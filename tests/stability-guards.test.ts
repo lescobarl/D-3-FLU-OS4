@@ -1,0 +1,161 @@
+// ============================================================
+// stability-guards.test.ts
+// Guards de REGRESIÓN (source-invariant) para las tres correcciones
+// de estabilidad aplicadas tras la cascada de fallos reportada por
+// el usuario en la consola del navegador:
+//
+//   Bug A — ReferenceError: resolvedSpeakerName is not defined
+//           (src/voice/hooks/useFluVoiceAssistant.js)
+//           → let/const declarados FUERA del try porque el bloque catch
+//             los referencia. En JS let/const tienen ámbito de bloque, así
+//             que declararlos dentro del try lanzaba ReferenceError en el
+//             path de error de la IA, tumbando la UI de React.
+//
+//   Bug B — Maximum update depth exceeded en stopAllSystems
+//           (src/core/autonomy/useAutonomyIntegration.ts)
+//           → guard idempotente systemsStoppedRef (useRef) + try/catch
+//             alrededor del setState, porque stopAllSystems se invoca en el
+//             cleanup del efecto de App durante unmount.
+//
+//   Bug C — Unhandled rejection capaz de tumbar Vite
+//           (src/server/geminiProxy.ts)
+//           → sendJson con try/catch (socket cerrado) + try/catch exterior
+//             en TODOS los middleware handlers de IA, para que ningún error
+//             no manejado pueda tumbar el proceso de desarrollo.
+//
+// Estos tests son "source-invariant": inspeccionan el código fuente (no el
+// runtime), de modo que si alguien revierte cualquiera de las tres
+// correcciones, la suite lo detecta al instante.
+// ============================================================
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+
+const VOICE_SRC = readFileSync('./src/voice/hooks/useFluVoiceAssistant.js', 'utf-8');
+const AUTONOMY_SRC = readFileSync('./src/core/autonomy/useAutonomyIntegration.ts', 'utf-8');
+const PROXY_SRC = readFileSync('./src/server/geminiProxy.ts', 'utf-8');
+
+// ============================================================
+// Bug A — ReferenceError: resolvedSpeakerName is not defined
+// ============================================================
+describe('🧪 Guard de estabilidad — Bug A: ReferenceError resolvedSpeakerName', () => {
+    it('resolvedSpeakerName y speakerAlias se declaran ANTES del try (visibles en el catch)', () => {
+        const declIndex = VOICE_SRC.indexOf('let resolvedSpeakerName = fallbackSpeaker');
+        expect(declIndex, 'Debe existir la declaración hoisted de resolvedSpeakerName').toBeGreaterThan(-1);
+
+        const aliasIndex = VOICE_SRC.indexOf('let speakerAlias = null');
+        expect(aliasIndex, 'Debe existir la declaración hoisted de speakerAlias').toBeGreaterThan(-1);
+
+        // El try que usa estas variables debe aparecer DESPUÉS de ambas declaraciones
+        const tryIndex = VOICE_SRC.indexOf('try {', Math.max(declIndex, aliasIndex));
+        expect(tryIndex, 'El try { que las usa debe ir después de las declaraciones').toBeGreaterThan(
+            Math.max(declIndex, aliasIndex)
+        );
+
+        // Y el catch debe venir después del try (bloque de error real)
+        const catchIndex = VOICE_SRC.indexOf('catch', tryIndex);
+        expect(catchIndex, 'Debe existir un catch después del try que usa las variables').toBeGreaterThan(tryIndex);
+    });
+
+    it('el orden de las declaraciones es exacto (decl → alias → try)', () => {
+        const declIndex = VOICE_SRC.indexOf('let resolvedSpeakerName = fallbackSpeaker');
+        const aliasIndex = VOICE_SRC.indexOf('let speakerAlias = null');
+        const tryIndex = VOICE_SRC.indexOf('try {', Math.max(declIndex, aliasIndex));
+
+        // FallbackSpeaker es un argumento/parámetro del hook, no una declaración nueva
+        expect(declIndex).toBeLessThan(aliasIndex);
+        expect(aliasIndex).toBeLessThan(tryIndex);
+    });
+
+    it('el bloque catch del path de error referencia resolvedSpeakerName sin re-declararlo', () => {
+        // Buscar el uso en el catch: "speakerName: resolvedSpeakerName || 'FLU'"
+        expect(VOICE_SRC).toContain("speakerName: resolvedSpeakerName || 'FLU'");
+        // Verificar que resolvedSpeakerName no se re-declara DENTRO de un try (con let/const)
+        const redeclareInTry = VOICE_SRC.match(/try\s*\{[^}]{0,400}?\b(?:let|const)\s+resolvedSpeakerName\b/);
+        expect(redeclareInTry, 'resolvedSpeakerName no debe volver a declararse con let/const dentro de un try').toBeNull();
+    });
+});
+
+// ============================================================
+// Bug B — Maximum update depth exceeded (stopAllSystems)
+// ============================================================
+describe('🧪 Guard de estabilidad — Bug B: Maximum update depth (stopAllSystems)', () => {
+    it('existe el guard idempotente systemsStoppedRef (useRef)', () => {
+        expect(AUTONOMY_SRC).toContain('const systemsStoppedRef = useRef(false)');
+    });
+
+    it('startAllSystems rearma el guard para permitir ciclos start→stop→start', () => {
+        expect(AUTONOMY_SRC).toContain('systemsStoppedRef.current = false;');
+    });
+
+    it('stopAllSystems es idempotente: early-return si ya se detuvo', () => {
+        const stopStart = AUTONOMY_SRC.indexOf('const stopAllSystems');
+        expect(stopStart, 'Debe existir la función stopAllSystems').toBeGreaterThan(-1);
+        // Cortar hasta el inicio de la siguiente función para abarcar toda la definición
+        const stopEnd = AUTONOMY_SRC.indexOf('const createManualBackup', stopStart);
+        const stopBlock = AUTONOMY_SRC.slice(stopStart, stopEnd > stopStart ? stopEnd : stopStart + 4000);
+
+        expect(stopBlock, 'stopAllSystems debe tener el early-return idempotente').toContain('if (systemsStoppedRef.current) return;');
+        expect(stopBlock, 'stopAllSystems debe marcar el guard como detenido').toContain('systemsStoppedRef.current = true;');
+    });
+
+    it('el setState/addNotification de stopAllSystems está protegido con try/catch (unmount-safe)', () => {
+        const stopStart = AUTONOMY_SRC.indexOf('const stopAllSystems');
+        const stopEnd = AUTONOMY_SRC.indexOf('const createManualBackup', stopStart);
+        const stopBlock = AUTONOMY_SRC.slice(stopStart, stopEnd > stopStart ? stopEnd : stopStart + 4000);
+
+        expect(stopBlock, 'El setState debe estar dentro de try/catch').toContain('try {');
+        expect(stopBlock, 'Debe existir el catch que evita tumbar la app durante unmount').toContain(
+            'actualización de estado omitida durante unmount'
+        );
+    });
+});
+
+// ============================================================
+// Bug C — el proxy de IA no puede tumbar Vite
+// ============================================================
+describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', () => {
+    it('sendJson protege la escritura ante socket cerrado (try/catch + guard writableEnded/destroyed)', () => {
+        const sendStart = PROXY_SRC.indexOf('function sendJson(');
+        expect(sendStart, 'Debe existir la función sendJson').toBeGreaterThan(-1);
+        const sendBlock = PROXY_SRC.slice(sendStart, sendStart + 600);
+
+        expect(sendBlock).toContain('try {');
+        expect(sendBlock).toContain('res.writableEnded || res.destroyed');
+        expect(sendBlock).toContain('catch (err: any)');
+    });
+
+    it('todos los middleware handlers de IA están envueltos en try/catch exterior', () => {
+        const routes = [
+            '/api/gemini/contract',
+            '/api/gemini/summary',
+            '/api/gemini/participant-eval',
+            '/api/gemini/vision',
+            '/api/gemini/text',
+            '/api/workspace-image',
+        ];
+
+        for (const route of routes) {
+            const regStart = PROXY_SRC.indexOf(`server.middlewares.use('${route}'`);
+            expect(regStart, `El middleware ${route} debe estar registrado`).toBeGreaterThan(-1);
+
+            const segment = PROXY_SRC.slice(regStart, regStart + 1200);
+            expect(segment, `El middleware ${route} debe tener try exterior`).toContain('try {');
+
+            // En el catch debe existir una respuesta de error 500 (sendJson o writeHead protegido)
+            const hasErrorResponse =
+                segment.includes('sendJson(res, 500') || segment.includes('writeHead(500');
+            expect(hasErrorResponse, `El middleware ${route} debe responder 500 en el catch`).toBe(true);
+        }
+    });
+
+    it('el handler de contract nunca responde 200 con body vacío (fail-fast, no cuelga)', () => {
+        // La clave del test HTTP: un body vacío no debe entrar al flujo de éxito.
+        // Internamente handleContract lanza/atrapa y responde con error.status||500.
+        const handleStart = PROXY_SRC.indexOf('async function handleContract(');
+        expect(handleStart).toBeGreaterThan(-1);
+        const handleEnd = PROXY_SRC.indexOf('async function handleSummary', handleStart);
+        const handleBlock = PROXY_SRC.slice(handleStart, handleEnd > handleStart ? handleEnd : handleStart + 5000);
+        expect(handleBlock, 'handleContract debe tener try/catch interno').toContain('try {');
+        expect(handleBlock).toContain('sendJson(res, error.status || 500');
+    });
+});

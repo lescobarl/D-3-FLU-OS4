@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Gradle / Flutter foreign artifacts (accidentally created at OS4 root)
+.gradle/
+
+# Test results
+test-results/
+playwright-report/
+
+# TypeScript build info (regenerates on `tsc -b`)
+*.tsbuildinfo
+
+# Environment variables
+.env
+
+# Logs
+debug.log
+*.log
+
+# Backups (safety net — excluded from git)
+backups/

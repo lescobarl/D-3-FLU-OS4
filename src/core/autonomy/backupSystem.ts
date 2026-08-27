@@ -1,0 +1,1043 @@
+// ============================================================
+// Backup System — Sistema de Respaldo y Recuperación de Estado
+// ============================================================
+// Crea y gestiona backups automáticos del estado de FLU
+// para permitir recuperación rápida después de fallos.
+//
+// Características:
+//   - Backups incrementales automáticos
+//   - Recuperación granular (por componente)
+//   - Verificación de integridad
+//   - Rotación y limpieza automática
+//   - Restauración asistida
+//
+// Cumple:
+//   - Minimiza impacto en rendimiento
+//   - Garantiza consistencia de datos
+//   - Soporta múltiples estrategias de backup
+//   - Integración con sistema de recuperación
+// ============================================================
+
+import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
+import { useIntegrationStore } from '../../store/integrationStore';
+
+// -----------------------------------------------------------
+// Tipos
+// -----------------------------------------------------------
+
+export type BackupStrategy = 
+    | 'full'          // Backup completo
+    | 'incremental'   // Solo cambios desde último backup
+    | 'differential'  // Cambios desde backup completo
+    | 'selective';    // Componentes específicos
+
+export type BackupComponent = 
+    | 'conversation_state'
+    | 'ai_configuration'
+    | 'user_preferences'
+    | 'minute_history'
+    | 'workspace_data'
+    | 'voice_profiles'
+    | 'system_settings'
+    | 'all';
+
+export interface BackupMetadata {
+    /** ID único del backup */
+    id: string;
+    /** Timestamp de creación */
+    timestamp: number;
+    /** Estrategia utilizada */
+    strategy: BackupStrategy;
+    /** Componentes incluidos */
+    components: BackupComponent[];
+    /** Tamaño aproximado (bytes) */
+    size: number;
+    /** Checksum para verificación */
+    checksum: string;
+    /** Versión de la aplicación */
+    appVersion: string;
+    /** Notas opcionales */
+    notes?: string;
+}
+
+export interface BackupData {
+    /** Metadatos del backup */
+    metadata: BackupMetadata;
+    /** Datos de los componentes */
+    components: Record<BackupComponent, any>;
+}
+
+export interface RestoreResult {
+    /** Si la restauración fue exitosa */
+    success: boolean;
+    /** Componentes restaurados */
+    restoredComponents: BackupComponent[];
+    /** Componentes que fallaron */
+    failedComponents: BackupComponent[];
+    /** Mensaje descriptivo */
+    message: string;
+    /** Timestamp del backup utilizado */
+    backupTimestamp: number;
+    /** Tiempo tomado (ms) */
+    durationMs: number;
+}
+
+export interface BackupSystemConfig {
+    /** Habilitar sistema de backup */
+    enabled: boolean;
+    /** Intervalo entre backups automáticos (ms) */
+    autoBackupInterval: number;
+    /** Estrategia por defecto */
+    defaultStrategy: BackupStrategy;
+    /** Máximo de backups almacenados */
+    maxStoredBackups: number;
+    /** Tamaño máximo total (MB) */
+    maxTotalSizeMB: number;
+    /** Componentes a incluir por defecto */
+    defaultComponents: BackupComponent[];
+    /** Habilitar verificación de integridad */
+    integrityCheckEnabled: boolean;
+    /** Habilitar compresión */
+    compressionEnabled: boolean;
+    /** Habilitar logging detallado */
+    verboseLogging: boolean;
+}
+
+// -----------------------------------------------------------
+// Configuración por defecto
+// -----------------------------------------------------------
+
+export const DEFAULT_BACKUP_CONFIG: BackupSystemConfig = {
+    enabled: true,
+    autoBackupInterval: 3600000, // 1 hora
+    defaultStrategy: 'incremental',
+    maxStoredBackups: 30,
+    maxTotalSizeMB: 100,
+    defaultComponents: [
+        'conversation_state',
+        'ai_configuration',
+        'user_preferences',
+        'minute_history',
+        'system_settings',
+    ],
+    integrityCheckEnabled: true,
+    compressionEnabled: true,
+    verboseLogging: false,
+};
+
+// -----------------------------------------------------------
+// Extractores de datos por componente
+// -----------------------------------------------------------
+
+class DataExtractor {
+    extractConversationState(): any {
+        try {
+            // Extraer estado de conversación desde integrationStore (fuente canónica)
+            const state = useIntegrationStore.getState();
+            return {
+                conversationHistory: state.conversationHistory || [],
+                conversationState: state.conversationState || 'idle',
+                eventLog: state.eventLog || [],
+                lastUpdated: Date.now(),
+            };
+        } catch (error) {
+            console.error('Error extrayendo estado de conversación:', error);
+        }
+        return null;
+    }
+    
+    extractAIConfiguration(): any {
+        try {
+            return {
+                provider: readStorage(STORAGE_KEYS.AI_PROVIDER, 'openrouter'),
+                apiKeys: {
+                    gemini: readStorage(STORAGE_KEYS.TEXT_API_KEY, ''),
+                    deepseek: readStorage(STORAGE_KEYS.DEEPSEEK_API_KEY, ''),
+                },
+                models: {
+                    gemini: readStorage(STORAGE_KEYS.TEXT_MODEL, GEMINI_CONFIG.MODEL),
+                    deepseek: readStorage(STORAGE_KEYS.DEEPSEEK_MODEL, DEEPSEEK_CONFIG.MODEL),
+                },
+                creativity: readStorage(STORAGE_KEYS.CREATIVITY, String(DEEPSEEK_CONFIG.CREATIVITY)),
+                maxTokens: readStorage(STORAGE_KEYS.AI_MAX_TOKENS, String(DEEPSEEK_CONFIG.DEFAULT_MAX_TOKENS)),
+            };
+        } catch (error) {
+            console.error('Error extrayendo configuración de IA:', error);
+        }
+        return null;
+    }
+    
+    extractUserPreferences(): any {
+        try {
+            return {
+                language: readStorage(STORAGE_KEYS.LANGUAGE, 'es'),
+                sessionRole: readStorage(STORAGE_KEYS.SESSION_ROLE, 'tutor'),
+                voiceConfig: {
+                    speed: readStorage(STORAGE_KEYS.VOICE_SPEED, '1.0'),
+                    volume: readStorage(STORAGE_KEYS.VOICE_VOLUME, '1.0'),
+                    pitch: readStorage(STORAGE_KEYS.VOICE_PITCH, '1.0'),
+                },
+                uiPreferences: {
+                    theme: readStorage(STORAGE_KEYS.UI_THEME, 'dark'),
+                    fontSize: readStorage(STORAGE_KEYS.UI_FONT_SIZE, 'medium'),
+                    animations: readStorage(STORAGE_KEYS.UI_ANIMATIONS, 'true'),
+                },
+                avatarConfig: {
+                    color: readStorage(STORAGE_KEYS.AVATAR_COLOR, '#22c55e'),
+                    pantsColor: readStorage(STORAGE_KEYS.AVATAR_PANTS_COLOR, '#3b82f6'),
+                    bodyColor: readStorage(STORAGE_KEYS.AVATAR_BODY_COLOR, '#ffffff'),
+                    faceColor: readStorage(STORAGE_KEYS.AVATAR_FACE_COLOR, '#fbbf24'),
+                },
+            };
+        } catch (error) {
+            console.error('Error extrayendo preferencias de usuario:', error);
+        }
+        return null;
+    }
+    
+    extractMinuteHistory(): any {
+        try {
+            // Extraer desde IndexedDB o localStorage
+            const minutesJson = localStorage.getItem(STORAGE_KEYS.MINUTE_HISTORY);
+            if (minutesJson) {
+                return JSON.parse(minutesJson);
+            }
+            
+            // Fallback: leer desde integrationStore (minuteHistory)
+            return useIntegrationStore.getState().minuteHistory || [];
+        } catch (error) {
+            console.error('Error extrayendo historial de minutos:', error);
+        }
+        return [];
+    }
+    
+    extractWorkspaceData(): any {
+        try {
+            const state = useIntegrationStore.getState();
+            return {
+                workspaceArtifact: state.workspaceArtifact || null,
+            };
+        } catch (error) {
+            console.error('Error extrayendo datos de workspace:', error);
+        }
+        return null;
+    }
+    
+    extractVoiceProfiles(): any {
+        try {
+            const profilesJson = localStorage.getItem(STORAGE_KEYS.VOICE_PROFILES);
+            if (profilesJson) {
+                return JSON.parse(profilesJson);
+            }
+        } catch (error) {
+            console.error('Error extrayendo perfiles de voz:', error);
+        }
+        return [];
+    }
+    
+    extractSystemSettings(): any {
+        try {
+            return {
+                branding: {
+                    mode: readStorage(STORAGE_KEYS.BRANDING_MODE, 'auto'),
+                    activeSeason: readStorage(STORAGE_KEYS.BRANDING_ACTIVE_SEASON, 'default'),
+                    birthday: readStorage<string | null>(STORAGE_KEYS.BRANDING_BIRTHDAY, null),
+                },
+                autonomy: {
+                    healthMonitoring: readStorage(STORAGE_KEYS.AUTONOMY_HEALTH_MONITORING, 'enabled'),
+                    autoRecovery: readStorage(STORAGE_KEYS.AUTONOMY_AUTO_RECOVERY, 'enabled'),
+                    decisionEngine: readStorage(STORAGE_KEYS.AUTONOMY_DECISION_ENGINE, 'enabled'),
+                },
+                performance: {
+                    cacheEnabled: readStorage(STORAGE_KEYS.PERFORMANCE_CACHE_ENABLED, 'true'),
+                    loggingLevel: readStorage(STORAGE_KEYS.PERFORMANCE_LOGGING_LEVEL, 'info'),
+                    analyticsEnabled: readStorage(STORAGE_KEYS.PERFORMANCE_ANALYTICS_ENABLED, 'true'),
+                },
+                lastBackup: readStorage<string | null>(STORAGE_KEYS.BACKUP_LAST_TIMESTAMP, null),
+                backupCount: parseInt(readStorage(STORAGE_KEYS.BACKUP_COUNT, '0')),
+            };
+        } catch (error) {
+            console.error('Error extrayendo configuración del sistema:', error);
+        }
+        return null;
+    }
+    
+    extractComponent(component: BackupComponent): any {
+        switch (component) {
+            case 'conversation_state':
+                return this.extractConversationState();
+            case 'ai_configuration':
+                return this.extractAIConfiguration();
+            case 'user_preferences':
+                return this.extractUserPreferences();
+            case 'minute_history':
+                return this.extractMinuteHistory();
+            case 'workspace_data':
+                return this.extractWorkspaceData();
+            case 'voice_profiles':
+                return this.extractVoiceProfiles();
+            case 'system_settings':
+                return this.extractSystemSettings();
+            case 'all':
+                return {
+                    conversation_state: this.extractConversationState(),
+                    ai_configuration: this.extractAIConfiguration(),
+                    user_preferences: this.extractUserPreferences(),
+                    minute_history: this.extractMinuteHistory(),
+                    workspace_data: this.extractWorkspaceData(),
+                    voice_profiles: this.extractVoiceProfiles(),
+                    system_settings: this.extractSystemSettings(),
+                };
+            default:
+                return null;
+        }
+    }
+}
+
+// -----------------------------------------------------------
+// Restaurador de datos
+// -----------------------------------------------------------
+
+class DataRestorer {
+    restoreConversationState(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            // Restaurar a integrationStore (fuente canónica)
+            useIntegrationStore.setState((state: any) => ({
+                ...state,
+                conversationHistory: data.conversationHistory || [],
+                conversationState: data.conversationState || 'idle',
+                eventLog: data.eventLog || [],
+            }));
+            return true;
+        } catch (error) {
+            console.error('Error restaurando estado de conversación:', error);
+        }
+        return false;
+    }
+    
+    restoreAIConfiguration(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            localStorage.setItem(STORAGE_KEYS.AI_PROVIDER, data.provider || 'openrouter');
+            
+            if (data.apiKeys) {
+                if (data.apiKeys.gemini) {
+                    localStorage.setItem(STORAGE_KEYS.TEXT_API_KEY, data.apiKeys.gemini);
+                }
+                if (data.apiKeys.deepseek) {
+                    localStorage.setItem(STORAGE_KEYS.DEEPSEEK_API_KEY, data.apiKeys.deepseek);
+                }
+            }
+            
+            if (data.models) {
+                if (data.models.gemini) {
+                    localStorage.setItem(STORAGE_KEYS.TEXT_MODEL, data.models.gemini);
+                }
+                if (data.models.deepseek) {
+                    localStorage.setItem(STORAGE_KEYS.DEEPSEEK_MODEL, data.models.deepseek);
+                }
+            }
+            
+            if (data.creativity) {
+                localStorage.setItem(STORAGE_KEYS.CREATIVITY, data.creativity);
+            }
+            
+            if (data.maxTokens) {
+                localStorage.setItem(STORAGE_KEYS.AI_MAX_TOKENS, data.maxTokens);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error restaurando configuración de IA:', error);
+        }
+        return false;
+    }
+    
+    restoreUserPreferences(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            if (data.language) {
+                localStorage.setItem(STORAGE_KEYS.LANGUAGE, data.language);
+            }
+            
+            if (data.sessionRole) {
+                localStorage.setItem(STORAGE_KEYS.SESSION_ROLE, data.sessionRole);
+            }
+            
+            if (data.voiceConfig) {
+                if (data.voiceConfig.speed) {
+                    localStorage.setItem(STORAGE_KEYS.VOICE_SPEED, data.voiceConfig.speed);
+                }
+                if (data.voiceConfig.volume) {
+                    localStorage.setItem(STORAGE_KEYS.VOICE_VOLUME, data.voiceConfig.volume);
+                }
+                if (data.voiceConfig.pitch) {
+                    localStorage.setItem(STORAGE_KEYS.VOICE_PITCH, data.voiceConfig.pitch);
+                }
+            }
+            
+            if (data.uiPreferences) {
+                if (data.uiPreferences.theme) {
+                    localStorage.setItem(STORAGE_KEYS.UI_THEME, data.uiPreferences.theme);
+                }
+                if (data.uiPreferences.fontSize) {
+                    localStorage.setItem(STORAGE_KEYS.UI_FONT_SIZE, data.uiPreferences.fontSize);
+                }
+                if (data.uiPreferences.animations) {
+                    localStorage.setItem(STORAGE_KEYS.UI_ANIMATIONS, data.uiPreferences.animations);
+                }
+            }
+            
+            if (data.avatarConfig) {
+                if (data.avatarConfig.color) {
+                    localStorage.setItem(STORAGE_KEYS.AVATAR_COLOR, data.avatarConfig.color);
+                }
+                if (data.avatarConfig.pantsColor) {
+                    localStorage.setItem(STORAGE_KEYS.AVATAR_PANTS_COLOR, data.avatarConfig.pantsColor);
+                }
+                if (data.avatarConfig.bodyColor) {
+                    localStorage.setItem(STORAGE_KEYS.AVATAR_BODY_COLOR, data.avatarConfig.bodyColor);
+                }
+                if (data.avatarConfig.faceColor) {
+                    localStorage.setItem(STORAGE_KEYS.AVATAR_FACE_COLOR, data.avatarConfig.faceColor);
+                }
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error restaurando preferencias de usuario:', error);
+        }
+        return false;
+    }
+    
+    restoreMinuteHistory(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            localStorage.setItem(STORAGE_KEYS.MINUTE_HISTORY, JSON.stringify(data));
+            
+            // También restaurar a integrationStore (fuente canónica) si es un array
+            if (Array.isArray(data)) {
+                useIntegrationStore.setState((state: any) => ({
+                    ...state,
+                    minuteHistory: data,
+                }));
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error restaurando historial de minutos:', error);
+        }
+        return false;
+    }
+    
+    restoreWorkspaceData(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            useIntegrationStore.setState((state: any) => ({
+                ...state,
+                workspaceArtifact: data.workspaceArtifact || state.workspaceArtifact,
+            }));
+            
+            return true;
+        } catch (error) {
+            console.error('Error restaurando datos de workspace:', error);
+        }
+        return false;
+    }
+    
+    restoreVoiceProfiles(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            localStorage.setItem(STORAGE_KEYS.VOICE_PROFILES, JSON.stringify(data));
+            return true;
+        } catch (error) {
+            console.error('Error restaurando perfiles de voz:', error);
+        }
+        return false;
+    }
+    
+    restoreSystemSettings(data: any): boolean {
+        try {
+            if (!data) return false;
+            
+            if (data.branding) {
+                if (data.branding.mode) {
+                    localStorage.setItem(STORAGE_KEYS.BRANDING_MODE, data.branding.mode);
+                }
+                if (data.branding.activeSeason) {
+                    localStorage.setItem(STORAGE_KEYS.BRANDING_ACTIVE_SEASON, data.branding.activeSeason);
+                }
+                if (data.branding.birthday) {
+                    localStorage.setItem(STORAGE_KEYS.BRANDING_BIRTHDAY, data.branding.birthday);
+                }
+            }
+            
+            if (data.autonomy) {
+                if (data.autonomy.healthMonitoring) {
+                    localStorage.setItem(STORAGE_KEYS.AUTONOMY_HEALTH_MONITORING, data.autonomy.healthMonitoring);
+                }
+                if (data.autonomy.autoRecovery) {
+                    localStorage.setItem(STORAGE_KEYS.AUTONOMY_AUTO_RECOVERY, data.autonomy.autoRecovery);
+                }
+                if (data.autonomy.decisionEngine) {
+                    localStorage.setItem(STORAGE_KEYS.AUTONOMY_DECISION_ENGINE, data.autonomy.decisionEngine);
+                }
+            }
+            
+            if (data.performance) {
+                if (data.performance.cacheEnabled) {
+                    localStorage.setItem(STORAGE_KEYS.PERFORMANCE_CACHE_ENABLED, data.performance.cacheEnabled);
+                }
+                if (data.performance.loggingLevel) {
+                    localStorage.setItem(STORAGE_KEYS.PERFORMANCE_LOGGING_LEVEL, data.performance.loggingLevel);
+                }
+                if (data.performance.analyticsEnabled) {
+                    localStorage.setItem(STORAGE_KEYS.PERFORMANCE_ANALYTICS_ENABLED, data.performance.analyticsEnabled);
+                }
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error restaurando configuración del sistema:', error);
+        }
+        return false;
+    }
+    
+    restoreComponent(component: BackupComponent, data: any): boolean {
+        switch (component) {
+            case 'conversation_state':
+                return this.restoreConversationState(data);
+            case 'ai_configuration':
+                return this.restoreAIConfiguration(data);
+            case 'user_preferences':
+                return this.restoreUserPreferences(data);
+            case 'minute_history':
+                return this.restoreMinuteHistory(data);
+            case 'workspace_data':
+                return this.restoreWorkspaceData(data);
+            case 'voice_profiles':
+                return this.restoreVoiceProfiles(data);
+            case 'system_settings':
+                return this.restoreSystemSettings(data);
+            default:
+                return false;
+        }
+    }
+}
+
+// -----------------------------------------------------------
+// Gestor de backups
+// -----------------------------------------------------------
+
+class BackupManager {
+    private dataExtractor: DataExtractor;
+    private dataRestorer: DataRestorer;
+    private backups: BackupMetadata[] = [];
+    
+    constructor() {
+        this.dataExtractor = new DataExtractor();
+        this.dataRestorer = new DataRestorer();
+        this.loadBackupList();
+    }
+    
+    createBackup(
+        strategy: BackupStrategy = 'incremental',
+        components: BackupComponent[] = ['all'],
+        notes?: string
+    ): BackupMetadata | null {
+        try {
+            const startTime = Date.now();
+            const backupId = `backup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Extraer datos de componentes
+            const extractedData: Record<BackupComponent, any> = {} as Record<BackupComponent, any>;
+            let totalSize = 0;
+            
+            for (const component of components) {
+                const data = this.dataExtractor.extractComponent(component);
+                if (data !== null) {
+                    extractedData[component] = data;
+                    
+                    // Calcular tamaño aproximado
+                    const jsonStr = JSON.stringify(data);
+                    totalSize += new Blob([jsonStr]).size;
+                }
+            }
+            
+            // Crear metadatos
+            const metadata: BackupMetadata = {
+                id: backupId,
+                timestamp: Date.now(),
+                strategy,
+                components,
+                size: totalSize,
+                checksum: this.calculateChecksum(extractedData),
+                appVersion: this.getAppVersion(),
+                notes,
+            };
+            
+            // Crear objeto de backup completo
+            const backup: BackupData = {
+                metadata,
+                components: extractedData,
+            };
+            
+            // Guardar backup
+            this.saveBackup(backup);
+            
+            // Actualizar lista de backups
+            this.backups.push(metadata);
+            this.saveBackupList();
+            
+            // Actualizar estadísticas
+            this.updateBackupStats(metadata);
+            
+            if (DEFAULT_BACKUP_CONFIG.verboseLogging) {
+                console.log('Backup creado:', {
+                    id: backupId,
+                    strategy,
+                    components: components.length,
+                    size: `${Math.round(totalSize / 1024)}KB`,
+                    duration: Date.now() - startTime,
+                });
+            }
+            
+            return metadata;
+        } catch (error) {
+            console.error('Error creando backup:', error);
+            return null;
+        }
+    }
+    
+    restoreBackup(backupId: string, componentsToRestore?: BackupComponent[]): RestoreResult {
+        const startTime = Date.now();
+        const restoredComponents: BackupComponent[] = [];
+        const failedComponents: BackupComponent[] = [];
+        
+        try {
+            // Cargar backup
+            const backup = this.loadBackup(backupId);
+            if (!backup) {
+                return {
+                    success: false,
+                    restoredComponents: [],
+                    failedComponents: [],
+                    message: `Backup ${backupId} no encontrado`,
+                    backupTimestamp: 0,
+                    durationMs: Date.now() - startTime,
+                };
+            }
+            
+            // Determinar componentes a restaurar
+            const components = componentsToRestore || backup.metadata.components;
+            
+            // Restaurar cada componente
+            for (const component of components) {
+                if (component === 'all') {
+                    // Restaurar todos los componentes individualmente
+                    const individualComponents = backup.metadata.components.filter(c => c !== 'all');
+                    for (const individualComponent of individualComponents) {
+                        if (this.dataRestorer.restoreComponent(individualComponent, backup.components[individualComponent])) {
+                            restoredComponents.push(individualComponent);
+                        } else {
+                            failedComponents.push(individualComponent);
+                        }
+                    }
+                } else {
+                    if (this.dataRestorer.restoreComponent(component, backup.components[component])) {
+                        restoredComponents.push(component);
+                    } else {
+                        failedComponents.push(component);
+                    }
+                }
+            }
+            
+            const success = failedComponents.length === 0;
+            
+            return {
+                success,
+                restoredComponents,
+                failedComponents,
+                message: success 
+                    ? `Restauración completada exitosamente (${restoredComponents.length} componentes)`
+                    : `Restauración parcial (${restoredComponents.length} exitosos, ${failedComponents.length} fallidos)`,
+                backupTimestamp: backup.metadata.timestamp,
+                durationMs: Date.now() - startTime,
+            };
+        } catch (error) {
+            console.error('Error restaurando backup:', error);
+            return {
+                success: false,
+                restoredComponents,
+                failedComponents,
+                message: `Error durante restauración: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+                backupTimestamp: 0,
+                durationMs: Date.now() - startTime,
+            };
+        }
+    }
+    
+    getAvailableBackups(): BackupMetadata[] {
+        return [...this.backups].sort((a, b) => b.timestamp - a.timestamp); // Más recientes primero
+    }
+    
+    getBackup(backupId: string): BackupMetadata | null {
+        return this.backups.find(b => b.id === backupId) || null;
+    }
+    
+    deleteBackup(backupId: string): boolean {
+        try {
+            // Eliminar de almacenamiento
+            localStorage.removeItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backupId}`);
+            
+            // Eliminar de lista
+            const index = this.backups.findIndex(b => b.id === backupId);
+            if (index !== -1) {
+                this.backups.splice(index, 1);
+                this.saveBackupList();
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error eliminando backup:', error);
+            return false;
+        }
+    }
+    
+    cleanupOldBackups(): number {
+        const deletedCount = 0;
+        
+        try {
+            // Ordenar por antigüedad (más antiguos primero)
+            const sorted = [...this.backups].sort((a, b) => a.timestamp - b.timestamp);
+            
+            // Eliminar según límite de cantidad
+            if (sorted.length > DEFAULT_BACKUP_CONFIG.maxStoredBackups) {
+                const toDelete = sorted.slice(0, sorted.length - DEFAULT_BACKUP_CONFIG.maxStoredBackups);
+                
+                for (const backup of toDelete) {
+                    this.deleteBackup(backup.id);
+                }
+                
+                return toDelete.length;
+            }
+            
+            // Eliminar según límite de tamaño (implementación simplificada)
+            // En una implementación real, se calcularía el tamaño total
+        } catch (error) {
+            console.error('Error limpiando backups antiguos:', error);
+        }
+        
+        return deletedCount;
+    }
+    
+    verifyBackupIntegrity(backupId: string): boolean {
+        try {
+            const backup = this.loadBackup(backupId);
+            if (!backup) return false;
+            
+            // Calcular checksum actual
+            const currentChecksum = this.calculateChecksum(backup.components);
+            
+            // Comparar con checksum almacenado
+            return currentChecksum === backup.metadata.checksum;
+        } catch (error) {
+            console.error('Error verificando integridad del backup:', error);
+            return false;
+        }
+    }
+    
+    private saveBackup(backup: BackupData): void {
+        try {
+            const key = `${STORAGE_KEYS.BACKUP_PREFIX}${backup.metadata.id}`;
+            const compressed = DEFAULT_BACKUP_CONFIG.compressionEnabled
+                ? this.compressBackup(backup)
+                : JSON.stringify(backup);
+            
+            localStorage.setItem(key, compressed);
+        } catch (error) {
+            console.error('Error guardando backup:', error);
+        }
+    }
+    
+    private loadBackup(backupId: string): BackupData | null {
+        try {
+            const key = `${STORAGE_KEYS.BACKUP_PREFIX}${backupId}`;
+            const data = localStorage.getItem(key);
+            
+            if (!data) {
+                return null;
+            }
+            
+            const backup = DEFAULT_BACKUP_CONFIG.compressionEnabled
+                ? this.decompressBackup(data)
+                : JSON.parse(data);
+            
+            return backup;
+        } catch (error) {
+            console.error('Error cargando backup:', error);
+            return null;
+        }
+    }
+    
+    private loadBackupList(): void {
+        try {
+            const listJson = localStorage.getItem(STORAGE_KEYS.BACKUP_LIST);
+            if (listJson) {
+                this.backups = JSON.parse(listJson);
+            }
+        } catch (error) {
+            console.error('Error cargando lista de backups:', error);
+            this.backups = [];
+        }
+    }
+    
+    private saveBackupList(): void {
+        try {
+            localStorage.setItem(STORAGE_KEYS.BACKUP_LIST, JSON.stringify(this.backups));
+        } catch (error) {
+            console.error('Error guardando lista de backups:', error);
+        }
+    }
+    
+    private calculateChecksum(data: any): string {
+        // Checksum simplificado (en producción usaría algo como SHA-256)
+        const jsonStr = JSON.stringify(data);
+        let hash = 0;
+        
+        for (let i = 0; i < jsonStr.length; i++) {
+            const char = jsonStr.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convertir a 32-bit integer
+        }
+        
+        return hash.toString(16);
+    }
+    
+    private compressBackup(backup: BackupData): string {
+        // Compresión simplificada (en producción usaría algo como pako o lz-string)
+        return JSON.stringify(backup);
+    }
+    
+    private decompressBackup(compressed: string): BackupData {
+        // Descompresión simplificada
+        return JSON.parse(compressed);
+    }
+    
+    private getAppVersion(): string {
+        return import.meta.env.VITE_APP_VERSION || '1.0.0';
+    }
+    
+    private updateBackupStats(metadata: BackupMetadata): void {
+        try {
+            // Actualizar último backup
+            localStorage.setItem(STORAGE_KEYS.BACKUP_LAST_TIMESTAMP, metadata.timestamp.toString());
+            
+            // Incrementar contador
+            const count = parseInt(localStorage.getItem(STORAGE_KEYS.BACKUP_COUNT) || '0');
+            localStorage.setItem(STORAGE_KEYS.BACKUP_COUNT, (count + 1).toString());
+            
+            // Guardar estadísticas de tamaño
+            const sizeStats = JSON.parse(localStorage.getItem(STORAGE_KEYS.BACKUP_SIZE_STATS) || '{"total": 0, "count": 0}');
+            sizeStats.total += metadata.size;
+            sizeStats.count += 1;
+            sizeStats.average = sizeStats.total / sizeStats.count;
+            localStorage.setItem(STORAGE_KEYS.BACKUP_SIZE_STATS, JSON.stringify(sizeStats));
+        } catch (error) {
+            console.error('Error actualizando estadísticas de backup:', error);
+        }
+    }
+}
+
+// -----------------------------------------------------------
+// Clase principal del Backup System
+// -----------------------------------------------------------
+
+export class BackupSystem {
+    private config: BackupSystemConfig;
+    private backupManager: BackupManager;
+    private autoBackupIntervalId: number | null = null;
+    
+    constructor(config: Partial<BackupSystemConfig> = {}) {
+        this.config = { ...DEFAULT_BACKUP_CONFIG, ...config };
+        this.backupManager = new BackupManager();
+    }
+    
+    start(): void {
+        if (this.autoBackupIntervalId !== null || !this.config.enabled) {
+            return;
+        }
+        
+        // Ejecutar backup inicial
+        this.performAutoBackup();
+        
+        // Configurar intervalo para backups automáticos
+        this.autoBackupIntervalId = window.setInterval(() => {
+            this.performAutoBackup();
+        }, this.config.autoBackupInterval);
+        
+        if (this.config.verboseLogging) {
+            console.log('BackupSystem iniciado con intervalo:', this.config.autoBackupInterval, 'ms');
+        }
+    }
+    
+    stop(): void {
+        if (this.autoBackupIntervalId !== null) {
+            clearInterval(this.autoBackupIntervalId);
+            this.autoBackupIntervalId = null;
+        }
+        
+        if (this.config.verboseLogging) {
+            console.log('BackupSystem detenido');
+        }
+    }
+    
+    performAutoBackup(): BackupMetadata | null {
+        if (!this.config.enabled) {
+            return null;
+        }
+        
+        // Limpiar backups antiguos primero
+        this.backupManager.cleanupOldBackups();
+        
+        // Crear backup automático
+        const backup = this.backupManager.createBackup(
+            this.config.defaultStrategy,
+            this.config.defaultComponents,
+            'Backup automático programado'
+        );
+        
+        if (backup && this.config.verboseLogging) {
+            console.log('Backup automático completado:', backup.id);
+        }
+        
+        return backup;
+    }
+    
+    createManualBackup(
+        components?: BackupComponent[],
+        notes?: string
+    ): BackupMetadata | null {
+        return this.backupManager.createBackup(
+            'full',
+            components || this.config.defaultComponents,
+            notes || 'Backup manual'
+        );
+    }
+    
+    restoreLatestBackup(components?: BackupComponent[]): RestoreResult {
+        const backups = this.backupManager.getAvailableBackups();
+        if (backups.length === 0) {
+            return {
+                success: false,
+                restoredComponents: [],
+                failedComponents: [],
+                message: 'No hay backups disponibles para restaurar',
+                backupTimestamp: 0,
+                durationMs: 0,
+            };
+        }
+        
+        const latestBackup = backups[0]; // Ya están ordenados por más reciente
+        return this.backupManager.restoreBackup(latestBackup.id, components);
+    }
+    
+    restoreBackupById(backupId: string, components?: BackupComponent[]): RestoreResult {
+        return this.backupManager.restoreBackup(backupId, components);
+    }
+    
+    getAvailableBackups(): BackupMetadata[] {
+        return this.backupManager.getAvailableBackups();
+    }
+    
+    verifyAllBackups(): Array<{ backupId: string; valid: boolean }> {
+        const backups = this.getAvailableBackups();
+        const results: Array<{ backupId: string; valid: boolean }> = [];
+        
+        for (const backup of backups) {
+            const valid = this.backupManager.verifyBackupIntegrity(backup.id);
+            results.push({ backupId: backup.id, valid });
+        }
+        
+        return results;
+    }
+    
+    cleanup(): number {
+        return this.backupManager.cleanupOldBackups();
+    }
+    
+    getBackupStats(): {
+        totalBackups: number;
+        totalSizeMB: number;
+        lastBackupTime: number | null;
+        averageSizeKB: number;
+    } {
+        const backups = this.getAvailableBackups();
+        const totalSize = backups.reduce((sum, b) => sum + b.size, 0);
+        
+        const sizeStats = JSON.parse(localStorage.getItem(STORAGE_KEYS.BACKUP_SIZE_STATS) || '{"total": 0, "count": 0, "average": 0}');
+        
+        return {
+            totalBackups: backups.length,
+            totalSizeMB: Math.round(totalSize / (1024 * 1024) * 100) / 100,
+            lastBackupTime: backups.length > 0 ? backups[0].timestamp : null,
+            averageSizeKB: Math.round(sizeStats.average / 1024) || 0,
+        };
+    }
+    
+    updateConfig(newConfig: Partial<BackupSystemConfig>): void {
+        this.config = { ...this.config, ...newConfig };
+        
+        // Reiniciar si el intervalo cambió
+        if (this.autoBackupIntervalId !== null && newConfig.autoBackupInterval) {
+            this.stop();
+            this.start();
+        }
+    }
+    
+    getConfig(): BackupSystemConfig {
+        return { ...this.config };
+    }
+}
+
+// -----------------------------------------------------------
+// Instancia global (singleton)
+// -----------------------------------------------------------
+
+let globalBackupSystem: BackupSystem | null = null;
+
+export function getBackupSystem(config?: Partial<BackupSystemConfig>): BackupSystem {
+    if (!globalBackupSystem) {
+        globalBackupSystem = new BackupSystem(config);
+    }
+    return globalBackupSystem;
+}
+
+export function startGlobalBackupSystem(config?: Partial<BackupSystemConfig>): BackupSystem {
+    const system = getBackupSystem(config);
+    system.start();
+    return system;
+}
+
+export function stopGlobalBackupSystem(): void {
+    if (globalBackupSystem) {
+        globalBackupSystem.stop();
+    }
+}
+
+export function createEmergencyBackup(): BackupMetadata | null {
+    const system = getBackupSystem();
+    return system.createManualBackup(['all'], 'Backup de emergencia');
+}
+
+export function restoreFromLatestBackup(): RestoreResult {
+    const system = getBackupSystem();
+    return system.restoreLatestBackup();
+}

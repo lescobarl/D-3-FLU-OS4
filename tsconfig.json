@@ -1,0 +1,55 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": [
+            "ES2023",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "isolatedModules": true,
+        "moduleDetection": "force",
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "strict": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "noFallthroughCasesInSwitch": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "allowJs": true,
+        "esModuleInterop": true,
+        "ignoreDeprecations": "6.0",
+        "baseUrl": ".",
+        "types": [
+            "vitest/globals"
+        ],
+        "paths": {
+            "@avatar": ["./src/avatar"],
+            "@avatar/*": ["./src/avatar/*"],
+            "@voice": ["./src/voice"],
+            "@voice/*": ["./src/voice/*"],
+            "@components": ["./src/components"],
+            "@components/*": ["./src/components/*"],
+            "@hooks": ["./src/hooks"],
+            "@hooks/*": ["./src/hooks/*"],
+            "@lib": ["./src/lib"],
+            "@lib/*": ["./src/lib/*"],
+            "@store": ["./src/store"],
+            "@store/*": ["./src/store/*"],
+            "@services": ["./src/services"],
+            "@services/*": ["./src/services/*"],
+            "@core": ["./src/core"],
+            "@core/*": ["./src/core/*"],
+            "@types": ["./src/types"],
+            "@types/*": ["./src/types/*"]
+        }
+    },
+    "include": [
+        "src",
+        "tests"
+    ]
+}

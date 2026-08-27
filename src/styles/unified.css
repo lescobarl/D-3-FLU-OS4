@@ -1,0 +1,1346 @@
+/* ============================================================
+   FLU OS4 — Unified CSS System
+   ============================================================
+   This file defines the unified CSS system for FLU OS4.
+   All components should use the `flu-` prefix with BEM-like structure.
+   
+   Migration Strategy:
+   1. Add both old and new classes during transition
+   2. Update component JSX to use new classes
+   3. Remove old CSS definitions after all components migrated
+   ============================================================ */
+
+/* ============================================================
+   Unified Button System
+   ============================================================ */
+
+/* Base Button */
+.flu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-medium);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+  text-decoration: none;
+  line-height: 1.4;
+  min-height: 32px;
+}
+
+.flu-btn:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.flu-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.flu-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Button Sizes */
+.flu-btn--sm {
+  padding: 4px 10px;
+  font-size: var(--text-sm);
+  min-height: 28px;
+}
+
+.flu-btn--md {
+  padding: 6px 14px;
+  font-size: var(--text-md);
+  min-height: 32px;
+}
+
+.flu-btn--lg {
+  padding: 8px 18px;
+  font-size: var(--text-lg);
+  min-height: 36px;
+}
+
+/* Button Variants */
+.flu-btn--primary {
+  background: var(--accent-cyan);
+  color: #000;
+  border-color: var(--accent-cyan);
+  font-weight: var(--weight-semibold);
+}
+
+.flu-btn--primary:hover:not(:disabled) {
+  background: #00e5ff;
+  color: #000;
+  border-color: #00e5ff;
+  box-shadow: 0 0 16px rgba(0, 212, 255, 0.25);
+}
+
+.flu-btn--danger {
+  background: rgba(255, 68, 68, 0.08);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.flu-btn--danger:hover:not(:disabled) {
+  background: rgba(255, 68, 68, 0.15);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  box-shadow: 0 0 12px rgba(255, 68, 68, 0.15);
+}
+
+.flu-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.flu-btn--ghost:hover:not(:disabled) {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.flu-btn--listening {
+  background: rgba(0, 255, 136, 0.12);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+.flu-btn--listening:hover:not(:disabled) {
+  background: rgba(0, 255, 136, 0.2);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.flu-btn--camera {
+  border-color: rgba(72, 187, 120, 0.3);
+  background: rgba(72, 187, 120, 0.08);
+  color: #48bb78;
+}
+
+.flu-btn--camera:hover:not(:disabled) {
+  background: rgba(72, 187, 120, 0.15);
+  border-color: rgba(72, 187, 120, 0.5);
+  color: #48bb78;
+}
+
+.flu-btn--send {
+  background: linear-gradient(135deg, #4a6cf7, #5a7fff);
+  color: #fff;
+  border: none;
+  font-weight: var(--weight-semibold);
+}
+
+.flu-btn--send:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a7cff, #6a8fff);
+  box-shadow: 0 0 16px rgba(74, 108, 247, 0.3);
+}
+
+.flu-btn--mic {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(100, 140, 255, 0.2);
+}
+
+.flu-btn--mic:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(100, 140, 255, 0.4);
+}
+
+.flu-btn--toggle {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.flu-btn--toggle:hover:not(:disabled) {
+  background: var(--bg-primary);
+  border-color: var(--accent-cyan);
+}
+
+.flu-btn--participant {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+}
+
+.flu-btn--participant:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #8b5cf6;
+}
+
+.flu-btn--participant-ready {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #8b5cf6;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+  animation: flu-pulse 1.5s ease-in-out infinite;
+}
+
+.flu-btn--participant-ready:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: rgba(139, 92, 246, 0.8);
+  color: #8b5cf6;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.4);
+}
+
+/* ============================================================
+   Unified Layout Components
+   ============================================================ */
+
+/* Header */
+.flu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+}
+
+.flu-header__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flu-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flu-header__chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Avatar Column */
+.flu-avatar-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.flu-avatar-viewer {
+  background: radial-gradient(ellipse at center, var(--bg-secondary, #0f0f2a) 0%, var(--bg-primary, #080816) 100%);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Panels Column */
+.flu-panels-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.flu-panels-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Unified Panel System
+   ============================================================ */
+
+.flu-panel {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.flu-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  min-height: 40px;
+}
+
+.flu-panel__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.flu-panel__subtitle {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.flu-panel__body {
+  padding: 12px;
+  flex: 1;
+  overflow: auto;
+}
+
+.flu-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all 0.2s ease;
+}
+
+.flu-panel__toggle:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.flu-panel--expanded {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  margin: 0;
+  border-radius: 0;
+  background: var(--bg-primary);
+}
+
+/* Subpanel (nested panels) */
+.flu-subpanel {
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+
+.flu-subpanel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+}
+
+.flu-subpanel__body {
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+/* ============================================================
+   Unified Settings Components
+   ============================================================ */
+
+.flu-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flu-settings-section {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  padding: 12px;
+}
+
+.flu-settings-section__summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.flu-settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.flu-settings-field--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.flu-settings-field--slider {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.flu-settings-field--checkbox {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.flu-settings-label {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.flu-settings-hint {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* ============================================================
+   Unified Voice Components
+   ============================================================ */
+
+.flu-voice-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+}
+
+.flu-voice-bar__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.flu-voice-bar__clusters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.flu-voice-bar__cluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.flu-voice-bar__cluster--session {
+  margin-left: auto;
+}
+
+.flu-voice-bar__cluster--flu {
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.flu-voice-bar__cluster--listen {
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.flu-voice-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flu-voice-profiles__item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.flu-voice-profiles__name {
+  width: 100%;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.flu-voice-profiles__actions {
+  align-self: flex-end;
+  display: flex;
+  gap: 4px;
+}
+
+.flu-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.flu-transcript__label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.flu-transcript__text {
+  font-size: var(--text-md);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.flu-voice-input {
+  border-radius: 10px;
+  border: 1px solid rgba(100, 140, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e0e0;
+  font-size: var(--text-md);
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+  padding: 8px 12px;
+}
+
+.flu-voice-input:focus {
+  border-color: rgba(100, 140, 255, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 3px rgba(100, 140, 255, 0.1);
+}
+
+/* Error Block */
+.flu-error-block {
+  padding: 8px 12px;
+  background: rgba(255, 68, 68, 0.08);
+  border-top: 1px solid rgba(255, 68, 68, 0.2);
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+}
+
+.flu-error {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--accent-red);
+  font-weight: var(--weight-medium);
+}
+
+.flu-error-hint {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.flu-error-detail {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+/* ============================================================
+   Unified Upload Zone
+   ============================================================ */
+
+.flu-upload-zone {
+  margin: 12px 0;
+  padding: 0;
+}
+
+.flu-upload-zone__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 2px dashed rgba(100, 140, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 120px;
+}
+
+.flu-upload-zone__drop:hover {
+  border-color: rgba(100, 140, 255, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.flu-upload-zone__hint {
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.flu-upload-zone__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.flu-upload-zone__img {
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 8px;
+  border: 1px solid rgba(100, 140, 255, 0.2);
+  object-fit: contain;
+}
+
+/* ============================================================
+   Unified Status Components
+   ============================================================ */
+
+.flu-status-overlay {
+  border-radius: 10px;
+  background: rgba(8, 8, 22, 0.7);
+  border: 1px solid rgba(100, 140, 255, 0.1);
+  padding: 8px 12px;
+}
+
+.flu-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  /* Tipografía estandarizada con el sistema flu-btn: mismo tamaño,
+     familia y peso que los botones para que chips y botones hermanos
+     (p. ej. "Flu participante" + "Flu participa") no tengan saltos
+     visibles de fuente. Antes: --text-sm (11px) sin peso explícito. */
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.flu-status-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.flu-status-chip--listening {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.3);
+  color: var(--accent-green);
+}
+
+.flu-status-chip--listening .flu-status-chip__dot {
+  background: var(--accent-green);
+}
+
+.flu-status-chip--processing {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--accent-cyan);
+}
+
+.flu-status-chip--processing .flu-status-chip__dot {
+  background: var(--accent-cyan);
+}
+
+.flu-status-chip--stopped {
+  background: rgba(255, 68, 68, 0.08);
+  border-color: rgba(255, 68, 68, 0.2);
+  color: var(--accent-red);
+}
+
+.flu-status-chip--stopped .flu-status-chip__dot {
+  background: var(--accent-red);
+}
+
+/* Status Chip Variants */
+.flu-status-chip--ack {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--accent-cyan);
+}
+
+.flu-status-chip--ack .flu-status-chip__dot {
+  background: var(--accent-cyan);
+}
+
+.flu-status-chip--parity-warn {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+  color: #ffc107;
+}
+
+.flu-status-chip--parity-warn .flu-status-chip__dot {
+  background: #ffc107;
+}
+
+.flu-status-chip--flu-participant {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+}
+
+.flu-status-chip--flu-participant .flu-status-chip__dot {
+  background: #8b5cf6;
+}
+
+.flu-status-chip--flu-hand-raised {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.4);
+  color: #ffc107;
+  animation: flu-pulse 1.5s ease-in-out infinite;
+}
+
+.flu-status-chip--flu-hand-evaluating {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.4);
+  color: var(--accent-cyan);
+  animation: flu-pulse 2s ease-in-out infinite;
+}
+
+.flu-status-chip--flu-hand-idle {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+/* ============================================================
+   Animation Keyframes (reused from existing)
+   ============================================================ */
+
+@keyframes flu-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(108, 92, 231, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(108, 92, 231, 0.4);
+  }
+}
+
+@keyframes flu-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flu-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ============================================================
+   Responsive Utilities
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .flu-header {
+    padding: 6px 10px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .flu-avatar-column {
+    display: none;
+  }
+  
+  .flu-panels-column {
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   Compatibility Layer (for migration)
+   ============================================================ */
+
+/* Keep old classes for backward compatibility during migration */
+/* These will be removed after all components are migrated */
+.voice-bar__button,
+.upload-zone__btn,
+.btn-component,
+.btn-control,
+.btn-animation,
+.btn-signal {
+  /* These will inherit from flu-btn via component updates */
+}
+
+.voice-bar__button--primary,
+.upload-zone__btn--camera {
+  /* These will inherit from flu-btn--primary via component updates */
+}
+
+.voice-bar__button--stop,
+.upload-zone__btn--clear {
+  /* These will inherit from flu-btn--danger via component updates */
+}
+
+.voice-bar__button--ghost {
+  /* This will inherit from flu-btn--ghost via component updates */
+}
+
+.panel-frame {
+  /* This will inherit from flu-panel via component updates */
+}
+
+.panel-frame__header {
+  /* This will inherit from flu-panel__header via component updates */
+}
+
+.panel-frame__body {
+  /* This will inherit from flu-panel__body via component updates */
+}
+
+.voice-profiles__item {
+  /* This will inherit from flu-voice-profiles__item via component updates */
+}
+
+.voice-profiles__name {
+  /* This will inherit from flu-voice-profiles__name via component updates */
+}
+
+.voice-profiles__actions {
+  /* This will inherit from flu-voice-profiles__actions via component updates */
+}
+
+/* ============================================================
+   Autonomy Panel System
+   ============================================================ */
+
+.flu-autonomy-panel {
+  padding: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.flu-autonomy-panel__header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.flu-autonomy-panel__status {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.flu-autonomy-panel__systems {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.flu-autonomy-panel__system {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.flu-autonomy-panel__system-name {
+  color: var(--text-primary);
+}
+
+.flu-autonomy-panel__system-status {
+  font-size: 12px;
+}
+
+.flu-autonomy-panel__system-status.active {
+  color: #22c55e;
+}
+
+.flu-autonomy-panel__system-status.inactive {
+  color: #6b7280;
+}
+
+.flu-autonomy-panel__health {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.flu-autonomy-panel__health-title {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.flu-autonomy-panel__health-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.flu-autonomy-panel__health-metric {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+}
+
+.flu-autonomy-panel__actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.flu-autonomy-panel__notifications {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+}
+
+.flu-autonomy-panel__notifications-title {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.flu-autonomy-panel__notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flu-autonomy-panel__notification {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.flu-autonomy-panel__notification.read {
+  opacity: 0.6;
+}
+
+.flu-autonomy-panel__notification--info {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid #3b82f6;
+}
+
+.flu-autonomy-panel__notification--warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+}
+
+.flu-autonomy-panel__notification--error {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+}
+
+.flu-autonomy-panel__notification--success {
+  background: rgba(34, 197, 94, 0.1);
+  border-left: 3px solid #22c55e;
+}
+
+.flu-autonomy-panel__notification-title {
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.flu-autonomy-panel__notification-message {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ============================================================
+   Análisis de Documentos (F1) / App (F2) / Generación (F3/F4)
+   ============================================================ */
+
+.frame-content__document-analysis,
+.frame-content__app-analysis,
+.frame-content__generation {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(100, 140, 255, 0.06);
+  border: 1px solid rgba(100, 140, 255, 0.15);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.frame-content__document-analysis--error {
+  background: rgba(255, 50, 50, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.frame-content__document-error {
+  margin: 4px 0;
+  font-size: var(--text-sm);
+  color: var(--error, #ff6b6b);
+}
+
+.flu-upload-zone__analyzing {
+  font-size: var(--text-sm);
+  color: var(--brand-primary-light, #a29bfe);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.document-analysis__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.document-analysis__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--brand-primary-light, #a29bfe);
+}
+
+.document-analysis__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.document-analysis__meta-item {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(100, 140, 255, 0.1);
+  border: 1px solid rgba(100, 140, 255, 0.2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-analysis__subtitle {
+  margin: 10px 0 6px 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.document-analysis__sheets {
+  margin-top: 4px;
+}
+
+.document-analysis__sheet-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.document-analysis__sheet-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.document-analysis__sheet-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.document-analysis__sheet-rol {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  background: rgba(100, 140, 255, 0.12);
+  color: var(--brand-primary-light, #a29bfe);
+}
+
+.document-analysis__sheet-rol--calculos,
+.document-analysis__sheet-rol--cálculos {
+  background: rgba(0, 255, 136, 0.12);
+  color: var(--accent-green, #00ff88);
+}
+
+.document-analysis__sheet-rol--configuracion,
+.document-analysis__sheet-rol--configuración {
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+}
+
+.document-analysis__sheet-rol--vista {
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+}
+
+.document-analysis__sheet-cells {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.document-analysis__sheet-errors,
+.document-analysis__error-list {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+  font-size: var(--text-xs);
+  color: var(--error, #ff6b6b);
+}
+
+.document-analysis__error-item {
+  margin-bottom: 2px;
+  color: var(--error, #ff6b6b);
+}
+
+.document-analysis__errors {
+  margin-top: 4px;
+}
+
+.document-analysis__scenarios {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.document-analysis__scenario {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.document-analysis__scenario summary {
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+}
+
+.document-analysis__scenario-body {
+  margin: 6px 0 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.document-analysis__warnings {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.document-analysis__warning {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: #f59e0b;
+}
+
+.document-analysis__app-proposito {
+  margin: 4px 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  width: 100%;
+  line-height: 1.4;
+}
+
+.document-analysis__app-line {
+  margin: 2px 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  width: 100%;
+}
+
+.document-analysis__flow-steps {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---- Generación (F3/F4) ---- */
+
+.generation-panel__title {
+  margin: 0 0 8px 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--brand-primary-light, #a29bfe);
+}
+
+.generation-panel__status {
+  margin-bottom: 8px;
+}
+
+.generation-panel__state {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  background: rgba(100, 140, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.generation-panel__state--listo {
+  background: rgba(0, 255, 136, 0.14);
+  color: var(--accent-green, #00ff88);
+}
+
+.generation-panel__state--error {
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--error, #ff6b6b);
+}
+
+.generation-panel__bar {
+  margin-top: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.generation-panel__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6c5ce7, #00ff88);
+  transition: width 0.4s ease;
+}
+
+.generation-panel__error {
+  margin: 6px 0;
+  font-size: var(--text-sm);
+  color: var(--error, #ff6b6b);
+}
+
+.generation-panel__result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 255, 136, 0.06);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.generation-panel__result-name {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+
+.generation-panel__video {
+  margin-top: 8px;
+}
+
+.generation-panel__video-player {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.generation-panel__video-degraded {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-size: var(--text-sm);
+  color: #f59e0b;
+  margin: 0;
+}
+
+.generation-panel__video-meta {
+  margin: 6px 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.generation-panel__warning {
+  margin: 4px 0;
+  font-size: var(--text-xs);
+  color: #f59e0b;
+}
+
+.generation-panel__script {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  font-size: var(--text-xs);
+}
+
+.generation-panel__script summary {
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.generation-panel__script-pre {
+  margin: 6px 0 0 0;
+  max-height: 260px;
+  overflow: auto;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

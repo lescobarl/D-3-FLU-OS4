@@ -1,0 +1,389 @@
+/* ============================================================
+   FLU OS4 — Estilos Globales con Sistema Unificado
+   ============================================================
+   Orden de importación real (desde main.tsx → App.tsx → avatar/App.tsx):
+      1. src/avatar/App.css      — :root CSS variables + BunnyControlCenter
+      2. src/App.css             — Main layout + tabs + panels
+      3. src/styles/unified.css  — Sistema CSS unificado flu-*
+      4. src/index.css           — Global overrides (este archivo, el último)
+   ============================================================ */
+
+/* Importar sistema unificado */
+@import './styles/unified.css';
+
+/* ---- Unified Typography ---- */
+
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+a {
+    color: var(--brand-primary-light, #a29bfe);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+a:hover {
+    color: var(--brand-primary, #6c5ce7);
+}
+
+button {
+    font-family: inherit;
+}
+
+input {
+    font-family: inherit;
+}
+
+textarea {
+    font-family: inherit;
+}
+
+select {
+    font-family: inherit;
+}
+
+/* ---- Smooth Scrolling ---- */
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* ---- Animations ---- */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* @keyframes pulse is defined in src/avatar/App.css (line 639) with scale transform */
+
+@keyframes glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px rgba(108, 92, 231, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(108, 92, 231, 0.4);
+    }
+}
+
+/* ---- VoiceProfilesPanel — OS2 override ---- */
+
+.voice-profiles__item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.voice-profiles__name {
+    width: 100%;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-primary, #e0e0e0);
+}
+
+.voice-profiles__button {
+    font-size: 11px;
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary, #a0a0b0);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.voice-profiles__button:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.voice-profiles__actions {
+    align-self: flex-end;
+}
+
+/* Note: .flu-shell-tabs styles moved to src/App.css (lines 665+) */
+
+/* ---- VoiceControls Override (inside FluAvatarVoiceBridge) ---- */
+
+.voice-controls__input {
+    border-radius: 10px;
+    border: 1px solid rgba(100, 140, 255, 0.2);
+    background: rgba(255, 255, 255, 0.04);
+    color: #e0e0e0;
+    font-size: var(--text-md);
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.voice-controls__input:focus {
+    border-color: rgba(100, 140, 255, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 3px rgba(100, 140, 255, 0.1);
+}
+
+.voice-controls__send {
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #4a6cf7, #5a7fff);
+    color: #fff;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.voice-controls__send:hover {
+    background: linear-gradient(135deg, #5a7cff, #6a8fff);
+    box-shadow: 0 0 16px rgba(74, 108, 247, 0.3);
+}
+
+.voice-controls__mic {
+    border-radius: 10px;
+    border: 1px solid rgba(100, 140, 255, 0.2);
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 0.2s ease;
+}
+
+.voice-controls__mic:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(100, 140, 255, 0.4);
+}
+
+/* ---- Status Overlay ---- */
+
+.status-overlay {
+    border-radius: 10px;
+    background: rgba(8, 8, 22, 0.7);
+    border: 1px solid rgba(100, 140, 255, 0.1);
+}
+
+/* ---- BunnyViewer Container ---- */
+
+.bunny-viewer-container {
+    background: radial-gradient(ellipse at center, var(--bg-secondary, #0f0f2a) 0%, var(--bg-primary, #080816) 100%);
+}
+
+/* ---- Upload Zone (digitalización OCR) ---- */
+
+.frame-content__upload-zone {
+    margin: 12px 0;
+    padding: 0;
+}
+
+.upload-zone__drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 16px;
+    border: 2px dashed rgba(100, 140, 255, 0.25);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 120px;
+}
+
+.upload-zone__drop:hover {
+    border-color: rgba(100, 140, 255, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.upload-zone__hint {
+    font-size: var(--text-md);
+    color: var(--text-secondary, #a0a0b0);
+    margin: 0;
+}
+
+.upload-zone__or {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary, #6a6a7a);
+    margin: 0;
+}
+
+.upload-zone__buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.upload-zone__btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(100, 140, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(100, 140, 255, 0.08);
+    color: var(--text-primary, #e0e0e0);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.upload-zone__btn:hover {
+    background: rgba(100, 140, 255, 0.15);
+    border-color: rgba(100, 140, 255, 0.5);
+}
+
+.upload-zone__btn--camera {
+    border-color: rgba(72, 187, 120, 0.3);
+    background: rgba(72, 187, 120, 0.08);
+}
+
+.upload-zone__btn--camera:hover {
+    background: rgba(72, 187, 120, 0.15);
+    border-color: rgba(72, 187, 120, 0.5);
+}
+
+.upload-zone__btn--clear {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.upload-zone__btn--clear:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.upload-zone__preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.upload-zone__img {
+    max-width: 100%;
+    max-height: 240px;
+    border-radius: 8px;
+    border: 1px solid rgba(100, 140, 255, 0.2);
+    object-fit: contain;
+}
+
+.upload-zone__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.upload-zone__analyzing {
+    font-size: var(--text-sm);
+    color: var(--brand-primary-light, #a29bfe);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ---- Homework Analysis Result ---- */
+
+.frame-content__homework-analysis {
+    margin: 12px 0;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: rgba(100, 140, 255, 0.06);
+    border: 1px solid rgba(100, 140, 255, 0.15);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.homework-analysis__title {
+    margin: 0 0 8px 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--brand-primary-light, #a29bfe);
+}
+
+.homework-analysis__detail {
+    margin: 4px 0;
+    font-size: var(--text-sm);
+    color: var(--text-primary, #e0e0e0);
+    line-height: 1.5;
+}
+
+.homework-analysis__list {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+    list-style: disc;
+}
+
+.homework-analysis__list li {
+    font-size: var(--text-sm);
+    color: var(--text-primary, #e0e0e0);
+    line-height: 1.5;
+    margin-bottom: 4px;
+}
+
+/* ---- Generated Image Section (Pollinations) ---- */
+.frame-content__generated-image {
+    margin: 16px 0;
+    padding: 0;
+    border: 1px solid rgba(100, 140, 255, 0.15);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+}
+
+.generated-image__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(100, 140, 255, 0.1);
+}
+
+.generated-image__title {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--brand-primary-light, #a29bfe);
+}
+
+.generated-image__preview {
+    padding: 12px;
+    text-align: center;
+}
+
+.generated-image__img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 4px;
+    object-fit: contain;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.generated-image__loading {
+    padding: 8px;
+    font-size: var(--text-sm);
+    color: var(--text-secondary, #a0a0b0);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    margin: 8px;
+}
+
+.generated-image__error {
+    padding: 12px;
+    background: rgba(255, 50, 50, 0.1);
+    border-radius: 4px;
+    margin: 8px;
+    text-align: center;
+}
+
+.generated-image__error p {
+    margin: 0 0 8px 0;
+    font-size: var(--text-sm);
+    color: var(--error, #ff6b6b);
+}

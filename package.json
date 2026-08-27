@@ -1,0 +1,61 @@
+{
+    "name": "flu-os4",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc -b && vite build",
+        "preview": "vite preview",
+        "lint": "eslint .",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "sync:ffmpeg": "node scripts/sync-ffmpeg-core.mjs",
+        "postinstall": "node scripts/sync-ffmpeg-core.mjs"
+    },
+    "dependencies": {
+        "@ffmpeg/core": "^0.12.6",
+        "@ffmpeg/ffmpeg": "^0.12.10",
+        "@ffmpeg/util": "^0.12.1",
+        "@react-three/drei": "^10.7.7",
+        "@react-three/fiber": "^9.6.1",
+        "dexie": "^4.4.4",
+        "docx": "^9.7.1",
+        "jszip": "^3.10.1",
+        "mammoth": "^1.12.0",
+        "pdfjs-dist": "^6.2.108",
+        "pdfkit": "^0.19.1",
+        "pptx-parser": "^1.1.7-beta.9",
+        "pptxgenjs": "^4.0.1",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "tesseract.js": "^7.0.0",
+        "three": "^0.184.0",
+        "uuid": "^14.0.1",
+        "ws": "^8.21.1",
+        "xlsx": "^0.18.5",
+        "zustand": "^5.0.14"
+    },
+    "devDependencies": {
+        "@huggingface/transformers": "^4.2.0",
+        "@playwright/test": "^1.61.1",
+        "@testing-library/dom": "^10.4.1",
+        "@testing-library/jest-dom": "^7.0.0",
+        "@testing-library/react": "^16.3.2",
+        "@types/node": "^26.0.1",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "@types/three": "^0.184.0",
+        "@types/uuid": "^10.0.0",
+        "@vitejs/plugin-react": "^6.0.2",
+        "jsdom": "^30.0.0",
+        "typescript": "~6.0.2",
+        "vite": "^8.1.0",
+        "vitest": "^3.1.0"
+    },
+    "overrides": {
+        "stats-gl": {
+            "three": "0.184.0"
+        }
+    }
+}
