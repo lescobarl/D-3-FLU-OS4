@@ -172,6 +172,8 @@ export interface IntegrationActions {
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
     addFluMessage: (text: string) => void;
+    /** Añadir un mensaje de sistema al historial de conversación */
+    addSystemMessage: (text: string) => void;
     /** Cargar historial completo desde DB (sin side effects) */
     batchLoadHistory: (entries: ConversationEntry[]) => void;
     /** Cambiar estado emocional */

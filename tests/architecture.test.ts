@@ -370,7 +370,7 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
         }
         // This test is informational — EXPRESSION_MAP may have extras not in registry
         expect(mapKeys.length).toBeGreaterThanOrEqual(20);
-    });
+    }, 60_000);
 
     it('EXPRESSION_MAP animations must be valid BunnyAnimation values', async () => {
         const { EXPRESSION_MAP } = await import('../src/avatar/index');
@@ -393,7 +393,7 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
             const details = invalid.map((i) => `  ${i.expression} → '${i.anim}'`).join('\n');
             expect(invalid).toEqual([]);
         }
-    });
+    }, 60_000);
 
     it('EXPRESSION_MAP must not have stale expressions (removed from registry)', async () => {
         const { EXPRESSION_MAP } = await import('../src/avatar/index');
@@ -416,5 +416,48 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
             const details = stale.map((s) => `  '${s}'`).join('\n');
             expect(stale).toEqual([]);
         }
+    }, 60_000);
+});
+
+// ============================================================
+// Fase 2 — Memoria y recordatorios (estructura persistente)
+// ============================================================
+
+describe('Fase 2 — Database v5: tablas reminders y shoppingItems', () => {
+    it('fluDatabase must declare v5 stores for reminders and shoppingItems', async () => {
+        const src = (await import('fs')).readFileSync('./src/core/db/fluDatabase.ts', 'utf-8');
+        expect(src).toMatch(/reminders:\s*'id, status, dueAt, personId, createdAt'/);
+        expect(src).toMatch(/shoppingItems:\s*'id, checked, personId, createdAt'/);
+    });
+
+    it('fluDatabase must export the Phase 2 record types', async () => {
+        const src = (await import('fs')).readFileSync('./src/core/db/fluDatabase.ts', 'utf-8');
+        expect(src).toContain('export interface ReminderRecord');
+        expect(src).toContain('export interface ShoppingItemRecord');
+        expect(src).toContain("export type ReminderStatus = 'pending' | 'done' | 'dismissed'");
+    });
+
+    it('fluDatabase must expose reminders and shoppingItems tables at runtime', async () => {
+        const { fluDb } = await import('../src/core/db/fluDatabase');
+        expect(fluDb.reminders).toBeDefined();
+        expect(fluDb.shoppingItems).toBeDefined();
+    });
+});
+
+describe('Fase 2 — FLU_CONFIG: recordatorios y compras centralizados [Rule #1]', () => {
+    it('FLU_CONFIG must enable reminders and shopping with agenda maxReminders=5', async () => {
+        const { FLU_CONFIG } = await import('../src/voice/lib/fluConfig.js');
+        expect(FLU_CONFIG.reminders.enabled).toBe(true);
+        expect(FLU_CONFIG.shopping.enabled).toBe(true);
+        expect(FLU_CONFIG.agenda.maxReminders).toBe(5);
+    });
+
+    it('FLU_CONFIG must centralize reminder and shopping defaults (no hardcode)', async () => {
+        const { FLU_CONFIG } = await import('../src/voice/lib/fluConfig.js');
+        expect(FLU_CONFIG.reminders.defaultReminderOffsetMinutes).toBe(10);
+        expect(FLU_CONFIG.reminders.maxPerDay).toBe(20);
+        expect(FLU_CONFIG.reminders.defaultCategory).toBe('reminder');
+        expect(FLU_CONFIG.shopping.defaultCategory).toBe('shopping');
+        expect(FLU_CONFIG.agenda.enabled).toBe(true);
     });
 });

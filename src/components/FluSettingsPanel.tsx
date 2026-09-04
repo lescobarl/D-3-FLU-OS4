@@ -16,20 +16,11 @@ import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES } from '../core/config/
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
-import { PALETTES } from '../core/branding/seasonalPalettes';
+import { getAllPalettes, getPalette } from '../core/branding/seasonalPalettes';
 import { useBunnyStore } from '../avatar/store/bunnyStore';
 import type { BunnyComponent } from '../avatar/types/bunny';
 import type { VoiceConfig } from '../types/bridge';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { useConfigPersistence } from '../hooks/useConfigPersistence';
 import { useAuditLog } from '../hooks/useAuditLog';
-
-// Declare global window types
-declare global {
-    interface Window {
-        FLU_CONFIG?: typeof FLU_CONFIG;
-    }
-}
 
 interface FluSettingsPanelProps {
     // External Services Config props
@@ -47,6 +38,8 @@ interface FluSettingsPanelProps {
     apiKey: string;
     textModel: string;
     textApiUrl: string;
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    geminiApiKey: string;
     imageModel: string;
     imageApiKey: string;
     imageApiUrl: string;
@@ -54,6 +47,7 @@ interface FluSettingsPanelProps {
     handleTextModelCommit: (val: string) => void;
     handleTextApiKeyCommit: (val: string) => void;
     handleTextApiUrlCommit: (val: string) => void;
+    handleGeminiApiKeyCommit: (val: string) => void;
     handleImageModelCommit: (val: string) => void;
     handleImageApiKeyCommit: (val: string) => void;
     handleImageApiUrlCommit: (val: string) => void;
@@ -79,6 +73,7 @@ export function FluSettingsPanel({
     apiKey,
     textModel,
     textApiUrl,
+    geminiApiKey,
     imageModel,
     imageApiKey,
     imageApiUrl,
@@ -86,6 +81,7 @@ export function FluSettingsPanel({
     handleTextModelCommit,
     handleTextApiKeyCommit,
     handleTextApiUrlCommit,
+    handleGeminiApiKeyCommit,
     handleImageModelCommit,
     handleImageApiKeyCommit,
     handleImageApiUrlCommit,
@@ -118,11 +114,12 @@ export function FluSettingsPanel({
 }: FluSettingsPanelProps) {
     const integrationStore = useIntegrationStore();
     const { componentColors, setComponentColor, resetComponentColors } = useBunnyStore();
+    const audit = useAuditLog();
 
     return (
         <section className="flu-settings-panel">
             {/* ---- 🎭 Configurador de FLU ---- */}
-            <details className="flu-settings-image-config" open>
+            <details className="flu-settings-image-config">
                 <summary className="flu-settings-image-config__summary flu-settings-image-config__summary--with-profile">
                     <span className="flu-settings-image-config__icon">🎭</span>
                     <span>Configurador de FLU</span>
@@ -488,8 +485,8 @@ export function FluSettingsPanel({
                                 onChange={(e) => onBrandingSeasonChange?.(e.target.value)}
                                 className="flu-settings-image-config__input"
                             >
-                                {Object.entries(PALETTES).map(([key, palette]) => (
-                                    <option key={key} value={key}>
+                                {getAllPalettes().map((palette) => (
+                                    <option key={palette.id} value={palette.id}>
                                         {palette.name}
                                     </option>
                                 ))}
@@ -521,7 +518,7 @@ export function FluSettingsPanel({
                     </label>
 
                     {/* Preview de paleta activa */}
-                    {brandingMode !== 'disabled' && brandingSeason && PALETTES[brandingSeason] && (
+                    {brandingMode !== 'disabled' && brandingSeason && (
                         <div style={{
                             marginTop: 8,
                             padding: '8px 10px',
@@ -531,10 +528,10 @@ export function FluSettingsPanel({
                             color: 'var(--text-secondary)',
                         }}>
                             <div style={{ marginBottom: 4 }}>
-                                <strong>Paleta activa:</strong> {PALETTES[brandingSeason].name}
+                                <strong>Paleta activa:</strong> {getPalette(brandingSeason).name}
                             </div>
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                {Object.entries(PALETTES[brandingSeason].colors).slice(0, 6).map(([key, color]) => (
+                                {Object.entries(getPalette(brandingSeason).colors).slice(0, 6).map(([key, color]) => (
                                     <span
                                         key={key}
                                         title={key}
@@ -554,11 +551,11 @@ export function FluSettingsPanel({
                 </div>
             </details>
 
-            {/* ---- 🎤 Editor de Comandos de Voz ---- */}
+            {/* ---- 🎤 Palabras de Activación ---- */}
             <details className="flu-settings-image-config">
                 <summary className="flu-settings-image-config__summary">
                     <span className="flu-settings-image-config__icon">🎤</span>
-                    <span>Editor de Comandos Personalizados</span>
+                    <span>Palabras de Activación</span>
                 </summary>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
@@ -589,40 +586,34 @@ export function FluSettingsPanel({
                 </summary>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
-                        {/* Estado de logs */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <button
-                                    type="button"
-                                    className="flu-settings-btn"
-                                    onClick={() => {
-                                        // Limpiar logs
-                                        console.clear();
-                                        alert('Logs de depuración limpiados correctamente');
-                                    }}
-                                >
-                                    🧹 Limpiar logs de depuración
-                                </button>
-                                <button
-                                    type="button"
-                                    className="flu-settings-btn"
-                                    onClick={() => {
-                                        // Exportar logs
-                                        const logs = JSON.stringify(window.FLU_CONFIG?.debug || {}, null, 2);
-                                        const blob = new Blob([logs], { type: 'application/json' });
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = 'flu-debug-logs.json';
-                                        a.click();
-                                        URL.revokeObjectURL(url);
-                                        alert('Logs de auditoría exportados correctamente');
-                                    }}
-                                >
-                                    💾 Exportar logs de auditoría
-                                </button>
-                            </div>
-                        </label>
+                        {/* Acciones de auditoría */}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                className="flu-settings-btn"
+                                onClick={async () => {
+                                    await audit.clearAll();
+                                    alert('Registro de auditoría limpiado correctamente');
+                                }}
+                            >
+                                🧹 Limpiar registro de auditoría
+                            </button>
+                            <button
+                                type="button"
+                                className="flu-settings-btn"
+                                onClick={() => {
+                                    const blob = new Blob([JSON.stringify(audit.logs, null, 2)], { type: 'application/json' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = 'flu-audit-logs.json';
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                            >
+                                💾 Exportar registro de auditoría
+                            </button>
+                        </div>
 
                         {/* Configuración de logs */}
                         <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 16 }}>
@@ -635,49 +626,32 @@ export function FluSettingsPanel({
                                 />
                             </div>
                         </label>
-                    </div>
-                </div>
-            </details>
 
-            {/* ---- 🧠 Configuración Avanzada de Memoria ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🧠</span>
-                    <span>Configuración Avanzada de Memoria</span>
-                </summary>
-                <div className="flu-settings-image-config__body">
-                    <div className="flu-settings-image-config__group">
-                        {/* Curva de olvido */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                            <span>Curva de olvido (segundos)</span>
-                            <input
-                                type="number"
-                                className="flu-settings-image-config__input"
-                                defaultValue={3600}
-                            />
-                            <small style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
-                                Tiempo en segundos para que la memoria se olvide de la información
-                            </small>
-                        </label>
-
-                        {/* Tamaño máximo de memoria */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 16 }}>
-                            <span>Tamaño máximo de memoria</span>
-                            <input
-                                type="number"
-                                className="flu-settings-image-config__input"
-                                defaultValue={100}
-                            />
-                            <small style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
-                                Número máximo de entradas en la memoria de conversación
-                            </small>
-                        </label>
+                        {/* Vista previa de auditoría */}
+                        <div style={{ marginTop: 16 }}>
+                            <span className="flu-settings-sub-title">Últimos eventos registrados</span>
+                            {audit.loading ? (
+                                <small style={{ color: 'var(--text-secondary)' }}>Cargando registro de auditoría…</small>
+                            ) : audit.logs.length === 0 ? (
+                                <small style={{ color: 'var(--text-secondary)' }}>Sin eventos registrados todavía.</small>
+                            ) : (
+                                <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                    {audit.logs.slice(0, 8).map((entry) => (
+                                        <li key={entry.id} style={{ marginBottom: 4 }}>
+                                            <strong>{entry.action}</strong> · {entry.entity}
+                                            {entry.context ? ` — ${entry.context}` : ''}
+                                            <span style={{ opacity: 0.7 }}> · {new Date(entry.timestamp).toLocaleString()}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
                     </div>
                 </div>
             </details>
 
             {/* ---- 🎨 Personalización del Avatar ---- */}
-            <details className="flu-settings-image-config" open>
+            <details className="flu-settings-image-config">
                 <summary className="flu-settings-image-config__summary">
                     <span className="flu-settings-image-config__icon">🎨</span>
                     <span>Personalización del Avatar</span>
@@ -893,6 +867,46 @@ export function FluSettingsPanel({
                                         onChange={(e) => handleImageApiUrlCommit(e.target.value)}
                                     />
                                 </label>
+                            </div>
+                        </div>
+
+                        {/* ---- 🖼️ Imagen Gemini (fallback) ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🖼️ Imagen Gemini (fallback)</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'Gemini API Key (dedicated)' : 'Gemini API Key (dedicada)'}
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type="password"
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder={language === 'en' ? 'Optional: Gemini native API key' : 'Opcional: Gemini API key nativa'}
+                                            defaultValue={geminiApiKey}
+                                            onChange={(e) => handleGeminiApiKeyCommit(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={(e) => {
+                                                const row = (e.currentTarget as HTMLButtonElement).closest('.flu-settings-row');
+                                                const input = row?.querySelector('input[type="password"]') as HTMLInputElement | null;
+                                                if (input) {
+                                                    input.type = input.type === 'password' ? 'text' : 'password';
+                                                }
+                                            }}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                                    {language === 'en'
+                                        ? 'If empty, falls back to the Text API key. The Gemini image fallback activates automatically when a key is present.'
+                                        : 'Si está vacía, se usa la API key de Texto. El fallback de imagen Gemini se activa automáticamente cuando hay una clave configurada.'}
+                                </p>
                             </div>
                         </div>
 

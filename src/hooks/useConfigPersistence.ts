@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey } from '../core/config/appConfig';
+import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveGeminiApiKey } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useAuditLog } from './useAuditLog';
 
@@ -27,6 +27,8 @@ export interface ConfigPersistence {
     apiKey: string;
     textModel: string;
     textApiUrl: string;
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    geminiApiKey: string;
     // Image (Pollinations) Config
     imageApiKey: string;
     imageModel: string;
@@ -47,6 +49,7 @@ export interface ConfigPersistence {
     handleTextApiKeyCommit: (key: string) => void;
     handleTextModelCommit: (model: string) => void;
     handleTextApiUrlCommit: (url: string) => void;
+    handleGeminiApiKeyCommit: (key: string) => void;
     handleImageApiKeyCommit: (key: string) => void;
     handleImageModelCommit: (model: string) => void;
     handleImageApiUrlCommit: (url: string) => void;
@@ -107,6 +110,10 @@ export function useConfigPersistence(): ConfigPersistence {
 
     const [textModel, setTextModel] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_MODEL));
     const [textApiUrl, setTextApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_API_URL));
+
+    // ---- Gemini nativo (paso 5): clave dedicada + toggle del fallback de imagen ----
+    // Usa resolveGeminiApiKey() centralizado desde appConfig (Rule #1: NO HARDCODE).
+    const [geminiApiKey, setGeminiApiKey] = useState<string>(() => resolveGeminiApiKey());
 
     // ---- Image (Pollinations) Config ----
     const [imageApiKey, setImageApiKey] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_KEY));
@@ -218,6 +225,14 @@ export function useConfigPersistence(): ConfigPersistence {
         auditLog.logChange('config', 'text-api-url', prev, url, 'Text API URL updated').catch(console.error);
     }, [textApiUrl, auditLog]);
 
+    // ---- Gemini nativo (paso 5) config handlers ----
+    const handleGeminiApiKeyCommit = useCallback((key: string) => {
+        const prev = geminiApiKey;
+        setGeminiApiKey(key);
+        saveString(STORAGE_KEYS.GEMINI_API_KEY, key);
+        auditLog.logChange('config', 'gemini-api-key', prev, key, 'Gemini API Key updated').catch(console.error);
+    }, [geminiApiKey, auditLog]);
+
     // ---- Image (Pollinations) config handlers ----
     const handleImageApiKeyCommit = useCallback((key: string) => {
         const prev = imageApiKey;
@@ -283,6 +298,7 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.TEXT_API_KEY,
             STORAGE_KEYS.TEXT_MODEL,
             STORAGE_KEYS.TEXT_API_URL,
+            STORAGE_KEYS.GEMINI_API_KEY,
             STORAGE_KEYS.IMAGE_API_KEY,
             STORAGE_KEYS.IMAGE_MODEL,
             STORAGE_KEYS.IMAGE_API_URL,
@@ -311,6 +327,7 @@ export function useConfigPersistence(): ConfigPersistence {
         apiKey,
         textModel,
         textApiUrl,
+        geminiApiKey,
         imageApiKey,
         imageModel,
         imageApiUrl,
@@ -325,6 +342,7 @@ export function useConfigPersistence(): ConfigPersistence {
         handleTextApiKeyCommit,
         handleTextModelCommit,
         handleTextApiUrlCommit,
+        handleGeminiApiKeyCommit,
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,

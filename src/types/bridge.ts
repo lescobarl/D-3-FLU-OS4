@@ -102,7 +102,8 @@ export type EmotionalState =
 export type FluProfile =
     | 'administrativo'
     | 'profesor'
-    | 'estudiante';
+    | 'estudiante'
+    | 'animador';
 
 /**
  * Configuración de imagen del avatar (componentes visuales).
@@ -322,13 +323,17 @@ export interface WorkspaceEntry {
     /** Título del contenido workspace (desde Gemini contract) */
     titulo?: string;
     /** Tipo de contenido workspace (desde Gemini contract) */
-    tipo?: 'text' | 'image_prompt' | 'diagram' | '3d' | null;
+    tipo?: 'text' | 'image_prompt' | 'diagram' | '3d' | 'horario' | 'doc' | 'video' | null;
+    /** Modo de visualización del horario de clases (solo cuando tipo === 'horario') */
+    modo?: 'semana' | 'dia' | 'proxima' | 'recordatorios';
     /** Contenido textual del workspace (desde Gemini contract) */
     contenido?: string;
     /** Prompt visual para generación de imágenes (desde Gemini contract) */
     prompt_visual?: string;
     /** Puntos clave extraídos de la conversación */
     puntos_clave: string[];
+    /** Origen del contenido: 'web' (navegación/búsqueda) o 'ia' (respuesta de Gemini) */
+    origen?: 'web' | 'ia';
     /** Timestamp de generación */
     timestamp: number;
 }

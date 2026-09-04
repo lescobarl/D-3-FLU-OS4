@@ -1,12 +1,17 @@
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 
-export function FluShellTabs({ activeTab, onTabChange }) {
+export function FluShellTabs({ activeTab, onTabChange, visibleIds }) {
   const items = FLU_CONFIG.ui.tabs.items
+  // Filtrar por las pestañas visibles del ambiente activo (si se especifican)
+  const visible =
+    Array.isArray(visibleIds) && visibleIds.length > 0
+      ? items.filter((item) => visibleIds.includes(item.id))
+      : items
 
   return (
     <nav className="flu-shell-tabs" role="tablist" aria-label={FLU_CONFIG.ui.tabs.ariaLabel}>
       <div className="flu-shell-tabs__list">
-        {items.map((item) => {
+        {visible.map((item) => {
           const isActive = activeTab === item.id
           return (
             <button

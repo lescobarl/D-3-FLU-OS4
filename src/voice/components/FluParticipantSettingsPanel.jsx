@@ -72,7 +72,7 @@ export default function FluParticipantSettingsPanel({
   const safeVoices = Array.isArray(voices) ? voices : []
 
   return (
-    <details className="flu-settings-image-config" open>
+    <details className="flu-settings-image-config">
       <summary className="flu-settings-image-config__summary">
         <span className="flu-settings-image-config__icon">🔊</span>
         <span>{resolveFluParticipantLabel('panelTitle', lang)}</span>

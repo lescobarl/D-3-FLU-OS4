@@ -1,0 +1,222 @@
+// ============================================================
+// useReminders — Recordatorios (Fase 2, B1/B3/B4)
+// ------------------------------------------------------------
+// Hook que gestiona recordatorios sobre Dexie (fluDb.reminders)
+// vía reminderService y ejecuta el scheduler (tickMs desde
+// FLU_CONFIG.reminders): cuando un recordatorio vence, se marca
+// como completado y se dispara notify({category:'reminder', ...}),
+// que la capa de notificaciones convierte en toast + voz.
+//
+// Cumple:
+//   - Rule #1: NO HARDCODE — intervalos/límites desde FLU_CONFIG
+//   - Obligación #5: auditoría (la hace reminderService)
+//   - Obligación #6/#7: UUIDv4 + SyncTuple (los hace reminderService)
+//   - DI: now/notify/speak inyectables para pruebas deterministas
+// ============================================================
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { fluDb, type ReminderRecord } from '../core/db/fluDatabase';
+import {
+  createReminderService,
+  type AddReminderResult,
+  type NewReminderInput,
+  type ReminderService,
+} from '../core/reminders/reminderService';
+import { collectDueOrdered } from '../core/reminders/reminderScheduler';
+
+// ------------------------------------------------------------
+// Tipos
+// ------------------------------------------------------------
+
+/** Forma mínima que el hook acepta para notificar vencimientos. */
+export interface ReminderNotifyInput {
+  category: string;
+  title: string;
+  body: string;
+  urgent?: boolean;
+}
+
+export interface UseRemindersOptions {
+  /** Anuncio por voz del vencimiento (opcional). */
+  speak?: (text: string, lang: string) => Promise<void>;
+  /** Dispara la notificación (esperado: notificationCenter.service.notify). */
+  notify?: (input: ReminderNotifyInput) => void;
+  /** Idioma para los anuncios por voz. */
+  language?: string;
+  /** Referencia de reloj (por defecto: Date.now()). */
+  now?: () => number;
+}
+
+export interface RemindersState {
+  reminders: ReminderRecord[];
+  loading: boolean;
+  pendingCount: number;
+}
+
+export interface RemindersActions {
+  refresh: () => Promise<void>;
+  add: (input: NewReminderInput) => Promise<AddReminderResult>;
+  complete: (id: string) => Promise<ReminderRecord | null>;
+  dismiss: (id: string) => Promise<ReminderRecord | null>;
+  remove: (id: string) => Promise<boolean>;
+}
+
+export interface UseRemindersResult extends RemindersState, RemindersActions {
+  service: ReminderService;
+}
+
+// ------------------------------------------------------------
+// Hook
+// ------------------------------------------------------------
+
+export function useReminders({
+  speak,
+  notify,
+  language = 'es',
+  now,
+}: UseRemindersOptions = {}): UseRemindersResult {
+  const config = (FLU_CONFIG as any).reminders || {};
+  const maxPerDay = Number(config.maxPerDay) || 20;
+  const defaultCategory = config.defaultCategory || 'reminder';
+  const tickMs = Number(config.tickMs) || 30000;
+  const graceMs = Number(config.graceMs) || 15000;
+  const voiceDue = (config.voice && config.voice.due) || 'Tienes un recordatorio pendiente:';
+  const lang = language === 'en' ? 'en' : 'es';
+
+  // Crear el servicio ANTES de cualquier useState: el inicializador de
+  // estado o los callbacks referencian `service`, y una referencia en
+  // la zona muerta temporal (TDZ) rompería el arranque con
+  // "Cannot access 'service' before initialization".
+  const serviceRef = useRef<ReminderService | null>(null);
+  if (!serviceRef.current) {
+    serviceRef.current = createReminderService({
+      db: fluDb.reminders,
+      config: { maxPerDay, defaultCategory },
+      now: now || (() => Date.now()),
+    });
+  }
+  const service = serviceRef.current;
+
+  // Reloj "latest": permite que `now` cambie sin closures obsoletas.
+  const nowRef = useRef(now || (() => Date.now()));
+  nowRef.current = now || (() => Date.now());
+
+  const [reminders, setReminders] = useState<ReminderRecord[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Ref de guardia para no solapar ticks asíncronos del scheduler.
+  const runningRef = useRef(false);
+
+  /** Recarga la lista desde IndexedDB (ordenada por vencimiento). */
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const all = await service.list();
+      const sorted = all.slice().sort((a, b) => a.dueAt - b.dueAt);
+      setReminders(sorted);
+      setPendingCount(sorted.filter((r) => r.status === 'pending').length);
+    } catch (err) {
+      console.error('[useReminders] refresh error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [service]);
+
+  /** Un tick del scheduler: marca los vencidos y notifica. */
+  const runTick = useCallback(async (): Promise<void> => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      const pending = await service.listPending();
+      const current = nowRef.current();
+      const due = collectDueOrdered(pending, current, ['pending'], 20, graceMs);
+      for (const record of due) {
+        await service.complete(record.id);
+        if (typeof notify === 'function') {
+          notify({
+            category: 'reminder',
+            title: lang === 'en' ? 'Reminder' : 'Recordatorio',
+            body: `${voiceDue} ${record.text}`,
+            urgent: true,
+          });
+        }
+        if (typeof speak === 'function') {
+          speak(`${voiceDue} ${record.text}`, lang).catch(() => undefined);
+        }
+      }
+      if (due.length > 0) {
+        await refresh();
+      }
+    } catch (err) {
+      console.error('[useReminders] scheduler tick error:', err);
+    } finally {
+      runningRef.current = false;
+    }
+  }, [service, notify, speak, graceMs, voiceDue, lang, refresh]);
+
+  // Carga inicial.
+  useEffect(() => {
+    refresh().catch(console.error);
+  }, [refresh]);
+
+  // Scheduler: tick inicial + intervalo configurable.
+  useEffect(() => {
+    runTick().catch(() => undefined);
+    const id = window.setInterval(() => {
+      runTick().catch(() => undefined);
+    }, tickMs);
+    return () => window.clearInterval(id);
+  }, [runTick, tickMs]);
+
+  /** Agrega un recordatorio y refresca la lista. */
+  const add = useCallback(
+    async (input: NewReminderInput): Promise<AddReminderResult> => {
+      const result = await service.add(input);
+      if (result.ok) await refresh();
+      return result;
+    },
+    [service, refresh],
+  );
+
+  /** Marca como completado y refresca. */
+  const complete = useCallback(
+    async (id: string): Promise<ReminderRecord | null> => {
+      const updated = await service.complete(id);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Descarta el recordatorio (no molestar) y refresca. */
+  const dismiss = useCallback(
+    async (id: string): Promise<ReminderRecord | null> => {
+      const updated = await service.dismiss(id);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Elimina el recordatorio y refresca. */
+  const remove = useCallback(
+    async (id: string): Promise<boolean> => {
+      const removed = await service.remove(id);
+      if (removed) await refresh();
+      return removed;
+    },
+    [service, refresh],
+  );
+
+  return {
+    service,
+    reminders,
+    loading,
+    pendingCount,
+    refresh,
+    add,
+    complete,
+    dismiss,
+    remove,
+  };
+}

@@ -19,6 +19,20 @@ import { createAdivinaNumeroEngine } from './adivinaNumero';
 import { createCalculoMentalEngine } from './calculoMental';
 import { createPalabrasEncadenadasEngine } from './palabrasEncadenadas';
 import { createQuienSoyEngine } from './quienSoy';
+import { createAhorcadoEngine } from './ahorcado';
+import { createMemoriaSecuenciasEngine } from './memoriaSecuencias';
+import { createTrabalenguasEngine } from './trabalenguas';
+import { createTriviaEngine } from './trivia';
+import { createOrdenaSecuenciaEngine } from './ordenaSecuencia';
+import { createAdivinaCancionEngine } from './adivinaCancion';
+import { createCuentacuentosEngine } from './storyteller';
+import { createCuentoColaborativoEngine } from './cuentoColaborativo';
+import { createRepiteTraduceEngine } from './repiteTraduce';
+import { createCuentaConmigoEngine } from './cuentaConmigo';
+import { createAbecedarioEngine } from './abecedario';
+import { createLoteriaEngine } from './loteria';
+import { createRespiracionEngine } from './respiracion';
+import { createKaraokeEngine } from './karaoke';
 
 export interface GameIntentEntry {
     id: GameId;
@@ -34,8 +48,8 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
     'quien_soy', 'ahorcado', 'memoria_secuencias', 'trabalenguas',
     'trivia', 'ordena_secuencia', 'adivina_cancion', 'cuentacuentos',
     'cuento_colaborativo', 'repite_traduce', 'cuenta_conmigo',
-    'abecedario', 'loteria', 'respiracion',
-]);
+    'abecedario', 'loteria', 'respiracion', 'karaoke',
+  ]);
 
 // --- Helpers locales de normalización (sin dependencias) ---
 
@@ -89,9 +103,25 @@ const NEGATIVE_INTENT_FRAMES: readonly string[] = Object.freeze([
     'dejemos de jugar',
 ]);
 
+/**
+ * Frases de salida de una partida activa (fuente única de verdad).
+ * Las consume el fast-path de voz (gameCommands.js) para emitir `end`
+ * SOLO cuando hay partida activa; en solitario nunca inician un juego.
+ */
+export const END_GAME_FRAMES: readonly string[] = Object.freeze([
+    'salir del juego',
+    'terminar el juego',
+    'dejar de jugar',
+    'ya no quiero jugar',
+    'cerrar el juego',
+    'terminemos',
+    'ya basta',
+    'se acabo',
+]);
+
 // --- Catálogo (Fase 2: solo juegos implementados, sin dummies) ---
 
-const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
+export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
     {
         id: 'simon_dice',
         aliases: ['simon dice', 'simon dice dice', 'simon'],
@@ -132,6 +162,90 @@ const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
         id: 'quien_soy',
         aliases: ['quien soy', 'a quien soy', 'quien soy yo', 'adivina quien soy'],
         engine: createQuienSoyEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'ahorcado',
+        aliases: ['ahorcado', 'ahorcados', 'el ahorcado'],
+        engine: createAhorcadoEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'memoria_secuencias',
+        aliases: ['memoria de secuencias', 'memoria', 'secuencias', 'memoria de colores'],
+        engine: createMemoriaSecuenciasEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'trabalenguas',
+        aliases: ['trabalenguas', 'traba lenguas', 'trabalengua'],
+        engine: createTrabalenguasEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'trivia',
+        aliases: ['trivia', 'trivias', 'preguntas y respuestas', 'preguntas', 'trivial'],
+        engine: createTriviaEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'ordena_secuencia',
+        aliases: ['ordena la secuencia', 'ordenar secuencia', 'ordenar los pasos', 'ordena los pasos'],
+        engine: createOrdenaSecuenciaEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'adivina_cancion',
+        aliases: ['adivina la cancion', 'que cancion es', 'adivina la melodia', 'adivinar la cancion', 'adivina que cancion'],
+        engine: createAdivinaCancionEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'cuentacuentos',
+        aliases: ['cuentacuentos', 'cuentame un cuento', 'cuentame una historia', 'una historia', 'un cuento'],
+        engine: createCuentacuentosEngine,
+        requiresApi: true,
+    },
+    {
+        id: 'cuento_colaborativo',
+        aliases: ['cuento colaborativo', 'hagamos un cuento', 'inventemos un cuento', 'cuento juntos'],
+        engine: createCuentoColaborativoEngine,
+        requiresApi: true,
+    },
+    {
+        id: 'repite_traduce',
+        aliases: ['repite y traduce', 'repite traduce', 'traduce', 'traducir palabras'],
+        engine: createRepiteTraduceEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'cuenta_conmigo',
+        aliases: ['cuenta conmigo', 'contar conmigo', 'contemos juntos'],
+        engine: createCuentaConmigoEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'abecedario',
+        aliases: ['abecedario', 'el abecedario', 'las letras', 'el alfabeto'],
+        engine: createAbecedarioEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'loteria',
+        aliases: ['loteria', 'la loteria'],
+        engine: createLoteriaEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'respiracion',
+        aliases: ['respira', 'respiracion', 'respiremos', 'ejercicio de respiracion', 'respirar'],
+        engine: createRespiracionEngine,
+        requiresApi: false,
+    },
+    {
+        id: 'karaoke',
+        aliases: ['karaoke', 'cantar juntos', 'cantemos', 'canta conmigo'],
+        engine: createKaraokeEngine,
         requiresApi: false,
     },
 ]);

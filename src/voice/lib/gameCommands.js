@@ -5,7 +5,8 @@
 // cuando el niño dice "ok flu, juguemos a las adivinanzas", este módulo
 // deriva el contrato a partir del texto transcrito SIN depender de Gemini.
 //
-// - Única fuente de verdad: gameCatalog (matchGameIntent) + gameSessionStore.
+// - Única fuente de verdad: gameCatalog (matchGameIntent + END_GAME_FRAMES) +
+//   gameSessionStore.
 // - Sin rutas dobles: el resultado se inyecta como `contract.juego` y se
 //   despacha por la ÚNICA ruta existente (App.tsx applyGameAction).
 // - Guardia estricta: requiere partida activa O intención de inicio resuelta.
@@ -13,24 +14,8 @@
 // ============================================================
 
 import { normalizeForMatch, hasToken } from './configCommands.js'
-import { matchGameIntent } from '../../core/games/gameCatalog'
+import { matchGameIntent, END_GAME_FRAMES } from '../../core/games/gameCatalog'
 import { getActiveGameSession } from '../../core/games/gameSessionStore'
-
-// ------------------------------------------------------------
-// Frases de salida / control de una partida activa
-// ------------------------------------------------------------
-// Solo se evalúan cuando hay partida activa (nunca disparan en solitario).
-
-const END_GAME_FRAMES = Object.freeze([
-  'salir del juego',
-  'terminar el juego',
-  'dejar de jugar',
-  'ya no quiero jugar',
-  'cerrar el juego',
-  'terminemos',
-  'ya basta',
-  'se acabo',
-])
 
 // ------------------------------------------------------------
 // Resolución determinista texto → evento de juego

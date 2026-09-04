@@ -35,6 +35,9 @@ import { relayLog } from '../lib/clientLogRelay';
 import type { ConversationState } from '../types/bridge';
 import { useFluBridge } from '../context/FluBridgeContext';
 import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
+import { useEnvironmentStore } from '../store/environmentStore';
+import { getAmbiente } from '../core/environments/environmentRegistry';
+import type { ResolvedCommunicationProfile } from '../core/personalization/communicationProfileService';
 
 // -----------------------------------------------------------
 // Props — mínimas, el resto viene de FluBridgeContext
@@ -47,6 +50,18 @@ interface FluAvatarVoiceBridgeProps {
     brandingSeason?: string;
     brandingIsBirthday?: boolean;
     brandingCelebrandoA?: string;
+    /**
+     * FASE P — Personalización profunda por persona.
+     * Perfil de comunicación ya resuelto para la persona del turno actual
+     * (nivel de explicación + tono + ttsRate). null/undefined = sin perfil.
+     */
+    communicationProfile?: ResolvedCommunicationProfile | null;
+    /**
+     * FASE P — Resolución perezosa del perfil a partir del texto del turno.
+     * Se usa cuando communicationProfile no viene pre-resuelto desde App.
+     * Debe devolver null si no hay persona/participante identificable.
+     */
+    onResolveCommunicationProfile?: (text: string) => Promise<ResolvedCommunicationProfile | null>;
 }
 
 // -----------------------------------------------------------
@@ -188,8 +203,14 @@ export function FluAvatarVoiceBridge({
     brandingSeason,
     brandingIsBirthday,
     brandingCelebrandoA,
+    communicationProfile,
+    onResolveCommunicationProfile,
 }: FluAvatarVoiceBridgeProps) {
     const integrationStore = useIntegrationStore();
+    // Ambiente activo (rebranding por oficio): decoración con precedencia sobre la estacional
+    const activeAmbienteId = useEnvironmentStore((s) => s.activeAmbienteId);
+    const activeAmbiente = activeAmbienteId ? getAmbiente(activeAmbienteId) : null;
+    const environmentDecoration = activeAmbiente?.tema.decoracion ?? null;
     const storeRef = useRef(integrationStore);
     // Keep storeRef current without triggering re-renders
     storeRef.current = integrationStore;
@@ -354,6 +375,27 @@ export function FluAvatarVoiceBridge({
                         try { return localStorage.getItem('flu-text-api-key') ?? ''; } catch { return ''; }
                     })()
                 ).trim();
+                // FASE P — Personalización profunda por persona:
+                // Perfil de comunicación (nivel de explicación + tono + ttsRate).
+                // Se resuelve ANTES de generar el contrato para poder inyectar
+                // explanationLevel/tone en el prompt y aplicar el multiplicador TTS.
+                // Regla: usa el perfil pre-resuelto si viene; si no, inténtalo
+                // desde el texto (tolerante a fallos: sin perfil → comportamiento actual).
+                let resolvedProfile: ResolvedCommunicationProfile | null = communicationProfile ?? null;
+                if (!resolvedProfile && typeof onResolveCommunicationProfile === 'function') {
+                    try {
+                        resolvedProfile = await onResolveCommunicationProfile(text);
+                    } catch (profileError) {
+                        console.warn('[Bridge] No se pudo resolver el perfil de comunicación:', profileError);
+                    }
+                }
+                const explanationLevel = resolvedProfile?.explanationLevel ?? '';
+                const profileTone = resolvedProfile?.tone ?? '';
+                // Multiplicador TTS: speakSingleChunk REEMPLAZA utterance.rate con el
+                // override (no lo multiplica), así que combinamos la velocidad global
+                // del usuario con el factor del perfil. Sin perfil → sin override (la
+                // velocidad global de la store se aplica de forma natural).
+                const baseRate = integrationStore.voiceConfig?.rate ?? 1;
                 if (resolvedApiKey) {
                     try {
                         const personality = store.config.personality;
@@ -364,7 +406,8 @@ export function FluAvatarVoiceBridge({
                                 role: personality.profile,
                                 theme: '',
                                 traits: personality.traits,
-                                tone: personality.tone,
+                                tone: profileTone || personality.tone,
+                                explanationLevel,
                             },
                             text,
                             store.conversationHistory.map((e) => ({
@@ -411,7 +454,11 @@ export function FluAvatarVoiceBridge({
                 store.incrementInteractionCount();
                 store.pushBridgeEvent({ type: 'speaking:start', timestamp: Date.now() });
 
-                await speakResponse(responseText, language);
+                await speakResponse(
+                    responseText,
+                    language,
+                    resolvedProfile ? { rate: baseRate * resolvedProfile.ttsRate } : undefined,
+                );
 
                 // Transición de estado: SPEAKING → IDLE después de terminar de hablar
                 // Esto asegura que la animación de boca (MouthMove) se detenga
@@ -430,7 +477,7 @@ export function FluAvatarVoiceBridge({
         };
 
         processText();
-    }, [apiKey, language, applyContextualEmotion, onGeminiError, pendingEmotionAnimsRef]);
+    }, [apiKey, language, applyContextualEmotion, onGeminiError, pendingEmotionAnimsRef, communicationProfile, onResolveCommunicationProfile]);
 
     // -------------------------------------------------------
     // Push-to-talk: iniciar escucha
@@ -536,15 +583,18 @@ export function FluAvatarVoiceBridge({
     // -------------------------------------------------------
     return (
         <div className="flu-bridge-container" style={{ width, height }}>
-            {/* SeasonalDecoration — controla visibilidad de componentes del avatar según branding */}
-            {brandingMode && brandingSeason && (
+            {/* SeasonalDecoration — decoración 3D + señales/animaciones de celebración.
+                La visibilidad de la gorra/pelo la controla ÚNICAMENTE el perfil
+                (useAvatarVoiceSync → imageConfig). */}
+            {(brandingMode && brandingSeason) || environmentDecoration ? (
                 <SeasonalDecoration
-                    mode={brandingMode}
-                    activeSeason={brandingSeason}
+                    mode={brandingMode ?? 'disabled'}
+                    activeSeason={brandingSeason ?? ''}
                     isBirthday={brandingIsBirthday ?? false}
                     celebrandoA={brandingCelebrandoA}
+                    environmentDecoration={environmentDecoration}
                 />
-            )}
+            ) : null}
 
             {/* Contenedor del avatar 3D */}
             <div className="flu-bridge-avatar-area">

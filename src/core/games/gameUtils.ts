@@ -1,0 +1,118 @@
+// ============================================================
+// src/core/games/gameUtils.ts
+// Helpers compartidos por todos los motores de juego (plan-juegos §4).
+// Copia exacta de los helpers locales ya verificados en simonDice,
+// riddles, adivinaNumero, calculoMental, veoVeo, quienSoy y
+// palabrasEncadenadas — extraídos aquí para no duplicar lógica en
+// los 14 motores nuevos. Módulo puro, sin I/O, sin imports .js.
+// ============================================================
+
+export type RandomSource = () => number;
+
+export function clamp(value: number, min: number, max: number): number {
+    if (!Number.isFinite(value)) return min;
+    return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function stripDiacritics(text: string): string {
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function normalizeForMatch(text = ''): string {
+    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+export function hasToken(normalized = '', phrase = ''): boolean {
+    if (!phrase) return false;
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Límites de palabra: la frase puede iniciar en el arranque (^), tras un
+    // espacio o tras puntuación tipográfica (incluido el "¡"/"¿" de apertura
+    // española, p. ej. "¡Lotería!" → "¡loteria!"). El cierre ya admite la
+    // puntuación española de apertura y cierre.
+    const pattern = new RegExp(`(^|\\s|[.,;!?¡¿])${escaped}($|\\s|[.,;!?¡¿])`);
+    return pattern.test(normalized);
+}
+
+export function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
+    return phrases.some((phrase) => hasToken(normalized, phrase));
+}
+
+/** Elige un elemento al azar (determinista con RNG sembrado). */
+export function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
+    return items[Math.floor(rng() * items.length)];
+}
+
+/** Baraja determinista (Fisher-Yates) de los índices [0..n-1]. */
+export function shuffleOrder(rng: RandomSource, length: number): number[] {
+    const order = Array.from({ length }, (_, index) => index);
+    for (let i = order.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rng() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+}
+
+/** Números del 0 al 20 en español (palabras), para resolver respuestas numéricas. */
+export const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
+    cero: 0,
+    uno: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4,
+    cinco: 5,
+    seis: 6,
+    siete: 7,
+    ocho: 8,
+    nueve: 9,
+    diez: 10,
+    once: 11,
+    doce: 12,
+    trece: 13,
+    catorce: 14,
+    quince: 15,
+    dieciseis: 16,
+    dieciséis: 16,
+    diecisiete: 17,
+    dieciocho: 18,
+    diecinueve: 19,
+    veinte: 20,
+});
+
+/**
+ * Resuelve una respuesta numérica a partir de texto normalizado.
+ * Acepta dígitos ("7", "7.5") y palabras en español 0-20 ("siete").
+ */
+export function resolveNumericAnswer(normalized: string): number | null {
+    const digits = normalized.match(/(\d+(?:[.,]\d+)?)/);
+    if (digits) {
+        const value = Number.parseFloat(digits[1].replace(',', '.'));
+        if (Number.isFinite(value)) return Math.round(value);
+    }
+    for (const token of normalized.split(/\s+/)) {
+        if (token in NUMBER_WORDS_ES) return NUMBER_WORDS_ES[token];
+    }
+    return null;
+}
+
+/**
+ * Lectura data-driven de `rounds` con clamps (misma semántica que los
+ * motores existentes): `cfg.rounds` → `cfg.defaultRounds` → DEFAULT.
+ */
+export function readRounds(
+    cfg: Record<string, unknown> | undefined,
+    defaultRounds = 3,
+    maxRounds = 20,
+): number {
+    const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || defaultRounds;
+    return clamp(rounds, 1, maxRounds);
+}
+
+/** Si el cfg trae una `random` función, la adopta como RNG del motor. */
+export function adoptRandom(
+    cfg: Record<string, unknown> | undefined,
+    rngRef: { current: RandomSource },
+): void {
+    if (cfg && typeof cfg.random === 'function') {
+        rngRef.current = cfg.random as RandomSource;
+    }
+}

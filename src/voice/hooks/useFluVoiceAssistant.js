@@ -26,11 +26,15 @@ import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
 import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js'
 import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
-import { resolveConfigCommandFromText } from '../lib/configCommands'
-import { resolveGameCommandFromText } from '../lib/gameCommands'
+import {
+  resolveDeterministicCommand,
+  resolveDeterministicSkipGeminiContract,
+  resolveStatefulDomains,
+} from '../lib/deterministicArbiter'
 import { relayLog } from '../../lib/clientLogRelay'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
+import { isSelfKnowledgeRequest } from '../../core/selfKnowledge/selfKnowledge'
 import {
   FLU_CONFIG,
   getActiveListenConfig,
@@ -42,7 +46,6 @@ import {
   getCommandSpeech,
   planVoiceCommandDispatch,
   resolveNavigationCommand,
-  resolveNavigationCommandFromTexts,
 } from '../lib/voiceCommands'
 import {
   flattenChunksTail,
@@ -351,6 +354,11 @@ export function useFluVoiceAssistant({
   knowledgeBase = '',
   getMinuteKnowledgeBase = () => '',
   getDailyAgenda = () => '',
+  getSelfManifesto = () => '',
+  getDiaryContext = () => '',
+  getNotesContext = () => '',
+  getHorarioContext = () => '',
+  getResultadosContext = () => '',
   resolveMinuteLookup = () => ({ mode: 'gemini' }),
   participantRef,
 }) {
@@ -418,6 +426,11 @@ export function useFluVoiceAssistant({
   const knowledgeBaseRef = useRef(knowledgeBase)
   const getMinuteKnowledgeBaseRef = useRef(getMinuteKnowledgeBase)
   const getDailyAgendaRef = useRef(getDailyAgenda)
+  const getSelfManifestoRef = useRef(getSelfManifesto)
+  const getDiaryContextRef = useRef(getDiaryContext)
+  const getNotesContextRef = useRef(getNotesContext)
+  const getHorarioContextRef = useRef(getHorarioContext)
+  const getResultadosContextRef = useRef(getResultadosContext)
   const resolveMinuteLookupRef = useRef(resolveMinuteLookup)
   const voiceProfilesRef = useRef([])
   const chunkTotalSamplesRef = useRef(0)
@@ -546,6 +559,26 @@ export function useFluVoiceAssistant({
   useEffect(() => {
     getDailyAgendaRef.current = getDailyAgenda
   }, [getDailyAgenda])
+
+  useEffect(() => {
+    getSelfManifestoRef.current = getSelfManifesto
+  }, [getSelfManifesto])
+
+  useEffect(() => {
+    getDiaryContextRef.current = getDiaryContext
+  }, [getDiaryContext])
+
+  useEffect(() => {
+    getNotesContextRef.current = getNotesContext
+  }, [getNotesContext])
+
+  useEffect(() => {
+    getHorarioContextRef.current = getHorarioContext
+  }, [getHorarioContext])
+
+  useEffect(() => {
+    getResultadosContextRef.current = getResultadosContext
+  }, [getResultadosContext])
 
   useEffect(() => {
     resolveMinuteLookupRef.current = resolveMinuteLookup
@@ -996,6 +1029,23 @@ export function useFluVoiceAssistant({
         ? getDailyAgendaRef.current()
         : ''
 
+      // Autoconocimiento (§1.4): solo se inyecta en el user prompt cuando el
+      // turno es una petición de autoconocimiento (isSelfKnowledgeRequest).
+      // La ruta local CONOCER_FLU (§1.3) corta antes de Gemini; este texto es
+      // la red de seguridad si una variante ambigua sí llega a la IA.
+      const selfKnowledgeText = isSelfKnowledgeRequest(transcript, language)
+        ? (getSelfManifestoRef.current() || '')
+        : ''
+
+      // Radar de contexto (Pizarrón un solo objeto — Paso 5): bloques 6-9.
+      // Cada bloque es dinámico desde su fuente (Dexie) y '' si no hay datos
+      // (Rule #1). Los getters los provee App.tsx desde los hooks de diario,
+      // notas, horario y resultados del feed.
+      const diaryContext = getDiaryContextRef.current() || ''
+      const notesContext = getNotesContextRef.current() || ''
+      const horarioContext = getHorarioContextRef.current() || ''
+      const resultadosContext = getResultadosContextRef.current() || ''
+
       // FLU "thinking" (Pensando / Idle_1) while the AI processes the request —
       // deterministic per definition: when the user asks the AI something (or it
       // learns/generates) FLU must show Pensando. Local minute lookups above
@@ -1024,6 +1074,11 @@ export function useFluVoiceAssistant({
           recentMemory,
           startupPrompt,
           agendaText,
+          selfKnowledgeText,
+          diaryContext,
+          notesContext,
+          horarioContext,
+          resultadosContext,
         })
       } finally {
         useIntegrationStore.getState?.().setThinking?.(false)
@@ -2057,11 +2112,6 @@ export function useFluVoiceAssistant({
           return
         }
 
-        if (uiCommand) {
-          scheduleAutoProcess(0)
-          return
-        }
-
         if (!turnPhrase) {
           clearAutoProcessTimer()
           return
@@ -2798,6 +2848,108 @@ export function useFluVoiceAssistant({
     [onContractResolved],
   )
 
+  // Fast-path determinista de AMBIENTE (espejo de dispatchFastGameCommand): despacha
+  // un contrato `ambiente` ya resuelto por resolveEnvironmentIntent a la ÚNICA ruta
+  // (onContractResolved → applyEnvironment/resetEnvironment). El catálogo de ambientes
+  // (src/core/environments/*) es la fuente de verdad: el rebranding se aplica de
+  // inmediato mientras la IA solo genera la confirmación verbal. Si no hay intent,
+  // no hace nada (guardia estricta: requiere tipo resuelto).
+  const dispatchFastEnvironmentCommand = useCallback(
+    async (
+      intent,
+      { speakerName = null, speakerAlias = null, phase = 'SESION_ACTIVA', session = null, language = null, transcript = '', timestamp = '' } = {},
+    ) => {
+      if (!intent?.tipo) return null
+      await onContractResolved?.({
+        contract: {
+          respuesta_voz: '',
+          navegacion: { comando: null, destino: null, parametros: {} },
+          workspace: null,
+          musica: null,
+          configuracion: null,
+          juego: null,
+          ambiente: intent,
+          metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
+        },
+        diagnostics: { route: 'deterministic-fast-path', provider: 'local', fastPath: true },
+        transcript,
+        speakerName,
+        speakerAlias,
+        phase,
+        session,
+        timestamp,
+        signature: null,
+        language,
+        fastPathEnvironment: true,
+      })
+      return intent
+    },
+    [onContractResolved],
+  )
+
+  // §3.1 — Árbitro determinista UNIFICADO. Centraliza la resolución y el despacho de
+  // los tres fast-paths deterministas (configuración/juego/ambiente) que antes se
+  // duplicaban en processConversationFluQuery y en las dos ramas de processCapture.
+  // Resuelve cada dominio desde el texto y lanza su despacho por la ÚNICA ruta
+  // (onContractResolved). Devuelve los objetos resueltos (para la idempotencia del
+  // contrato tardío) y un `dispatch` (Promise.allSettled que nunca rechaza) para que
+  // cada llamador decida cuándo esperarlo: en paralelo con la IA en conversación, o
+  // fire-and-forget antes de la confirmación verbal en captura.
+  const evaluateDeterministicFastPaths = useCallback(
+    async ({
+      text,
+      speakerName = null,
+      speakerAlias = null,
+      phase = 'SESION_ACTIVA',
+      session = null,
+      language = null,
+      timestamp = '',
+    }) => {
+      const transcript = cleanForSpeech(text)
+      // §1A: la resolución de los dominios con efecto de estado (config/juego/
+      // ambiente) se delega al árbitro puro (src/voice/lib/deterministicArbiter.js).
+      // El hook conserva SOLO la orquestación del despacho (onContractResolved).
+      const { config, game, env } = resolveStatefulDomains(text, { language })
+      const dispatch = Promise.allSettled([
+        config?.accion
+          ? dispatchFastConfigCommand(config, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript,
+            })
+          : Promise.resolve(null),
+        game?.gameId
+          ? dispatchFastGameCommand(game, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript,
+            })
+          : Promise.resolve(null),
+        env?.tipo
+          ? dispatchFastEnvironmentCommand(env, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript,
+            })
+          : Promise.resolve(null),
+      ])
+      return { config, game, env, dispatch }
+    },
+    [dispatchFastConfigCommand, dispatchFastGameCommand, dispatchFastEnvironmentCommand],
+  )
+
   const processConversationFluQuery = useCallback(
     async (fullTranscript, { beforeWake = '', question = '' } = {}) => {
       relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery ENTER: conversationActiveRef.current=${conversationActiveRef?.current}, question="${(question || '').slice(0, 60)}"`)
@@ -2844,6 +2996,70 @@ export function useFluVoiceAssistant({
           })
           speakerAlias = null
         }
+
+        // §2B — Semántica "si hay match determinista de estado → NO llamar a Gemini".
+        // Controlado por FLU_CONFIG.arbiter.skipGeminiOnMatch (por defecto APAGADO).
+        // La decisión + construcción del contrato determinista se delega a la función
+        // pura `resolveDeterministicSkipGeminiContract` (testeable sin React, paso 3B).
+        // Cuando devuelve un contrato (flag activo + match de config/juego/ambiente),
+        // se despacha con la frase de cortesía y se omite por completo la llamada a
+        // Gemini (requestFluContractForTranscript NO se invoca). Para juego/ambiente el
+        // motor local ya habla su propia voz, así que la frase de cortesía es '' (no se
+        // duplica el habla).
+        const skipGemini = resolveDeterministicSkipGeminiContract({
+          text: question || fullTranscript,
+          language: detectedLanguage,
+          skipGeminiOnMatch: Boolean(FLU_CONFIG.arbiter?.skipGeminiOnMatch),
+        })
+        if (skipGemini) {
+          const { domain: statefulDomain, contract: deterministicContract } = skipGemini
+          const courtesy = deterministicContract.respuesta_voz || ''
+          setLastTranscript(fullTranscript)
+          setLastContract(deterministicContract)
+          setLastDiagnostics({ route: 'deterministic-arbiter', provider: 'local', skipGemini: true })
+          setError('')
+          setLastErrorEvent(null)
+          dialogueHistoryRef.current = recordConversationExchange(
+            logRowsTextRef.current,
+            logRowSpeakersRef.current,
+            dialogueHistoryRef.current,
+            {
+              user: { speaker: resolvedSpeakerName, text: question },
+              assistant: { text: courtesy },
+              phase: 'SESION_ACTIVA',
+              userSource: DIALOGUE_SOURCE.QUERY,
+              assistantSource: DIALOGUE_SOURCE.QUERY,
+            },
+            {
+              maxDialogue: CONTEXT_HISTORY_LIMIT,
+              maxLogRows: FLU_CONFIG.limits.priorRowsMax,
+            },
+          )
+          await saveSessionState({
+            phase: 'SESION_ACTIVA',
+            ...session,
+            history: getConversationContext(),
+          })
+          relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery §2B deterministic (skip Gemini): domain="${statefulDomain}", respuesta_voz="${courtesy.slice(0, 80)}"`)
+          await onContractResolved?.({
+            contract: deterministicContract,
+            diagnostics: { route: 'deterministic-arbiter', provider: 'local', skipGemini: true },
+            transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
+            conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
+            speakerName: resolvedSpeakerName,
+            speakerAlias,
+            phase: 'SESION_ACTIVA',
+            session,
+            timestamp: currentClock,
+            signature: (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+            language: detectedLanguage,
+            fastPathConfig: statefulDomain === 'config',
+            fastPathGame: statefulDomain === 'game',
+            fastPathEnvironment: statefulDomain === 'environment',
+          })
+          return
+        }
+
         const knowledgeMode = isMinuteKnowledgeRequest(question) ? 'minutes' : 'general'
         setActiveKnowledgeBase(knowledgeMode)
 
@@ -2861,43 +3077,29 @@ export function useFluVoiceAssistant({
             phase: 'SESION_ACTIVA',
           }),
           computeAudioSignature(audioSnapshot, sampleRate).then((s) => s.vector),
-          // Fast-path determinista: si el transcript es un comando de configuración,
-          // se despacha al instante (onContractResolved → applyConfigAction) MIENTRAS
-          // la IA aún genera la confirmación verbal. Es la 4ª tarea del lote: corre en
-          // paralelo con la llamada a la API y no añade latencia a la confirmación.
+          // Fast-path determinista UNIFICADO (§3.1): el árbitro resuelve y despacha
+          // configuración/juego/ambiente desde un único punto, en paralelo con la IA.
+          // Se espera su `dispatch` para garantizar el orden: el efecto del fast-path
+          // queda aplicado ANTES de que el contrato tardío (con idempotencia) llegue a
+          // onContractResolved.
           (async () => {
-            const det = resolveConfigCommandFromText(question || fullTranscript)
-            if (!det?.accion) return null
-            await dispatchFastConfigCommand(det, {
+            const result = await evaluateDeterministicFastPaths({
+              text: question || fullTranscript,
               speakerName: resolvedSpeakerName,
               speakerAlias,
               phase: 'SESION_ACTIVA',
               session,
               language: detectedLanguage,
               timestamp: currentClock,
-              transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
             })
-            return det
-          })(),
-          // Fast-path determinista de JUEGO (5ª tarea): si el transcript es un comando
-          // de juego (start/turn/end), se despacha al instante con el motor local — la
-          // fuente de verdad de la partida. La IA sigue generando en paralelo, pero su
-          // `juego` se anula (idempotencia) y su voz se suprime vía fastPathGame.
-          (async () => {
-            const game = resolveGameCommandFromText(question || fullTranscript)
-            if (!game?.gameId) return null
-            await dispatchFastGameCommand(game, {
-              speakerName: resolvedSpeakerName,
-              speakerAlias,
-              phase: 'SESION_ACTIVA',
-              session,
-              language: detectedLanguage,
-              timestamp: currentClock,
-              transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
-            })
-            return game
+            await result.dispatch
+            return result
           })(),
         ])
+        const fastPath = fastPathResult?.status === 'fulfilled' ? fastPathResult.value : null
+        const fastPathConfig = fastPath?.config
+        const fastGame = fastPath?.game
+        const fastEnv = fastPath?.env
 
         // La llamada API es el único resultado obligatorio: si falla, propagar al catch.
         if (contractResult.status === 'rejected') {
@@ -2916,6 +3118,11 @@ export function useFluVoiceAssistant({
         // Firma de audio reutilizable; fallback perezoso si el cálculo paralelo falló.
         audioSignatureVector = signatureResult.status === 'fulfilled' ? signatureResult.value : null
 
+        // §1A: re-resolución determinista tardía (config/ambiente) para la idempotencia
+        // del contrato. Se delega al árbitro puro; solo se usa cuando el fast-path NO
+        // despachó (para que la resolución determinista gane sobre la del modelo).
+        const lateStateful = resolveStatefulDomains(question || fullTranscript, { language: detectedLanguage })
+
         const resolvedContract = {
           ...contract.contract,
           respuesta_voz: contract.contract.respuesta_voz,
@@ -2924,21 +3131,28 @@ export function useFluVoiceAssistant({
             destino: null,
             parametros: {},
           },
-          // Idempotencia fast-path: si la tarea rápida ya aplicó la configuración,
-          // se anula la del contrato tardío para NO duplicar el efecto. Si no hubo
-          // fast-path, se conserva la resolución determinista sobre la del modelo.
+          // Idempotencia fast-path: si el árbitro determinista ya aplicó la
+          // configuración, se anula la del contrato tardío para NO duplicar el efecto.
+          // Si no hubo fast-path, se conserva la resolución determinista sobre la del
+          // modelo. La re-resolución se delega al árbitro puro (§1A).
           configuracion:
-            fastPathResult?.status === 'fulfilled' && fastPathResult?.value?.accion
+            fastPathConfig?.accion
               ? null
-              : resolveConfigCommandFromText(question || fullTranscript) ??
-                contract?.contract?.configuracion,
+              : lateStateful.config?.accion
+                ? lateStateful.config
+                : contract?.contract?.configuracion,
           // Idempotencia de juego: si el fast-path de juego ya despachó (start/turn/
           // end), se anula el `juego` del contrato tardío para NO duplicar el efecto.
           // La voz del turno ya la habló el motor local (determinista).
-          juego:
-            fastGameResult?.status === 'fulfilled' && fastGameResult?.value?.gameId
-              ? null
-              : contract?.contract?.juego ?? null,
+          juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
+          // Idempotencia de ambiente: si el fast-path de ambiente ya despachó
+          // (activar/reset), se anula el `ambiente` del contrato tardío para NO
+          // duplicar el rebranding ni la bienvenida hablada.
+          ambiente: fastEnv?.tipo
+            ? null
+            : lateStateful.env?.tipo
+              ? lateStateful.env
+              : contract?.contract?.ambiente ?? null,
         }
 
         setLastTranscript(fullTranscript)
@@ -2982,7 +3196,9 @@ export function useFluVoiceAssistant({
           signature: audioSignatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
           // En juegos por voz la voz es SIEMPRE del motor local (determinista).
-          fastPathGame: Boolean(fastGameResult?.status === 'fulfilled' && fastGameResult?.value?.gameId),
+          fastPathGame: Boolean(fastGame?.gameId),
+          // En ambientes por voz la bienvenida la habla SIEMPRE el motor local.
+          fastPathEnvironment: Boolean(fastEnv?.tipo),
         })
       } catch (error) {
         relayLog('ERROR', 'useFluVoiceAssistant', `processConversationFluQuery CATCH: message="${error?.message || error}", code="${error?.code}", status="${error?.status}"`)
@@ -3032,6 +3248,8 @@ export function useFluVoiceAssistant({
       session,
       dispatchFastConfigCommand,
       dispatchFastGameCommand,
+      dispatchFastEnvironmentCommand,
+      evaluateDeterministicFastPaths,
     ],
   )
 
@@ -3222,10 +3440,16 @@ export function useFluVoiceAssistant({
       // EN PARALELO con la llamada a la API y se reconcilia justo antes de
       // onContractResolved — mismo patrón que processConversationFluQuery (lote paralelo).
       const bufferedTranscript = bufferedValidation.commandText
-      const directCommand = resolveNavigationCommandFromTexts([
-        bufferedTranscript,
-        capturedTranscript,
-      ])
+      // §2A: la resolución de navegación se delega al árbitro determinista UNIFICADO
+      // (src/voice/lib/deterministicArbiter.js), que evalúa config/juego/ambiente/
+      // navegación en orden de prioridad. Aquí solo se extrae el dominio de navegación
+      // (los dominios de estado se despachan después por el fast-path de fase).
+      const arbiterResult = resolveDeterministicCommand(capturedTranscript, {
+        language: detectedLanguage,
+        texts: [bufferedTranscript, capturedTranscript],
+      })
+      const directCommand =
+        arbiterResult.domain === 'navigation' ? arbiterResult.action : null
       const intent = directCommand
         ? {
           comando: directCommand,
@@ -3348,40 +3572,28 @@ export function useFluVoiceAssistant({
           history: getConversationContext(),
         })
 
-        // FAST-PATH DETERMINISTA (configuración por voz instantánea): si el
-        // transcript es un comando de configuración, se resuelve sin IA y se
-        // despacha al instante por la MISMA ruta (onContractResolved) mientras
-        // la API genera la confirmación verbal. Fire-and-forget con .catch para
-        // nunca dejar una promesa sin manejar.
-        const fastPathConfig = resolveConfigCommandFromText(capturedTranscript)
-        const fastPathDispatch =
-          fastPathConfig?.accion
-            ? dispatchFastConfigCommand(fastPathConfig, {
-                speakerName: fastSpeakerName,
-                speakerAlias: null,
-                phase: 'CONFIGURACION',
-                session: nextSession,
-                language: detectedLanguage,
-                timestamp: currentClock,
-                transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-              }).catch(() => null)
-            : Promise.resolve(null)
-        // FAST-PATH DETERMINISTA DE JUEGO: misma estrategia que la configuración —
-        // el motor local (fuente de verdad) arranca la partida al instante por la
-        // MISMA ruta (onContractResolved → applyGameAction). Sin dependencia de la IA.
-        const fastGame = resolveGameCommandFromText(capturedTranscript)
-        const fastGameDispatch =
-          fastGame?.gameId
-            ? dispatchFastGameCommand(fastGame, {
-                speakerName: fastSpeakerName,
-                speakerAlias: null,
-                phase: 'CONFIGURACION',
-                session: nextSession,
-                language: detectedLanguage,
-                timestamp: currentClock,
-                transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-              }).catch(() => null)
-            : Promise.resolve(null)
+        // FAST-PATH DETERMINISTA UNIFICADO (§3.1): el árbitro resuelve y despacha
+        // configuración/juego/ambiente desde un único punto, sin IA, por la MISMA ruta
+        // (onContractResolved) mientras la API genera la confirmación verbal. El
+        // `dispatch` (Promise.allSettled que nunca rechaza) se espera antes de hablar
+        // la confirmación; los objetos resueltos alimentan la idempotencia del contrato.
+        const fastPath = await evaluateDeterministicFastPaths({
+          text: capturedTranscript,
+          speakerName: fastSpeakerName,
+          speakerAlias: null,
+          phase: 'CONFIGURACION',
+          session: nextSession,
+          language: detectedLanguage,
+          timestamp: currentClock,
+        })
+        const fastPathConfig = fastPath.config
+        const fastGame = fastPath.game
+        const fastEnv = fastPath.env
+        const fastPathDispatch = fastPath.dispatch
+        // §1A: re-resolución determinista tardía (config/ambiente) para la idempotencia
+        // del contrato. Se delega al árbitro puro; solo se usa cuando el fast-path NO
+        // despachó (para que la resolución determinista gane sobre la del modelo).
+        const lateStateful = resolveStatefulDomains(capturedTranscript, { language: detectedLanguage })
 
         let contract
         try {
@@ -3448,6 +3660,8 @@ export function useFluVoiceAssistant({
               language: detectedLanguage,
               // Si el fast-path de juego ya arrancó la partida, la voz es la del motor.
               fastPathGame: Boolean(fastGame?.gameId),
+              // Si el fast-path de ambiente ya aplicó el rebranding, la voz es la del motor.
+              fastPathEnvironment: Boolean(fastEnv?.tipo),
             })
           }
           finishTurn()
@@ -3468,11 +3682,19 @@ export function useFluVoiceAssistant({
           configuracion:
             fastPathConfig?.accion
               ? null
-              : resolveConfigCommandFromText(capturedTranscript) ??
-                contract?.contract?.configuracion,
+              : lateStateful.config?.accion
+                ? lateStateful.config
+                : contract?.contract?.configuracion,
           // Idempotencia de juego: si el fast-path de juego ya despachó (start),
           // se anula el `juego` del contrato tardío para NO duplicar el arranque.
           juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
+          // Idempotencia de ambiente: si el fast-path ya aplicó el rebranding, se
+          // anula el `ambiente` del contrato tardío para NO duplicar el efecto.
+          ambiente: fastEnv?.tipo
+            ? null
+            : lateStateful.env?.tipo
+              ? lateStateful.env
+              : contract?.contract?.ambiente ?? null,
         }
 
         setLastTranscript(capturedTranscript)
@@ -3507,9 +3729,9 @@ export function useFluVoiceAssistant({
         setStatus('idle')
         isListeningRef.current = false
         relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION SUCCESS: calling onContractResolved with respuesta_voz="${(finalContract.respuesta_voz || '').slice(0, 80)}"`)
-        // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración
-        // y el arranque de juego se aplican ANTES de hablar la confirmación verbal.
-        await Promise.allSettled([fastPathDispatch, fastGameDispatch])
+        // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración,
+        // el arranque de juego y el ambiente se aplican ANTES de hablar la confirmación.
+        await fastPathDispatch
         await onContractResolved?.({
           contract: finalContract,
           diagnostics: contract.diagnostics || null,
@@ -3523,42 +3745,34 @@ export function useFluVoiceAssistant({
           language: detectedLanguage,
           // En juegos por voz la voz es SIEMPRE del motor local (determinista).
           fastPathGame: Boolean(fastGame?.gameId),
+          // En ambientes por voz el rebranding es SIEMPRE del motor local (determinista).
+          fastPathEnvironment: Boolean(fastEnv?.tipo),
         })
         return
       }
 
-      // FAST-PATH DETERMINISTA (configuración por voz instantánea): misma estrategia
-      // que en CONFIGURACION — resolución sin IA + despacho inmediato por la MISMA
-      // ruta onContractResolved mientras la API genera la confirmación verbal.
-      const fastPathConfig = resolveConfigCommandFromText(capturedTranscript)
-      const fastPathDispatch =
-        fastPathConfig?.accion
-          ? dispatchFastConfigCommand(fastPathConfig, {
-              speakerName: fastSpeakerName,
-              speakerAlias: null,
-              phase: 'SESION_ACTIVA',
-              session,
-              language: detectedLanguage,
-              timestamp: currentClock,
-              transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-            }).catch(() => null)
-          : Promise.resolve(null)
-      // FAST-PATH DETERMINISTA DE JUEGO: misma estrategia — el motor local resuelve el
-      // turno (o fin de partida) al instante por la MISMA ruta (onContractResolved →
-      // applyGameAction). La partida avanza sin depender de la IA.
-      const fastGame = resolveGameCommandFromText(capturedTranscript)
-      const fastGameDispatch =
-        fastGame?.gameId
-          ? dispatchFastGameCommand(fastGame, {
-              speakerName: fastSpeakerName,
-              speakerAlias: null,
-              phase: 'SESION_ACTIVA',
-              session,
-              language: detectedLanguage,
-              timestamp: currentClock,
-              transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-            }).catch(() => null)
-          : Promise.resolve(null)
+      // FAST-PATH DETERMINISTA UNIFICADO (§3.1): el árbitro resuelve y despacha
+      // configuración/juego/ambiente desde un único punto, sin IA, por la MISMA ruta
+      // (onContractResolved) mientras la API genera la confirmación verbal. El
+      // `dispatch` (Promise.allSettled que nunca rechaza) se espera antes de hablar
+      // la confirmación; los objetos resueltos alimentan la idempotencia del contrato.
+      const fastPath = await evaluateDeterministicFastPaths({
+        text: capturedTranscript,
+        speakerName: fastSpeakerName,
+        speakerAlias: null,
+        phase: 'SESION_ACTIVA',
+        session,
+        language: detectedLanguage,
+        timestamp: currentClock,
+      })
+      const fastPathConfig = fastPath.config
+      const fastGame = fastPath.game
+      const fastEnv = fastPath.env
+      const fastPathDispatch = fastPath.dispatch
+      // §1A: re-resolución determinista tardía (config/ambiente) para la idempotencia
+      // del contrato. Se delega al árbitro puro; solo se usa cuando el fast-path NO
+      // despachó (para que la resolución determinista gane sobre la del modelo).
+      const lateStateful = resolveStatefulDomains(capturedTranscript, { language: detectedLanguage })
 
       let contract
       try {
@@ -3624,6 +3838,8 @@ export function useFluVoiceAssistant({
             language: detectedLanguage,
             // Si el fast-path de juego ya despachó el turno, la voz es la del motor.
             fastPathGame: Boolean(fastGame?.gameId),
+            // Si el fast-path de ambiente ya aplicó el rebranding, la voz es la del motor.
+            fastPathEnvironment: Boolean(fastEnv?.tipo),
           })
         }
         finishTurn()
@@ -3652,11 +3868,19 @@ export function useFluVoiceAssistant({
         configuracion:
           fastPathConfig?.accion
             ? null
-            : resolveConfigCommandFromText(capturedTranscript) ??
-              contract?.contract?.configuracion,
+            : lateStateful.config?.accion
+              ? lateStateful.config
+              : contract?.contract?.configuracion,
         // Idempotencia de juego: si el fast-path de juego ya despachó (turn/end),
         // se anula el `juego` del contrato tardío para NO duplicar el efecto.
         juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
+        // Idempotencia de ambiente: si el fast-path ya aplicó el rebranding, se anula
+        // el `ambiente` del contrato tardío para NO duplicar el efecto.
+        ambiente: fastEnv?.tipo
+          ? null
+          : lateStateful.env?.tipo
+            ? lateStateful.env
+            : contract?.contract?.ambiente ?? null,
       }
 
       setLastTranscript(capturedTranscript)
@@ -3690,9 +3914,9 @@ export function useFluVoiceAssistant({
       setStatus('idle')
       isListeningRef.current = false
       relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA SUCCESS: calling onContractResolved with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
-      // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración
-      // y el turno de juego se aplican ANTES de hablar la confirmación verbal.
-      await Promise.allSettled([fastPathDispatch, fastGameDispatch])
+      // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración,
+      // el turno de juego y el ambiente se aplican ANTES de hablar la confirmación.
+      await fastPathDispatch
       await onContractResolved?.({
         contract: resolvedContract,
         diagnostics: contract.diagnostics || null,
@@ -3706,6 +3930,8 @@ export function useFluVoiceAssistant({
         language: detectedLanguage,
         // En juegos por voz la voz es SIEMPRE del motor local (determinista).
         fastPathGame: Boolean(fastGame?.gameId),
+        // En ambientes por voz el rebranding es SIEMPRE del motor local (determinista).
+        fastPathEnvironment: Boolean(fastEnv?.tipo),
       })
     } catch (error) {
       setError(error?.message || 'No se pudo procesar la captura.')
@@ -3727,7 +3953,9 @@ export function useFluVoiceAssistant({
     conversationActiveRef,
     dispatchFastConfigCommand,
     dispatchFastGameCommand,
+    dispatchFastEnvironmentCommand,
     dispatchPassiveVoiceCommand,
+    evaluateDeterministicFastPaths,
     emitActiveConversationCommand,
     emitConversationLog,
     finalizeRecognition,

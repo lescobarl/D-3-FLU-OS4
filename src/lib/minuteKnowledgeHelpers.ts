@@ -195,14 +195,48 @@ export function formatMinuteDraftText(draft: any = {}): string {
 // Formato de una minuta individual para KB
 // ------------------------------------------------------------
 
+/**
+ * Resuelve la etiqueta legible de un registro según su `kind`.
+ * Los registros sin `kind` (retrocompatibles) se tratan como 'minuta'.
+ */
+function resolveKindLabel(kind: string = ''): string {
+    switch (kind) {
+        case 'conversacion':
+            return 'Conversacion';
+        case 'diario':
+            return 'Diario';
+        case 'minuta':
+        default:
+            return 'Minuta';
+    }
+}
+
 function formatMinuteKnowledgeEntry(record: any = {}, { fallbackIndex = 0 }: { fallbackIndex?: number } = {}): string {
     const snapshot = record?.summarySnapshot || record;
+    const kind = String(snapshot?.kind || record?.kind || 'minuta');
+    const kindLabel = resolveKindLabel(kind);
     const code = normalizeSpaces(record?.historyCode || '');
     const { sequence } = parseMinuteHistoryCode(code);
     const seqLabel = sequence > 0 ? String(sequence) : String(fallbackIndex + 1);
     const header = code
-        ? `[Minuta ${seqLabel} · ${code}] ${record?.description || snapshot?.titulo || ''}`.trim()
-        : `[Minuta ${seqLabel}] ${record?.description || snapshot?.titulo || ''}`.trim();
+        ? `[${kindLabel} ${seqLabel} · ${code}] ${record?.description || snapshot?.titulo || ''}`.trim()
+        : `[${kindLabel} ${seqLabel}] ${record?.description || snapshot?.titulo || ''}`.trim();
+
+    // Diario: renderiza la entrada directamente (fecha + contenido + ánimo),
+    // sin las etiquetas de minuta (acuerdos/pendientes/siguientes pasos).
+    if (kind === 'diario') {
+        const date = String(snapshot?.date || record?.date || '');
+        const mood = snapshot?.mood != null ? ` (ánimo ${snapshot.mood})` : '';
+        const content = String(snapshot?.content || snapshot?.resumen || '').trim();
+        const body = [
+            date ? `Fecha: ${date}` : '',
+            content ? `Contenido: ${content}` : '',
+        ]
+            .filter(Boolean)
+            .join('\n');
+        return `${header}${mood}\n${body}`.trim();
+    }
+
     const speechTheme = resolveMinuteThemeForSpeech(snapshot, record);
     const body = [
         snapshot?.titulo ? `Titulo: ${snapshot.titulo}` : '',
@@ -219,10 +253,43 @@ function formatMinuteKnowledgeEntry(record: any = {}, { fallbackIndex = 0 }: { f
     return `${header}\n${body}`.trim();
 }
 
-/** Construye KB2 (texto) a partir de todas las minutas, listo para inyectar al prompt de Gemini. */
-export function buildMinuteKnowledgeBase2(records: any[] = []): string {
-    if (!Array.isArray(records) || !records.length) return '';
-    return records
+/** Convierte una entrada de diario (DiaryEntryRecord) a un registro de conocimiento con kind 'diario'. */
+function diaryEntryToKnowledgeRecord(entry: any = {}): any {
+    const date = String(entry?.date || '');
+    const title = String(entry?.title || '').trim();
+    const content = String(entry?.content || '').trim();
+    const mood = entry?.mood;
+    const description = title || (date ? `Diario ${date}` : 'Diario');
+    return {
+        kind: 'diario',
+        description,
+        summarySnapshot: {
+            kind: 'diario',
+            titulo: description,
+            date,
+            content,
+            mood,
+            resumen: content,
+            participantes: [],
+            acuerdos: [],
+            pendientes: [],
+            siguientes_pasos: [],
+            tema_sesion: '',
+        },
+    };
+}
+
+/**
+ * Construye KB2 (texto) a partir de minutas, resúmenes de conversación y
+ * entradas de diario, listo para inyectar al prompt de Gemini.
+ * - `records`: MinuteRecord[] (minutas + conversaciones con kind).
+ * - `options.diary`: DiaryEntryRecord[] (se normalizan a kind 'diario').
+ */
+export function buildMinuteKnowledgeBase2(records: any[] = [], options?: { diary?: any[] }): string {
+    const diaryRecords = (options?.diary || []).map(diaryEntryToKnowledgeRecord);
+    const all = [...(Array.isArray(records) ? records : []), ...diaryRecords];
+    if (!all.length) return '';
+    return all
         .map((record, index) => formatMinuteKnowledgeEntry(record, { fallbackIndex: index }))
         .filter(Boolean)
         .join('\n\n');
@@ -286,14 +353,17 @@ function minuteCatalogSpeech(records: any[] = [], { language = 'es' }: { languag
     }
     const labels = records
         .map((record, index) => {
+            const snapshot = record?.summarySnapshot || record;
+            const kind = String(snapshot?.kind || record?.kind || 'minuta');
+            const kindLabel = resolveKindLabel(kind).toLowerCase();
             const code = String(record?.historyCode || '').trim();
             const { sequence } = parseMinuteHistoryCode(code);
             const seqLabel = sequence > 0 ? sequence : index + 1;
-            const title = String(record?.description || record?.summarySnapshot?.titulo || '').trim();
+            const title = String(record?.description || snapshot?.titulo || '').trim();
             if (isEnglish) {
-                return title ? `minute ${seqLabel} (${title})` : `minute ${seqLabel}`;
+                return title ? `${kindLabel} ${seqLabel} (${title})` : `${kindLabel} ${seqLabel}`;
             }
-            return title ? `minuta ${seqLabel} (${title})` : `minuta ${seqLabel}`;
+            return title ? `${kindLabel} ${seqLabel} (${title})` : `${kindLabel} ${seqLabel}`;
         })
         .filter(Boolean);
     return labels.join(', ');
@@ -331,18 +401,20 @@ export function buildMinuteLookupContract({
     }
 
     const snapshot = record?.summarySnapshot || record;
+    const kind = String(snapshot?.kind || record?.kind || 'minuta');
+    const kindLabel = resolveKindLabel(kind);
     const code = String(record?.historyCode || '').trim();
     const { sequence: codeSequence } = parseMinuteHistoryCode(code);
     const seqLabel = codeSequence > 0 ? codeSequence : target;
     const titulo = String(snapshot?.titulo || record?.description || '').trim();
-    const titleLabel = titulo || (isEnglish ? `Minute ${seqLabel}` : `Minuta ${seqLabel}`);
+    const titleLabel = titulo || (isEnglish ? `${kindLabel} ${seqLabel}` : `${kindLabel} ${seqLabel}`);
     const codeSpeech = code ? code.replace('-', ' ') : '';
     const speechTheme = resolveMinuteThemeForSpeech(snapshot, record);
 
     const spokenParts: string[] = [];
     if (isEnglish) {
         spokenParts.push(
-            `Minute ${seqLabel}${codeSpeech ? `, id ${codeSpeech},` : ','} ${titleLabel}.`,
+            `${kindLabel} ${seqLabel}${codeSpeech ? `, id ${codeSpeech},` : ','} ${titleLabel}.`,
         );
         if (speechTheme) spokenParts.push(`Topic: ${speechTheme}.`);
         if (snapshot?.resumen) spokenParts.push(snapshot.resumen);
@@ -353,7 +425,7 @@ export function buildMinuteLookupContract({
         }
     } else {
         spokenParts.push(
-            `La minuta ${seqLabel}${codeSpeech ? `, identificada como ${codeSpeech},` : ''} ${titulo ? `titulada ${titulo},` : ''}`,
+            `La ${kindLabel.toLowerCase()} ${seqLabel}${codeSpeech ? `, identificada como ${codeSpeech},` : ''} ${titulo ? `titulada ${titulo},` : ''}`,
         );
         if (speechTheme) spokenParts.push(` trata sobre ${speechTheme}.`);
         if (snapshot?.resumen) spokenParts.push(` ${snapshot.resumen}`);

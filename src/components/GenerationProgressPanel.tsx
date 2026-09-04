@@ -24,6 +24,7 @@ export interface GenerationProgressPanelProps {
     isGenerating: boolean;
     error: string | null;
     language?: string;
+    hideHeader?: boolean;
     onDownload?: (result: GeneratedDocumentResult) => void;
     onClear?: () => void;
 }
@@ -62,6 +63,7 @@ export default function GenerationProgressPanel({
     isGenerating,
     error,
     language = 'es',
+    hideHeader = false,
     onDownload,
     onClear,
 }: GenerationProgressPanelProps) {
@@ -104,9 +106,11 @@ export default function GenerationProgressPanel({
 
     return (
         <div className="frame-content__generation">
-            <h4 className="generation-panel__title">
-                {isEn ? '🛠️ Document / Video Generation' : '🛠️ Generación de Documento / Video'}
-            </h4>
+            {!hideHeader && (
+                <h4 className="generation-panel__title">
+                    {isEn ? '🛠️ Document / Video Generation' : '🛠️ Generación de Documento / Video'}
+                </h4>
+            )}
 
             {job && (
                 <div className="generation-panel__status">

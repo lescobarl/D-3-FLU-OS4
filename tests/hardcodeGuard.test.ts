@@ -42,6 +42,7 @@ const SAFE_URL_PATTERNS: RegExp[] = [
 const ALLOWED_CONFIG_FILES = new Set([
     'core/config/appConfig.ts',  // single source of truth (Rule #1)
     'voice/lib/visualConfig.js', // módulo de config del pipeline visual
+    'voice/lib/fluConfig.js',    // FLU_CONFIG centralizado (browser/search, voz, etc.)
     'services/musicPlayer.ts',   // catálogo estático de pistas demo (datos)
 ]);
 

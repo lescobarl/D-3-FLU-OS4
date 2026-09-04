@@ -13,6 +13,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { aiService } from '../services/aiServiceFactory';
+import { fetchGeminiImageFallback } from '../voice/lib/imageGeneration';
+import { resolveGeminiApiKey } from '../core/config/appConfig';
 
 export interface WorkspaceImageState {
     /** URL de la imagen generada, o null si no hay */
@@ -23,14 +25,20 @@ export interface WorkspaceImageState {
     isFailed: boolean;
     /** Si el overlay de imagen expandida está visible */
     isExpanded: boolean;
+    /** Contador de reintentos de carga de la URL (para forzar recarga del <img>) */
+    loadAttempt: number;
     /** Reintentar generación con el último prompt/tipo */
     retry: () => void;
+    /** Reintentar la carga de la URL actual (Pollinations es stateless: misma URL → misma imagen) */
+    retryLoad: () => void;
     /** Abrir overlay expandido */
     expand: () => void;
     /** Cerrar overlay expandido */
     close: () => void;
     /** Marcar como fallido (para onError en JSX) */
     markFailed: () => void;
+    /** Intentar fallback con generación nativa de Gemini (paso 5) cuando Pollinations falla */
+    fallbackToGemini: () => Promise<void>;
     /** Generar imagen desde un contract de Gemini */
     generateFromContract: (promptVisual: string, tipo: string | null) => Promise<void>;
     /** Limpiar todo el estado de imagen */
@@ -48,12 +56,22 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
     const promptRef = useRef<string>('');
     const tipoRef = useRef<string | null>(null);
     const loadTimeoutRef = useRef<number>(0);
+    // Contador de reintentos de carga de la URL (ref espejo de loadAttempt para
+    // leer el valor actual de forma síncrona dentro de retryLoad sin efectos en el updater).
+    const loadAttemptRef = useRef(0);
 
     // ---- Estados ----
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isFailed, setIsFailed] = useState(false);
+    // Contador de reintentos de carga de la URL. Se incrementa en retryLoad()
+    // para forzar una recarga del <img> (Pollinations es stateless: la misma
+    // URL devuelve la misma imagen una vez generada, así que reintentar la URL
+    // suele bastar ante fallos transitorios o generación lenta en frío).
+    const [loadAttempt, setLoadAttempt] = useState(0);
+    // Máximo de reintentos de carga de la URL antes de caer al fallback de Gemini.
+    const MAX_LOAD_RETRIES = 3;
 
     // ---- Limpiar timeout ----
     const clearLoadTimeout = useCallback(() => {
@@ -68,6 +86,8 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         const prompt = promptRef.current;
         const tipo = tipoRef.current;
         if (!prompt) return;
+        loadAttemptRef.current = 0;
+        setLoadAttempt(0);
         setIsLoading(true);
         setIsFailed(false);
         const requestId = Date.now();
@@ -101,11 +121,78 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         clearLoadTimeout();
     }, [clearLoadTimeout]);
 
+    // ---- Fallback to Gemini native image generation (paso 5) ----
+    // Cuando la URL de Pollinations falla al cargar en el <img>, intentamos
+    // generar la imagen con la API nativa de Gemini (si hay clave configurada)
+    // antes de mostrar el placeholder. Devuelve un data URL que no depende de red.
+    // El fallback es automático: si hay clave de Gemini, se considera.
+    const fallbackToGemini = useCallback(async () => {
+        const prompt = promptRef.current;
+        if (!prompt) {
+            markFailed();
+            return;
+        }
+        const apiKey = resolveGeminiApiKey();
+        if (!apiKey) {
+            markFailed();
+            return;
+        }
+        // Evitar reintentos concurrentes: invalidar peticiones previas
+        const requestId = Date.now();
+        requestRef.current = requestId;
+        setIsLoading(true);
+        setIsFailed(false);
+        try {
+            const result = await fetchGeminiImageFallback({
+                workspace: { prompt_visual: prompt, tipo: tipoRef.current },
+                language,
+                apiKey,
+            });
+            if (requestRef.current !== requestId) return;
+            if (result.image_url) {
+                urlRef.current = result.image_url;
+                setImageUrl(result.image_url);
+                setIsLoading(false);
+                setIsFailed(false);
+            } else {
+                console.warn('[useWorkspaceImage] Gemini fallback returned no image:', result.trace);
+                setIsLoading(false);
+                setIsFailed(true);
+            }
+        } catch (err) {
+            if (requestRef.current !== requestId) return;
+            console.warn('[useWorkspaceImage] Gemini fallback failed:', err);
+            setIsLoading(false);
+            setIsFailed(true);
+        }
+    }, [language, markFailed]);
+
+    // ---- Retry load of current URL (Pollinations is stateless) ----
+    // Cuando el <img> dispara onError por un fallo transitorio o por generación
+    // lenta en frío, reintentamos cargar la MISMA URL (Pollinations es stateless:
+    // una vez generada, la misma URL devuelve la misma imagen). Solo tras agotar
+    // MAX_LOAD_RETRIES caemos al fallback de Gemini.
+    const retryLoad = useCallback(() => {
+        if (!urlRef.current) {
+            markFailed();
+            return;
+        }
+        if (loadAttemptRef.current >= MAX_LOAD_RETRIES) {
+            // Agotados los reintentos de URL → fallback a Gemini (si hay clave)
+            void fallbackToGemini();
+            return;
+        }
+        loadAttemptRef.current += 1;
+        setLoadAttempt(loadAttemptRef.current);
+    }, [fallbackToGemini, markFailed]);
+
     // ---- Generate from contract ----
     const generateFromContract = useCallback(async (promptVisual: string, tipo: string | null) => {
         // Guardar prompt y tipo para posible retry
         promptRef.current = promptVisual;
         tipoRef.current = tipo;
+        loadAttemptRef.current = 0;
+        setLoadAttempt(0);
         setIsLoading(true);
         setIsFailed(false);
         const requestId = Date.now();
@@ -137,6 +224,8 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         setIsLoading(false);
         setIsFailed(false);
         setIsExpanded(false);
+        loadAttemptRef.current = 0;
+        setLoadAttempt(0);
         urlRef.current = '';
         promptRef.current = '';
         tipoRef.current = null;
@@ -184,10 +273,13 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         isLoading,
         isFailed,
         isExpanded,
+        loadAttempt,
         retry,
+        retryLoad,
         expand,
         close,
         markFailed,
+        fallbackToGemini,
         generateFromContract,
         clear,
         loadTimeoutRef,

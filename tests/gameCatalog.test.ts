@@ -7,7 +7,7 @@
 // - getGameEngine resuelve SOLO juegos del catálogo activo.
 // ============================================================
 import { describe, test, expect } from 'vitest';
-import { matchGameIntent, getGameEngine, isGameId, GAME_IDS } from '../src/core/games/gameCatalog';
+import { matchGameIntent, getGameEngine, isGameId, GAME_IDS, END_GAME_FRAMES } from '../src/core/games/gameCatalog';
 
 describe('gameCatalog — matchGameIntent (guardia triple)', () => {
     test('"ok flu, vamos a jugar a las adivinanzas" → adivinanzas', () => {
@@ -64,9 +64,9 @@ describe('gameCatalog — matchGameIntent (guardia triple)', () => {
         expect(matchGameIntent('')).toBeNull();
     });
 
-    test('juego en GAME_IDS pero NO en el catálogo → null (sin dummies)', () => {
-        // 'ahorcado' es un id válido pero NO está implementado.
-        expect(matchGameIntent('juguemos a ahorcado')).toBeNull();
+    test('juego inexistente (fuera de GAME_IDS) → null (sin dummies)', () => {
+        // 'piedra_papel' no es un id válido ni está en el catálogo.
+        expect(matchGameIntent('juguemos a piedra papel o tijera')).toBeNull();
     });
 
     test('"juguemos a veo veo" → veo_veo', () => {
@@ -109,8 +109,8 @@ describe('gameCatalog — getGameEngine (solo catálogo activo)', () => {
         expect(getGameEngine('piedra_papel' as never)).toBeNull();
     });
 
-    test('id en GAME_IDS pero sin motor (ahorcado) → null', () => {
-        expect(getGameEngine('ahorcado' as never)).toBeNull();
+    test('id inexistente → null', () => {
+        expect(getGameEngine('piedra_papel' as never)).toBeNull();
     });
 
     test('veo_veo → motor disponible', () => {
@@ -180,5 +180,45 @@ describe('gameCatalog — isGameId / GAME_IDS', () => {
         expect(GAME_IDS.length).toBeGreaterThan(0);
         expect(GAME_IDS).toContain('simon_dice');
         expect(GAME_IDS).toContain('adivinanzas');
+    });
+});
+
+describe('gameCatalog — END_GAME_FRAMES (control data-driven de partida activa)', () => {
+    test('catálogo congelado y no vacío, todas las frases son texto no vacío', () => {
+        expect(Object.isFrozen(END_GAME_FRAMES)).toBe(true);
+        expect(END_GAME_FRAMES.length).toBeGreaterThan(0);
+        for (const frame of END_GAME_FRAMES) {
+            expect(typeof frame).toBe('string');
+            expect(frame.trim().length).toBeGreaterThan(0);
+        }
+    });
+
+    test('incluye las frases de salida documentadas del fast-path de voz', () => {
+        expect(END_GAME_FRAMES).toEqual(expect.arrayContaining([
+            'salir del juego',
+            'terminar el juego',
+            'dejar de jugar',
+            'ya no quiero jugar',
+            'cerrar el juego',
+            'terminemos',
+            'ya basta',
+            'se acabo',
+        ]));
+    });
+
+    test('frases ya normalizadas: sin diacríticos, minúsculas, sin dobles espacios', () => {
+        for (const frame of END_GAME_FRAMES) {
+            const normalized = frame
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim();
+            expect(normalized).toBe(frame);
+        }
+    });
+
+    test('sin frases duplicadas', () => {
+        expect(new Set(END_GAME_FRAMES).size).toBe(END_GAME_FRAMES.length);
     });
 });

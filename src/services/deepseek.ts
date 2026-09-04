@@ -16,7 +16,7 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, WORKSPACE_TIPOS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
+import { DEEPSEEK_CONFIG, GENERATION_TIMEOUT_MS, OPENROUTER_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, WORKSPACE_TIPOS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { buildCapabilitiesPrompt } from './capabilities';
@@ -149,6 +149,39 @@ function safeParseJson(text: string): any | null {
     }
 }
 
+/**
+ * FASE P — Personalización profunda por persona.
+ * El motor de texto (OpenRouter) se invoca directamente (sin proxy), así que el
+ * nivel de explicación, el tono y los rasgos se inyectan en el systemPrompt local.
+ * Devuelve una cadena vacía cuando no hay personalización activa (sin cambios de
+ * comportamiento en el caso por defecto).
+ */
+function buildPersonalizationRule(options: AIRequestOptions, isEnglish: boolean): string {
+    const parts: string[] = [];
+    if (options.traits && options.traits.length > 0) {
+        parts.push(
+            isEnglish
+                ? `Your personality traits are: ${options.traits.join(', ')}.`
+                : `Tus rasgos de personalidad son: ${options.traits.join(', ')}.`,
+        );
+    }
+    if (options.tone) {
+        parts.push(
+            isEnglish
+                ? `Your communication tone is: ${options.tone}.`
+                : `Tu tono de comunicacion es: ${options.tone}.`,
+        );
+    }
+    if (options.explanationLevel) {
+        parts.push(
+            isEnglish
+                ? `Explanation level: ${options.explanationLevel}. Adjust the depth of your answers to match this level (simple = short and plain, detallado = thorough with steps and examples, avanzado = technical and advanced).`
+                : `Nivel de explicacion: ${options.explanationLevel}. Ajusta la profundidad de tus respuestas a ese nivel (simple = breve y claro, detallado = a fondo con pasos y ejemplos, avanzado = tecnico).`,
+        );
+    }
+    return parts.length > 0 ? `\n\n${parts.join(' ')}` : '';
+}
+
 // -----------------------------------------------------------
 // DeepSeekService — Implementation of IAIService
 // -----------------------------------------------------------
@@ -269,7 +302,7 @@ class DeepSeekService implements IAIService {
         const messages = [
             {
                 role: 'system',
-                content: `You are ${botName}, a conversational assistant. Respond naturally and helpfully in ${isEnglish ? 'English' : 'Spanish'}.`
+                content: `You are ${botName}, a conversational assistant. Respond naturally and helpfully in ${isEnglish ? 'English' : 'Spanish'}.` + buildPersonalizationRule(options, isEnglish),
             },
             ...history.map(entry => ({
                 role: entry.role === 'user' ? 'user' : 'assistant',
@@ -433,7 +466,7 @@ Formato de respuesta (JSON):
             .map((e) => `${e.speakerName || (e.role === 'user' ? (isEnglish ? 'User' : 'Usuario') : 'FLU')}: ${e.text}`)
             .join('\n');
 
-        const systemPrompt = isEnglish
+        const baseSystemPrompt = isEnglish
             ? `You are FLU, an educational assistant that generates structured responses.
 Your task is to analyze the conversation and the user's latest message, then respond in JSON format.
 
@@ -441,7 +474,7 @@ Response format (JSON):
 {
   "respuesta_voz": "your spoken response in English",
   "navegacion": {
-    "comando": "FLU_WAKE" | "INICIAR_CONVERSACION" | "CERRAR_ESCUCHA" | "ABRIR_ESCUCHA" | null,
+    "comando": "FLU_WAKE" | "INICIAR_CONVERSACION" | "CERRAR_ESCUCHA" | "ABRIR_ESCUCHA" | "NAVEGAR" | "BUSCAR" | null,
     "destino": "screen_id" | null,
     "parametros": {}
   },
@@ -462,7 +495,11 @@ Response format (JSON):
 
 Rules:
 - respuesta_voz is REQUIRED and must be a natural, conversational response
-- navegacion.comando should be set when the user wants to navigate or control FLU
+- navegacion.comando should be set when the user wants to navigate or control FLU; use "NAVEGAR" when the user asks to open, navigate to or search a curated site (e.g. "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") and fill navegacion.parametros.sitio with the site name
+- use "BUSCAR" when the user asks to search the web in general (e.g. "buscá capital de Francia", "search the capital of France", "qué significa X") and fill navegacion.parametros.consulta with the search query
+- use "INICIAR_CONVERSACION" ONLY when the user explicitly asks to start, begin or reset the conversation/session (e.g. "iniciar conversación", "empezar conversación", "nueva conversación", "start a new conversation"). NEVER set it for an ordinary conversational question or request for information; those are plain answers with navegacion.comando = null.
+- use "CERRAR_ESCUCHA" ONLY when the user explicitly asks to stop/close the listening (e.g. "cerrar escucha", "dejar de escuchar", "stop listening"). NEVER set it after answering a normal question.
+- use "ABRIR_ESCUCHA" ONLY when the user explicitly asks to resume/open the listening (e.g. "abrir escucha", "seguir escuchando", "resume listening"). NEVER set it for a normal question.
 - workspace should be set when the user asks for content creation
 - animacion and emocion are optional hints for avatar behavior
 - musica should be set when the user asks to play, pause or stop music; cancion can be a playlist id or title (plays instantly) or any song name (FLU searches it online, public domain)
@@ -475,7 +512,7 @@ Formato de respuesta (JSON):
 {
   "respuesta_voz": "tu respuesta hablada en español",
   "navegacion": {
-    "comando": "FLU_WAKE" | "INICIAR_CONVERSACION" | "CERRAR_ESCUCHA" | "ABRIR_ESCUCHA" | null,
+    "comando": "FLU_WAKE" | "INICIAR_CONVERSACION" | "CERRAR_ESCUCHA" | "ABRIR_ESCUCHA" | "NAVEGAR" | "BUSCAR" | null,
     "destino": "screen_id" | null,
     "parametros": {}
   },
@@ -496,14 +533,20 @@ Formato de respuesta (JSON):
 
 Reglas:
 - respuesta_voz es REQUERIDO y debe ser una respuesta natural y conversacional
-- navegacion.comando debe establecerse cuando el usuario quiere navegar o controlar FLU
+- navegacion.comando debe establecerse cuando el usuario quiere navegar o controlar FLU; usa "NAVEGAR" cuando pida abrir, navegar o buscar un sitio curado (ej: "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") y llena navegacion.parametros.sitio con el nombre del sitio
+- usa "BUSCAR" cuando el usuario pida buscar en la web en general (ej: "buscá capital de Francia", "buscá recetas de cocina", "¿qué significa X?") y llena navegacion.parametros.consulta con la consulta
+- usa "INICIAR_CONVERSACION" SOLO cuando el usuario pida explícitamente iniciar, comenzar o reiniciar la conversación/sesión (ej: "iniciar conversación", "empezar conversación", "nueva conversación", "nueva sesión"). NUNCA lo uses para una pregunta conversacional o petición de información normal; esas son respuestas simples con navegacion.comando = null.
+- usa "CERRAR_ESCUCHA" SOLO cuando el usuario pida explícitamente detener/cerrar la escucha (ej: "cerrar escucha", "dejar de escuchar", "detener escucha"). NUNCA lo uses tras responder una pregunta normal.
+- usa "ABRIR_ESCUCHA" SOLO cuando el usuario pida explícitamente reanudar/abrir la escucha (ej: "abrir escucha", "seguir escuchando", "continuar escuchando"). NUNCA lo uses para una pregunta normal.
 - workspace debe establecerse cuando el usuario pide crear contenido
 - animacion y emocion son sugerencias opcionales para el comportamiento del avatar
 - musica debe establecerse cuando el usuario pide reproducir, pausar o detener música; cancion puede ser un id o título del playlist (suena al instante) o cualquier nombre de canción (FLU la busca en línea, dominio público)
 
 ${buildCapabilitiesPrompt('es')}`;
 
-        const messages = [
+const systemPrompt = baseSystemPrompt + buildPersonalizationRule(options, isEnglish);
+
+const messages = [
             { role: 'system', content: systemPrompt },
             ...history.map(entry => ({
                 role: entry.role === 'user' ? 'user' : 'assistant',
@@ -761,7 +804,7 @@ ${buildCapabilitiesPrompt('es')}`;
      */
     private async postJson(
         messages: Array<{ role: string; content: any }>,
-        options: { maxTokens?: number; temperature?: number } = {},
+        options: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
     ): Promise<string> {
         const url = buildTextApiUrl('/chat/completions');
         const local = isLocalTextEndpoint(url);
@@ -785,7 +828,7 @@ ${buildCapabilitiesPrompt('es')}`;
             method: 'POST',
             headers,
             body: JSON.stringify(body),
-        });
+        }, options.timeoutMs);
         if (!response.ok) {
             throw new Error(`Text API error: ${response.status} ${response.statusText}`);
         }
@@ -954,7 +997,7 @@ ${buildCapabilitiesPrompt('es')}`;
             const content = await this.postJson([
                 { role: 'system', content: buildGenerationSystemPrompt(language) },
                 { role: 'user', content: buildGenerationPrompt(payload, language) },
-            ], { maxTokens: 3000 });
+            ], { maxTokens: 3000, timeoutMs: GENERATION_TIMEOUT_MS });
             return serializeDocument(payload.formato, content, nombre);
         } catch (error) {
             console.warn('Text engine generateDocument fallback to fallback content:', error);

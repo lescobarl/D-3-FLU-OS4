@@ -116,13 +116,31 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                 const fuentes = opts?.fuentes && opts.fuentes.length > 0 ? opts.fuentes : buildDefaultFuentes();
                 const parametros = opts?.parametros ?? {};
 
+                // El contenido de conversación NO debe ir como contenido_analizado:
+                // eso dispara el atajo que serializa el texto crudo sin pasar por el
+                // LLM (el video no capturaba el tema). Se alimenta al LLM como fuente
+                // de contexto para que genere un guion coherente con el tema.
+                const contenido = (opts?.contenido || '').trim();
+                let fuentesFinal = fuentes;
+                if (contenido) {
+                    // Reemplaza la fuente 'conversacion' por defecto (que solo trae la
+                    // última respuesta) por el contexto completo (pregunta + respuesta),
+                    // evitando duplicar la conversación en el prompt del LLM.
+                    fuentesFinal = [
+                        ...fuentes.filter((f) => f.tipo !== 'conversacion'),
+                        { tipo: 'conversacion', ref: contenido.slice(0, 1200) },
+                    ];
+                }
+
                 setJob('analizando', formato);
                 const docResult = await aiService.generateDocument(
                     {
                         formato,
                         parametros: parametros as GenerationInputParams,
-                        fuentes,
-                        contenido_analizado: opts?.contenido,
+                        fuentes: fuentesFinal,
+                        // Solo se usa cuando hay contenido genuinamente pre-analizado
+                        // (flujo F3 de documento analizado); nunca la conversación cruda.
+                        contenido_analizado: undefined,
                     },
                     language,
                 );

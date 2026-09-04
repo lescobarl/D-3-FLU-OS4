@@ -7,7 +7,7 @@
 // devuelven GameTurnResult. La sesión es un objeto plano y
 // serializable para poder persistirla en sessionState.
 // ============================================================
-import type { GameId, GameSession, GameTurnResult } from './types';
+import type { GameId, GameNarrativeScene, GameSession, GameTurnResult } from './types';
 
 export interface GameEngine {
     id: GameId;
@@ -17,6 +17,12 @@ export interface GameEngine {
     start(session: GameSession, options?: Record<string, unknown>): GameTurnResult;
     /** Valida la respuesta del jugador, avanza estado, devuelve siguiente prompt. */
     turn(session: GameSession, text: string): GameTurnResult;
+    /**
+     * (Opcional) Ingresa escenas externas (contrato narrate de cuentacuentos)
+     * y devuelve el prompt de la primera escena. Los motores que no narran
+     * no implementan este método.
+     */
+    narrate?(session: GameSession, scenes: GameNarrativeScene[], options?: Record<string, unknown>): GameTurnResult;
     /** Detecta "sigo jugando", "salir del juego", etc. */
     isGameCommand(text: string): boolean;
 }

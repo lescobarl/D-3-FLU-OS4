@@ -1,8 +1,11 @@
 import { cleanForSpeech } from './audioMath.js'
 import { normalizeConfiguracion } from './configCommands.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
 import { buildGenerationPrompt } from './fluVisualPipeline.js'
 import {
+  buildGeminiApiUrl,
+  buildGeminiPredictUrl,
   buildPollinationsUrl,
   buildTextApiUrl,
   isLocalTextEndpoint,
@@ -12,14 +15,24 @@ import {
 } from '../../core/config/appConfig'
 
 import {
+  buildBareVisualFallbackWorkspace,
   buildVisualAnchorBlock,
+  isBareVisualRequest,
+  isVisualWorkspaceTipo,
   normalizeWorkspaceContract,
   selectConversationSummaryWindow,
 } from './workspaceContract.js'
-import { fetchTextEngine, fetchTextEngineResilient, resolveRequestTimeout } from '../../core/ai/httpClient'
+import {
+  fetchTextEngine,
+  fetchTextEngineResilient,
+  REQUEST_TIMEOUT_PRESETS,
+  resolveRequestTimeout,
+} from '../../core/ai/httpClient'
 import { buildAnimPrompt } from '../../core/anim/expressionRegistry'
 import { buildCapabilitiesPrompt } from '../../services/capabilities'
 import { buildConfiguracionPrompt } from '../../core/config/voiceConfigCatalog'
+import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
+import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
 
 export {
   buildVisualAnchorBlock,
@@ -105,14 +118,14 @@ async function postChatCompletion({
   }
   if (jsonMode && !local) body.response_format = { type: 'json_object' }
 
-  const response = await fetchTextEngine(
+  const response = await fetchTextEngineResilient(
     url,
     {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     },
-    timeoutMs,
+    { timeoutMs, retries: 1, retryDelayMs: 300 },
   )
 
   if (!response.ok) {
@@ -176,10 +189,15 @@ export function buildMinimalContractSchema() {
     type: 'object',
     properties: {
       respuesta_voz: { type: 'string' },
+      ambiente: { type: 'string', nullable: true },
       navegacion: {
         type: 'object',
         properties: {
-          comando: { type: 'string', nullable: true },
+          comando: {
+            type: 'string',
+            nullable: true,
+            description: `Valores válidos: ${GEMINI_INFERABLE_COMMAND_IDS.join(', ')} o null. Usa NAVEGAR cuando el usuario pida abrir/navegar/buscar un sitio curado.`,
+          },
           destino: { type: 'string', nullable: true },
           parametros: { type: 'object' },
         },
@@ -196,7 +214,7 @@ export function buildMinimalContractSchema() {
  *  - texto corto (< 20 palabras);
  *  - sin comando de navegación explícito (intent.comando null/undefined);
  *  - sin referencias a workspace/documentos/imágenes/música/configuración/
- *    minutas/resúmenes/participantes/vídeo;
+ *    minutas/resúmenes/participantes/vídeo/horario;
  *  - el idioma y las peticiones de traducción no fuerzan el pipeline completo:
  *    la IA resuelve la estructura de la conversación de forma natural.
  */
@@ -206,7 +224,7 @@ export function detectSimpleRequest({ transcript = '', intent = {} } = {}) {
   if (words > 20) return false
   if (intent?.comando) return false
   const complexReference =
-    /(workspace|documento|documentos|imagen|im[áa]genes|m[úu]sica|cancion|canciones|canta|cantar|toca|tocar|sing|configura|configurar|pantalla|minuta|minutas|resumen|resumir|participante|participantes|v[íi]deo|archivo|reproduce|reproducir|toma nota|actas)/i
+    /(workspace|documento|documentos|imagen|im[áa]genes|m[úu]sica|cancion|canciones|canta|cantar|toca|tocar|sing|configura|configurar|pantalla|minuta|minutas|resumen|resumir|participante|participantes|v[íi]deo|archivo|reproduce|reproducir|toma nota|actas|horario|horarios|clase|clases)/i
   return !complexReference.test(transcript)
 }
 
@@ -258,6 +276,176 @@ export async function generateWorkspaceImage({ apiKey, workspace, language = 'es
         source: 'generation_failed',
         error: error?.message || 'unknown',
         prompt,
+      },
+    }
+  }
+}
+
+/**
+ * Genera una imagen con la API NATIVA de Gemini (servidor, apiKey segura).
+ * Paso 5 del plan visual: fallback real cuando la URL de Pollinations falla
+ * al cargar en el navegador (evita dejar el placeholder «chipote»).
+ *
+ * Soportados (config visualConfig.js → geminiImage.models):
+ *  - kind 'generateContent' (gemini-2.5-flash-image / gemini-3.1-flash-image-preview):
+ *    POST buildGeminiApiUrl(model) → candidates[0].content.parts[].inlineData
+ *    { data: base64, mimeType } → data URL.
+ *  - kind 'predict' (imagen-4.0-*): POST buildGeminiPredictUrl(model) →
+ *    predictions[0].bytesBase64Encoded → data URL (image/png).
+ *
+ * Requiere apiKey (env del servidor vía resolveServerApiKey o cliente).
+ * Devuelve { imageUrl, trace }; imageUrl vacío si no hay key o falla.
+ */
+export async function generateGeminiImage({
+  apiKey = '',
+  prompt = '',
+  language = 'es',
+  model = '',
+  kind = '',
+} = {}) {
+  if (!prompt) {
+    return {
+      imageUrl: '',
+      trace: {
+        provider: 'gemini',
+        model: model || '',
+        kind: 'none',
+        source: 'empty_prompt',
+        hasImage: false,
+      },
+    }
+  }
+
+  const resolvedKey = resolveGeminiApiKey(apiKey)
+  if (!resolvedKey.apiKey) {
+    return {
+      imageUrl: '',
+      trace: {
+        provider: 'gemini',
+        model: model || '',
+        kind: 'none',
+        source: 'missing_api_key',
+        hasImage: false,
+        prompt,
+      },
+    }
+  }
+
+  const resolvedKind = String(kind || '').trim().toLowerCase()
+  const resolvedModel = String(model || '').trim()
+
+  try {
+    let imageUrl = ''
+    let usedKind = resolvedKind
+
+    if (resolvedKind === 'predict') {
+      const url = buildGeminiPredictUrl(resolvedModel)
+      const body = {
+        instances: [{ prompt }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: '16:9',
+        },
+      }
+      const response = await fetchTextEngine(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${resolvedKey.apiKey}`,
+          },
+          body: JSON.stringify(body),
+        },
+        REQUEST_TIMEOUT_PRESETS.image,
+      )
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '')
+        throw new Error(`Gemini predict error ${response.status}: ${detail || response.statusText}`)
+      }
+      const payload = await response.json()
+      const bytes = payload?.predictions?.[0]?.bytesBase64Encoded
+      if (bytes) {
+        imageUrl = `data:image/png;base64,${bytes}`
+      }
+    } else {
+      // generateContent (default)
+      usedKind = 'generateContent'
+      const url = buildGeminiApiUrl(resolvedModel)
+      const body = {
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+        },
+      }
+      const response = await fetchTextEngine(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${resolvedKey.apiKey}`,
+          },
+          body: JSON.stringify(body),
+        },
+        REQUEST_TIMEOUT_PRESETS.image,
+      )
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '')
+        throw new Error(`Gemini generateContent error ${response.status}: ${detail || response.statusText}`)
+      }
+      const payload = await response.json()
+      const parts = payload?.candidates?.[0]?.content?.parts || []
+      const inline = parts.find((p) => p?.inlineData?.data)
+      if (inline?.inlineData?.data) {
+        const mimeType = String(inline.inlineData.mimeType || 'image/png')
+        imageUrl = `data:${mimeType};base64,${inline.inlineData.data}`
+      }
+    }
+
+    if (!imageUrl) {
+      return {
+        imageUrl: '',
+        trace: {
+          provider: 'gemini',
+          model: resolvedModel || '',
+          kind: usedKind,
+          source: 'empty_response',
+          hasImage: false,
+          prompt,
+          language,
+        },
+      }
+    }
+
+    return {
+      imageUrl,
+      trace: {
+        provider: 'gemini',
+        model: resolvedModel || '',
+        kind: usedKind,
+        source: 'gemini_native',
+        hasImage: true,
+        prompt,
+        language,
+      },
+    }
+  } catch (error) {
+    return {
+      imageUrl: '',
+      trace: {
+        provider: 'gemini',
+        model: resolvedModel || '',
+        kind: resolvedKind || 'generateContent',
+        source: 'generation_failed',
+        hasImage: false,
+        error: error?.message || 'unknown',
+        prompt,
+        language,
       },
     }
   }
@@ -354,6 +542,13 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
       isEnglish
         ? 'Adapt your responses to reflect these traits and tone naturally in your language and style.'
         : 'Adapta tus respuestas para reflejar estos rasgos y tono de forma natural en tu lenguaje y estilo.',
+      // FASE P: desired explanation depth from the person's communication profile
+      ...(personality.explanationLevel
+        ? [isEnglish
+          ? `Explanation level: ${personality.explanationLevel}. Adjust the depth of your answers to match this level (simple = short and plain, detallado = thorough with steps and examples, avanzado = technical and advanced).`
+          : `Nivel de explicacion: ${personality.explanationLevel}. Ajusta la profundidad de tus respuestas a ese nivel (simple = breve y claro, detallado = a fondo con pasos y ejemplos, avanzado = tecnico).`
+        ]
+        : []),
       // Custom instructions from FLU Configurator (free text, e.g. "be more expressive, use animations, be kind")
       ...(personality.customInstructions
         ? [isEnglish
@@ -376,6 +571,12 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
   // lo amerita (shouldIncludeConfigPrompt). includeConfig=true conserva el
   // comportamiento original para llamadas directas y pruebas.
   const configPrompt = includeConfig ? [buildConfiguracionPrompt(isEnglish ? 'en' : 'es')] : []
+
+  // Ambiente instructions — fuente de verdad ÚNICA: environmentRegistry (catálogo fusionado).
+  // Se inyecta SIEMPRE (no gated por shouldIncludeConfigPrompt): los ambientes son identidad
+  // central y el catálogo es compacto. El LLM interpreta la esencia de la orden y emite
+  // el id de ambiente cuando el usuario adopta un rol explícito (sin coincidencia literal).
+  const ambientePrompt = [buildAmbientePrompt(isEnglish ? 'en' : 'es')]
 
   return [
     // Startup prompt: profile-level personality definition injected at the top of the system prompt
@@ -407,6 +608,15 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
       ? 'Use workspace.tipo text (or omit workspace) for pure conversation, explanations, or when the user says without image / text only. Use image_prompt for photos, diagram for flowcharts, 3d for 3D scenes.'
       : 'Usa workspace.tipo text (u omite workspace) para platica, explicaciones o cuando el usuario diga sin imagen / solo texto. Usa image_prompt para fotos, diagram para diagramas de flujo, 3d para escenas 3D.',
     isEnglish
+      ? 'BARE VISUAL REQUEST: when the user asks for an image without naming a subject (e.g. "generate me an image", "create an image", "show me a picture"), the topic is in the conversation thread. You MUST infer prompt_visual from the recent thread and set workspace.tipo = image_prompt. Do NOT reply "what image do you want?" when the thread has a topic — generate it. Only ask if the thread has no topic at all.'
+      : 'PETICIÓN VISUAL SIN SUJETO: cuando el usuario pida una imagen sin nombrar el sujeto (p. ej. "generame una imagen", "crea una imagen", "muéstrame una foto"), el tema está en el hilo de conversación. DEBES inferir prompt_visual del hilo reciente y fijar workspace.tipo = image_prompt. NO respondas "¿qué imagen quieres?" cuando el hilo tiene un tema — genérala. Solo pregunta si el hilo no tiene ningún tema.',
+    isEnglish
+      ? 'Use workspace.tipo horario with a modo (semana, dia, proxima or recordatorios) when the user asks about their class schedule ("show my schedule", "what classes do I have today", "next class"). The schedule renders in the Pizarrón from the horario table; return only the tipo and the modo, the app draws it.'
+      : 'Usa workspace.tipo horario con un modo (semana, dia, proxima o recordatorios) cuando el usuario pida su horario de clases ("muestra mi horario", "qué clases tengo hoy", "próxima clase"). El horario se dibuja en el Pizarrón desde la tabla horario; devuelve solo el tipo y el modo, la app lo dibuja.',
+    isEnglish
+      ? 'DOCUMENT/VIDEO GENERATION: when the user asks you to generate a written document (a letter, essay, summary, report, article, "write me a letter", "generate a document", "make a summary"), set workspace.tipo = doc and put the full content to generate in workspace.contenido (and a short title in workspace.titulo). When the user asks to generate a video ("generate a video", "make a video about..."), set workspace.tipo = video with the topic in workspace.contenido. The app triggers the document/video generator from these types; do not just describe the document in respuesta_voz.'
+      : 'GENERACIÓN DE DOCUMENTO/VIDEO: cuando el usuario te pida generar un documento escrito (una carta, ensayo, resumen, informe, artículo, "escríbeme una carta", "genera un documento", "haz un resumen"), fija workspace.tipo = doc y pon el contenido completo a generar en workspace.contenido (y un título corto en workspace.titulo). Cuando el usuario pida generar un video ("genera un video", "haz un video sobre..."), fija workspace.tipo = video con el tema en workspace.contenido. La app dispara el generador de documento/video desde estos tipos; no te limites a describir el documento en respuesta_voz.',
+    isEnglish
       ? 'When workspace.tipo is image_prompt, diagram or 3d, write prompt_visual as a self-contained renderable scene (concrete subject, setting, style). Example: "commercial passenger airplane in mid-flight above clouds, photorealistic". Never use a single generic noun alone. No wake words or command boilerplate. Never use generic abstract placeholders like "conceptual image" or "modern artistic composition".'
       : 'Cuando workspace.tipo sea image_prompt, diagram o 3d, escribe prompt_visual como escena renderizable autocontenida (sujeto concreto, entorno, estilo). Ejemplo: "avion comercial de pasajeros en pleno vuelo sobre nubes, fotorrealista". Nunca uses un solo sustantivo generico. Sin wake word ni muletillas del comando. Nunca uses placeholders abstractos genericos como "imagen conceptual" o "composicion abstracta".',
     isEnglish
@@ -420,7 +630,14 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
     ...minuteRules,
     ...animPrompt,
     ...configPrompt,
+    ...ambientePrompt,
     buildCapabilitiesPrompt(isEnglish ? 'en' : 'es'),
+    // P1-B (§1.2): autoconocimiento — refuerza en el system prompt qué sabe hacer FLU.
+    // Bloque compacto compilado desde el registro real (nunca hardcode); el LLM responde
+    // "¿qué sabes hacer?" enumerando capacidades reales sin inventar.
+    // Nota: sin spread (...) — es una sola cadena; con spread el join(' ') la separaría
+    // letra a letra.
+    buildSelfManifestoPrompt(isEnglish ? 'en' : 'es'),
   ].join(' ')
 }
 
@@ -437,8 +654,19 @@ export function buildUserPrompt({
   knowledgeMode = 'general',
   recentMemory = '',
   agendaText = '',
+  selfKnowledgeText = '',
+  diaryContext = '',
+  notesContext = '',
+  horarioContext = '',
+  resultadosContext = '',
 }) {
   const isEnglish = language === 'en'
+
+  // Allowlist del navegador curado (Regla #1: desde config, sin hardcode).
+  // FLU_CONFIG ya está importado al tope de este módulo.
+  const browserAllowlist = Array.isArray(FLU_CONFIG?.browser?.defaultProfile?.allowlist)
+    ? FLU_CONFIG.browser.defaultProfile.allowlist
+    : []
 
   const useMinuteKnowledge = knowledgeMode === 'minutes'
   const activeKnowledgeBase = useMinuteKnowledge ? knowledgeBase2 : knowledgeBase
@@ -452,6 +680,12 @@ export function buildUserPrompt({
 
   return [
     `${isEnglish ? 'Clean transcript' : 'Transcripcion limpia'}: ${transcript}`,
+    // Ancla visual colocada AL INICIO del prompt de usuario (justo tras la
+    // transcripción) para que sea prominente y el modelo la pondere con más
+    // fuerza. Antes iba al final (tras KB/agenda/memoria/autoconocimiento) y
+    // el modelo la ignoraba, respondiendo "¿qué imagen quieres?" en vez de
+    // generar image_prompt cuando el usuario decía "generame una imagen".
+    buildVisualAnchorBlock(transcript, language),
     `${isEnglish ? 'Detected speaker' : 'Hablante detectado'}: ${speaker || (isEnglish ? 'Anonymous speaker' : 'Hablante anonimo')}`,
     `${isEnglish ? 'Central topic' : 'Tema central'}: ${theme || (isEnglish ? 'Undefined' : 'No definido')}`,
     `${isEnglish ? 'Role' : 'Rol'}: ${role || (isEnglish ? 'Undefined' : 'No definido')}`,
@@ -460,6 +694,12 @@ export function buildUserPrompt({
     isEnglish
       ? 'Infer all navigation from the conversation context. Do not rely on fixed keywords.'
       : 'Infiere toda la navegacion desde el contexto de la conversacion. No dependas de palabras fijas.',
+    isEnglish
+      ? `Valid navegacion.comando values: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Use "NAVEGAR" when the user asks to open, navigate to or search a curated site (e.g. "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") and fill navegacion.parametros.sitio with the site name.`
+      : `Valores válidos de navegacion.comando: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Usa "NAVEGAR" cuando el usuario pida abrir, navegar o buscar un sitio curado (ej: "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") y llena navegacion.parametros.sitio con el nombre del sitio.`,
+    isEnglish
+      ? `Curated browser allowlist: ${browserAllowlist.join(', ') || '(empty)'}. If the user asks which sites they have access to, enumerate these sites.`
+      : `Sitios permitidos del navegador curado (allowlist): ${browserAllowlist.join(', ') || '(vacía)'}. Si el usuario pregunta a qué sitios tiene acceso, enumera estos sitios.`,
     isEnglish
       ? 'Continue the current thread naturally and keep references from earlier turns.'
       : 'Continua el hilo naturalmente y conserva las referencias de los turnos anteriores.',
@@ -485,6 +725,14 @@ export function buildUserPrompt({
         : `Agenda del día (pendientes de sesiones anteriores):\n${agendaText}`
       ]
       : []),
+    // Autoconocimiento (§1.4): solo se inyecta cuando el turno es una petición
+    // de autoconocimiento (isSelfKnowledgeRequest decide en useFluVoiceAssistant).
+    ...(selfKnowledgeText
+      ? [isEnglish
+        ? `FLU SELF-KNOWLEDGE (answer what FLU can do using this only):\n${selfKnowledgeText}`
+        : `AUTOCONOCIMIENTO DE FLU (responde qué sabe hacer FLU usando SOLO esto):\n${selfKnowledgeText}`
+      ]
+      : []),
     // Optimización 1.4: el estado emocional del turno viaja en el user message
     // (contexto del turno), no en el system prompt (que debe permanecer estable
     // para el cache server-side). El texto es idéntico al que antes iba en system.
@@ -494,7 +742,32 @@ export function buildUserPrompt({
         : `CRÍTICO — En este momento estás experimentando esta emoción. NO es un evento pasado — es cómo te sientes ahora mismo. Debes EXPRESAR este sentimiento en tu respuesta_voz antes que cualquier otra cosa. No lo niegues, no lo sobrescribas con tu personalidad. Esta emoción es parte de ti ahora mismo: ${recentMemory}`
       ]
       : []),
-    buildVisualAnchorBlock(transcript, language),
+    // Radar de contexto (Pizarrón un solo objeto — Paso 5): bloques 6-9.
+    // Cada bloque es dinámico desde su fuente (Dexie) y se omite si está vacío.
+    ...(resultadosContext
+      ? [isEnglish
+        ? `Recent results (last query + feed):\n${resultadosContext}`
+        : `Resultados recientes (última consulta + feed):\n${resultadosContext}`
+      ]
+      : []),
+    ...(diaryContext
+      ? [isEnglish
+        ? `Personal diary (latest entry + mood):\n${diaryContext}`
+        : `Diario personal (última entrada + ánimo):\n${diaryContext}`
+      ]
+      : []),
+    ...(notesContext
+      ? [isEnglish
+        ? `Pending notes:\n${notesContext}`
+        : `Notas pendientes:\n${notesContext}`
+      ]
+      : []),
+    ...(horarioContext
+      ? [isEnglish
+        ? `Today's schedule (HOY):\n${horarioContext}`
+        : `Horario del día (HOY):\n${horarioContext}`
+      ]
+      : []),
   ]
     .filter(Boolean)
     .join('\n')
@@ -514,6 +787,11 @@ export function buildConversationMessages({
   knowledgeMode = 'general',
   recentMemory = '',
   agendaText = '',
+  selfKnowledgeText = '',
+  diaryContext = '',
+  notesContext = '',
+  horarioContext = '',
+  resultadosContext = '',
 }) {
   const messages = []
 
@@ -555,6 +833,11 @@ export function buildConversationMessages({
       knowledgeMode,
       recentMemory,
       agendaText,
+      selfKnowledgeText,
+      diaryContext,
+      notesContext,
+      horarioContext,
+      resultadosContext,
     }),
   })
 
@@ -1003,6 +1286,11 @@ export async function generateFluContract({
   recentMemory = '',
   startupPrompt = '',
   agendaText = '',
+  selfKnowledgeText = '',
+  diaryContext = '',
+  notesContext = '',
+  horarioContext = '',
+  resultadosContext = '',
   model: modelParam,
 }) {
   const resolvedKey = resolveGeminiApiKey(apiKey)
@@ -1107,6 +1395,11 @@ export async function generateFluContract({
       knowledgeMode,
       recentMemory,
       agendaText,
+      selfKnowledgeText,
+      diaryContext,
+      notesContext,
+      horarioContext,
+      resultadosContext,
     }),
   ])
 
@@ -1158,7 +1451,7 @@ export async function generateFluContract({
 
   const responseText = rawResponseText
 
-  const workspace =
+  let workspace =
     parsed.workspace && typeof parsed.workspace === 'object'
       ? normalizeWorkspaceContract(
         {
@@ -1173,9 +1466,35 @@ export async function generateFluContract({
           puntos_clave: Array.isArray(parsed.workspace.puntos_clave)
             ? parsed.workspace.puntos_clave.map((item) => String(item || '').trim()).filter(Boolean)
             : [],
+          modo: String(parsed.workspace.modo || '').trim(),
         },
       )
       : null
+
+  // ── Fallback determinista para petición visual SIN sujeto ──────────────
+  // El modelo google/gemini-2.5-flash-lite tiene una fuerte tendencia a pedir
+  // aclaración ("¿sobre qué te gustaría la imagen?") cuando el usuario dice
+  // "generame una imagen" sin nombrar el sujeto. Aunque el ancla del prompt lo
+  // guía, no es fiable. Aquí, si el usuario hizo una petición visual sin sujeto
+  // y el modelo NO devolvió un workspace visual, construimos el workspace de
+  // forma determinista a partir del tema del hilo de conversación. Así la
+  // imagen SIEMPRE se genera cuando el hilo tiene un tema.
+  let fallbackRespuestaVoz = ''
+  if (
+    (!workspace || !isVisualWorkspaceTipo(workspace.tipo)) &&
+    isBareVisualRequest(transcript)
+  ) {
+    const fallbackWorkspace = buildBareVisualFallbackWorkspace(transcript, history, language)
+    if (fallbackWorkspace) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[FLU-DEBUG] bareVisualFallback activado: modelo devolvió workspace no visual; ' +
+          `se construye image_prompt determinista con tema "${fallbackWorkspace._subject}".`,
+      )
+      workspace = fallbackWorkspace
+      fallbackRespuestaVoz = fallbackWorkspace._respuestaVoz || ''
+    }
+  }
 
   const navegacion = parsed.navegacion && typeof parsed.navegacion === 'object' ? parsed.navegacion : {}
   const comando =
@@ -1184,7 +1503,8 @@ export async function generateFluContract({
       navegacion.comando === 'ABRIR_ESCUCHA' ||
       navegacion.comando === 'CERRAR_ESCUCHA' ||
       navegacion.comando === 'INICIAR_CONVERSACION' ||
-      navegacion.comando === 'GENERAR_RESUMEN'
+      navegacion.comando === 'GENERAR_RESUMEN' ||
+      navegacion.comando === 'NAVEGAR'
       ? navegacion.comando
       : null
   const destino = typeof navegacion.destino === 'string' ? navegacion.destino : null
@@ -1203,8 +1523,16 @@ export async function generateFluContract({
   const musica = musicaFromModel || undefined
   const configuracion = normalizeConfiguracion(parsed?.configuracion)
 
+  // OS4 FASE A: el LLM interpreta la esencia de la orden y emite el id de ambiente.
+  // Sin validación aquí: normalizeEnvironment (App.tsx) es el único validador
+  // (id inválido → null → sin acción, seguro). El prompt guía con el catálogo real.
+  const ambiente =
+    typeof parsed.ambiente === 'string' ? parsed.ambiente.trim().toLowerCase() : null
+
   const contract = {
-    respuesta_voz: responseText,
+    // Si se aplicó el fallback determinista, la respuesta_voz confirma la
+    // generación de la imagen (en lugar del "¿sobre qué imagen?" del modelo).
+    respuesta_voz: fallbackRespuestaVoz || responseText,
     navegacion: {
       comando: comando || intent?.comando || null,
       destino: destino || intent?.destino || null,
@@ -1227,6 +1555,7 @@ export async function generateFluContract({
     ...(emocion ? { emocion } : {}),
     ...(musica ? { musica } : {}),
     ...(configuracion ? { configuracion } : {}),
+    ...(ambiente ? { ambiente } : {}),
   }
   return {
     contract,

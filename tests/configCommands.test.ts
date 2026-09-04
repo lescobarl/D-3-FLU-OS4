@@ -9,7 +9,7 @@
 // Sin parches ni rutas dobles: cada expectativa refleja el comportamiento REAL
 // del módulo + VOICE_CONFIG_CATALOG + PALETTES (data-driven).
 // ============================================================
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, afterEach } from 'vitest';
 import {
     normalizeForMatch,
     hasToken,
@@ -25,6 +25,7 @@ import {
     normalizeConfiguracion,
 } from '../src/voice/lib/configCommands';
 import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog';
+import { builtinPaletteEntries, resetMergedPalettes, setMergedPalettes } from '../src/core/branding/seasonalPalettes';
 
 // Clave real aún sin implementar, derivada del catálogo (data-driven, sin hardcode):
 // si algún día el catálogo implementa todo, este vector se omite (no hay qué rechazar).
@@ -350,6 +351,71 @@ describe('configCommands — branding de cumpleaños por voz (fix determinista)'
     });
 });
 
+describe('configCommands — toggle genérico del branding (apagado por defecto, encendido a petición)', () => {
+    // El branding estacional arranca APAGADO (disabled). Solo se enciende a
+    // petición explícita: "activa la estación/branding" (sin temporada) → auto
+    // (detecta por calendario), "activa la estación de X" → manual + X, y
+    // "apaga/desactiva la estación/branding" → disabled. No está asociado a
+    // perfiles: es global y por temporada/calendario.
+
+    const MODE_AUTO = { accion: 'set_branding', componente: 'branding', clave: 'mode', valor: 'auto' };
+    const MODE_DISABLED = { accion: 'set_branding', componente: 'branding', clave: 'mode', valor: 'disabled' };
+
+    test.each([
+        'activa la estación',
+        'activa el branding',
+        'activa la temporada',
+        'enciende el branding',
+        'activate the season',
+        'enable the branding',
+    ])('encendido genérico "%s" → set_branding mode=auto', (phrase) => {
+        expect(resolveConfigCommandFromText(phrase)).toEqual(MODE_AUTO);
+    });
+
+    test.each([
+        'apaga la estación',
+        'apaga el branding',
+        'desactiva la estación',
+        'desactiva el branding',
+        'apaga la temporada',
+        'disable the branding',
+        'turn off the season',
+    ])('apagado genérico "%s" → set_branding mode=disabled', (phrase) => {
+        expect(resolveConfigCommandFromText(phrase)).toEqual(MODE_DISABLED);
+    });
+
+    test('apagar una temporada concreta apaga el branding entero → mode=disabled', () => {
+        expect(resolveConfigCommandFromText('apaga la estación de cumpleaños')).toEqual(MODE_DISABLED);
+    });
+
+    test.each([
+        'quita el branding',
+        'quita la temporada',
+        'quita la estación',
+        'quitar el branding',
+        'elimina el branding',
+        'elimina la temporada',
+        'borra el branding',
+        'borra la temporada',
+        'remueve el branding',
+        'saca el branding',
+        'deshabilita el branding',
+        'remove the branding',
+        'delete the season',
+        'clear the branding',
+    ])('apagado por remoción "%s" → set_branding mode=disabled', (phrase) => {
+        expect(resolveConfigCommandFromText(phrase)).toEqual(MODE_DISABLED);
+    });
+
+    test('encender una temporada concreta la fija (manual) → activeSeason=primavera', () => {
+        expect(resolveConfigCommandFromText('activa la estación de primavera')).toEqual(SPRING);
+    });
+
+    test('sin temporada ni verbo de encendido/apagado → null (guardia)', () => {
+        expect(resolveConfigCommandFromText('cambia la estación')).toBeNull();
+    });
+});
+
 describe('configCommands — festividad personalizada (add/remove)', () => {
     test('agrega festividad con fecha → subvalor add + valor "nombre|MM-DD|paleta"', () => {
         expect(resolveConfigCommandFromText('agrega la festividad del día de la madre el 10 de mayo')).toEqual({
@@ -489,5 +555,41 @@ describe('configCommands — matchers', () => {
     test('resolveNumberValue respeta min/max', () => {
         expect(resolveNumberValue('ponla a 3.5', { min: 0.1, max: 10 })).toBe('3.5');
         expect(resolveNumberValue('ponla a 50', { min: 0.1, max: 10 })).toBeNull();
+    });
+});
+
+describe('configCommands — temporadas dinámicas (B3)', () => {
+    afterEach(() => {
+        resetMergedPalettes();
+    });
+
+    const buildSelva = () => {
+        const base = builtinPaletteEntries().find((p) => p.id === 'default');
+        expect(base).toBeDefined();
+        return { ...base!, id: 'selva', name: 'Selva' };
+    };
+
+    test('matchSeason resuelve una paleta dinámica por id y por nombre', () => {
+        setMergedPalettes([...builtinPaletteEntries(), buildSelva()]);
+        expect(matchSeason('selva')).toBe('selva');
+        expect(matchSeason('la selva')).toBe('selva');
+        expect(matchSeason('pon la temporada de la selva')).toBe('selva');
+    });
+
+    test('resolveConfigCommandFromText aplica la temporada dinámica', () => {
+        setMergedPalettes([...builtinPaletteEntries(), buildSelva()]);
+        expect(resolveConfigCommandFromText('pon la temporada de la selva')).toEqual({
+            accion: 'set_branding',
+            componente: 'branding',
+            clave: 'activeSeason',
+            valor: 'selva',
+        });
+    });
+
+    test('sin regresión: built-ins siguen resolviéndose tras la fusión', () => {
+        setMergedPalettes([...builtinPaletteEntries(), buildSelva()]);
+        expect(matchSeason('primavera')).toBe('primavera');
+        expect(matchSeason('navidad')).toBe('navidad');
+        expect(matchSeason('no hay temporada')).toBeNull();
     });
 });

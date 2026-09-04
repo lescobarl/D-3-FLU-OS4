@@ -1,0 +1,263 @@
+// ============================================================
+// useTemporalItems — Motor temporal genérico (alarmas + temporizadores)
+// ------------------------------------------------------------
+// Hook que gestiona alarmas y temporizadores sobre Dexie
+// (fluDb.temporalItems) vía temporalService y ejecuta el scheduler
+// (tickMs desde FLU_CONFIG.temporal): cuando un ítem vence, se
+// re-arranca (recurrencia) o se completa, y se dispara
+// notify({category: item.kind, ...}) + voz + tono WebAudio.
+//
+// Modelo genérico (un solo motor para recordatorios, alarmas y
+// temporizadores):
+//   trigger  = absolute (una vez) | daily (hora del día) | countdown
+//   recurrence = once | daily | weekdays | interval
+//   delivery = notify (toast) + speak (voz) + audio (tono)
+//
+// Cumple:
+//   - Rule #1: NO HARDCODE — intervalos/límites/etiquetas desde
+//     FLU_CONFIG.temporal
+//   - Obligación #5: auditoría (la hace temporalService)
+//   - Obligación #6/#7: UUIDv4 + SyncTuple (los hace temporalService)
+//   - DI: now/notify/speak/audio inyectables para pruebas deterministas
+// ============================================================
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { fluDb } from '../core/db/fluDatabase';
+import {
+  createTemporalService,
+  type AddTemporalResult,
+  type NewTemporalItemInput,
+  type TemporalItemRecord,
+  type TemporalService,
+} from '../core/temporal/temporalService';
+import { collectDueOrdered, nextOccurrence } from '../core/temporal/scheduleEngine';
+import {
+  createWebAudioDriver,
+  type AudioDriver,
+  type SoundOptions,
+} from '../core/temporal/audioAlert';
+
+// ------------------------------------------------------------
+// Tipos
+// ------------------------------------------------------------
+
+/** Forma mínima que el hook acepta para notificar vencimientos. */
+export interface TemporalNotifyInput {
+  category: string;
+  title: string;
+  body: string;
+  urgent?: boolean;
+}
+
+export interface UseTemporalItemsOptions {
+  /** Anuncio por voz del vencimiento (opcional). */
+  speak?: (text: string, lang: string) => Promise<void>;
+  /** Dispara la notificación (esperado: notificationCenter.service.notify). */
+  notify?: (input: TemporalNotifyInput) => void;
+  /** Idioma para los anuncios por voz. */
+  language?: string;
+  /** Referencia de reloj (por defecto: Date.now()). */
+  now?: () => number;
+  /** Driver de audio para el tono (por defecto: createWebAudioDriver()). */
+  audio?: AudioDriver;
+}
+
+export interface TemporalItemsState {
+  alarms: TemporalItemRecord[];
+  timers: TemporalItemRecord[];
+  loading: boolean;
+}
+
+export interface TemporalItemsActions {
+  refresh: () => Promise<void>;
+  add: (input: NewTemporalItemInput) => Promise<AddTemporalResult>;
+  cancel: (id: string) => Promise<TemporalItemRecord | null>;
+  remove: (id: string) => Promise<boolean>;
+}
+
+export interface UseTemporalItemsResult extends TemporalItemsState, TemporalItemsActions {
+  service: TemporalService;
+}
+
+// ------------------------------------------------------------
+// Hook
+// ------------------------------------------------------------
+
+export function useTemporalItems({
+  speak,
+  notify,
+  language = 'es',
+  now,
+  audio,
+}: UseTemporalItemsOptions = {}): UseTemporalItemsResult {
+  const config = (FLU_CONFIG as any).temporal || {};
+  const maxActive = Number(config.maxActive) || 12;
+  const tickMs = Number(config.tickMs) || 30000;
+  const graceMs = Number(config.graceMs) || 15000;
+  const limit = Number(config.limit) || 20;
+  const sound = (config.sound || {}) as SoundOptions;
+  const voice = config.voice || {};
+  const voiceAlarmDue = voice.alarmDue || 'Es la hora de tu alarma:';
+  const voiceTimerDue = voice.timerDue || '¡Tiempo cumplido!';
+  const ui = config.ui || {};
+  const alarmsLabel = ui.alarmsLabel || 'Alarmas';
+  const timersLabel = ui.timersLabel || 'Temporizadores';
+  const lang = language === 'en' ? 'en' : 'es';
+
+  // Crear el servicio ANTES de cualquier useState: el inicializador de
+  // estado o los callbacks referencian `service`, y una referencia en
+  // la zona muerta temporal (TDZ) rompería el arranque con
+  // "Cannot access 'service' before initialization".
+  const serviceRef = useRef<TemporalService | null>(null);
+  if (!serviceRef.current) {
+    serviceRef.current = createTemporalService({
+      db: fluDb.temporalItems,
+      config: { maxActive },
+      now: now || (() => Date.now()),
+    });
+  }
+  const service = serviceRef.current;
+
+  // Driver de audio "latest" (mismo patrón TDZ-safe que el servicio).
+  const audioRef = useRef<AudioDriver | null>(null);
+  if (!audioRef.current) {
+    audioRef.current = audio || createWebAudioDriver();
+  }
+  const audioDriver = audioRef.current;
+
+  // Reloj "latest": permite que `now` cambie sin closures obsoletas.
+  const nowRef = useRef(now || (() => Date.now()));
+  nowRef.current = now || (() => Date.now());
+
+  const [alarms, setAlarms] = useState<TemporalItemRecord[]>([]);
+  const [timers, setTimers] = useState<TemporalItemRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Ref de guardia para no solapar ticks asíncronos del scheduler.
+  const runningRef = useRef(false);
+
+  /** Recarga las listas desde IndexedDB (ordenadas por próximo disparo). */
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const all = await service.list();
+      const sorted = all.slice().sort((a, b) => a.nextAt - b.nextAt);
+      setAlarms(sorted.filter((r) => r.kind === 'alarm'));
+      setTimers(sorted.filter((r) => r.kind === 'timer'));
+    } catch (err) {
+      console.error('[useTemporalItems] refresh error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [service]);
+
+  /** Un tick del scheduler: re-arranca/completa los vencidos y notifica. */
+  const runTick = useCallback(async (): Promise<void> => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      const active = await service.listActive();
+      const current = nowRef.current();
+      const due = collectDueOrdered(active, current, ['pending'], limit, graceMs);
+      for (const item of due) {
+        const next = nextOccurrence(item.trigger, item.recurrence, current);
+        if (next !== null) {
+          await service.rearm(item.id, current);
+        } else {
+          await service.complete(item.id);
+        }
+        const isAlarm = item.kind === 'alarm';
+        const dueText = isAlarm ? voiceAlarmDue : voiceTimerDue;
+        const dueTitle = isAlarm ? alarmsLabel : timersLabel;
+        const dueBody = isAlarm ? `${dueText} ${item.label}` : `${dueText} (${item.label})`;
+        if (typeof notify === 'function') {
+          notify({
+            category: item.kind,
+            title: dueTitle,
+            body: dueBody,
+            urgent: true,
+          });
+        }
+        if (typeof speak === 'function') {
+          speak(dueBody, lang).catch(() => undefined);
+        }
+        audioDriver.play(sound).catch(() => undefined);
+      }
+      if (due.length > 0) {
+        await refresh();
+      }
+    } catch (err) {
+      console.error('[useTemporalItems] scheduler tick error:', err);
+    } finally {
+      runningRef.current = false;
+    }
+  }, [
+    service,
+    notify,
+    speak,
+    graceMs,
+    voiceAlarmDue,
+    voiceTimerDue,
+    alarmsLabel,
+    timersLabel,
+    lang,
+    refresh,
+    audioDriver,
+    sound,
+    limit,
+  ]);
+
+  // Carga inicial.
+  useEffect(() => {
+    refresh().catch(console.error);
+  }, [refresh]);
+
+  // Scheduler: tick inicial + intervalo configurable.
+  useEffect(() => {
+    runTick().catch(() => undefined);
+    const id = window.setInterval(() => {
+      runTick().catch(() => undefined);
+    }, tickMs);
+    return () => window.clearInterval(id);
+  }, [runTick, tickMs]);
+
+  /** Agrega una alarma o temporizador y refresca las listas. */
+  const add = useCallback(
+    async (input: NewTemporalItemInput): Promise<AddTemporalResult> => {
+      const result = await service.add(input);
+      if (result.ok) await refresh();
+      return result;
+    },
+    [service, refresh],
+  );
+
+  /** Cancela un ítem (lo saca de pendientes) y refresca. */
+  const cancel = useCallback(
+    async (id: string): Promise<TemporalItemRecord | null> => {
+      const updated = await service.cancel(id);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Elimina el ítem y refresca. */
+  const remove = useCallback(
+    async (id: string): Promise<boolean> => {
+      const removed = await service.remove(id);
+      if (removed) await refresh();
+      return removed;
+    },
+    [service, refresh],
+  );
+
+  return {
+    service,
+    alarms,
+    timers,
+    loading,
+    refresh,
+    add,
+    cancel,
+    remove,
+  };
+}

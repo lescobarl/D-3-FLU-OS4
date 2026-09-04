@@ -247,3 +247,98 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
     return resolveErrorFallback(workspace, language, error?.message || 'unknown')
   }
 }
+
+/**
+ * Paso 5: fallback real de imagen con la API NATIVA de Gemini (servidor).
+ * Se invoca cuando la imagen de Pollinations falla al cargar en el navegador
+ * (onError del <img>), para no dejar el placeholder «chipote».
+ * POST /api/gemini-image → { imageUrl (data URL), trace }.
+ * Devuelve { image_url, trace }; image_url vacío si no hay key o falla.
+ */
+export async function fetchGeminiImageFallback({
+  workspace = {},
+  language = 'es',
+  apiKey = '',
+  model = '',
+  kind = '',
+} = {}) {
+  const c = getVisualPipelineConfig()
+  const prompt = buildGenerationPrompt(workspace, language)
+  const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch('/api/gemini-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        prompt,
+        language,
+        model: model || c.geminiImageModel,
+        kind: kind || c.geminiImageKind,
+        ...(apiKey ? { apiKey } : {}),
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      return {
+        image_url: '',
+        trace: {
+          provider: 'gemini',
+          model: model || c.geminiImageModel,
+          kind: kind || c.geminiImageKind,
+          source: 'proxy_error',
+          hasImage: false,
+          error: detail || `gemini_image_http_${response.status}`,
+          prompt,
+        },
+      }
+    }
+
+    const payload = await response.json()
+    if (!payload?.imageUrl) {
+      return {
+        image_url: '',
+        trace: payload?.trace || {
+          provider: 'gemini',
+          model: model || c.geminiImageModel,
+          kind: kind || c.geminiImageKind,
+          source: 'empty_response',
+          hasImage: false,
+          prompt,
+        },
+      }
+    }
+
+    return {
+      image_url: payload.imageUrl,
+      trace: payload.trace || {
+        provider: 'gemini',
+        model: model || c.geminiImageModel,
+        kind: kind || c.geminiImageKind,
+        source: 'gemini_native',
+        hasImage: true,
+        prompt,
+        language,
+      },
+    }
+  } catch (error) {
+    return {
+      image_url: '',
+      trace: {
+        provider: 'gemini',
+        model: model || c.geminiImageModel,
+        kind: kind || c.geminiImageKind,
+        source: error?.name === 'AbortError' ? 'gemini_image_timeout' : 'generation_failed',
+        hasImage: false,
+        error: error?.message || 'unknown',
+        prompt,
+      },
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}

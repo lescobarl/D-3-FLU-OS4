@@ -29,6 +29,8 @@ export interface AIRequestOptions {
     traits?: string[];
     /** Communication tone to inject into the system prompt (Phase 1) */
     tone?: string;
+    /** Nivel de explicación (FASE P: simple | detallado | avanzado) */
+    explanationLevel?: string;
 }
 
 /**

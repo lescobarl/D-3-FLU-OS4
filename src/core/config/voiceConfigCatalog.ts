@@ -14,7 +14,7 @@
 // de forma automática, sin tocar el prompt ni el despachador.
 // ============================================================
 
-import { PALETTES } from '../branding/seasonalPalettes';
+import { getPaletteKeys } from '../branding/seasonalPalettes';
 import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES } from './appConfig';
 
 // ------------------------------------------------------------
@@ -110,8 +110,8 @@ export interface ConfigCatalogEntry {
 // Opciones dinámicas (fuente de verdad derivada de los datos reales)
 // ------------------------------------------------------------
 
-/** Temporadas reales del branding (Object.keys(PALETTES), 21 paletas). */
-export const BRANDING_SEASONS: readonly string[] = Object.keys(PALETTES);
+/** Temporadas reales del branding (claves del catálogo fusionado de paletas). */
+export const BRANDING_SEASONS: readonly string[] = getPaletteKeys();
 
 /** Modos del branding estacional. */
 export const BRANDING_MODES: readonly string[] = ['auto', 'manual', 'disabled'] as const;

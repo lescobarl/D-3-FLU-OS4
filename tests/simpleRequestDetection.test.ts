@@ -41,6 +41,10 @@ describe('detectSimpleRequest — regresión: cantar/tocar música NO es simple'
     ['toma nota de la reunion', 'toma nota'],
     ['genera una minuta', 'minuta'],
     ['abre el workspace de finanzas', 'workspace'],
+    ['muestrame mi horario de clases', 'horario'],
+    ['que clases tengo manana', 'clases'],
+    ['cual es mi proxima clase', 'clase'],
+    ['ensename mi horario semanal', 'horarios'],
   ]
 
   for (const [transcript, label] of complexCases) {

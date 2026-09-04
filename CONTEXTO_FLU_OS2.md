@@ -583,6 +583,14 @@ Marketplace
 - **Estado**: No implementado en OS4.
 - **Acción**: Integrar WebLLM como motor de inferencia local, con conmutación automática cuando se alcance el límite de costCapEngine o no haya conexión.
 
+### 4. Regla de capas de voz (afinado estructural)
+- **Qué**: La lógica de voz se separa por capas para evitar que vuelva a crecer el monolito del hook:
+  - `src/voice/lib/*` = **lógica pura y testeable** (sin React, sin refs, sin efectos). Ej.: [`deterministicArbiter.js`](src/voice/lib/deterministicArbiter.js), [`audioMath.js`](src/voice/lib/audioMath.js), [`configCommands.js`](src/voice/lib/configCommands.js).
+  - `src/voice/hooks/*` = **solo orquestación, estado y efectos** (React hooks). Ej.: [`useFluVoiceAssistant.js`](src/voice/hooks/useFluVoiceAssistant.js).
+  - `src/core/*` = **dominios de negocio** (catálogos, servicios, parsers). Ej.: [`voiceConfigCatalog.ts`](src/core/config/voiceConfigCatalog.ts).
+- **Regla**: Prohibido meter negocio/parseo dentro de un hook gigante. Si una decisión es testeable en aislamiento, debe vivir en `lib/` como función pura y el hook solo orquestarla.
+- **Regla de cohesión**: Al añadir helpers, agruparlos en módulos cohesivos por responsabilidad en lugar de crear un archivo por función (evitar fragmentación excesiva).
+
 *Fin del documento — CONTEXTO FLU OS 2.0 — Funcionalidades, Definición y Alcance*
 *Fuente base: CONTEXTO_FLU_OS.md — Versión completa sin omisiones.*
 

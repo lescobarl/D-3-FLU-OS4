@@ -15,6 +15,7 @@ export interface DocumentResultPanelProps {
     error?: string | null;
     onClear?: () => void;
     language?: string;
+    hideHeader?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -42,6 +43,7 @@ export default function DocumentResultPanel({
     error = null,
     onClear,
     language = 'es',
+    hideHeader = false,
 }: DocumentResultPanelProps) {
     const isEn = language === 'en';
 
@@ -79,20 +81,22 @@ export default function DocumentResultPanel({
 
     return (
         <div className="frame-content__document-analysis">
-            <div className="document-analysis__header">
-                <h4 className="document-analysis__title">
-                    📄 {isEn ? 'Document Analysis' : 'Análisis de Documento'}
-                </h4>
-                <div className="document-analysis__meta">
-                    <span className="document-analysis__meta-item">
-                        {TIPO_LABEL[document.tipo] || document.tipo}
-                    </span>
-                    <span className="document-analysis__meta-item" title={document.nombre}>
-                        {document.nombre}
-                    </span>
-                    <span className="document-analysis__meta-item">{formatBytes(document.tamaño)}</span>
+            {!hideHeader && (
+                <div className="document-analysis__header">
+                    <h4 className="document-analysis__title">
+                        📄 {isEn ? 'Document Analysis' : 'Análisis de Documento'}
+                    </h4>
+                    <div className="document-analysis__meta">
+                        <span className="document-analysis__meta-item">
+                            {TIPO_LABEL[document.tipo] || document.tipo}
+                        </span>
+                        <span className="document-analysis__meta-item" title={document.nombre}>
+                            {document.nombre}
+                        </span>
+                        <span className="document-analysis__meta-item">{formatBytes(document.tamaño)}</span>
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="homework-analysis__detail">
                 <span className="homework-analysis__label">

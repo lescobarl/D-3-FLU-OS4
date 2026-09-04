@@ -8,6 +8,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConfigPersistence } from '../../src/hooks/useConfigPersistence';
+import { VISUAL_CONFIG } from '../../src/voice/lib/visualConfig';
 
 // Mock localStorage
 const mockLocalStorage = {
@@ -56,6 +57,12 @@ describe('useConfigPersistence', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    // Restaura el singleton VISUAL_CONFIG: test 17 escribe-through a
+    // geminiImage.enabled=true y, sin reset, contamina los tests posteriores
+    // (p.ej. test 11 que espera el default false).
+    if (VISUAL_CONFIG.image?.pipeline?.geminiImage) {
+      VISUAL_CONFIG.image.pipeline.geminiImage.enabled = false;
+    }
   });
 
   test('1. Carga valores iniciales desde localStorage', () => {
@@ -205,6 +212,31 @@ describe('useConfigPersistence', () => {
     expect(result.current.imageApiUrl).toBe('https://api.pollinations.ai');
   });
 
+  test('16. handleGeminiApiKeyCommit guarda clave de Gemini dedicada', () => {
+    const { result } = renderHook(() => useConfigPersistence());
+
+    act(() => {
+      result.current.handleGeminiApiKeyCommit('gemini-key-xyz');
+    });
+
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+      'flu-gemini-api-key',
+      'gemini-key-xyz'
+    );
+    expect(result.current.geminiApiKey).toBe('gemini-key-xyz');
+  });
+
+  test('18. geminiApiKey carga desde localStorage dedicado y hace fallback a la clave de texto', () => {
+    // Sin clave dedicada: geminiApiKey cae a resolveTextApiKey() (vacío en test)
+    const { result: emptyResult } = renderHook(() => useConfigPersistence());
+    expect(emptyResult.current.geminiApiKey).toBe('');
+
+    // Con clave dedicada: se usa la clave de Gemini
+    mockLocalStorage.store['flu-gemini-api-key'] = 'dedicated-gemini-key';
+    const { result: dedicatedResult } = renderHook(() => useConfigPersistence());
+    expect(dedicatedResult.current.geminiApiKey).toBe('dedicated-gemini-key');
+  });
+
   test('13. handleOcrApiKeyCommit guarda clave de OCR', () => {
     const { result } = renderHook(() => useConfigPersistence());
 
@@ -256,6 +288,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.apiKey).toBe('');
     expect(result.current.textModel).toBe('');
     expect(result.current.textApiUrl).toBe('');
+    expect(result.current.geminiApiKey).toBe('');
     expect(result.current.imageApiKey).toBe('');
     expect(result.current.imageModel).toBe('');
     expect(result.current.imageApiUrl).toBe('');

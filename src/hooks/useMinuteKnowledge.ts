@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { fluDb, newId, newSyncTuple, bumpSync, type MinuteRecord, type MinuteSummarySnapshot } from '../core/db/fluDatabase';
+import { fluDb, newId, newSyncTuple, bumpSync, type MinuteRecord, type MinuteSummarySnapshot, type KnowledgeKind } from '../core/db/fluDatabase';
 
 /**
  * Minuta en formato de UI (compatible con OS2 normalizeMinuteKnowledgeRecord).
@@ -208,12 +208,14 @@ export function useMinuteKnowledge() {
      * Acepta un summarySnapshot (OS2 compatible) y genera los metadatos automáticamente.
      */
     const addMinute = useCallback(
-        async (snapshot: MinuteSummarySnapshot, options?: { profileId?: string; userId?: string }): Promise<MinuteUIEntry> => {
+        async (snapshot: MinuteSummarySnapshot, options?: { profileId?: string; userId?: string; kind?: KnowledgeKind }): Promise<MinuteUIEntry> => {
             const records = await fluDb.minutes.orderBy('sequence').reverse().toArray();
             const maxSeq = records.length > 0 ? records[0].sequence : 0;
             const now = new Date();
-            const minuteKey = buildMinuteKey(snapshot);
-            const description = (snapshot.titulo || '').trim();
+            const kind = options?.kind || snapshot.kind || 'minuta';
+            const snapshotWithKind: MinuteSummarySnapshot = { ...snapshot, kind };
+            const minuteKey = buildMinuteKey(snapshotWithKind);
+            const description = (snapshotWithKind.titulo || '').trim();
 
             // Buscar si ya existe una minuta con el mismo minuteKey (upsert)
             const existingIndex = records.findIndex((r) => r.minuteKey === minuteKey && !r.sync.deleted);
@@ -228,7 +230,7 @@ export function useMinuteKnowledge() {
                         ? records[existingIndex].historyCode
                         : formatHistoryCode(now, getNextSequence(records)),
                 description,
-                summarySnapshot: { ...snapshot },
+                summarySnapshot: { ...snapshotWithKind },
                 sequence: maxSeq + 1,
                 createdAt: existingIndex >= 0 ? records[existingIndex].createdAt : now.toISOString(),
                 updatedAt: now.toISOString(),

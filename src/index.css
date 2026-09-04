@@ -181,111 +181,27 @@ html {
 /* ---- Upload Zone (digitalización OCR) ---- */
 
 .frame-content__upload-zone {
-    margin: 12px 0;
+    margin: 4px 0;
     padding: 0;
 }
 
-.upload-zone__drop {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 24px 16px;
-    border: 2px dashed rgba(100, 140, 255, 0.25);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-height: 120px;
-}
-
-.upload-zone__drop:hover {
-    border-color: rgba(100, 140, 255, 0.5);
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.upload-zone__hint {
-    font-size: var(--text-md);
-    color: var(--text-secondary, #a0a0b0);
-    margin: 0;
-}
-
-.upload-zone__or {
+.flu-upload-zone__or {
     font-size: var(--text-sm);
     color: var(--text-tertiary, #6a6a7a);
     margin: 0;
 }
 
-.upload-zone__buttons {
+.flu-upload-zone__buttons {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     justify-content: center;
 }
 
-.upload-zone__btn {
-    padding: 6px 14px;
-    border: 1px solid rgba(100, 140, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(100, 140, 255, 0.08);
-    color: var(--text-primary, #e0e0e0);
-    font-size: var(--text-sm);
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.upload-zone__btn:hover {
-    background: rgba(100, 140, 255, 0.15);
-    border-color: rgba(100, 140, 255, 0.5);
-}
-
-.upload-zone__btn--camera {
-    border-color: rgba(72, 187, 120, 0.3);
-    background: rgba(72, 187, 120, 0.08);
-}
-
-.upload-zone__btn--camera:hover {
-    background: rgba(72, 187, 120, 0.15);
-    border-color: rgba(72, 187, 120, 0.5);
-}
-
-.upload-zone__btn--clear {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.08);
-}
-
-.upload-zone__btn--clear:hover {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.5);
-}
-
-.upload-zone__preview {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.upload-zone__img {
-    max-width: 100%;
-    max-height: 240px;
-    border-radius: 8px;
-    border: 1px solid rgba(100, 140, 255, 0.2);
-    object-fit: contain;
-}
-
-.upload-zone__actions {
+.flu-upload-zone__actions {
     display: flex;
     align-items: center;
     gap: 12px;
-}
-
-.upload-zone__analyzing {
-    font-size: var(--text-sm);
-    color: var(--brand-primary-light, #a29bfe);
-    animation: pulse 1.5s ease-in-out infinite;
 }
 
 /* ---- Homework Analysis Result ---- */

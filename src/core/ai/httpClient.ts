@@ -31,6 +31,8 @@ export const REQUEST_TIMEOUT_PRESETS = Object.freeze({
   minutes: 10_000,
   /** Documentos / imágenes / peticiones pesadas → fallback al default. */
   complex: 45_000,
+  /** Generación de imagen nativa (Gemini generateContent/predict) → más lenta. */
+  image: 90_000,
 })
 
 /** Umbrales de carga para escalar el timeout por volumen de contexto. */

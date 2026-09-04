@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
     TEXT_API_URL: 'flu-text-api-url',
     TEXT_MODEL: 'flu-text-model',
     TEXT_API_KEY: 'flu-text-api-key',
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    GEMINI_API_KEY: 'flu-gemini-api-key',
     IMAGE_API_URL: 'flu-image-api-url',
     IMAGE_MODEL: 'flu-image-model',
     IMAGE_API_KEY: 'flu-image-api-key',
@@ -83,6 +85,20 @@ export const STORAGE_KEYS = {
     BACKUP_LIST: 'flu-backup-list',
     BACKUP_SIZE_STATS: 'flu-backup-size-stats',
     BACKUP_PREFIX: 'flu-backup-',
+    // Onboarding & asistente personal (Fase 1)
+    USER_NAME: 'flu-user-name',
+    ONBOARDING_COMPLETED: 'flu-onboarding-completed',
+    ONBOARDING_STEP: 'flu-onboarding-step',
+    ACTIVE_USER: 'flu-active-user',
+    NOTIFICATION_PERMISSION: 'flu-notification-permission',
+    NOTIFICATION_CHANNEL: 'flu-notification-channel',
+    NOTIFICATION_MUTED: 'flu-notification-muted',
+    DND_ENABLED: 'flu-dnd-enabled',
+    DND_SCHEDULE: 'flu-dnd-schedule',
+    DND_ALLOW_URGENT: 'flu-dnd-allow-urgent',
+    // F5 — Centro de Control del Buscador (overrides + límite diario)
+    SEARCH_CONFIG_OVERRIDES: 'flu-search-config-overrides',
+    SEARCH_DAILY_USAGE: 'flu-search-daily-usage',
 } as const;
 
 // -----------------------------------------------------------
@@ -140,6 +156,18 @@ export const OPENROUTER_CONFIG = {
 } as const;
 
 // -----------------------------------------------------------
+// Generation Timeout (F4 — documentos / video)
+// -----------------------------------------------------------
+// Generar un guion de video o un documento completo pide al LLM hasta
+// 3000 tokens de salida (buildGenerationPrompt + maxTokens 3000). Eso puede
+// tardar más de los 45s del timeout de red por defecto (AI_REQUEST_TIMEOUT_MS),
+// que aborta la petición antes de que el LLM termine → cae al contenido de
+// respaldo genérico y el video "no captura el tema" / "no le da tiempo".
+// Este timeout ampliado se aplica SOLO a la generación de documentos/video
+// (Rule #1: NO HARDCODE — centralizado aquí).
+export const GENERATION_TIMEOUT_MS = 120_000;
+
+// -----------------------------------------------------------
 // Shared Domain Constants (Rule #1: NO HARDCODE)
 // -----------------------------------------------------------
 // Single source of truth for workspace "tipo" values and the STT
@@ -151,13 +179,26 @@ export const OPENROUTER_CONFIG = {
 // -----------------------------------------------------------
 
 /** Valores válidos para workspace.tipo (contrato FLU). */
-export const WORKSPACE_TIPOS: readonly string[] = ['text', 'image_prompt', 'diagram', '3d'];
+export const WORKSPACE_TIPOS: readonly string[] = ['text', 'image_prompt', 'diagram', '3d', 'horario', 'doc', 'video'];
 
 /** Tipos visuales que activan generación de imagen (Pollinations). */
 export const VALID_VISUAL_TIPOS: readonly string[] = ['image_prompt', 'diagram', '3d'];
 
 /** URL del servidor STT standalone de desarrollo (devServerUrl). */
 export const STREAM_STT_DEV_URL = (import.meta as any)?.env?.VITE_STREAM_STT_DEV_URL || 'ws://127.0.0.1:8787';
+
+// -----------------------------------------------------------
+// Device Actions — WhatsApp web base (Rule #1: NO HARDCODE)
+// -----------------------------------------------------------
+// Base URL de enlaces profundos de WhatsApp (wa.me), centralizada aquí
+// como fuente única de verdad (el guard de hardcode exige que los hosts
+// de servicios reales vivan en appConfig). Los demás esquemas de acción
+// (tel:, sms:, mailto:) son estándares del sistema y no usan host remoto.
+// Configurable vía VITE_WHATSAPP_WEB_BASE.
+// -----------------------------------------------------------
+export const DEVICE_ACTIONS_CONFIG = {
+    WHATSAPP_WEB_BASE: (import.meta as any)?.env?.VITE_WHATSAPP_WEB_BASE || 'https://wa.me',
+} as const;
 
 // -----------------------------------------------------------
 // Pollinations.ai Image Generation
@@ -369,6 +410,37 @@ export const FLU_PROFILES: FluProfileDefinition[] = [
         orientation: 0.525,
         startupPrompt: 'Eres FLU, un estudiante casual, enérgico y carismático. Tu personalidad es rebelde y chusca, te gusta aprender de forma divertida y dinámica. Usa un lenguaje relajado y juvenil, sé expresivo y no temas ser creativo o sarcástico. Mantén la conversación entretenida pero sin perder el hilo del aprendizaje.',
     },
+    {
+        id: 'animador',
+        label: 'Alma de la fiesta 🎉',
+        description: 'Carismático y divertido, ideal para animar reuniones, proponer actividades y ser el centro de la celebración.',
+        image: {
+            capVisible: true,
+            hairVisible: true,
+        },
+        personality: {
+            name: 'FLU',
+            traits: ['carismático', 'enérgico', 'entusiasta', 'cómico', 'divertido'],
+            tone: 'playful',
+            proactivity: 0.9,
+            defaultEmotion: 'happy',
+        },
+        voice: {
+            voiceURI: '',
+            voiceName: 'Voz Festiva (default)',
+            rate: 1.25,
+            pitch: 1.05,
+            volume: 1.0,
+        },
+        advanced: {
+            ...DEFAULT_ADVANCED_CONFIG,
+            animationSpeed: 1.4,
+            emotionalReactivity: 1.2,
+            creativity: 0.9,
+        },
+        orientation: 0.525,
+        startupPrompt: 'Eres FLU, el alma de la fiesta y el animador del grupo. Tu misión es hacer que todos se sientan incluidos, proponer actividades y juegos, celebrar cada logro con entusiasmo y mantener la energía alta. Sé carismático, divertido y cálido: usa el humor, los halagos y los retos amistosos para que la reunión fluya. Cuando alguien gane, aclámalo con emoción; cuando alguien dude, anímalo con una porra. Prioriza la diversión y la participación de todos sin perder el hilo de la conversación.',
+    },
 ];
 
 /**
@@ -406,6 +478,8 @@ export const AVAILABLE_TRAITS = [
     'didáctico',
     'servicial',
     'eficiente',
+    'entusiasta',
+    'divertido',
 ] as const;
 
 /**
@@ -807,4 +881,18 @@ export function resolveTextApiKey(): string {
         if (dsKey) return dsKey;
     } catch { /* ignore */ }
     return '';
+}
+
+/**
+ * Resolve the Gemini native API key (paso 5 — fallback de imagen).
+ * Priority: flu-gemini-api-key (campo dedicado del configurador) >
+ *           resolveTextApiKey() (flu-text-api-key > env VITE_GEMINI_API_KEY >
+ *           VITE_OPENROUTER_API_KEY > VITE_DEEPSEEK_API_KEY).
+ * Permite usar una clave de Gemini dedicada sin romper la compatibilidad con
+ * la clave de texto compartida existente.
+ */
+export function resolveGeminiApiKey(): string {
+    const dedicated = readStorage(STORAGE_KEYS.GEMINI_API_KEY, '').trim();
+    if (dedicated) return dedicated;
+    return resolveTextApiKey();
 }

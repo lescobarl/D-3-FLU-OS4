@@ -161,7 +161,7 @@ export async function waitForSpeechIdle() {
   }
 }
 
-function speakSingleChunk(spoken, language) {
+function speakSingleChunk(spoken, language, overrides = {}) {
   return new Promise((resolve) => {
     const finish = () => resolve()
 
@@ -175,6 +175,13 @@ function speakSingleChunk(spoken, language) {
       utterance.rate = voiceCfg.rate
       utterance.pitch = voiceCfg.pitch ?? 1
       utterance.volume = voiceCfg.volume ?? 1
+
+      // Overrides por llamada (p.ej. "grito" de victoria en juegos):
+      // solo aplican si vienen definidos; mantienen el rango W3C [0,1]
+      // para volume y respetan la config de voz del perfil activo.
+      if (typeof overrides.rate === 'number') utterance.rate = overrides.rate
+      if (typeof overrides.pitch === 'number') utterance.pitch = overrides.pitch
+      if (typeof overrides.volume === 'number') utterance.volume = overrides.volume
 
       // Selección de voz: si el texto está en un idioma distinto al configurado
       // (p.ej. japonés detectado por script), priorizar una voz que coincida con
@@ -210,7 +217,21 @@ function speakSingleChunk(spoken, language) {
   })
 }
 
-export function speakResponse(text, language = 'es', { allowWhileSpeaking = false } = {}) {
+/**
+ * @typedef {Object} SpeechResponseOptions
+ * @property {boolean} [allowWhileSpeaking] - Permitir hablar mientras ya se habla.
+ * @property {number} [volume] - Override de volumen por llamada (rango W3C [0,1]).
+ * @property {number} [rate] - Override de velocidad por llamada.
+ * @property {number} [pitch] - Override de tono por llamada.
+ */
+
+/**
+ * Habla `text` con la voz configurada. Opciones opcionales por llamada.
+ * @param {string} text
+ * @param {string} [language]
+ * @param {SpeechResponseOptions} [options]
+ */
+export function speakResponse(text, language = 'es', { allowWhileSpeaking = false, volume, rate, pitch } = {}) {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
     return Promise.resolve()
   }
@@ -265,7 +286,7 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
       await refreshVoiceConfigCache()
 
       for (const chunk of chunks) {
-        await speakSingleChunk(chunk, language)
+        await speakSingleChunk(chunk, language, { volume, rate, pitch })
       }
     } finally {
       if (restoreSpeaking) restoreSpeaking()

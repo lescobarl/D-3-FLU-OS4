@@ -10,7 +10,7 @@ export type GameId =
     | 'quien_soy' | 'ahorcado' | 'memoria_secuencias' | 'trabalenguas'
     | 'trivia' | 'ordena_secuencia' | 'adivina_cancion' | 'cuentacuentos'
     | 'cuento_colaborativo' | 'repite_traduce' | 'cuenta_conmigo'
-    | 'abecedario' | 'loteria' | 'respiracion';
+    | 'abecedario' | 'loteria' | 'respiracion' | 'karaoke';
 
 export type AvatarAnimation =
     | 'Dance' | 'Run' | 'Walk' | 'Jump_in_place' | 'Idle';

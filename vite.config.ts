@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { createGeminiMiddleware } from './src/server/geminiProxy';
+import { createBrowserProxy } from './src/server/browserProxy';
+import { createSearchProxy } from './src/server/searchProxy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +35,10 @@ export default defineConfig(({ mode }) => {
             }),
             // Gemini API proxy middleware
             createGeminiMiddleware({ env }),
+            // Browser lectura curada proxy middleware (/api/browser/fetch)
+            createBrowserProxy({ env }),
+            // Buscador web + IA proxy middleware (/api/search/web)
+            createSearchProxy({ env }),
         ],
         resolve: {
             // dedupe: fuerza a Vite/vitest a resolver 'three' SIEMPRE desde el

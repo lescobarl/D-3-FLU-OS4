@@ -5,7 +5,7 @@
 // cuando el modelo solo verbaliza (o emite `configuracion` incompleto),
 // este módulo deriva el contrato a partir del texto transcrito.
 //
-// - Única fuente de verdad: VOICE_CONFIG_CATALOG + PALETTES (data-driven).
+// - Única fuente de verdad: VOICE_CONFIG_CATALOG + catálogo fusionado de paletas (data-driven).
 // - Sin rutas dobles: el resultado se inyecta como `contract.configuracion`
 //   y se despacha por la ÚNICA ruta existente (App.tsx applyConfigAction).
 // - Guardia estricta (sin afectación): requiere verbo de directiva + clave
@@ -14,7 +14,7 @@
 // ============================================================
 
 import { stripDiacritics } from './audioMath.js'
-import { PALETTES } from '../../core/branding/seasonalPalettes'
+import { getFusedPalettes } from '../../core/branding/seasonalPalettes'
 import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
 import { isGameId } from '../../core/games/gameCatalog'
 
@@ -64,6 +64,7 @@ const DIRECTIVE_VERBS = Object.freeze([
   'pon', 'ponle', 'ponme', 'poner', 'ponga', 'pongas', 'ponla', 'ponlo', 'ponlos', 'ponlas',
   'activa', 'activen', 'activar', 'activemos', 'activame',
   'desactiva', 'desactiven', 'desactivar', 'desactivame',
+  'deshabilita', 'deshabilitar', 'deshabilitame',
   'configura', 'configurame', 'configurar', 'configures', 'configurarme',
   'ajusta', 'ajustar', 'ajustame',
   'selecciona', 'seleccionar', 'seleccioname',
@@ -84,6 +85,37 @@ const DIRECTIVE_VERBS = Object.freeze([
   'activate', 'activated', 'enable', 'enabled', 'disable', 'disabled', 'turn', 'make', 'select', 'adjust',
   'add', 'create', 'register', 'save', 'remove', 'delete', 'clean', 'clear',
 ])
+
+// ------------------------------------------------------------
+// Verbos de encendido/apagado del branding (toggle genérico)
+// ------------------------------------------------------------
+// Cuando se dice "activa/desactiva la estación/branding" SIN nombrar una
+// temporada concreta, se interpreta como encender (→ auto, detecta por
+// calendario) o apagar (→ disabled) el branding estacional global.
+
+/** Verbos que ENCIENDEN el branding estacional (genérico → auto). */
+const BRANDING_ON_VERBS = Object.freeze([
+  'activa', 'activen', 'activar', 'activemos', 'activame',
+  'enciende', 'encender',
+  'activate', 'enable', 'enabled', 'turn on',
+])
+
+/** Verbos que APAGAN el branding estacional (→ disabled). */
+const BRANDING_OFF_VERBS = Object.freeze([
+  'desactiva', 'desactiven', 'desactivar', 'desactivame',
+  'apaga', 'apagar',
+  'quita', 'quitar', 'quitame', 'quitale', 'quitemos',
+  'elimina', 'eliminar', 'eliminame',
+  'borra', 'borrar', 'borrame',
+  'remueve', 'remover', 'saca', 'sacar',
+  'deshabilita', 'deshabilitar', 'deshabilitame',
+  'disable', 'disabled', 'turn off', 'off', 'remove', 'delete', 'clear',
+])
+
+/** ¿El texto contiene alguno de los verbos de la lista dada? */
+function hasBrandingIntent(normalized = '', verbs = []) {
+  return verbs.some((verb) => hasToken(normalized, verb))
+}
 
 // ------------------------------------------------------------
 // Sustantivos de configuración → clave del catálogo (data-driven)
@@ -185,7 +217,7 @@ function findConfigEntry(normalized = '') {
 // Resolución de valores (selects)
 // ------------------------------------------------------------
 
-/** Construye el mapa de sinónimos de temporadas desde PALETTES (fuente de verdad). */
+/** Construye el mapa de sinónimos de temporadas desde el catálogo fusionado de paletas. */
 function buildSeasonAliases() {
   const aliases = []
   const extra = {
@@ -211,10 +243,10 @@ function buildSeasonAliases() {
     invierno: ['invierno', 'winter'],
     ecologico: ['ecologico', 'eco', 'ecologia'],
   }
-  for (const key of Object.keys(PALETTES)) {
-    aliases.push([normalizeForMatch(key), key])
-    const name = normalizeForMatch(PALETTES[key].name || '')
-    if (name && name !== normalizeForMatch(key)) aliases.push([name, key])
+  for (const palette of getFusedPalettes()) {
+    aliases.push([normalizeForMatch(palette.id), palette.id])
+    const name = normalizeForMatch(palette.name || '')
+    if (name && name !== normalizeForMatch(palette.id)) aliases.push([name, palette.id])
   }
   for (const [key, syns] of Object.entries(extra)) {
     for (const syn of syns) aliases.push([normalizeForMatch(syn), key])
@@ -222,12 +254,10 @@ function buildSeasonAliases() {
   return aliases.sort((a, b) => b[0].length - a[0].length)
 }
 
-const SEASON_ALIASES = buildSeasonAliases()
-
-/** Resuelve una temporada del branding (clave de PALETTES) desde el texto. */
+/** Resuelve una temporada del branding (clave de paleta) desde el texto. */
 export function matchSeason(text = '') {
   const normalized = normalizeForMatch(text)
-  for (const [syn, key] of SEASON_ALIASES) {
+  for (const [syn, key] of buildSeasonAliases()) {
     if (hasToken(normalized, syn)) return key
   }
   return null
@@ -657,6 +687,24 @@ export function resolveConfigCommandFromText(text = '', _options = {}) {
 
   const entry = findConfigEntry(normalized)
   if (!entry) return null
+
+  // Toggle genérico del branding estacional (sustantivo estación/branding):
+  //   "apaga/desactiva la estación/branding" → mode=disabled (apagado)
+  //   "activa la estación de X"               → activeSeason=X (manual)
+  //   "activa/enciende la estación/branding"  → mode=auto (detecta por calendario)
+  if (entry.clave === 'activeSeason') {
+    if (hasBrandingIntent(normalized, BRANDING_OFF_VERBS)) {
+      return { accion: 'set_branding', componente: 'branding', clave: 'mode', valor: 'disabled' }
+    }
+    const season = matchSeason(normalized)
+    if (season) {
+      return { accion: 'set_branding', componente: 'branding', clave: 'activeSeason', valor: season }
+    }
+    if (hasBrandingIntent(normalized, BRANDING_ON_VERBS)) {
+      return { accion: 'set_branding', componente: 'branding', clave: 'mode', valor: 'auto' }
+    }
+    return null
+  }
 
   const valor = resolveValueForEntry(normalized, entry)
   if (valor == null) return null

@@ -25,7 +25,7 @@ export interface Riddle {
 
 export const RIDDLE_BANK: readonly Riddle[] = Object.freeze([
     {
-        pregunta: 'Soy amarillo por fuera y blanco por dentro, y me tienes que pelar para comerme.',
+        pregunta: 'Soy una fruta con forma de gota, mi piel es verde o amarilla y por dentro soy blanca y jugosa',
         respuesta: ['pera'],
         pista: 'Es una fruta que empieza con la letra "pe".',
     },

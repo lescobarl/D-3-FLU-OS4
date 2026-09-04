@@ -1,0 +1,185 @@
+// ============================================================
+// useNotes — Listado de notas (Pizarrón consolidado)
+// ------------------------------------------------------------
+// Hook que gestiona el listado de notas sobre Dexie
+// (fluDb.notes) vía notesService. Es un hook de estado + acciones:
+// no lleva scheduler ni notificaciones (las notas no vencen), sólo
+// persistencia y UI en vivo.
+//
+// Cumple:
+//   - Rule #1: NO HARDCODE — texto/etiquetas vienen de
+//     FLU_CONFIG.notes.ui (lo consume el panel, no el hook)
+//   - Obligación #5: auditoría (la hace notesService)
+//   - Obligación #6/#7: UUIDv4 + SyncTuple (los hace notesService)
+//   - DI: `now` inyectable para pruebas deterministas
+// ============================================================
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { fluDb, type NoteRecord } from '../core/db/fluDatabase';
+import {
+  createNotesService,
+  type AddNoteResult,
+  type NewNoteInput,
+  type NotesService,
+} from '../core/notes/notesService';
+import { notesRemaining } from '../core/notes/notesList';
+
+// ------------------------------------------------------------
+// Tipos
+// ------------------------------------------------------------
+
+export interface UseNotesOptions {
+  /** Referencia de reloj (por defecto: Date.now()). */
+  now?: () => number;
+}
+
+export interface NotesState {
+  notes: NoteRecord[];
+  loading: boolean;
+  remainingCount: number;
+}
+
+export interface NotesActions {
+  refresh: () => Promise<void>;
+  add: (input: NewNoteInput) => Promise<AddNoteResult>;
+  /** Agrega varias etiquetas de una vez (multi-add del parser de intención). */
+  addMany: (labels: string[]) => Promise<AddNoteResult[]>;
+  toggle: (id: string) => Promise<NoteRecord | null>;
+  rename: (id: string, label: string) => Promise<NoteRecord | null>;
+  remove: (id: string) => Promise<boolean>;
+  uncheckAll: () => Promise<number>;
+  clearDone: () => Promise<number>;
+}
+
+export interface UseNotesResult extends NotesState, NotesActions {
+  service: NotesService;
+}
+
+// ------------------------------------------------------------
+// Hook
+// ------------------------------------------------------------
+
+export function useNotes({ now }: UseNotesOptions = {}): UseNotesResult {
+  // Crear el servicio ANTES de cualquier useState: el inicializador de
+  // estado o los callbacks referencian `service`, y una referencia en
+  // la zona muerta temporal (TDZ) rompería el arranque con
+  // "Cannot access 'service' before initialization".
+  const serviceRef = useRef<NotesService | null>(null);
+  if (!serviceRef.current) {
+    serviceRef.current = createNotesService({
+      db: fluDb.notes,
+      now: now || (() => Date.now()),
+    });
+  }
+  const service = serviceRef.current;
+
+  const [notes, setNotes] = useState<NoteRecord[]>([]);
+  const [remainingCount, setRemainingCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  /** Recarga la lista desde IndexedDB (cronológica, pendientes primero). */
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const all = await service.list();
+      const sorted = all.slice().sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      });
+      setNotes(sorted);
+      setRemainingCount(notesRemaining(sorted));
+    } catch (err) {
+      console.error('[useNotes] refresh error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [service]);
+
+  // Carga inicial.
+  useEffect(() => {
+    refresh().catch(console.error);
+  }, [refresh]);
+
+  /** Agrega una nota y refresca la lista. */
+  const add = useCallback(
+    async (input: NewNoteInput): Promise<AddNoteResult> => {
+      const result = await service.add(input);
+      if (result.ok) await refresh();
+      return result;
+    },
+    [service, refresh],
+  );
+
+  /** Agrega varias etiquetas de una vez (multi-add del parser de intención). */
+  const addMany = useCallback(
+    async (labels: string[]): Promise<AddNoteResult[]> => {
+      const clean = (labels || []).map((l) => l.trim()).filter(Boolean);
+      if (clean.length === 0) return [];
+      const results: AddNoteResult[] = [];
+      for (const label of clean) {
+        const result = await service.add({ label });
+        results.push(result);
+      }
+      if (results.some((r) => r.ok)) await refresh();
+      return results;
+    },
+    [service, refresh],
+  );
+
+  /** Alterna el estado hecho/pendiente y refresca. */
+  const toggle = useCallback(
+    async (id: string): Promise<NoteRecord | null> => {
+      const updated = await service.toggle(id);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Renombra una nota y refresca. */
+  const rename = useCallback(
+    async (id: string, label: string): Promise<NoteRecord | null> => {
+      const updated = await service.rename(id, label);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Elimina una nota y refresca. */
+  const remove = useCallback(
+    async (id: string): Promise<boolean> => {
+      const removed = await service.remove(id);
+      if (removed) await refresh();
+      return removed;
+    },
+    [service, refresh],
+  );
+
+  /** Desmarca todas las notas pendientes y refresca. */
+  const uncheckAll = useCallback(async (): Promise<number> => {
+    const count = await service.uncheckAll();
+    if (count > 0) await refresh();
+    return count;
+  }, [service, refresh]);
+
+  /** Limpia las notas marcadas como hechas y refresca. */
+  const clearDone = useCallback(async (): Promise<number> => {
+    const count = await service.clearDone();
+    if (count > 0) await refresh();
+    return count;
+  }, [service, refresh]);
+
+  return {
+    service,
+    notes,
+    loading,
+    remainingCount,
+    refresh,
+    add,
+    addMany,
+    toggle,
+    rename,
+    remove,
+    uncheckAll,
+    clearDone,
+  };
+}

@@ -239,7 +239,7 @@ class DataExtractor {
         try {
             return {
                 branding: {
-                    mode: readStorage(STORAGE_KEYS.BRANDING_MODE, 'auto'),
+                    mode: readStorage(STORAGE_KEYS.BRANDING_MODE, 'disabled'),
                     activeSeason: readStorage(STORAGE_KEYS.BRANDING_ACTIVE_SEASON, 'default'),
                     birthday: readStorage<string | null>(STORAGE_KEYS.BRANDING_BIRTHDAY, null),
                 },

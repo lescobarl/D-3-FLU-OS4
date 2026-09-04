@@ -24,7 +24,7 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useConfigPersistence } from './hooks/useConfigPersistence';
 import { useBunnyStore, ensureAvatarPantsVisible, EXPRESSION_MAP } from './avatar';
 import { relayLog } from './lib/clientLogRelay';
-import { cleanForSpeech } from './lib/textUtils';
+import { cleanForSpeech, normalizeSpaces } from './lib/textUtils';
 import type { BunnyComponent } from './avatar/types/bunny';
 import { v4 as uuidv4 } from 'uuid';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -41,7 +41,12 @@ import { useSessionPersistence, loadSessionState } from './hooks/useSessionPersi
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
 import { useMinuteHandlers } from './hooks/useMinuteHandlers';
 import { useNavigationCommands } from './hooks/useNavigationCommands';
-import { FLU_EVENTS, onFluEvent } from './core/events/fluEvents';
+import { useCommunicationProfiles } from './hooks/useCommunicationProfiles';
+import { useBrowserProfiles } from './hooks/useBrowserProfiles';
+import { useSearchSites } from './hooks/useSearchSites';
+import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
+import type { ResolvedCommunicationProfile } from './core/personalization/communicationProfileService';
+import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
 import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING } from './core/config/appConfig';
 import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
 import { FLU_PROFILES } from './core/config/appConfig';
@@ -55,6 +60,17 @@ import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import DocumentResultPanel from './components/DocumentResultPanel';
 import AppAnalysisPanel from './components/AppAnalysisPanel';
 import GenerationProgressPanel from './components/GenerationProgressPanel';
+import FluCollapsibleCard from './components/FluCollapsibleCard';
+import { BrowserProfilesPanel } from './components/BrowserProfilesPanel';
+import { SearchControlCenter } from './components/SearchControlCenter';
+import { WorkspaceSearch } from './components/WorkspaceSearch';
+import { WorkspaceHub } from './components/WorkspaceHub';
+import {
+    loadSearchConfigOverrides,
+    saveSearchConfigOverrides,
+    clearSearchConfigOverrides,
+    type SearchConfigOverrides,
+} from './core/search/searchConfigOverrides';
 import { isSupportedDocument } from './lib/documentParser';
 import type { GenerationFormato } from './types/documentContracts';
 import { useAutonomyIntegration, AutonomyStatusPanel } from './core/autonomy';
@@ -93,6 +109,58 @@ const ConversationLogAny = ConversationLog as React.ComponentType<any>;
 const MinuteDraftPanelAny = MinuteDraftPanel as React.ForwardRefExoticComponent<any>;
 import { VoiceAssistantBarWrapper } from './components/VoiceAssistantBarWrapper';
 import { FluSettingsPanel } from './components/FluSettingsPanel';
+import { AssistantSettingsPanel } from './components/AssistantSettingsPanel';
+import { AmbientesPanel } from './components/AmbientesPanel';
+import { PaletasPanel } from './components/PaletasPanel';
+import { OnboardingOverlay } from './components/OnboardingOverlay';
+import { useOnboarding } from './hooks/useOnboarding';
+import { useOnboardingVoiceCapture } from './hooks/useOnboardingVoiceCapture';
+import { useNotificationCenter } from './hooks/useNotificationCenter';
+import { useDoNotDisturb } from './hooks/useDoNotDisturb';
+// ---- Fase 2 — Memoria y recordatorios: hooks, paneles y parser de intención ----
+import { useReminders } from './hooks/useReminders';
+import { useShoppingList } from './hooks/useShoppingList';
+import { RemindersPanel } from './components/RemindersPanel';
+import { ShoppingPanel } from './components/ShoppingPanel';
+import { parseReminderIntent } from './core/reminders/reminderIntentParser';
+// ---- Motor temporal genérico — alarmas y temporizadores (despertador + temporizador) ----
+import { useTemporalItems } from './hooks/useTemporalItems';
+import { TemporalItemsPanel } from './components/TemporalItemsPanel';
+import { parseTemporalIntent, formatDurationMs } from './core/temporal/temporalIntentParser';
+// ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
+import { useDeviceActions } from './hooks/useDeviceActions';
+import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
+// ---- Horario de clases (Pizarrón): hook temprano y panel presentacional ----
+import { useHorario } from './hooks/useHorario';
+import { HorarioPizarron, clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
+import { structureHorarioText, diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
+import { parseHorarioIntent } from './core/horario/horarioIntentParser';
+import type { NotificationService } from './core/notifications/notificationService';
+import { nameCaptureKey, promptForStep } from './core/onboarding/onboardingFlow';
+import {
+    DEFAULT_ONBOARDING_USER,
+    resolveActiveUser,
+    setActiveUser,
+} from './core/onboarding/onboardingService';
+// ---- Fase 3 — Multi-usuario: participantes, materia gris y paneles ----
+import { useParticipants } from './hooks/useParticipants';
+import { resolveKindRole } from './core/multiuser/participantRegistry';
+import { useMateriaGris } from './hooks/useMateriaGris';
+import { ParticipantsPanel } from './components/ParticipantsPanel';
+import { MateriaGrisPanel } from './components/MateriaGrisPanel';
+// ---- Fase 4 — Módulo G: hábitos y metas ----
+import { useHabits } from './hooks/useHabits';
+import { HabitsPanel } from './components/HabitsPanel';
+// ---- Fase 5 — Módulo H: bienestar y ánimo ----
+import { useMood } from './hooks/useMood';
+import { MoodPanel } from './components/MoodPanel';
+// ---- Fase 6 — Módulos I y J: contactos y diario personal ----
+import { useContacts } from './hooks/useContacts';
+import { useDiary } from './hooks/useDiary';
+import { useNotes } from './hooks/useNotes';
+import { ContactsPanel } from './components/ContactsPanel';
+import { DiaryPanel } from './components/DiaryPanel';
+import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
@@ -101,13 +169,42 @@ import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import { normalizeJuego } from './voice/lib/configCommands';
+import { normalizeEnvironment } from './core/environments/environmentIntents';
+import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
+import {
+    ENVIRONMENTS,
+    getAmbientes,
+    getVisibleTabIds,
+    isAmbienteId,
+    type EnvironmentDefinition,
+} from './core/environments/environmentRegistry';
+import { useEnvironmentStore, readPersistedActiveAmbienteId } from './store/environmentStore';
+import {
+    hydrateAmbientes,
+    registerAmbiente,
+    removeAmbiente,
+    updateAmbiente,
+} from './core/environments/ambientesCatalog';
+import type { RegisterResult, UpdateResult } from './core/catalogs/catalogRegistry';
+import {
+    hydratePalettes,
+    registerPaleta,
+    removePaleta,
+    updatePaleta,
+} from './core/branding/paletasCatalog';
+import {
+    builtinPaletteEntries,
+    getAllPalettes,
+    type PaletteDefinition,
+} from './core/branding/seasonalPalettes';
 import { getGameEngine } from './core/games/gameCatalog';
 import {
     getActiveGameSession,
     setActiveGameSession,
     clearActiveGameSession,
 } from './core/games/gameSessionStore';
-import type { GameId } from './core/games/types';
+import type { GameId, GameSession } from './core/games/types';
+import { resolveGameSpeechOptions, type GameSpeechOptions } from './core/games/gameSpeech';
 import { getCommandSpeech } from './voice/lib/voiceCommands';
 import { formatStreamSttUiStatus, getTranscriptSource } from './voice/lib/transcriptConfig';
 import {
@@ -128,6 +225,7 @@ import {
     buildDailyAgenda,
     formatAgendaForPrompt,
     countPendingItems,
+    mergeRemindersIntoAgenda,
 } from './lib/dailyAgenda';
 import {
     buildSystemConversationEntry,
@@ -142,7 +240,18 @@ import { deleteAuditLogsBySpeaker } from './voice/lib/fluStorage';
 // ============================================================
 // Tipo para las pestañas del panel derecho
 // ============================================================
-type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings';
+type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings' | 'system';
+
+// ============================================================
+// Sub-secciones del panel de Ajustes (Fase A2)
+// ============================================================
+type SettingsGroupId = 'flu' | 'data' | 'management';
+
+const SETTINGS_GROUPS: ReadonlyArray<{ id: SettingsGroupId; label: string }> = [
+  { id: 'flu', label: 'FLU' },
+  { id: 'data', label: 'Mis datos' },
+  { id: 'management', label: 'Gestión' },
+];
 
 // ============================================================
 // ErrorBoundary — Captura errores de renderizado y los muestra en la UI
@@ -220,6 +329,19 @@ function parseBoolean(value: string): boolean | null {
     if (truthy.includes(v)) return true;
     if (falsy.includes(v)) return false;
     return null;
+}
+
+/**
+ * Resuelve un rótulo bilingüe { es, en } desde FLU_CONFIG según el idioma
+ * activo, con fallback final. NO HARDCODE: el texto proviene del catálogo.
+ */
+function pickLabel(
+    labels: { es?: string; en?: string } | undefined,
+    language: string,
+    fallback: string
+): string {
+    if (!labels) return fallback;
+    return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
 }
 
 /**
@@ -592,7 +714,7 @@ async function applyConfigAction(
 interface ApplyGameContext {
     languageRef: React.MutableRefObject<string>;
     conversationActiveRef: React.MutableRefObject<boolean>;
-    speakFluRef: React.MutableRefObject<(text: string, lang: string) => Promise<void>>;
+    speakFluRef: React.MutableRefObject<(text: string, lang: string, opts?: GameSpeechOptions) => Promise<void>>;
     /** Reanuda la escucha tras hablar (useNavigationCommands, estable). */
     scheduleResumeListening: (textLength?: number) => void;
 }
@@ -613,11 +735,11 @@ function applyGameEmotion(result: { animation?: string; emotion?: string }): voi
  * Habla el prompt del motor replicando el mecanismo de habla de
  * onContractResolved (SPEAKING → habla → LISTENING/IDLE + resume).
  */
-async function speakGameText(text: string, ctx: ApplyGameContext): Promise<void> {
+async function speakGameText(text: string, ctx: ApplyGameContext, opts?: GameSpeechOptions): Promise<void> {
     if (!text) return;
 
     const currentSpeakFlu = ctx.speakFluRef.current;
-    const speakPromise = currentSpeakFlu(text, ctx.languageRef.current).catch((speechErr: unknown) => {
+    const speakPromise = currentSpeakFlu(text, ctx.languageRef.current, opts).catch((speechErr: unknown) => {
         console.warn('[Juego] speakFlu failed:', speechErr);
     });
 
@@ -655,7 +777,54 @@ function buildGameConfig(gameId: string): Record<string, unknown> {
         const cfg = games.calculoMental || {};
         return { ...base, maxSuma: cfg.maxSuma, operaciones: [...(cfg.operaciones || [])] };
     }
+    if (gameId === 'ahorcado') {
+        const cfg = games.ahorcado || {};
+        return { ...base, intentos: cfg.intentos };
+    }
+    if (gameId === 'memoria_secuencias') {
+        const cfg = games.memoriaSecuencias || {};
+        return { ...base, longMax: cfg.longMax };
+    }
+    if (gameId === 'cuento_colaborativo') {
+        const cfg = games.cuentoColaborativo || {};
+        return { ...base, turnos: cfg.turnos };
+    }
+    if (gameId === 'cuenta_conmigo') {
+        const cfg = games.cuentaConmigo || {};
+        return { ...base, hasta: cfg.hasta };
+    }
+    if (gameId === 'respiracion') {
+        const cfg = games.respiracion || {};
+        return { ...base, rondas: cfg.rondas };
+    }
+    if (gameId === 'loteria') {
+        const cfg = games.loteria || {};
+        return { ...base, tablaSize: cfg.tablaSize };
+    }
+    if (gameId === 'cuentacuentos') {
+        const cfg = games.cuentacuentos || {};
+        return { ...base, escenasMax: cfg.escenasMax };
+    }
     return base;
+}
+
+/** Los juegos que reproducen pista musical real (FLU_PLAYLIST) en `session.state.songId`. */
+const MUSIC_GAME_IDS: ReadonlySet<string> = new Set(['adivina_cancion', 'karaoke']);
+
+/** Detiene la música si el juego activo la está usando. */
+function stopMusicForGame(gameId: string): void {
+    if (MUSIC_GAME_IDS.has(gameId)) {
+        stopMusic();
+    }
+}
+
+/** Reproduce la pista que el motor eligió (songId) para juegos musicales. */
+function playSongForGame(session: GameSession, gameId: string): void {
+    if (!MUSIC_GAME_IDS.has(gameId)) return;
+    const songId = (session.state as { songId?: string } | null)?.songId;
+    if (songId) {
+        void playSong(songId);
+    }
 }
 
 interface NormalizedGameAction {
@@ -672,7 +841,18 @@ interface NormalizedGameAction {
  */
 async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGameContext): Promise<void> {
     if (juegoAction.action === 'narrate') {
-        await speakGameText('La narración de historias llegará en una próxima fase. ¿Jugamos otra cosa?', ctx);
+        const engine = getGameEngine(juegoAction.gameId as GameId);
+        const scenes = juegoAction.narrative?.scenes;
+        if (!engine?.narrate || !scenes || scenes.length === 0) {
+            await speakGameText('No puedo narrar esa historia ahora mismo. ¿Probamos otra cosa?', ctx);
+            return;
+        }
+        const config = buildGameConfig(juegoAction.gameId);
+        const session = getActiveGameSession() ?? engine.createSession(config);
+        if (!getActiveGameSession()) setActiveGameSession(session);
+        const result = engine.narrate(session, scenes, config);
+        applyGameEmotion(result);
+        await speakGameText(result.prompt, ctx);
         return;
     }
 
@@ -684,15 +864,18 @@ async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGame
 
     if (juegoAction.action === 'end') {
         clearActiveGameSession();
+        stopMusicForGame(juegoAction.gameId);
         await speakGameText('¡Hasta la próxima partida! ¿Qué más hacemos?', ctx);
         return;
     }
 
     if (juegoAction.action === 'start') {
-        const session = engine.createSession(buildGameConfig(juegoAction.gameId));
-        const result = engine.start(session, buildGameConfig(juegoAction.gameId));
+        const config = buildGameConfig(juegoAction.gameId);
+        const session = engine.createSession(config);
+        const result = engine.start(session, config);
         setActiveGameSession(session);
         applyGameEmotion(result);
+        playSongForGame(session, juegoAction.gameId);
         await speakGameText(result.prompt, ctx);
         return;
     }
@@ -705,18 +888,97 @@ async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGame
     const result = engine.turn(activeSession, juegoAction.playerText || '');
     if (result.gameOver) {
         clearActiveGameSession();
+        stopMusicForGame(juegoAction.gameId);
     }
     applyGameEmotion(result);
-    await speakGameText(result.prompt, ctx);
+    const speechOpts = resolveGameSpeechOptions(result);
+    await speakGameText(result.prompt, ctx, speechOpts);
 }
 
 // ============================================================
 // App
 // ============================================================
 
+/**
+ * Determina si un workspace de tipo 'text' es una respuesta conversacional
+ * redundante (el contenido escrito duplica la respuesta hablada) en lugar de
+ * contenido estructurado genuino.
+ *
+ * El contrato de IA (deepseek.ts/gemini.ts) instruye: "workspace debe
+ * establecerse cuando el usuario pide crear contenido". Sin embargo, los
+ * modelos suelen rellenar workspace.contenido con la MISMA respuesta hablada
+ * para preguntas conversacionales simples ("platícame de los autos a
+ * gasolina"). Eso provoca que la pestaña «respuesta» del Pizarrón muestre el
+ * texto en 2 lugares (latestResponse + workspaceArtifact.contenido).
+ *
+ * Se considera contenido genuino (NO redundante) cuando:
+ *   - hay puntos_clave distintos (estructura real), o
+ *   - el contenido escrito difiere sustancialmente de la respuesta hablada
+ *     (p. ej. una versión escrita más extensa/detallada).
+ */
+function isRedundantTextWorkspace(opts: {
+    contenido: string;
+    titulo: string;
+    puntosClave: string[];
+    respuestaVoz: string;
+}): boolean {
+    const { contenido, titulo, puntosClave, respuestaVoz } = opts;
+    // Puntos clave reales ⇒ contenido estructurado, no redundante.
+    if (puntosClave.length > 0) return false;
+
+    const spoken = normalizeSpaces(respuestaVoz);
+    const written = normalizeSpaces(contenido || titulo || '');
+    if (!spoken || !written) return false;
+
+    // Si el contenido escrito es esencialmente la respuesta hablada (mismo
+    // texto o subconjunto casi idéntico), es redundante.
+    const spokenTokens = spoken.toLowerCase().split(' ').filter(Boolean);
+    const writtenTokens = written.toLowerCase().split(' ').filter(Boolean);
+    if (!spokenTokens.length || !writtenTokens.length) return false;
+
+    const writtenSet = new Set(writtenTokens);
+    let overlap = 0;
+    for (const token of spokenTokens) {
+        if (writtenSet.has(token)) overlap += 1;
+    }
+    const overlapRatio = overlap / spokenTokens.length;
+    // Umbral alto: solo se suprime cuando el escrito replica casi por completo
+    // lo hablado (respuesta conversacional duplicada), no cuando añade detalle.
+    return overlapRatio >= 0.85;
+}
+
 function App() {
     const [currentState, setCurrentState] = useState<ConversationState>('IDLE');
     const integrationStore = useIntegrationStore();
+    // Ambiente activo (rebranding por oficio): pestañas visibles derivadas del catálogo
+    const activeAmbienteId = useEnvironmentStore((s) => s.activeAmbienteId);
+    const visibleTabIds = useMemo(() => getVisibleTabIds(activeAmbienteId), [activeAmbienteId]);
+
+    // ---- 1A: catálogo dinámico de ambientes (A5) ----
+    // Espejo en React del catálogo fusionado (built-ins + dinámicos) para el panel de Ajustes.
+    const [ambientes, setAmbientes] = useState<readonly EnvironmentDefinition[]>(() => getAmbientes());
+    const refreshAmbientes = useCallback(() => {
+        setAmbientes(getAmbientes());
+    }, []);
+    // Ids de ambientes dinámicos (persistidos): únicos que admiten editar/eliminar.
+    const dynamicAmbienteIds = useMemo(
+        () => new Set(ambientes.filter((a) => !ENVIRONMENTS.some((b) => b.id === a.id)).map((a) => a.id)),
+        [ambientes]
+    );
+    // ---- 1B: catálogo dinámico de paletas (B4) ----
+    // Espejo en React del catálogo fusionado (built-ins + dinámicos) para el panel de Ajustes.
+    const [paletas, setPaletas] = useState<readonly PaletteDefinition[]>(() => getAllPalettes());
+    const refreshPaletas = useCallback(() => {
+        setPaletas(getAllPalettes());
+    }, []);
+    // Ids de paletas dinámicas (persistidas): únicas que admiten editar/eliminar.
+    const dynamicPaletaIds = useMemo(
+        () =>
+            new Set(
+                paletas.filter((p) => !builtinPaletteEntries().some((b) => b.id === p.id)).map((p) => p.id)
+            ),
+        [paletas]
+    );
     const auditLog = useAuditLog();
     const minuteKnowledge = useMinuteKnowledge();
     const voiceProfiles = useVoiceProfiles();
@@ -771,6 +1033,10 @@ function App() {
     const conversationActiveRef = useRef(false);
     const resumeListeningTimerRef = useRef<number | null>(null);
     const lastRawLogRef = useRef<string>('');
+    // Indica si FLU ya produjo una respuesta sustantiva en ESTA carga de página.
+    // Se usa para que latestResponse NO resucite una respuesta vieja del historial
+    // persistido (IndexedDB) al recargar, antes de que FLU responda de nuevo.
+    const hasLiveResponseRef = useRef(false);
 
     // Ref for speakFlu to fix closure issue: useCallback with [] deps captures
     // speakFlu from the FIRST render's closure. Keeping a ref ensures the callback
@@ -785,12 +1051,19 @@ function App() {
     // Always start on Pizarron (workspace) tab as default
     const [activeTab, setActiveTab] = useState<RightTab>('workspace');
 
+    // Mantener la pestaña activa dentro de las visibles del ambiente activo
+    useEffect(() => {
+        if (visibleTabIds.length > 0 && !visibleTabIds.includes(activeTab)) {
+            setActiveTab(visibleTabIds[0]);
+        }
+    }, [visibleTabIds, activeTab]);
+
     // ---- Estado para imagen subida (digitalización OCR) ----
     const [uploadedImage, setUploadedImage] = useState<{ dataUrl: string; mimeType: string; fileName: string } | null>(null);
     const [homeworkContext, setHomeworkContext] = useState<{ materia: string; problemas: string[]; instrucciones: string; nivel: string; texto_extraido: string } | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
     const docInputRef = useRef<HTMLInputElement>(null);
     const projectInputRef = useRef<HTMLInputElement>(null);
 
@@ -806,6 +1079,9 @@ function App() {
 
     // ---- Estado para la minuta seleccionada en el historial ----
     const [selectedMinuteId, setSelectedMinuteId] = useState<string | null>(savedSession.current.selectedMinuteId);
+
+    // ---- Sub-sección activa del panel de Ajustes (Fase A2: FLU / Mis datos / Gestión) ----
+    const [settingsGroup, setSettingsGroup] = useState<SettingsGroupId>('flu');
 
     // ---- Ref para MinuteDraftPanel (accede a .save()) ----
     const minutePanelRef = useRef<{ save: () => void }>(null);
@@ -824,6 +1100,7 @@ function App() {
         apiKey,
         textModel,
         textApiUrl,
+        geminiApiKey,
         imageApiKey,
         imageModel,
         imageApiUrl,
@@ -838,6 +1115,7 @@ function App() {
         handleTextApiKeyCommit,
         handleTextModelCommit,
         handleTextApiUrlCommit,
+        handleGeminiApiKeyCommit,
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,
@@ -854,12 +1132,246 @@ function App() {
         wakeWordsRef,
     } = useConfigPersistence();
 
+    // ---- Fase 2 — Memoria y recordatorios: hooks tempranos ----
+    // useReminders debe declararse ANTES de useFluVoiceAssistant porque
+    // getDailyAgenda (más abajo) lo referencia. speakFlu y el servicio de
+    // notificaciones se resuelven después (línea 1726 y 1740), así que se
+    // inyectan vía refs:
+    //   - speakFluRef (declarado arriba, sincronizado en la línea 1733)
+    //   - notificationServiceRef (actualizado tras useNotificationCenter)
+    const notificationServiceRef = useRef<NotificationService | null>(null);
+    const reminders = useReminders({
+        speak: (text, lang) => speakFluRef.current(text, lang),
+        notify: (input) => notificationServiceRef.current?.notify(input),
+        language,
+    });
+    // ---- Motor temporal genérico: alarmas y temporizadores (despertador + temporizador) ----
+    const temporals = useTemporalItems({
+        speak: (text, lang) => speakFluRef.current(text, lang),
+        notify: (input) => notificationServiceRef.current?.notify(input),
+        language,
+    });
+    const shopping = useShoppingList({});
+
+    // ---- Horario de clases: hook temprano (Pizarrón + consulta por voz) ----
+    const horario = useHorario({});
+    const [horarioModo, setHorarioModo] = useState<HorarioModo>('semana');
+    // Entradas de horario pendientes de confirmar (parseadas desde una imagen
+    // digitalizada). Nada se escribe en fluDb.horario sin el visto bueno del
+    // usuario (Regla #1: sin hardcode; el parseo es genérico vía structureHorarioText).
+    const [pendingHorarioImport, setPendingHorarioImport] = useState<HorarioClaseEstructurada[] | null>(null);
+    const [horarioImportBusy, setHorarioImportBusy] = useState(false);
+
+    // Confirma el parseo: persiste cada entrada estructurada en fluDb.horario.
+    // Genérico: mapea {materia, tipo, dia, inicio, fin, aula} → NewHorarioInput.
+    const confirmHorarioImport = useCallback(async () => {
+        const entries = pendingHorarioImport;
+        if (!entries || entries.length === 0) return;
+        setHorarioImportBusy(true);
+        try {
+            for (const entry of entries) {
+                await horario.add({
+                    materia: entry.materia,
+                    tipo: entry.tipo,
+                    dia: entry.dia,
+                    inicio: entry.inicio,
+                    fin: entry.fin,
+                    aula: entry.aula,
+                });
+            }
+            const voice = FLU_CONFIG.horario?.voice || {};
+            const okMsg = String(
+                voice.structureOk ||
+                (language === 'en' ? 'I registered the schedule entries.' : 'Registré las entradas del horario.')
+            );
+            speakFluRef.current?.(okMsg, language);
+        } finally {
+            setPendingHorarioImport(null);
+            setHorarioImportBusy(false);
+        }
+    }, [pendingHorarioImport, horario, language]);
+
+    // Descarta el parseo sin escribir nada.
+    const cancelHorarioImport = useCallback(() => {
+        setPendingHorarioImport(null);
+        setHorarioImportBusy(false);
+    }, []);
+
+    // ---- Fase 3 — Multi-usuario: participantes del hogar y materia gris ----
+    const participants = useParticipants({});
+    // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
+    // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
+    const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
+    const [pickerMode, setPickerMode] = useState(false);
+    const [newProfilePending, setNewProfilePending] = useState(false);
+    const registerProfileRef = useRef(false);
+    // Guard de una sola sesión: auto-registrar solo al PRIMER participante
+    // (primer arranque). Evita re-crear un perfil si luego se elimina.
+    const firstProfileResolvedRef = useRef(false);
+    const materiaGris = useMateriaGris({});
+    // ---- FASE P — Personalización profunda por persona (nivel de explicación + tono) ----
+    const communicationProfiles = useCommunicationProfiles({});
+    // ---- Punto 2 — Navegador curado: perfil de navegador por participante ----
+    const browserProfiles = useBrowserProfiles({});
+    // ---- Punto 2 — Catálogo de sitios: catálogo fusionado del buscador ----
+    const searchSites = useSearchSites();
+    // ---- Fase 4 — Módulo G: hábitos y metas por participante ----
+    const habits = useHabits({});
+    // ---- Fase 5 — Módulo H: bienestar y ánimo por participante ----
+    const mood = useMood({});
+    // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
+    const contacts = useContacts({});
+    const diary = useDiary({});
+    const notes = useNotes({});
+    // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
+    const deviceActions = useDeviceActions({
+        service: contacts.service,
+        contacts: contacts.contacts,
+    });
+
+    // ---- FASE P — Resolución del perfil de comunicación para el turno de voz en curso ----
+    const onResolveCommunicationProfile = useCallback(
+        async (_text: string): Promise<ResolvedCommunicationProfile | null> => {
+            try {
+                const history = integrationStore.conversationHistory;
+                let speakerLabel: string | undefined;
+                for (let i = history.length - 1; i >= 0; i--) {
+                    const e = history[i] as any;
+                    if (e.role === 'user' && e.speakerName) {
+                        speakerLabel = e.speakerName;
+                        break;
+                    }
+                }
+                if (!speakerLabel) return null;
+                const participant = await participants.resolveParticipantBySpeakerLabel(speakerLabel);
+                if (!participant) return null;
+                return communicationProfiles.resolveForTurn(participant.id);
+            } catch (err) {
+                console.warn('[App] No se pudo resolver el perfil de comunicación:', err);
+                return null;
+            }
+        },
+        [integrationStore.conversationHistory, participants.resolveParticipantBySpeakerLabel, communicationProfiles.resolveForTurn]
+    );
+
+    // B9: cumpleaños próximos dentro de la ventana configurada (FLU_CONFIG.multiuser).
+    // Se recalcula cuando cambia el registro de participantes.
+    const [birthdayNear, setBirthdayNear] = useState<ParticipantRecord[]>([]);
+    useEffect(() => {
+        let active = true;
+        participants
+            .participantsWithBirthdayNear()
+            .then((rows) => {
+                if (active) setBirthdayNear(rows);
+            })
+            .catch((err) => console.error('[App] birthdayNear error:', err));
+        return () => {
+            active = false;
+        };
+    }, [participants.participants, participants.participantsWithBirthdayNear]);
+
+    // B11: pendientes filtrados por autor (listPendingByAuthor) desde el filtro del panel.
+    // Se recalcula al escribir el autor y cuando cambia la lista de recordatorios.
+    const [remindersAuthor, setRemindersAuthor] = useState('');
+    const [pendingByAuthor, setPendingByAuthor] = useState<ReminderRecord[]>([]);
+    useEffect(() => {
+        let active = true;
+        const author = remindersAuthor.trim();
+        if (!author) {
+            setPendingByAuthor([]);
+            return undefined;
+        }
+        reminders.service
+            .listPendingByAuthor(author)
+            .then((rows) => {
+                if (active) setPendingByAuthor(rows);
+            })
+            .catch((err) => console.error('[App] pendingByAuthor error:', err));
+        return () => {
+            active = false;
+        };
+    }, [remindersAuthor, reminders.service, reminders.reminders]);
+
     // ---- AI Provider Selection ----
     const [aiProvider, setAiProviderState] = useState<string>(() => getPreferredAIProvider());
     const handleSetAiProvider = useCallback((provider: string) => {
         setPreferredAIProvider(provider as any);
         setAiProviderState(provider);
     }, []);
+
+    // ---- Ambientes (B5): activación desde el panel de Ajustes ----
+    // Espejo del handler por voz (onContractResolved): aplica el ambiente
+    // con applyEnvironment y habla la bienvenida en el idioma activo.
+    // Debe ir DESPUÉS de useConfigPersistence (languageRef) y de la
+    // declaración de speakFluRef para tener ambos en scope.
+    const handleActivateAmbiente = useCallback(async (ambienteId: string) => {
+        try {
+            const ambiente = applyEnvironment(ambienteId);
+            const envLang = languageRef.current === 'en' ? 'en' : 'es';
+            await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
+        } catch (err) {
+            console.error('[App] applyEnvironment failed (non-critical):', err);
+        }
+    }, []);
+
+    // ---- 1A/1B: hidrata los catálogos dinámicos (ambientes + paletas) al
+    // arranque. El merge del store corrige ids inválidos a 'asistente'; aquí
+    // se restaura un ambiente dinámico ya hidratado y se refrescan las paletas. ----
+    useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                await hydrateAmbientes();
+                await hydratePalettes();
+                if (!active) return;
+                refreshAmbientes();
+                refreshPaletas();
+                const persistedId = readPersistedActiveAmbienteId();
+                const currentId = useEnvironmentStore.getState().activeAmbienteId;
+                if (persistedId && persistedId !== currentId && isAmbienteId(persistedId)) {
+                    applyEnvironment(persistedId);
+                }
+            } catch (err) {
+                console.error('[App] hydrate catalogs failed (non-critical):', err);
+            }
+        })();
+        return () => {
+            active = false;
+        };
+    }, [refreshAmbientes, refreshPaletas]);
+
+    // ---- 1A: CRUD de ambientes dinámicos (delegado a ambientesCatalog) ----
+    const handleRegisterAmbiente = useCallback(
+        async (data: EnvironmentDefinition): Promise<RegisterResult<EnvironmentDefinition>> => {
+            const result = await registerAmbiente(data);
+            refreshAmbientes();
+            return result;
+        },
+        [refreshAmbientes]
+    );
+
+    const handleUpdateAmbiente = useCallback(
+        async (id: string, data: EnvironmentDefinition): Promise<UpdateResult<EnvironmentDefinition>> => {
+            const result = await updateAmbiente(id, data);
+            if (result.ok && activeAmbienteId === id && result.record.data.id !== id) {
+                // El ambiente activo fue renombrado: su slug (id canónico) cambió → reactivar.
+                applyEnvironment(result.record.data.id);
+            }
+            refreshAmbientes();
+            return result;
+        },
+        [refreshAmbientes, activeAmbienteId]
+    );
+
+    const handleRemoveAmbiente = useCallback(
+        async (id: string): Promise<void> => {
+            const wasActive = activeAmbienteId === id;
+            if (wasActive) resetEnvironment();
+            await removeAmbiente(id);
+            refreshAmbientes();
+        },
+        [refreshAmbientes, activeAmbienteId]
+    );
 
     // ---- Flu participant state (OS2 parity: useFluParticipant hook) ----
     // Memoized snapshot: use a ref to avoid re-creating the callback on every render.
@@ -949,6 +1461,7 @@ function App() {
     fluParticipantRef.current = fluParticipant;
     const fluParticipantPresentation = fluParticipant.presentation;
     const [participantConfig, setParticipantConfig] = useState(() => getFluParticipantConfig());
+    const [searchOverrides, setSearchOverrides] = useState<SearchConfigOverrides>(() => loadSearchConfigOverrides());
 
 
     // ============================================================
@@ -1006,7 +1519,7 @@ function App() {
             // Devolvemos el texto formateado de TODAS las minutas persistidas en IndexedDB
             // para inyectarlo en el prompt de Gemini como knowledgeBase2.
             // Si no hay minutas, devolvemos '' (Gemini dirá "KB minutas vacía" como en OS2).
-            return buildMinuteKnowledgeBase2(minuteKnowledge.minutes);
+            return buildMinuteKnowledgeBase2(minuteKnowledge.minutes, { diary: diary.entries || [] });
         },
         getDailyAgenda: () => {
             // Compila pendientes de todas las minutas en una "orden del día"
@@ -1014,12 +1527,64 @@ function App() {
             // Si no hay pendientes, devuelve '' (Gemini ignora el campo).
             const agendaConfig = FLU_CONFIG.agenda || {};
             if (!agendaConfig.enabled) return '';
-            const items = buildDailyAgenda(minuteKnowledge.minutes, {
+            let items = buildDailyAgenda(minuteKnowledge.minutes, {
                 maxItems: agendaConfig.maxItems,
                 minImportance: agendaConfig.minImportance,
             });
+            // Fase 2 — B5: fusiona los recordatorios pendientes como un item
+            // sintético al final de la agenda, aunque no haya minutas.
+            items = mergeRemindersIntoAgenda(
+                items,
+                reminders.reminders,
+                { maxReminders: agendaConfig.maxReminders },
+                languageRef.current as 'es' | 'en',
+            );
             if (items.length === 0) return '';
             return formatAgendaForPrompt(items, languageRef.current as 'es' | 'en');
+        },
+        // Autoconocimiento (§1.4): manifiesto 1ª persona de FLU compilado desde
+        // la config real. useFluVoiceAssistant solo lo pide cuando el turno es
+        // una petición de autoconocimiento (isSelfKnowledgeRequest).
+        getSelfManifesto: () => buildSelfManifesto(languageRef.current as 'es' | 'en'),
+        // Radar de contexto (Pizarrón un solo objeto — Paso 5): bloques 6-9.
+        // Cada getter compila texto dinámico desde su fuente (Dexie) y devuelve
+        // '' si no hay datos (Rule #1). useFluVoiceAssistant los lee vía refs en
+        // el callback de contrato y los inyecta en el user prompt de Gemini.
+        getDiaryContext: () => {
+            // Bloque 7 — DIARIO (+ánimo): última entrada (una sola).
+            const entries = diary.entries || [];
+            if (entries.length === 0) return '';
+            const last = entries[0];
+            const moodTxt = last.mood ? ` (ánimo ${last.mood})` : '';
+            const titleTxt = last.title ? ` ${last.title}` : '';
+            return `[${last.date}]${titleTxt}${moodTxt}: ${last.content}`;
+        },
+        getNotesContext: () => {
+            // Bloque 8 — NOTAS: pendientes (top-N, sin hardcode de N).
+            const pending = (notes.notes || []).filter((n) => !n.done);
+            if (pending.length === 0) return '';
+            return pending.map((n) => `- ${n.label}`).join('\n');
+        },
+        getHorarioContext: () => {
+            // Bloque 9 — Horario del día (HOY): clases de hoy ordenadas por hora.
+            const items = horario.horario || [];
+            if (items.length === 0) return '';
+            const hoy = diaDeFecha(Date.now());
+            const clasesHoy = clasesDelDia(items, hoy);
+            if (clasesHoy.length === 0) return '';
+            return clasesHoy
+                .map((c) => `${c.inicio}–${c.fin} ${c.materia}${c.aula ? ` (${c.aula})` : ''}`)
+                .join('\n');
+        },
+        getResultadosContext: () => {
+            // Bloque 6 — Resultados: última consulta/respuesta + feed reciente.
+            const parts: string[] = [];
+            const lastResp = (integrationStore.lastResponse || '').trim();
+            if (lastResp) parts.push(`Última respuesta: ${lastResp}`);
+            const artifact = integrationStore.workspaceArtifact as any;
+            if (artifact?.contenido) parts.push(`Contenido activo: ${artifact.contenido}`);
+            if (parts.length === 0) return '';
+            return parts.join('\n');
         },
         resolveMinuteLookup: ((query: string, lang?: string) => {
             // OS2 parity: useMinuteKnowledge ↔ minuteKnowledgeRef.resolveMinuteQuery
@@ -1139,10 +1704,77 @@ function App() {
                 return;
             }
 
-            const respuestaVoz = contract?.respuesta_voz || '';
+            let respuestaVoz = contract?.respuesta_voz || '';
             const navegacion = contract?.navegacion || {};
             const workspace = contract?.workspace || null;
             const musica = contract?.musica || null;
+
+            // ============================================================
+            // INTERCEPCIÓN DETERMINISTA — Recordatorios, compras, alarmas,
+            // temporizadores, notas y diario por voz.
+            // ============================================================
+            // ROOT CAUSE FIX: el contrato de Gemini NO trae campo para crear
+            // recordatorios/notas/diario/compras/alarmas. Los manejadores
+            // __fluHandle* (que SÍ parsean y crean estos ítems vía los parsers
+            // deterministas) se exponen en window en cada render, pero NUNCA
+            // se invocaban desde el flujo de voz. Aquí interceptamos el
+            // transcript crudo y despachamos al manejador correspondiente.
+            // Si un manejador devuelve una confirmación hablada, la usamos
+            // como respuesta_voz (FLU la pronuncia) y marcamos que la intención
+            // ya fue resuelta localmente para no duplicar con la IA.
+            //
+            // onContractResolved es useCallback con deps [] y se define ANTES
+            // de los manejadores, por lo que se invocan vía window en runtime
+            // (siempre tienen closures frescas porque se reasignan cada render).
+            // ============================================================
+            let localHandledReply = '';
+            if (transcript && !rawOnly) {
+                const w: any = window as any;
+                try {
+                    // 1) Recordatorios + lista de compras (parseReminderIntent)
+                    if (!localHandledReply && typeof w.__fluHandleReminderText === 'function') {
+                        const reply = await w.__fluHandleReminderText(transcript, {
+                            personId: undefined,
+                            personName: speakerName || undefined,
+                        });
+                        if (reply) localHandledReply = reply;
+                    }
+                    // 2) Alarmas + temporizadores (parseTemporalIntent)
+                    if (!localHandledReply && typeof w.__fluHandleTemporalText === 'function') {
+                        const reply = await w.__fluHandleTemporalText(transcript);
+                        if (reply) localHandledReply = reply;
+                    }
+                    // 3) Notas (dictado: "nota para el super", "nota para recordar...")
+                    if (!localHandledReply && typeof w.__fluHandleNoteText === 'function') {
+                        const reply = await w.__fluHandleNoteText(transcript, {
+                            personId: undefined,
+                            personName: speakerName || undefined,
+                        });
+                        if (reply) localHandledReply = reply;
+                    }
+                    // 4) Diario (dictado: "escribe en el diario...")
+                    if (!localHandledReply && typeof w.__fluHandleDiaryText === 'function') {
+                        const reply = await w.__fluHandleDiaryText(transcript, {
+                            personId: undefined,
+                            personName: speakerName || undefined,
+                        });
+                        if (reply) localHandledReply = reply;
+                    }
+                    // 5) Horario (dictado: "agrega matemáticas el lunes a las 8",
+                    //    "qué clases tengo mañana", "quita historia del viernes")
+                    if (!localHandledReply && typeof w.__fluHandleHorarioText === 'function') {
+                        const reply = await w.__fluHandleHorarioText(transcript);
+                        if (reply) localHandledReply = reply;
+                    }
+                } catch (err) {
+                    console.warn('[App] Deterministic feature interception threw (non-critical):', err);
+                    relayLog('WARN', 'App', `feature interception threw: ${err}`);
+                }
+                if (localHandledReply) {
+                    respuestaVoz = localHandledReply;
+                    relayLog('LOG', 'App', `onContractResolved: intención local resuelta → "${localHandledReply}"`);
+                }
+            }
             // ============================================================
             // FAST-PATH DETERMINISTA (configuración por voz instantánea)
             // ============================================================
@@ -1160,6 +1792,14 @@ function App() {
             // al final del callback (no se re-declara). El motor local es la
             // fuente de verdad de la partida.
             const juegoAction = normalizeJuego(contract?.juego);
+
+            // Ambiente por voz (fast-path determinista): contrato normalizado por
+            // normalizeEnvironment (tipo 'activar' | 'reset' + ambienteId del
+            // catálogo). Se declara aquí (hoisted) para que el gate de abajo lo
+            // admita y se REUTILIZA al final del callback (no se re-declara).
+            // El catálogo de ambientes (src/core/environments/*) es la fuente de
+            // verdad del rebranding por oficio.
+            const environmentAction = normalizeEnvironment(contract?.ambiente);
 
             // ============================================================
             // MÚSICA REAL (F3): ejecutar la acción de música del contrato
@@ -1184,7 +1824,7 @@ function App() {
             // Gate único: se admiten contratos con respuesta_voz, navegación o
             // configuración. Antes, un contrato SOLO-configuración (fast-path) era
             // descartado aquí en silencio; ahora pasa para aplicar applyConfigAction.
-            if (!respuestaVoz && !navegacion.comando && !configAction?.accion && !juegoAction?.action) return;
+            if (!respuestaVoz && !navegacion.comando && !configAction?.accion && !juegoAction?.action && !environmentAction?.tipo) return;
 
             // ============================================================
             // OS2 parity: cuando viene de una consulta de minuta local exitosa
@@ -1237,11 +1877,142 @@ function App() {
                 relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
             }
 
+            // ============================================================
+            // PROCESAR WORKSPACE ARTIFACT — INMEDIATAMENTE (en paralelo con la voz)
+            // ============================================================
+            // OS2 parity: procesar workspace artifact. Este bloque corre ANTES del
+            // bloque de habla (if respuestaVoz) para que la petición de imagen
+            // (workspaceImage.generateFromContract) se dispare EN EL MOMENTO en que
+            // la IA responde, en paralelo con (incluso antes de) que FLU hable.
+            // generateFromContract es async fire-and-forget: no bloquea el habla.
+            //
+            // "contenido viejo arreglalo": SIEMPRE limpiar el artifact previo al
+            // inicio de cada turno real (no rawOnly), de modo que el contenido
+            // visual/textual del turno anterior NUNCA se mezcle con la respuesta
+            // nueva. Solo se re-puebla si el nuevo contrato trae contenido real.
+            integrationStore.setWorkspaceArtifact(null);
+
+            // Limpiar también el estado de búsqueda del Pizarrón al iniciar un
+            // turno real: si el turno anterior fue una búsqueda web (BUSCAR/
+            // NAVEGAR o manual), sus resultados y la consulta de la barra NO deben
+            // quedar "pegados" cuando la IA responde otra cosa (conversación,
+            // generación de imagen, etc.). WorkspaceHub escucha RESET_SEARCH y
+            // llama a resetSearch(). Si este turno SÍ es una búsqueda, el
+            // dispatchFluSearch posterior (más abajo) re-puebla resultados frescos.
+            dispatchFluResetSearch();
+            if (workspace) {
+                const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
+                const titulo = workspace.titulo || '';
+                const contenido = workspace.contenido || '';
+                const promptVisual = workspace.prompt_visual || '';
+                const puntos_clave = Array.isArray(workspace.puntos_clave)
+                    ? workspace.puntos_clave.map((item: string) => String(item || '').trim()).filter(Boolean)
+                    : [];
+
+                const VISUAL_TIPOS = ['image_prompt', 'diagram', '3d'];
+                const isVisualTipo = VISUAL_TIPOS.includes(tipo);
+                if (isVisualTipo) {
+                    const visualCore = promptVisual || contenido || titulo;
+                    if (visualCore && visualCore.length >= 5) {
+                        // Obligación #6: UUIDv4
+                        const wsId = uuidv4();
+                        integrationStore.setWorkspaceArtifact({
+                            id: wsId,
+                            respuesta: contenido || titulo || respuestaVoz,
+                            titulo: titulo || visualCore,
+                            tipo: tipo as 'text' | 'image_prompt' | 'diagram' | '3d' | null,
+                            contenido: contenido || visualCore,
+                            prompt_visual: visualCore,
+                            puntos_clave,
+                            origen: 'ia',
+                            timestamp: Date.now(),
+                        });
+
+                        // SOLO usar workspace.prompt_visual (lo que Gemini diseña específicamente como prompt de imagen).
+                        // NO caer en contenido/titulo — eso es texto para mostrar, NO para generar imagen.
+                        // Si prompt_visual está vacío, NO generar imagen (fail-fast con mensaje claro).
+                        if (promptVisual && promptVisual.length >= 5) {
+                            workspaceImage.generateFromContract(promptVisual, workspace.tipo as string | null);
+                        }
+                    }
+                } else if (tipo === 'horario' && (titulo || contenido || puntos_clave.length > 0 || promptVisual)) {
+                    // Horario de clases en el Pizarrón: preservar tipo + modo
+                    // (semana/dia/proxima/recordatorios). Los modos válidos vienen de
+                    // FLU_CONFIG.horario.modos — nada hardcodeado.
+                    const horarioConfig = (FLU_CONFIG as any).horario || {};
+                    const modoValido = horarioConfig.modos ? Object.keys(horarioConfig.modos) : ['semana', 'dia', 'proxima', 'recordatorios'];
+                    const rawModo = String(workspace.modo || '').trim().toLowerCase();
+                    const modo: HorarioModo = modoValido.includes(rawModo) ? (rawModo as HorarioModo) : 'semana';
+                    // Obligación #6: UUIDv4
+                    integrationStore.setWorkspaceArtifact({
+                        id: uuidv4(),
+                        respuesta: contenido || titulo || respuestaVoz,
+                        titulo: titulo || 'Horario de clases',
+                        tipo: 'horario',
+                        contenido: contenido || '',
+                        prompt_visual: promptVisual || '',
+                        modo,
+                        puntos_clave,
+                        origen: 'ia',
+                        timestamp: Date.now(),
+                    });
+                    setHorarioModo(modo);
+                } else if (tipo === 'doc' || tipo === 'video') {
+                    // Generación de documento/video desde el contrato de workspace de
+                    // Gemini. Se crea el artifact (para que buildGenerationTopic tome
+                    // el tema/contenido) y se dispara el evento FLU que el useEffect
+                    // de generación ya escucha y resuelve en documentGeneration.
+                    const isVideo = tipo === 'video';
+                    integrationStore.setWorkspaceArtifact({
+                        id: uuidv4(),
+                        respuesta: contenido || titulo || respuestaVoz,
+                        titulo: titulo || (isVideo ? 'Video' : 'Documento'),
+                        tipo: isVideo ? 'video' : 'doc',
+                        contenido: contenido || '',
+                        prompt_visual: promptVisual || '',
+                        puntos_clave,
+                        origen: 'ia',
+                        timestamp: Date.now(),
+                    });
+                    relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → dispatch ${isVideo ? 'GENERATE_VIDEO' : 'GENERATE_DOCUMENT'}`);
+                    dispatchFluEvent(isVideo ? FLU_EVENTS.GENERATE_VIDEO : FLU_EVENTS.GENERATE_DOCUMENT);
+                } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
+                    // Guard anti-duplicado: si el workspace de tipo 'text' es una
+                    // respuesta conversacional redundante (el contenido escrito
+                    // replica la respuesta hablada y no hay puntos clave reales),
+                    // NO crear un artifact. La pestaña «respuesta» ya muestra la
+                    // respuesta hablada (latestResponse); crearlo duplicaría el
+                    // texto en 2 lugares del Pizarrón.
+                    const redundantText = isRedundantTextWorkspace({
+                        contenido,
+                        titulo,
+                        puntosClave: puntos_clave,
+                        respuestaVoz,
+                    });
+                    if (redundantText) {
+                        relayLog('LOG', 'App', 'onContractResolved: workspace text redundante (duplica respuesta_voz) — se omite artifact para evitar doble render en Pizarrón');
+                    } else {
+                        // Obligación #6: UUIDv4
+                        integrationStore.setWorkspaceArtifact({
+                            id: uuidv4(),
+                            respuesta: contenido || titulo || respuestaVoz,
+                            titulo: titulo || 'Contenido',
+                            tipo: 'text',
+                            contenido: contenido || '',
+                            prompt_visual: promptVisual || '',
+                            puntos_clave,
+                            origen: 'ia',
+                            timestamp: Date.now(),
+                        });
+                    }
+                }
+            }
+
             // Si hay respuesta de voz, actualizar el store.
             // En juegos por voz la voz es SIEMPRE del motor local (determinista):
             // se suprime la respuesta_voz de cortesía de Gemini para evitar doble
             // habla (juegoAction) y la del contrato fast-path (fastPathGame).
-            if (respuestaVoz && !juegoAction?.action && !(resolved as any)?.fastPathGame) {
+            if (respuestaVoz && !juegoAction?.action && !environmentAction?.tipo && !(resolved as any)?.fastPathGame && !(resolved as any)?.fastPathEnvironment) {
                 integrationStore.setLastResponse(respuestaVoz);
                 integrationStore.addFluMessage(respuestaVoz);
 
@@ -1447,61 +2218,6 @@ function App() {
                 scheduleResumeListening(respuestaVoz?.length);
             }
 
-            // OS2 parity: procesar workspace artifact
-            // Si el nuevo contrato NO tiene workspace, limpiar el artifact anterior
-            // para que no persista contenido visual/textual del turno previo.
-            if (!workspace) {
-                integrationStore.setWorkspaceArtifact(null);
-            }
-            if (workspace) {
-                const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
-                const titulo = workspace.titulo || '';
-                const contenido = workspace.contenido || '';
-                const promptVisual = workspace.prompt_visual || '';
-                const puntos_clave = Array.isArray(workspace.puntos_clave)
-                    ? workspace.puntos_clave.map((item: string) => String(item || '').trim()).filter(Boolean)
-                    : [];
-
-                const VISUAL_TIPOS = ['image_prompt', 'diagram', '3d'];
-                const isVisualTipo = VISUAL_TIPOS.includes(tipo);
-                if (isVisualTipo) {
-                    const visualCore = promptVisual || contenido || titulo;
-                    if (visualCore && visualCore.length >= 5) {
-                        // Obligación #6: UUIDv4
-                        const wsId = uuidv4();
-                        integrationStore.setWorkspaceArtifact({
-                            id: wsId,
-                            respuesta: contenido || titulo || respuestaVoz,
-                            titulo: titulo || visualCore,
-                            tipo: tipo as 'text' | 'image_prompt' | 'diagram' | '3d' | null,
-                            contenido: contenido || visualCore,
-                            prompt_visual: visualCore,
-                            puntos_clave,
-                            timestamp: Date.now(),
-                        });
-
-                        // SOLO usar workspace.prompt_visual (lo que Gemini diseña específicamente como prompt de imagen).
-                        // NO caer en contenido/titulo — eso es texto para mostrar, NO para generar imagen.
-                        // Si prompt_visual está vacío, NO generar imagen (fail-fast con mensaje claro).
-                        if (promptVisual && promptVisual.length >= 5) {
-                            workspaceImage.generateFromContract(promptVisual, workspace.tipo as string | null);
-                        }
-                    }
-                } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
-                    // Obligación #6: UUIDv4
-                    integrationStore.setWorkspaceArtifact({
-                        id: uuidv4(),
-                        respuesta: contenido || titulo || respuestaVoz,
-                        titulo: titulo || 'Contenido',
-                        tipo: 'text',
-                        contenido: contenido || '',
-                        prompt_visual: promptVisual || '',
-                        puntos_clave,
-                        timestamp: Date.now(),
-                    });
-                }
-            }
-
             // OS2 parity: detectar emoción del transcript
             if (transcript) {
                 integrationStore.detectAndSetEmotion(transcript);
@@ -1587,6 +2303,29 @@ function App() {
             }
 
             // ============================================================
+            // APPLY ENVIRONMENT ACTION — Ambientes por voz (fast-path)
+            // ============================================================
+            // El catálogo de ambientes (src/core/environments/*) es la fuente de
+            // verdad del rebranding por oficio (Identidad, Tema visual, Escena 3D,
+            // Atuendo, Voz/personalidad, Pestañas/contenido). `reset` devuelve al
+            // ambiente por defecto (asistente). Se aplica ANTES que la configuración
+            // para que el rebranding se refleje de inmediato y FLU salude con la
+            // bienvenida del ambiente. Si falla, no afecta el resto del contrato.
+            // ============================================================
+            if (environmentAction?.tipo) {
+                try {
+                    const ambiente =
+                        environmentAction.tipo === 'reset'
+                            ? resetEnvironment()
+                            : applyEnvironment(environmentAction.ambienteId);
+                    const envLang = languageRef.current === 'en' ? 'en' : 'es';
+                    await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
+                } catch (err) {
+                    console.error('[App] applyEnvironment failed (non-critical):', err);
+                }
+            }
+
+            // ============================================================
             // APPLY CONFIG ACTION — Configuración por voz desde Gemini
             // ============================================================
             // Gemini puede devolver un campo configuracion cuando el usuario
@@ -1633,6 +2372,11 @@ function App() {
                     // No relanzar — el contrato ya se procesó exitosamente
                 }
             }
+
+            // Devolver la respuesta hablada (respuestaVoz) para que los llamadores
+            // (y las pruebas E2E de intercepción) puedan conocer qué dijo FLU.
+            // Puede ser '' si no hubo respuesta hablada (p. ej. solo navegación).
+            return respuestaVoz;
         }, [])),
         // OS2 parity: inject the local useFluParticipant instance so OS2's voice commands
         // (FLU_ADELANTE) use the same participant state as the UI button.
@@ -1662,8 +2406,876 @@ function App() {
     // Keep speakFluRef in sync so onContractResolved always reads the latest speakFlu
     speakFluRef.current = speakFlu;
 
+    // ---- Asistente personal (Fase 1): DND, onboarding y notificaciones ----
+    // Regla #1: el estado vive en hooks config-driven (FLU_CONFIG + STORAGE_KEYS),
+    // sin valores hardcodeados en este componente.
+    const [dnd, dndActions] = useDoNotDisturb();
+    // Puente para romper la dependencia circular: `onboarding.speak` necesita
+    // suspender/reanudar el micrófono del onboarding, pero el hook de voz
+    // necesita `onboarding.answer`. El ref se sincroniza tras crear ambos.
+    const onboardingVoiceControlRef = useRef<{ suspend: () => void; resume: () => void }>({
+        suspend: () => undefined,
+        resume: () => undefined,
+    });
+    // Escucha activa (mismo modelo anti-eco que FLU): antes de que FLU hable
+    // se SUSPENDE el micrófono del onboarding y al terminar el TTS se REANUDA.
+    const onboardingSpeak = useCallback(
+        async (text: string, lang: string) => {
+            onboardingVoiceControlRef.current.suspend();
+            try {
+                await speakFlu(text, lang);
+            } finally {
+                onboardingVoiceControlRef.current.resume();
+            }
+        },
+        [speakFlu],
+    );
+    const onboarding = useOnboarding({ speak: onboardingSpeak, language, participantId: activeParticipantId });
+    // Captura dual TEXTO + VOZ: la voz alimenta el MISMO embudo `answer`
+    // del teclado. Solo se activa en pasos capture/decision con
+    // acceptVoice !== false (config-driven, sin hardcode). Escucha activa:
+    // el micrófono se abre automáticamente al activarse el paso y se
+    // suspende mientras FLU habla (anti-eco). `listening` solo es true
+    // con onstart real del navegador.
+    const onboardingVoiceEnabled =
+        onboarding.visible &&
+        ((onboarding.currentStep?.type === 'capture' ||
+            onboarding.currentStep?.type === 'decision') &&
+            onboarding.currentStep.acceptVoice !== false);
+    const onboardingVoice = useOnboardingVoiceCapture({
+        enabled: onboardingVoiceEnabled,
+        language: language === 'en' ? 'en' : 'es',
+        onFinal: onboarding.answer,
+    });
+    // Mantener el ref en sync con los métodos reales del hook de voz.
+    onboardingVoiceControlRef.current = {
+        suspend: onboardingVoice.suspend,
+        resume: onboardingVoice.resume,
+    };
+    const notificationCenter = useNotificationCenter({
+        speak: speakFlu,
+        language,
+        dnd: { isActive: dnd.active, allowUrgent: dnd.allowUrgent },
+    });
+    // Sincroniza el servicio de notificaciones en el ref temprano para que
+    // useReminders (declarado antes de useFluVoiceAssistant) pueda notificar
+    // los vencimientos de recordatorios.
+    notificationServiceRef.current = notificationCenter.service;
+
+    // ---- Onboarding multiusuario: selector "¿Quién eres?" ----
+    const handleSelectActiveUser = useCallback(
+        (participantId: string) => {
+            setActiveUser(undefined, participantId);
+            setActiveParticipantId(participantId);
+            setNewProfilePending(false);
+            setPickerMode(false);
+        },
+        [],
+    );
+
+    const handleRemoveActiveUser = useCallback(async () => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return;
+        const id = activeParticipantId;
+        await browserProfiles.reset(id);
+        await participants.remove(id);
+        setActiveUser(undefined);
+        setActiveParticipantId(undefined);
+        setNewProfilePending(false);
+    }, [activeParticipantId, browserProfiles, participants, setActiveUser, setActiveParticipantId, setNewProfilePending]);
+
+    const handleCreateNewProfile = useCallback(() => {
+        // Crea un perfil nuevo: vuelve a la ruta legacy (aún sin registro Dexie)
+        // para capturar el nombre; al completar se registra el participante.
+        // Se limpia el estado legacy para que el onboarding de la persona nueva
+        // arranque de cero y no herede la sesión anterior.
+        if (typeof window !== 'undefined') {
+            window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+            window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
+            if (onboarding.config.nameKey) window.localStorage.removeItem(onboarding.config.nameKey);
+        }
+        const wasLegacy =
+            !activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER;
+        setActiveUser(undefined);
+        setActiveParticipantId(undefined);
+        setNewProfilePending(true);
+        setPickerMode(false);
+        if (wasLegacy) {
+            // Ruta legacy (sin perfil Dexie): re-inicializa el onboarding para
+            // que las preguntas vuelvan a aparecer (no hereda "completado").
+            onboarding.reset();
+        }
+    }, [activeParticipantId, onboarding]);
+
+    const handleSkipUserPicker = useCallback(() => {
+        // "Omitir" cierra el selector. Si no hay un participante activo (p. ej.
+        // primer arranque sin elegir perfil), se selecciona el perfil anónimo
+        // por defecto (Anónimo/Estudiante) para que siempre haya una sesión
+        // válida con la que navegar/escuchar. Si ya hay uno activo, se mantiene.
+        const finish = () => {
+            setNewProfilePending(false);
+            setPickerMode(false);
+        };
+        const hasActive =
+            activeParticipantId && activeParticipantId !== DEFAULT_ONBOARDING_USER;
+        if (hasActive) {
+            finish();
+            return;
+        }
+        void participants
+            .findAnonymous()
+            .then((anon) => {
+                if (!anon) {
+                    finish();
+                    return;
+                }
+                setActiveUser(undefined, anon.id);
+                setActiveParticipantId(anon.id);
+                finish();
+            })
+            .catch(() => finish());
+    }, [activeParticipantId, participants, setActiveUser, setActiveParticipantId]);
+
+    // Al completar el onboarding (ya sea en modo "crear perfil nuevo" o en el
+    // primer arranque sin participantes) se registra al participante con el
+    // nombre capturado, se siembra su onboarding (completado) en Dexie v14 y
+    // queda como usuario activo. Esto elimina el "estado fantasma": el primer
+    // usuario deja de quedar atrapado en localStorage completado sin perfil.
+    useEffect(() => {
+        const hasAnyParticipant = participants.participants.length >= 1;
+        if (hasAnyParticipant) firstProfileResolvedRef.current = true;
+        if (!onboarding.state.completed || registerProfileRef.current) return;
+        const isCreatingProfile = newProfilePending;
+        const isFirstRun = !hasAnyParticipant && !firstProfileResolvedRef.current;
+        if (!isCreatingProfile && !isFirstRun) return;
+        firstProfileResolvedRef.current = true;
+        const captureKey = nameCaptureKey(onboarding.config.steps);
+        const name = captureKey ? onboarding.state.captured[captureKey] : undefined;
+        if (!name) return;
+        // El rol se deriva de la respuesta "¿Niño o adulto?" (config-driven vía
+        // multiuser.kindToRole) → el navegador se customiza con defaultsByRole.
+        const kind = onboarding.state.captured['kind'];
+        const kindToRole = (FLU_CONFIG as any).multiuser?.kindToRole || {};
+        const role = resolveKindRole(kind, kindToRole);
+        registerProfileRef.current = true;
+        let cancelled = false;
+        // Si el nombre capturado coincide con el perfil anónimo por defecto
+        // (config-driven vía multiuser.skipDefaults.anonymousName), NO se crea
+        // un participante nuevo: se selecciona el Anónimo que ya existe como
+        // semilla (seedAnonymous) y queda como activo.
+        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
+        const isAnonymous = name.trim().toLowerCase() === anonymousName.toLowerCase();
+        const activate = (id: string) => {
+            setActiveUser(undefined, id);
+            setActiveParticipantId(id);
+            setNewProfilePending(false);
+        };
+        if (isAnonymous) {
+            void participants
+                .findAnonymous()
+                .then(async (anon) => {
+                    if (cancelled) return;
+                    if (anon) {
+                        await onboarding.persistForParticipant(anon.id);
+                        if (cancelled) return;
+                        activate(anon.id);
+                    } else {
+                        setNewProfilePending(false);
+                    }
+                })
+                .catch(() => setNewProfilePending(false))
+                .finally(() => {
+                    registerProfileRef.current = false;
+                });
+            return () => {
+                cancelled = true;
+            };
+        }
+        void participants
+            .register({ name, role })
+            .then(async (result) => {
+                if (cancelled) return;
+                if (!result.ok || !result.record) {
+                    setNewProfilePending(false);
+                    return;
+                }
+                await onboarding.persistForParticipant(result.record.id);
+                if (cancelled) return;
+                activate(result.record.id);
+            })
+            .catch(() => {
+                setNewProfilePending(false);
+            })
+            .finally(() => {
+                registerProfileRef.current = false;
+            });
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [newProfilePending, onboarding.state.completed, participants.participants.length]);
+
+    // Fase 2 — Exponer manejador de recordatorios por texto en window (E2E + integración).
+    // Se asigna en CREACIÓN (expresión de asignación), disponible desde el montaje,
+    // siguiendo el precedente de __fluOnContractResolved (línea 1105).
+    (window as any).__fluHandleReminderText = useCallback(
+        async (text: string, opts?: { personId?: string; personName?: string }) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const remindersConfig = (FLU_CONFIG as any).reminders || {};
+            const offsetMinutes = Number(remindersConfig.defaultReminderOffsetMinutes);
+            const defaultOffsetMs = (Number.isFinite(offsetMinutes) ? offsetMinutes : 10) * 60 * 1000;
+            const intent = parseReminderIntent(String(text || ''), { defaultOffsetMs });
+            if (!intent.handled) return '';
+            const data = intent.data || {};
+
+            switch (intent.action) {
+                case 'reminder.add': {
+                    const result = await reminders.add({
+                        text: data.text || '',
+                        dueAt: data.dueAt || Date.now() + defaultOffsetMs,
+                        personName: data.personName || opts?.personName,
+                        personId: opts?.personId,
+                    });
+                    if (!result.ok) {
+                        return lang === 'en'
+                            ? `I couldn't create the reminder${result.reason ? ` (${result.reason})` : ''}.`
+                            : `No pude crear el recordatorio${result.reason ? ` (${result.reason})` : ''}.`;
+                    }
+                    return lang === 'en'
+                        ? `Reminder created: ${data.text || ''}`
+                        : `Recordatorio creado: ${data.text || ''}`;
+                }
+                case 'reminder.list': {
+                    const pending = reminders.reminders.filter((r) => r.status === 'pending');
+                    if (pending.length === 0) {
+                        return lang === 'en'
+                            ? 'You have no pending reminders.'
+                            : 'No tienes recordatorios pendientes.';
+                    }
+                    const lines = pending
+                        .slice()
+                        .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0))
+                        .slice(0, 10)
+                        .map((r) => `${new Date(r.dueAt ?? 0).toLocaleString(lang)} — ${r.text}`);
+                    return lang === 'en'
+                        ? `Pending reminders: ${lines.join(' | ')}`
+                        : `Recordatorios pendientes: ${lines.join(' | ')}`;
+                }
+                case 'shopping.add': {
+                    const labels = String(data.label || '')
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                    if (labels.length === 0) return '';
+                    await shopping.addMany(labels);
+                    return lang === 'en'
+                        ? `Added to the shopping list: ${labels.join(', ')}`
+                        : `Agregué a la lista de compras: ${labels.join(', ')}`;
+                }
+                case 'shopping.toggle': {
+                    const label = String(data.label || '').trim();
+                    const item = shopping.items.find(
+                        (i) => i.label.toLowerCase() === label.toLowerCase(),
+                    );
+                    if (!item) {
+                        return lang === 'en'
+                            ? `"${label}" is not on the shopping list.`
+                            : `"${label}" no está en la lista de compras.`;
+                    }
+                    await shopping.toggle(item.id);
+                    return lang === 'en'
+                        ? `Updated "${item.label}".`
+                        : `Actualicé "${item.label}".`;
+                }
+                case 'shopping.remove': {
+                    const label = String(data.label || '').trim();
+                    const item = shopping.items.find(
+                        (i) => i.label.toLowerCase() === label.toLowerCase(),
+                    );
+                    if (!item) {
+                        return lang === 'en'
+                            ? `"${label}" is not on the shopping list.`
+                            : `"${label}" no está en la lista de compras.`;
+                    }
+                    await shopping.remove(item.id);
+                    return lang === 'en'
+                        ? `Removed "${item.label}" from the shopping list.`
+                        : `Quité "${item.label}" de la lista de compras.`;
+                }
+                case 'shopping.list': {
+                    const pending = shopping.items.filter((i) => !i.checked);
+                    if (pending.length === 0) {
+                        return lang === 'en'
+                            ? 'Your shopping list is empty.'
+                            : 'Tu lista de compras está vacía.';
+                    }
+                    const lines = pending.map((i) => i.label).join(' | ');
+                    return lang === 'en'
+                        ? `Shopping list: ${lines}`
+                        : `Lista de compras: ${lines}`;
+                }
+                default:
+                    return '';
+            }
+        },
+        [reminders, shopping, languageRef],
+    );
+
+    // Motor temporal genérico — manejador de alarmas y temporizadores por texto (E2E + integración).
+    // Un único motor (trigger + recurrencia + entrega) cubre recordatorios, despertador y temporizador.
+    (window as any).__fluHandleTemporalText = useCallback(
+        async (text: string) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const temporalConfig = (FLU_CONFIG as any).temporal || {};
+            const intent = parseTemporalIntent(String(text || ''), {
+                now: Date.now(),
+                defaultAlarmTimeOfDay: temporalConfig.defaultAlarmTimeOfDay,
+                defaultTimerMinutes: Number(temporalConfig.defaultTimerMinutes) || 5,
+            });
+            if (!intent.handled) return '';
+            const data = intent.data || {};
+
+            switch (intent.action) {
+                case 'alarm.add':
+                case 'timer.start': {
+                    const fallbackLabel =
+                        data.kind === 'alarm'
+                            ? (data.trigger as any)?.timeOfDay || ''
+                            : formatDurationMs((data.trigger as any)?.durationMs || 0, lang);
+                    const result = await temporals.add({
+                        kind: data.kind || 'alarm',
+                        label: data.label || fallbackLabel,
+                        trigger: data.trigger as any,
+                        recurrence: data.recurrence as any,
+                    });
+                    if (!result.ok) {
+                        if (result.reason === 'max-active') {
+                            return lang === 'en'
+                                ? "I can't keep more active temporal items."
+                                : 'No puedo guardar más ítems temporales activos.';
+                        }
+                        return lang === 'en'
+                            ? "I couldn't save the temporal item."
+                            : 'No pude guardar el ítem temporal.';
+                    }
+                    return intent.reply;
+                }
+                case 'alarm.list': {
+                    const pending = temporals.alarms.filter((a) => a.status === 'pending');
+                    if (pending.length === 0) {
+                        return lang === 'en'
+                            ? 'You have no alarms.'
+                            : 'No tienes alarmas.';
+                    }
+                    const lines = pending
+                        .slice()
+                        .sort((a, b) => a.nextAt - b.nextAt)
+                        .slice(0, 10)
+                        .map((a) => `${new Date(a.nextAt).toLocaleString(lang)} — ${a.label}`);
+                    return lang === 'en'
+                        ? `Alarms: ${lines.join(' | ')}`
+                        : `Tus alarmas: ${lines.join(' | ')}`;
+                }
+                case 'timer.list': {
+                    const pending = temporals.timers.filter((t) => t.status === 'pending');
+                    if (pending.length === 0) {
+                        return lang === 'en'
+                            ? 'You have no timers.'
+                            : 'No tienes temporizadores.';
+                    }
+                    const lines = pending
+                        .slice()
+                        .sort((a, b) => a.nextAt - b.nextAt)
+                        .slice(0, 10)
+                        .map((t) => `${formatDurationMs(t.trigger.durationMs ?? 0, lang)} — ${t.label}`);
+                    return lang === 'en'
+                        ? `Timers: ${lines.join(' | ')}`
+                        : `Tus temporizadores: ${lines.join(' | ')}`;
+                }
+                case 'alarm.cancel': {
+                    const target = data.cancelTarget as string | undefined;
+                    const matches = temporals.alarms.filter(
+                        (a) =>
+                            a.status === 'pending' &&
+                            (data.all || (target && a.trigger.timeOfDay === target)),
+                    );
+                    for (const a of matches) await temporals.cancel(a.id);
+                    return intent.reply;
+                }
+                case 'timer.cancel': {
+                    const target = data.cancelTarget as string | undefined;
+                    let matches = temporals.timers.filter(
+                        (t) =>
+                            t.status === 'pending' &&
+                            (data.all ||
+                                (target &&
+                                    formatDurationMs(t.trigger.durationMs ?? 0, lang) === target)),
+                    );
+                    if (!data.all && matches.length === 0) {
+                        const first = temporals.timers.find((t) => t.status === 'pending');
+                        if (first) matches = [first];
+                    }
+                    for (const t of matches) await temporals.cancel(t.id);
+                    return intent.reply;
+                }
+                default:
+                    return intent.reply;
+            }
+        },
+        [temporals, languageRef],
+    );
+
+    // P1-C (§1.3.4) — autoconocimiento por texto (E2E + integración).
+    // Fast-path local sin Gemini: detecta CONOCER_FLU, construye el manifiesto
+    // compilado desde la configuración y lo devuelve como respuesta hablada.
+    (window as any).__fluHandleConocerFluText = useCallback(
+        async (text: string) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const clean = String(text || '').trim();
+            if (!clean || !isSelfKnowledgeRequest(clean, lang)) return '';
+            const manifesto = buildSelfManifesto(lang);
+            auditLog.logEvent(
+                'command:conocer_flu',
+                'navigation',
+                uuidv4(),
+                {
+                    transcript: clean,
+                    response: manifesto,
+                    comando: 'CONOCER_FLU',
+                    phase: 'local-fast-path',
+                },
+                'CONOCER_FLU command executed (local)',
+            ).catch(console.error);
+            return manifesto;
+        },
+        [languageRef, auditLog],
+    );
+
+    // Fase 7 — Acciones de dispositivo — manejador por texto (E2E + integración).
+    // Resuelve el contacto en la agenda y abre el esquema de URL estándar
+    // (tel:, wa.me, sms:, mailto:) vía el servicio inyectado en el hook.
+    (window as any).__fluHandleDeviceActionText = useCallback(
+        async (text: string) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const intent = parseDeviceActionIntent(String(text || ''));
+            if (!intent.handled) return '';
+            if (!intent.action) return intent.reply;
+            const data: DeviceActionIntentData = intent.data || {
+                contactName: '',
+                message: undefined,
+            };
+            const name = data.contactName || '';
+            const result = await deviceActions.service.execute({
+                kind: intent.action.replace(/\.(start|send)$/, '') as
+                    | 'call'
+                    | 'whatsapp'
+                    | 'sms'
+                    | 'email',
+                contactName: name,
+                message: data.message,
+            });
+            if (result.ok) return intent.reply;
+            const voice =
+                (((FLU_CONFIG as any).deviceActions?.voice || {}) as any)[lang] || {};
+            const fill = (tpl?: string) => String(tpl || '').replace('{name}', name);
+            if (result.reason === 'missing-phone') {
+                return (
+                    fill(voice.missingPhone) ||
+                    (lang === 'en'
+                        ? `I don't have a phone number for ${name}.`
+                        : `No tengo teléfono de ${name}.`)
+                );
+            }
+            if (result.reason === 'missing-email') {
+                return (
+                    fill(voice.missingEmail) ||
+                    (lang === 'en'
+                        ? `I don't have an email for ${name}.`
+                        : `No tengo correo de ${name}.`)
+                );
+            }
+            return (
+                fill(voice.contactNotFound) ||
+                (lang === 'en'
+                    ? `I don't have ${name} in your contacts.`
+                    : `No tengo a ${name} en tus contactos.`)
+            );
+        },
+        [deviceActions, languageRef],
+    );
+
+    // Fase 6 — Notas por voz (E2E + integración + dictado por voz).
+    // Detecta intenciones de nota ("nota para el super", "nota para recordar un
+    // negocio", "apunta/anota {texto}", "nota: {texto}") y crea la nota vía
+    // notes.add. Devuelve la confirmación hablada (o '' si no aplica).
+    (window as any).__fluHandleNoteText = useCallback(
+        async (text: string, opts?: { personId?: string; personName?: string }) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const clean = String(text || '').trim();
+            if (!clean) return '';
+            const notesVoice = ((FLU_CONFIG as any).notes?.voice || {}) as any;
+            const addedMsg =
+                notesVoice.added ||
+                (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
+
+            // Normalizar para matching (minúsculas, sin acentos).
+            const norm = clean
+                .toLowerCase()
+                .replace(/[áàäâ]/g, 'a')
+                .replace(/[éèëê]/g, 'e')
+                .replace(/[íìïî]/g, 'i')
+                .replace(/[óòöô]/g, 'o')
+                .replace(/[úùüû]/g, 'u')
+                .replace(/[ñ]/g, 'n');
+
+            // 1) "nota para el super" / "nota para el supermercado" / "nota para comprar X"
+            //    → nota cuyo contenido es el resto tras el marcador.
+            const paraSuper = /^nota\s+(?:para|de)\s+(?:el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i.exec(norm);
+            if (paraSuper) {
+                const rest = paraSuper[2].trim();
+                const label = rest
+                    ? `Super: ${rest}`
+                    : lang === 'en'
+                        ? 'Supermarket'
+                        : 'Super';
+                const result = await notes.add({
+                    label,
+                    personId: opts?.personId,
+                    personName: opts?.personName,
+                });
+                if (!result.ok) {
+                    return lang === 'en'
+                        ? "I couldn't create the note."
+                        : 'No pude crear la nota.';
+                }
+                return addedMsg;
+            }
+
+            // 2) "nota para recordar un negocio" / "nota para recordar {X}"
+            const paraRecordar = /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i.exec(norm);
+            if (paraRecordar) {
+                const rest = paraRecordar[1].trim();
+                const label = rest
+                    ? `Recordar: ${rest}`
+                    : lang === 'en'
+                        ? 'Remember'
+                        : 'Recordar';
+                const result = await notes.add({
+                    label,
+                    personId: opts?.personId,
+                    personName: opts?.personName,
+                });
+                if (!result.ok) {
+                    return lang === 'en'
+                        ? "I couldn't create the note."
+                        : 'No pude crear la nota.';
+                }
+                return addedMsg;
+            }
+
+            // 3) "apunta/anota {texto}" o "nota: {texto}" o "nota {texto}"
+            const apunta = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i.exec(clean);
+            if (apunta) {
+                const label = apunta[1].trim();
+                if (!label) return '';
+                const result = await notes.add({
+                    label,
+                    personId: opts?.personId,
+                    personName: opts?.personName,
+                });
+                if (!result.ok) {
+                    return lang === 'en'
+                        ? "I couldn't create the note."
+                        : 'No pude crear la nota.';
+                }
+                return addedMsg;
+            }
+
+            return '';
+        },
+        [notes, languageRef],
+    );
+
+    // Fase 6 — Diario por voz (E2E + integración + dictado por voz).
+    // Detecta intenciones de diario ("escribe en el diario {contenido}",
+    // "guarda en el diario {contenido}", "diario: {contenido}") y crea la
+    // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
+    (window as any).__fluHandleDiaryText = useCallback(
+        async (text: string, opts?: { personId?: string; personName?: string }) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const clean = String(text || '').trim();
+            if (!clean) return '';
+            const diaryVoice = ((FLU_CONFIG as any).diary?.voice || {}) as any;
+            const addedMsg =
+                diaryVoice.entryAdded ||
+                (lang === 'en'
+                    ? 'Done, I saved your diary entry.'
+                    : 'Listo, he guardado tu entrada del diario.');
+
+            const norm = clean
+                .toLowerCase()
+                .replace(/[áàäâ]/g, 'a')
+                .replace(/[éèëê]/g, 'e')
+                .replace(/[íìïî]/g, 'i')
+                .replace(/[óòöô]/g, 'o')
+                .replace(/[úùüû]/g, 'u')
+                .replace(/[ñ]/g, 'n');
+
+            // "escribe/guarda/anota en el diario {contenido}"
+            const enDiario = /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
+            // "diario: {contenido}" / "diario {contenido}"
+            const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
+            const match = enDiario || diarioPrefijo;
+            if (!match) return '';
+
+            const content = match[1].trim();
+            if (!content) return '';
+            const today = new Date();
+            const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const result = await diary.addEntry({
+                date: dateKey,
+                content,
+                title: opts?.personName || undefined,
+            });
+            if (!result.ok) {
+                return lang === 'en'
+                    ? "I couldn't save the diary entry."
+                    : 'No pude guardar la entrada del diario.';
+            }
+            return addedMsg;
+        },
+        [diary, languageRef],
+    );
+
+    // Horario por dictado de voz (agregar / consultar / quitar). Motor
+    // determinista: parseHorarioIntent interpreta el transcript y aquí se
+    // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
+    (window as any).__fluHandleHorarioText = useCallback(
+        async (text: string) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const clean = String(text || '').trim();
+            if (!clean) return '';
+            const intent = parseHorarioIntent(clean);
+            if (!intent.handled) return '';
+            const data = intent.data || {};
+            const voice = ((FLU_CONFIG as any).horario?.voice || {}) as any;
+            const dayLabels = ((FLU_CONFIG as any).horario?.dayLabels as string[]) || [];
+            const dayLabel = (dia?: number) =>
+                dia && dia >= 1 && dia <= 7 ? dayLabels[dia] || String(dia) : '';
+
+            const pick = (obj: any, key: string, fallback: string) => {
+                const v = obj?.[key];
+                if (v && typeof v === 'object') return v[lang] || v.es || fallback;
+                return v || fallback;
+            };
+
+            switch (intent.action) {
+                case 'horario.add': {
+                    const materia = String(data.materia || '').trim();
+                    const dia = data.dia;
+                    const inicio = data.inicio;
+                    if (!materia || !dia || !inicio) return '';
+                    // Si no se dictó hora de fin, derivar una duración por defecto
+                    // (config data-driven, Regla #1: sin hardcode).
+                    let fin = data.fin;
+                    if (!fin) {
+                        const durMin = Number(
+                            ((FLU_CONFIG as any).horario?.defaultDurationMinutes) ?? 60,
+                        );
+                        const startMin = toMin(inicio);
+                        fin = toHHMM(startMin >= 0 ? startMin + (Number.isFinite(durMin) ? durMin : 60) : 0);
+                    }
+                    const result = await horario.add({
+                        materia,
+                        dia,
+                        inicio,
+                        fin,
+                        aula: data.aula,
+                    });
+                    if (!result.ok) {
+                        return pick(voice, 'addError', `No pude registrar "${materia}".`)
+                            .replace('{titulo}', materia);
+                    }
+                    const hora = fin ? `${inicio} a ${fin}` : `a las ${inicio}`;
+                    return pick(voice, 'addOk', `Listo, agregué "${materia}" al horario.`)
+                        .replace('{titulo}', materia)
+                        .replace('{dia}', dayLabel(dia))
+                        .replace('{hora}', hora);
+                }
+                case 'horario.query': {
+                    const all = horario.horario || [];
+                    if (all.length === 0) {
+                        return pick(voice, 'queryEmptyAll', 'Aún no hay entradas en el horario.');
+                    }
+                    let entries = all;
+                    if (data.dia) {
+                        entries = all.filter((r) => r.dia === data.dia);
+                    } else if (data.when === 'hoy') {
+                        entries = all.filter((r) => r.dia === diaDeFecha(Date.now()));
+                    } else if (data.when === 'manana') {
+                        const d = new Date(Date.now());
+                        d.setDate(d.getDate() + 1);
+                        entries = all.filter((r) => r.dia === diaDeFecha(d.getTime()));
+                    }
+                    if (entries.length === 0) {
+                        return pick(voice, 'queryEmpty', 'No tienes entradas registradas para ese día.');
+                    }
+                    const lines = entries
+                        .slice()
+                        .sort((a, b) => toMin(a.inicio) - toMin(b.inicio))
+                        .slice(0, 10)
+                        .map((r) => {
+                            const when = data.dia ? `${dayLabel(r.dia)} ` : '';
+                            const time = r.fin ? `${r.inicio} a ${r.fin}` : r.inicio;
+                            return `${when}${time} — ${r.materia}`;
+                        });
+                    return lang === 'en'
+                        ? `Schedule: ${lines.join(' | ')}`
+                        : `Horario: ${lines.join(' | ')}`;
+                }
+                case 'horario.remove': {
+                    const materia = String(data.materia || '').trim();
+                    if (!materia) return '';
+                    const norm = (s: string) =>
+                        String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    let matches = (horario.horario || []).filter(
+                        (r) => norm(r.materia) === norm(materia),
+                    );
+                    if (data.dia) matches = matches.filter((r) => r.dia === data.dia);
+                    if (matches.length === 0) {
+                        return pick(voice, 'removeNotFound', `No encontré "${materia}" en el horario.`)
+                            .replace('{titulo}', materia);
+                    }
+                    for (const m of matches) {
+                        await horario.remove(m.id);
+                    }
+                    return pick(voice, 'removeOk', `Listo, quité "${materia}" del horario.`)
+                        .replace('{titulo}', materia);
+                }
+                default:
+                    return '';
+            }
+        },
+        [horario, languageRef],
+    );
+
+    const onboardingOverlayLabels = (FLU_CONFIG as any).onboarding?.overlay || {};
+    const onboardingPrompt = onboarding.currentStep
+        ? promptForStep(
+              onboarding.currentStep,
+              language === 'en' ? 'en' : 'es',
+              onboarding.state.captured,
+          )
+        : '';
+
+    // Selector "¿Quién eres?": perfil activo + participantes registrados.
+    const userPickerConfig = ((FLU_CONFIG as any).onboarding?.userPicker) || {};
+    const activeParticipantName = useMemo(() => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
+        return participants.participants.find((p) => p.id === activeParticipantId)?.name;
+    }, [activeParticipantId, participants.participants]);
+    const activeParticipant = useMemo(
+        () => participants.participants.find((p) => p.id === activeParticipantId),
+        [activeParticipantId, participants.participants]
+    );
+    // Allowlist efectiva del Navegador Curado para el participante activo:
+    // perfil guardado > defaults por rol > perfil por defecto > fallback mínimo.
+    // Todo config-driven (FLU_CONFIG.browser), sin hardcode (Regla #1).
+    const resolvedBrowserAllowlist = useMemo<string[]>(() => {
+        const manual = browserProfiles.profiles.find((p) => p.id === activeParticipantId)?.allowlist;
+        if (Array.isArray(manual) && manual.length) return manual;
+        const roleAllowlist = activeParticipant?.role
+            ? (FLU_CONFIG as any).browser?.defaultsByRole?.[activeParticipant.role]?.allowlist
+            : undefined;
+        if (Array.isArray(roleAllowlist) && roleAllowlist.length) return roleAllowlist;
+        const defaultAllowlist = (FLU_CONFIG as any).browser?.defaultProfile?.allowlist;
+        if (Array.isArray(defaultAllowlist) && defaultAllowlist.length) return defaultAllowlist;
+        return ['wikipedia.org', 'educ.ar'];
+    }, [browserProfiles.profiles, activeParticipantId, activeParticipant]);
+    const userPicker = {
+        title: userPickerConfig.title || '¿Quién eres?',
+        subtitle: userPickerConfig.subtitle || '',
+        createLabel: userPickerConfig.createLabel || 'Crear perfil nuevo',
+        emptyHint: userPickerConfig.emptyHint as string | undefined,
+        selectPlaceholder: userPickerConfig.selectPlaceholder || 'Elegir usuario',
+        participants: participants.participants.map((p) => ({ id: p.id, name: p.name, role: p.role })),
+        activeId: activeParticipantId,
+        onCreate: handleCreateNewProfile,
+        onSelect: handleSelectActiveUser,
+    };
+
+    // ---- Puerta de identidad al arrancar (dispositivo compartido) ----
+    // Al abrir la app, si ya hay perfiles registrados (o quedó onboarding
+    // legacy completado sin perfil → "fantasma"), se pregunta "¿Quién eres?"
+    // para que cada persona de la familia elija o cree el suyo y no quede en
+    // la sesión del anterior. No se abre en el primer arranque (0 perfiles y
+    // onboarding sin completar → corren las preguntas de bienvenida).
+    const pickerAutoOpenDoneRef = useRef(false);
+    useEffect(() => {
+        if (pickerAutoOpenDoneRef.current) return;
+        if (participants.loading || !onboarding.ready) return;
+        pickerAutoOpenDoneRef.current = true;
+        if (!userPickerConfig.autoOpenOnLoad) return;
+        // Si ya hay un perfil activo persistido (el último que accedió) y
+        // sigue existiendo en la lista, se restaura esa sesión sin abrir el
+        // selector "¿Quién eres?".
+        const hasPersistedActive =
+            activeParticipantId &&
+            activeParticipantId !== DEFAULT_ONBOARDING_USER &&
+            participants.participants.some((p) => p.id === activeParticipantId);
+        if (hasPersistedActive) return;
+        const hasProfiles = participants.participants.length >= 1;
+        const ghostCompleted = onboarding.state.completed;
+        if (pickerMode || onboarding.visible) return;
+        if (hasProfiles || ghostCompleted) {
+            setPickerMode(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [participants.loading, onboarding.ready, onboarding.state.completed, pickerMode, onboarding.visible, activeParticipantId]);
+
     // ---- Branding Inteligente por Temporalidad + Ecológico ----
     const branding = useEnhancedBranding();
+
+    // ---- 1B: CRUD de paletas dinámicas (delegado a paletasCatalog) ----
+    const handleRegisterPaleta = useCallback(
+        async (data: PaletteDefinition): Promise<RegisterResult<PaletteDefinition>> => {
+            const result = await registerPaleta(data);
+            refreshPaletas();
+            return result;
+        },
+        [refreshPaletas]
+    );
+
+    const handleUpdatePaleta = useCallback(
+        async (id: string, data: PaletteDefinition): Promise<UpdateResult<PaletteDefinition>> => {
+            const result = await updatePaleta(id, data);
+            if (result.ok && branding.config.activeSeason === id && result.record.data.id !== id) {
+                // La temporada activa fue renombrada: su slug (id canónico) cambió → reactivar.
+                await branding.seasonalActions.setMode('manual');
+                await branding.seasonalActions.setActiveSeason(result.record.data.id);
+            }
+            refreshPaletas();
+            return result;
+        },
+        [refreshPaletas, branding]
+    );
+
+    const handleRemovePaleta = useCallback(
+        async (id: string): Promise<void> => {
+            await removePaleta(id);
+            refreshPaletas();
+        },
+        [refreshPaletas]
+    );
+
+    // Activa una temporada desde el panel (mismo patrón que el handler de voz).
+    const handleActivatePaleta = useCallback(
+        async (paletaId: string) => {
+            await branding.seasonalActions.setMode('manual');
+            await branding.seasonalActions.setActiveSeason(paletaId);
+        },
+        [branding]
+    );
 
     // ---- Handlers para digitalización OCR (tutor experience) ----
     // These must be declared AFTER speakFlu and injectDialogueEntry are available.
@@ -1675,6 +3287,7 @@ function App() {
             const mimeType = file.type;
             setUploadedImage({ dataUrl, mimeType, fileName: file.name });
             setIsAnalyzing(true);
+            setUploadError(null);
             try {
                 const profile = integrationStore.profile || 'tutor';
                 const result = await geminiService.generateVisionAnalysis(
@@ -1698,6 +3311,21 @@ function App() {
                         }
                     } catch (ocrErr) {
                         console.warn('[App] OCR fallback failed:', ocrErr);
+                    }
+                }
+
+                // ── Digitalización → horario (HOY): si el texto OCR parece un
+                //    horario (días + horas), se estructura de forma genérica y se
+                //    ofrece al usuario confirmarlo antes de escribir en fluDb.horario.
+                //    Sin hardcode: el parseo usa structureHorarioText (días/horas
+                //    configurables) y el guardado respeta el visto bueno del usuario.
+                if (result.texto_extraido) {
+                    const estructuradas = structureHorarioText(result.texto_extraido);
+                    if (estructuradas.length > 0) {
+                        setPendingHorarioImport(estructuradas);
+                        // Muestra el horario en modo "Hoy" para que el usuario vea
+                        // la confirmación del parseo junto a sus entradas del día.
+                        setHorarioModo('dia');
                     }
                 }
 
@@ -1731,6 +3359,7 @@ function App() {
                         tipo: 'text',
                         contenido: result.texto_extraido,
                         puntos_clave: result.problemas.length > 0 ? result.problemas : (result.instrucciones ? [result.instrucciones] : []),
+                        origen: 'ia',
                         timestamp: Date.now(),
                     });
 
@@ -1759,6 +3388,13 @@ function App() {
                 }
             } catch (err) {
                 console.warn('[App] Vision analysis failed:', err);
+                setUploadError(
+                    pickLabel(
+                        FLU_CONFIG.ui?.workspace?.uploadErrorImage,
+                        language,
+                        '⚠️ No se pudo leer la imagen. Verifica que sea un archivo JPG o PNG e inténtalo de nuevo.'
+                    )
+                );
             } finally {
                 setIsAnalyzing(false);
             }
@@ -1770,6 +3406,7 @@ function App() {
         setUploadedImage(null);
         setHomeworkContext(null);
         setIsAnalyzing(false);
+        setUploadError(null);
     }, []);
 
     // ---- Gemini error state (OS2 parity: geminiError) ----
@@ -1866,11 +3503,46 @@ function App() {
 
     // Comandos de voz → eventos de ventana (dispatch en useNavigationCommands).
     // Nombres centralizados en FLU_EVENTS (single source of truth, sin drift).
+    // "correcta tu propuesta de video": al generar por voz se captura el TEMA
+    // actual de la conversación (última pregunta del usuario + última respuesta
+    // de FLU) y se pasa como parametros.tema + contenido, para que el guion y el
+    // video NO sean una propuesta genérica sino sobre lo que se está hablando.
+    const buildGenerationTopic = useCallback((): { tema: string; contenido: string } => {
+        const state = useIntegrationStore.getState();
+        const history = state.conversationHistory || [];
+        let lastUser = '';
+        for (let i = history.length - 1; i >= 0; i--) {
+            const entry = history[i];
+            if (entry.role === 'user' || (entry.speakerName && entry.speakerName !== 'FLU')) {
+                lastUser = (entry.text || '').trim();
+                break;
+            }
+        }
+        const lastResp = (state.lastResponse || '').trim();
+        const artifact = state.workspaceArtifact;
+        // Prioridad de tema: artifacto activo (contenido/titulo) > última pregunta
+        const tema = (artifact?.titulo || artifact?.contenido || lastUser || lastResp || '').slice(0, 200);
+        const contenido = [lastUser, lastResp].filter(Boolean).join('\n').slice(0, 1200);
+        return { tema, contenido };
+    }, []);
+
     useEffect(() => {
         const onAnalyzeDocument = () => { docInputRef.current?.click(); };
         const onAnalyzeApp = () => { projectInputRef.current?.click(); };
-        const onGenerateDocument = () => { documentGeneration.generate('pdf'); };
-        const onGenerateVideo = () => { documentGeneration.generate('video'); };
+        const onGenerateDocument = () => {
+            const { tema, contenido } = buildGenerationTopic();
+            documentGeneration.generate('pdf', {
+                parametros: tema ? { tema } : {},
+                contenido: contenido || undefined,
+            });
+        };
+        const onGenerateVideo = () => {
+            const { tema, contenido } = buildGenerationTopic();
+            documentGeneration.generate('video', {
+                parametros: tema ? { tema } : {},
+                contenido: contenido || undefined,
+            });
+        };
         const offs = [
             onFluEvent(FLU_EVENTS.ANALYZE_DOCUMENT, onAnalyzeDocument),
             onFluEvent(FLU_EVENTS.ANALYZE_APP, onAnalyzeApp),
@@ -1879,7 +3551,7 @@ function App() {
         ];
         return () => offs.forEach((off) => off());
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [documentGeneration.generate]);
+    }, [documentGeneration.generate, buildGenerationTopic]);
 
     // ---- Auto-save session state on changes ----
     useSessionPersistence({
@@ -1920,6 +3592,22 @@ function App() {
         // Audit log
         auditLog.logChange('config', 'flu-participant', prev, newConfig, 'Participant config updated').catch(console.error);
     }, [participantConfig, auditLog]);
+
+    const handleSearchConfigChange = useCallback((overrides: SearchConfigOverrides) => {
+        const prev = searchOverrides;
+        setSearchOverrides(overrides);
+        saveSearchConfigOverrides(overrides);
+        // Audit log
+        auditLog.logChange('config', 'search', prev, overrides, 'Search config updated').catch(console.error);
+    }, [searchOverrides, auditLog]);
+
+    const handleSearchConfigReset = useCallback(() => {
+        const prev = searchOverrides;
+        clearSearchConfigOverrides();
+        setSearchOverrides({});
+        // Audit log
+        auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch(console.error);
+    }, [searchOverrides, auditLog]);
 
     const handleParticipantReset = useCallback(() => {
         const prev = participantConfig;
@@ -1970,9 +3658,27 @@ const {
     handleGenerateMinute,
     handleGenerateSummary,
     handleSaveMinute,
+    handleSaveConversationSummary,
     handleSelectMinuteHistory,
 } = minuteHandlers;
 
+    // ============================================================
+    // Paso 6: guardar el resumen de conversación UNA vez al cerrar
+    // la app (pagehide) como conocimiento de tipo 'conversacion'.
+    // ============================================================
+    const conversationSummarySavedRef = useRef(false);
+    useEffect(() => {
+        const onPageHide = () => {
+            if (conversationSummarySavedRef.current) return;
+            conversationSummarySavedRef.current = true;
+            // No bloquear el cierre: disparar en background y capturar errores.
+            handleSaveConversationSummary({ announce: false }).catch((err) => {
+                console.warn('[App] Conversation summary save on close failed:', err);
+            });
+        };
+        window.addEventListener('pagehide', onPageHide);
+        return () => window.removeEventListener('pagehide', onPageHide);
+    }, [handleSaveConversationSummary]);
 
     // ============================================================
     // OS2 parity: handleToggleListening (Gap D)
@@ -2145,19 +3851,53 @@ const {
     // Selecciona el idioma según la configuración actual del usuario
     // ============================================================
     const welcomeText = language === 'en' ? WELCOME_MESSAGE.en : WELCOME_MESSAGE.es;
+    // Frases de acuse transitorias (p. ej. "Preparando el video.") que FLU
+    // dice al reconocer un comando, pero que NO son una respuesta sustantiva.
+    // Se excluyen del campo de Respuesta para que, tras recargar la página,
+    // no quede un acuse de procesamiento como si fuera la última respuesta.
+    // Provienen de FLU_CONFIG.ui.commandSpeech (Rule #1: NO HARDCODE).
+    const transientAckPhrases = useMemo(() => {
+        const set = new Set<string>();
+        const speech = FLU_CONFIG.ui?.commandSpeech;
+        if (speech && typeof speech === 'object') {
+            Object.values(speech).forEach((phrase: any) => {
+                if (phrase && typeof phrase === 'object') {
+                    if (phrase.es) set.add(phrase.es);
+                    if (phrase.en) set.add(phrase.en);
+                } else if (typeof phrase === 'string' && phrase) {
+                    set.add(phrase);
+                }
+            });
+        }
+        return set;
+    }, []);
     const latestResponse = useMemo(() => {
+        const isTransient = (text: string) => !text || text === welcomeText || transientAckPhrases.has(text);
         const lastResp = integrationStore.lastResponse;
-        if (lastResp && lastResp !== welcomeText) return lastResp;
+        if (lastResp && !isTransient(lastResp)) {
+            // Respuesta sustantiva en vivo: marcamos que FLU ya respondió en esta
+            // carga de página (habilita el puente transitorio del historial).
+            hasLiveResponseRef.current = true;
+            return lastResp;
+        }
+        // Si FLU aún no ha respondido en ESTA carga de página (p. ej. tras un
+        // reload, donde lastResponse no se persiste), NO resucitar una respuesta
+        // vieja del historial persistido en IndexedDB. La pestaña «respuesta»
+        // debe quedar vacía hasta que FLU vuelva a hablar.
+        if (!hasLiveResponseRef.current) return '';
+        // Puente transitorio: dentro de una sesión activa, si la última respuesta
+        // fue un acuse transitorio (p. ej. "Preparando el video."), seguimos
+        // mostrando la última respuesta sustantiva del historial.
         const history = integrationStore.conversationHistory;
         for (let i = history.length - 1; i >= 0; i--) {
             const entry = history[i];
             if (entry.role === 'flu' || entry.speakerName === 'FLU') {
                 const text = entry.text || '';
-                if (text && text !== welcomeText) return text;
+                if (!isTransient(text)) return text;
             }
         }
         return '';
-    }, [integrationStore.lastResponse, integrationStore.conversationHistory, welcomeText]);
+    }, [integrationStore.lastResponse, integrationStore.conversationHistory, welcomeText, transientAckPhrases]);
 
     // ============================================================
     // OS2 parity: knowledgeBaseLabel
@@ -2291,7 +4031,7 @@ const {
                             <div className="session-chip">
                                 <span className="session-chip__icon">🌐</span>
                                 <span className="session-chip__label">Idioma</span>
-                                <select value={language} onChange={(e) => setLanguage(e.target.value as 'es' | 'en' | 'both')}>
+                                <select aria-label="Idioma" value={language} onChange={(e) => setLanguage(e.target.value as 'es' | 'en' | 'both')}>
                                     <option value="both">Ambos</option>
                                     <option value="es">Español</option>
                                     <option value="en">Inglés</option>
@@ -2301,6 +4041,7 @@ const {
                                 <span className="session-chip__icon">👤</span>
                                 <span className="session-chip__label">Perfil</span>
                                 <select
+                                    aria-label="Perfil"
                                     value={integrationStore.profile}
                                     onChange={(e) => {
                                         integrationStore.applyProfile(e.target.value as FluProfile);
@@ -2315,6 +4056,51 @@ const {
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+                            <div className="session-chip">
+                                <span className="session-chip__icon">🧑</span>
+                                <span className="session-chip__label">Usuario</span>
+                                <select
+                                    aria-label={userPickerConfig.title || 'Elegir usuario'}
+                                    value={
+                                        participants.participants.some((p) => p.id === activeParticipantId)
+                                            ? activeParticipantId
+                                            : ''
+                                    }
+                                    onChange={(e) => {
+                                        if (e.target.value === '__new__') {
+                                            handleCreateNewProfile();
+                                        } else if (e.target.value) {
+                                            handleSelectActiveUser(e.target.value);
+                                        }
+                                    }}
+                                    data-testid="user-picker-select"
+                                >
+                                    <option value="">
+                                        {activeParticipantName || userPickerConfig.selectPlaceholder || 'Elegir usuario'}
+                                    </option>
+                                    {participants.participants.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name}
+                                            {p.role ? ` · ${p.role}` : ''}
+                                        </option>
+                                    ))}
+                                    <option value="__new__">
+                                        {userPickerConfig.createShortLabel || '+ Nuevo'}
+                                    </option>
+                                </select>
+                                {participants.participants.some((p) => p.id === activeParticipantId) && (
+                                    <button
+                                        type="button"
+                                        className="session-chip__button session-chip__button--remove"
+                                        onClick={handleRemoveActiveUser}
+                                        data-testid="user-picker-remove"
+                                        aria-label={userPickerConfig.removeLabel || 'Borrar usuario'}
+                                        title={userPickerConfig.removeLabel || 'Borrar usuario'}
+                                    >
+                                        ×
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -2384,6 +4170,8 @@ const {
                                 <FluAvatarVoiceBridge
                                     height="100%"
                                     width="100%"
+                                    // ---- FASE P — Resolución del perfil de comunicación por persona ----
+                                    onResolveCommunicationProfile={onResolveCommunicationProfile}
                                     // ---- Branding Inteligente por Temporalidad ----
                                     brandingMode={branding.config.mode}
                                     brandingSeason={branding.config.activeSeason}
@@ -2400,7 +4188,7 @@ const {
 
                         {/* Panels Column (right) */}
                         <div className="app-panels-column">
-                            <FluShellTabs activeTab={activeTab} onTabChange={setActiveTab} />
+                            <FluShellTabs activeTab={activeTab} onTabChange={setActiveTab} visibleIds={visibleTabIds} />
 
                             <div className="flu-shell__tab-content">
                                 {/* Pizarron Tab (renamed from Workspace) */}
@@ -2416,247 +4204,93 @@ const {
                                     } as any}
                                 >
                                     <div className="frame-content frame-content--workspace">
-                                        <div className={`conversation-live-phrase${liveTranscript || integrationStore.currentTranscript ? '' : ' is-empty'}`}>
-                                            <div className="conversation-live-phrase__scroll">
-                                                <span>{liveTranscript || integrationStore.currentTranscript || '\u00a0'}</span>
-                                            </div>
-                                        </div>
-                                        <div className={`frame-content__response${latestResponse ? '' : ' is-empty'}`}>
-                                            <div className="frame-content__response-scroll">
-                                                <span>{latestResponse || '\u00a0'}</span>
-                                            </div>
-                                        </div>
-                                        <p className="frame-content__contenido">{integrationStore.workspaceArtifact?.contenido || FLU_CONFIG.ui?.workspace?.emptyContent || 'Sin contenido'}</p>
-                                        {/* ---- Generated Image Section (Pollinations) ---- */}
-                                        {workspaceImage.imageUrl && (
-                                            <div className="frame-content__generated-image">
-                                                <div className="generated-image__header">
-                                                    <h4 className="generated-image__title">Imagen Generada</h4>
-                                                    <button
-                                                        type="button"
-                                                        className="flu-btn flu-btn--small"
-                                                        onClick={() => workspaceImage.expand()}
-                                                        title="Ampliar imagen"
-                                                    >
-                                                        🔍 Ampliar
-                                                    </button>
-                                                </div>
-                                                <div className="generated-image__preview">
-                                                    <img
-                                                        className="generated-image__img"
-                                                        src={workspaceImage.imageUrl}
-                                                        alt={integrationStore.workspaceArtifact?.prompt_visual || 'Visual generado por Flu'}
-                                                        onLoad={() => {
-                                                            if (workspaceImage.loadTimeoutRef.current) {
-                                                                clearTimeout(workspaceImage.loadTimeoutRef.current);
-                                                                workspaceImage.loadTimeoutRef.current = 0;
-                                                            }
-                                                        }}
-                                                        onError={() => {
-                                                            console.warn('[App] Generated image failed to load:', workspaceImage.imageUrl);
-                                                            if (workspaceImage.loadTimeoutRef.current) {
-                                                                clearTimeout(workspaceImage.loadTimeoutRef.current);
-                                                                workspaceImage.loadTimeoutRef.current = 0;
-                                                            }
-                                                            workspaceImage.markFailed();
-                                                        }}
-                                                    />
-                                                    {workspaceImage.isLoading && (
-                                                        <div className="generated-image__loading">🔄 Generando imagen...</div>
-                                                    )}
-                                                    {workspaceImage.isFailed && (
-                                                        <div className="generated-image__error">
-                                                            <p>No se pudo cargar la imagen</p>
-                                                            <button
-                                                                type="button"
-                                                                className="flu-btn flu-btn--small"
-                                                                onClick={() => workspaceImage.retry()}
-                                                            >
-                                                                Reintentar
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* ---- Workspace Image Overlay (Ampliar) ---- */}
-                                        {workspaceImage.isExpanded && workspaceImage.imageUrl && (
-                                            <div
-                                                className="workspace-image-overlay"
-                                                role="dialog"
-                                                aria-modal="true"
-                                                aria-label="Imagen ampliada"
-                                                onClick={() => workspaceImage.close()}
-                                            >
-                                                <div
-                                                    className="workspace-image-container"
-                                                    onClick={(event) => event.stopPropagation()}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        className="workspace-image-close"
-                                                        onClick={() => workspaceImage.close()}
-                                                        aria-label="Cerrar imagen ampliada"
-                                                        title="Cerrar"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                    <img
-                                                        src={workspaceImage.imageUrl}
-                                                        alt={integrationStore.workspaceArtifact?.prompt_visual || 'Visual generado por Flu'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {Array.isArray(integrationStore.workspaceArtifact?.puntos_clave) && integrationStore.workspaceArtifact.puntos_clave.length > 0 ? (
-                                            <ul className="frame-content__list">
-                                                {integrationStore.workspaceArtifact.puntos_clave.map((item: string, index: number) => (
-                                                    <li key={`${item}-${index}`}>{item}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <p className="frame-content__empty">{FLU_CONFIG.ui?.workspace?.keyPointsEmpty || 'Sin puntos clave'}</p>
-                                        )}
-                                        {homeworkContext && (
-                                            <div className="frame-content__homework-analysis">
-                                                <h4 className="homework-analysis__title">📚 {homeworkContext.materia}</h4>
-                                                <p className="homework-analysis__detail"><span className="homework-analysis__label">Nivel:</span> {homeworkContext.nivel}</p>
-                                                <p className="homework-analysis__detail"><span className="homework-analysis__label">Instrucciones:</span> {homeworkContext.instrucciones}</p>
-                                                {homeworkContext.problemas.length > 0 && (
-                                                    <ul className="homework-analysis__list">
-                                                        {homeworkContext.problemas.map((p, i) => (
-                                                            <li key={i}>{p}</li>
-                                                        ))}
-                                                    </ul>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* ---- F1: Análisis de documentos ---- */}
-                                        <DocumentResultPanel
-                                            document={integrationStore.documentArtifact}
-                                            isAnalyzing={documentAnalysis.isAnalyzing}
-                                            warnings={documentAnalysis.warnings}
-                                            error={documentAnalysis.error}
-                                            onClear={documentAnalysis.clear}
+                                        <WorkspaceHub
+                                            searchAllowlist={resolvedBrowserAllowlist}
+                                            searchOverrides={searchOverrides}
+                                            workspaceArtifact={integrationStore.workspaceArtifact}
+                                            latestResponse={latestResponse}
+                                            liveTranscript={liveTranscript}
+                                            currentTranscript={integrationStore.currentTranscript}
+                                            isListening={voiceStatus === 'listening'}
+                                            homeworkContext={homeworkContext}
+                                            image={{
+                                                imageUrl: workspaceImage.imageUrl,
+                                                isLoading: workspaceImage.isLoading,
+                                                isFailed: workspaceImage.isFailed,
+                                                isExpanded: workspaceImage.isExpanded,
+                                                loadAttempt: workspaceImage.loadAttempt,
+                                                loadTimeoutRef: workspaceImage.loadTimeoutRef,
+                                                expand: workspaceImage.expand,
+                                                close: workspaceImage.close,
+                                                retry: workspaceImage.retry,
+                                                retryLoad: workspaceImage.retryLoad,
+                                                fallbackToGemini: workspaceImage.fallbackToGemini,
+                                            }}
+                                            document={{
+                                                isAnalyzing: documentAnalysis.isAnalyzing,
+                                                error: documentAnalysis.error,
+                                                warnings: documentAnalysis.warnings,
+                                                artifact: integrationStore.documentArtifact,
+                                                clear: documentAnalysis.clear,
+                                            }}
+                                            app={{
+                                                isAnalyzing: appAnalysis.isAnalyzing,
+                                                error: appAnalysis.error,
+                                                artifact: integrationStore.appAnalysisArtifact,
+                                                clear: appAnalysis.clear,
+                                            }}
+                                            generation={{
+                                                isGenerating: documentGeneration.isGenerating,
+                                                error: documentGeneration.error,
+                                                job: integrationStore.generationJob,
+                                                result: documentGeneration.result,
+                                                videoResult: documentGeneration.videoResult,
+                                                clear: documentGeneration.clear,
+                                            }}
+                                            horarioImport={{
+                                                pending: pendingHorarioImport,
+                                                busy: horarioImportBusy,
+                                                onConfirm: confirmHorarioImport,
+                                                onCancel: cancelHorarioImport,
+                                            }}
+                                            upload={{
+                                                uploadedImage,
+                                                isAnalyzing,
+                                                error: uploadError,
+                                                fileInputRef,
+                                                docInputRef,
+                                                projectInputRef,
+                                                onFileDrop: handleFileDrop,
+                                                onFileSelected: handleFileSelected,
+                                                onDocumentFileSelected: handleDocumentFileSelected,
+                                                onProjectFolderSelected: handleProjectFolderSelected,
+                                                onClearImage: handleClearImage,
+                                            }}
+                                            hoy={{
+                                                horario: {
+                                                    items: horario.horario,
+                                                    loading: horario.loading,
+                                                    modo: horarioModo,
+                                                    onModoChange: setHorarioModo,
+                                                    onAdd: async (input) => horario.add(input),
+                                                    onRemove: async (id) => {
+                                                        await horario.remove(id);
+                                                    },
+                                                },
+                                                diary: {
+                                                    entries: diary.entries,
+                                                    loading: diary.loading,
+                                                },
+                                                notes: {
+                                                    notes: notes.notes,
+                                                    loading: notes.loading,
+                                                    onToggle: async (id) => notes.toggle(id),
+                                                    onRemove: async (id) => notes.remove(id),
+                                                },
+                                                language,
+                                            }}
                                             language={language}
                                         />
-
-                                        {/* ---- F2: Análisis de app ---- */}
-                                        <AppAnalysisPanel
-                                            analysis={integrationStore.appAnalysisArtifact}
-                                            isAnalyzing={appAnalysis.isAnalyzing}
-                                            error={appAnalysis.error}
-                                            onClear={appAnalysis.clear}
-                                            language={language}
-                                        />
-
-                                        {/* ---- F3/F4: Generación de documentos y video ---- */}
-                                        <GenerationProgressPanel
-                                            job={integrationStore.generationJob}
-                                            result={documentGeneration.result}
-                                            videoResult={documentGeneration.videoResult}
-                                            isGenerating={documentGeneration.isGenerating}
-                                            error={documentGeneration.error}
-                                            language={language}
-                                            onClear={documentGeneration.clear}
-                                        />
-
-                                        {/* ---- Upload zone for image digitalization (OCR) — AL FINAL ---- */}
-                                        <div className="frame-content__upload-zone">
-                                            {!uploadedImage ? (
-                                                <div
-                                                    className="flu-upload-zone__drop"
-                                                    onDragOver={(e) => e.preventDefault()}
-                                                    onDrop={handleFileDrop}
-                                                >
-                                                    <p className="flu-upload-zone__hint">Arrastra una imagen aquí</p>
-                                                    <p className="flu-upload-zone__or">— o —</p>
-                                                    <div className="flu-upload-zone__buttons">
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn"
-                                                            onClick={() => fileInputRef.current?.click()}
-                                                        >
-                                                            📁 Seleccionar archivo
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn flu-btn--camera"
-                                                            onClick={() => cameraInputRef.current?.click()}
-                                                        >
-                                                            📷 Tomar foto
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn"
-                                                            onClick={() => docInputRef.current?.click()}
-                                                        >
-                                                            📄 Analizar documento
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn"
-                                                            onClick={() => projectInputRef.current?.click()}
-                                                        >
-                                                            🧭 Analizar app
-                                                        </button>
-                                                    </div>
-                                                    <input
-                                                        ref={fileInputRef}
-                                                        type="file"
-                                                        accept="image/*"
-                                                        hidden
-                                                        onChange={handleFileSelected}
-                                                    />
-                                                    <input
-                                                        ref={cameraInputRef}
-                                                        type="file"
-                                                        accept="image/*"
-                                                        capture="environment"
-                                                        hidden
-                                                        onChange={handleFileSelected}
-                                                    />
-                                                    <input
-                                                        ref={docInputRef}
-                                                        type="file"
-                                                        accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
-                                                        hidden
-                                                        onChange={handleDocumentFileSelected}
-                                                    />
-                                                    <input
-                                                        ref={projectInputRef}
-                                                        type="file"
-                                                        multiple
-                                                        hidden
-                                                        onChange={handleProjectFolderSelected}
-                                                        {...({ webkitdirectory: '', directory: '' } as any)}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="flu-upload-zone__preview">
-                                                    <img
-                                                        className="flu-upload-zone__img"
-                                                        src={uploadedImage.dataUrl}
-                                                        alt="Tarea subida"
-                                                    />
-                                                    <div className="flu-upload-zone__actions">
-                                                        {isAnalyzing && (
-                                                            <span className="flu-upload-zone__analyzing">🔍 Analizando con IA...</span>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn flu-btn--danger"
-                                                            onClick={handleClearImage}
-                                                        >
-                                                            ✕ Quitar
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
                                     </div>
                                 </PanelFrame>
                             </FluTabPanel>
@@ -2779,46 +4413,270 @@ const {
                                         onToggleExpand: handleToggleExpand,
                                     } as any}
                                 >
-                                    <FluSettingsPanel
-                                        language={language}
-                                        apiKey={apiKey}
-                                        textModel={textModel}
-                                        textApiUrl={textApiUrl}
-                                        imageModel={imageModel}
-                                        imageApiKey={imageApiKey}
-                                        imageApiUrl={imageApiUrl}
-                                        ocrApiKey={ocrApiKey}
-                                        ocrModel={ocrModel}
-                                        ocrApiUrl={ocrApiUrl}
-                                        voices={voices}
-                                        handleTextModelCommit={handleTextModelCommit}
-                                        handleTextApiKeyCommit={handleTextApiKeyCommit}
-                                        handleTextApiUrlCommit={handleTextApiUrlCommit}
-                                        handleImageModelCommit={handleImageModelCommit}
-                                        handleImageApiKeyCommit={handleImageApiKeyCommit}
-                                        handleImageApiUrlCommit={handleImageApiUrlCommit}
-                                        handleOcrApiKeyCommit={handleOcrApiKeyCommit}
-                                        handleOcrModelCommit={handleOcrModelCommit}
-                                        handleOcrApiUrlCommit={handleOcrApiUrlCommit}
-                                        onClearCache={handleClearCache}
-                                        wakeWords={wakeWords}
-                                        setWakeWords={setWakeWords}
-                                        debugLogsEnabled={debugLogsEnabled}
-                                        setDebugLogsEnabled={setDebugLogsEnabled}
-                                        handleParticipantConfigChange={handleParticipantConfigChange}
-                                        // ---- Branding Inteligente por Temporalidad ----
-                                        brandingMode={branding.config.mode}
-                                        brandingSeason={branding.config.activeSeason}
-                                        brandingBirthday={branding.config.birthday}
-                                        brandingCelebrateAchievements={branding.config.celebrateAchievements}
-                                        onBrandingModeChange={branding.seasonalActions.setMode}
-                                        onBrandingSeasonChange={branding.seasonalActions.setActiveSeason}
-                                        onBrandingBirthdayChange={branding.seasonalActions.setBirthday}
-                                        onBrandingCelebrateAchievementsChange={branding.seasonalActions.setCelebrateAchievements}
-                                        // ---- AI Provider Selection ----
-                                        aiProvider={aiProvider}
-                                        setAiProvider={handleSetAiProvider}
-                                    />
+                                    {/* Sub-menú de secciones (Fase A2): mismas pestañas, mismo estado, agrupación visual */}
+                                    <div className="flu-settings-groups" role="tablist" aria-label="Secciones de ajustes">
+                                        {SETTINGS_GROUPS.map((group) => (
+                                            <button
+                                                key={group.id}
+                                                type="button"
+                                                role="tab"
+                                                aria-selected={settingsGroup === group.id}
+                                                className={[
+                                                    'flu-settings-groups__pill',
+                                                    settingsGroup === group.id ? 'is-active' : '',
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' ')}
+                                                onClick={() => setSettingsGroup(group.id)}
+                                            >
+                                                {group.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Grupo FLU — identidad, voz y participantes */}
+                                    <div
+                                        className="flu-settings-group flu-settings-group--flu"
+                                        role="tabpanel"
+                                        hidden={settingsGroup !== 'flu'}
+                                    >
+                                        <FluSettingsPanel
+                                            language={language}
+                                            apiKey={apiKey}
+                                            textModel={textModel}
+                                            textApiUrl={textApiUrl}
+                                            geminiApiKey={geminiApiKey}
+                                            imageModel={imageModel}
+                                            imageApiKey={imageApiKey}
+                                            imageApiUrl={imageApiUrl}
+                                            ocrApiKey={ocrApiKey}
+                                            ocrModel={ocrModel}
+                                            ocrApiUrl={ocrApiUrl}
+                                            voices={voices}
+                                            handleTextModelCommit={handleTextModelCommit}
+                                            handleTextApiKeyCommit={handleTextApiKeyCommit}
+                                            handleTextApiUrlCommit={handleTextApiUrlCommit}
+                                            handleGeminiApiKeyCommit={handleGeminiApiKeyCommit}
+                                            handleImageModelCommit={handleImageModelCommit}
+                                            handleImageApiKeyCommit={handleImageApiKeyCommit}
+                                            handleImageApiUrlCommit={handleImageApiUrlCommit}
+                                            handleOcrApiKeyCommit={handleOcrApiKeyCommit}
+                                            handleOcrModelCommit={handleOcrModelCommit}
+                                            handleOcrApiUrlCommit={handleOcrApiUrlCommit}
+                                            onClearCache={handleClearCache}
+                                            wakeWords={wakeWords}
+                                            setWakeWords={setWakeWords}
+                                            debugLogsEnabled={debugLogsEnabled}
+                                            setDebugLogsEnabled={setDebugLogsEnabled}
+                                            handleParticipantConfigChange={handleParticipantConfigChange}
+                                            // ---- Branding Inteligente por Temporalidad ----
+                                            brandingMode={branding.config.mode}
+                                            brandingSeason={branding.config.activeSeason}
+                                            brandingBirthday={branding.config.birthday}
+                                            brandingCelebrateAchievements={branding.config.celebrateAchievements}
+                                            onBrandingModeChange={branding.seasonalActions.setMode}
+                                            onBrandingSeasonChange={branding.seasonalActions.setActiveSeason}
+                                            onBrandingBirthdayChange={branding.seasonalActions.setBirthday}
+                                            onBrandingCelebrateAchievementsChange={branding.seasonalActions.setCelebrateAchievements}
+                                            // ---- AI Provider Selection ----
+                                            aiProvider={aiProvider}
+                                            setAiProvider={handleSetAiProvider}
+                                        />
+                                        <AmbientesPanel
+                                            ambientes={ambientes}
+                                            activeAmbienteId={activeAmbienteId}
+                                            onActivate={handleActivateAmbiente}
+                                            dynamicIds={dynamicAmbienteIds}
+                                            onRegister={handleRegisterAmbiente}
+                                            onUpdate={handleUpdateAmbiente}
+                                            onRemove={handleRemoveAmbiente}
+                                        />
+                                        <PaletasPanel
+                                            paletas={paletas}
+                                            activeSeason={branding.config.activeSeason}
+                                            onActivate={handleActivatePaleta}
+                                            dynamicIds={dynamicPaletaIds}
+                                            onRegister={handleRegisterPaleta}
+                                            onUpdate={handleUpdatePaleta}
+                                            onRemove={handleRemovePaleta}
+                                        />
+                                        <AssistantSettingsPanel
+                                            channel={notificationCenter.channel}
+                                            onChannelChange={notificationCenter.setChannel}
+                                            dnd={dnd}
+                                            onSetDndEnabled={dndActions.setEnabled}
+                                            onSetDndSchedule={dndActions.setSchedule}
+                                            onSetDndAllowUrgent={dndActions.setAllowUrgent}
+                                            onReplayOnboarding={onboarding.reset}
+                                        />
+                                        <ParticipantsPanel
+                                            items={participants.participants}
+                                            loading={participants.loading}
+                                            birthdayNear={birthdayNear}
+                                            profiles={communicationProfiles.profiles}
+                                            onSetManual={communicationProfiles.setManual}
+                                            onResetPerson={communicationProfiles.resetPerson}
+                                            onRegister={async (input) => {
+                                                return participants.register(input);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await browserProfiles.reset(id);
+                                                await participants.remove(id);
+                                            }}
+                                        />
+                                        <BrowserProfilesPanel
+                                            items={participants.participants}
+                                            loading={participants.loading}
+                                            profiles={browserProfiles.profiles}
+                                            onUpdate={browserProfiles.update}
+                                            onReset={browserProfiles.reset}
+                                        />
+                                        <SearchControlCenter
+                                            overrides={searchOverrides}
+                                            onChange={handleSearchConfigChange}
+                                            onReset={handleSearchConfigReset}
+                                            allowlist={resolvedBrowserAllowlist}
+                                            sites={searchSites.sites}
+                                            dynamicDomains={searchSites.dynamicDomains}
+                                            loading={searchSites.loading}
+                                            onRegister={searchSites.register}
+                                            onUpdate={searchSites.update}
+                                            onRemove={searchSites.remove}
+                                        />
+                                    </div>
+
+                                    {/* Grupo Mis datos — agenda personal */}
+                                    <div
+                                        className="flu-settings-group flu-settings-group--data"
+                                        role="tabpanel"
+                                        hidden={settingsGroup !== 'data'}
+                                    >
+                                        <ContactsPanel
+                                            participants={participants.participants}
+                                            contacts={contacts.contacts}
+                                            birthdayNear={contacts.birthdayNear}
+                                            loading={contacts.loading}
+                                            onAdd={async (input) => {
+                                                await contacts.addContact(input);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await contacts.removeContact(id);
+                                            }}
+                                        />
+                                        <DiaryPanel
+                                            participants={participants.participants}
+                                            entries={diary.entries}
+                                            loading={diary.loading}
+                                            onAdd={async (input) => {
+                                                await diary.addEntry(input);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await diary.removeEntry(id);
+                                            }}
+                                        />
+                                        <MoodPanel
+                                            participants={participants.participants}
+                                            moods={mood.moods}
+                                            summary={mood.summary}
+                                            loading={mood.loading}
+                                            onLog={async (input) => {
+                                                await mood.logMood(input);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await mood.removeMood(id);
+                                            }}
+                                        />
+                                        <HabitsPanel
+                                            participants={participants.participants}
+                                            stats={habits.stats}
+                                            loading={habits.loading}
+                                            onAdd={async (input) => {
+                                                await habits.addGoal(input);
+                                            }}
+                                            onCheckIn={async (goalId, date, done) => {
+                                                await habits.checkIn({ goalId, date, done });
+                                            }}
+                                            onStatus={async (id, status) => {
+                                                await habits.updateStatus(id, status);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await habits.removeGoal(id);
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Grupo Gestión — recordatorios, compras y reconocimiento */}
+                                    <div
+                                        className="flu-settings-group flu-settings-group--management"
+                                        role="tabpanel"
+                                        hidden={settingsGroup !== 'management'}
+                                    >
+                                        <RemindersPanel
+                                            items={reminders.reminders}
+                                            loading={reminders.loading}
+                                            pendingCount={reminders.pendingCount}
+                                            authorFilter={remindersAuthor}
+                                            authorPending={pendingByAuthor}
+                                            onAuthorFilterChange={setRemindersAuthor}
+                                            onAdd={async (input) => {
+                                                await reminders.add(input);
+                                            }}
+                                            onComplete={async (id) => {
+                                                await reminders.complete(id);
+                                            }}
+                                            onDismiss={async (id) => {
+                                                await reminders.dismiss(id);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await reminders.remove(id);
+                                            }}
+                                        />
+                                        <TemporalItemsPanel
+                                            alarms={temporals.alarms}
+                                            timers={temporals.timers}
+                                            loading={temporals.loading}
+                                            onAdd={async (input) => {
+                                                await temporals.add(input);
+                                            }}
+                                            onCancel={async (id) => {
+                                                await temporals.cancel(id);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await temporals.remove(id);
+                                            }}
+                                        />
+                                        <ShoppingPanel
+                                            items={shopping.items}
+                                            loading={shopping.loading}
+                                            remainingCount={shopping.remainingCount}
+                                            onAdd={async (label) => {
+                                                await shopping.addMany(
+                                                    label
+                                                        .split(',')
+                                                        .map((s) => s.trim())
+                                                        .filter(Boolean),
+                                                );
+                                            }}
+                                            onToggle={async (id) => {
+                                                await shopping.toggle(id);
+                                            }}
+                                            onRemove={async (id) => {
+                                                await shopping.remove(id);
+                                            }}
+                                            onClearChecked={async () => {
+                                                await shopping.clearChecked();
+                                            }}
+                                        />
+                                        <MateriaGrisPanel
+                                            participants={participants.participants}
+                                            leaderboard={materiaGris.leaderboard}
+                                            history={materiaGris.history}
+                                            loading={materiaGris.loading}
+                                            onAward={async (input) => {
+                                                await materiaGris.awardPoints(input);
+                                            }}
+                                        />
+                                    </div>
                                 </PanelFrame>
                             </FluTabPanel>
 
@@ -2844,6 +4702,60 @@ const {
 
             {/* Indicador visual de procesamiento de IA (FLU pensando) */}
             <ThinkingIndicator />
+
+            {/* Onboarding de primera configuración (no bloqueante) */}
+            <OnboardingOverlay
+                visible={pickerMode || onboarding.visible}
+                prompt={onboardingPrompt}
+                stepType={onboarding.currentStep?.type}
+                progress={onboarding.progress}
+                skipLabel={onboardingOverlayLabels.skipLabel || 'Omitir'}
+                progressLabel={onboardingOverlayLabels.progressLabel || 'Paso {current} de {total}'}
+                listeningHint={onboardingOverlayLabels.listeningHint || 'Escucho…'}
+                typingHint={onboardingOverlayLabels.typingHint || 'Escribe tu respuesta…'}
+                listening={onboardingVoice.listening}
+                interim={onboardingVoice.interim}
+                canVoice={onboardingVoiceEnabled && onboardingVoice.supported}
+                micLabel={onboardingOverlayLabels.micLabel || 'Hablar'}
+                stopLabel={onboardingOverlayLabels.stopLabel || 'Detener'}
+                onVoiceStart={onboardingVoice.start}
+                onVoiceStop={onboardingVoice.stop}
+                submitLabel={onboardingOverlayLabels.submitLabel || 'Enviar'}
+                continueLabel={onboardingOverlayLabels.continueLabel || 'Continuar'}
+                acceptLabel={onboardingOverlayLabels.acceptLabel || 'Sí'}
+                rejectLabel={onboardingOverlayLabels.rejectLabel || 'No'}
+                accept={onboarding.currentStep?.accept}
+                reject={onboarding.currentStep?.reject}
+                stepOptions={onboarding.currentStep?.options?.map((o) => ({
+                    value: o.value,
+                    label: language === 'en' ? o.en : o.es,
+                }))}
+                pickerMode={pickerMode}
+                userPicker={userPicker}
+                onAnswer={onboarding.answer}
+                onSkip={pickerMode ? handleSkipUserPicker : onboarding.skip}
+            />
+
+            {/* Stack de notificaciones (toasts) */}
+            {notificationCenter.toasts.length > 0 && (
+                <div className="flu-notifications" data-testid="notification-toasts">
+                    {notificationCenter.toasts.map((toast) => (
+                        <button
+                            key={toast.id}
+                            type="button"
+                            className={
+                                'flu-notification' +
+                                (toast.urgent ? ' flu-notification--urgent' : '')
+                            }
+                            onClick={() => notificationCenter.dismiss(toast.id)}
+                            data-testid={`notification-toast-${toast.id}`}
+                        >
+                            <strong>{toast.title}</strong>
+                            <span>{toast.body}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
                 </main>
 
             {/* Workspace Image Overlay removed - now displayed in workspace panel */}

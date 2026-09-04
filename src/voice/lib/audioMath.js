@@ -88,7 +88,7 @@ export function looksLikeEchoResponse(responseText = '', transcriptText = '') {
 export function isVisualRequestText(text = '') {
   const normalized = cleanForSpeech(String(text || ''))
   if (!normalized) return false
-  return /\b(im[aá]gen(?:es)?|fotos?|image|visual|diagrama|diagram|illustration|ilustraci[oó]n|grafico|gr[aá]fico|dibuj\w*|render)\b/i.test(
+  return /\b(im[aá]gen(?:es)?|fotos?|images?|photos?|pictures?|image|visual|diagrama|diagram|illustration|ilustraci[oó]n|grafico|gr[aá]fico|dibuj\w*|render)\b/i.test(
     normalized,
   )
 }
@@ -170,6 +170,8 @@ function collectVoiceCommandPhrases(voiceCommands = {}) {
     ...(voiceCommands.analyzeApp || []),
     ...(voiceCommands.generateDocument || []),
     ...(voiceCommands.generateVideo || []),
+    // P1-C (§1.3.3, opcional): incluir CONOCER_FLU en "esperar frase incompleta".
+    ...(voiceCommands.conocerFlu || []),
   ]
 }
 
@@ -201,11 +203,24 @@ function shouldAckFluWake(afterWake = '', voiceCommands = {}) {
   return isListeningAckPhrase(text, voiceCommands.listeningAckPhrases)
 }
 
-function matchesCommandPhrase(text = '', phrases = []) {
+function matchesCommandPhrase(text = '', phrases = [], options = {}) {
   const normalizedText = normalizeVoiceCommandText(text)
   if (!normalizedText || !phrases.length) return false
 
-  return phrases.some((phrase) => normalizedText === normalizeVoiceCommandText(phrase))
+  const exact = phrases.some((phrase) => normalizedText === normalizeVoiceCommandText(phrase))
+  if (exact) return true
+
+  // Coincidencia tolerante (solo para navegación): si la frase canónica es
+  // suficientemente larga y aparece dentro del texto, se considera un match.
+  // Evita falsos positivos con frases cortas o ambiguas.
+  if (options.tolerant) {
+    return phrases.some((phrase) => {
+      const normalizedPhrase = normalizeVoiceCommandText(phrase)
+      return normalizedPhrase.length >= 6 && normalizedText.includes(normalizedPhrase)
+    })
+  }
+
+  return false
 }
 
 const RECOVERABLE_RECOGNITION_ERRORS = new Set(['no-speech', 'aborted', 'network'])
@@ -503,6 +518,26 @@ export function detectUiVoiceCommand(text = '', commands = {}) {
   // F4 — generación de video
   if (matchesCommandPhrase(text, commands.generateVideo || [])) {
     return 'GENERAR_VIDEO'
+  }
+
+  // Navegación curada por voz → resultado en el Pizarrón
+  // (modo tolerante: acepta frases conversacionales como "navegar a wikipedia")
+  if (matchesCommandPhrase(text, commands.navigate || [], { tolerant: true })) {
+    return 'NAVEGAR'
+  }
+
+  // F3 — búsqueda web por voz ("buscá capital de Francia") → resultados en el
+  // Pizarrón. Se evalúa DESPUÉS de NAVEGAR para que "navega en wikipedia"
+  // gane sobre "buscar en wikipedia" (orden por especificidad).
+  if (matchesCommandPhrase(text, commands.buscar || [], { tolerant: true })) {
+    return 'BUSCAR'
+  }
+
+  // P1-C (§1.3.3) — autoconocimiento (CONOCER_FLU): fast-path local sin IA.
+  // Se evalúa después de NAVEGAR/BUSCAR; responde enumerando las capacidades
+  // reales de FLU compiladas desde la configuración (nunca hardcode).
+  if (matchesCommandPhrase(text, commands.conocerFlu || [], { tolerant: true })) {
+    return 'CONOCER_FLU'
   }
 
   return null

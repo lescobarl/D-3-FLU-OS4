@@ -260,7 +260,7 @@ export const FLU_CONFIG = {
     liveTranscriptDebounceMs: 32,
     /** @deprecated Interinos ya no escriben al log; solo aplica a rutas legacy. */
     streamLogThrottleMs: 0,
-    wakeWordCommandDelayMs: 1500,
+    wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 500,
     conversationMinMsAfterLastResult: 30,
     interimFinalizeGraceMs: 25,
@@ -394,6 +394,8 @@ export const FLU_CONFIG = {
     minImportance: 0.3,
     injectOnStartup: true,
     proactiveReminder: true,
+    // Fase 2 — B5: cuántos recordatorios pendientes se fusionan a la agenda.
+    maxReminders: 5,
   },
   vision: {
     temperature: 0.2,
@@ -424,7 +426,1123 @@ export const FLU_CONFIG = {
         es: '¡Qué onda! Ya vi lo que subiste. {materia}{nivel}{items} ¿Por dónde le entramos?',
         en: 'Hey! I checked out what you uploaded. {materia}{nivel}{items} Where should we start?',
       },
+      animador: {
+        es: '¡Hola, hola! Ya vi lo que trajiste. {materia}{nivel}{items} ¡Vamos a sacarle jugo a esto y a pasarla bien!',
+        en: 'Hello, hello! I already took a look at what you brought. {materia}{nivel}{items} Let’s make the most of it and have a great time!',
+      },
     },
+  },
+  /**
+   * Asistente personal — Fase 1: notificaciones, onboarding y no molestar.
+   * Regla #1: toda la lógica de asistente vive aquí (config-driven, sin hardcode).
+   */
+  notifications: {
+    enabled: true,
+    channel: 'toast', // 'none' | 'toast' | 'voice' | 'both'
+    toastDurationMs: 6000,
+    defaultTitle: 'FLU OS4',
+    maxStack: 4,
+    webApiEnabled: true,
+    mutedCategories: [],
+  },
+  /**
+   * Recordatorios — Fase 2 (B1/B3/B4): persistencia, scheduler y parser de intención.
+   * Regla #1: sin hardcode — el comportamiento vive aquí (config-driven).
+   */
+  reminders: {
+    enabled: true,
+    defaultReminderOffsetMinutes: 10,
+    maxPerDay: 20,
+    defaultCategory: 'reminder',
+    soundEnabled: true,
+    // Scheduler (useReminders): frecuencia de revisión y margen de vencimiento.
+    tickMs: 30000,
+    graceMs: 15000,
+    ui: {
+      panelTitle: 'Recordatorios',
+      addLabel: 'Recordarme',
+      placeholder: 'Ej: Reunión con el equipo mañana a las 9',
+      whenLabel: '¿Cuándo?',
+      whenPlaceholder: 'Ej: mañana a las 9',
+      emptyState: 'No tienes recordatorios pendientes.',
+      pendingLabel: 'Pendientes',
+      doneLabel: 'Completados',
+      removeTitle: 'Eliminar recordatorio',
+      completeTitle: 'Marcar como hecho',
+      dismissTitle: 'Descartar',
+    },
+    voice: {
+      added: 'Listo, te lo recuerdo.',
+      removed: 'Recordatorio eliminado.',
+      completed: 'Recordatorio completado.',
+      due: 'Tienes un recordatorio pendiente:',
+    },
+  },
+  /**
+   * Horario de clases — Pizarrón (Fase 1C): clases semanales por voz/OCR.
+   * Regla #1: sin hardcode — días, modos, colores y textos config-driven.
+   * - grid: rango de horas y altura por hora de la vista semanal (mockup).
+   * - colores: catálogo de tokens válidos para el registro (m1..m6).
+   * - colorHex: mapa token → color hex para render (sin hardcode en la UI).
+   */
+  horario: {
+    enabled: true,
+    // Horario GENÉRICO (Regla #1: sin hardcode): sirve para cualquier
+    // tipo de agenda (escuela, consultas médicas/IMSS, trabajo, gimnasio…).
+    // Cada entrada lleva un campo libre "tipo" que etiqueta su naturaleza;
+    // "titulo" es el rótulo legible y "lugar" la ubicación opcional.
+    maxClasesPorDia: 16,
+    diaMin: 1,
+    diaMax: 7,
+    defaultColor: 'm1',
+    // Duración por defecto (minutos) cuando se dicta una entrada sin hora de fin.
+    defaultDurationMinutes: 60,
+    // Etiquetas sugeridas para el campo libre "tipo" (NO son obligatorias).
+    tipoSuggestions: ['escuela', 'medico', 'trabajo', 'gimnasio', 'personal'],
+    grid: {
+      startHour: 7,
+      endHour: 18,
+      hourPx: 40,
+    },
+    dayLabels: ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
+    dayLabelsShort: ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+    modos: {
+      semana: { label: 'Semana' },
+      dia: { label: 'Hoy' },
+      proxima: { label: 'Próximo' },
+      recordatorios: { label: 'Recordatorios' },
+    },
+    colores: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'],
+    colorHex: {
+      m1: '#4f8cff',
+      m2: '#ff7a59',
+      m3: '#35c48b',
+      m4: '#ffc53d',
+      m5: '#b48cff',
+      m6: '#ff6b9d',
+    },
+    ui: {
+      panelTitle: 'Horario',
+      horaLabel: 'Hora',
+      modoLabel: 'Ver',
+      emptyState:
+        'Sin entradas registradas. Pide a Flu que lea una foto de tu horario o dicta una cita o actividad.',
+      addLabel: 'Registrar',
+      tituloLabel: 'Título',
+      tipoLabel: 'Tipo (opcional)',
+      tipoPlaceholder: 'p. ej. escuela, médico, trabajo…',
+      diaLabel: 'Día',
+      inicioLabel: 'Inicio',
+      finLabel: 'Fin',
+      lugarLabel: 'Lugar (opcional)',
+      colorLabel: 'Color',
+      proximaEmpty: 'No hay ninguna entrada próxima registrada.',
+      hoyEmpty: 'Hoy no tienes entradas registradas.',
+      semanaTitle: 'Horario de la semana',
+      diaTitle: 'Entradas de hoy',
+      proximaTitle: 'Próxima entrada',
+      recordatoriosTitle: 'Recordatorios',
+      removeTitle: 'Quitar entrada',
+      editTitle: 'Editar entrada',
+      // Badge de resumen y confirmación visual al registrar una entrada.
+      claseCountOne: { es: '1 entrada', en: '1 entry' },
+      claseCountMany: { es: 'entradas', en: 'entries' },
+      addedToast: {
+        es: '✓ "{titulo}" agregado el {dia} {hora}',
+        en: '✓ "{titulo}" added on {dia} {hora}',
+      },
+      addError: {
+        es: 'No se pudo registrar la entrada. Inténtalo de nuevo.',
+        en: 'Could not register the entry. Try again.',
+      },
+      // Confirmación del parseo de una imagen de horario (digitalización → HOY).
+      // Genérico: sin hardcode; el usuario da su visto bueno antes de escribir.
+      importTitle: {
+        es: 'Leí un horario en la imagen',
+        en: 'I read a schedule in the image',
+      },
+      importHint: {
+        es: 'Revisa las entradas detectadas. Al confirmar, quedan registradas en tu horario.',
+        en: 'Review the detected entries. On confirm, they are saved to your schedule.',
+      },
+      importConfirm: {
+        es: 'Confirmar y guardar',
+        en: 'Confirm and save',
+      },
+      importCancel: {
+        es: 'Descartar',
+        en: 'Discard',
+      },
+      importBusy: {
+        es: 'Guardando…',
+        en: 'Saving…',
+      },
+      importCountOne: {
+        es: '1 entrada detectada',
+        en: '1 entry detected',
+      },
+      importCountMany: {
+        es: '{n} entradas detectadas',
+        en: '{n} entries detected',
+      },
+    },
+    voice: {
+      added: 'Listo, registré la entrada.',
+      removed: 'Entrada eliminada.',
+      updated: 'Entrada actualizada.',
+      empty: 'Aún no hay entradas en el horario.',
+      proxima: 'Tu próxima entrada es',
+      hoy: 'Hoy tienes estas entradas:',
+      structureEmpty: 'No encontré entradas legibles en la imagen.',
+      structureOk: 'Registré las entradas del horario.',
+      // Respuestas deterministas para el dictado por voz (agregar/consultar/quitar).
+      addOk: {
+        es: 'Listo, agregué "{titulo}" el {dia} {hora} al horario.',
+        en: 'Done, I added "{titulo}" on {dia} {hora} to the schedule.',
+      },
+      addError: {
+        es: 'No pude registrar "{titulo}". Inténtalo de nuevo.',
+        en: 'I could not register "{titulo}". Try again.',
+      },
+      removeOk: {
+        es: 'Listo, quité "{titulo}" del horario.',
+        en: 'Done, I removed "{titulo}" from the schedule.',
+      },
+      removeNotFound: {
+        es: 'No encontré "{titulo}" en el horario.',
+        en: 'I could not find "{titulo}" in the schedule.',
+      },
+      askMateria: {
+        es: '¿Qué entrada quieres agregar al horario y en qué día?',
+        en: 'What entry would you like to add to the schedule, and on which day?',
+      },
+      askMateriaRemove: {
+        es: '¿Qué entrada quieres quitar del horario?',
+        en: 'Which entry would you like to remove from the schedule?',
+      },
+      askTime: {
+        es: '¿A qué hora es "{titulo}" el {dia}?',
+        en: 'At what time is "{titulo}" on {dia}?',
+      },
+      queryEmpty: {
+        es: 'No tienes entradas registradas para ese día.',
+        en: 'You have no entries registered for that day.',
+      },
+      queryEmptyAll: {
+        es: 'Aún no hay entradas en el horario.',
+        en: 'There are no entries in the schedule yet.',
+      },
+    },
+  },
+  /**
+   * Panel lateral "Hoy" — Pizarrón consolidado (Paso 2): vista compacta
+   * de HOY (próxima clase + clases del día), DIARIO (+ánimo) y NOTAS.
+   * Regla #1: sin hardcode — etiquetas viven aquí (config-driven).
+   */
+  hoy: {
+    enabled: true,
+    ui: {
+      panelTitle: 'Hoy',
+      hoyTitle: { es: '📅 Hoy', en: '📅 Today' },
+      diarioTitle: { es: '📓 Diario', en: '📓 Diary' },
+      notasTitle: { es: '📝 Notas', en: '📝 Notes' },
+      verHorarioCompleto: { es: 'Ver horario completo', en: 'View full schedule' },
+      proximaClaseLabel: { es: 'Próxima', en: 'Next' },
+      clasesHoyLabel: { es: 'Clases de hoy', en: "Today's classes" },
+      sinProxima: { es: 'Sin próxima entrada', en: 'No upcoming entry' },
+      sinClasesHoy: { es: 'Hoy no tienes entradas', en: 'No entries today' },
+      sinDiario: { es: 'Aún no hay entradas en el diario.', en: 'No diary entries yet.' },
+      sinNotas: { es: 'Aún no hay notas.', en: 'No notes yet.' },
+      sinAnimo: { es: 'Sin ánimo', en: 'No mood' },
+      notasPendientes: { es: 'pendientes', en: 'pending' },
+    },
+  },
+  /**
+   * Motor temporal genérico — Alarmas, despertador y temporizador (Fase 1D).
+   * Regla #1: sin hardcode — un solo motor (trigger + recurrencia + entrega)
+   * para recordatorios, alarmas y temporizadores. Textos config-driven.
+   * - tickMs: frecuencia del scheduler; graceMs: margen de vencimiento.
+   * - maxActive: tope de ítems activos (alarmas + temporizadores).
+   * - sound: tono WebAudio (frecuencia, duración, beeps, pausa, volumen).
+   */
+  temporal: {
+    enabled: true,
+    tickMs: 30000,
+    graceMs: 15000,
+    maxActive: 12,
+    defaultAlarmTimeOfDay: '07:00',
+    defaultTimerMinutes: 5,
+    sound: {
+      frequency: 880,
+      durationMs: 500,
+      beeps: 3,
+      gapMs: 150,
+      volume: 0.4,
+    },
+    ui: {
+      panelTitle: 'Alarmas y temporizadores',
+      alarmsLabel: 'Alarmas',
+      timersLabel: 'Temporizadores',
+      addAlarmLabel: 'Poner alarma',
+      addTimerLabel: 'Poner temporizador',
+      alarmPlaceholder: 'Ej: a las 7 de la mañana',
+      timerPlaceholder: 'Ej: de 5 minutos para la pasta',
+      emptyState: 'No tienes alarmas ni temporizadores.',
+      emptyAlarms: 'Sin alarmas.',
+      emptyTimers: 'Sin temporizadores.',
+      timeLabel: 'Hora',
+      durationLabel: 'Duración',
+      labelLabel: 'Nombre (opcional)',
+      remainingLabel: 'Restante',
+      nextAtLabel: 'Próximo disparo',
+      addTitle: 'Agregar',
+      removeTitle: 'Eliminar',
+      cancelTitle: 'Cancelar',
+    },
+    voice: {
+      alarmAdded: 'Listo, puse la alarma.',
+      alarmCancelled: 'Alarma cancelada.',
+      alarmDue: 'Es la hora de tu alarma:',
+      timerStarted: 'Listo, puse el temporizador.',
+      timerCancelled: 'Temporizador cancelado.',
+      timerDue: '¡Tiempo cumplido!',
+      needAlarmTime: '¿A qué hora quieres la alarma?',
+      needTimerDuration: '¿De cuánto tiempo quieres el temporizador?',
+    },
+  },
+  /**
+   * Lista de compras — Fase 2 (B10): persistencia y parser de intención.
+   * Regla #1: sin hardcode — textos de UI y voz config-driven.
+   */
+  shopping: {
+    enabled: true,
+    defaultCategory: 'shopping',
+    ui: {
+      panelTitle: 'Lista de compras',
+      addLabel: 'Agregar',
+      placeholder: 'Ej: leche, huevos, pan',
+      emptyState: 'Tu lista de compras está vacía.',
+      pendingLabel: 'Pendientes',
+      checkedLabel: 'Comprados',
+      addHint: 'Escribe un ítem y presiona Enter',
+      removeTitle: 'Quitar de la lista',
+      clearCheckedLabel: 'Vaciar comprados',
+    },
+    voice: {
+      added: 'Listo, lo agregué a la lista de compras.',
+      removed: 'Listo, lo quité de la lista.',
+      toggled: 'Listo, lo marqué.',
+      cleared: 'Lista de compras vaciada.',
+    },
+  },
+  /**
+   * Notas — Pizarrón consolidado (Paso 1/2): lista de notas rápidas
+   * con marca de hecho (done) y vínculo opcional a participante.
+   * Regla #1: sin hardcode — etiquetas viven aquí (config-driven).
+   */
+  notes: {
+    enabled: true,
+    ui: {
+      panelTitle: 'Notas',
+      addLabel: 'Agregar',
+      placeholder: 'Escribe una nota…',
+      emptyState: 'Aún no hay notas.',
+      pendingLabel: 'Pendientes',
+      doneLabel: 'Hechas',
+      addHint: 'Escribe una nota y presiona Enter',
+      removeTitle: 'Quitar nota',
+      clearDoneLabel: 'Vaciar hechas',
+    },
+    voice: {
+      added: 'Listo, lo agregué a las notas.',
+      removed: 'Listo, lo quité de las notas.',
+      toggled: 'Listo, lo marqué.',
+      cleared: 'Notas hechas vaciadas.',
+    },
+  },
+  /**
+   * Multi-usuario — Fase 3 (A3/A4/A5/B9): participantes del hogar/equipo.
+   * Regla #1: sin hardcode — roles, voces y textos viven aquí (config-driven).
+   * - A3: speakerLabel vincula la diarización ↔ participante
+   * - A4: profileId asigna un perfil de asistente al participante
+   * - A5: defaultVoice + resolveTtsVoice definen el TTS por participante
+   * - B9: birthdayAdvanceDays define la ventana de cumpleaños próximos
+   */
+  multiuser: {
+    enabled: true,
+    roles: ['Familiar', 'Amigo', 'Estudiante', 'Colega', 'Otro'],
+    // "¿Niño o Adulto?" (onboarding) → rol del participante. El rol customiza
+    // el navegador automáticamente (defaultsByRole en browser). Config-driven.
+    kindToRole: {
+      'niño': 'Estudiante', 'niña': 'Estudiante', 'nino': 'Estudiante',
+      'chico': 'Estudiante', 'chica': 'Estudiante', 'estudiante': 'Estudiante',
+      'adulto': 'Familiar', 'adulta': 'Familiar', 'adult': 'Familiar', 'familiar': 'Familiar',
+    },
+    // Defaults al pulsar "Omitir" en el onboarding. Fail-safe: omitir SIEMPRE
+    // cae al perfil más restrictivo (Estudiante). "Familiar" solo se obtiene
+    // respondiendo explícitamente "adulto". Config-driven (Regla #1).
+    skipDefaults: {
+      anonymousName: 'Anónimo',
+      defaultKind: 'niño',
+    },
+    birthdayAdvanceDays: 7,
+    defaultVoice: {
+      voiceURI: '',
+      voiceName: 'Voz por defecto',
+      rate: 1.0,
+      pitch: 1.0,
+      volume: 1.0,
+    },
+    ui: {
+      panelTitle: 'Participantes',
+      addLabel: 'Registrar participante',
+      nameLabel: 'Nombre',
+      namePlaceholder: 'Ej: Mamá, Luis, Ana…',
+      roleLabel: 'Rol',
+      roleEmpty: '— Sin rol —',
+      birthdayLabel: 'Cumpleaños',
+      speakerLabel: 'Etiqueta de hablante',
+      speakerPlaceholder: 'Ej: Hablante_01 (opcional)',
+      birthdayNearLabel: 'Cumpleaños próximos',
+      listLabel: 'Participantes registrados',
+      emptyState: 'Aún no hay participantes.',
+      removeTitle: 'Eliminar participante',
+    },
+    voice: {
+      registered: 'Listo, he registrado a',
+      removed: 'He eliminado a',
+      birthdayNear: 'Cumpleaños próximos:',
+    },
+  },
+  /**
+   * Personalización profunda — FASE P: perfil de comunicación por persona.
+   * Regla #1: sin hardcode — niveles, tonos y TTS viven aquí (config-driven).
+   * - defaultTone/defaultExplanationLevel: valores por defecto (fuente de verdad)
+   * - ttsRateByLevel: multiplicador de rate de voz por nivel de explicación
+   */
+  personalization: {
+    enabled: true,
+    defaultTone: 'friendly',
+    defaultExplanationLevel: 'detallado',
+    ttsRateByLevel: {
+      simple: 1.05,
+      detallado: 0.95,
+      avanzado: 0.9,
+    },
+    ui: {
+      panelTitle: 'Perfil de comunicación',
+      explanationLabel: 'Nivel de explicación',
+      toneLabel: 'Tono',
+      autoHint: 'FLU aprende el nivel y el tono según cómo le hablas.',
+      autoPlaceholder: 'Auto',
+      resetLabel: 'Restablecer',
+      emptyState: 'Sin perfil personalizado todavía.',
+      level_simple: 'Simple',
+      level_detallado: 'Detallado',
+      level_avanzado: 'Avanzado',
+      tone_formal: 'Formal',
+      tone_casual: 'Casual',
+      tone_friendly: 'Amigable',
+      tone_professional: 'Profesional',
+      tone_energetic: 'Enérgico',
+      tone_calm: 'Sereno',
+    },
+  },
+  /**
+   * Navegador curado — Punto 2: perfil del navegador por persona.
+   * Regla #1: sin hardcode — catálogo de categorías, defaults por rol y
+   * textos viven aquí (config-driven). La resolución es:
+   * manual (perfil guardado) > defaults por rol > default global.
+   */
+  browser: {
+    enabled: true,
+    // Esquema base para los enlaces de la allowlist. Solo el esquema (sin "://")
+    // para no hardcodear URLs (Regla #1) y poder cambiarlo desde config.
+    allowlistScheme: 'https',
+    // Verbos/conectores para extraer el nombre del sitio de una frase por voz
+    // ("navega en wikipedia" → "wikipedia", "open youtube" → "youtube").
+    // Sin hardcode: la lista vive aquí y puede afinarse desde config.
+    siteStopwords: [
+      // español
+      'navega', 'navegar', 'navegá', 'navegamos',
+      'vamos', 'vayamos', 'ir',
+      'abre', 'abrir', 'abrí', 'abrimos', 'abreme',
+      'busca', 'buscar', 'búscame', 'buscame', 'busquemos',
+      'explora', 'explorar', 'visita', 'visitar', 'mira', 'mirar',
+      'la', 'el', 'los', 'las', 'en', 'a', 'de', 'al', 'del',
+      'por', 'favor', 'me', 'página', 'pagina', 'páginas',
+      'web', 'sitio', 'site', 'hacia', 'sobre',
+      // inglés
+      'navigate', 'go', 'open', 'the', 'to', 'page', 'website',
+    ],
+    categories: {
+      educacion: 'Educación',
+      cuentos: 'Cuentos',
+      juegos: 'Juegos',
+      musica: 'Música',
+    },
+    readingLevels: ['simple', 'detallado', 'avanzado'],
+    languages: ['es', 'en', 'both'],
+    // Idioma (F1): marcadores que el usuario dice por voz para pedir un
+    // idioma ("en inglés", "in english") y el mapeo idioma→subdominio de
+    // cada host ("wikipedia.org" → "es.wikipedia.org"). Regla #1: sin
+    // hardcode — todo vive aquí y puede afinarse desde config.
+    languageWords: {
+      es: ['en español', 'en castellano', 'español', 'castellano', 'habla español'],
+      en: ['in english', 'english please', 'english', 'en inglés', 'en ingles', 'speak english'],
+    },
+    languageHosts: {
+      'wikipedia.org': { es: 'es', en: 'en' },
+    },
+    defaultProfile: {
+      categories: ['educacion', 'cuentos'],
+      allowlist: ['wikipedia.org', 'educ.ar'],
+      readingLevel: 'detallado',
+      language: 'es',
+      homeTiles: ['educacion', 'cuentos'],
+    },
+    defaultsByRole: {
+      Estudiante: {
+        categories: ['educacion', 'cuentos', 'juegos'],
+        allowlist: ['wikipedia.org', 'educ.ar'],
+        readingLevel: 'simple',
+        language: 'es',
+        homeTiles: ['educacion', 'cuentos', 'juegos'],
+      },
+      Familiar: {
+        categories: ['educacion', 'cuentos', 'juegos', 'musica'],
+        allowlist: ['wikipedia.org', 'educ.ar', 'youtube.com'],
+        readingLevel: 'detallado',
+        language: 'es',
+        homeTiles: ['educacion', 'cuentos', 'juegos', 'musica'],
+      },
+    },
+    ui: {
+      panelTitle: 'Navegador curado',
+      categoriesLabel: 'Categorías',
+      allowlistLabel: 'Sitios permitidos',
+      readingLevelLabel: 'Nivel de lectura',
+      languageLabel: 'Idioma',
+      resetLabel: 'Restablecer',
+      emptyState: 'Sin perfil de navegador todavía.',
+      level_simple: 'Simple',
+      level_detallado: 'Detallado',
+      level_avanzado: 'Avanzado',
+      // Resultado por voz → Pizarrón (Regla #1: sin hardcode).
+      resultTitle: 'Navegación curada',
+      blockedTitle: 'Sitio no permitido',
+      invalidTitle: 'No pude entender la dirección',
+      pointSite: 'Sitio: ',
+      pointUrl: 'URL: ',
+      pointQuery: 'Búsqueda: ',
+      // Modo lectura curada: cuando el sitio NO puede cargarse (red, timeout).
+      fetchErrorTitle: 'No pude cargar el sitio',
+    },
+    // Modo lectura curada: proxy server-side que trae el contenido real
+    // del sitio permitido al Pizarrón (evita CORS). Todo config-driven.
+    fetch: {
+      endpoint: '/api/browser/fetch',
+      timeoutMs: 10000,
+      maxContentChars: 6000,
+      maxParagraphs: 40,
+    },
+    // Tiles de inicio del navegador curado. Única fuente de verdad de los
+    // sitios built-in (los consume el catálogo de búsqueda vía panel.tiles).
+    panel: {
+      tiles: [
+        { id: 'wikipedia', label: 'Wikipedia', domain: 'wikipedia.org', category: 'educacion' },
+        { id: 'educar', label: 'Educ.ar', domain: 'educ.ar', category: 'educacion' },
+        { id: 'youtube', label: 'YouTube', domain: 'youtube.com', category: 'musica' },
+      ],
+    },
+    catalog: {
+      panelTitle: 'Catálogo de sitios',
+      subtitle: 'Sitios aprobados que FLU puede usar en voz, barra, tiles y resultados',
+      hint: 'Agregar un sitio aprobado lo hace aparecer en voz, barra, tiles y resultados sin tocar código.',
+      domainLabel: 'Dominio',
+      domainPlaceholder: 'Ej: khanacademy.org',
+      labelLabel: 'Nombre',
+      labelPlaceholder: 'Ej: Khan Academy',
+      categoriesLabel: 'Categorías',
+      languagesLabel: 'Idiomas',
+      levelLabel: 'Nivel de lectura',
+      approvedLabel: 'Aprobado',
+      createLabel: 'Nuevo sitio',
+      saveLabel: 'Guardar cambios',
+      cancelLabel: 'Cancelar',
+      editLabel: 'Editar',
+      removeLabel: 'Eliminar',
+      builtinBadge: 'Sistema',
+      emptyState: 'No hay sitios en el catálogo todavía.',
+      loadingLabel: 'Cargando catálogo…',
+      duplicateError: 'Ya existe un sitio con ese dominio.',
+      reservedError: 'Ese dominio pertenece al catálogo de sistema y no se puede modificar.',
+      notFoundError: 'El sitio no existe o ya fue eliminado.',
+      invalidError: 'Revisa los datos: el dominio debe ser un host válido (ej: wikipedia.org).',
+      removeConfirm: '¿Eliminar este sitio del catálogo?',
+      lang_es: 'Español',
+      lang_en: 'English',
+      lang_both: 'Ambos',
+    },
+    // Fase 3 — Buscador web + IA (núcleo Google).
+    // Regla #1: sin hardcode — proveedores, etiquetas, límites y fallback
+    // viven aquí (config-driven) y pueden afinarse sin tocar código.
+    search: {
+      // Proxy server-side (mismo patrón que browser.fetch, evita CORS).
+      endpoint: '/api/search/web',
+      // F4 — Endpoints por tipo (el hook los usa; `endpoint` se conserva
+      // para compatibilidad con lecturas previas).
+      endpoints: {
+        web: '/api/search/web',
+        images: '/api/search/images',
+        video: '/api/search/video',
+      },
+      timeoutMs: 8000,
+      providers: {
+        // Proveedores web sin clave (Wikipedia + DuckDuckGo IA).
+        // Los placeholders {q} y {lang} los rellena buildProviderRequest
+        // (searchSession.ts). "{lang}" también fija el subdominio de
+        // Wikipedia (es/en) según el idioma pedido (F1).
+        web: [
+          {
+            id: 'wikipedia',
+            label: 'Wikipedia',
+            enabled: true,
+            endpoint: 'https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={q}&format=json',
+            articleUrlTemplate: 'https://{lang}.wikipedia.org/wiki/{title}',
+            key: null,
+            maxResults: 5,
+            timeoutMs: 8000,
+          },
+          {
+            id: 'duckduckgo',
+            label: 'DuckDuckGo',
+            enabled: true,
+            endpoint: 'https://api.duckduckgo.com/?q={q}&format=json&no_html=1&kl={lang}',
+            key: null,
+            maxResults: 5,
+            timeoutMs: 8000,
+          },
+        ],
+        // F4 — Imágenes y vídeo.
+        // Sin clave: Wikimedia Commons (images/video, keyless) funciona de
+        // serie. YouTube Data API v3 (con key) e Invidious (self-hosted)
+        // están deshabilitados por defecto; al activarlos y poner su key/
+        // instancia, FLU los usa junto a Commons (todo config-driven).
+        images: [
+          {
+            id: 'commons',
+            label: 'Wikimedia Commons',
+            enabled: true,
+            endpoint: 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={q}&gsrnamespace=6&prop=imageinfo&iiprop=url|size&iiurlwidth=320&format=json',
+            key: null,
+            maxResults: 12,
+            timeoutMs: 8000,
+          },
+        ],
+        video: [
+          {
+            id: 'commons-video',
+            label: 'Commons vídeo',
+            enabled: true,
+            endpoint: 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={q}%20filetype:video&gsrnamespace=6&prop=videoinfo&viprop=url|size&viurlwidth=320&format=json',
+            key: null,
+            maxResults: 6,
+            timeoutMs: 8000,
+          },
+          {
+            id: 'youtube',
+            label: 'YouTube',
+            enabled: false,
+            key: '',
+            endpoint: 'https://www.googleapis.com/youtube/v3/search?part=snippet&q={q}&type=video&maxResults={n}&key={key}',
+            embedUrlTemplate: 'https://www.youtube.com/embed/{id}',
+            watchUrlTemplate: 'https://www.youtube.com/watch?v={id}',
+            maxResults: 6,
+            timeoutMs: 8000,
+          },
+          {
+            id: 'invidious',
+            label: 'Invidious',
+            enabled: false,
+            key: null,
+            endpoint: '',
+            maxResults: 6,
+            timeoutMs: 8000,
+          },
+        ],
+      },
+      maxResultsByType: {
+        web: 8,
+        images: 24,
+        video: 8,
+      },
+      aiOverview: {
+        enabled: true,
+        maxChars: 2000,
+        overviewMaxResults: 8,
+      },
+      // Clave de mensaje en search.ui: cuándo no hay resultados, FLU usa
+      // este texto como respuesta en el Pizarrón (sin hardcode).
+      offlineFallback: 'respuesta_ia_sin_resultados',
+      // Etiquetas de la UI del buscador (Regla #1: sin hardcode).
+      ui: {
+        searchLabel: 'Buscar',
+        // Placeholder vacío: el usuario pidió quitar el texto "Busca algo"
+        // de la barra de búsqueda del Pizarrón. Se conserva un aria-label
+        // accesible separado (searchInputLabel) para no perder la etiqueta.
+        placeholder: '',
+        searchInputLabel: 'Buscar en el Pizarrón',
+        languageLabel: 'Idioma',
+        levelLabel: 'Nivel',
+        level_simple: 'Simple',
+        level_detallado: 'Detallado',
+        level_avanzado: 'Avanzado',
+        aiOverviewTitle: 'Puntos clave',
+        readLabel: '🗣️ Leer',
+        listenLabel: '🔊 Escuchar',
+        tabAll: 'Todos',
+        tabImages: 'Imágenes',
+        tabVideo: 'Vídeos',
+        allowedBadge: 'Permitido',
+        blockedBadge: 'NO permitido',
+        blockedSuffix: '🔒',
+        openLabel: 'Abrir',
+        emptyState: 'No encontré resultados para esta búsqueda.',
+        errorState: 'No pude completar la búsqueda. Inténtalo de nuevo.',
+        loadingLabel: 'Buscando…',
+        loadingSpinnerLabel: 'Cargando resultados…',
+        // Chrome-like UX (auditoría F5): inicio con sugerencias, metadatos
+        // de resultados, reintento y pista de pestañas deshabilitadas.
+        startTitle: '¿Qué querés buscar hoy?',
+        startHint: 'Escribí tu consulta o elegí una sugerencia.',
+        suggestions: [
+          '¿Qué es la fotosíntesis?',
+          'Historia de la Luna',
+          'Animales en peligro de extinción',
+          'Cuentos para leer',
+        ],
+        resultsMetaOne: '{count} resultado para "{query}"',
+        resultsMetaMany: '{count} resultados para "{query}"',
+        retryLabel: 'Reintentar',
+        errorHint: 'Comprobá tu conexión o intentá con otra consulta.',
+        emptyResultsTitle: 'Sin resultados',
+        emptyResultsHint: 'Probá con otras palabras o elegí una sugerencia.',
+        disabledTabHint: 'Sin proveedores configurados. Activá uno en el Centro de Control.',
+        sourceWikipedia: 'Wikipedia',
+        sourceDuckDuckGo: 'DuckDuckGo',
+        resultTitle: 'Resultados',
+        respuesta_ia_sin_resultados: 'No encontré resultados para esa búsqueda.',
+        voiceNoQuery: '¿Qué querés que busque?',
+        voiceResultCount: 'Encontré {count} resultados.',
+        // F4 — Etiquetas de las cuadrículas de imágenes y vídeo.
+        sourceCommons: 'Wikimedia Commons',
+        sourceYouTube: 'YouTube',
+        sourceInvidious: 'Invidious',
+        openImageLabel: 'Abrir imagen',
+        openVideoLabel: 'Abrir vídeo',
+        playLabel: 'Reproducir',
+        emptyImages: 'No encontré imágenes para esta búsqueda.',
+        emptyVideo: 'No encontré vídeos para esta búsqueda.',
+        imagesTitle: 'Imágenes',
+        videoTitle: 'Vídeos',
+        // F5 — Centro de Control del Buscador (panel "Buscador y catálogo").
+        searchControlTitle: 'Buscador y catálogo',
+        searchControlIntro: 'Configurá proveedores, catálogo, seguridad y vista previa del buscador.',
+        providersSection: 'Proveedores',
+        catalogSection: 'Catálogo de sitios',
+        categoriesSection: 'Categorías',
+        securitySection: 'Seguridad',
+        previewSection: 'Vista previa (dev)',
+        providerGroupWeb: 'Web',
+        providerGroupImages: 'Imágenes',
+        providerGroupVideo: 'Vídeo',
+        providerEnabled: 'Habilitado',
+        providerKey: 'Clave (API)',
+        providerKeyPlaceholder: 'Dejalo vacío para usar la config',
+        providerMaxResults: 'Máx. resultados',
+        providerTimeout: 'Timeout (ms)',
+        safeSearchLabel: 'Búsqueda segura (solo dominios permitidos)',
+        safeSearchHint: 'Filtra los resultados para conservar únicamente los sitios curados.',
+        supervisedLabel: 'Modo supervisado',
+        supervisedHint: 'Fuerza la búsqueda segura en todos los tipos de resultado.',
+        dailyLimitLabel: 'Límite diario de búsquedas',
+        dailyLimitHint: '0 = sin límite',
+        dailyLimitMessage: 'Alcanzaste el límite diario de búsquedas. Volvé mañana.',
+        previewQueryLabel: 'Consulta de prueba',
+        previewQueryPlaceholder: 'Escribí una consulta de prueba…',
+        runPreview: 'Probar consulta',
+        previewResults: 'Resultados',
+        previewAi: 'Resumen de IA',
+        previewEmpty: 'Ejecutá una consulta para ver la vista previa.',
+        previewLoading: 'Consultando…',
+        previewError: 'No se pudo completar la consulta de prueba.',
+        saveConfig: 'Guardar configuración',
+        saveConfigHint: 'Guardá los cambios para aplicarlos al buscador (se persisten como overrides sobre la configuración).',
+        resetConfig: 'Restablecer',
+        configSaved: 'Configuración guardada.',
+        configReset: 'Configuración restablecida.',
+        // F5 — Secciones de idiomas/nivel y categorías (vista config-driven).
+        languageLevelSection: 'Idiomas y nivel',
+        languageLevelHint: 'Idioma y nivel de lectura por rol; los sitios del catálogo los usan por defecto al resolver la búsqueda.',
+        roleColumnLabel: 'Rol',
+        categoriesHint: 'Las categorías del catálogo y cuántos sitios tiene cada una. Los tiles del inicio se derivan automáticamente.',
+        siteCountWord: 'sitios',
+      },
+    },
+  },
+  /**
+   * Materia gris — Fase 3 (F5): gamificación de participaciones.
+   * Regla #1: sin hardcode — la tabla de acciones vive aquí (config-driven).
+   */
+  materiaGris: {
+    enabled: true,
+    actions: {
+      participacion_conversacion: 3,
+      recordatorio_completado: 5,
+      tarea_hogar: 5,
+      juego_completado: 8,
+      cuento: 10,
+    },
+    maxEntriesPerParticipant: 200,
+    ui: {
+      panelTitle: 'Materia gris',
+      awardLabel: 'Otorgar puntos',
+      participantLabel: 'Participante',
+      participantEmpty: '— Elegir participante —',
+      actionLabel: 'Acción',
+      actionEmpty: '— Elegir acción —',
+      leaderboardLabel: 'Leaderboard',
+      emptyState: 'Aún no hay puntos otorgados.',
+      historyLabel: 'Historial',
+      action_participacion_conversacion: 'Participar en la conversación',
+      action_recordatorio_completado: 'Completar un recordatorio',
+      action_tarea_hogar: 'Tarea del hogar',
+      action_juego_completado: 'Completar un juego',
+      action_cuento: 'Participar en un cuento',
+    },
+    voice: {
+      awarded: 'Listo, puntos otorgados.',
+    },
+  },
+  /**
+   * Hábitos y metas — Fase 4 (Módulo G): metas/hábitos por participante
+   * con check-in diario, rachas y progreso.
+   * Regla #1: sin hardcode — categorías y límites viven aquí (config-driven).
+   */
+  habits: {
+    enabled: true,
+    categories: ['habito', 'meta', 'estudio', 'personal'],
+    defaultTargetDays: 21,
+    maxGoalsPerParticipant: 50,
+    ui: {
+      panelTitle: 'Hábitos y metas',
+      addLabel: 'Agregar meta',
+      participantLabel: 'Participante',
+      participantEmpty: '— Elegir participante —',
+      titleLabel: 'Meta o hábito',
+      titlePlaceholder: 'Ej. Leer 15 minutos',
+      categoryLabel: 'Categoría',
+      category_habito: 'Hábito',
+      category_meta: 'Meta',
+      category_estudio: 'Estudio',
+      category_personal: 'Personal',
+      targetLabel: 'Días objetivo (opcional)',
+      targetPlaceholder: '21',
+      listLabel: 'Mis metas',
+      emptyState: 'Aún no hay metas registradas.',
+      todayLabel: 'Hoy',
+      statusLabel: 'Estado',
+      status_active: 'Activa',
+      status_done: 'Hecha',
+      status_paused: 'Pausada',
+      status_archived: 'Archivada',
+      streakUnit: 'día(s)',
+      removeLabel: 'Eliminar',
+    },
+    voice: {
+      goalAdded: 'Listo, he registrado la meta.',
+      checkInDone: 'Hecho, meta completada hoy.',
+      checkInUndone: 'Entendido, lo dejo como pendiente.',
+      statusChanged: 'Listo, estado actualizado.',
+      goalRemoved: 'He eliminado la meta.',
+      streakLabel: 'Racha de',
+      daysUnit: 'días',
+    },
+  },
+  /**
+   * Bienestar/Ánimo — Fase 5 (Módulo H): registro diario de ánimo por
+   * participante (escala scaleMin..scaleMax), nota opcional, historial
+   * y resumen.
+   * Regla #1: sin hardcode — escala, límites y etiquetas viven aquí
+   * (config-driven).
+   */
+  mood: {
+    enabled: true,
+    scaleMin: 1,
+    scaleMax: 5,
+    maxLogsPerParticipant: 365,
+    ui: {
+      panelTitle: 'Bienestar y ánimo',
+      addLabel: 'Registrar ánimo',
+      participantLabel: 'Participante',
+      participantEmpty: '— Elegir participante —',
+      moodLabel: 'Ánimo de hoy',
+      moodEmpty: '— Elegir ánimo —',
+      noteLabel: 'Nota (opcional)',
+      notePlaceholder: '¿Cómo te sientes hoy?',
+      summaryLabel: 'Resumen',
+      totalLabel: 'Registros',
+      averageLabel: 'Promedio',
+      bestLabel: 'Mejor',
+      worstLabel: 'Peor',
+      currentLabel: 'Hoy',
+      emptySummary: 'Aún no hay registros.',
+      listLabel: 'Historial de ánimo',
+      emptyState: 'Aún no hay registros de ánimo.',
+      removeLabel: 'Eliminar',
+      mood_1: '😞 Muy mal',
+      mood_2: '😕 Mal',
+      mood_3: '😐 Regular',
+      mood_4: '🙂 Bien',
+      mood_5: '😄 Muy bien',
+    },
+    voice: {
+      moodLogged: 'Listo, he registrado tu ánimo de hoy.',
+      moodUpdated: 'Entendido, he actualizado tu ánimo de hoy.',
+      moodRemoved: 'He eliminado ese registro de ánimo.',
+      summaryLabel: 'Resumen de ánimo',
+    },
+  },
+  /**
+   * Contactos — Fase 6 (Módulo I): agenda de contactos con cumpleaños
+   * (clave 'YYYY-MM-DD'), vínculo opcional con participantes y ventana de
+   * "cumpleaños próximos" (B9). Regla #1: sin hardcode — tope, ventana y
+   * etiquetas viven aquí (config-driven).
+   */
+  contacts: {
+    enabled: true,
+    maxContacts: 500,
+    birthdayWindowDays: 7,
+    ui: {
+      panelTitle: 'Agenda de contactos',
+      addLabel: 'Agregar contacto',
+      nameLabel: 'Nombre',
+      namePlaceholder: 'Nombre del contacto',
+      phoneLabel: 'Teléfono',
+      phonePlaceholder: 'Teléfono (opcional)',
+      emailLabel: 'Correo',
+      emailPlaceholder: 'Correo (opcional)',
+      relationshipLabel: 'Relación',
+      relationshipPlaceholder: 'Familiar, amigo… (opcional)',
+      birthdayLabel: 'Cumpleaños',
+      participantLabel: 'Participante',
+      participantEmpty: '— Ninguno —',
+      notesLabel: 'Notas',
+      notesPlaceholder: 'Notas (opcional)',
+      birthdayNearLabel: 'Cumpleaños próximos',
+      emptyBirthdayNear: 'No hay cumpleaños en la ventana.',
+      todayLabel: '¡Hoy!',
+      tomorrowLabel: 'Mañana',
+      inDaysLabel: 'En',
+      dayLabel: 'día',
+      daysLabel: 'días',
+      favoriteMark: '★',
+      listLabel: 'Contactos',
+      emptyState: 'Aún no hay contactos.',
+      removeLabel: 'Eliminar',
+    },
+    voice: {
+      contactAdded: 'Listo, he agregado el contacto.',
+      contactUpdated: 'He actualizado el contacto.',
+      contactRemoved: 'He eliminado el contacto.',
+    },
+  },
+  /**
+   * Acciones de dispositivo — Fase 7 (Módulo I+): llamar, WhatsApp,
+   * SMS y correo. Regla #1: sin hardcode — prefijo de país, canal de
+   * apertura y textos viven aquí (config-driven). Honestidad de PWA:
+   * solo abre esquemas de URL estándar (tel:, wa.me, sms:, mailto:).
+   */
+  deviceActions: {
+    enabled: true,
+    countryDial: '52',
+    launchTarget: '_blank',
+    ui: {
+      panelTitle: 'Acciones de dispositivo',
+      callLabel: 'Llamar',
+      whatsappLabel: 'WhatsApp',
+      smsLabel: 'SMS',
+      emailLabel: 'Correo',
+    },
+    voice: {
+      es: {
+        callLaunched: 'Abriendo el marcador para {name}...',
+        whatsappLaunched: 'Abriendo WhatsApp para {name}...',
+        smsLaunched: 'Abriendo mensajes para {name}...',
+        emailLaunched: 'Abriendo el correo para {name}...',
+        contactNotFound: 'No tengo a {name} en tus contactos.',
+        missingPhone: 'No tengo teléfono de {name}.',
+        missingEmail: 'No tengo correo de {name}.',
+      },
+      en: {
+        callLaunched: 'Opening the dialer for {name}...',
+        whatsappLaunched: 'Opening WhatsApp for {name}...',
+        smsLaunched: 'Opening messages for {name}...',
+        emailLaunched: 'Opening email for {name}...',
+        contactNotFound: "I don't have {name} in your contacts.",
+        missingPhone: "I don't have a phone number for {name}.",
+        missingEmail: "I don't have an email for {name}.",
+      },
+    },
+  },
+  /**
+   * Diario personal — Fase 6 (Módulo J): entradas de diario con fecha
+   * ('YYYY-MM-DD'), título opcional, contenido, ánimo opcional (1..moodMax)
+   * y vínculo opcional con participantes. Regla #1: sin hardcode — tope
+   * diario, escala y etiquetas viven aquí (config-driven).
+   */
+  diary: {
+    enabled: true,
+    maxEntriesPerDay: 50,
+    moodMax: 5,
+    ui: {
+      panelTitle: 'Diario personal',
+      addLabel: 'Guardar entrada',
+      dateLabel: 'Fecha',
+      titleLabel: 'Título',
+      titlePlaceholder: 'Título (opcional)',
+      contentLabel: 'Contenido',
+      contentPlaceholder: '¿Qué quieres recordar hoy?',
+      moodLabel: 'Ánimo (opcional)',
+      moodEmpty: '— Sin ánimo —',
+      participantLabel: 'Participante',
+      participantEmpty: '— Ninguno —',
+      untitledLabel: 'Sin título',
+      listLabel: 'Historial del diario',
+      emptyState: 'Aún no hay entradas en el diario.',
+      removeLabel: 'Eliminar',
+      mood_1: '😞 Muy mal',
+      mood_2: '😕 Mal',
+      mood_3: '😐 Regular',
+      mood_4: '🙂 Bien',
+      mood_5: '😄 Muy bien',
+    },
+    voice: {
+      entryAdded: 'Listo, he guardado tu entrada del diario.',
+      entryUpdated: 'He actualizado esa entrada.',
+      entryRemoved: 'He eliminado esa entrada del diario.',
+    },
+  },
+  /**
+   * Onboarding — primera configuración asistida por voz (Fase 1, D1).
+   * Pasos deterministas: ack (afirmación) | capture (captura de valor) | decision (sí/no).
+   * - capture: {key} guarda la respuesta (ej. userName) en el estado capturado.
+   * - decision: {accept}/{reject} resuelven una acción (ej. habilitar notificaciones).
+   * Templates con placeholder {name} ← valor capturado en la clave nameKey.
+   */
+  onboarding: {
+    enabled: true,
+    nameKey: 'flu-user-name',
+    overlay: {
+      skipLabel: 'Omitir',
+      progressLabel: 'Paso {current} de {total}',
+      // Hint HONESTO de escritura: el input siempre pide escribir. El
+      // label "Escucho…" (listeningHint) solo se muestra como badge vivo
+      // cuando el navegador confirma onstart de verdad.
+      typingHint: 'Escribe tu respuesta…',
+      listeningHint: 'Escucho…',
+      submitLabel: 'Enviar',
+      continueLabel: 'Continuar',
+      acceptLabel: 'Sí',
+      rejectLabel: 'No',
+      // Tap-to-talk: el micrófono solo se abre al tocar el botón 🎤
+      // (nunca en paralelo con la voz de FLU → auto-eco imposible).
+      micLabel: 'Hablar',
+      stopLabel: 'Detener',
+    },
+    // Selector "¿Quién eres?" (multiusuario — Fase 3): puerta de identidad
+    // al abrir la app en un dispositivo compartido por la familia.
+    userPicker: {
+      title: '',
+      subtitle: 'Toca tu perfil para personalizar tu experiencia.',
+      createLabel: 'Crear perfil personal',
+      // Dropdown del header: opción "+ Nuevo", placeholder y botón borrar.
+      createShortLabel: '+ Nuevo',
+      selectPlaceholder: 'Elegir usuario',
+      removeLabel: 'Borrar usuario',
+      emptyHint: 'Todavía no hay perfiles. Crea el primero para comenzar.',
+      // Al cargar, si ya hay perfiles (o quedó onboarding completado sin
+      // perfil → "fantasma") se abre el selector para que cada persona
+      // elija o cree el suyo. No se abre en el primer arranque (0 perfiles
+      // y onboarding sin completar → corren las preguntas de bienvenida).
+      autoOpenOnLoad: true,
+    },
+    steps: [
+      {
+        id: 'name',
+        type: 'capture',
+        key: 'name',
+        es: '¿Cómo te llamas?',
+        en: 'What is your name?',
+        // Captura dual: el niño puede RESPONDER HABLANDO (además de texto).
+        acceptVoice: true,
+        ack: {
+          es: '¡{name}, qué bonito nombre!',
+          en: 'Nice to meet you, {name}!',
+        },
+      },
+      {
+        id: 'kind',
+        type: 'capture',
+        key: 'kind',
+        es: '¿Eres niño o adulto?',
+        en: 'Are you a child or an adult?',
+        // Select de 2 opciones: niño→Estudiante, adulto→Familiar (defaultsByRole).
+        options: [
+          { value: 'niño', es: 'Niño / Niña', en: 'Child' },
+          { value: 'adulto', es: 'Adulto / Adulta', en: 'Adult' },
+        ],
+        acceptVoice: true,
+        ack: {
+          es: '¡Genial, {name}!',
+          en: 'Great, {name}!',
+        },
+      },
+      {
+        id: 'complete',
+        type: 'ack',
+        es: '¡Listo, {name}! Ya estás configurado. Háblame cuando quieras.',
+        en: 'Done, {name}! You are all set. Talk to me whenever you want.',
+      },
+    ],
+  },
+  /**
+   * No molestar (DND) — Fase 1 (D2). Silencia notificaciones y toasts según horario.
+   */
+  dnd: {
+    enabled: false,
+    schedule: { start: '22:00', end: '07:00' },
+    allowUrgent: true,
+    tickMs: 60000,
+  },
+  /**
+   * Noticias — Fase 5 (placeholder config-driven; se habilita con el proxy RSS /api/rss).
+   */
+  news: {
+    enabled: false,
+    maxItems: 5,
+    refreshIntervalMinutes: 60,
+    sources: [],
+  },
+  /**
+   * Salud y cuidador — Fase 4 (placeholder config-driven; se habilita con C1-C8).
+   */
+  health: {
+    enabled: false,
+    hydrationIntervalMinutes: 90,
+    postureIntervalMinutes: 60,
+    focusIntervalMinutes: 45,
   },
   /**
    * Flu como participante: escucha activa, mano alzada, intervención con «ok flu adelante».
@@ -532,6 +1650,8 @@ export const FLU_CONFIG = {
       ANALIZAR_APP: { es: 'Analizando la app.', en: 'Analyzing the app.' },
       GENERAR_DOCUMENTO: { es: 'Generando el documento.', en: 'Generating the document.' },
       GENERAR_VIDEO: { es: 'Preparando el video.', en: 'Preparing the video.' },
+      NAVEGAR: { es: '', en: '' },
+      BUSCAR: { es: '', en: '' },
     },
     panel: {
       maximize: 'Maximizar',
@@ -547,6 +1667,42 @@ export const FLU_CONFIG = {
       languageEn: 'English',
       languageBoth: 'Español + English',
       sessionRole: 'Perfil de sesión',
+    },
+    ambientes: {
+      panelTitle: 'Ambientes (rebranding por oficio)',
+      panelHint:
+        'FLU se rebrandea según el oficio: identidad, tema visual, avatar, voz y pestañas.',
+      activate: 'Activar',
+      active: 'Activo',
+      preview: 'Vista previa',
+      // ---- 1A: gestión de ambientes dinámicos (crear/clonar/editar/eliminar) ----
+      createLabel: 'Nuevo ambiente',
+      cloneLabel: 'Clonar',
+      cloneNameSuffix: ' (copia)',
+      editLabel: 'Editar',
+      removeLabel: 'Eliminar',
+      saveLabel: 'Guardar cambios',
+      cancelLabel: 'Cancelar',
+      nombreLabel: 'Nombre',
+      nombrePlaceholder: 'Ej: Modo Selva',
+      idLabel: 'Identificador',
+      taglineLabel: 'Frase descriptiva',
+      taglinePlaceholder: 'Ej: Convierto tu espacio en una selva de aprendizaje',
+      iconoLabel: 'Ícono',
+      frasesEsLabel: 'Frases de activación (ES)',
+      frasesEnLabel: 'Frases de activación (EN)',
+      frasesPlaceholder: 'Una frase por línea',
+      frasesHint: 'Con estas frases FLU detecta el modo y se activa al escucharlas.',
+      varsLabel: 'Variables del tema',
+      varsPlaceholder: 'Vacío = no inyectar',
+      decoracionLabel: 'Decoración',
+      decoracionNone: '— Sin decoración —',
+      tabsLabel: 'Pestañas visibles',
+      requiredError: 'El nombre es obligatorio para generar el identificador.',
+      duplicateError: 'Ya existe un ambiente con ese identificador.',
+      reservedError: 'Ese identificador está reservado por el sistema.',
+      notFoundError: 'El ambiente ya no existe.',
+      invalidError: 'El formulario contiene datos inválidos.',
     },
     tabs: {
       ariaLabel: 'Secciones de Flu Voz',
@@ -571,12 +1727,12 @@ export const FLU_CONFIG = {
     identifyingSpeakerName: 'Identificando...',
     mainCopy: '',
     workspace: {
-      title: '',
-      emptyContent:
-        'Aquí aparecerá el material que Flu genera para apoyar la sesión: texto, imagen, diagrama o salida operativa.',
+      title: 'Pizarrón',
+      emptyContent: '',
       fallbackTitle: 'Salida activa de IA',
-      keyPointsTitle: 'Puntos clave',
-      keyPointsEmpty: 'Sin puntos clave por ahora.',
+      keyPointsTitle: { es: 'Puntos clave', en: 'Key points' },
+      contenidoTitle: { es: 'Contenido', en: 'Content' },
+      keyPointsEmpty: '',
       conversationEmpty: 'Todavia no hay transcripciones guardadas.',
       minuteHistoryEmpty: 'Aun no hay minutas guardadas. Genera una minuta y pulsa Guardar.',
       participantsEmpty: 'Los participantes aparecerán al identificar voces en la sesión.',
@@ -589,6 +1745,7 @@ export const FLU_CONFIG = {
         diagram: 'Diagrama',
         '3d': 'Escena 3D',
         text: 'Texto de trabajo',
+        horario: 'Horario de clases',
       },
       conversationSubtitle: 'Transcripción en vivo de la conversación',
       visibleLabels: {
@@ -603,6 +1760,53 @@ export const FLU_CONFIG = {
       minuteDraftEmpty: 'Genera o selecciona una minuta para editarla aquí.',
       summaryUnavailableTitle: 'Minuta no disponible',
       summaryUnavailableMessage: 'No se pudo generar el resumen.',
+      // ---- Pizarrón: tarjetas plegables (diseño UX aprobado) ----
+      responseTitle: { es: 'Respuesta de Flu', en: 'Flu response' },
+      responseEmpty: {
+        es: 'Flu responderá aquí a tus preguntas.',
+        en: 'Flu will respond here to your questions.',
+      },
+      origenWebLabel: { es: 'Web', en: 'Web' },
+      origenIaLabel: { es: 'IA', en: 'AI' },
+      imageTitle: { es: 'Imagen generada', en: 'Generated image' },
+      imageExpandLabel: { es: '🔍 Ampliar', en: '🔍 Expand' },
+      imageErrorTitle: { es: 'No se pudo cargar la imagen', en: 'The image could not be loaded' },
+      imageRetryLabel: { es: 'Reintentar', en: 'Retry' },
+      agendaTitle: { es: 'Agenda', en: 'Agenda' },
+      agendaScheduleTitle: { es: 'Calendario de clases', en: 'Class schedule' },
+      horarioTitle: { es: 'Horario de clases', en: 'Class schedule' },
+      horarioEmpty: {
+        es: 'Pide a Flu que lea una foto de tu horario o dicta una clase.',
+        en: 'Ask Flu to read a photo of your schedule or dictate a class.',
+      },
+      documentTitle: { es: 'Análisis de documento', en: 'Document analysis' },
+      documentEmpty: {
+        es: 'Sube un documento (PDF, Excel, Word) para analizarlo aquí.',
+        en: 'Upload a document (PDF, Excel, Word) to analyze it here.',
+      },
+      appTitle: { es: 'Análisis de app', en: 'App analysis' },
+      appEmpty: {
+        es: 'Sube una carpeta de proyecto para analizarla aquí.',
+        en: 'Upload a project folder to analyze it here.',
+      },
+      generationTitle: { es: 'Generación de documento / video', en: 'Document / video generation' },
+      generationEmpty: {
+        es: 'Genera documentos o videos desde aquí.',
+        en: 'Generate documents or videos from here.',
+      },
+      uploadTitle: { es: 'Subir archivo', en: 'Upload file' },
+      uploadDropHint: { es: 'Arrastra una imagen aquí', en: 'Drag an image here' },
+      uploadDropOr: { es: '— o —', en: '— or —' },
+      uploadSelectLabel: { es: '📁 Subir imagen', en: '📁 Upload image' },
+      uploadCameraLabel: { es: '📷 Tomar foto', en: '📷 Take photo' },
+      uploadDocumentLabel: { es: '📄 Analizar documento', en: '📄 Analyze document' },
+      uploadAppLabel: { es: '🧭 Analizar app', en: '🧭 Analyze app' },
+      uploadRemoveLabel: { es: '✕ Quitar', en: '✕ Remove' },
+      uploadAnalyzingLabel: { es: '🔍 Analizando con IA...', en: '🔍 Analyzing with AI...' },
+      uploadErrorImage: {
+        es: '⚠️ No se pudo leer la imagen. Verifica que sea un archivo JPG o PNG e inténtalo de nuevo.',
+        en: '⚠️ The image could not be read. Make sure it is a JPG or PNG file and try again.',
+      },
     },
     minuteFields: {
       title: 'Titulo',
@@ -655,8 +1859,23 @@ export const FLU_CONFIG = {
       maxSuma: 10,
       operaciones: ['+', '-'],
     },
+    ahorcado: {
+      intentos: 6,
+    },
+    memoriaSecuencias: {
+      longMax: 4,
+    },
+    cuentoColaborativo: {
+      turnos: 4,
+    },
+    cuentaConmigo: {
+      hasta: 10,
+    },
+    respiracion: {
+      rondas: 4,
+    },
     loteria: {
-      cartasPorRonda: 3,
+      tablaSize: 3,
     },
     cuentacuentos: {
       escenasMax: 4,
@@ -689,6 +1908,20 @@ export const FLU_CONFIG = {
     showEmbeddingPreview: false,
     /** Reenviar logs del frontend al servidor (terminal) para que Roo pueda verlos. */
     relayToServer: true,
+  },
+  /**
+   * Árbitro determinista (§1A/§2A/§2B del plan de afinado estructural).
+   * Controla la semántica de "si hay match determinista → manda y NO llamar a
+   * Gemini" (§2B). Por defecto está APAGADO (skipGeminiOnMatch: false): el flujo
+   * conserva la semántica actual (fast-path en paralelo + contrato tardío de
+   * Gemini con idempotencia). Al activarlo, cuando el árbitro matchea un dominio
+   * con efecto de estado (config/juego/ambiente), se salta la llamada a Gemini y
+   * se responde con una frase de cortesía determinista. Cambio de ALTO riesgo:
+   * activar solo tras validar con el test §3B y prueba manual.
+   */
+  arbiter: {
+    /** §2B: si hay match determinista de estado → NO llamar a Gemini (ALTO riesgo). */
+    skipGeminiOnMatch: false,
   },
   /**
    * Perfil gratuito (recomendado): source browser + Chrome SR on-device + mic pasivo para hablantes.
@@ -776,6 +2009,18 @@ export const FLU_CONFIG = {
         'ahí',
         'perro',
         'gato',
+        // Palabras clave de juegos (lotería, pista, simon, trivia…). Hoy son
+        // un no-op: shortFinalHasKeyword ya acepta cualquier palabra de
+        // ≥ shortFinalKeywordMinChars (4). Se listan para documentar la
+        // intención y blindar el reconocimiento si ese umbral cambia.
+        'loteria',
+        'lotería',
+        'tengo',
+        'pista',
+        'paso',
+        'sigue',
+        'simon',
+        'trivia',
       ],
       minKeywordConfidence: 0.55,
       shortFinalMaxWords: 4,
@@ -977,6 +2222,19 @@ export const FLU_CONFIG = {
       'genera un excel',
       'generar presentacion',
       'genera una presentacion',
+      // Cartas y otros documentos concretos (F4 — generación de documento).
+      'generar carta',
+      'genera carta',
+      'genera una carta',
+      'generame una carta',
+      'escribir carta',
+      'escribe una carta',
+      'redactar carta',
+      'redacta una carta',
+      'generar ensayo',
+      'genera un ensayo',
+      'generar resumen',
+      'genera un resumen',
       'generate document',
       'create document',
       'create a document',
@@ -1005,6 +2263,90 @@ export const FLU_CONFIG = {
       'guardar la minuta',
       'save minute',
       'save the minute',
+    ],
+    /** Navegación curada por voz → resultado en el Pizarrón (frases directas). */
+    navigate: [
+      'navegar a wikipedia',
+      'navega a wikipedia',
+      'navegar en wikipedia',
+      'navega en wikipedia',
+      'navegar a educar',
+      'navega a educar',
+      'navegar en educar',
+      'navega en educar',
+      'navegar a youtube',
+      'navega a youtube',
+      'abrir wikipedia',
+      'abre wikipedia',
+      'abrir educar',
+      'abre educar',
+      'abrir youtube',
+      'abre youtube',
+      'buscar en wikipedia',
+      'busca en wikipedia',
+      'buscar en educar',
+      'busca en educar',
+      'buscar en youtube',
+      'busca en youtube',
+      'búscame en wikipedia',
+      'búscame en educar',
+      'explora wikipedia',
+      'explora educar',
+      'navigate to wikipedia',
+      'open wikipedia',
+      'search wikipedia',
+      'search on wikipedia',
+      'browse wikipedia',
+      'go to wikipedia',
+    ],
+    // F3 — Búsqueda web general (BUSCAR): frases que disparan una búsqueda
+    // en los proveedores configurados (Wikipedia + DuckDuckGo). Se detectan
+    // con matchesCommandPhrase(..., { tolerant: true }) como NAVEGAR, pero
+    // se evalúan DESPUÉS de NAVEGAR para que "busca en wikipedia" siga
+    // navegando al sitio curado en vez de hacer una búsqueda general.
+    buscar: [
+      'busca en la web',
+      'buscá en la web',
+      'buscar en la web',
+      'busca en internet',
+      'buscá en internet',
+      'buscar en internet',
+      'busca información sobre',
+      'buscá información sobre',
+      'buscar información sobre',
+      'busca sobre',
+      'buscá sobre',
+      'búscame',
+      'buscame',
+      'busca en google',
+      'buscá en google',
+      'buscar en google',
+      'búsqueda general',
+      'search the web',
+      'search on the web',
+      'search the internet',
+      'search for information about',
+      'search about',
+      'search on google',
+      'google search',
+      'search for',
+      'look up',
+    ],
+    // P1-C (§1.3.2) — autoconocimiento (CONOCER_FLU): frases que disparan la
+    // respuesta local de FLU sobre sus capacidades (fast-path sin IA, §1.3.3-1.3.4).
+    conocerFlu: [
+      'que sabes hacer',
+      'que puedes hacer',
+      'que sabe hacer flu',
+      'que puedes hacer flu',
+      'que haces',
+      'que funciones tienes',
+      'cuentame tus habilidades',
+      'para que sirves',
+      'what can you do',
+      'what do you do',
+      'what are your skills',
+      'what can flu do',
     ],
     listeningAckPhrases: [
       ...LISTENING_ACK_PHRASES,

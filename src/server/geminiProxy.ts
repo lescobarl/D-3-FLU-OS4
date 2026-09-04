@@ -28,6 +28,7 @@ import {
 import {
     generateFluContract,
     generateConversationSummary,
+    generateGeminiImage,
     generateParticipantEvaluation,
     generateWorkspaceImage,
     analyzeImage,
@@ -386,6 +387,21 @@ async function handleWorkspaceImage(req: IncomingMessage, res: ServerResponse) {
     }
 }
 
+// Paso 5: generación de imagen con la API NATIVA de Gemini (fallback real
+// cuando la URL de Pollinations falla al cargar en el navegador). La apiKey
+// se resuelve en el servidor (env > cliente) y nunca se expone al browser.
+async function handleGeminiImage(req: IncomingMessage, res: ServerResponse) {
+    try {
+        let body = await parseBody(req);
+        body = resolveServerApiKey(body);
+        const result = await generateGeminiImage(body || {});
+        sendJson(res, 200, result);
+    } catch (error: any) {
+        console.error('[geminiProxy] /api/gemini-image error:', error.message);
+        sendJson(res, error.status || 500, { error: error.message });
+    }
+}
+
 async function handleVisionAnalysis(req: IncomingMessage, res: ServerResponse) {
     try {
         let body = await parseBody(req);
@@ -532,6 +548,20 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     await handleWorkspaceImage(req, res);
                 } catch (err: any) {
                     console.error('[geminiProxy] Unhandled error in /api/workspace-image:', err?.message || err);
+                    try {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'internal_error', detail: err?.message || 'Unknown error' }));
+                    } catch { /* ignore write errors after connection close */ }
+                }
+            });
+            // POST /api/gemini-image — generación de imagen con la API nativa de Gemini
+            // (Paso 5: fallback real cuando la URL de Pollinations falla al cargar).
+            server.middlewares.use('/api/gemini-image', async (req: any, res: any, next: any) => {
+                if (req.method !== 'POST') return next();
+                try {
+                    await handleGeminiImage(req, res);
+                } catch (err: any) {
+                    console.error('[geminiProxy] Unhandled error in /api/gemini-image:', err?.message || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: err?.message || 'Unknown error' }));

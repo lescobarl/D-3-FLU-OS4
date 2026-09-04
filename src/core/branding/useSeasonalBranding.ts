@@ -61,8 +61,12 @@ export interface SeasonalBrandingActions {
 // Default config
 // ============================================================
 
+// El branding arranca APAGADO (disabled) por defecto. Solo se enciende a
+// petición explícita por voz ("activa la estación/branding" → auto, o
+// "activa la estación de X" → manual + X). No está asociado a perfiles:
+// es global y por temporada/calendario.
 const DEFAULT_CONFIG: BrandingConfig = {
-    mode: 'auto',
+    mode: 'disabled',
     activeSeason: 'default',
     birthday: null,
     customEvents: [],
@@ -81,12 +85,15 @@ const CONFIG_KEYS = {
     CUSTOM_EVENTS: 'branding_customEvents',
     CELEBRATE_ACHIEVEMENTS: 'branding_celebrateAchievements',
     CELEBRATE_ANNIVERSARIES: 'branding_celebrateAnniversaries',
+    // Bandera de migración única: el branding ahora arranca APAGADO por defecto.
+    MIGRATED: 'branding_migrated_v2',
 } as const;
 
 async function loadConfigFromDB(): Promise<BrandingConfig> {
     try {
         const records = await fluDb.brandingConfig.toArray();
         const config = { ...DEFAULT_CONFIG };
+        let hasMigratedFlag = false;
 
         for (const record of records) {
             switch (record.key) {
@@ -115,7 +122,21 @@ async function loadConfigFromDB(): Promise<BrandingConfig> {
                 case CONFIG_KEYS.CELEBRATE_ANNIVERSARIES:
                     config.celebrateAnniversaries = record.value === 'true';
                     break;
+                case CONFIG_KEYS.MIGRATED:
+                    hasMigratedFlag = record.value === 'true';
+                    break;
             }
+        }
+
+        // Migración única: el branding arranca APAGADO por defecto. Los usuarios
+        // que tenían 'auto' guardado en su navegador pasan a 'disabled' una sola
+        // vez (se persiste el nuevo estado y se marca la bandera para no repetir).
+        if (!hasMigratedFlag) {
+            if (config.mode === 'auto') {
+                config.mode = 'disabled';
+                await saveConfigToDB(CONFIG_KEYS.MODE, 'disabled');
+            }
+            await saveConfigToDB(CONFIG_KEYS.MIGRATED, 'true');
         }
 
         return config;

@@ -130,3 +130,18 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 | 7 | ⚙️ URLs configurables probadas | [`tests/configEnv.test.ts`](tests/configEnv.test.ts) valida que `appConfig.ts` lee cada `VITE_*` (con `vi.stubEnv` + `resetModules`) y que los defaults coinciden con `.env.example`. Cualquier URL de servicio nueva DEBE agregarse aquí con su test de override + default. |
 | 8 | 🚫 Sin timers como parche | Prohibido usar `setTimeout` para sincronizar estado (ej. visibilidad de avatar). Los stores de Zustand sin `persist` son síncronos: `getState()` está disponible al montar. Usar llamadas deterministas (ej. `ensureAvatarPantsVisible()` en [`bunnyStore.ts`](src/avatar/store/bunnyStore.ts:378)). |
 | 9 | 🧱 Handlers por responsabilidad | Los handlers de servidor deben tener una responsabilidad por función. En [`geminiProxy.ts`](src/server/geminiProxy.ts) los modos `contract` / `response` / `minute` se despachan desde `handleContract()` a `handleContractMode()` / `handleResponseMode()` / `handleMinuteMode()`. |
+| 10 | 🧅 Regla de capas de voz | La lógica de voz se separa por capas: `src/voice/lib/*` = **lógica pura y testeable** (sin React, sin refs, sin efectos); `src/voice/hooks/*` = **solo orquestación, estado y efectos** (React hooks); `src/core/*` = **dominios de negocio** (catálogos, servicios, parsers). Prohibido meter negocio/parseo dentro de un hook gigante: si una decisión es testeable en aislamiento, debe vivir en `lib/` como función pura y el hook solo orquestarla. |
+| 11 | 🧩 Módulos cohesivos, no 1-función-por-archivo | Al añadir helpers, agruparlos en módulos cohesivos por responsabilidad (ej. [`deterministicArbiter.js`](src/voice/lib/deterministicArbiter.js), [`audioMath.js`](src/voice/lib/audioMath.js)) en lugar de crear un archivo por función. La fragmentación excesiva dificulta la navegación. |
+
+## 9. PROTOCOLO DE ITERACIÓN RÁPIDA (optimización de velocidad/costo)
+
+> Vigente hasta nueva indicación. Mantiene intactas las reglas de calidad: sin hardcode, sin parches, estructurado. Actualizado: 2026-08-29.
+
+| # | Regla | Descripción |
+|---|-------|-------------|
+| 1 | ⚡ Verificación por iteración mínima | Ejecutar SOLO la prueba del cambio específico: `npx vitest run --changed --reporter=dot --silent` (añadir `-t "<nombre>"` para acotar dentro del archivo). El `npm test` completo (119 archivos / 2390 tests) queda reservado para cierre de hitos/entregas. |
+| 2 | 🚪 Puerta de tipos por iteración | Correr `npx tsc -b` en cada iteración (verificación de tipos incremental). El `vite build` completo solo en cierre de hitos. El dev server + HMR sirve como capa de verificación de runtime en vivo. |
+| 3 | 📦 Sin backups por iteración | No crear backups robocopy por cada iteración; solo cuando el usuario lo indique explícitamente. |
+| 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` directamente con `start_line` y contenido ya conocido (bloques mapeados), sin re-leer archivos completos de miles de líneas. Solo re-leer un bloque si el diff falla por desajuste. |
+| 5 | ⚙️ Paralelismo de herramientas | Ejecutar comandos y ediciones independientes en un solo mensaje (en paralelo) para reducir rondas de ida y vuelta. |
+| 6 | 🎬 E2E solo con cambio de UI | Ejecutar playwright solo cuando el cambio altera comportamiento visual, y únicamente el spec afectado. |

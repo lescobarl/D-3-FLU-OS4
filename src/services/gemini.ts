@@ -232,6 +232,20 @@ Responde en español de forma natural y contextual.
 Sé cálido, empático y mantén una conversación fluida.
 No uses markdown ni formato especial. Solo texto plano.`;
 
+        // FASE P: traits/tone/explanationLevel must reach the LLM through the
+        // `personality` object. The proxy's handleResponseMode rebuilds the prompt
+        // server-side from `personality` (it ignores the client's local systemPrompt),
+        // so the personality object is the only channel that works in response mode.
+        const personality = (options.traits || options.tone || options.explanationLevel)
+            ? {
+                traits: options.traits || [],
+                tone: options.tone || '',
+                explanationLevel: options.explanationLevel || '',
+                name: '',
+                profile: options.role || '',
+            }
+            : null;
+
         const userMessage = isEnglish
             ? `Recent history:
 ${conversationLog}
@@ -258,6 +272,7 @@ Responde como ${botName}:`;
                 role: options.role || '',
                 theme: options.theme || '',
                 history: history,
+                personality,
                 systemPrompt,
                 userMessage,
                 temperature: resolveCreativityTemperature(),
@@ -395,13 +410,14 @@ Genera la minuta en formato JSON.`;
     ): Promise<FluContract> {
         const isEnglish = options.language === 'en';
 
-        // Build personality object from traits/tone (OS2 parity)
+        // Build personality object from traits/tone/explanationLevel (OS2 parity + FASE P)
         // generateFluContract() in gemini.js expects a `personality` object
-        // with traits and tone sub-properties, not flat fields.
-        const personality = (options.traits || options.tone)
+        // with traits, tone and explanationLevel sub-properties, not flat fields.
+        const personality = (options.traits || options.tone || options.explanationLevel)
             ? {
                 traits: options.traits || [],
                 tone: options.tone || '',
+                explanationLevel: options.explanationLevel || '',
                 name: '',
                 profile: options.role || '',
             }
