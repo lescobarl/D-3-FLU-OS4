@@ -155,6 +155,7 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 | 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` directamente con `start_line` y contenido ya conocido (bloques mapeados), sin re-leer archivos completos de miles de líneas. Solo re-leer un bloque si el diff falla por desajuste. |
 | 5 | ⚙️ Paralelismo de herramientas | Ejecutar comandos y ediciones independientes en un solo mensaje (en paralelo) para reducir rondas de ida y vuelta. |
 | 6 | 🎬 E2E solo con cambio de UI | Ejecutar playwright solo cuando el cambio altera comportamiento visual, y únicamente el spec afectado. |
+| 7 | ✅ Commit por hito funcional | Commitea CADA hito funcional en cuanto quede validado en verde (tests + tipos). No acumular cambios para un solo commit al final. Cada commit es un checkpoint seguro y pequeño que acelera el avance y permite revertir sin perder el resto del trabajo. |
 
 ## 10. PROTOCOLO DE DEPURACIÓN DIARIA Y CALIDAD (vigente)
 
