@@ -122,6 +122,7 @@ Antes de realizar un commit, el agente DEBE:
 | 1 | 🏗️ Catálogos como Metadata + UI Configuradora | Todos los catálogos del sistema (roles, grados, tipos de junta, entidades SEP, regiones, etc.) DEBEN gestionarse como metadata unificada en una sola tabla `app_catalogos` con estructura `{ id, tipo_catalogo, codigo, valor, metadata_json, orden, padre_id, activo, ...sync_tuple }`. DEBE incluir una **IU de Configuración de Catálogos** que permita: definir nuevos tipos de catálogo con su schema (campos, tipos, obligatorios), CRUD de entidades, relaciones jerárquicas, e importación/exportación. Nuevos catálogos se agregan desde la UI, no como código. |
 | 2 | 🏗️ Flujos Configurables (Workflow Engine) + UI Diseñadora | Todos los flujos operativos del sistema (asistencia, tareas, juntas CTE, ceremonias, sincronización, etc.) DEBEN ser configurables mediante un motor de workflows. Cada flujo se define como datos: `{ id, nombre, pasos: [{ orden, pantalla_id, evento, componente, config, transiciones }] }`. DEBE incluir una **IU Diseñadora de Flujos** que permita: definir pasos, eventos y transiciones visualmente, asignar componentes/pantallas a cada paso, configurar reglas de validación, y probar el flujo. Las pantallas se construyen al vuelo. Los componentes se cargan lazy. Nuevos flujos se agregan desde la UI, no como código. |
 | 3 | ⏳ NO timeout:null en comandos | Prohibido usar `timeout: null` en `execute_command`. Todo comando debe tener un timeout finito (máx. 30s para comandos rápidos, máx. 120s para instalaciones). Para servidores largos (vite, npm start, etc.), usar timeout de 15-30s solo para verificar arranque y luego verificar con otro comando. El uso de `timeout: null` causa el botón "Run" y bloquea el chat. |
+| 4 | ✅ Commit por hito funcional | Commitea CADA hito funcional en cuanto quede validado en verde (tests + tipos). No acumular cambios para un solo commit al final. Cada commit es un checkpoint seguro y pequeño que acelera el avance y permite revertir sin perder el resto del trabajo. |
 
 ## 8. CONVENCIONES DE CONFIGURACIÓN EXTERNA
 
@@ -155,7 +156,6 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 | 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` directamente con `start_line` y contenido ya conocido (bloques mapeados), sin re-leer archivos completos de miles de líneas. Solo re-leer un bloque si el diff falla por desajuste. |
 | 5 | ⚙️ Paralelismo de herramientas | Ejecutar comandos y ediciones independientes en un solo mensaje (en paralelo) para reducir rondas de ida y vuelta. |
 | 6 | 🎬 E2E solo con cambio de UI | Ejecutar playwright solo cuando el cambio altera comportamiento visual, y únicamente el spec afectado. |
-| 7 | ✅ Commit por hito funcional | Commitea CADA hito funcional en cuanto quede validado en verde (tests + tipos). No acumular cambios para un solo commit al final. Cada commit es un checkpoint seguro y pequeño que acelera el avance y permite revertir sin perder el resto del trabajo. |
 
 ## 10. PROTOCOLO DE DEPURACIÓN DIARIA Y CALIDAD (vigente)
 
