@@ -174,3 +174,51 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 | 5 | 🩹 Sin parches | Prohibido aplicar parches o soluciones temporales. Todo error se corrige de fondo y de forma definitiva. |
 | 6 | 🙅 Sin disculpas | Las disculpas son inaceptables. Todo debe ser consistente con las definiciones y constraints. Ante un error se corrige de fondo, no se justifica. |
 | 7 | 🚫 Sin errores de programación/lógica/implementación | Los errores de programación, lógica o implementación son inaceptables. Cada cambio debe ser correcto, validado y consistente desde la primera entrega. |
+
+## 11. CONSTRAINTS CONSOLIDADOS DE ACELERACIÓN, CALIDAD Y COSTO (A–E)
+
+> Consolidación vinculante de las reglas operativas del ciclo de desarrollo. Muchas ya están reforzadas en las secciones 7, 8, 9 y 10; esta sección las agrupa de forma completa y explícita (reglas 1–24) para que ninguna quede implícita. Actualizado: 2026-09-05.
+
+### A. Reglas de aceleración del ciclo
+
+| # | Regla | Descripción | Ref. |
+|---|-------|-------------|------|
+| 1 | ⚡ Commit por hito funcional en verde | Commitea CADA hito funcional en cuanto quede validado en verde (tests + tipos). No acumular cambios. | §7.4, §9 |
+| 2 | ⚡ Verificación por iteración mínima | `npm test` corre SOLO el cambio (`--changed`; añadir `-t "<nombre>"` para acotar). Suite completa solo en cierre de hitos/pre-commit. | §9.1 |
+| 3 | 🚪 Puerta de tipos por iteración | Correr `npx tsc -b` (o `tsc --noEmit`) en cada iteración. `vite build` solo en cierre de hitos. | §9.2 |
+| 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` con `start_line` y contenido ya conocido. Solo re-leer si el diff falla por desajuste. | §9.4 |
+| 5 | ⚙️ Paralelismo de herramientas | Ejecutar comandos y ediciones independientes en un solo mensaje (en paralelo). | §9.5 |
+| 6 | ⏳ NO `timeout: null` | Todo comando con timeout finito (rápidos ≤30s, instalaciones ≤120s). Servidores: timeout corto solo para verificar arranque. | §7.3 |
+| 7 | 📦 Sin backups por iteración | No crear backups robocopy por iteración; solo cuando el usuario lo indique. Git es el backup. | §9.3 |
+
+### B. Reglas de calidad
+
+| # | Regla | Descripción | Ref. |
+|---|-------|-------------|------|
+| 8 | 🧹 Depuración diaria de código/archivos muertos | Eliminar código y archivos inútiles, obsoletos o duplicados cada jornada (raíz, `src/`, `tests/`, `plans/`, `reports/`). | §10.1–2 |
+| 9 | 🧪 Sin tests arbitrarios o duplicados | Todo test cubre una regla/escenario real y único. Verificar que no exista uno equivalente antes de crear. | §10.3 |
+| 10 | 🛤️ Sin rutas dobles | Prohibido crear rutas duplicadas o implementaciones paralelas. Cada intención converge en una única fuente de verdad. | §10.4 |
+| 11 | 🩹 Sin parches | Prohibido aplicar parches o soluciones temporales. Todo error se corrige de fondo y de forma definitiva. | §10.5 |
+| 12 | 🧅 Separación lógica pura vs. orquestación | `src/voice/lib/*` = lógica pura testeable; `src/voice/hooks/*` = solo orquestación/estado/efectos; `src/core/*` = dominios de negocio. Si una decisión es testeable en aislamiento, vive en `lib/` como función pura. | §8.10 |
+| 13 | 🎬 E2E solo con cambio de UI | Ejecutar playwright solo cuando el cambio altera comportamiento visual, y únicamente el spec afectado. | §9.6 |
+
+### C. Rendimiento de suite
+
+| # | Regla | Descripción | Ref. |
+|---|-------|-------------|------|
+| 14 | 🧪 Tests de lógica pura en `node` | Solo los tests que renderizan UI usan `jsdom`. Los de lógica pura corren en `node` (arranque más rápido). | §7.5 |
+| 15 | 📊 Medir antes de asumir | Antes de "optimizar" config de tests/build, hacer benchmark controlado (baseline vs. cambio) y quedarse con la opción más rápida medida. | §7.6 |
+| 16 | 🗃️ Cache de transform compartido | Mantener y aprovechar el cache de transform de Vite/Vitest compartido entre corridas para evitar re-transformar archivos sin cambios. No invalidar el cache innecesariamente (evitar tocar configs que lo reseteen sin motivo medido). | — |
+| 17 | 🚫 Cero warnings `act()` | Eliminar warnings de `act()`/render en tests. Son causa raíz de flakiness y ralentizan el debug. | §7.7 |
+
+### D. Ahorro de tokens/costo de IA
+
+| # | Regla | Descripción | Ref. |
+|---|-------|-------------|------|
+| 18 | 🪟 Mitigar límite de longitud de línea Windows | En Windows, comandos con cadenas gigantes fallan con "The command line is too long". Usar mensajes de commit concisos y evitar comandos con argumentos enormes. `--no-verify` SOLO en consolidaciones puntuales ya validadas, nunca como atajo habitual. | §7.8 |
+| 19 | 📖 Leer solo fragmentos necesarios | Leer únicamente los fragmentos/bloques requeridos (con `start_line`/`offset`/`limit` o modo `indentation`), no archivos completos de miles de líneas. | §9.4 |
+| 20 | 🎯 Modelo adecuado por tarea | Usar el modelo apropiado según la tarea (p. ej. no usar el modelo más caro para tareas simples de edición/refactor). Delegar subtareas a modos/modelos ligeros cuando aplique. | — |
+| 21 | 🚫 Evitar ciclos largos de prueba-error | No iterar a ciegas probando teorías sin medir. Validar hipótesis con la verificación mínima antes de escalar. | §7.6, §9.1 |
+| 22 | 🧹 Limpiar archivos temporales del contexto | Eliminar archivos temporales/artefactos de diagnóstico del contexto y del workspace al terminar la tarea. | §10.2 |
+| 23 | 🧼 Output de tests limpio | Usar `--reporter=dot --silent` por defecto para output mínimo. No inundar el contexto con logs de suite completa. | §9.1 |
+| 24 | 🎛️ Contexto mínimo por tarea | Mantener el contexto mínimo necesario por tarea: no arrastrar contexto de tareas previas no relacionadas. | — |
