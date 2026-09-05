@@ -26,6 +26,7 @@ import { BunnyViewer, useBunnyStore } from '../avatar';
 import type { BunnyAnimation } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { stripWakeWordForDisplay } from '../voice/lib/audioMath';
 import { useIntegrationStore, detectSentiment } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
 import { geminiService } from '../services/gemini';
@@ -160,7 +161,11 @@ function VoiceControls({
     liveTranscript,
     transcript,
 }: VoiceControlsProps) {
-    const displayText = liveTranscript || transcript || '';
+    // Solo se muestra lo que viene después del wake word (si lo hay), para no
+    // repetir el prefijo de activación ("Flu, ...") en la transcripción visible.
+    const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [];
+    const rawText = liveTranscript || transcript || '';
+    const displayText = stripWakeWordForDisplay(rawText, wakeWords);
     return (
         <div className="voice-controls">
             {/* Transcripción en vivo — siempre visible con scroll */}

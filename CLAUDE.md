@@ -24,6 +24,12 @@
 | 8 | ❌ NO borrado físico en offline | El borrado es estrictamente lógico (`deleted: true`), nunca físico en offline. |
 | 9 | ❌ NO a entregas parciales, todo se debe entregar completo de acuerdo a la solicitud |
 | 10 | ❌ NO a grandes respuestas, solo cualdo se solicita el detalle responder detalladamente, de modo contrario responder en resumen lo mas claro y preciso posible |
+| 11 | ❌ NO casos de prueba arbitrarios o duplicados | Prohibido crear casos de prueba de manera arbitraria o duplicados. Cada test debe cubrir una regla/escenario real y único, sin solaparse con otros tests existentes. |
+| 12 | ❌ NO rutas dobles | Prohibido crear rutas duplicadas o implementaciones paralelas para el mismo destino. Una única ruta/flujo por intención, convergente en una sola fuente de verdad. |
+| 13 | ❌ NO parches | Prohibido aplicar parches o soluciones temporales para casos de borde. Todo error se corrige de fondo y de forma definitiva. |
+| 14 | ❌ NO basura ni duplicados | Prohibido dejar código o archivos inútiles, obsoletos o duplicados. El proyecto se depura diariamente tanto en código como en archivos. |
+| 15 | ❌ NO disculpas | Las disculpas son inaceptables. Todo debe ser consistente con las definiciones y constraints. Ante un error se corrige de fondo, no se justifica. |
+| 16 | ❌ NO errores de programación/lógica/implementación | Los errores de programación, lógica o implementación son inaceptables. Cada cambio debe ser correcto, validado y consistente desde la primera entrega. |
 
 ## 2. OBLIGACIONES ESTRICTAS
 
@@ -40,6 +46,10 @@
 | 9 | ✅ Aislamiento de contexto de IA | Cada llamada de inferencia debe inicializar un contexto ciego aislado: `escuela_id + alumno_id + materia_id`. Purgar variables globales residuales antes de cada inferencia. |
 | 10 | ✅ Circular Buffer en audio | El pipeline de audio debe implementar vaciado cíclico cada 30 segundos para evitar fugas de memoria. |
 | 11 | ✅ requestAnimationFrame para 3D | El renderizado 3D del avatar debe aislarse con `requestAnimationFrame`. Comunicación con IndexedDB via `postMessage`. |
+| 12 | ✅ Consistencia con las definiciones | Todo cambio debe ser consistente con las definiciones y constraints vigentes. Prohibido contradecir o divergir de lo ya definido. |
+| 13 | ✅ Depuración diaria | El proyecto se depura diariamente: eliminar código y archivos inútiles, obsoletos o duplicados, tanto en `src/` como en `tests/`, `plans/` y raíz. |
+| 14 | ✅ Tests únicos y no duplicados | Cada caso de prueba debe ser único, no arbitrario y no duplicado. Antes de crear un test, verificar que no exista uno equivalente. |
+| 15 | ✅ Fuente única por intención | Cada intención/ruta/flujo converge en una única fuente de verdad. Prohibido implementar la misma lógica en dos lugares. |
 
 ## 3. STACK TECNOLÓGICO OBLIGATORIO
 
@@ -145,3 +155,17 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 | 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` directamente con `start_line` y contenido ya conocido (bloques mapeados), sin re-leer archivos completos de miles de líneas. Solo re-leer un bloque si el diff falla por desajuste. |
 | 5 | ⚙️ Paralelismo de herramientas | Ejecutar comandos y ediciones independientes en un solo mensaje (en paralelo) para reducir rondas de ida y vuelta. |
 | 6 | 🎬 E2E solo con cambio de UI | Ejecutar playwright solo cuando el cambio altera comportamiento visual, y únicamente el spec afectado. |
+
+## 10. PROTOCOLO DE DEPURACIÓN DIARIA Y CALIDAD (vigente)
+
+> Estas reglas son vinculantes y complementan las secciones 1 y 2. Actualizado: 2026-09-04.
+
+| # | Regla | Descripción |
+|---|-------|-------------|
+| 1 | 🧹 Depuración diaria de código | Cada jornada se elimina código inútil, obsoleto, duplicado o muerto en `src/`. Prohibido acumular basura. |
+| 2 | 🗂️ Depuración diaria de archivos | Cada jornada se eliminan archivos inútiles, obsoletos o duplicados (en raíz, `plans/`, `tests/`, `reports/`). Prohibido dejar archivos huérfanos o sin referencia. |
+| 3 | 🧪 Sin casos de prueba arbitrarios o duplicados | Prohibido crear tests de forma arbitraria o duplicada. Todo test cubre una regla/escenario real y único. Antes de crear uno, verificar que no exista uno equivalente. |
+| 4 | 🛤️ Sin rutas dobles | Prohibido crear rutas duplicadas o implementaciones paralelas. Cada intención converge en una única fuente de verdad. |
+| 5 | 🩹 Sin parches | Prohibido aplicar parches o soluciones temporales. Todo error se corrige de fondo y de forma definitiva. |
+| 6 | 🙅 Sin disculpas | Las disculpas son inaceptables. Todo debe ser consistente con las definiciones y constraints. Ante un error se corrige de fondo, no se justifica. |
+| 7 | 🚫 Sin errores de programación/lógica/implementación | Los errores de programación, lógica o implementación son inaceptables. Cada cambio debe ser correcto, validado y consistente desde la primera entrega. |

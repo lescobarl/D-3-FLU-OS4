@@ -2124,9 +2124,24 @@ export function useFluVoiceAssistant({
           return
         }
 
-        const pauseDelay = validation.wakeWordMatched
-          ? FLU_CONFIG.timing.wakeWordCommandDelayMs
-          : FLU_CONFIG.timing.interimCommandDelayMs
+        const timingCfg = FLU_CONFIG.timing
+        const baseDelay = validation.wakeWordMatched
+          ? timingCfg.wakeWordCommandDelayMs
+          : timingCfg.interimCommandDelayMs
+        // Dictado: una frase larga en curso indica que el usuario sigue hablando
+        // (p. ej. dictando una lista). Se amplía el margen antes de auto-procesar
+        // para no cortarlo cuando hace una pausa breve pensando entre ítems.
+        const wordCount = turnPhrase.trim().split(/\s+/).filter(Boolean).length
+        let pauseDelay = baseDelay
+        if (wordCount >= (timingCfg.dictationGraceWords || 0)) {
+          const extra = Math.min(
+            (timingCfg.dictationGraceBaseMs || 0) +
+              (wordCount - (timingCfg.dictationGraceWords || 0)) *
+                (timingCfg.dictationGracePerWordMs || 0),
+            timingCfg.dictationGraceMaxMs || 0,
+          )
+          pauseDelay = baseDelay + extra
+        }
         scheduleAutoProcess(pauseDelay)
       }
 

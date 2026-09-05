@@ -115,6 +115,20 @@ const REMINDER_LIST_ES =
 const REMINDER_LIST_EN =
   /^what(?:'s| is)?\s+(?:pending|my\s+reminders)\b|^show\s+(?:me\s+)?(?:my\s+)?(?:pending|reminders)\b/i;
 
+/**
+ * Citas (agenda). No existe un modelo "cita" separado; por la regla de
+ * fuente única por intención, una cita se modela como recordatorio
+ * (cubre texto + persona + cuándo). Estos triggers reconocen la creación
+ * de una cita y la enrutan a `reminder.add`.
+ */
+const CITA_TRIGGER_ES =
+  /^(?:crea|crear|genera|generar|genérame|generame|agenda|agendar|programa|programar|pon|ponme|poner|hazme|hacer|tengo|quiero|quiero\s+(?:crear|agendar|programar|generar))\s+(?:una\s+|un\s+)?cita\b\s*/i;
+const CITA_TRIGGER_EN =
+  /^(?:create|schedule|book|set|make|add|i\s+have|i\s+want)\s+(?:an?\s+)?appointment\b\s*/i;
+/** Persona de la cita: 'con el doctor', 'con la doctora', 'with the doctor'. */
+const CITA_PERSON_ES = /^con\s+(?:el\s+|la\s+|mi\s+|nuestr[oa]\s+)?([A-ZÁÉÍÓÚÑa-záéíóúñ]+)\b/i;
+const CITA_PERSON_EN = /^with\s+(?:the\s+|my\s+|our\s+)?([A-Za-z]+)\b/i;
+
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
@@ -290,6 +304,67 @@ export function parseReminderIntent(
       lang === 'es'
         ? `Listo, te lo recuerdo${person ? ` y se lo haré saber a ${person}` : ''}: "${textPart}"${whenPhrase}.`
         : `Okay, I will remind you${person ? ` and let ${person} know` : ''}: "${textPart}"${whenPhrase}.`;
+
+    return { handled: true, action: 'reminder.add', reply, data };
+  }
+
+  // --- Citas (agenda) -------------------------------------------
+  // 'crea/agenda/programa una cita con {persona} {cuándo}' → reminder.add.
+  // Las citas se modelan como recordatorios (fuente única por intención).
+  const citaEs = CITA_TRIGGER_ES.exec(text);
+  const citaEn = CITA_TRIGGER_EN.exec(text);
+  const cita = citaEs || citaEn;
+  if (cita) {
+    const lang = citaEs ? 'es' : 'en';
+    let rest = text.slice(cita[0].length).trim();
+
+    // Persona (opcional): 'con el doctor', 'with the doctor'.
+    let person: string | undefined;
+    const conMatch = (lang === 'es' ? CITA_PERSON_ES : CITA_PERSON_EN).exec(rest);
+    if (conMatch) {
+      person = conMatch[1];
+      rest = rest.slice(conMatch[0].length).trim();
+    }
+
+    const { textPart, whenClause } = splitWhen(rest);
+    const base = person
+      ? lang === 'es'
+        ? `cita con ${person}`
+        : `appointment with ${person}`
+      : lang === 'es'
+        ? 'cita'
+        : 'appointment';
+    const subject = textPart ? `${base} ${textPart}` : base;
+    if (!subject.trim()) {
+      return { handled: true, action: null, reply: askTextReply(lang) };
+    }
+
+    let dueAt: number | undefined;
+    let whenLabel: string | undefined;
+    if (whenClause) {
+      const resolved = resolveWhen(whenClause, now);
+      if (resolved) {
+        dueAt = resolved.dueAt;
+        whenLabel = resolved.label;
+      }
+    }
+    if (dueAt === undefined && options.defaultOffsetMs !== undefined) {
+      dueAt = now + options.defaultOffsetMs;
+    }
+
+    const data: ReminderIntentData = { text: subject };
+    if (dueAt !== undefined) data.dueAt = dueAt;
+    if (person) data.personName = person;
+
+    const whenPhrase = whenLabel
+      ? lang === 'es'
+        ? `, ${whenLabel}`
+        : `, at ${whenLabel}`
+      : '';
+    const reply =
+      lang === 'es'
+        ? `Listo, agendé tu cita${person ? ` con ${person}` : ''}: "${subject}"${whenPhrase}.`
+        : `Done, I scheduled your appointment${person ? ` with ${person}` : ''}: "${subject}"${whenPhrase}.`;
 
     return { handled: true, action: 'reminder.add', reply, data };
   }

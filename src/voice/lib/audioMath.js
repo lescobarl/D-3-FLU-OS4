@@ -223,6 +223,38 @@ function matchesCommandPhrase(text = '', phrases = [], options = {}) {
   return false
 }
 
+/**
+ * Comandos de generación de contenido (video/documento) que requieren que el
+ * usuario describa QUÉ generar. Si la frase es SOLO el gatillo ("generame un
+ * video") sin contenido, FLU debe ESPERAR (kind 'wait') a que el usuario
+ * complete la instrucción en vez de disparar "Preparando el video." de inmediato
+ * y truncar la descripción. Si hay contenido tras el gatillo ("generame un video
+ * sobre la historia de México"), NO es un gatillo pelado y debe ir a la IA.
+ */
+function isBareContentGenerationTrigger(text = '', voiceCommands = {}) {
+  const snapshot = cleanForSpeech(text)
+  if (!snapshot) return false
+
+  const wakeWords = voiceCommands.wakeWords || []
+  const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
+  const afterWake = cleanForSpeech(split.afterWake || split.commandText || snapshot)
+
+  const triggerPhrases = [
+    ...(voiceCommands.generateVideo || []),
+    ...(voiceCommands.generateDocument || []),
+  ]
+  if (!triggerPhrases.length) return false
+
+  const norm = normalizeVoiceCommandText(afterWake)
+  if (!norm) return false
+
+  // Gatillo pelado: el texto (tras wake word) coincide EXACTAMENTE con una de
+  // las frases canónicas de generación, sin contenido adicional.
+  return triggerPhrases.some(
+    (phrase) => normalizeVoiceCommandText(phrase) === norm,
+  )
+}
+
 const RECOVERABLE_RECOGNITION_ERRORS = new Set(['no-speech', 'aborted', 'network'])
 
 export function matchWakeWordPrefix(text = '', wakeWords = []) {
@@ -609,7 +641,20 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
   }
 
   const command = detectSessionVoiceCommand(text, voiceCommands)
-  if (command) return { kind: 'command', command }
+  if (command) {
+    // Generación de contenido (video/documento): si la frase es SOLO el gatillo
+    // ("generame un video") sin descripción de QUÉ generar, FLU debe ESPERAR a
+    // que el usuario complete la instrucción en vez de disparar de inmediato y
+    // truncar el contenido. El contenido llega en una frase posterior o en la
+    // misma frase con descripción (esa NO es gatillo pelado → va a la IA).
+    if (
+      (command === 'GENERAR_VIDEO' || command === 'GENERAR_DOCUMENTO') &&
+      isBareContentGenerationTrigger(text, voiceCommands)
+    ) {
+      return { kind: 'wait' }
+    }
+    return { kind: 'command', command }
+  }
 
   if (!split.wakeWordMatched) return { kind: 'log' }
 
@@ -951,6 +996,53 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
 export function removeWakeWord(text = '', wakeWords = []) {
   const result = extractFluVoiceCommand(text, { requireWake: true, wakeWords })
   return result.accepted ? result.commandText : normalizeVoiceCommandText(text)
+}
+
+/**
+ * Para mostrar la transcripción en la UI: si el texto contiene una palabra de
+ * activación (wake word), se muestra SOLO lo que viene después de ella; si no
+ * hay wake word, se muestra el texto tal cual. Así la transcripción en pantalla
+ * refleja la intención del usuario sin el prefijo de activación ("Flu, ...").
+ *
+ * A diferencia de splitTranscriptAtWakeWord (que normaliza y pierde los acentos),
+ * este helper recorta sobre el texto ORIGINAL para conservar la frase tal y como
+ * la dijo el usuario (p. ej. "recuérdame" no pierde la tilde).
+ */
+export function stripWakeWordForDisplay(text = '', wakeWords = []) {
+  const source = typeof text === 'string' ? text : ''
+  if (!source.trim() || !wakeWords.length) return source
+
+  // Confirmamos que hay un wake word usando la detección normalizada ya probada.
+  const split = splitTranscriptAtWakeWord(source, wakeWords)
+  if (!split.wakeWordMatched) return source
+
+  // Los wake words son ASCII (sin acentos), así que podemos localizarlos en el
+  // texto original con una búsqueda insensible a mayúsculas y recortar desde ahí
+  // conservando los acentos del resto de la frase.
+  const candidates = wakeWords
+    .map((wakeWord) => normalizeVoiceCommandText(wakeWord))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length) // primero los compuestos ("oye flu")
+  const lower = source.toLowerCase()
+  let foundIndex = -1
+  let foundLength = 0
+  for (const candidate of candidates) {
+    const index = lower.indexOf(candidate)
+    if (index < 0) continue
+    const before = index === 0 ? '' : lower[index - 1]
+    const after = lower[index + candidate.length] || ''
+    if (before && /\w/.test(before)) continue // parte de otra palabra
+    if (after && /\w/.test(after)) continue // parte de otra palabra
+    if (foundIndex < 0 || index < foundIndex) {
+      foundIndex = index
+      foundLength = candidate.length
+    }
+  }
+  if (foundIndex < 0) return source
+
+  // Salta puntuación/espacios que sigan al wake word (p. ej. "flu, crea...").
+  const rest = source.slice(foundIndex + foundLength).replace(/^[\s,.;:!?\-—]+/, '')
+  return rest || source
 }
 
 export function cosineDistance(vectorA = [], vectorB = []) {

@@ -168,6 +168,7 @@ import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
+import { stripWakeWordForDisplay } from './voice/lib/audioMath';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
@@ -176,6 +177,7 @@ import {
     getAmbientes,
     getVisibleTabIds,
     isAmbienteId,
+    DEFAULT_AMBIENTE_ID,
     type EnvironmentDefinition,
 } from './core/environments/environmentRegistry';
 import { useEnvironmentStore, readPersistedActiveAmbienteId } from './store/environmentStore';
@@ -1731,9 +1733,72 @@ function App() {
             if (transcript && !rawOnly) {
                 const w: any = window as any;
                 try {
+                    // ============================================================
+                    // PUNTO ÚNICO DE NORMALIZACIÓN DEL MANDATO (hub de integración)
+                    // ============================================================
+                    // El transcript crudo llega CON la wake word pegada ("Okay Blue
+                    // generame una cita...") y con fragmentos ASR duplicados ("Okay
+                    // Flow generame Una Okay flu genérame una nota..."). Los parsers
+                    // deterministas (parseReminderIntent, __fluHandleNoteText, etc.)
+                    // anclan sus regex al inicio del mandato, así que aquí se limpia
+                    // TODO el prefijo de wake word (una sola vez, para todos los
+                    // manejadores) y se colapsan los fragmentos duplicados antes de
+                    // despachar. Este es EL ÚNICO punto donde se separa la wake word
+                    // del mandato para la resolución determinista de intención.
+                    const wakeWords: string[] =
+                        ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
+                    let commandText = String(transcript || '').trim();
+                    if (wakeWords.length) {
+                        // 1) Quitar TODAS las apariciones de wake word (no solo la
+                        //    primera) para tolerar el eco ASR duplicado.
+                        const candidates = wakeWords
+                            .map((ww) => ww.toLowerCase())
+                            .filter(Boolean)
+                            .sort((a, b) => b.length - a.length); // compuestos primero
+                        let stripped = commandText;
+                        for (const candidate of candidates) {
+                            // Reemplazo global insensible a mayúsculas/acentos.
+                            const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            const re = new RegExp(
+                                `(^|\\s)${escaped}(?=\\s|$|,|\\.)`,
+                                'gi',
+                            );
+                            stripped = stripped.replace(re, ' ');
+                        }
+                        // Si la wake word quedó al inicio sin espacio previo (p.ej.
+                        // "Okay Blue generame"), el regex anterior ya la quitó. Si
+                        // quedó algún residuo de normalización, lo limpiamos.
+                        commandText = stripped.replace(/\s+/g, ' ').trim();
+                        // 2) Colapsar fragmentos duplicados del mandato: cuando el ASR
+                        //    repite el verbo ("generame ... genérame una nota"), nos
+                        //    quedamos con la última aparición completa. El patrón real
+                        //    es "VERBO una VERBO una NOTA ...": buscamos la ÚLTIMA
+                        //    ocurrencia de "VERBO [una|un] NOTA" y recortamos desde ahí.
+                        const intentNoun = /(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/i;
+                        const lastVerbMatch = /(genera|genérame|generame|generar|crea|crear|haz|hacer|pon|poner|ponme|guarda|guardar|anota|anotar|apunta|apuntar|agenda|agendar|programa|programar)\w*\s+(?:una\s+|un\s+)?(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/i;
+                        const lastMatch = lastVerbMatch.exec(commandText);
+                        if (lastMatch) {
+                            // Recortar todo lo anterior a la última aparición del verbo.
+                            const lastIdx = commandText.lastIndexOf(lastMatch[0]);
+                            if (lastIdx > 0) {
+                                commandText = commandText.slice(lastIdx).trim();
+                            }
+                        } else if (intentNoun.test(commandText)) {
+                            // Sin verbo duplicado pero con eco "Una ...": quitar un
+                            // fragmento "una/un" huérfano al inicio.
+                            commandText = commandText.replace(/^(?:una|un)\s+/i, '');
+                        }
+                        if (commandText !== transcript) {
+                            relayLog(
+                                'LOG',
+                                'App',
+                                `onContractResolved: mandato normalizado (wake word + eco ASR) → "${commandText}"`,
+                            );
+                        }
+                    }
                     // 1) Recordatorios + lista de compras (parseReminderIntent)
                     if (!localHandledReply && typeof w.__fluHandleReminderText === 'function') {
-                        const reply = await w.__fluHandleReminderText(transcript, {
+                        const reply = await w.__fluHandleReminderText(commandText, {
                             personId: undefined,
                             personName: speakerName || undefined,
                         });
@@ -1741,12 +1806,12 @@ function App() {
                     }
                     // 2) Alarmas + temporizadores (parseTemporalIntent)
                     if (!localHandledReply && typeof w.__fluHandleTemporalText === 'function') {
-                        const reply = await w.__fluHandleTemporalText(transcript);
+                        const reply = await w.__fluHandleTemporalText(commandText);
                         if (reply) localHandledReply = reply;
                     }
                     // 3) Notas (dictado: "nota para el super", "nota para recordar...")
                     if (!localHandledReply && typeof w.__fluHandleNoteText === 'function') {
-                        const reply = await w.__fluHandleNoteText(transcript, {
+                        const reply = await w.__fluHandleNoteText(commandText, {
                             personId: undefined,
                             personName: speakerName || undefined,
                         });
@@ -1754,7 +1819,7 @@ function App() {
                     }
                     // 4) Diario (dictado: "escribe en el diario...")
                     if (!localHandledReply && typeof w.__fluHandleDiaryText === 'function') {
-                        const reply = await w.__fluHandleDiaryText(transcript, {
+                        const reply = await w.__fluHandleDiaryText(commandText, {
                             personId: undefined,
                             personName: speakerName || undefined,
                         });
@@ -1763,7 +1828,7 @@ function App() {
                     // 5) Horario (dictado: "agrega matemáticas el lunes a las 8",
                     //    "qué clases tengo mañana", "quita historia del viernes")
                     if (!localHandledReply && typeof w.__fluHandleHorarioText === 'function') {
-                        const reply = await w.__fluHandleHorarioText(transcript);
+                        const reply = await w.__fluHandleHorarioText(commandText);
                         if (reply) localHandledReply = reply;
                     }
                 } catch (err) {
@@ -2314,12 +2379,30 @@ function App() {
             // ============================================================
             if (environmentAction?.tipo) {
                 try {
-                    const ambiente =
+                    // Idempotencia: si el ambiente resuelto YA es el activo, no se
+                    // re-aplica (evita que un `ambiente: "asistente"` espurio del LLM
+                    // dispare un reset innecesario que re-activa el perfil por defecto).
+                    // Un cambio legítimo de rol sigue funcionando porque el id objetivo
+                    // difiere del activo (ej. en "chef" + "vuelve al modo asistente").
+                    const resolvedId =
                         environmentAction.tipo === 'reset'
-                            ? resetEnvironment()
-                            : applyEnvironment(environmentAction.ambienteId);
-                    const envLang = languageRef.current === 'en' ? 'en' : 'es';
-                    await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
+                            ? DEFAULT_AMBIENTE_ID
+                            : environmentAction.ambienteId;
+                    const currentId = useEnvironmentStore.getState().activeAmbienteId;
+                    if (resolvedId === currentId) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `[Ambiente] "${resolvedId}" ya activo — se omite re-aplicación (idempotente).`
+                        );
+                    } else {
+                        const ambiente =
+                            environmentAction.tipo === 'reset'
+                                ? resetEnvironment()
+                                : applyEnvironment(environmentAction.ambienteId);
+                        const envLang = languageRef.current === 'en' ? 'en' : 'es';
+                        await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
+                    }
                 } catch (err) {
                     console.error('[App] applyEnvironment failed (non-critical):', err);
                 }
@@ -2911,12 +2994,24 @@ function App() {
     (window as any).__fluHandleNoteText = useCallback(
         async (text: string, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const clean = String(text || '').trim();
+            let clean = String(text || '').trim();
             if (!clean) return '';
             const notesVoice = ((FLU_CONFIG as any).notes?.voice || {}) as any;
             const addedMsg =
                 notesVoice.added ||
                 (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
+
+            // 0) Prefijos de creación explícita: "crea/haz/pon/guarda una nota ...",
+            //    "quiero crear una nota ...". Se normalizan a la forma canónica
+            //    "nota ..." para que los patrones 1-3 los reconozcan sin duplicar
+            //    lógica (fuente única por intención).
+            const creationPrefix =
+                /^(?:crea|crear|genera|generar|genérame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i;
+            const creationMatch = creationPrefix.exec(clean);
+            if (creationMatch) {
+                const rest = creationMatch[1].trim();
+                clean = rest ? `nota ${rest}` : 'nota';
+            }
 
             // Normalizar para matching (minúsculas, sin acentos).
             const norm = clean
@@ -2930,7 +3025,7 @@ function App() {
 
             // 1) "nota para el super" / "nota para el supermercado" / "nota para comprar X"
             //    → nota cuyo contenido es el resto tras el marcador.
-            const paraSuper = /^nota\s+(?:para|de)\s+(?:el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i.exec(norm);
+            const paraSuper = /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i.exec(norm);
             if (paraSuper) {
                 const rest = paraSuper[2].trim();
                 const label = rest
@@ -3205,11 +3300,11 @@ function App() {
     };
 
     // ---- Puerta de identidad al arrancar (dispositivo compartido) ----
-    // Al abrir la app, si ya hay perfiles registrados (o quedó onboarding
-    // legacy completado sin perfil → "fantasma"), se pregunta "¿Quién eres?"
-    // para que cada persona de la familia elija o cree el suyo y no quede en
-    // la sesión del anterior. No se abre en el primer arranque (0 perfiles y
-    // onboarding sin completar → corren las preguntas de bienvenida).
+    // Al abrir la app se pregunta "¿Quién eres?" SOLO cuando hay varios
+    // perfiles reales (2+ excluyendo la semilla anónima). Si hay un único
+    // perfil real (o ninguno además del anónimo), no se interrumpe: se
+    // restaura la sesión persistida del último que accedió o se deja correr
+    // el flujo normal (primer arranque → preguntas de bienvenida).
     const pickerAutoOpenDoneRef = useRef(false);
     useEffect(() => {
         if (pickerAutoOpenDoneRef.current) return;
@@ -3224,10 +3319,19 @@ function App() {
             activeParticipantId !== DEFAULT_ONBOARDING_USER &&
             participants.participants.some((p) => p.id === activeParticipantId);
         if (hasPersistedActive) return;
-        const hasProfiles = participants.participants.length >= 1;
-        const ghostCompleted = onboarding.state.completed;
         if (pickerMode || onboarding.visible) return;
-        if (hasProfiles || ghostCompleted) {
+        // Perfiles reales = todos excepto la semilla anónima (config-driven
+        // vía multiuser.skipDefaults.anonymousName). El anónimo se siembra en
+        // cada montaje y NO cuenta como perfil de persona.
+        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').toLowerCase();
+        const realProfiles = participants.participants.filter(
+            (p) => p.name.trim().toLowerCase() !== anonymousName
+        );
+        // Opción 3: preguntar solo si hay varios perfiles reales (2+).
+        // Con 0 o 1 perfil real no se abre el selector: se restaura la sesión
+        // persistida (si existe) o se deja correr el flujo normal.
+        if (realProfiles.length >= 2) {
             setPickerMode(true);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4311,7 +4415,7 @@ const {
                                     {/* OS3 parity: live phrase display above conversation log — sin label para ahorrar espacio */}
                                     <div className="conversation-live-phrase frame-content__response">
                                         <div className="conversation-live-phrase__scroll">
-                                            <span>{liveTranscript || integrationStore.currentTranscript || '\u00a0'}</span>
+                                            <span>{stripWakeWordForDisplay(liveTranscript || integrationStore.currentTranscript || '', FLU_CONFIG.voiceCommands?.wakeWords || []) || '\u00a0'}</span>
                                         </div>
                                     </div>
                                     <ConversationLogAny

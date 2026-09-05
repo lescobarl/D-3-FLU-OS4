@@ -262,6 +262,16 @@ export const FLU_CONFIG = {
     streamLogThrottleMs: 0,
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 500,
+    /**
+     * Dictado: cuanto más larga es la frase en curso, más margen se da antes de
+     * auto-procesar. Evita cortar al usuario que dicta una lista pensando y
+     * hablando entre ítems ("estoy pensando y hablando, lleva tiempo… no puedes
+     * cortarlo"). Los comandos cortos siguen disparando rápido.
+     */
+    dictationGraceWords: 6,
+    dictationGraceBaseMs: 500,
+    dictationGracePerWordMs: 120,
+    dictationGraceMaxMs: 4000,
     conversationMinMsAfterLastResult: 30,
     interimFinalizeGraceMs: 25,
     conversationSettleStableMs: 80,

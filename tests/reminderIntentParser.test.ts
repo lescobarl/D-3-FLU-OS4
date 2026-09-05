@@ -204,6 +204,55 @@ describe('reminderIntentParser — listas de recordatorios', () => {
   });
 });
 
+describe('reminderIntentParser — citas (agenda)', () => {
+  it('"crea una cita con el doctor el lunes a las 3" → reminder.add con persona y cuándo', () => {
+    const result = parseReminderIntent('crea una cita con el doctor el lunes a las 3', { now });
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.add');
+    expect(result.data?.text).toBe('cita con doctor');
+    expect(result.data?.personName).toBe('doctor');
+    expect(typeof result.data?.dueAt).toBe('number');
+    expect(result.reply).toMatch(/^Listo, agendé tu cita con doctor/);
+  });
+
+  it('"agenda una cita con la doctora mañana" → reminder.add', () => {
+    const result = parseReminderIntent('agenda una cita con la doctora mañana', { now });
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.add');
+    expect(result.data?.text).toBe('cita con doctora');
+    expect(result.data?.personName).toBe('doctora');
+    expect(typeof result.data?.dueAt).toBe('number');
+  });
+
+  it('"programa una cita" sin cuándo usa el desfase por defecto', () => {
+    expect(parseReminderIntent('programa una cita', { now, defaultOffsetMs: 60000 })).toEqual({
+      handled: true,
+      action: 'reminder.add',
+      reply: 'Listo, agendé tu cita: "cita".',
+      data: { text: 'cita', dueAt: NOW + 60000 },
+    });
+  });
+
+  it('"schedule an appointment with the doctor tomorrow" → reminder.add (en)', () => {
+    const result = parseReminderIntent('schedule an appointment with the doctor tomorrow', { now });
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.add');
+    expect(result.data?.text).toBe('appointment with doctor');
+    expect(result.data?.personName).toBe('doctor');
+    expect(typeof result.data?.dueAt).toBe('number');
+    expect(result.reply).toMatch(/^Done, I scheduled your appointment with doctor/);
+  });
+
+  it('"create an appointment" sin cuándo usa el desfase por defecto (en)', () => {
+    expect(parseReminderIntent('create an appointment', { now, defaultOffsetMs: 60000 })).toEqual({
+      handled: true,
+      action: 'reminder.add',
+      reply: 'Done, I scheduled your appointment: "appointment".',
+      data: { text: 'appointment', dueAt: NOW + 60000 },
+    });
+  });
+});
+
 describe('reminderIntentParser — no reconocido', () => {
   it.each(['hola', '', '   ', 'qué pendientes tengo', 'agrega leche'])(
     'devuelve handled:false para "%s"',
