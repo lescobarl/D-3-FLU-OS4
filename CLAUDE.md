@@ -107,7 +107,7 @@ flu-os/
 ## 6. VALIDACIÓN PRE-COMMIT
 
 Antes de realizar un commit, el agente DEBE:
-1. Ejecutar `npm run test` y confirmar que todos los tests pasan
+1. Ejecutar `npm run test:full` (suite completa) y confirmar que todos los tests pasan
 2. Verificar que no hay código hardcodeado
 3. Verificar que no hay try-catch vacíos
 4. Verificar que toda nueva tabla tiene tupla `[revision, updated_at, deleted]`
@@ -149,7 +149,7 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 
 | # | Regla | Descripción |
 |---|-------|-------------|
-| 1 | ⚡ Verificación por iteración mínima | Ejecutar SOLO la prueba del cambio específico: `npx vitest run --changed --reporter=dot --silent` (añadir `-t "<nombre>"` para acotar dentro del archivo). El `npm test` completo (119 archivos / 2390 tests) queda reservado para cierre de hitos/entregas. |
+| 1 | ⚡ Verificación por iteración mínima | El comando por defecto `npm test` ejecuta SOLO la prueba del cambio específico (`vitest run --changed --reporter=dot --silent`; añadir `-t "<nombre>"` para acotar dentro del archivo). La suite completa queda reservada a `npm run test:full`, que se usa SOLO en cierre de hitos/entregas y pre-commit (Sección 6). Esta estructura está blindada por [`tests/protocolGuard.test.ts`](tests/protocolGuard.test.ts): si `npm test` deja de ser `--changed` o se elimina `test:full`, la suite completa falla. |
 | 2 | 🚪 Puerta de tipos por iteración | Correr `npx tsc -b` en cada iteración (verificación de tipos incremental). El `vite build` completo solo en cierre de hitos. El dev server + HMR sirve como capa de verificación de runtime en vivo. |
 | 3 | 📦 Sin backups por iteración | No crear backups robocopy por cada iteración; solo cuando el usuario lo indique explícitamente. |
 | 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` directamente con `start_line` y contenido ya conocido (bloques mapeados), sin re-leer archivos completos de miles de líneas. Solo re-leer un bloque si el diff falla por desajuste. |

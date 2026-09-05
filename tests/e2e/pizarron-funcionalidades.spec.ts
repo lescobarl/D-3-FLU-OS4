@@ -124,29 +124,53 @@ async function setWorkspaceArtifact(page: Page, artifact: Record<string, unknown
  * Silencia speechSynthesis y, CRÍTICO, dispara `onend` en cada utterance
  * para que la promesa de speakResponse() (fluSpeech.js) resuelva. Sin esto,
  * `await speakPromise` en App.tsx cuelga y el workspaceArtifact nunca se fija.
+ *
+ * IMPORTANTE (orden): usa page.addInitScript, que SOLO aplica a la SIGUIENTE
+ * navegación. Debe registrarse ANTES de gotoClean(page) (que hace page.goto);
+ * si se registra después, el stub queda inactivo y se usa el TTS real de
+ * Chromium headless, cuyo `onend` puede no dispararse bajo carga paralela →
+ * `await speakPromise` (App.tsx) cuelga y el flujo posterior nunca corre.
+ *
+ * El stub emula speechSynthesis de forma completa: define `speaking`/`pending`
+ * (los lee speakResponse/isSpeechBusy) y `addEventListener`/`removeEventListener`
+ * (los usa ensureSpeechVoicesReady cuando getVoices() devuelve vacío), para que
+ * los caminos de voz funcionen con normalidad y no por fallback de error.
  */
 function stubLocalSpeech(page: Page) {
     return page.addInitScript(() => {
         const noop = () => {};
-        Object.defineProperty(window, 'speechSynthesis', {
-            value: {
-                speak(utterance: any) {
-                    // Disparar onend de forma asíncrona para que la promesa
-                    // de speakSingleChunk() resuelva (igual que el TTS real).
-                    setTimeout(() => {
-                        try {
-                            if (typeof utterance?.onend === 'function') utterance.onend();
-                        } catch {
-                            /* noop */
-                        }
-                    }, 5);
-                },
-                cancel: noop,
-                pause: noop,
-                resume: noop,
-                getVoices: () => [],
-                onvoiceschanged: null,
+        const listeners = new Map<string, Set<Function>>();
+        const synth = {
+            speaking: false,
+            pending: false,
+            speak(utterance: any) {
+                // Disparar onend de forma asíncrona para que la promesa
+                // de speakSingleChunk() resuelva (igual que el TTS real).
+                this.speaking = true;
+                setTimeout(() => {
+                    this.speaking = false;
+                    try {
+                        if (typeof utterance?.onend === 'function') utterance.onend();
+                    } catch {
+                        /* noop */
+                    }
+                }, 5);
             },
+            cancel: noop,
+            pause: noop,
+            resume: noop,
+            getVoices: () => [],
+            onvoiceschanged: null,
+            addEventListener(type: string, cb: Function) {
+                if (!listeners.has(type)) listeners.set(type, new Set());
+                listeners.get(type)!.add(cb);
+            },
+            removeEventListener(type: string, cb: Function) {
+                listeners.get(type)?.delete(cb);
+            },
+        };
+        Object.defineProperty(window, 'speechSynthesis', {
+            value: synth,
             configurable: true,
         });
         (window as any).SpeechSynthesisUtterance = class {
@@ -214,8 +238,11 @@ const SAMPLE_WORKSPACE_VISUAL = {
 test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalidades', () => {
     test.describe('1. Respuesta de la IA en el Pizarrón', () => {
         test('1.1 El contrato de voz con respuesta_voz muestra la respuesta en la pestaña respuesta', async ({ page }) => {
-            const errors = await gotoClean(page);
+            // stubLocalSpeech usa addInitScript → debe ir ANTES de gotoClean
+            // (que hace page.goto) para que el stub de speechSynthesis esté
+            // activo cuando el contrato dispare la voz.
             await stubLocalSpeech(page);
+            const errors = await gotoClean(page);
 
             await driveContract(page, {
                 respuesta_voz: SAMPLE_RESPONSE,
@@ -337,8 +364,8 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
 
     test.describe('4. Imágenes de Pollinations/IA (contrato visual)', () => {
         test('4.1 El contrato visual genera la imagen en la pestaña imagen', async ({ page }) => {
-            const errors = await gotoClean(page);
             await stubLocalSpeech(page);
+            const errors = await gotoClean(page);
 
             // Mock del endpoint de generación de imagen (Pollinations) para
             // que la prueba sea determinista y no dependa de la red real.
@@ -414,8 +441,15 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
 
     test.describe('5. Navegador (contrato NAVEGAR → búsqueda curada en el feed)', () => {
         test('5.1 El contrato NAVEGAR dispara la búsqueda curada en la tarjeta web-resultados', async ({ page }) => {
-            await gotoClean(page);
+            // stubLocalSpeech usa page.addInitScript, que SOLO aplica a la
+            // siguiente navegación. Debe registrarse ANTES de gotoClean (que
+            // hace page.goto) para que el stub de speechSynthesis esté activo
+            // cuando el contrato dispare la voz. Si se registra después, el
+            // TTS real de Chromium headless se usa y `await speakPromise`
+            // (App.tsx) puede colgar bajo carga paralela → la búsqueda NAVEGAR
+            // nunca se dispara (flakiness de test 5.1).
             await stubLocalSpeech(page);
+            await gotoClean(page);
 
             // NAVEGAR se unifica con BUSCAR: el comando resuelve el sitio y
             // dispara una búsqueda web en la pestaña "Buscar" (WorkspaceSearch),
@@ -505,8 +539,8 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
 
     test.describe('6. Cargas de archivo (subir imagen por input real)', () => {
         test('6.1 Subir una imagen muestra la vista previa en la pestaña archivos', async ({ page }) => {
-            await gotoClean(page);
             await stubLocalSpeech(page);
+            await gotoClean(page);
 
             // La zona de carga está siempre visible en el Pizarrón consolidado.
 
@@ -536,8 +570,8 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
 
     test.describe('7. Generación de documentos (F1 → F3)', () => {
         test('7.1 Subir un documento .txt y generar un documento descargable', async ({ page }) => {
-            await gotoClean(page);
             await stubLocalSpeech(page);
+            await gotoClean(page);
 
             // La zona de carga está siempre visible en el Pizarrón consolidado.
 
@@ -568,8 +602,8 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
 
     test.describe('8. OCR (análisis de imagen subida)', () => {
         test('8.1 Subir una imagen dispara el análisis (estado de análisis visible)', async ({ page }) => {
-            await gotoClean(page);
             await stubLocalSpeech(page);
+            await gotoClean(page);
 
             // La zona de carga está siempre visible en el Pizarrón consolidado.
 

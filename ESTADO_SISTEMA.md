@@ -91,7 +91,7 @@
 ### Control de Versiones
 1. **Backup local**: `rollback/backup-2026-08-18-seq1/` eliminado por ser duplicado obsoleto (2026-08-19)
 2. **Recomendación**: Usar control de versiones (git) como respaldo del proyecto
-3. **Verificación**: Ejecutar `npm test` y `npm run build` para validar el estado actual
+3. **Verificación**: Ejecutar `npm run test:full` (suite completa) y `npm run build` para validar el estado actual
 
 ### Solución de Problemas
 - **Servidor no accesible**: Revisar la consola del servidor (vite) y los errores en la pestaña Sistema
