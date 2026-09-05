@@ -24,3 +24,4 @@ debug.log
 
 # Backups (safety net — excluded from git)
 backups/
+"test-output.txt"  
