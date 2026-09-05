@@ -1045,6 +1045,70 @@ export function stripWakeWordForDisplay(text = '', wakeWords = []) {
   return rest || source
 }
 
+// ============================================================
+// PUNTO ÚNICO DE NORMALIZACIÓN DEL MANDATO (hub de integración)
+// ============================================================
+// El transcript crudo llega CON la wake word pegada ("Okay Blue generame una
+// cita...") y con fragmentos ASR duplicados ("Okay Flow generame Una Okay flu
+// genérame una nota..."). Los parsers deterministas (parseReminderIntent,
+// __fluHandleNoteText, etc.) anclan sus regex al inicio del mandato, así que
+// aquí se limpia TODO el prefijo de wake word (una sola vez, para todos los
+// manejadores) y se colapsan los fragmentos duplicados antes de despachar.
+//
+// Esta es LA ÚNICA función que separa la wake word del mandato para la
+// resolución determinista de intención. Antes vivía inline en App.tsx
+// (onContractResolved); se extrajo aquí como función pura testeable para que
+// todos los consumidores compartan el mismo comportamiento (una tubería).
+//
+// @param {string} text Transcript crudo (con wake word y posible eco ASR).
+// @param {string[]} [wakeWords=[]] Palabras de activación configuradas.
+// @returns {string} Mandato limpio y normalizado (sin wake word ni eco).
+export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
+  let commandText = String(text || '').trim()
+  if (!commandText || !wakeWords.length) return commandText
+
+  // 1) Quitar TODAS las apariciones de wake word (no solo la primera) para
+  //    tolerar el eco ASR duplicado.
+  const candidates = wakeWords
+    .map((ww) => String(ww || '').toLowerCase())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length) // compuestos primero
+  let stripped = commandText
+  for (const candidate of candidates) {
+    // Reemplazo global insensible a mayúsculas/acentos.
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`(^|\\s)${escaped}(?=\\s|$|,|\\.)`, 'gi')
+    stripped = stripped.replace(re, ' ')
+  }
+  commandText = stripped.replace(/\s+/g, ' ').trim()
+
+  // 2) Colapsar fragmentos duplicados del mandato: cuando el ASR repite el
+  //    verbo ("generame ... genérame una nota"), nos quedamos con la última
+  //    aparición completa. El patrón real es "VERBO una VERBO una NOTA ...":
+  //    buscamos la ÚLTIMA ocurrencia de "VERBO [una|un] NOTA" y recortamos.
+  //    NOTA: exec() solo devuelve la PRIMERA coincidencia, así que iteramos
+  //    con el flag global para localizar la última (evita que el eco quede
+  //    sin colapsar cuando la primera aparición está en el índice 0).
+  const intentNoun = /(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/i
+  const verbPhraseRe = /(genera|genérame|generame|generar|crea|crear|haz|hacer|pon|poner|ponme|guarda|guardar|anota|anotar|apunta|apuntar|agenda|agendar|programa|programar)\w*\s+(?:una\s+|un\s+)?(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/gi
+  let lastIdx = -1
+  let match = verbPhraseRe.exec(commandText)
+  while (match) {
+    lastIdx = match.index
+    match = verbPhraseRe.exec(commandText)
+  }
+  if (lastIdx > 0) {
+    // Recortar todo lo anterior a la última aparición del verbo.
+    commandText = commandText.slice(lastIdx).trim()
+  } else if (lastIdx === -1 && intentNoun.test(commandText)) {
+    // Sin verbo duplicado pero con eco "Una ...": quitar un fragmento
+    // "una/un" huérfano al inicio.
+    commandText = commandText.replace(/^(?:una|un)\s+/i, '')
+  }
+
+  return commandText
+}
+
 export function cosineDistance(vectorA = [], vectorB = []) {
   const length = Math.min(vectorA.length, vectorB.length)
   if (!length) return 1

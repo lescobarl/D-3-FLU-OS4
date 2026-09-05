@@ -168,7 +168,7 @@ import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
-import { stripWakeWordForDisplay } from './voice/lib/audioMath';
+import { stripWakeWordForDisplay, normalizeCommandForDeterministic } from './voice/lib/audioMath';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
@@ -1747,54 +1747,16 @@ function App() {
                     // del mandato para la resolución determinista de intención.
                     const wakeWords: string[] =
                         ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
-                    let commandText = String(transcript || '').trim();
-                    if (wakeWords.length) {
-                        // 1) Quitar TODAS las apariciones de wake word (no solo la
-                        //    primera) para tolerar el eco ASR duplicado.
-                        const candidates = wakeWords
-                            .map((ww) => ww.toLowerCase())
-                            .filter(Boolean)
-                            .sort((a, b) => b.length - a.length); // compuestos primero
-                        let stripped = commandText;
-                        for (const candidate of candidates) {
-                            // Reemplazo global insensible a mayúsculas/acentos.
-                            const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                            const re = new RegExp(
-                                `(^|\\s)${escaped}(?=\\s|$|,|\\.)`,
-                                'gi',
-                            );
-                            stripped = stripped.replace(re, ' ');
-                        }
-                        // Si la wake word quedó al inicio sin espacio previo (p.ej.
-                        // "Okay Blue generame"), el regex anterior ya la quitó. Si
-                        // quedó algún residuo de normalización, lo limpiamos.
-                        commandText = stripped.replace(/\s+/g, ' ').trim();
-                        // 2) Colapsar fragmentos duplicados del mandato: cuando el ASR
-                        //    repite el verbo ("generame ... genérame una nota"), nos
-                        //    quedamos con la última aparición completa. El patrón real
-                        //    es "VERBO una VERBO una NOTA ...": buscamos la ÚLTIMA
-                        //    ocurrencia de "VERBO [una|un] NOTA" y recortamos desde ahí.
-                        const intentNoun = /(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/i;
-                        const lastVerbMatch = /(genera|genérame|generame|generar|crea|crear|haz|hacer|pon|poner|ponme|guarda|guardar|anota|anotar|apunta|apuntar|agenda|agendar|programa|programar)\w*\s+(?:una\s+|un\s+)?(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/i;
-                        const lastMatch = lastVerbMatch.exec(commandText);
-                        if (lastMatch) {
-                            // Recortar todo lo anterior a la última aparición del verbo.
-                            const lastIdx = commandText.lastIndexOf(lastMatch[0]);
-                            if (lastIdx > 0) {
-                                commandText = commandText.slice(lastIdx).trim();
-                            }
-                        } else if (intentNoun.test(commandText)) {
-                            // Sin verbo duplicado pero con eco "Una ...": quitar un
-                            // fragmento "una/un" huérfano al inicio.
-                            commandText = commandText.replace(/^(?:una|un)\s+/i, '');
-                        }
-                        if (commandText !== transcript) {
-                            relayLog(
-                                'LOG',
-                                'App',
-                                `onContractResolved: mandato normalizado (wake word + eco ASR) → "${commandText}"`,
-                            );
-                        }
+                    // PUNTO ÚNICO DE NORMALIZACIÓN: delega en la función pura
+                    // normalizeCommandForDeterministic (audioMath.js) que quita la
+                    // wake word y colapsa el eco ASR para TODOS los manejadores.
+                    const commandText = normalizeCommandForDeterministic(transcript, wakeWords);
+                    if (commandText !== transcript) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: mandato normalizado (wake word + eco ASR) → "${commandText}"`,
+                        );
                     }
                     // 1) Recordatorios + lista de compras (parseReminderIntent)
                     if (!localHandledReply && typeof w.__fluHandleReminderText === 'function') {
