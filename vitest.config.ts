@@ -10,6 +10,14 @@ export default defineConfig({
         include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
         exclude: ['tests/e2e/**', 'node_modules/**'],
         testTimeout: 15_000,
+        // RENDIMIENTO: pool 'forks' (default de vitest 3) resultó más rápido
+        // que 'threads' en este proyecto (jsdom + three.js). Con 12 CPUs
+        // lógicos, el cuello de botella es el arranque/transform de workers
+        // (environment ~360-418s sumado vs tests ~16-20s), no la ejecución.
+        // maxWorkers explícito aprovecha más CPUs sin saturar el wall-clock.
+        pool: 'forks',
+        maxWorkers: 10,
+        minWorkers: 2,
     },
     resolve: {
         // dedupe: fuerza a vitest a resolver 'three' SIEMPRE desde el
