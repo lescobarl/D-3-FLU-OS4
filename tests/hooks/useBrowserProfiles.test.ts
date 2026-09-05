@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Tests para useBrowserProfiles — Punto 2: Navegador curado
 // ============================================================

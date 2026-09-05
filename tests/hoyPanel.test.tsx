@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Validación de render del panel lateral "Hoy" (Paso 2 del
 // Pizarrón consolidado). Monta HoyPanel con datos de ejemplo y

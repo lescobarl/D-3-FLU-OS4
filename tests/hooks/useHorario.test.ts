@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Tests para useHorario — horario de clases en el Pizarrón
 // ============================================================

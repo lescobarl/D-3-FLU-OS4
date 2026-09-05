@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Tests para useCommunicationProfiles — personalización profunda (FASE P)
 // ============================================================

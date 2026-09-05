@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Validación de render del feed de resultados unificado (Paso 3
 // del Pizarrón consolidado). Monta ResultFeed con tarjetas de

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Tests para useFluParticipant — regresión OS4: participación en el turno N
 // ============================================================

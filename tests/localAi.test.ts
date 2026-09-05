@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // localAi.test.ts — compatibilidad con LLM local (Ollama/localhost)
 // ============================================================

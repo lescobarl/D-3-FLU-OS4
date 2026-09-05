@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // fluSpeech — Japonés y otros scripts (TTS multi-idioma)
 // Validación funcional de la corrección "habla en japonés sin audio":

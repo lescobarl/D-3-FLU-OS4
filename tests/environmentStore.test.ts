@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // environmentStore.test.ts — Store del AMBIENTE activo (zustand persist)
 // ============================================================

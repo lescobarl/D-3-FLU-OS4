@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Notification Service — Centro de notificaciones (Fase 1, J2)
 // Pruebas con driver inyectable (fake) y captura del CustomEvent

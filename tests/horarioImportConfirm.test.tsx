@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Validación de render del panel de confirmación de importación
 // de horario (digitalización → HOY). Monta HorarioImportConfirm

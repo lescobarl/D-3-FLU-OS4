@@ -6,7 +6,12 @@ const ROOT = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
     test: {
         globals: true,
-        environment: 'jsdom',
+        // RENDIMIENTO (Constraint #5): el arranque de jsdom domina el tiempo
+        // cuando la suite es grande. Por defecto corremos en 'node' (rápido,
+        // sin globals de navegador). Solo los archivos que renderizan UI o
+        // usan window/document/localStorage/speechSynthesis declaran
+        // '// @vitest-environment jsdom' en su cabecera.
+        environment: 'node',
         include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
         exclude: ['tests/e2e/**', 'node_modules/**'],
         testTimeout: 15_000,

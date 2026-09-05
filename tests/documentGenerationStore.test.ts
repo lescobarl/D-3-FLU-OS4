@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // documentGenerationStore.test.ts — slices F1–F4 del store (zustand)
 // ============================================================

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Validación del flujo de voz RUN_SEARCH → feed consolidado.
 //

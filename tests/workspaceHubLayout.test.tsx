@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Validación del layout consolidado del WorkspaceHub
 // (Pizarrón unificado — "un solo objeto").
