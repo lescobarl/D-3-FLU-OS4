@@ -1089,8 +1089,8 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
   //    NOTA: exec() solo devuelve la PRIMERA coincidencia, así que iteramos
   //    con el flag global para localizar la última (evita que el eco quede
   //    sin colapsar cuando la primera aparición está en el índice 0).
-  const intentNoun = /(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/i
-  const verbPhraseRe = /(genera|genérame|generame|generar|crea|crear|haz|hacer|pon|poner|ponme|guarda|guardar|anota|anotar|apunta|apuntar|agenda|agendar|programa|programar)\w*\s+(?:una\s+|un\s+)?(nota|cita|video|recordatorio|alarma|temporizador|diario|compra|compras)\b/gi
+  const intentNoun = /(nota|cita|video|documento|recordatorio|alarma|temporizador|diario|compra|compras)\b/i
+  const verbPhraseRe = /(genera|genérame|generame|generar|crea|crear|haz|hacer|pon|poner|ponme|guarda|guardar|anota|anotar|apunta|apuntar|agenda|agendar|programa|programar)\w*\s+(?:una\s+|un\s+)?(nota|cita|video|documento|recordatorio|alarma|temporizador|diario|compra|compras)\b/gi
   let lastIdx = -1
   let match = verbPhraseRe.exec(commandText)
   while (match) {

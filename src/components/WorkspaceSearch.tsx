@@ -24,6 +24,7 @@ import {
     type FormEvent,
 } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { splitTranscriptAtWakeWord } from '../voice/lib/audioMath';
 import type { SearchLevel } from '../hooks/useWorkspaceSearch';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import type { SearchConfig } from '../core/search/searchSession';
@@ -104,7 +105,17 @@ export function WorkspaceSearch({
     );
 
     const hasQuery = Boolean(String(query).trim());
-    const live = String(livePhrase || '').trim();
+    // La barra de comandos SOLO debe reflejar los mandatos "OK FLU", NO toda la
+    // transcripción en vivo (que incluye conversación de fondo sin wake word).
+    // Se extrae únicamente el texto que sigue a una wake word; si no hay wake
+    // word (ruido de fondo / conversación ajena), no se muestra nada en la barra.
+    const rawLive = String(livePhrase || '').trim();
+    const wakeWords: string[] =
+        (FLU_CONFIG as any)?.voiceCommands?.wakeWords || [];
+    const split = splitTranscriptAtWakeWord(rawLive, wakeWords);
+    const live = split.wakeWordMatched
+        ? String(split.afterWake || split.commandText || '').trim()
+        : '';
     // La transcripción en vivo se muestra como "valor" de la barra SOLO
     // mientras el asistente está escuchando de verdad y no hay una consulta
     // escrita/confirmada. Así no queda texto residual ("Busca…") pegado en la

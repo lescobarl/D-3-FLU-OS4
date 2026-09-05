@@ -3935,7 +3935,12 @@ export function useFluVoiceAssistant({
         logRowSpeakersRef.current,
         dialogueHistoryRef.current,
         {
-          user: { speaker: resolvedSpeakerName, text: capturedTranscript },
+          // La transcripción que se PERSISTE en el historial debe ser la MISMA que
+          // FLU realmente procesó (bufferedTranscript, ya limpio de wake word + eco
+          // ASR), NO el transcript crudo (capturedTranscript) que arrastra la wake
+          // word pegada y el ruido de fondo. Así la transcripción == lo que escucha
+          // FLU (mismo criterio que la ruta CONFIGURACION).
+          user: { speaker: resolvedSpeakerName, text: bufferedTranscript },
           assistant: { text: resolvedContract.respuesta_voz },
           phase: 'SESION_ACTIVA',
           userSource: DIALOGUE_SOURCE.CAPTURE,

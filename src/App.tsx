@@ -3639,8 +3639,13 @@ function App() {
         }
         const lastResp = (state.lastResponse || '').trim();
         const artifact = state.workspaceArtifact;
-        // Prioridad de tema: artifacto activo (contenido/titulo) > última pregunta
-        const tema = (artifact?.titulo || artifact?.contenido || lastUser || lastResp || '').slice(0, 200);
+        // Prioridad de tema: la ÚLTIMA PREGUNTA del usuario (el mandato real, p. ej.
+        // "un video de un conejo hablando") es la fuente de verdad del tema. El
+        // artifacto activo (titulo/contenido) es la DEFINICIÓN textual que Gemini ya
+        // escribió como respuesta, NO la petición visual; usarlo como tema hacía que
+        // el video/documento se generara sobre el texto de la definición en vez de
+        // sobre lo que el usuario pidió. Se usa solo como respaldo si no hay pregunta.
+        const tema = (lastUser || artifact?.titulo || artifact?.contenido || lastResp || '').slice(0, 200);
         const contenido = [lastUser, lastResp].filter(Boolean).join('\n').slice(0, 1200);
         return { tema, contenido };
     }, []);
