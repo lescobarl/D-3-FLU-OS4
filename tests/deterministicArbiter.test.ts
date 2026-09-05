@@ -160,6 +160,115 @@ describe('deterministicArbiter — resolveDeterministicCommand', () => {
   });
 });
 
+describe('deterministicArbiter — funciones-adición (Phase B)', () => {
+  it('resuelve el dominio de recordatorio (reminder.add)', () => {
+    const result = resolveDeterministicCommand('recuérdame comprar leche mañana');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('reminder');
+    expect(result.action).toMatchObject({ handled: true, action: 'reminder.add' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('resuelve el dominio de recordatorio (shopping.add)', () => {
+    const result = resolveDeterministicCommand('agrega leche a la lista de compras');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('reminder');
+    expect(result.action).toMatchObject({ handled: true, action: 'shopping.add' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('resuelve el dominio temporal (alarm.add)', () => {
+    const result = resolveDeterministicCommand('pon una alarma a las 7');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('temporal');
+    expect(result.action).toMatchObject({ handled: true, action: 'alarm.add' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('resuelve el dominio temporal (timer.start)', () => {
+    const result = resolveDeterministicCommand('pon un temporizador de 5 minutos');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('temporal');
+    expect(result.action).toMatchObject({ handled: true, action: 'timer.start' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('resuelve el dominio de diario (diary.addEntry)', () => {
+    const result = resolveDeterministicCommand('escribe en el diario que fui al parque');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('diary');
+    expect(result.action).toMatchObject({ handled: true, action: 'diary.addEntry' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('enruta "anota X en el diario" a diario y NO a nota (diario gana)', () => {
+    // El patrón de diario ("... en el diario ..." al inicio) es más específico
+    // que el apunta genérico de nota, así que el diario se evalúa antes.
+    const result = resolveDeterministicCommand('anota en el diario que fui al parque');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('diary');
+    expect(result.action).toMatchObject({ handled: true, action: 'diary.addEntry' });
+  });
+
+  it('resuelve el dominio de nota (notes.add por apunta)', () => {
+    const result = resolveDeterministicCommand('apunta comprar pan');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('note');
+    expect(result.action).toMatchObject({ handled: true, action: 'notes.add' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('resuelve el dominio de nota (notes.add por creación explícita)', () => {
+    const result = resolveDeterministicCommand('crea una nota para recordar la tarea');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('note');
+    expect(result.action).toMatchObject({ handled: true, action: 'notes.add' });
+  });
+
+  it('resuelve el dominio de nota (notes.add para supermercado)', () => {
+    const result = resolveDeterministicCommand('nota para el super comprar cereal');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('note');
+    expect(result.action).toMatchObject({ handled: true, action: 'notes.add' });
+  });
+});
+
+describe('deterministicArbiter — canales de integración (Phase B)', () => {
+  it('mapea búsqueda web al canal web', () => {
+    const result = resolveDeterministicCommand('busca en la web capital de Francia');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('navigation');
+    expect(result.action).toBe('BUSCAR');
+    expect(result.channel).toBe('web');
+  });
+
+  it('mapea generación de video al canal video', () => {
+    // El gatillo pelado "genera un video" es un comando de navegación directo
+    // (GENERAR_VIDEO); con contenido adicional se trataría como consulta IA.
+    const result = resolveDeterministicCommand('genera un video');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('navigation');
+    expect(result.action).toBe('GENERAR_VIDEO');
+    expect(result.channel).toBe('video');
+  });
+
+  it('mapea generación de documento al canal documento', () => {
+    const result = resolveDeterministicCommand('generar documento');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('navigation');
+    expect(result.action).toBe('GENERAR_DOCUMENTO');
+    expect(result.channel).toBe('documento');
+  });
+
+  it('mapea iniciar conversación al canal flu (sin objeto de integración externo)', () => {
+    const result = resolveDeterministicCommand('iniciar conversación');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('navigation');
+    expect(result.action).toBe('INICIAR_CONVERSACION');
+    expect(result.channel).toBe('flu');
+  });
+});
+
 describe('deterministicArbiter — resolveStatefulDomains', () => {
   it('resuelve config/juego/ambiente sin navegación', () => {
     const result = resolveStatefulDomains('actúa como chef');
@@ -178,10 +287,17 @@ describe('deterministicArbiter — resolveStatefulDomains', () => {
 
 describe('deterministicArbiter — dominios declarados', () => {
   it('expone los dominios soportados en orden de prioridad', () => {
+    // §Concepto plataforma (Phase B): las funciones-adición (reminder/temporal/
+    // diary/note) se suman como términos al núcleo fijo, ANTES de horario y
+    // navegación, en el MISMO punto único de resolución.
     expect(ARBITER_DOMAINS).toEqual([
       'config',
       'game',
       'environment',
+      'reminder',
+      'temporal',
+      'diary',
+      'note',
       'horario',
       'navigation',
     ]);

@@ -22,66 +22,203 @@ import { resolveConfigCommandFromText } from './configCommands.js'
 import { resolveGameCommandFromText } from './gameCommands.js'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
+import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
+import { parseTemporalIntent } from '../../core/temporal/temporalIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
 
 /**
  * Dominios deterministas soportados por el árbitro.
- * Orden de prioridad de resolución (config > juego > ambiente > horario >
- * navegación): los dominios con efecto de estado (config/juego/ambiente/
- * horario) se evalúan antes que la navegación pura para que un comando de
- * configuración no se trague una navegación, y viceversa.
+ * Orden de prioridad de resolución (config > juego > ambiente > función-adición
+ * > horario > navegación): los dominios con efecto de estado (config/juego/
+ * ambiente) y las funciones-adición (reminder/temporal/diario/nota) se evalúan
+ * antes que la navegación pura para que un comando de configuración no se trague
+ * una navegación, y viceversa.
+ *
+ * §Concepto plataforma: las funciones-adición (recordatorios, temporales,
+ * diario, notas) son "términos" que se suman al núcleo fijo; el árbitro las
+ * reconoce en el MISMO punto único que config/juego/ambiente/horario/navegación.
  */
 export const ARBITER_DOMAINS = Object.freeze([
   'config',
   'game',
   'environment',
+  'reminder',
+  'temporal',
+  'diary',
+  'note',
   'horario',
   'navigation',
 ])
+
+// ------------------------------------------------------------
+// Canales de integración (§Concepto plataforma)
+// ------------------------------------------------------------
+// Cada dominio resuelto apunta a un "objeto de integración" destino:
+//   - 'flu'      → canal IA local (asistente) — funciones-adición y comandos IA.
+//   - 'web'      → objeto WEB (búsqueda/navegación en el navegador).
+//   - 'video'    → objeto VIDEO (generación de video).
+//   - 'documento'→ objeto WORD (generación/análisis de documentos).
+//   - 'app'      → objeto IA (análisis de una app/imagen).
+// El canal NO decide el despacho (eso sigue en el hook/App), solo etiqueta el
+// elemento de integración destino para que la tubería única sepa a dónde va.
+const NAVIGATION_CHANNEL = Object.freeze({
+  BUSCAR: 'web',
+  NAVEGAR: 'web',
+  GENERAR_VIDEO: 'video',
+  GENERAR_DOCUMENTO: 'documento',
+  ANALIZAR_DOCUMENTO: 'documento',
+  ANALIZAR_APP: 'app',
+})
+
+function resolveChannelForNavigation(commandId = '') {
+  return NAVIGATION_CHANNEL[String(commandId || '').trim()] || 'flu'
+}
+
+// ------------------------------------------------------------
+// Reconocimiento de nota / diario (función-adición)
+// ------------------------------------------------------------
+// No existe un parser dedicado para nota/diario (viven como regex inline en
+// App.tsx). Para que el árbitro sea la fuente única de reconocimiento, se
+// replican AQUÍ los mismos patrones (fuente única por intención) como funciones
+// puras. El despacho real (crear la nota/entrada) sigue en App.tsx.
+//
+// Orden nota-vs-diario: el patrón de diario ("... en el diario ...") es MÁS
+// específico que el apunta genérico de nota ("anota {texto}"), así que el diario
+// se evalúa ANTES que la nota para que "anota X en el diario" se enrute bien.
+const DIARY_EN = /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i
+const DIARY_PREFIX = /^diario\s*[:,\-]?\s+(.+)$/i
+
+function recognizeDiaryIntent(text = '') {
+  const clean = String(text || '').trim()
+  if (!clean) return null
+  const match = DIARY_EN.exec(clean) || DIARY_PREFIX.exec(clean)
+  if (!match) return null
+  const content = match[1].trim()
+  if (!content) return null
+  return { handled: true, action: 'diary.addEntry', data: { content } }
+}
+
+const NOTE_CREATION_PREFIX =
+  /^(?:crea|crear|genera|generar|genérame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i
+const NOTE_PARA_SUPER =
+  /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
+const NOTE_PARA_RECORDAR =
+  /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
+const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
+
+function stripAccentsEs(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[áàäâ]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n')
+}
+
+function recognizeNoteIntent(text = '') {
+  const clean = String(text || '').trim()
+  if (!clean) return null
+
+  // 0) Prefijos de creación explícita → forma canónica "nota ...".
+  const creationMatch = NOTE_CREATION_PREFIX.exec(clean)
+  let normalized = clean
+  if (creationMatch) {
+    const rest = creationMatch[1].trim()
+    normalized = rest ? `nota ${rest}` : 'nota'
+  }
+
+  const norm = stripAccentsEs(normalized)
+  const paraSuper = NOTE_PARA_SUPER.test(norm)
+  const paraRecordar = NOTE_PARA_RECORDAR.test(norm)
+  const apunta = NOTE_APUNTA.test(clean)
+  if (paraSuper || paraRecordar || apunta) {
+    return { handled: true, action: 'notes.add' }
+  }
+  return null
+}
 
 /**
  * Resuelve de forma determinista y local un comando de voz a partir del texto
  * transcrito, contrastando contra TODOS los resolvers de dominio en orden de
  * prioridad. NO depende de Gemini.
  *
+ * §Concepto plataforma (Phase B): además de config/juego/ambiente/horario/
+ * navegación, reconoce las funciones-adición (reminder/temporal/diario/nota)
+ * reutilizando los parsers existentes (parseReminderIntent, parseTemporalIntent)
+ * y los patrones de nota/diario. Devuelve también `channel`, el elemento de
+ * integración destino (flu/web/video/documento/app).
+ *
  * @param {string} text Texto transcrito (crudo o ya limpio).
  * @param {object} [options]
  * @param {string} [options.language='es'] Idioma detectado (para ambiente).
  * @param {string[]} [options.texts] Fragmentos ASR alternativos (buffer+final)
  *   usados por la resolución de navegación. Si se omite, se usa `text`.
- * @returns {{ matched: boolean, domain: string|null, action: object|null }}
+ * @returns {{ matched: boolean, domain: string|null, action: object|null, channel: string|null }}
  *   - `matched`: true si algún dominio resolvió una acción.
  *   - `domain`:  nombre del dominio que ganó ('config'|'game'|'environment'|
- *                'horario'|'navigation') o null.
+ *                'reminder'|'temporal'|'diary'|'note'|'horario'|'navigation')
+ *                o null.
  *   - `action`:  objeto de acción resuelto por el dominio (forma específica de
  *                cada resolver) o null.
+ *   - `channel`: elemento de integración destino ('flu'|'web'|'video'|
+ *                'documento'|'app') o null cuando no hay match.
  */
 export function resolveDeterministicCommand(text = '', options = {}) {
   const { language = 'es', texts = null } = options || {}
   const transcript = String(text || '').trim()
   if (!transcript && !(Array.isArray(texts) && texts.some((t) => String(t || '').trim()))) {
-    return { matched: false, domain: null, action: null }
+    return { matched: false, domain: null, action: null, channel: null }
   }
 
   // 1. Configuración (configCommands): efecto de estado de configuración.
   const config = resolveConfigCommandFromText(transcript)
   if (config?.accion) {
-    return { matched: true, domain: 'config', action: config }
+    return { matched: true, domain: 'config', action: config, channel: 'flu' }
   }
 
   // 2. Juego (gameCommands): arranque/turno/fin de partida.
   const game = resolveGameCommandFromText(transcript)
   if (game?.gameId) {
-    return { matched: true, domain: 'game', action: game }
+    return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
 
   // 3. Ambiente (environmentIntents): activar/reset de ambiente.
   const env = resolveEnvironmentIntent(transcript, language)
   if (env?.tipo) {
-    return { matched: true, domain: 'environment', action: env }
+    return { matched: true, domain: 'environment', action: env, channel: 'flu' }
   }
 
-  // 4. Horario por dictado (horarioIntentParser): agregar/consultar/quitar
+  // 4. Recordatorios/compras/citas (reminderIntentParser): función-adición.
+  //    Solo MATCH cuando el parser devuelve una intención ACCIONABLE
+  //    (action truthy). Los casos de aclaración (action === null) NO se marcan
+  //    aquí: el despacho real vive en App.tsx (__fluHandleReminderText).
+  const reminder = parseReminderIntent(transcript)
+  if (reminder?.handled && reminder?.action) {
+    return { matched: true, domain: 'reminder', action: reminder, channel: 'flu' }
+  }
+
+  // 5. Temporales (temporalIntentParser): temporizadores/alarmas (función-adición).
+  const temporal = parseTemporalIntent(transcript)
+  if (temporal?.handled && temporal?.action) {
+    return { matched: true, domain: 'temporal', action: temporal, channel: 'flu' }
+  }
+
+  // 6. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
+  //    ("... en el diario ...") es más específico que el apunta genérico de nota.
+  const diary = recognizeDiaryIntent(transcript)
+  if (diary) {
+    return { matched: true, domain: 'diary', action: diary, channel: 'flu' }
+  }
+
+  // 7. Nota (función-adición): "nota ...", "apunta/anota {texto}", etc.
+  const note = recognizeNoteIntent(transcript)
+  if (note) {
+    return { matched: true, domain: 'note', action: note, channel: 'flu' }
+  }
+
+  // 8. Horario por dictado (horarioIntentParser): agregar/consultar/quitar
   //    entradas del horario semanal. §2C del plan de afinado estructural.
   //    Solo se considera MATCH cuando el parser devuelve una intención
   //    ACCIONABLE (horario.add/query/remove). Los casos de aclaración
@@ -91,17 +228,23 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   //    para que el flujo pueda saltarse Gemini (§2B).
   const horario = parseHorarioIntent(transcript)
   if (horario?.handled && horario?.action) {
-    return { matched: true, domain: 'horario', action: horario }
+    return { matched: true, domain: 'horario', action: horario, channel: 'flu' }
   }
 
-  // 5. Navegación (voiceCommands): comandos de UI/navegación directos.
+  // 9. Navegación (voiceCommands): comandos de UI/navegación directos. El canal
+  //    se deriva del comando (web/video/documento/app/flu).
   const navTexts = Array.isArray(texts) && texts.length ? texts : [transcript]
   const nav = resolveNavigationCommandFromTexts(navTexts)
   if (nav) {
-    return { matched: true, domain: 'navigation', action: nav }
+    return {
+      matched: true,
+      domain: 'navigation',
+      action: nav,
+      channel: resolveChannelForNavigation(nav),
+    }
   }
 
-  return { matched: false, domain: null, action: null }
+  return { matched: false, domain: null, action: null, channel: null }
 }
 
 /**
