@@ -169,6 +169,7 @@ import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import { stripWakeWordForDisplay, normalizeCommandForDeterministic } from './voice/lib/audioMath';
+import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
@@ -1758,38 +1759,75 @@ function App() {
                             `onContractResolved: mandato normalizado (wake word + eco ASR) → "${commandText}"`,
                         );
                     }
-                    // 1) Recordatorios + lista de compras (parseReminderIntent)
-                    if (!localHandledReply && typeof w.__fluHandleReminderText === 'function') {
+                    // ============================================================
+                    // DESPACHO UNIFICADO POR DOMINIO (árbitro determinista)
+                    // ============================================================
+                    // En lugar de encadenar los 5 manejadores a ciegas (cada uno
+                    // re-parseando el mandato), se consulta UNA sola vez al árbitro
+                    // unificado (deterministicArbiter.resolveDeterministicCommand),
+                    // que devuelve { matched, domain, action, channel }. El dominio
+                    // ganador decide QUÉ manejador se invoca; si ninguno matchea,
+                    // el mandato cae a la IA (flu). Esto hace que "la última frase
+                    // sea consistente": un solo camino de respuesta por mandato.
+                    //
+                    // El árbitro evalúa los dominios en orden de prioridad y ya
+                    // resuelve la ambigüedad diario-vs-nota (diario gana cuando el
+                    // texto dice "en el diario"). Los dominios de estado (config/
+                    // game/environment) y navegación NO se despachan aquí: se
+                    // resuelven por sus propios fast-paths (configAction, juegos,
+                    // navegacion) más abajo en este mismo callback.
+                    const arbiterResult: any = resolveDeterministicCommand(commandText);
+                    const arbiterDomain = arbiterResult?.matched ? arbiterResult.domain : null;
+                    if (arbiterDomain) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: árbitro → dominio "${arbiterDomain}" (acción ${JSON.stringify(
+                                arbiterResult.action?.action ?? arbiterResult.action,
+                            )})`,
+                        );
+                    }
+                    // Recordatorios + lista de compras (reminder)
+                    if (
+                        arbiterDomain === 'reminder' &&
+                        typeof w.__fluHandleReminderText === 'function'
+                    ) {
                         const reply = await w.__fluHandleReminderText(commandText, {
                             personId: undefined,
                             personName: speakerName || undefined,
                         });
                         if (reply) localHandledReply = reply;
                     }
-                    // 2) Alarmas + temporizadores (parseTemporalIntent)
-                    if (!localHandledReply && typeof w.__fluHandleTemporalText === 'function') {
+                    // Alarmas + temporizadores (temporal)
+                    if (
+                        arbiterDomain === 'temporal' &&
+                        typeof w.__fluHandleTemporalText === 'function'
+                    ) {
                         const reply = await w.__fluHandleTemporalText(commandText);
                         if (reply) localHandledReply = reply;
                     }
-                    // 3) Notas (dictado: "nota para el super", "nota para recordar...")
-                    if (!localHandledReply && typeof w.__fluHandleNoteText === 'function') {
-                        const reply = await w.__fluHandleNoteText(commandText, {
-                            personId: undefined,
-                            personName: speakerName || undefined,
-                        });
-                        if (reply) localHandledReply = reply;
-                    }
-                    // 4) Diario (dictado: "escribe en el diario...")
-                    if (!localHandledReply && typeof w.__fluHandleDiaryText === 'function') {
+                    // Diario (diary) — se evalúa antes que nota porque el árbitro
+                    // ya priorizó diario sobre nota cuando el texto dice "en el diario".
+                    if (arbiterDomain === 'diary' && typeof w.__fluHandleDiaryText === 'function') {
                         const reply = await w.__fluHandleDiaryText(commandText, {
                             personId: undefined,
                             personName: speakerName || undefined,
                         });
                         if (reply) localHandledReply = reply;
                     }
-                    // 5) Horario (dictado: "agrega matemáticas el lunes a las 8",
-                    //    "qué clases tengo mañana", "quita historia del viernes")
-                    if (!localHandledReply && typeof w.__fluHandleHorarioText === 'function') {
+                    // Notas (note)
+                    if (arbiterDomain === 'note' && typeof w.__fluHandleNoteText === 'function') {
+                        const reply = await w.__fluHandleNoteText(commandText, {
+                            personId: undefined,
+                            personName: speakerName || undefined,
+                        });
+                        if (reply) localHandledReply = reply;
+                    }
+                    // Horario (horario)
+                    if (
+                        arbiterDomain === 'horario' &&
+                        typeof w.__fluHandleHorarioText === 'function'
+                    ) {
                         const reply = await w.__fluHandleHorarioText(commandText);
                         if (reply) localHandledReply = reply;
                     }
