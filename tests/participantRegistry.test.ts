@@ -378,6 +378,48 @@ describe('participantRegistry — seedAnonymous (Anónimo Estudiante por defecto
     expect(all).toHaveLength(1);
   });
 
+  it('es seguro ante llamadas concurrentes (StrictMode): no duplica', async () => {
+    // React.StrictMode dispara el efecto de siembra dos veces en paralelo en
+    // desarrollo. Sin el candado, ambas pasan findAnonymous antes de hacer
+    // add() y se crean DOS "Anónimo Estudiante".
+    const service = createAnonService(db);
+    const [a, b] = await Promise.all([service.seedAnonymous(), service.seedAnonymous()]);
+    expect(a?.id).toBe(b?.id);
+    const all = await service.list();
+    expect(all).toHaveLength(1);
+    expect(all[0].name).toBe('Anónimo');
+    expect(all[0].role).toBe('Estudiante');
+  });
+
+  it('reconcilia duplicados preexistentes dejando un único Anónimo', async () => {
+    // Simula el estado corrupto que ya quedó en el dispositivo: dos registros
+    // "Anónimo" creados por una carrera previa.
+    const dup1: ParticipantRecord = {
+      id: 'par-dup1',
+      name: 'Anónimo',
+      role: 'Estudiante',
+      createdAt: NOW,
+      updatedAt: NOW,
+      sync: { revision: 1, updated_at: new Date(NOW).toISOString(), deleted: false },
+    };
+    const dup2: ParticipantRecord = {
+      id: 'par-dup2',
+      name: 'Anónimo',
+      role: 'Estudiante',
+      createdAt: NOW + 1000,
+      updatedAt: NOW + 1000,
+      sync: { revision: 1, updated_at: new Date(NOW + 1000).toISOString(), deleted: false },
+    };
+    db = createMapDb([dup1, dup2]);
+    const service = createAnonService(db);
+    const seeded = await service.seedAnonymous();
+    // Conserva el más antiguo (par-dup1) y elimina el duplicado.
+    expect(seeded?.id).toBe('par-dup1');
+    const all = await service.list();
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe('par-dup1');
+  });
+
   it('repara un Anónimo preexistente sin rol (creado por versiones antiguas)', async () => {
     // Simula el registro viejo de skip(): nombre "Anónimo" pero sin rol.
     const legacy: ParticipantRecord = {

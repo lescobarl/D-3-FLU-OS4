@@ -3315,25 +3315,23 @@ function App() {
     };
 
     // ---- Puerta de identidad al arrancar (dispositivo compartido) ----
-    // Al abrir la app se pregunta "¿Quién eres?" SOLO cuando hay varios
-    // perfiles reales (2+ excluyendo la semilla anónima). Si hay un único
-    // perfil real (o ninguno además del anónimo), no se interrumpe: se
-    // restaura la sesión persistida del último que accedió o se deja correr
-    // el flujo normal (primer arranque → preguntas de bienvenida).
+    // SIEMPRE se pregunta "¿Quién eres?" al abrir la app cuando ya existe al
+    // menos un perfil real (excluyendo la semilla anónima), SIN importar si
+    // quedó un perfil activo persistido de la última sesión. Motivo: los
+    // niños que aún no saben leer ni navegar necesitan ser recibidos por la
+    // puerta de identidad (tocar su perfil o guiarse por voz) en CADA carga,
+    // en lugar de ser lanzados en silencio a la sesión anterior.
+    // Único caso que NO abre el selector: el primer arranque (0 perfiles
+    // reales y onboarding de bienvenida sin completar → onboarding.visible),
+    // donde corren las preguntas de configuración guiadas por voz.
     const pickerAutoOpenDoneRef = useRef(false);
     useEffect(() => {
         if (pickerAutoOpenDoneRef.current) return;
         if (participants.loading || !onboarding.ready) return;
         pickerAutoOpenDoneRef.current = true;
         if (!userPickerConfig.autoOpenOnLoad) return;
-        // Si ya hay un perfil activo persistido (el último que accedió) y
-        // sigue existiendo en la lista, se restaura esa sesión sin abrir el
-        // selector "¿Quién eres?".
-        const hasPersistedActive =
-            activeParticipantId &&
-            activeParticipantId !== DEFAULT_ONBOARDING_USER &&
-            participants.participants.some((p) => p.id === activeParticipantId);
-        if (hasPersistedActive) return;
+        // Primer arranque: el onboarding de bienvenida ya está visible → no
+        // interrumpir con el selector; corren las preguntas de configuración.
         if (pickerMode || onboarding.visible) return;
         // Perfiles reales = todos excepto la semilla anónima (config-driven
         // vía multiuser.skipDefaults.anonymousName). El anónimo se siembra en
@@ -3343,10 +3341,11 @@ function App() {
         const realProfiles = participants.participants.filter(
             (p) => p.name.trim().toLowerCase() !== anonymousName
         );
-        // Opción 3: preguntar solo si hay varios perfiles reales (2+).
-        // Con 0 o 1 perfil real no se abre el selector: se restaura la sesión
-        // persistida (si existe) o se deja correr el flujo normal.
-        if (realProfiles.length >= 2) {
+        // Con al menos un perfil real, SIEMPRE se abre la puerta de identidad
+        // en cada carga (regresión intencional del antiguo guard ">= 2" y de
+        // la restauración silenciosa de sesión) para el caso de los niños que
+        // no saben leer ni navegar.
+        if (realProfiles.length >= 1) {
             setPickerMode(true);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps

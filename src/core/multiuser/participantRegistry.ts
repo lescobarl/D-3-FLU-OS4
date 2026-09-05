@@ -160,6 +160,12 @@ export function resolveKindRole(
 // Service
 // ------------------------------------------------------------
 
+// Guarda de idempotencia ante llamadas concurrentes a seedAnonymous. En
+// desarrollo React.StrictMode dispara el efecto de siembra dos veces en
+// paralelo; sin este candado ambas llamadas pasan el chequeo findAnonymous
+// antes de que ninguna haga add() y se crean DOS "Anónimo Estudiante".
+let anonymousSeedInFlight: Promise<ParticipantRecord | undefined> | undefined;
+
 export function createParticipantRegistry({
   db,
   config,
@@ -239,36 +245,78 @@ export function createParticipantRegistry({
     return found ? toRecord(found) : undefined;
   };
 
-  // Siembra el perfil anónimo por defecto si aún no existe. Idempotente:
-  // se llama en cada arranque para garantizar que "Anónimo Estudiante"
-  // siempre esté presente (default activo, no eliminable).
+  // Reconciliación: si por una carrera anterior (StrictMode) o una versión
+  // vieja quedaron DOS registros "Anónimo", conserva el primero y elimina el
+  // resto para que el listado muestre un único "Anónimo Estudiante".
+  const reconcileAnonymousDuplicates = async (): Promise<void> => {
+    const anon = config.anonymous;
+    if (!anon?.name) return;
+    const needle = anon.name.toLowerCase();
+    const all = await db.toArray();
+    const duplicates = all.filter((p) => p.name.toLowerCase() === needle);
+    if (duplicates.length <= 1) return;
+    // Conserva el registro más antiguo (createdAt menor) como canónico.
+    const sorted = duplicates.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+    const keep = sorted[0];
+    for (const dup of sorted.slice(1)) {
+      await db.delete(dup.id);
+      await addAuditLog('participant.seed-anonymous-dedup', 'participant', dup.id, dup, { name: dup.name }, 'participantRegistry');
+    }
+    // Si el canónico quedó sin rol, se lo repara.
+    if (!keep.role || keep.role !== anon.role) {
+      await upsert(keep.id, { role: anon.role });
+    }
+  };
+
+  // Siembra el perfil anónimo por defecto si aún no existe. Idempotente y
+  // seguro ante llamadas concurrentes (React.StrictMode dispara el efecto de
+  // siembra dos veces en paralelo en desarrollo): se llama en cada arranque
+  // para garantizar que "Anónimo Estudiante" siempre esté presente (default
+  // activo, no eliminable) y que nunca exista duplicado.
   const seedAnonymous = async (): Promise<ParticipantRecord | undefined> => {
     const anon = config.anonymous;
     if (!anon?.name) return undefined;
-    const existing = await findAnonymous();
-    if (existing) {
-      // Auto-reparación: si el Anónimo preexistente quedó sin rol (creado por
-      // versiones anteriores de skip()), se le asigna el rol por defecto para
-      // que siempre figure como "Estudiante" y no como perfil vacío.
-      if (!existing.role || existing.role !== anon.role) {
-        const repaired = await upsert(existing.id, { role: anon.role });
-        if (repaired.ok && repaired.record) return repaired.record;
+
+    // Candado de idempotencia: si ya hay una siembra en curso, espera a que
+    // termine y devuelve su resultado en lugar de sembrar de nuevo. Esto
+    // cierra la carrera check-then-act que duplicaba el Anónimo.
+    if (anonymousSeedInFlight) return anonymousSeedInFlight;
+
+    anonymousSeedInFlight = (async (): Promise<ParticipantRecord | undefined> => {
+      try {
+        // 1) Reconciliar duplicados que hayan quedado de una carrera previa.
+        await reconcileAnonymousDuplicates();
+
+        const existing = await findAnonymous();
+        if (existing) {
+          // Auto-reparación: si el Anónimo preexistente quedó sin rol (creado
+          // por versiones anteriores de skip()), se le asigna el rol por
+          // defecto para que siempre figure como "Estudiante".
+          if (!existing.role || existing.role !== anon.role) {
+            const repaired = await upsert(existing.id, { role: anon.role });
+            if (repaired.ok && repaired.record) return repaired.record;
+          }
+          return existing;
+        }
+        const id = newId();
+        const t = timestamp();
+        const record: ParticipantRecord = {
+          id,
+          name: anon.name,
+          role: anon.role,
+          createdAt: t,
+          updatedAt: t,
+          sync: buildSync(),
+        };
+        await db.add(record);
+        await addAuditLog('participant.seed-anonymous', 'participant', id, null, { name: record.name }, 'participantRegistry');
+        return toRecord(record);
+      } finally {
+        anonymousSeedInFlight = undefined;
       }
-      return existing;
-    }
-    const id = newId();
-    const t = timestamp();
-    const record: ParticipantRecord = {
-      id,
-      name: anon.name,
-      role: anon.role,
-      createdAt: t,
-      updatedAt: t,
-      sync: buildSync(),
-    };
-    await db.add(record);
-    await addAuditLog('participant.seed-anonymous', 'participant', id, null, { name: record.name }, 'participantRegistry');
-    return toRecord(record);
+    })();
+
+    return anonymousSeedInFlight;
   };
 
   const upsert = async (id: string, patch: ParticipantPatch): Promise<UpsertResult> => {
