@@ -50,6 +50,7 @@ import {
 import {
   flattenChunksTail,
   flattenChunksWindow,
+  isAutoSpeakerLabel,
   nextAvailableSpeakerLabel,
   normalizeSpeakerLabel,
   pruneGhostSpeakerClusters,
@@ -361,6 +362,7 @@ export function useFluVoiceAssistant({
   getResultadosContext = () => '',
   resolveMinuteLookup = () => ({ mode: 'gemini' }),
   participantRef,
+  activeParticipantName = '',
 }) {
   const [status, setStatus] = useState('idle')
   const [phase, setPhase] = useState('CONFIGURACION')
@@ -497,6 +499,29 @@ export function useFluVoiceAssistant({
   const srGapFiredForOpenLineRef = useRef(false)
   const ingressBindingsRef = useRef({})
   const ingressRuntimeRef = useRef(null)
+
+  // ---- Fase E: vincular la voz del participante activo (Juan/Luis) a su nombre ----
+  // Si hay un participante real con nombre propio activo, se siembra como sessionPrimary
+  // para que la diarización etiquete sus turnos con su nombre (no «Hablante N»).
+  // Config-gated (roomCapture.seedSessionPrimaryFromActiveParticipant) y solo con
+  // participante real (no anónimo/default) para no introducir regresiones.
+  const seedSessionPrimaryFromActiveName = useCallback(() => {
+    const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
+    const roomCfg = captureCfg.roomCapture || {}
+    if (roomCfg.seedSessionPrimaryFromActiveParticipant !== true) return
+    const name = String(activeParticipantName || '').trim()
+    if (!name) return
+    // Solo nombres propios reales (no «Hablante N» ni anónimo genérico).
+    if (isAutoSpeakerLabel(name)) return
+    const skipDefaults = FLU_CONFIG.multiuser?.skipDefaults || {}
+    const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase()
+    if (name.toLowerCase() === anonymousName) return
+    sessionPrimarySpeakerRef.current = name
+  }, [activeParticipantName])
+
+  useEffect(() => {
+    seedSessionPrimaryFromActiveName()
+  }, [seedSessionPrimaryFromActiveName])
 
   if (!ingressRuntimeRef.current) {
     ingressRuntimeRef.current = createConversationIngressRuntime({
@@ -2573,6 +2598,9 @@ export function useFluVoiceAssistant({
         lastSpeakerRef.current = 'Hablante 1'
         lastLoggedSpeakerRef.current = 'Hablante 1'
         sessionPrimarySpeakerRef.current = ''
+        // Fase E: tras reiniciar la sesión, re-sembrar el participante activo (Juan/Luis)
+        // como sessionPrimary para que sus turnos sigan etiquetándose con su nombre.
+        seedSessionPrimaryFromActiveName()
         activeTurnIdRef.current = 0
         preflightScheduledForTurnRef.current = false
         stopAllContinuousIdentityPipelines()

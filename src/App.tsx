@@ -1485,6 +1485,18 @@ function App() {
     // Esto elimina los hardcodes anteriores en VoiceAssistantBar y
     // asegura que OS3 use EXACTAMENTE la misma funcionalidad de OS2.
     // ============================================================
+    // Fase E: nombre del participante activo (Juan/Luis) para sembrar
+    // sessionPrimary en la diarización. Solo perfiles reales con nombre
+    // propio (excluye legacy/default y la semilla anónima, config-driven).
+    const activeParticipantNameForVoice = useMemo(() => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
+        const profile = participants.participants.find((p) => p.id === activeParticipantId);
+        if (!profile?.name) return undefined;
+        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase();
+        if (profile.name.trim().toLowerCase() === anonymousName) return undefined;
+        return profile.name;
+    }, [activeParticipantId, participants.participants]);
     const {
         status: voiceStatus,
         error: voiceError,
@@ -2465,6 +2477,9 @@ function App() {
         // (FLU_ADELANTE) use the same participant state as the UI button.
         // Fixes: voice "ok flu adelante" responding "No tengo nada pendiente por ahora"
         participantRef: fluParticipantRef,
+        // Fase E: nombre del participante activo (Juan/Luis) para sembrar
+        // sessionPrimary en la diarización (config-gated en el hook).
+        activeParticipantName: activeParticipantNameForVoice,
     });
 
     // Keep the ref in sync so onEmotion (captured by useFluParticipant before

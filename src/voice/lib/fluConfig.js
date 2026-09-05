@@ -211,6 +211,15 @@ export const FLU_CONFIG = {
         soloNewVoiceFactor: 0.82,
         /** Tras ≥N clusters auto: no forzar production-primary-rematch si otro cluster encaja mejor. */
         classroomPrimaryRematchMaxClusters: 1,
+        /**
+         * Vincular la voz del participante activo (perfil creado: Juan/Luis) a su nombre.
+         * Cuando hay un participante real con nombre propio activo, se siembra como
+         * sessionPrimary para que la diarización etiquete sus turnos con su nombre
+         * (no «Hablante N»). Solo aplica con participante real (no anónimo/default).
+         */
+        seedSessionPrimaryFromActiveParticipant: true,
+        /** Crear el cluster del participante primario si aún no existe (primer turno). */
+        sessionPrimaryCreateCluster: true,
       },
       /** Siempre mic sala al escuchar (máx sensibilidad, también antes de «Iniciar conversación»). */
       maxSensitivity: true,

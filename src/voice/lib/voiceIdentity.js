@@ -648,6 +648,34 @@ function resolveProductionSpeakerAtBoundary({
     }
   }
 
+  // Fase E: si el participante primario (Juan/Luis) aún no tiene cluster (primer turno)
+  // y la voz NO encaja fuertemente con un cluster auto existente ni con el último
+  // hablante, crear su cluster y etiquetar el turno con su nombre. Config-gated
+  // (roomCapture.sessionPrimaryCreateCluster) para no introducir regresiones.
+  if (
+    primaryLabel &&
+    roomCfg.sessionPrimaryCreateCluster === true &&
+    !findClusterByLabel(speakerClusters, primaryLabel)?.signature?.length
+  ) {
+    const strongAutoMatch = bestLabel && bestSim >= REUSE_EFF
+    const strongLastMatch = lastSpeaker && lastSim >= REUSE_EFF
+    if (!strongAutoMatch && !strongLastMatch) {
+      speakerClusters.push({
+        label: primaryLabel,
+        signature: [...normalized],
+        signatureHistory: [[...normalized]],
+      })
+      note?.({
+        reason: 'production-primary-create-cluster',
+        speaker: primaryLabel,
+        lastSim,
+        bestSim,
+        bestLabel,
+      })
+      return primaryLabel
+    }
+  }
+
   if (
     primaryLabel &&
     lastSpeaker &&
