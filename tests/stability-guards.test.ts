@@ -159,3 +159,68 @@ describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', (
         expect(handleBlock).toContain('sendJson(res, error.status || 500');
     });
 });
+
+// ============================================================
+// Bug D — "hoa" + escucha pasmada: flushListenStateBeforeRebuild
+//         NO debe commitear interinos parciales como turnos finales
+// ============================================================
+// Síntoma reportado: la transcripción solo escribía "hoa" y luego se
+// detenía ("escucha pasmada"). Causa raíz: el watchdog de stall en modo
+// conversación reconstruye el reconocimiento cada ~4.2s sin ingress, y
+// flushListenStateBeforeRebuild() commitaba el interino parcial en vuelo
+// (p.ej. "hoa" de "hola") como turno final vía syncConversationStream
+// ({ turnCommit: true }). Eso creaba filas basura y reiniciaba la línea
+// abierta, de modo que cada ciclo volvía a commitear otro fragmento.
+//
+// La corrección: en un rebuild el interino parcial se DESCARTA (no se
+// commitea) y la línea abierta se resetea limpia, sin emitir fila al log.
+describe('🧪 Guard de estabilidad — Bug D: flushListenStateBeforeRebuild no commitea interinos parciales', () => {
+    // Extrae el bloque completo de flushListenStateBeforeRebuild (desde su
+    // declaración hasta el cierre del useCallback).
+    function flushBlock(): string {
+        const start = VOICE_SRC.indexOf('const flushListenStateBeforeRebuild = useCallback');
+        expect(start, 'Debe existir flushListenStateBeforeRebuild').toBeGreaterThan(-1);
+        // El bloque termina en el "}, [" que cierra el useCallback + su array de deps.
+        const end = VOICE_SRC.indexOf('}, [', start);
+        expect(end, 'El useCallback debe cerrarse con }, [').toBeGreaterThan(start);
+        return VOICE_SRC.slice(start, end);
+    }
+
+    it('existe la función flushListenStateBeforeRebuild', () => {
+        expect(VOICE_SRC).toContain('const flushListenStateBeforeRebuild = useCallback');
+    });
+
+    it('NO commitea el interino parcial como turno final (sin syncConversationStream con turnCommit)', () => {
+        const block = flushBlock();
+        // El commit de un turno final se hace vía syncConversationStream({ turnCommit: true }).
+        // En un rebuild NO debe existir esa llamada dentro del bloque.
+        expect(block, 'flushListenStateBeforeRebuild no debe llamar syncConversationStream').not.toContain(
+            'syncConversationStream'
+        );
+        expect(block, 'no debe haber turnCommit dentro del bloque').not.toContain('turnCommit');
+    });
+
+    it('resetea la línea abierta y el estado de preview (sin tocar transcript ni hablante)', () => {
+        const block = flushBlock();
+        // Reset de la línea abierta (espejo de finalizeTurnCommit pero sin commitear fila).
+        expect(block, 'debe limpiar openLine').toContain("listenStateRef.current.openLine = ''");
+        expect(block, 'debe limpiar pendingInterim').toContain("listenStateRef.current.pendingInterim = ''");
+        expect(block, 'debe limpiar publishedLiveRef').toContain("publishedLiveRef.current = ''");
+        expect(block, 'debe cerrar openPreviewTurnRef').toContain('openPreviewTurnRef.current = false');
+        expect(block, 'debe limpiar lastStreamPreviewRef').toContain("lastStreamPreviewRef.current = ''");
+        expect(block, 'debe limpiar preflightScheduledForTurnRef').toContain(
+            'preflightScheduledForTurnRef.current = false'
+        );
+        expect(block, 'debe limpiar srGapFiredForOpenLineRef').toContain(
+            'srGapFiredForOpenLineRef.current = false'
+        );
+        expect(block, 'debe limpiar el live transcript').toContain("setLiveTranscript('')");
+    });
+
+    it('lee el parcial solo para diagnóstico (no para commitearlo)', () => {
+        const block = flushBlock();
+        // El parcial se lee únicamente para el log de depuración DEV, no para commitear.
+        expect(block, 'debe leer el parcial con cleanForSpeech').toContain('cleanForSpeech(');
+        expect(block, 'debe leer el display del stream').toContain('readStreamDisplay(');
+    });
+});

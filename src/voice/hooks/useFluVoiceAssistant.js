@@ -1778,19 +1778,47 @@ export function useFluVoiceAssistant({
 
   const flushListenStateBeforeRebuild = useCallback(() => {
     if (!conversationActiveRef?.current) return
-    const capture =
+    // El interino en vuelo durante un stall/rebuild es NO CONFIABLE: Chrome se
+    // congeló a mitad de frase y puede entregar una palabra truncada (p.ej. "hoa"
+    // de "hola"). Commitearlo como turno final crea filas basura en el log y
+    // reinicia la línea abierta, de modo que la siguiente sesión arranca desde
+    // cero y vuelve a commitear otro fragmento parcial (síntoma "solo escribe hoa
+    // y deja de transcribir" + "escucha pasmada").
+    //
+    // En un rebuild NO se commitea el interino parcial: se descarta la línea
+    // abierta (sin tocar el transcript de sesión ni el índice de hablante) para
+    // que la nueva sesión de reconocimiento recapture limpio desde el audio
+    // actual. El audio hablado durante el congelamiento de Chrome se pierde de
+    // todos modos (Chrome no lo procesó), así que commitear el fragmento previo
+    // no recupera nada y solo ensucia el log.
+    const partial = cleanForSpeech(
       readStreamDisplay(listenStateRef.current) ||
-      cleanForSpeech(listenStateRef.current.pendingInterim)
-    if (!capture) return
-    const result = sealPendingInterim(listenStateRef.current)
-    syncConversationStream({
-      capture,
-      newParagraph: result.newParagraph,
-      speaker: result.speaker,
-      utterance: capture,
-      turnCommit: true,
-    })
-  }, [conversationActiveRef, syncConversationStream])
+        listenStateRef.current.pendingInterim,
+    )
+    if (partial && import.meta.env?.DEV && debugHotPath) {
+      fluDebugHot('stall-rebuild-discard-partial', { partial: partial.slice(0, 80) })
+    }
+    // Reset de la línea abierta (espejo de finalizeTurnCommit pero SIN commitear
+    // una fila al log).
+    listenStateRef.current.openLine = ''
+    listenStateRef.current.pendingInterim = ''
+    publishedLiveRef.current = ''
+    openPreviewTurnRef.current = false
+    lastStreamPreviewRef.current = ''
+    preflightScheduledForTurnRef.current = false
+    srGapFiredForOpenLineRef.current = false
+    setLiveTranscript('')
+  }, [
+    conversationActiveRef,
+    debugHotPath,
+    fluDebugHot,
+    openPreviewTurnRef,
+    publishedLiveRef,
+    lastStreamPreviewRef,
+    preflightScheduledForTurnRef,
+    srGapFiredForOpenLineRef,
+    setLiveTranscript,
+  ])
 
   const cleanupAudio = useCallback(async () => {
     clearPassiveAudioDelayTimer()
