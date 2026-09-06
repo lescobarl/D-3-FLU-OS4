@@ -114,7 +114,7 @@ export const APP_BRANDING = {
 // Gemini Configuration
 // -----------------------------------------------------------
 export const GEMINI_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_GEMINI_MODEL || 'gemini-3.1-flash-lite',
+    MODEL: (import.meta as any)?.env?.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite',
     API_URL: (import.meta as any)?.env?.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
     PREDICT_API_URL: (import.meta as any)?.env?.VITE_GEMINI_PREDICT_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:predict',
     DEFAULT_TEMPERATURE: 0.7,
