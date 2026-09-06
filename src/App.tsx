@@ -2741,15 +2741,48 @@ function App() {
         [],
     );
 
+    /**
+     * Borra un participante de forma consistente (lo usa el botón del perfil
+     * activo y el botón de cada fila del panel). Al eliminar se limpian:
+     *  - su perfil de navegador (browserProfiles),
+     *  - su registro Dexie + onboarding per-user + estado huérfano,
+     *  - ACTIVE_USER / activeParticipantId si era el usuario activo (para que
+     *    el onboarding siguiente NO herede el id borrado ni su nombre capturado),
+     *  - la referencia "pending" y el estado legacy, para que la próxima
+     *    entrada vuelva a preguntar "¿Quién eres?" SIN sugerencias fantasma.
+     */
+    const handleRemoveMultiuserParticipant = useCallback(
+        async (id: string): Promise<void> => {
+            if (!id || id === DEFAULT_ONBOARDING_USER) return;
+            await browserProfiles.reset(id);
+            const removed = await participants.remove(id);
+            const wasActive = activeParticipantId === id;
+            if (removed && wasActive) {
+                // El participante borrado era el activo: salir a la ruta legacy
+                // y reiniciar el onboarding (borra estado legacy + per-user del id).
+                setActiveUser(undefined);
+                setActiveParticipantId(undefined);
+                setNewProfilePending(false);
+                if (typeof window !== 'undefined') {
+                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
+                    if (onboarding.config.nameKey)
+                        window.localStorage.removeItem(onboarding.config.nameKey);
+                }
+                onboarding.reset();
+            } else if (removed) {
+                // Se borró otro participante distinto del activo: nada que limpiar
+                // del estado activo; el listado ya se refrescó en participants.remove.
+            }
+        },
+        [activeParticipantId, browserProfiles, participants, onboarding, setActiveUser, setActiveParticipantId, setNewProfilePending],
+    );
+
     const handleRemoveActiveUser = useCallback(async () => {
         if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return;
         const id = activeParticipantId;
-        await browserProfiles.reset(id);
-        await participants.remove(id);
-        setActiveUser(undefined);
-        setActiveParticipantId(undefined);
-        setNewProfilePending(false);
-    }, [activeParticipantId, browserProfiles, participants, setActiveUser, setActiveParticipantId, setNewProfilePending]);
+        await handleRemoveMultiuserParticipant(id);
+    }, [activeParticipantId, handleRemoveMultiuserParticipant]);
 
     const handleCreateNewProfile = useCallback(() => {
         // Crea un perfil nuevo: vuelve a la ruta legacy (aún sin registro Dexie)
@@ -2882,6 +2915,18 @@ function App() {
             .then(async (result) => {
                 if (cancelled) return;
                 if (!result.ok || !result.record) {
+                    // Carrera de duplicado (el perfil ya existe en la BD pero aún no
+                    // en `participants.participants`): se activa el existente en vez
+                    // de abortar el alta del usuario.
+                    const byName = participants.participants.find(
+                        (p) => p.name.trim().toLowerCase() === name.trim().toLowerCase(),
+                    );
+                    if (byName) {
+                        await onboarding.persistForParticipant(byName.id);
+                        if (cancelled) return;
+                        activate(byName.id);
+                        return;
+                    }
                     setNewProfilePending(false);
                     return;
                 }
@@ -4180,7 +4225,44 @@ const {
         auditLog.logEvent('participant:removed', 'config', uuidv4(), {
             label,
         }, 'Participant removed').catch(console.error);
-    }, [voiceProfiles, integrationStore, os2RemoveSessionSpeaker, auditLog]);
+
+        // 6) Registro multiusuario homónimo (Dexie participants + onboarding).
+        //    Causa raíz de "borré ratón/conejo y sigue apareciendo en el
+        //    onboarding": este panel borra el PERFIL DE VOZ pero NO la fila del
+        //    registro multiusuario (la que alimenta las sugerencias del nombre y
+        //    la activación). Si existe un participante con el mismo nombre se
+        //    elimina también de verdad y, si era el usuario activo, se sale a la
+        //    ruta legacy limpiando ACTIVE_USER/estado legacy.
+        const participantMatch = participants.participants.find(
+            (p) => p.name.trim().toLowerCase() === label.trim().toLowerCase(),
+        );
+        if (participantMatch) {
+            await participants.remove(participantMatch.id);
+            if (activeParticipantId === participantMatch.id) {
+                setActiveUser(undefined);
+                setActiveParticipantId(undefined);
+                setNewProfilePending(false);
+                if (typeof window !== 'undefined') {
+                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
+                    if (onboarding.config.nameKey)
+                        window.localStorage.removeItem(onboarding.config.nameKey);
+                }
+                onboarding.reset();
+            }
+        }
+    }, [
+        voiceProfiles,
+        integrationStore,
+        os2RemoveSessionSpeaker,
+        auditLog,
+        participants,
+        activeParticipantId,
+        onboarding,
+        setActiveUser,
+        setActiveParticipantId,
+        setNewProfilePending,
+    ]);
 
     // ============================================================
     // OS2 parity: handleRenameProfile (Gap H)
@@ -4910,8 +4992,7 @@ const {
                                                 return participants.register(input);
                                             }}
                                             onRemove={async (id) => {
-                                                await browserProfiles.reset(id);
-                                                await participants.remove(id);
+                                                await handleRemoveMultiuserParticipant(id);
                                             }}
                                         />
                                         <BrowserProfilesPanel
