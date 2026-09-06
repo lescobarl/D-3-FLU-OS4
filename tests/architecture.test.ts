@@ -1,5 +1,5 @@
 // ============================================================
-// FLU OS3 — Architecture & Compliance Tests
+// FLU OS4 — Architecture & Compliance Tests
 // ============================================================
 // Validates that the refactored codebase complies with
 // CLAUDE.md constraints:
@@ -13,7 +13,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { STORAGE_KEYS, GEMINI_CONFIG, POLLINATIONS_CONFIG, DEFAULT_PERSONALITY, WELCOME_MESSAGE, UI_DEFAULTS } from '../src/core/config/appConfig';
-import type { IAIService } from '../src/core/ai/IAIService';
 
 // ============================================================
 // 1. AppConfig — Centralized Configuration (Rule #1)
@@ -65,30 +64,6 @@ describe('AppConfig — Centralized Configuration [Rule #1]', () => {
         expect(UI_DEFAULTS.RESUME_LISTENING_DELAY_MS).toBe(50);
         expect(UI_DEFAULTS.RESUME_LISTENING_RETRY_MS).toBe(120);
         expect(UI_DEFAULTS.IDLE_TIMEOUT_MS).toBe(2000);
-    });
-});
-
-// ============================================================
-// 2. IAIService Interface — Dependency Injection (Obligación #1)
-// ============================================================
-describe('IAIService — Dependency Injection Interface [Obligación #1]', () => {
-
-    it('IAIService must define all required methods', () => {
-        // We can't instantiate an interface, but we can verify the type contract
-        const methods: (keyof IAIService)[] = [
-            'generateMinute',
-            'generateResponse',
-            'generateParticipantEvaluation',
-            'generateConversationSummary',
-            'generateFluContract',
-            'generateWorkspaceImage',
-        ];
-        expect(methods.length).toBe(6);
-        // All methods must be async (return Promise)
-        methods.forEach(m => {
-            // Just verify the method names exist in the type
-            expect(m).toBeDefined();
-        });
     });
 });
 
@@ -284,11 +259,6 @@ describe('Conversation State Machine', () => {
         expect(src).toContain("case 'SPEAKING'");
         expect(src).toContain("case 'ERROR'");
     });
-
-    it('integrationStore must have all conversation states in type', () => {
-        const states = ['IDLE', 'LISTENING', 'THINKING', 'SPEAKING', 'ERROR'] as const;
-        expect(states.length).toBe(5);
-    });
 });
 
 // ============================================================
@@ -354,22 +324,16 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
 
     it('EXPRESSION_MAP must have all expressions registered in expressionRegistry', async () => {
         const { EXPRESSION_MAP } = await import('../src/avatar/index');
-        const { getExpressionDef, getValidAnimations } = await import('../src/core/anim/expressionRegistry');
+        const { getExpressionDef } = await import('../src/core/anim/expressionRegistry');
 
         const mapKeys = Object.keys(EXPRESSION_MAP);
-        expect(mapKeys.length).toBeGreaterThan(0);
-
-        const missing: string[] = [];
-        for (const expr of mapKeys) {
-            const def = getExpressionDef(expr);
-            if (!def) {
-                // Some expressions like 'saludo', 'wave', 'alerta', 'sleep' are OS3 parity
-                // extras that may not be in the registry yet — that's acceptable
-                continue;
-            }
-        }
-        // This test is informational — EXPRESSION_MAP may have extras not in registry
         expect(mapKeys.length).toBeGreaterThanOrEqual(20);
+
+        // Extras de paridad OS3 que pueden no estar aún en el registry.
+        const ALLOWED_MAP_EXTRAS = new Set(['saludo', 'wave', 'alerta', 'sleep']);
+
+        const missing = mapKeys.filter((expr) => !getExpressionDef(expr) && !ALLOWED_MAP_EXTRAS.has(expr));
+        expect(missing, 'expresiones de EXPRESSION_MAP sin definición en expressionRegistry').toEqual([]);
     }, 60_000);
 
     it('EXPRESSION_MAP animations must be valid BunnyAnimation values', async () => {

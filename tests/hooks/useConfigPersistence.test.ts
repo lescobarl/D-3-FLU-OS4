@@ -58,9 +58,9 @@ describe('useConfigPersistence', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
-    // Restaura el singleton VISUAL_CONFIG: test 17 escribe-through a
+    // Restaura el singleton VISUAL_CONFIG: algún test escribe-through a
     // geminiImage.enabled=true y, sin reset, contamina los tests posteriores
-    // (p.ej. test 11 que espera el default false).
+    // (p.ej. el de valores por defecto que espera el default false).
     if (VISUAL_CONFIG.image?.pipeline?.geminiImage) {
       VISUAL_CONFIG.image.pipeline.geminiImage.enabled = false;
     }
@@ -213,7 +213,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.imageApiUrl).toBe('https://api.pollinations.ai');
   });
 
-  test('16. handleGeminiApiKeyCommit guarda clave de Gemini dedicada', () => {
+  test('11. handleGeminiApiKeyCommit guarda clave de Gemini dedicada', () => {
     const { result } = renderHook(() => useConfigPersistence());
 
     act(() => {
@@ -227,7 +227,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.geminiApiKey).toBe('gemini-key-xyz');
   });
 
-  test('18. geminiApiKey carga desde localStorage dedicado y hace fallback a la clave de texto', () => {
+  test('12. geminiApiKey carga desde localStorage dedicado y hace fallback a la clave de texto', () => {
     // Sin clave dedicada: geminiApiKey cae a resolveTextApiKey() (vacío en test)
     const { result: emptyResult } = renderHook(() => useConfigPersistence());
     expect(emptyResult.current.geminiApiKey).toBe('');
@@ -280,7 +280,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.ocrApiUrl).toBe('https://ocr.endpoint.ai');
   });
 
-  test('11. Valores por defecto cuando localStorage está vacío', () => {
+  test('16. Valores por defecto cuando localStorage está vacío', () => {
     // localStorage vacío
     mockLocalStorage.store = {};
 
@@ -300,7 +300,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.sessionRole).toBe('Asistente del Maestro');
   });
 
-  test('12. Manejo de errores en localStorage', () => {
+  test('17. Manejo de errores en localStorage', () => {
     // Simular error en localStorage.getItem
     mockLocalStorage.getItem.mockImplementation(() => {
       throw new Error('LocalStorage error');

@@ -1,5 +1,5 @@
 // ============================================================
-// FLU OS3 — Integration Tests (Real Code Imports)
+// FLU OS4 — Integration Tests (Real Code Imports)
 // ============================================================
 // Tests all key integration points using real source modules:
 //   - integrationStore (Zustand)
