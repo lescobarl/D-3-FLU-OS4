@@ -13,5 +13,9 @@ export default defineConfig({
     command: 'npx vite --port 5175 --host',
     port: 5175,
     reuseExistingServer: true,
+    env: {
+      ...process.env,
+      PLAYWRIGHT_SERVER: '1',
+    },
   },
 });

@@ -87,7 +87,9 @@ export default defineConfig(({ mode }) => {
         },
         server: {
             port: 5173,
-            open: true,
+            // Auto-open SOLO en dev manual; Playwright levanta su propio server
+            // (PLAYWRIGHT_SERVER=1) y no debe abrir pestañas del navegador.
+            open: process.env.PLAYWRIGHT_SERVER === '1' ? false : true,
             // Proxy same-origin para la búsqueda de música en línea (Deezer).
             // La API de Deezer NO envía CORS: un fetch directo desde el
             // navegador sería bloqueado. Este proxy reescribe /api/deezer →
