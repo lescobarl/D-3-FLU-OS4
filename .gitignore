@@ -30,3 +30,6 @@ test-output.txt
 
 # Evidencia E2E regenerable (los specs escriben los PNG en cada corrida)
 reports/
+
+# TypeScript incremental (cache en node_modules/.cache/ts)
+tsconfig.tsbuildinfo

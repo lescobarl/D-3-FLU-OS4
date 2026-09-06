@@ -6,12 +6,15 @@ export default defineConfig({
   fullyParallel: true,
   workers: 4,
   use: {
-    baseURL: 'http://localhost:5175',
+    // Mismo puerto que el dev server: si `npm run dev` ya está corriendo,
+    // los E2E lo reutilizan (no relanzan Vite). Cada spec corre en su propio
+    // contexto de navegador (IndexedDB/localStorage aislados del portal real).
+    baseURL: 'http://localhost:5173',
     headless: true,
   },
   webServer: {
-    command: 'npx vite --port 5175 --host',
-    port: 5175,
+    command: 'npx vite --host',
+    port: 5173,
     reuseExistingServer: true,
     env: {
       ...process.env,

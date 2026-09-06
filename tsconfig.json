@@ -8,6 +8,8 @@
         ],
         "module": "ESNext",
         "skipLibCheck": true,
+        "incremental": true,
+        "tsBuildInfoFile": "./node_modules/.cache/ts/tsconfig.tsbuildinfo",
         "moduleResolution": "bundler",
         "allowImportingTsExtensions": true,
         "isolatedModules": true,
