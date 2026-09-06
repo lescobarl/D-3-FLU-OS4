@@ -224,6 +224,21 @@ describe('reminderIntentParser — citas (agenda)', () => {
     expect(typeof result.data?.dueAt).toBe('number');
   });
 
+  it('"crea una cita para mañana a las 10" → reminder.add con texto limpio y hora mañana 10:00 (Bug #7)', () => {
+    const result = parseReminderIntent('crea una cita para mañana a las 10', { now });
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.add');
+    // El conector "para" que introduce el tiempo NO debe quedar como texto.
+    expect(result.data?.text).toBe('cita');
+    const due = new Date(result.data?.dueAt ?? NaN);
+    expect(due.getFullYear()).toBe(2026);
+    expect(due.getMonth()).toBe(0); // enero
+    expect(due.getDate()).toBe(16); // mañana
+    expect(due.getHours()).toBe(10);
+    expect(due.getMinutes()).toBe(0);
+    expect(result.reply).toMatch(/^Listo, agendé tu cita/);
+  });
+
   it('"programa una cita" sin cuándo usa el desfase por defecto', () => {
     expect(parseReminderIntent('programa una cita', { now, defaultOffsetMs: 60000 })).toEqual({
       handled: true,

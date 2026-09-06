@@ -414,7 +414,16 @@ export function parseReminderIntent(
       : lang === 'es'
         ? 'cita'
         : 'appointment';
-    const subject = textPart ? `${base} ${textPart}` : base;
+    // El asunto de la cita es el texto entre el trigger/persona y la cláusula
+    // "cuándo". Cuando ese tramo es SOLO un conector que introduce el tiempo
+    // ("crea una cita para mañana a las 10" → textPart "para"), se descarta
+    // para que el recordatorio quede con el nombre limpio ("cita", "cita con
+    // el doctor") y no "cita para". Los conectores con contenido real ("para
+    // una revisión dental…") se conservan.
+    const connectorsOnly = /^(?:para|a|de|por|que|el|la|los|las|una|un|del|al|con|mi|mis|tu|tus|su|sus|nuestro|nuestra)\s*$/i;
+    const subject = textPart && !connectorsOnly.test(textPart.trim())
+      ? `${base} ${textPart}`
+      : base;
     if (!subject.trim()) {
       return { handled: true, action: null, reply: askTextReply(lang) };
     }

@@ -18,7 +18,8 @@
 import { useState } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import type { HorarioRecord, DiaryEntryRecord, NoteRecord } from '../core/db/fluDatabase';
+import type { HorarioRecord, DiaryEntryRecord, NoteRecord, ReminderRecord } from '../core/db/fluDatabase';
+import { describeNlDateTime } from '../core/reminders/nlDateParser';
 import { diaDeFecha, type NewHorarioInput } from '../core/horario/horarioService';
 import {
   HorarioPizarron,
@@ -56,6 +57,13 @@ export interface HoyPanelProps {
     onToggle: (id: string) => Promise<NoteRecord | null>;
     onRemove: (id: string) => Promise<boolean>;
   };
+  /** Próximas citas/recordatorios (Bug #7): recordatorios pendientes por
+      fecha. Se muestran en el bloque HOY para que una cita agendada por voz
+      ("crea una cita para mañana a las 10") sea visible al instante. */
+  reminders?: {
+    items: ReminderRecord[];
+    loading: boolean;
+  };
   /** Referencia de reloj (por defecto: Date.now()) para pruebas. */
   now?: () => number;
   /** Idioma actual para etiquetas bilingües (es/en). */
@@ -70,6 +78,7 @@ export function HoyPanel({
   horario,
   diary,
   notes,
+  reminders,
   now = () => Date.now(),
   language = 'es',
 }: HoyPanelProps) {
@@ -88,6 +97,14 @@ export function HoyPanel({
   const hoy = diaDeFecha(now());
   const proxima = proximaClaseDe(horario.items, now);
   const clasesHoy = clasesDelDia(horario.items, hoy);
+
+  // ---- Citas/recordatorios próximos (Bug #7): pendientes ordenados por
+  // fecha, recortados a los más cercanos para la vista compacta. ----
+  const proximasCitas = (reminders?.items ?? [])
+    .filter((item) => item.status === 'pending')
+    .slice()
+    .sort((a, b) => a.dueAt - b.dueAt)
+    .slice(0, 3);
 
   // ---- DIARIO: última entrada (una sola) ----
   const ultimaEntrada = diary.entries.length > 0 ? diary.entries[0] : null;
@@ -110,6 +127,29 @@ export function HoyPanel({
           {pickLabel(hoyUi.hoyTitle, language, '📅 Hoy')}
         </summary>
         <div className="hoy-panel__body">
+          {reminders && (
+            <section className="hoy-panel__section" data-testid="hoy-agenda">
+              <h4 className="hoy-panel__section-title">
+                {pickLabel(hoyUi.agendaTitle, language, 'Próximas citas')}
+              </h4>
+              {reminders.loading ? (
+                <p className="hoy-panel__empty">…</p>
+              ) : proximasCitas.length === 0 ? (
+                <p className="hoy-panel__empty">
+                  {pickLabel(hoyUi.sinAgenda, language, 'Sin citas próximas')}
+                </p>
+              ) : (
+                <ul className="hoy-panel__list" data-testid="hoy-agenda-list">
+                  {proximasCitas.map((item) => (
+                    <li key={item.id} className="hoy-panel__clase" data-testid="hoy-agenda-item">
+                      <span className="hoy-panel__clase-materia">{item.text}</span>
+                      <span className="hoy-panel__clase-meta">{describeNlDateTime(item.dueAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
           <section className="hoy-panel__section" data-testid="hoy-proxima">
             <h4 className="hoy-panel__section-title">
               {pickLabel(hoyUi.proximaClaseLabel, language, 'Próxima')}

@@ -679,6 +679,7 @@ export function WorkspaceHub({
                                 horario={hoy.horario}
                                 diary={hoy.diary}
                                 notes={hoy.notes}
+                                reminders={hoy.reminders}
                                 now={hoy.now}
                                 language={language}
                             />

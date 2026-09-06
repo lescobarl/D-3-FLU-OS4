@@ -4557,6 +4557,10 @@ const {
                                                 onToggle: async (id) => notes.toggle(id),
                                                 onRemove: async (id) => notes.remove(id),
                                             },
+                                            reminders: {
+                                                items: reminders.reminders,
+                                                loading: reminders.loading,
+                                            },
                                             language,
                                         },
                                         language,

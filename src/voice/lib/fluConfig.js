@@ -667,6 +667,8 @@ export const FLU_CONFIG = {
       notasTitle: { es: '📝 Notas', en: '📝 Notes' },
       verHorarioCompleto: { es: 'Ver horario completo', en: 'View full schedule' },
       proximaClaseLabel: { es: 'Próxima', en: 'Next' },
+      agendaTitle: { es: 'Próximas citas', en: 'Upcoming appointments' },
+      sinAgenda: { es: 'Sin citas próximas', en: 'No upcoming appointments' },
       clasesHoyLabel: { es: 'Clases de hoy', en: "Today's classes" },
       sinProxima: { es: 'Sin próxima entrada', en: 'No upcoming entry' },
       sinClasesHoy: { es: 'Hoy no tienes entradas', en: 'No entries today' },
