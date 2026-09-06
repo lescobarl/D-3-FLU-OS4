@@ -19,7 +19,13 @@
 - Limpieza de debug productivo: retirado el bloque "DIAGNÓSTICO TEMPORAL" (`setInterval` 2 s), `relayLog [DIAG-*]`, `console.[log] [FLU-DEBUG]*` y los duplicados `[DIAG]` de avatar. Los `catch` vacíos de SW/listen registran error con contexto.
 - Autonomía: bus `autonomyEvents.ts` (interfaz común suscribible) sustituye los 8 `CustomEvent 'flu-*'` de `window` que no tenían listener; el hook los convierte en notificaciones del panel. `AutonomyStatusPanel` es presentacional (state/actions por props) → una sola instancia del hook. Eliminada la telemetría fabricada (`getConsolidatedAutonomyStatus`) y orquestadores muertos.
 - Config/env alineados (`.env.example` ↔ `appConfig` ↔ `configEnv.test`); default `VITE_GEMINI_MODEL` unificado en `gemini-2.5-flash-lite`; `VITE_WHATSAPP_WEB_BASE` documentada y testeada; removidas vars fantasma.
-- Higiene: `reports/` (PNG E2E regenerables) excluido de git; `.gitignore` corregido; `sessionBootstrap.js`/`speakerClusterStore.js` eliminados (sin importadores).
+- Higiene: `reports/` (PNG E2E regenerables) excluido de git; `.gitignore` corregido; `sessionBootstrap.js`/`speakerClusterStore.js`/`streamStt/client.js` eliminados (sin importadores); `backups/` reducido de 1.69 GB a 238 MB (solo 08-29) y **sin copias de `.env`** (secretos fuera de git); 13 planes obsoletos del linaje pizarrón/agenda borrados y referencias colgantes corregidas.
+- Deduplicación de rutas dobles: `pickLabel` ×4 → `src/lib/textUtils.ts` (con test); fallback de persistencia Zustand ×2 → `src/store/storage.ts`; helpers E2E ×4 specs → `tests/e2e/_helpers.ts` (gotoClean/stubLocalSpeech/readStore/clearStore/captureScreenshot).
+- Tests depurados: triviales/no-op eliminados de `architecture.test.ts`, EXPRESSION_MAP validado de verdad, cabeceras OS3→OS4, `useConfigPersistence.test` renumerado 1–17. `npm run lint` ejecuta los guards reales (hardcode/protocol/stability).
+
+## Trabajo de remediación entregado (2.ª tanda, mismo día)
+- **Ejecutado y verificado**: lo anterior con `tsc -b` limpio, `npm run test:full` 2686/2686 (143 archivos) y `npm run build` OK en la rama `feature/fase-conversacional-acciones`.
+- **No fusionado (requiere ciclo dedicado con validación runtime)**: la unificación de los 3 motores de contrato IA (`voice/lib/gemini.js` / `services/deepseek.ts` / `services/gemini.ts`) y el code-split de `App.tsx` (React Router + lazy). Son refactors grandes que exigen validación con LLM real (E2E con API key) y un ciclo por fases; no se ejecutan a ciegas en un solo pase para no violar la regla de corrección validada.
 
 ## Deudas técnicas identificadas (auditoría 2026-09-06)
 1. **Mandatos arquitectónicos ausentes (CLAUDE §7.1/§7.2)**: no existe tabla `app_catalogos` + UI Configuradora, ni Workflow Engine + UI Diseñadora, ni `screenRegistry`/pantallas dinámicas.
