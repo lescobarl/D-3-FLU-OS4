@@ -2764,11 +2764,35 @@ function App() {
             // la escucha de FLU justo después (si el TTS de cierre terminó ya, el
             // micrófono del onboarding se suspendió; la escucha principal queda
             // activa para que la frase no sea una invitación sin micrófono).
-            window.setTimeout(() => {
-                os2StartListening({ resume: true }).catch((err: unknown) =>
-                    console.warn('[App] fallo al iniciar escucha tras onboarding:', err),
-                );
-            }, 700);
+            // Política de autoplay: si el navegador rechaza abrir el micrófono sin
+            // gesto del usuario (name 'not-allowed'/'aborted'), se reintenta con el
+            // PRIMER gesto (click/tap/tecla) durante 10 s.
+            const tryStartListening = () => {
+                os2StartListening({ resume: true }).catch((err: unknown) => {
+                    const name = String((err as any)?.name || '');
+                    const blocked = name === 'not-allowed' || name === 'aborted' || name === 'not-allowed-error';
+                    if (blocked) {
+                        const cleanup = () => {
+                            window.removeEventListener('pointerdown', startOnGesture);
+                            window.removeEventListener('keydown', startOnGesture);
+                            window.removeEventListener('touchstart', startOnGesture);
+                        };
+                        const startOnGesture = () => {
+                            cleanup();
+                            os2StartListening({ resume: true }).catch((err2: unknown) =>
+                                console.warn('[App] escucha tras gesto del usuario falló:', err2),
+                            );
+                        };
+                        window.addEventListener('pointerdown', startOnGesture);
+                        window.addEventListener('keydown', startOnGesture);
+                        window.addEventListener('touchstart', startOnGesture);
+                        window.setTimeout(cleanup, 10000);
+                    } else {
+                        console.warn('[App] fallo al iniciar escucha tras onboarding:', err);
+                    }
+                });
+            };
+            window.setTimeout(tryStartListening, 700);
         };
         if (isAnonymous) {
             void participants
