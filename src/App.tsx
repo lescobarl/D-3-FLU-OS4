@@ -22,6 +22,8 @@
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useConfigPersistence } from './hooks/useConfigPersistence';
+import { useCatalogsSettings } from './hooks/useCatalogsSettings';
+import { useDocumentGenerationBridge } from './hooks/useDocumentGenerationBridge';
 import { useBunnyStore, ensureAvatarPantsVisible, EXPRESSION_MAP } from './avatar';
 import { relayLog } from './lib/clientLogRelay';
 import { cleanForSpeech, normalizeSpaces, pickLabel } from './lib/textUtils';
@@ -154,32 +156,10 @@ import { normalizeJuego } from './voice/lib/configCommands';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import {
-    ENVIRONMENTS,
-    getAmbientes,
     getVisibleTabIds,
-    isAmbienteId,
     DEFAULT_AMBIENTE_ID,
-    type EnvironmentDefinition,
 } from './core/environments/environmentRegistry';
-import { useEnvironmentStore, readPersistedActiveAmbienteId } from './store/environmentStore';
-import {
-    hydrateAmbientes,
-    registerAmbiente,
-    removeAmbiente,
-    updateAmbiente,
-} from './core/environments/ambientesCatalog';
-import type { RegisterResult, UpdateResult } from './core/catalogs/catalogRegistry';
-import {
-    hydratePalettes,
-    registerPaleta,
-    removePaleta,
-    updatePaleta,
-} from './core/branding/paletasCatalog';
-import {
-    builtinPaletteEntries,
-    getAllPalettes,
-    type PaletteDefinition,
-} from './core/branding/seasonalPalettes';
+import { useEnvironmentStore } from './store/environmentStore';
 import { getGameEngine } from './core/games/gameCatalog';
 import {
     getActiveGameSession,
@@ -994,31 +974,6 @@ function App() {
     const activeAmbienteId = useEnvironmentStore((s) => s.activeAmbienteId);
     const visibleTabIds = useMemo(() => getVisibleTabIds(activeAmbienteId), [activeAmbienteId]);
 
-    // ---- 1A: catálogo dinámico de ambientes (A5) ----
-    // Espejo en React del catálogo fusionado (built-ins + dinámicos) para el panel de Ajustes.
-    const [ambientes, setAmbientes] = useState<readonly EnvironmentDefinition[]>(() => getAmbientes());
-    const refreshAmbientes = useCallback(() => {
-        setAmbientes(getAmbientes());
-    }, []);
-    // Ids de ambientes dinámicos (persistidos): únicos que admiten editar/eliminar.
-    const dynamicAmbienteIds = useMemo(
-        () => new Set(ambientes.filter((a) => !ENVIRONMENTS.some((b) => b.id === a.id)).map((a) => a.id)),
-        [ambientes]
-    );
-    // ---- 1B: catálogo dinámico de paletas (B4) ----
-    // Espejo en React del catálogo fusionado (built-ins + dinámicos) para el panel de Ajustes.
-    const [paletas, setPaletas] = useState<readonly PaletteDefinition[]>(() => getAllPalettes());
-    const refreshPaletas = useCallback(() => {
-        setPaletas(getAllPalettes());
-    }, []);
-    // Ids de paletas dinámicas (persistidas): únicas que admiten editar/eliminar.
-    const dynamicPaletaIds = useMemo(
-        () =>
-            new Set(
-                paletas.filter((p) => !builtinPaletteEntries().some((b) => b.id === p.id)).map((p) => p.id)
-            ),
-        [paletas]
-    );
     const auditLog = useAuditLog();
     const minuteKnowledge = useMinuteKnowledge();
     const voiceProfiles = useVoiceProfiles();
@@ -1104,8 +1059,6 @@ function App() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const docInputRef = useRef<HTMLInputElement>(null);
-    const projectInputRef = useRef<HTMLInputElement>(null);
 
     // ---- Estado para maximizar/restaurar paneles (PanelFrame expandable) ----
     const [expandedFrameId, setExpandedFrameId] = useState<string>(savedSession.current.expandedFrameId);
@@ -1342,80 +1295,6 @@ function App() {
         setPreferredAIProvider(provider as any);
         setAiProviderState(provider);
     }, []);
-
-    // ---- Ambientes (B5): activación desde el panel de Ajustes ----
-    // Espejo del handler por voz (onContractResolved): aplica el ambiente
-    // con applyEnvironment y habla la bienvenida en el idioma activo.
-    // Debe ir DESPUÉS de useConfigPersistence (languageRef) y de la
-    // declaración de speakFluRef para tener ambos en scope.
-    const handleActivateAmbiente = useCallback(async (ambienteId: string) => {
-        try {
-            const ambiente = applyEnvironment(ambienteId);
-            const envLang = languageRef.current === 'en' ? 'en' : 'es';
-            await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
-        } catch (err) {
-            console.error('[App] applyEnvironment failed (non-critical):', err);
-        }
-    }, []);
-
-    // ---- 1A/1B: hidrata los catálogos dinámicos (ambientes + paletas) al
-    // arranque. El merge del store corrige ids inválidos a 'asistente'; aquí
-    // se restaura un ambiente dinámico ya hidratado y se refrescan las paletas. ----
-    useEffect(() => {
-        let active = true;
-        (async () => {
-            try {
-                await hydrateAmbientes();
-                await hydratePalettes();
-                if (!active) return;
-                refreshAmbientes();
-                refreshPaletas();
-                const persistedId = readPersistedActiveAmbienteId();
-                const currentId = useEnvironmentStore.getState().activeAmbienteId;
-                if (persistedId && persistedId !== currentId && isAmbienteId(persistedId)) {
-                    applyEnvironment(persistedId);
-                }
-            } catch (err) {
-                console.error('[App] hydrate catalogs failed (non-critical):', err);
-            }
-        })();
-        return () => {
-            active = false;
-        };
-    }, [refreshAmbientes, refreshPaletas]);
-
-    // ---- 1A: CRUD de ambientes dinámicos (delegado a ambientesCatalog) ----
-    const handleRegisterAmbiente = useCallback(
-        async (data: EnvironmentDefinition): Promise<RegisterResult<EnvironmentDefinition>> => {
-            const result = await registerAmbiente(data);
-            refreshAmbientes();
-            return result;
-        },
-        [refreshAmbientes]
-    );
-
-    const handleUpdateAmbiente = useCallback(
-        async (id: string, data: EnvironmentDefinition): Promise<UpdateResult<EnvironmentDefinition>> => {
-            const result = await updateAmbiente(id, data);
-            if (result.ok && activeAmbienteId === id && result.record.data.id !== id) {
-                // El ambiente activo fue renombrado: su slug (id canónico) cambió → reactivar.
-                applyEnvironment(result.record.data.id);
-            }
-            refreshAmbientes();
-            return result;
-        },
-        [refreshAmbientes, activeAmbienteId]
-    );
-
-    const handleRemoveAmbiente = useCallback(
-        async (id: string): Promise<void> => {
-            const wasActive = activeAmbienteId === id;
-            if (wasActive) resetEnvironment();
-            await removeAmbiente(id);
-            refreshAmbientes();
-        },
-        [refreshAmbientes, activeAmbienteId]
-    );
 
     // ---- Flu participant state (OS2 parity: useFluParticipant hook) ----
     // Memoized snapshot: use a ref to avoid re-creating the callback on every render.
@@ -3599,46 +3478,26 @@ function App() {
     // ---- Branding Inteligente por Temporalidad + Ecológico ----
     const branding = useEnhancedBranding();
 
-    // ---- 1B: CRUD de paletas dinámicas (delegado a paletasCatalog) ----
-    const handleRegisterPaleta = useCallback(
-        async (data: PaletteDefinition): Promise<RegisterResult<PaletteDefinition>> => {
-            const result = await registerPaleta(data);
-            refreshPaletas();
-            return result;
-        },
-        [refreshPaletas]
-    );
-
-    const handleUpdatePaleta = useCallback(
-        async (id: string, data: PaletteDefinition): Promise<UpdateResult<PaletteDefinition>> => {
-            const result = await updatePaleta(id, data);
-            if (result.ok && branding.config.activeSeason === id && result.record.data.id !== id) {
-                // La temporada activa fue renombrada: su slug (id canónico) cambió → reactivar.
-                await branding.seasonalActions.setMode('manual');
-                await branding.seasonalActions.setActiveSeason(result.record.data.id);
-            }
-            refreshPaletas();
-            return result;
-        },
-        [refreshPaletas, branding]
-    );
-
-    const handleRemovePaleta = useCallback(
-        async (id: string): Promise<void> => {
-            await removePaleta(id);
-            refreshPaletas();
-        },
-        [refreshPaletas]
-    );
-
-    // Activa una temporada desde el panel (mismo patrón que el handler de voz).
-    const handleActivatePaleta = useCallback(
-        async (paletaId: string) => {
-            await branding.seasonalActions.setMode('manual');
-            await branding.seasonalActions.setActiveSeason(paletaId);
-        },
-        [branding]
-    );
+    // ---- Ajustes · catálogos dinámicos (ambientes + paletas) extraído a hook ----
+    const {
+        ambientes,
+        dynamicAmbienteIds,
+        paletas,
+        dynamicPaletaIds,
+        handleActivateAmbiente,
+        handleRegisterAmbiente,
+        handleUpdateAmbiente,
+        handleRemoveAmbiente,
+        handleActivatePaleta,
+        handleRegisterPaleta,
+        handleUpdatePaleta,
+        handleRemovePaleta,
+    } = useCatalogsSettings({
+        activeAmbienteId,
+        languageRef,
+        speakFluRef,
+        branding,
+    });
 
     // ---- Handlers para digitalización OCR (tutor experience) ----
     // These must be declared AFTER speakFlu and injectDialogueEntry are available.
@@ -3864,62 +3723,10 @@ function App() {
         e.target.value = '';
     }, [appAnalysis, language]);
 
-    // Comandos de voz → eventos de ventana (dispatch en useNavigationCommands).
-    // Nombres centralizados en FLU_EVENTS (single source of truth, sin drift).
-    // "correcta tu propuesta de video": al generar por voz se captura el TEMA
-    // actual de la conversación (última pregunta del usuario + última respuesta
-    // de FLU) y se pasa como parametros.tema + contenido, para que el guion y el
-    // video NO sean una propuesta genérica sino sobre lo que se está hablando.
-    const buildGenerationTopic = useCallback((): { tema: string; contenido: string } => {
-        const state = useIntegrationStore.getState();
-        const history = state.conversationHistory || [];
-        let lastUser = '';
-        for (let i = history.length - 1; i >= 0; i--) {
-            const entry = history[i];
-            if (entry.role === 'user' || (entry.speakerName && entry.speakerName !== 'FLU')) {
-                lastUser = (entry.text || '').trim();
-                break;
-            }
-        }
-        const lastResp = (state.lastResponse || '').trim();
-        const artifact = state.workspaceArtifact;
-        // Prioridad de tema: la ÚLTIMA PREGUNTA del usuario (el mandato real, p. ej.
-        // "un video de un conejo hablando") es la fuente de verdad del tema. El
-        // artifacto activo (titulo/contenido) es la DEFINICIÓN textual que Gemini ya
-        // escribió como respuesta, NO la petición visual; usarlo como tema hacía que
-        // el video/documento se generara sobre el texto de la definición en vez de
-        // sobre lo que el usuario pidió. Se usa solo como respaldo si no hay pregunta.
-        const tema = (lastUser || artifact?.titulo || artifact?.contenido || lastResp || '').slice(0, 200);
-        const contenido = [lastUser, lastResp].filter(Boolean).join('\n').slice(0, 1200);
-        return { tema, contenido };
-    }, []);
-
-    useEffect(() => {
-        const onAnalyzeDocument = () => { docInputRef.current?.click(); };
-        const onAnalyzeApp = () => { projectInputRef.current?.click(); };
-        const onGenerateDocument = () => {
-            const { tema, contenido } = buildGenerationTopic();
-            documentGeneration.generate('pdf', {
-                parametros: tema ? { tema } : {},
-                contenido: contenido || undefined,
-            });
-        };
-        const onGenerateVideo = () => {
-            const { tema, contenido } = buildGenerationTopic();
-            documentGeneration.generate('video', {
-                parametros: tema ? { tema } : {},
-                contenido: contenido || undefined,
-            });
-        };
-        const offs = [
-            onFluEvent(FLU_EVENTS.ANALYZE_DOCUMENT, onAnalyzeDocument),
-            onFluEvent(FLU_EVENTS.ANALYZE_APP, onAnalyzeApp),
-            onFluEvent(FLU_EVENTS.GENERATE_DOCUMENT, onGenerateDocument),
-            onFluEvent(FLU_EVENTS.GENERATE_VIDEO, onGenerateVideo),
-        ];
-        return () => offs.forEach((off) => off());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [documentGeneration.generate, buildGenerationTopic]);
+    // ---- Workspace · generación: puente de eventos doc/app/video (extraído a hook) ----
+    const { docInputRef, projectInputRef } = useDocumentGenerationBridge({
+        generation: documentGeneration,
+    });
 
     // ---- Auto-save session state on changes ----
     useSessionPersistence({
