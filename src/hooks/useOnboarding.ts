@@ -41,6 +41,16 @@ export interface UseOnboardingOptions {
    * undefined / '' / 'default' → ruta legacy (localStorage).
    */
   participantId?: string;
+  /**
+   * Notificación de completado (fuente única de la transición): se invoca
+   * EXACTAMENTE cuando el onboarding pasa de NO completado a completado
+   * (answer / completeWithName / skip), con el estado resultante. Permite al
+   * llamador registrar/activar al participante en el mismo flujo que completa,
+   * sin carreras de efectos (Bug #1: el participante nuevo no se activaba ni
+   * aparecía en el selector porque el efecto de completado se cancelaba al
+   * refrescar la lista de participantes).
+   */
+  onCompleted?: (state: OnboardingState) => void;
 }
 
 export interface UseOnboardingResult {
@@ -60,13 +70,14 @@ export interface UseOnboardingResult {
   skip: () => void;
   reset: () => void;
   /** Siembra el estado actual en el onboarding de un participante. */
-  persistForParticipant: (participantId: string) => Promise<void>;
+  persistForParticipant: (participantId: string, state?: OnboardingState) => Promise<void>;
 }
 
 export function useOnboarding({
   speak,
   language = 'es',
   participantId,
+  onCompleted,
 }: UseOnboardingOptions): UseOnboardingResult {
   const config = ((FLU_CONFIG as any).onboarding || { enabled: false, steps: [] }) as OnboardingConfig;
   const lang = language === 'en' ? 'en' : 'es';
@@ -84,6 +95,18 @@ export function useOnboarding({
   );
   // La ruta legacy está lista de inmediato; la per-user espera al load().
   const [ready, setReady] = useState<boolean>(() => !isPerUser);
+
+  // Ref del estado más reciente: persistForParticipant se invoca desde flujos
+  // que acaban de transicionar (p. ej. onCompleted), cuando `state` del render
+  // todavía es el estado ANTERIOR. La semilla bajo el id del participante debe
+  // usar el estado transicionado, NO el del closure.
+  const latestStateRef = useRef(state);
+  latestStateRef.current = state;
+
+  // Ref para invocar onCompleted con el valor más reciente sin depender de
+  // closures (mismo patrón que useOnboardingVoiceCapture.onFinalRef).
+  const onCompletedRef = useRef(onCompleted);
+  onCompletedRef.current = onCompleted;
 
   // Cargar el estado del participante al montar/cambiar de participante.
   useEffect(() => {
@@ -133,6 +156,14 @@ export function useOnboarding({
     [isPerUser, participantId],
   );
 
+  // Fuente única de la transición a completado: notifica al llamador con el
+  // estado resultante solo cuando se pasa de NO completado a completado.
+  const notifyCompleted = (next: OnboardingState): void => {
+    if (next.completed && !state.completed) {
+      onCompletedRef.current?.(next);
+    }
+  };
+
   // Hablar el saludo inicial al montar (una sola vez) cuando esté listo.
   useEffect(() => {
     if (!ready || !config.enabled || state.completed) return;
@@ -158,6 +189,7 @@ export function useOnboarding({
       const result = advanceOnboarding(state, config.steps, text, lang);
       setState(result.state);
       persistState(result.state);
+      notifyCompleted(result.state);
       // Persistir el nombre capturado en la clave de almacenamiento
       // config-driven (config.nameKey → STORAGE_KEYS.USER_NAME).
       // Solo en la ruta legacy: en la per-user el nombre vive en el
@@ -174,7 +206,7 @@ export function useOnboarding({
         speak(result.speech, lang).catch(() => undefined);
       }
     },
-    [state, config, lang, speak, persistState, handleAction, isPerUser],
+    [state, config, lang, speak, persistState, handleAction, isPerUser, notifyCompleted],
   );
 
   /**
@@ -198,13 +230,14 @@ export function useOnboarding({
       };
       setState(next);
       persistState(next);
+      notifyCompleted(next);
       // Ruta legacy: persistir también el nombre capturado en la clave global
       // (misma lógica que answer()).
       if (!isPerUser && typeof window !== 'undefined' && config.nameKey) {
         window.localStorage.setItem(config.nameKey, trimmed);
       }
     },
-    [state, config, persistState, isPerUser],
+    [state, config, persistState, isPerUser, notifyCompleted],
   );
 
   const skip = useCallback(() => {
@@ -216,7 +249,8 @@ export function useOnboarding({
     const next = finishOnboarding(state);
     setState(next);
     persistState(next);
-  }, [state, persistState]);
+    notifyCompleted(next);
+  }, [state, persistState, notifyCompleted]);
 
   const reset = useCallback(() => {
     const next = createInitialState();
@@ -231,13 +265,18 @@ export function useOnboarding({
     speak(initialSpeech(config.steps, lang, next.captured), lang).catch(() => undefined);
   }, [config, lang, speak, isPerUser, participantId]);
 
-  /** Siembra el estado actual (ej. completado) para otro participante. */
+  /** Siembra el onboarding de un participante con un estado dado (o el más
+      reciente conocido). Se pasa el estado EXPLÍCITO al sembrar el onboarding
+      del participante recién resuelto/activado: el closure del render aún no
+      refleja la transición y sembrar el estado anterior reabriría el onboarding
+      del participante en bucle (lo que provocaba Bug #1). */
   const persistForParticipant = useCallback(
-    (id: string): Promise<void> => {
+    (id: string, stateToSave?: OnboardingState): Promise<void> => {
       if (!id || id === DEFAULT_ONBOARDING_USER) return Promise.resolve();
-      return serviceRef.current?.save(id, state).catch(() => undefined) ?? Promise.resolve();
+      const target = stateToSave ?? latestStateRef.current;
+      return serviceRef.current?.save(id, target).catch(() => undefined) ?? Promise.resolve();
     },
-    [state],
+    [],
   );
 
   const visible = ready && config.enabled === true && !state.completed;

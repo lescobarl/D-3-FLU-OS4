@@ -121,7 +121,7 @@ import { HorarioPizarron, clasesDelDia, type HorarioModo } from './components/Ho
 import { structureHorarioText, diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
 import { parseHorarioIntent } from './core/horario/horarioIntentParser';
 import type { NotificationService } from './core/notifications/notificationService';
-import { nameCaptureKey, promptForStep } from './core/onboarding/onboardingFlow';
+import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
 import {
     DEFAULT_ONBOARDING_USER,
     resolveActiveUser,
@@ -1241,16 +1241,14 @@ function App() {
     // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
     // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
     const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
-    const [newProfilePending, setNewProfilePending] = useState(false);
-    const registerProfileRef = useRef(false);
     // Guard de montaje: el onboarding se reinicia (para pedirlo SIEMPRE al
     // entrar) solo después de que los participantes carguen y el estado del
     // onboarding esté resuelto (ready). Evita resetear antes de tiempo.
     const onboardingMountSettledRef = useRef(false);
-    // Guard de una sola sesión: evita registrar/activar el participante varias
-    // veces cuando el efecto de completado se re-dispara (p. ej. al cambiar la
-    // lista de participantes tras el registro).
-    const onboardingHandledRef = useRef(false);
+    // Registro/activación del participante al completar el onboarding: se
+    // dispara desde el MISMO flujo que completa (onCompleted del hook), sin
+    // depender de un efecto que la lista refrescada pueda cancelar (Bug #1).
+    const handleOnboardingCompletedRef = useRef<(state: OnboardingState) => void>(() => undefined);
     const materiaGris = useMateriaGris({});
     // ---- FASE P — Personalización profunda por persona (nivel de explicación + tono) ----
     const communicationProfiles = useCommunicationProfiles({});
@@ -2538,7 +2536,14 @@ function App() {
         },
         [speakFlu],
     );
-    const onboarding = useOnboarding({ speak: onboardingSpeak, language, participantId: activeParticipantId });
+    const onboarding = useOnboarding({
+        speak: onboardingSpeak,
+        language,
+        participantId: activeParticipantId,
+        onCompleted: (completed) => {
+            handleOnboardingCompletedRef.current?.(completed);
+        },
+    });
     // Embudo ÚNICO de respuestas del onboarding (teclado, chip y voz). Atajo
     // para perfiles EXISTENTES: si la respuesta del paso de captura del NOMBRE
     // coincide con un participante ya registrado (p. ej. tocar el chip "luis"
@@ -2629,7 +2634,6 @@ function App() {
         (participantId: string) => {
             setActiveUser(undefined, participantId);
             setActiveParticipantId(participantId);
-            setNewProfilePending(false);
         },
         [],
     );
@@ -2655,7 +2659,6 @@ function App() {
                 // y reiniciar el onboarding (borra estado legacy + per-user del id).
                 setActiveUser(undefined);
                 setActiveParticipantId(undefined);
-                setNewProfilePending(false);
                 if (typeof window !== 'undefined') {
                     window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
                     window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
@@ -2668,7 +2671,7 @@ function App() {
                 // del estado activo; el listado ya se refrescó en participants.remove.
             }
         },
-        [activeParticipantId, browserProfiles, participants, onboarding, setActiveUser, setActiveParticipantId, setNewProfilePending],
+        [activeParticipantId, browserProfiles, participants, onboarding, setActiveUser, setActiveParticipantId],
     );
 
     const handleRemoveActiveUser = useCallback(async () => {
@@ -2691,7 +2694,6 @@ function App() {
             !activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER;
         setActiveUser(undefined);
         setActiveParticipantId(undefined);
-        setNewProfilePending(true);
         if (wasLegacy) {
             // Ruta legacy (sin perfil Dexie): re-inicializa el onboarding para
             // que las preguntas vuelvan a aparecer (no hereda "completado").
@@ -2723,54 +2725,24 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [participants.loading, onboarding.ready, onboarding.visible]);
 
-    // Al completar el onboarding (ya sea en el primer arranque, al crear un
-    // perfil nuevo, o al volver a pedir el onboarding en cada entrada) se
-    // resuelve el nombre capturado a un participante: si ya existe uno con ese
-    // nombre se selecciona (sin duplicar); si coincide con el anónimo por
-    // defecto se selecciona el Anónimo; si no, se registra un participante
-    // nuevo. Se siembra su onboarding (completado) en Dexie v14 y queda como
-    // usuario activo. onboardingHandledRef evita re-procesar el mismo
-    // completado cuando la lista de participantes cambia tras el registro.
-    useEffect(() => {
-        if (!onboardingMountSettledRef.current) return;
-        if (!onboarding.state.completed || registerProfileRef.current) return;
-        if (onboardingHandledRef.current) return;
-        onboardingHandledRef.current = true;
-        const captureKey = nameCaptureKey(onboarding.config.steps);
-        const name = captureKey ? onboarding.state.captured[captureKey] : undefined;
-        if (!name) {
-            onboardingHandledRef.current = false;
-            return;
-        }
-        // El rol se deriva de la respuesta "¿Niño o adulto?" (config-driven vía
-        // multiuser.kindToRole) → el navegador se customiza con defaultsByRole.
-        const kind = onboarding.state.captured['kind'];
-        const kindToRole = (FLU_CONFIG as any).multiuser?.kindToRole || {};
-        const role = resolveKindRole(kind, kindToRole);
-        registerProfileRef.current = true;
-        let cancelled = false;
-        // Si el nombre capturado coincide con el perfil anónimo por defecto
-        // (config-driven vía multiuser.skipDefaults.anonymousName), NO se crea
-        // un participante nuevo: se selecciona el Anónimo que ya existe como
-        // semilla (seedAnonymous) y queda como activo.
-        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
-        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
-        const isAnonymous = name.trim().toLowerCase() === anonymousName.toLowerCase();
-        const activate = (id: string) => {
+    // Activa a un participante tras resolver el completado del onboarding:
+    // lo escribe como ACTIVE_USER + usuario activo del header y enciende la
+    // escucha principal (si el TTS de cierre ya terminó, el micrófono del
+    // onboarding se suspendió; la escucha principal queda activa para que la
+    // frase "Háblame cuando quieras" no sea una invitación sin micrófono).
+    // Política de autoplay: si el navegador rechaza abrir el micrófono sin
+    // gesto del usuario, se reintenta con el PRIMER gesto durante 10 s.
+    const activateParticipant = useCallback(
+        (id: string) => {
             setActiveUser(undefined, id);
             setActiveParticipantId(id);
-            setNewProfilePending(false);
-            // Al cerrar el onboarding se dijo "Háblame cuando quieras": se enciende
-            // la escucha de FLU justo después (si el TTS de cierre terminó ya, el
-            // micrófono del onboarding se suspendió; la escucha principal queda
-            // activa para que la frase no sea una invitación sin micrófono).
-            // Política de autoplay: si el navegador rechaza abrir el micrófono sin
-            // gesto del usuario (name 'not-allowed'/'aborted'), se reintenta con el
-            // PRIMER gesto (click/tap/tecla) durante 10 s.
             const tryStartListening = () => {
                 os2StartListening({ resume: true }).catch((err: unknown) => {
-                    const name = String((err as any)?.name || '');
-                    const blocked = name === 'not-allowed' || name === 'aborted' || name === 'not-allowed-error';
+                    const errorName = String((err as any)?.name || '');
+                    const blocked =
+                        errorName === 'not-allowed' ||
+                        errorName === 'aborted' ||
+                        errorName === 'not-allowed-error';
                     if (blocked) {
                         const cleanup = () => {
                             window.removeEventListener('pointerdown', startOnGesture);
@@ -2793,84 +2765,77 @@ function App() {
                 });
             };
             window.setTimeout(tryStartListening, 700);
-        };
-        if (isAnonymous) {
-            void participants
-                .findAnonymous()
-                .then(async (anon) => {
-                    if (cancelled) return;
+        },
+        [os2StartListening],
+    );
+
+    // Al COMPLETAR el onboarding (primer arranque, perfil nuevo o re-entrega en
+    // cada entrada) se resuelve el nombre capturado a un participante: si ya
+    // existe uno con ese nombre se selecciona (sin duplicar); si coincide con
+    // el anónimo por defecto se selecciona el Anónimo; si no, se registra un
+    // participante nuevo. Se siembra su onboarding (completado) en Dexie y
+    // queda como usuario activo. Corre desde onCompleted (el MISMO flujo que
+    // completa), NO desde un efecto: antes, el refresco de la lista disparado
+    // por el propio registro cancelaba la cadena (cleanup del efecto) y el
+    // participante se persistía sin activarse ni aparecer en el selector
+    // (Bug #1). Las búsquedas por nombre leen el registro REAL (IndexedDB)
+    // para no depender de una lista en memoria desactualizada.
+    const handleOnboardingCompleted = useCallback(
+        async (completed: OnboardingState) => {
+            const captureKey = nameCaptureKey(onboarding.config.steps);
+            const name = captureKey ? completed.captured[captureKey] : undefined;
+            if (!name) {
+                return;
+            }
+            try {
+                // El rol se deriva de la respuesta "¿Niño o adulto?"
+                // (config-driven vía multiuser.kindToRole).
+                const kind = completed.captured['kind'];
+                const kindToRole = (FLU_CONFIG as any).multiuser?.kindToRole || {};
+                const role = resolveKindRole(kind, kindToRole);
+                const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+                const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
+                const normalized = name.trim().toLowerCase();
+                // Nombre = perfil anónimo por defecto: NO se registra un
+                // participante nuevo; se activa el Anónimo ya sembrado.
+                if (normalized === anonymousName.toLowerCase()) {
+                    const anon = await participants.findAnonymous();
                     if (anon) {
-                        await onboarding.persistForParticipant(anon.id);
-                        if (cancelled) return;
-                        activate(anon.id);
-                    } else {
-                        setNewProfilePending(false);
+                        await onboarding.persistForParticipant(anon.id, completed);
+                        activateParticipant(anon.id);
                     }
-                })
-                .catch(() => setNewProfilePending(false))
-                .finally(() => {
-                    registerProfileRef.current = false;
-                });
-            return () => {
-                cancelled = true;
-            };
-        }
-        // Bug 2: si ya existe un participante con el nombre capturado (p. ej. el
-        // usuario dice "Luis" y el perfil "Luis" ya está dado de alta), NO se crea
-        // un duplicado: se selecciona el perfil existente y queda como activo.
-        const existing = participants.participants.find(
-            (p) => p.name.trim().toLowerCase() === name.trim().toLowerCase(),
-        );
-        if (existing) {
-            void onboarding
-                .persistForParticipant(existing.id)
-                .then(() => {
-                    if (cancelled) return;
-                    activate(existing.id);
-                })
-                .catch(() => setNewProfilePending(false))
-                .finally(() => {
-                    registerProfileRef.current = false;
-                });
-            return () => {
-                cancelled = true;
-            };
-        }
-        void participants
-            .register({ name, role })
-            .then(async (result) => {
-                if (cancelled) return;
-                if (!result.ok || !result.record) {
-                    // Carrera de duplicado (el perfil ya existe en la BD pero aún no
-                    // en `participants.participants`): se activa el existente en vez
-                    // de abortar el alta del usuario.
-                    const byName = participants.participants.find(
-                        (p) => p.name.trim().toLowerCase() === name.trim().toLowerCase(),
-                    );
-                    if (byName) {
-                        await onboarding.persistForParticipant(byName.id);
-                        if (cancelled) return;
-                        activate(byName.id);
-                        return;
-                    }
-                    setNewProfilePending(false);
                     return;
                 }
-                await onboarding.persistForParticipant(result.record.id);
-                if (cancelled) return;
-                activate(result.record.id);
-            })
-            .catch(() => {
-                setNewProfilePending(false);
-            })
-            .finally(() => {
-                registerProfileRef.current = false;
-            });
-        return () => {
-            cancelled = true;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [onboarding.state.completed, participants.participants.length, newProfilePending]);
+                // Perfil existente con el mismo nombre: se activa sin duplicar.
+                const rows = await participants.service.list();
+                const existing = rows.find((p) => p.name.trim().toLowerCase() === normalized);
+                if (existing) {
+                    await onboarding.persistForParticipant(existing.id, completed);
+                    activateParticipant(existing.id);
+                    return;
+                }
+                const result = await participants.register({ name, role });
+                if (result.ok && result.record) {
+                    await onboarding.persistForParticipant(result.record.id, completed);
+                    activateParticipant(result.record.id);
+                    return;
+                }
+                // Carrera de duplicado: el perfil ya está en la BD pero la
+                // lectura previa no lo vio. Se relee y se activa el existente.
+                const after = await participants.service.list();
+                const byName = after.find((p) => p.name.trim().toLowerCase() === normalized);
+                if (byName) {
+                    await onboarding.persistForParticipant(byName.id, completed);
+                    activateParticipant(byName.id);
+                    return;
+                }
+            } catch (err) {
+                console.error('[App] error al resolver el completado del onboarding:', err);
+            }
+        },
+        [onboarding, participants, activateParticipant],
+    );
+    handleOnboardingCompletedRef.current = handleOnboardingCompleted;
 
     // Fase 2 — Exponer manejador de recordatorios por texto en window (E2E + integración).
     // Se asigna en CREACIÓN (expresión de asignación), disponible desde el montaje,
@@ -4095,7 +4060,6 @@ const {
             if (activeParticipantId === participantMatch.id) {
                 setActiveUser(undefined);
                 setActiveParticipantId(undefined);
-                setNewProfilePending(false);
                 if (typeof window !== 'undefined') {
                     window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
                     window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
@@ -4115,7 +4079,6 @@ const {
         onboarding,
         setActiveUser,
         setActiveParticipantId,
-        setNewProfilePending,
     ]);
 
     // ============================================================
