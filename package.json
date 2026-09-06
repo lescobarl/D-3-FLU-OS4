@@ -13,6 +13,7 @@
         "test:full": "vitest run",
         "test:watch": "vitest",
         "e2e": "playwright test",
+        "e2e:failed": "playwright test --last-failed --retries=1",
         "e2e:pizarron": "playwright test pizarron-funcionalidades.spec.ts",
         "e2e:auditoria": "playwright test auditoria-acciones-llm.spec.ts auditoria-despacho-real.spec.ts",
         "e2e:flu": "playwright test flu-settings-panel.spec.ts",
