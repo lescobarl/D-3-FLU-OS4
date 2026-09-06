@@ -3,7 +3,7 @@
 > **Objetivo:** reemplazar el pizarrón ACTUAL de pestañas fragmentadas
 > (`respuesta | buscar | horario | documento | app | generacion | archivos`,
 > donde cada pestaña oculta a las demás con un `switch`) por el diseño
-> **consolidado** que describe `plans/propuesta-agenda-pizarron.md`:
+> **consolidado** de "un solo objeto":
 > un solo objeto con **panel lateral "Hoy"** (Outlook) siempre visible,
 > un **feed de resultados unificado** con insignias de origen, y el
 > **diario/notas** integrados. Sin `switch` que oculte regiones entre sí.
@@ -22,7 +22,7 @@
   de la pestaña vieja `horario` (`WorkspaceHub.tsx:710`), por eso la pantalla
   principal no cambió.
 - El diseño objetivo (panel HOY + feed unificado) **no está implementado**;
-  solo existe como propuesta en `plans/propuesta-agenda-pizarron.md`.
+  era la propuesta que este plan ejecuta (referencia histórica: `propuesta-agenda-pizarron.md`, superada).
 
 ---
 

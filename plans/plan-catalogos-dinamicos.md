@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-08-28 (America/Mexico_City)
 - **Estado:** PROPUESTO — pendiente de aprobación. **No se ejecuta nada en producción** hasta autorización expresa (regla "no ejecutes nada" vigente).
-- **Documento base:** [`plans/plan-ejecucion-reorganizacion-ambientes.md`](plans/plan-ejecucion-reorganizacion-ambientes.md:1) (COMPLETADO Q11) y [`plans/plan-reorganizacion-iu-rebranding.md`](plans/plan-reorganizacion-iu-rebranding.md:1)
+- **Documento base:** [`plans/plan-ejecucion-reorganizacion-ambientes.md`](plans/plan-ejecucion-reorganizacion-ambientes.md:1) (COMPLETADO Q11).
 - **Objetivo:** convertir los catálogos estáticos (ambientes, temporadas/paletas, bancos de juego, perfiles, sinónimos de voz, etc.) en **catálogos dinámicos**: registros persistentes en IndexedDB/Dexie que se **fusionan** con los built-in en runtime, manteniendo el esquema existente, sin parches ni hardcode y sin regresiones.
 - **Patrón único a replicar:** [`src/core/multiuser/participantRegistry.ts`](src/core/multiuser/participantRegistry.ts:1) — registro DB-backed (Dexie) + esquema con validación + CRUD (register/upsert/get/list/remove) + tupla `Sync` + UUIDv4 + `addAuditLog` + DI `{ db, config, now, newId }`.
 - **Alcance:** SOLO catálogos existentes + gestión de datos. **NO SEP**, NO pantallas nuevas, NO routing/lazy-loading nuevo, NO empaquetado APP.

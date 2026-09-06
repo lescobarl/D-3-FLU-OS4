@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-08-27 (America/Mexico_City)
 - **Estado:** COMPLETADO (Q11) — **Fase A:** A1 ✓, A2 ✓, A3 ✓, A4 ✓, A5 ✓ (validación smoke e2e 42/42). **Fase B:** B1 ✓ (registro de ambientes), B2 ✓ (store persistente), B3 ✓ (aplicador de tema/identidad + pestañas y decoración reactivas), **B4 ✓ (activación por voz)**, **B5 ✓ (panel Ambientes en Ajustes)**, **B6 ✓ (transición del tema y bienvenida)**, **B7 ✓ (tests de catálogo y store)**, **B8 ✓ (validación end-to-end Fase B)**: [`tests/e2e/environment-e2e.spec.ts`](tests/e2e/environment-e2e.spec.ts:1) **9/9 PASSED** + **27/27** (`--repeat-each=3`), flake de coexistencia eliminado **a nivel de test**. Suite completa en verde (**2047 tests / 103 archivos**, `tsc` exit 0, `npm run build` 590 módulos).
-- **Documento conceptual base:** [`plans/plan-reorganizacion-iu-rebranding.md`](plans/plan-reorganizacion-iu-rebranding.md:1)
+- **Documento conceptual base:** reorganización IU/rebranding (plan previo superado por este).
 - **Alcance:** SOLO lo existente + el sistema de **Ambientes**. NO SEP, NO features nuevas adicionales, NO empaquetado APP.
 - **Prerequisitos:**
   - Respaldo full de hoy como punto seguro: [`backups/2026-08-27/seq-1/`](backups/2026-08-27/seq-1/MANIFEST.md) (581 archivos · 118.33 MB · 0 fallos).
