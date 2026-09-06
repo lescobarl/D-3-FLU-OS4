@@ -1,4 +1,4 @@
-import { cleanForSpeech, isVisualRequestText, stripDiacritics } from './audioMath.js'
+import { cleanForSpeech, isVisualRequestText, stripDiacritics, splitTranscriptAtWakeWord } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { VISUAL_CONFIG } from './visualConfig.js'
 
@@ -19,6 +19,31 @@ const VISUAL_COMMAND_PATTERNS = [
 
 function normalizeBareText(text = '') {
   return stripDiacritics(cleanForSpeech(text).toLowerCase())
+}
+
+/**
+ * Quita del transcript el verbo/gatillo de generación al inicio
+ * ("crea un video de un conejo saltando" → "de un conejo saltando") para usar
+ * el resto como asunto del documento/video cuando el modelo no aportó contenido.
+ */
+function stripGenerationLead(text = '', voiceCommands = null) {
+  const cleaned = cleanForSpeech(text)
+  if (!cleaned) return ''
+  const vc = voiceCommands || (FLU_CONFIG.voiceCommands || {})
+  const split = splitTranscriptAtWakeWord(cleaned, vc.wakeWords || [])
+  const body = cleanForSpeech(split.afterWake || split.commandText || cleaned)
+  if (!body) return ''
+  const phrases = [...(vc.generateDocument || []), ...(vc.generateVideo || [])]
+    .map((phrase) => normalizeBareText(phrase))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  const norm = normalizeBareText(body)
+  for (const target of phrases) {
+    if (!norm.startsWith(target)) continue
+    const words = target.split(/\s+/).filter(Boolean).length
+    return body.split(/\s+/).filter(Boolean).slice(words).join(' ')
+  }
+  return body
 }
 
 /**
@@ -96,6 +121,56 @@ export function isGenerationWorkspaceTipo(tipo = '') {
   return GENERATION_WORKSPACE_TIPOS.includes(String(tipo || '').trim().toLowerCase())
 }
 
+/**
+ * Detecta una petición EXPLÍCITA de generar video o documento en el transcript
+ * del usuario ("genera un video de un conejo", "crea una carta sobre…"). Se usa
+ * como fuente de verdad CLIENTE cuando el modelo devuelve un tipo incoherente
+ * (video pedido → tipo text/doc, carta → tipo video/doc erróneo).
+ *
+ * Reglas (sin false positives de pregunta/cómo-se-hace):
+ *   - Se evalúa sobre el texto tras la wake word (si la hubiera).
+ *   - Se ignora si es pregunta ("¿qué es un video?", "cómo se crea una carta").
+ *   - El transcript debe EMPEZAR con una frase canónica de generación de
+ *     video/documento (voiceCommands.generateVideo / generateDocument).
+ *
+ * @param {string} transcript
+ * @param {object|null|undefined} [voiceCommands]
+ * @returns {'video'|'doc'|null} tipo explícito o null si no hay petición clara.
+ */
+export function detectExplicitGenerationTipo(transcript = '', voiceCommands = null) {
+  const text = cleanForSpeech(transcript)
+  if (!text) return null
+  // Preguntas / cómo-se-hace no son órdenes de generación.
+  if (
+    /^(?:como|como\s+se|como\s+puedo|que\s+es|que\s+es\s+un|que\s+es\s+una|cual|cuales|cuando|donde|por\s+que|para\s+que|hay\s+que|explicame|dime|cuentame)\b/i.test(text)
+  ) {
+    return null
+  }
+  if (
+    /como\s+(?:se\s+)?(?:crea|creo|crear|genera|genero|generar|hago|hacer|puedo|puedes)|que\s+significa|dime\s+(?:que|como)\b|aprende\s+a|ense[ñn]ame/i.test(
+      text,
+    )
+  ) {
+    return null
+  }
+
+  const vc = voiceCommands || (FLU_CONFIG.voiceCommands || {})
+  const wakeWords = vc.wakeWords || []
+  const split = splitTranscriptAtWakeWord(text, wakeWords)
+  const body = cleanForSpeech(split.afterWake || split.commandText || text)
+  if (!body) return null
+  const norm = normalizeBareText(body)
+  const startsWithCanonical = (phrases = []) =>
+    phrases.some((phrase) => {
+      const target = normalizeBareText(phrase)
+      return Boolean(target && norm.startsWith(target))
+    })
+
+  if (startsWithCanonical(vc.generateVideo)) return 'video'
+  if (startsWithCanonical(vc.generateDocument)) return 'doc'
+  return null
+}
+
 /** Gate único: la IA incluyó workspace visual con brief usable. */
 export function shouldGenerateWorkspaceImage(workspace = null) {
   if (!workspace || typeof workspace !== 'object') return false
@@ -110,17 +185,31 @@ export function shouldGenerateWorkspaceImage(workspace = null) {
 /**
  * Normaliza workspace devuelto por Gemini. Sin workspace de la IA → null (sin sintetizar desde voz).
  * @param {object|null|undefined} workspace
+ * @param {{ transcript?: string, voiceCommands?: object }} [options]
  */
-export function normalizeWorkspaceContract(workspace) {
+export function normalizeWorkspaceContract(workspace, options = {}) {
   if (!workspace || typeof workspace !== 'object') return null
 
-  const tipo = String(workspace.tipo || 'text').trim().toLowerCase()
+  const transcript = cleanForSpeech(options?.transcript || '')
+  const explicitTipo = transcript
+    ? detectExplicitGenerationTipo(transcript, options?.voiceCommands)
+    : null
+
+  const tipo = explicitTipo
+    || String(workspace.tipo || 'text').trim().toLowerCase()
   const titulo = cleanForSpeech(workspace.titulo || '')
   const contenido = cleanForSpeech(workspace.contenido || '')
   const promptVisual = cleanForSpeech(workspace.prompt_visual || '')
   const puntos_clave = Array.isArray(workspace.puntos_clave)
     ? workspace.puntos_clave.map((item) => String(item || '').trim()).filter(Boolean)
     : []
+
+  // Cuando la petición explícita es doc/video pero el modelo no dio contenido
+  // (devolvió tipo text con solo texto), el asunto se recupera del transcript
+  // para que el generador tenga un tema real que desarrollar.
+  const explicitLeadStripped = transcript
+    ? stripGenerationLead(cleanForSpeech(transcript), options?.voiceCommands)
+    : ''
 
   // Horario de clases: se preserva el tipo y el modo para el renderer del Pizarrón.
   if (tipo === 'horario') {
@@ -150,12 +239,15 @@ export function normalizeWorkspaceContract(workspace) {
   }
 
   // Generación de documento/video: se preserva el tipo para que el dispatch de
-  // onContractResolved dispare documentGeneration.generate('pdf'|'video').
+  // onContractResolved dispare documentGeneration.generate('pdf'|'video'). El
+  // tipo se CORRIGE por petición explícita del usuario cuando el modelo emite
+  // uno incoherente (Bug #5/#6: "crea un video" → text/doc, "genera una carta"
+  // → video).
   if (isGenerationWorkspaceTipo(tipo)) {
-    const core = contenido || titulo
+    const core = contenido || titulo || promptVisual || (explicitTipo ? explicitLeadStripped : '')
     if (!core) return null
     return {
-      titulo: titulo || 'Documento',
+      titulo: titulo || (explicitTipo ? 'Documento' : 'Documento'),
       tipo,
       contenido: core,
       prompt_visual: promptVisual,

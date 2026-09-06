@@ -2064,6 +2064,16 @@ function App() {
                     });
                     relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → dispatch ${isVideo ? 'GENERATE_VIDEO' : 'GENERATE_DOCUMENT'}`);
                     dispatchFluEvent(isVideo ? FLU_EVENTS.GENERATE_VIDEO : FLU_EVENTS.GENERATE_DOCUMENT);
+                    // Bug #5: para un video, además del guion/ensamblado se genera
+                    // una ESCENA visual del asunto (imagen real en el Pizarrón), de
+                    // modo que el usuario vea un artefacto aunque ffmpeg no esté
+                    // disponible para producir el mp4.
+                    if (isVideo) {
+                        const scenePrompt = cleanForSpeech(promptVisual || contenido || titulo || '');
+                        if (scenePrompt.length >= 5) {
+                            workspaceImage.generateFromContract(scenePrompt, 'image_prompt');
+                        }
+                    }
                 } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
                     // Guard anti-duplicado: si el workspace de tipo 'text' es una
                     // respuesta conversacional redundante (el contenido escrito

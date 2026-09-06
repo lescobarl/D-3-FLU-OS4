@@ -1465,6 +1465,9 @@ export async function generateFluContract({
             : [],
           modo: String(parsed.workspace.modo || '').trim(),
         },
+        {
+          transcript: cleanForSpeech(transcript),
+        },
       )
       : null
 
