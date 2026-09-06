@@ -1,13 +1,4899 @@
 /* ============================================================
-   FLU OS4 — Unified CSS System
+   FLU OS 4 — Unified CSS System (single source)
    ============================================================
-   This file defines the unified CSS system for FLU OS4.
-   All components should use the `flu-` prefix with BEM-like structure.
-   
-   Migration Strategy:
-   1. Add both old and new classes during transition
-   2. Update component JSX to use new classes
-   3. Remove old CSS definitions after all components migrated
+   Archivo consolidado en la Fase 4 del code-split:
+
+   Sección A  — Layout y componentes de la app heredados de
+                src/App.css (shell, tabs, pizarrón/workspace, ajustes,
+                voz, branding, onboarding, generación…).
+   Sección B  — Sistema de componentes unificado `flu-*` (botones,
+                paneles, tarjetas, settings, voz, upload, status,
+                autonomía, análisis de documentos…).
+
+   Los selectores duplicados entre A y B se eliminaron en esta fase
+   (familia `.flu-btn`, `.flu-settings-panel/-section/-hint`); la
+   definición canónica vive en la Sección B y hereda las propiedades
+   exclusivas que antes aportaba A.
+
+   Orden de carga real (main.tsx -> App.tsx -> index.css):
+     1. src/avatar/App.css    — :root CSS variables + BunnyControlCenter
+     2. src/styles/unified.css (este archivo, vía @import en index.css)
+     3. src/index.css         — Global overrides (última capa)
+   ============================================================ */
+
+/* ============================================================
+   Sección A — Layout y componentes de App
+   (consolidado desde src/App.css en Fase 4)
+   ============================================================ */
+
+/* --- OS3 Shell Layout --- */
+.flu-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--flu-bg);
+}
+
+/* --- OS3 Hero Header (VoiceAssistantBar) --- */
+.flu-shell__hero {
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+/* --- OS3 Browser (Tabs + Content) --- */
+.flu-shell__browser {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* --- OS3 Tab Content Area --- */
+.flu-shell__tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- App Header (branding + status chips, above hero) --- */
+.app-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  z-index: 10;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.app-header-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.app-header-session-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-title-icon {
+  font-size: var(--text-2xl);
+  line-height: 1;
+}
+
+.app-title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.app-title-badge {
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--accent-cyan);
+  color: #000;
+  font-weight: var(--weight-semibold);
+  font-family: var(--font-mono);
+}
+
+/* --- Voice State Chip --- */
+.voice-state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.voice-state-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.voice-state-chip.is-listening {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.voice-state-chip.is-listening .voice-state-chip__dot {
+  background: var(--accent-green);
+  animation: pulse 1.5s infinite;
+}
+
+.voice-state-chip.is-processing {
+  background: rgba(0, 212, 255, 0.1);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.voice-state-chip.is-processing .voice-state-chip__dot {
+  background: var(--accent-cyan);
+  animation: pulse 0.8s infinite;
+}
+
+.voice-state-chip.is-stopped {
+  background: rgba(255, 68, 68, 0.08);
+  color: var(--accent-red);
+  border-color: rgba(255, 68, 68, 0.3);
+}
+
+.voice-state-chip.is-stopped .voice-state-chip__dot {
+  background: var(--accent-red);
+}
+
+/* --- Main Content Area (Avatar + Panels) --- */
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* --- Avatar Column --- */
+.app-avatar-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+  min-width: 320px;
+  max-width: 50%;
+}
+
+/* --- Área de FLU: contenedor de branding (recibe la paleta de temporada) --- */
+.app-avatar-column.flu-branding-scope {
+  position: relative;
+  z-index: 0;
+}
+
+/* --- Panels Column (right side) --- */
+.app-panels-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 50%;
+}
+
+/* --- Panels Content Area --- */
+.app-panels-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Tab Panels --- */
+.flu-tab-panel {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.flu-tab-panel.is-active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================
+   PIZARRÓN (Workspace) — IDENTIDAD FIJA
+   ============================================================
+   El pizarrón es un pizarrón: su identidad visual NO cambia con el
+   branding de temporada/ecológico. Todas sus propiedades se
+   centralizan en --board-* (valores de la paleta DEFAULT, neutros).
+   applyPaletteToCSS() NUNCA escribe estas variables, por lo que
+   ninguna temporada puede recolorear el pizarrón. El branding
+   creativo vive en el shell y en <SeasonalEffects/> (overlay).
+   ============================================================ */
+:root {
+  --board-bg-top: #163a3b;
+  --board-bg-bottom: #0f0f1a;
+  --board-accent: #00ff88;
+  --board-accent-soft: rgba(0, 255, 136, 0.10);
+  --board-inner-glow: rgba(22, 33, 62, 0.6);
+  --board-frame-bg: #1d2739;
+  --board-frame-border: rgba(0, 255, 136, 0.22);
+  --board-header-bg: #173539;
+  --board-header-border: rgba(0, 255, 136, 0.16);
+  --board-title: #00ff88;
+  --board-content-divider: rgba(0, 255, 136, 0.12);
+}
+
+/* ============================================================
+   Tokens de Ambiente (--flu-*)
+   ============================================================
+   Identidad visual del shell (fondo, tarjetas, bordes, texto,
+   acento). Base = tema oscuro actual. applyEnvironmentThemeVars()
+   los sobrescribe en documentElement al activar un Ambiente; la
+   limpieza (cleanupEnvironmentThemeVars) los restaura.
+   El pizarrón NO usa estos tokens (ver --board-* arriba).
+   ============================================================ */
+/* --- Tokens de Ambiente: transición suave del tema (B6) ---
+   Las variables --flu-* se registran con @property (syntax '<color>')
+   para que sean propiedades de primera clase e interpoloables. Al activar
+   o restaurar un Ambiente, applyEnvironmentThemeVars() escribe/limpia
+   estos tokens inline en documentElement; la transición declarada en
+   :root los anima y todos los consumidores del shell (fondo, header,
+   título, acento, ...) siguen el valor interpolado de forma coherente.
+   Navegadores sin soporte de @property degradan a un cambio instantáneo
+   (el tema se aplica igual; solo se pierde la animación). */
+@property --flu-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #0f0f1a;
+}
+@property --flu-bg-secondary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1a1a2e;
+}
+@property --flu-bg-card {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1e1e36;
+}
+@property --flu-border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2a2a4a;
+}
+@property --flu-text {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e0e0e0;
+}
+@property --flu-text-secondary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #8888aa;
+}
+@property --flu-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #00d4ff;
+}
+@property --flu-accent-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(0, 212, 255, 0.12);
+}
+
+:root {
+  --flu-bg: #0f0f1a;
+  --flu-bg-secondary: #1a1a2e;
+  --flu-bg-card: #1e1e36;
+  --flu-border: #2a2a4a;
+  --flu-text: #e0e0e0;
+  --flu-text-secondary: #8888aa;
+  --flu-accent: #00d4ff;
+  --flu-accent-soft: rgba(0, 212, 255, 0.12);
+
+  /* Ritmo de transición del tema de Ambiente (B6). */
+  --flu-theme-duration: 400ms;
+  --flu-theme-easing: ease;
+
+  transition:
+    --flu-bg var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-bg-secondary var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-bg-card var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-border var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-text var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-text-secondary var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-accent var(--flu-theme-duration) var(--flu-theme-easing),
+    --flu-accent-soft var(--flu-theme-duration) var(--flu-theme-easing);
+}
+
+/* --- Shell consume los tokens de Ambiente ---
+   Todo el shell resuelve las variables heredadas a los tokens
+   --flu-*. El área de FLU (.flu-branding-scope) conserva la paleta
+   de temporada: applyPaletteToCSS() escribe --bg-* y --accent-*
+   INLINE en esos contenedores, y una declaración inline gana sobre
+   este mapeo heredado. Ambiente colorea el shell; Temporada colorea
+   el área de FLU. */
+.flu-shell {
+  --bg-primary: var(--flu-bg);
+  --bg-secondary: var(--flu-bg-secondary);
+  --bg-card: var(--flu-bg-card);
+  --border-color: var(--flu-border);
+  --text-primary: var(--flu-text);
+  --text-secondary: var(--flu-text-secondary);
+  --accent-cyan: var(--flu-accent);
+}
+
+.flu-tab-panel--workspace {
+  background: radial-gradient(ellipse at top, var(--board-bg-top) 0%, var(--board-bg-bottom) 100%);
+  box-shadow: inset 0 0 30px var(--board-inner-glow);
+}
+
+.flu-tab-panel--conversation {
+  display: none;
+  flex-direction: row;
+  gap: 6px;
+  padding: 6px;
+}
+.flu-tab-panel--conversation.is-active {
+  display: flex;
+  flex-direction: row;
+}
+.flu-tab-panel--conversation .panel-frame--log {
+  flex: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--conversation .panel-frame--participants {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--conversation .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.flu-tab-panel--minutes {
+  display: none;
+  flex-direction: row;
+  gap: 6px;
+  padding: 6px;
+}
+.flu-tab-panel--minutes.is-active {
+  display: flex;
+  flex-direction: row;
+}
+.flu-tab-panel--minutes .panel-frame--minute {
+  flex: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--minutes .panel-frame--history {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--minutes .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+}
+.flu-tab-panel--minutes .panel-frame--minute .panel-frame__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* --- Unified panel frame alignment for conversation & minutes --- */
+.flu-tab-panel--conversation .panel-frame,
+.flu-tab-panel--minutes .panel-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.flu-tab-panel--settings {
+  /* settings-specific overrides */
+  min-height: 0;
+}
+.flu-tab-panel--settings.is-active {
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--settings .panel-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.flu-tab-panel--settings .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* --- System Tab --- */
+.flu-tab-panel--system {
+  /* system-specific overrides */
+  min-height: 0;
+}
+.flu-tab-panel--system.is-active {
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--system .panel-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.flu-tab-panel--system .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* --- Browser Tab (Navegador curado) --- */
+.flu-tab-panel--browser {
+  min-height: 0;
+}
+.flu-tab-panel--browser.is-active {
+  display: flex;
+  flex-direction: column;
+}
+.flu-tab-panel--browser .panel-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.flu-tab-panel--browser .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+}
+
+.flu-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+
+.flu-browser__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-secondary, #1a1a2e);
+  flex-wrap: wrap;
+}
+
+.flu-browser__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.flu-browser__nav button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card, #22223a);
+  color: var(--text-primary, #e0e0e0);
+  font-size: 15px;
+  cursor: pointer;
+}
+.flu-browser__nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.flu-browser__address-form {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 160px;
+  gap: 4px;
+}
+
+.flu-browser__address {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card, #22223a);
+  color: var(--text-primary, #e0e0e0);
+  font-family: inherit;
+  font-size: var(--text-md, 13px);
+}
+
+.flu-browser__go,
+.flu-browser__external {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--accent-soft, rgba(0, 212, 255, 0.14));
+  color: var(--text-primary, #e0e0e0);
+  font-family: inherit;
+  font-size: var(--text-md, 13px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flu-browser__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-browser__supervised {
+  color: var(--accent-warn, #ffb020);
+}
+
+.flu-browser__message {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 8px);
+  font-size: var(--text-md, 13px);
+}
+.flu-browser__message--error {
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffb3b3;
+}
+.flu-browser__message--info {
+  border: 1px solid var(--border-color, #2a2a4a);
+  background: var(--bg-secondary, #1a1a2e);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-browser__home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px;
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.flu-browser__home-title {
+  font-size: var(--text-lg, 16px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.flu-browser__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.flu-browser__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-secondary, #1a1a2e);
+  color: var(--text-primary, #e0e0e0);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+.flu-browser__tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-cyan, #00d4ff);
+}
+
+.flu-browser__tile-label {
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.flu-browser__tile-domain {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-browser__empty {
+  font-size: var(--text-md, 13px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-browser__view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.flu-browser__frame {
+  flex: 1;
+  width: 100%;
+  min-height: 340px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: #ffffff;
+}
+
+.flu-browser__hint {
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+  text-align: center;
+}
+
+.flu-browser__lockout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 176, 32, 0.08);
+  color: var(--text-primary, #e0e0e0);
+  text-align: center;
+}
+
+.flu-browser__lockout strong {
+  font-size: var(--text-lg, 16px);
+  color: var(--accent-warn, #ffb020);
+}
+
+.flu-browser__lockout button {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card, #22223a);
+  color: var(--text-primary, #e0e0e0);
+  font-family: inherit;
+  font-size: var(--text-md, 13px);
+  cursor: pointer;
+}
+
+/* --- Sub-menú de secciones (Fase A2: FLU / Mis datos / Gestión) ---
+   Agrupación visual del panel de Ajustes: mismos componentes, mismo
+   estado; solo se alterna la visibilidad con [hidden]. */
+.flu-settings-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 8px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 6px;
+}
+
+.flu-settings-groups__pill {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-settings-groups__pill:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.flu-settings-groups__pill.is-active {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #0f0f1a;
+  font-weight: var(--weight-semibold);
+}
+
+.flu-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.flu-settings-group[hidden] {
+  display: none;
+}
+
+/* --- Panel Ambientes (B5 — rebranding por oficio) --- */
+.flu-ambientes-panel__hint {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.flu-ambientes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.flu-ambientes-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.flu-ambientes-card:hover {
+  border-color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-ambientes-card.is-active {
+  border-color: var(--flu-accent, var(--accent-cyan));
+  box-shadow: 0 0 0 1px var(--flu-accent, var(--accent-cyan)) inset;
+}
+
+.flu-ambientes-card__preview {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--flu-bg, var(--bg-secondary));
+  border-bottom: 1px solid var(--flu-border, var(--border-color));
+}
+
+.flu-ambientes-card__swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--flu-border, var(--border-color));
+}
+
+.flu-ambientes-card__swatch--bg {
+  background: var(--flu-bg, var(--bg-secondary));
+}
+
+.flu-ambientes-card__swatch--bg-card {
+  background: var(--flu-bg-card, var(--bg-card));
+}
+
+.flu-ambientes-card__swatch--accent {
+  background: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-ambientes-card__swatch--accent-soft {
+  background: var(--flu-accent-soft, var(--accent-cyan));
+  opacity: 0.55;
+}
+
+.flu-ambientes-card__body {
+  flex: 1;
+  padding: 10px 12px;
+}
+
+.flu-ambientes-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.flu-ambientes-card__icon {
+  line-height: 1;
+}
+
+.flu-ambientes-card__tagline {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.flu-ambientes-card__tabs {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.flu-ambientes-card__actions {
+  padding: 0 12px 12px;
+}
+
+.flu-ambientes-card__activate {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--flu-accent, var(--accent-cyan));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--flu-accent, var(--accent-cyan));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.flu-ambientes-card__activate:hover:not(:disabled) {
+  background: var(--flu-accent, var(--accent-cyan));
+  color: #0f0f1a;
+}
+
+.flu-ambientes-card__activate:disabled {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.flu-ambientes-panel__create {
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--flu-accent, var(--accent-cyan));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--flu-accent, var(--accent-cyan));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.flu-ambientes-panel__create:hover {
+  background: var(--flu-accent, var(--accent-cyan));
+  color: #0f0f1a;
+}
+
+.flu-ambientes-card__clone,
+.flu-ambientes-card__edit {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-ambientes-card__clone:hover,
+.flu-ambientes-card__edit:hover {
+  border-color: var(--flu-accent, var(--accent-cyan));
+  color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-ambientes-card__remove {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-ambientes-card__remove:hover {
+  border-color: var(--accent-red, #e5484d);
+  color: var(--accent-red, #e5484d);
+}
+
+.flu-ambientes-editor__slug {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-ambientes-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.flu-ambientes-editor__submit {
+  padding: 6px 12px;
+  border: 1px solid var(--flu-accent, var(--accent-cyan));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--flu-accent, var(--accent-cyan));
+  color: #0f0f1a;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.flu-ambientes-editor__submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.flu-ambientes-editor__cancel {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-ambientes-editor__cancel:hover:not(:disabled) {
+  border-color: var(--flu-accent, var(--accent-cyan));
+  color: var(--flu-accent, var(--accent-cyan));
+}
+
+/* --- Panel Temporadas (B4 — rebranding por paleta dinámica) --- */
+.flu-paletas-panel__hint {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.flu-paletas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.flu-paletas-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.flu-paletas-card:hover {
+  border-color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-paletas-card.is-active {
+  border-color: var(--flu-accent, var(--accent-cyan));
+  box-shadow: 0 0 0 1px var(--flu-accent, var(--accent-cyan)) inset;
+}
+
+.flu-paletas-card__preview {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--flu-bg, var(--bg-secondary));
+  border-bottom: 1px solid var(--flu-border, var(--border-color));
+}
+
+.flu-paletas-card__swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--flu-border, var(--border-color));
+}
+
+.flu-paletas-card__body {
+  flex: 1;
+  padding: 10px 12px;
+}
+
+.flu-paletas-card__title {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.flu-paletas-card__meta {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.flu-paletas-card__actions {
+  padding: 0 12px 12px;
+}
+
+.flu-paletas-card__activate {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--flu-accent, var(--accent-cyan));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--flu-accent, var(--accent-cyan));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.flu-paletas-card__activate:hover:not(:disabled) {
+  background: var(--flu-accent, var(--accent-cyan));
+  color: #0f0f1a;
+}
+
+.flu-paletas-card__activate:disabled {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.flu-paletas-panel__create {
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--flu-accent, var(--accent-cyan));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--flu-accent, var(--accent-cyan));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.flu-paletas-panel__create:hover {
+  background: var(--flu-accent, var(--accent-cyan));
+  color: #0f0f1a;
+}
+
+.flu-paletas-card__clone,
+.flu-paletas-card__edit {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-paletas-card__clone:hover,
+.flu-paletas-card__edit:hover {
+  border-color: var(--flu-accent, var(--accent-cyan));
+  color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-paletas-card__remove {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-paletas-card__remove:hover {
+  border-color: var(--accent-red, #e5484d);
+  color: var(--accent-red, #e5484d);
+}
+
+.flu-paletas-editor__slug {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-paletas-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.flu-paletas-editor__submit {
+  padding: 6px 12px;
+  border: 1px solid var(--flu-accent, var(--accent-cyan));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--flu-accent, var(--accent-cyan));
+  color: #0f0f1a;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.flu-paletas-editor__submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.flu-paletas-editor__cancel {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.flu-paletas-editor__cancel:hover:not(:disabled) {
+  border-color: var(--flu-accent, var(--accent-cyan));
+  color: var(--flu-accent, var(--accent-cyan));
+}
+
+.flu-settings-image-config {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  padding: 4px 8px;
+}
+
+.flu-settings-image-config__summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-lg);
+  color: var(--accent-cyan);
+  padding: 1px 0;
+  user-select: none;
+}
+
+/* --- Summary with inline profile select --- */
+.flu-settings-image-config__summary--with-profile {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.flu-settings-summary-spacer {
+  flex: 1;
+}
+.flu-settings-profile-inline {
+  font-size: var(--text-base);
+  line-height: 1;
+}
+.flu-settings-profile-select {
+  font-size: var(--text-sm) !important;
+  padding: 1px 4px !important;
+  max-width: 160px;
+  cursor: pointer;
+}
+
+.flu-settings-image-config__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.flu-settings-image-config__group-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--accent-cyan);
+  margin-bottom: 2px;
+}
+
+.flu-settings-image-config__body--flu-config {
+  padding-top: 2px;
+}
+
+.flu-settings-image-config__field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+}
+
+.flu-settings-image-config__field--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flu-settings-image-config__field--slider {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.flu-settings-image-config__field--checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.flu-settings-image-config__field--inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.flu-settings-image-config__error {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(255, 68, 68, 0.08);
+  color: var(--accent-red, #e5484d);
+  font-size: var(--text-sm);
+}
+
+.flu-settings-section__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--accent-cyan);
+  margin-bottom: 2px;
+}
+
+.flu-settings-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* --- Settings: 2-column grid for participant fields --- */
+.flu-settings-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.flu-settings-fields-grid__full {
+  grid-column: 1 / -1;
+}
+
+.flu-settings-section__body--indent {
+  padding-left: 4px;
+}
+
+/* --- Settings: personality traits row --- */
+.flu-settings-traits-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 1px 0;
+}
+
+.flu-settings-trait-btn {
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid #555;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  font-size: var(--text-base);
+  transition: all 0.2s;
+}
+
+.flu-settings-trait-btn.is-selected {
+  border-color: #4caf50;
+  background: #1b5e20;
+  color: #fff;
+}
+
+.flu-settings-trait-btn:hover {
+  border-color: var(--accent-cyan);
+}
+
+/* --- Settings: sub-title --- */
+.flu-settings-sub-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted, #888);
+  margin-bottom: 2px;
+}
+
+/* --- Settings: section label (for textareas, etc.) --- */
+.flu-settings-section-label {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+/* --- Settings: inline flex row helper --- */
+.flu-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* --- Settings: password reveal button --- */
+.flu-settings-reveal-btn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #4caf50;
+  background: transparent;
+  color: #4caf50;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  transition: all 0.2s;
+}
+
+.flu-settings-reveal-btn:hover {
+  background: rgba(76, 175, 80, 0.15);
+}
+
+/* --- Settings: API key configured badge --- */
+.flu-settings-api-badge {
+  color: #4caf50;
+  font-size: var(--text-sm);
+  margin-top: 2px;
+  display: block;
+}
+
+/* --- Settings: slider label --- */
+.flu-settings-slider-label {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  min-width: 120px;
+}
+
+/* --- Settings: slider value --- */
+.flu-settings-slider-value {
+  font-size: var(--text-base);
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* --- Settings: textarea --- */
+.flu-settings-textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  resize: vertical;
+  margin-top: 2px;
+  font-family: var(--font-sans);
+}
+
+.flu-settings-textarea:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+/* --- Settings: input with monospace --- */
+.flu-settings-input-mono {
+  font-family: var(--font-mono) !important;
+}
+
+.flu-settings-input-mono--small {
+  font-family: var(--font-mono) !important;
+  font-size: var(--text-sm) !important;
+}
+
+/* --- Session Chip --- */
+.session-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* --- Panel Frame --- */
+.panel-frame {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.panel-frame:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  border-color: rgba(100, 140, 255, 0.15);
+}
+
+.panel-frame__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  min-height: 30px;
+  gap: 8px;
+}
+.panel-frame__header-titles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.panel-frame__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.panel-frame__subtitle {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-frame__body {
+  padding: 6px 10px;
+  overflow-y: auto;
+}
+
+/* --- Panel Frame Header Button (minute actions, etc.) --- */
+.panel-frame__header-button {
+  font-size: var(--text-base);
+  padding: 2px 10px;
+}
+
+/* --- Panel Hint (empty state) --- */
+.panel__hint {
+  font-size: var(--text-md);
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px;
+  text-align: center;
+}
+.panel__hint--compact {
+  font-size: var(--text-base);
+  padding: 4px;
+}
+
+/* --- Panel Frame Toggle Icon Button --- */
+.panel-frame__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  line-height: 1;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s ease;
+}
+.panel-frame__toggle:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  transform: scale(1.05);
+}
+.panel-frame__toggle:active {
+  transform: scale(0.95);
+}
+
+/* --- Panel Frame Expanded State --- */
+.panel-frame--expanded {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  border-radius: 0;
+  border: none;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-frame--expanded .panel-frame__header {
+  border-radius: 0;
+  padding: 8px 14px;
+}
+
+.panel-frame--expanded .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* --- Workspace Image --- */
+.workspace-image-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.workspace-image-container {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.workspace-image-container img {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.workspace-image-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-red);
+  color: white;
+  border: 2px solid var(--bg-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  transition: transform 0.2s;
+}
+
+.workspace-image-close:hover {
+  transform: scale(1.1);
+}
+
+/* --- Knowledge Base Label --- */
+.knowledge-base-label {
+  font-size: var(--text-sm);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  color: var(--accent-green);
+  font-family: var(--font-mono);
+}
+
+/* --- STT Source Label --- */
+.stt-source-label {
+  font-size: var(--text-sm);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  color: var(--accent-orange);
+  font-family: var(--font-mono);
+}
+
+/* --- Select / Input Styles --- */
+.flu-settings-image-config select,
+.flu-settings-image-config input[type="text"],
+.flu-settings-image-config input[type="number"],
+.flu-settings-image-config textarea {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+}
+
+.flu-settings-image-config select:focus,
+.flu-settings-image-config input:focus,
+.flu-settings-image-config textarea:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+.flu-settings-image-config textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* --- Scrollbar --- */
+.app-panels-content::-webkit-scrollbar,
+.flu-tab-panel::-webkit-scrollbar,
+.panel-frame__body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.app-panels-content::-webkit-scrollbar-track,
+.flu-tab-panel::-webkit-scrollbar-track,
+.panel-frame__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-panels-content::-webkit-scrollbar-thumb,
+.flu-tab-panel::-webkit-scrollbar-thumb,
+.panel-frame__body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.app-panels-content::-webkit-scrollbar-thumb:hover,
+.flu-tab-panel::-webkit-scrollbar-thumb:hover,
+.panel-frame__body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* A4: íconos de pestaña vía ::before (la marca no incluye elemento de ícono).
+   Disponibles en escritorio y móvil sin tocar el DOM de la etiqueta: los e2e
+   comparan textContent verbatim, por eso NO se añaden spans de ícono. */
+.flu-shell-tabs__tab::before {
+  margin-right: 5px;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.flu-shell-tabs__tab[aria-controls="flu-tabpanel-workspace"]::before {
+  content: '📋';
+}
+
+.flu-shell-tabs__tab[aria-controls="flu-tabpanel-conversation"]::before {
+  content: '💬';
+}
+
+.flu-shell-tabs__tab[aria-controls="flu-tabpanel-minutes"]::before {
+  content: '📝';
+}
+
+.flu-shell-tabs__tab[aria-controls="flu-tabpanel-settings"]::before {
+  content: '⚙️';
+}
+
+.flu-shell-tabs__tab[aria-controls="flu-tabpanel-system"]::before {
+  content: '🖥️';
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .app-avatar-column {
+    display: none;
+  }
+
+  /* A3: navegación inferior fija en móvil
+     Dentro del breakpoint existente, las pestañas actuales pasan a una barra
+     inferior fija (íconos + etiqueta). Se conserva el layout de 2 columnas:
+     solo se oculta el avatar y la columna de paneles ocupa el ancho completo. */
+  .app-panels-column {
+    max-width: 100%;
+  }
+
+  .flu-shell-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    border-bottom: none;
+    border-top: 1px solid rgba(100, 140, 255, 0.12);
+    padding: 0;
+    min-height: 0;
+  }
+
+  .flu-shell-tabs__list {
+    display: flex;
+    width: 100%;
+  }
+
+  .flu-shell-tabs__tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 7px 2px 8px;
+    border-bottom: none;
+    font-size: var(--text-xs);
+  }
+
+  .flu-shell-tabs__tab::after {
+    top: 0;
+    bottom: auto;
+  }
+
+  /* Ícono vía ::before (content global, A4); en móvil va sobre la etiqueta */
+  .flu-shell-tabs__tab::before {
+    font-size: 15px;
+    line-height: 1;
+    margin-right: 0;
+    pointer-events: none;
+  }
+
+  .flu-shell-tabs__label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  /* Contenido no queda oculto detrás de la barra inferior fija */
+  .flu-shell__tab-content {
+    padding-bottom: 56px;
+  }
+}
+
+/* --- Flu Bridge Container (Avatar + Voice Controls) --- */
+.flu-bridge-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.flu-bridge-avatar-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+}
+
+/* --- Voice Controls (Transcript display) --- */
+.voice-controls {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+  min-height: 48px;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.voice-controls__transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+}
+
+.voice-controls__transcript-label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #666);
+}
+
+.voice-controls__transcript-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.voice-controls__transcript-text {
+  font-size: var(--text-md);
+  line-height: 1.4;
+  color: #4da6ff;
+  font-style: italic;
+  word-break: break-word;
+}
+
+/* --- Voice Bar (Assistant controls strip) --- */
+.voice-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+}
+
+.voice-bar__top {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+.voice-bar__clusters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.voice-bar__cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-bar__cluster--session {
+  margin-left: auto;
+  gap: 4px;
+}
+
+/* --- Voice Bar Buttons (aligned with flu-btn system) --- */
+.voice-bar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  transition: background 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s;
+  white-space: nowrap;
+}
+
+.voice-bar__button:hover:not(:disabled) {
+  background: var(--bg-primary);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.voice-bar__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.voice-bar__button--primary {
+  background: var(--accent-cyan);
+  color: #000;
+  border-color: var(--accent-cyan);
+  font-weight: var(--weight-semibold);
+}
+
+.voice-bar__button--primary:hover:not(:disabled) {
+  background: #00e5ff;
+  color: #000;
+  border-color: #00e5ff;
+}
+
+.voice-bar__button--stop {
+  background: rgba(255, 68, 68, 0.15);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.voice-bar__button--stop:hover:not(:disabled) {
+  background: rgba(255, 68, 68, 0.25);
+  color: var(--accent-red);
+}
+
+.voice-bar__button--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.voice-bar__button--ghost:hover:not(:disabled) {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* --- Voice Bar Error Block --- */
+.voice-bar__error-block {
+  padding: 8px 12px;
+  background: rgba(255, 68, 68, 0.08);
+  border-top: 1px solid rgba(255, 68, 68, 0.2);
+}
+
+.voice-bar__error {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--accent-red);
+  font-weight: var(--weight-medium);
+}
+
+.voice-bar__error-hint {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.voice-bar__error-detail {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted, #666);
+  font-family: var(--font-mono);
+}
+
+/* --- Session Chip Select Styles --- */
+.session-chip select {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.session-chip select:focus {
+  border-color: var(--accent-cyan);
+}
+
+.session-chip select:hover {
+  border-color: var(--accent-cyan);
+  background: var(--bg-tertiary);
+}
+
+/* Botón de usuario activo (mismo lenguaje visual que los selects). */
+.session-chip__button {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-chip__button:hover {
+  border-color: var(--accent-cyan);
+  background: var(--bg-tertiary);
+}
+
+/* --- Flu Shell Tabs --- */
+.flu-shell-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(100, 140, 255, 0.12);
+  background: linear-gradient(90deg, var(--bg-secondary), var(--bg-primary));
+  flex-shrink: 0;
+  padding: 0 4px;
+  min-height: 28px;
+}
+
+.flu-shell-tabs__tab {
+  padding: 4px 12px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: #667;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  font-family: var(--font-sans);
+  letter-spacing: 0.3px;
+  position: relative;
+}
+
+.flu-shell-tabs__tab::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: #4a6cf7;
+  transition: width 0.25s ease, left 0.25s ease;
+  border-radius: 1px;
+}
+
+.flu-shell-tabs__tab:hover {
+  color: #8ab4ff;
+  background: rgba(100, 140, 255, 0.06);
+}
+
+.flu-shell-tabs__tab.is-active {
+  color: #8ab4ff;
+  border-bottom-color: #4a6cf7;
+  font-weight: var(--weight-semibold);
+}
+
+.flu-shell-tabs__tab.is-active::after {
+  width: 60%;
+  left: 20%;
+}
+
+/* Workspace tab (Pizarrón) — identidad FIJA vía --board-* */
+.flu-shell-tabs__tab.is-active[aria-controls="flu-tabpanel-workspace"] {
+  color: var(--board-title);
+  border-bottom-color: var(--board-accent);
+  background: var(--board-accent-soft);
+}
+
+.flu-shell-tabs__tab.is-active[aria-controls="flu-tabpanel-workspace"]::after {
+  background: var(--board-accent);
+}
+
+.flu-shell-tabs__label {
+  text-transform: capitalize;
+}
+
+/* --- Workspace (Pizarrón) content sections — identidad FIJA vía --board-* --- */
+.flu-tab-panel--workspace .panel-frame {
+  border-color: var(--board-frame-border);
+  background: var(--board-frame-bg);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.flu-tab-panel--workspace .panel-frame__header {
+  background: var(--board-header-bg);
+  border-bottom-color: var(--board-header-border);
+  flex-shrink: 0;
+}
+
+.flu-tab-panel--workspace .panel-frame__body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px); /* Ensure scrollable area */
+  min-height: 200px;
+}
+
+.flu-tab-panel--workspace .panel-frame__title {
+  color: var(--board-title);
+}
+
+.frame-content--workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.frame-content--workspace > * + * {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--board-content-divider);
+}
+
+.frame-content--workspace .frame-content__response {
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: #ffffff;
+  font-weight: var(--weight-normal);
+}
+
+/* Live-phrase del pizarrón: conserva su tipografía cuando NO está vacío
+   (antes heredaba de .frame-content__response; ahora la clase es propia del bloque response).
+   La transcripción en vivo se muestra en itálica y azul para distinguirla de la respuesta. */
+.frame-content--workspace .conversation-live-phrase {
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: #4da6ff;
+  font-weight: var(--weight-normal);
+  font-style: italic;
+}
+
+/* La respuesta de Flu puede tener varias partes (p. ej. la respuesta sustantiva
+   + la pregunta final "¿te gustaría saber algo más?"). El límite de 80px ocultaba
+   la parte final tras un scroll apenas visible: FLU la pronuncia completa pero en
+   el Pizarrón solo se veía la primera parte. Se amplía el alto máximo para que la
+   respuesta completa (multi-parte) quede visible sin recortarse. */
+.frame-content--workspace .frame-content__response-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Pizarrón: frames vacíos (solo \u00a0) colapsados — recuperan espacio para las preguntas */
+.frame-content--workspace .conversation-live-phrase.is-empty,
+.frame-content--workspace .frame-content__response.is-empty {
+  margin: 0;
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
+}
+
+.frame-content--workspace p,
+.frame-content--workspace .frame-content__contenido {
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: #9aa0b4;
+  font-weight: var(--weight-normal);
+  white-space: pre-wrap;
+}
+
+/* Badge de origen del contenido del Pizarrón: distingue visualmente
+   resultados provenientes de la web (navegación/búsqueda) de los de la IA. */
+.frame-content--workspace .frame-content__origen {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.frame-content--workspace .frame-content__origen--web {
+  color: #0b6e4f;
+  background: rgba(11, 110, 79, 0.12);
+  border: 1px solid rgba(11, 110, 79, 0.35);
+}
+.frame-content--workspace .frame-content__origen--ia {
+  color: #5b3df5;
+  background: rgba(91, 61, 245, 0.12);
+  border: 1px solid rgba(91, 61, 245, 0.35);
+}
+
+.frame-content--workspace .frame-content__list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-weight: var(--weight-normal);
+}
+
+.frame-content--workspace .frame-content__list li {
+  margin-bottom: 3px;
+  color: var(--board-title);
+  opacity: 0.9;
+  font-weight: var(--weight-normal);
+}
+
+/* Subtítulo de sección (Contenido / Puntos clave) en la pestaña Respuesta */
+.frame-content--workspace .frame-content__section-gap {
+  height: 1rem;
+}
+
+.frame-content--workspace .frame-content__subtitle {
+  margin: 0 0 4px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-color, #5b3df5);
+}
+
+.frame-content--workspace .frame-content__empty {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* --- WorkspaceHub (Pizarrón unificado) ---
+   Barra de pestañas dinámicas + cuerpo del panel. Reutiliza los tokens
+   del tema (--board-* / --text-* / --accent-color) y el patrón visual de
+   .workspace-search__tabs para mantener coherencia con el buscador. */
+.workspace-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+
+.workspace-hub__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--board-content-divider, #e2e2ec);
+  padding-bottom: 4px;
+}
+
+.workspace-hub__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-muted, #6b6b7d);
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  position: relative;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.workspace-hub__tab:hover {
+  color: var(--accent-color, #7c6cff);
+  background: rgba(124, 108, 255, 0.06);
+}
+
+.workspace-hub__tab--active {
+  color: var(--accent-color, #7c6cff);
+  font-weight: 700;
+}
+
+.workspace-hub__tab--active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -5px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--accent-color, #7c6cff);
+}
+
+.workspace-hub__tab-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.workspace-hub__tab-label {
+  line-height: 1.2;
+}
+
+.workspace-hub__body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Barra de comandos a todo lo ancho del frame (sin márgenes laterales).
+   Vive como hermana por encima del cuerpo desplazable (.workspace-hub__body),
+   por lo que ocupa de borde a borde y empuja el panel lateral hacia abajo.
+   Los márgenes negativos compensan el padding de .panel-frame__body
+   (6px 10px) para que la barra llegue exactamente hasta el borde del frame
+   sin generar scroll horizontal (el contenedor .workspace-hub no es
+   desplazable, así que el desborde se absorbe contra el padding del frame). */
+.workspace-hub__searchbar {
+  width: auto;
+  flex: none;
+  margin: -6px -10px 2px;
+}
+
+.workspace-hub__tab-content {
+  padding: 4px 0;
+}
+
+/* --- WorkspaceHub: layout de 2 columnas (Pizarrón un solo objeto) ---
+   Cuando `hoy` está presente, el cuerpo se divide en una columna principal
+   (contenido activo: buscador/respuesta/agenda) y una columna lateral fija
+   con el panel "Hoy" (próxima clase, diario y notas). Reutiliza los tokens
+   del tema (--board-* / --text-* / --accent-color / --radius-*). */
+.workspace-hub__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 4px;
+  align-items: start;
+  min-height: 0;
+}
+
+.workspace-hub__main {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-hub__side {
+  min-width: 0;
+  border-left: 1px solid var(--board-content-divider, #e2e2ec);
+  padding-left: 12px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .workspace-hub__columns {
+    grid-template-columns: 1fr;
+  }
+  .workspace-hub__side {
+    border-left: none;
+    border-top: 1px solid var(--board-content-divider, #e2e2ec);
+    padding-left: 0;
+    padding-top: 12px;
+  }
+}
+
+/* --- Panel "Hoy" (columna lateral) ---
+   Bloques colapsables (details/summary) para Próxima/Clases, Diario y
+   Notas. Cada bloque es una tarjeta con el patrón visual del tema. */
+.hoy-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hoy-panel__block {
+  border: 1px solid var(--flu-border, var(--border-color, #2a2a4a));
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-card, var(--flu-bg-card, #1e1e36));
+  overflow: hidden;
+}
+
+.hoy-panel__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+  list-style: none;
+  user-select: none;
+}
+
+.hoy-panel__summary::-webkit-details-marker {
+  display: none;
+}
+
+.hoy-panel__summary::before {
+  content: '▸';
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--accent-color, #7c6cff);
+  font-size: 12px;
+}
+
+.hoy-panel__block[open] > .hoy-panel__summary::before {
+  transform: rotate(90deg);
+}
+
+.hoy-panel__body {
+  padding: 4px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hoy-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hoy-panel__section-title {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.hoy-panel__empty {
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+  font-style: italic;
+}
+
+.hoy-panel__clase {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.15));
+}
+
+.hoy-panel__clase-materia {
+  font-size: var(--text-sm, 12px);
+  font-weight: var(--weight-medium, 500);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.hoy-panel__clase-meta {
+  font-size: var(--text-xs, 11px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.hoy-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hoy-panel__ver-horario {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--accent-color, #7c6cff);
+  font-size: var(--text-sm, 12px);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.hoy-panel__ver-horario:hover {
+  text-decoration: underline;
+}
+
+.hoy-panel__horario {
+  margin-top: 4px;
+}
+
+.hoy-panel__diario {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.15));
+}
+
+.hoy-panel__diario-title {
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.hoy-panel__diario-mood {
+  align-self: flex-start;
+  font-size: var(--text-xs, 11px);
+  color: var(--accent-color, #7c6cff);
+  font-weight: var(--weight-medium, 500);
+}
+
+.hoy-panel__diario-content {
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.hoy-panel__diario-date {
+  font-size: var(--text-xs, 11px);
+  color: var(--text-secondary, #a0a0b0);
+  opacity: 0.8;
+}
+
+.hoy-panel__nota {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.15));
+}
+
+.hoy-panel__nota-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-primary, #e0e0e0);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.hoy-panel__nota-label input {
+  accent-color: var(--accent-color, #7c6cff);
+  cursor: pointer;
+}
+
+.hoy-panel__nota-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hoy-panel__nota--done .hoy-panel__nota-label span {
+  text-decoration: line-through;
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.hoy-panel__nota-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.hoy-panel__nota-remove:hover {
+  color: #ff5c5c;
+}
+
+/* --- Feed de resultados unificado (Pizarrón, pestaña Respuesta) ---
+   Lista de tarjetas con insignia de origen (web / IA / OCR). */
+.result-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-feed__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.result-feed__title {
+  margin: 0;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.result-feed__filters {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.result-feed__filter {
+  border: 1px solid var(--flu-border, var(--border-color, #2a2a4a));
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: var(--text-xs, 11px);
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.result-feed__filter:hover {
+  color: var(--accent-color, #7c6cff);
+  border-color: var(--accent-color, #7c6cff);
+}
+
+.result-feed__filter--active {
+  background: var(--accent-color, #7c6cff);
+  border-color: var(--accent-color, #7c6cff);
+  color: #fff;
+}
+
+.result-feed__empty {
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+  font-style: italic;
+}
+
+.result-feed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-feed__card {
+  border: 1px solid var(--flu-border, var(--border-color, #2a2a4a));
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-card, var(--flu-bg-card, #1e1e36));
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-feed__card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result-feed__badge {
+  flex-shrink: 0;
+  font-size: var(--text-xs, 10px);
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.result-feed__badge--web {
+  background: #4f8cff;
+}
+
+.result-feed__badge--ia {
+  background: #7c6cff;
+}
+
+.result-feed__badge--ocr {
+  background: #2bb673;
+}
+
+.result-feed__card-title {
+  font-size: var(--text-sm, 12px);
+  font-weight: var(--weight-medium, 500);
+  color: var(--text-primary, #e0e0e0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-feed__card-body {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Agenda (Pizarrón, workspace.tipo='horario') ---
+   Pestaña "Agenda": agrupa el calendario de clases (HorarioPizarron,
+   que ya es un acordeón propio con su resumen) y los paneles de agenda
+   personal (recordatorios, temporales, diario, ánimo, hábitos,
+   contactos, compras y materia gris). Cada panel usa
+   .flu-settings-image-config como contenedor; aquí solo se organiza el
+   layout en columnas. */
+.agenda-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agenda-hub__group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.agenda-hub__group > .flu-settings-image-config {
+  margin: 0;
+}
+
+/* --- Horario de clases (Pizarrón, workspace.tipo='horario') ---
+   Rejilla semanal, clases del día, próxima clase y recordatorios.
+   Reutiliza .flu-settings-image-config (contenedor) y los tokens del
+   tema (--flu-* / --text-* / --radius-* / --board-*). Los colores por
+   token llegan inline desde FLU_CONFIG.horario.colorHex (color-mix),
+   sin reglas .m1..m6 hardcodeadas. */
+.flu-horario__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.flu-horario__modo-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.flu-horario__modo-select {
+  background: var(--flu-bg-secondary);
+  color: var(--flu-text);
+  border: 1px solid var(--flu-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.flu-horario__empty {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Rejilla semanal */
+.flu-horario__week {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  background: var(--flu-bg-secondary);
+  border: 1px solid var(--flu-border);
+  border-radius: var(--radius-md);
+  padding: 6px;
+}
+
+.flu-horario__corner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.flu-horario__dayhead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--board-title);
+  background: var(--flu-bg-card);
+  border-radius: var(--radius-sm);
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.flu-horario__timelabel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  padding-right: 6px;
+  white-space: nowrap;
+}
+
+.flu-horario__daycol {
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-sm);
+}
+
+.flu-horario__hourline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.flu-horario__cls {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 2;
+  border-left: 3px solid var(--flu-accent);
+  border-radius: 6px;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: filter 0.15s ease;
+}
+
+.flu-horario__cls:hover {
+  filter: brightness(1.15);
+  z-index: 3;
+}
+
+.flu-horario__cls-materia {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--flu-text);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.flu-horario__cls-meta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flu-horario__cls-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--flu-text);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.flu-horario__cls:hover .flu-horario__cls-remove {
+  display: flex;
+}
+
+/* Listas (vistas "dia" y "recordatorios") */
+.flu-horario__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flu-horario__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--flu-bg-card);
+  border: 1px solid var(--flu-border);
+  border-radius: var(--radius-sm);
+}
+
+.flu-horario__row-color {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.flu-horario__row-materia {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--flu-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flu-horario__row-meta {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.flu-horario__row-remove {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.flu-horario__row:hover .flu-horario__row-remove {
+  opacity: 1;
+}
+
+.flu-horario__row-remove:hover {
+  background: rgba(255, 80, 80, 0.18);
+  color: #ff8080;
+}
+
+/* Próxima clase */
+.flu-horario__proxima {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--flu-accent-soft);
+  border: 1px solid var(--flu-border);
+  border-left: 3px solid var(--flu-accent);
+  border-radius: var(--radius-md);
+}
+
+.flu-horario__proxima-dia {
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--flu-accent);
+  font-weight: var(--weight-medium);
+}
+
+.flu-horario__proxima-materia {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--flu-text);
+}
+
+.flu-horario__proxima-meta {
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+/* Recordatorios agrupados por día */
+.flu-horario__recordatorios {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flu-horario__grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flu-horario__grupo-dia {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--board-title);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Formulario de alta manual */
+.flu-horario__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.flu-horario__form .flu-settings-image-config__field--stacked {
+  min-width: 0;
+}
+
+.flu-horario__form input[type='time'] {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  min-width: 0;
+}
+
+.flu-horario__form input[type='time']:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+.flu-horario__submit {
+  align-self: stretch;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  padding: 6px 14px;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s;
+}
+
+.flu-horario__submit:hover:not(:disabled) {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.flu-horario__submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Confirmación del parseo de una imagen de horario (digitalización → HOY) */
+.flu-horario-import {
+  border: 1px solid var(--accent-cyan, #4f8cff);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.flu-horario-import__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flu-horario-import__title {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+
+.flu-horario-import__count {
+  font-size: var(--text-sm);
+  color: var(--accent-cyan, #4f8cff);
+  white-space: nowrap;
+}
+
+.flu-horario-import__hint {
+  margin: 6px 0 10px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.flu-horario-import__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.flu-horario-import__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+}
+
+.flu-horario-import__item-titulo {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.flu-horario-import__item-meta {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.flu-horario-import__item-hora {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.flu-horario-import__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flu-horario-import__btn {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  padding: 6px 14px;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s;
+}
+
+.flu-horario-import__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.flu-horario-import__btn--confirm {
+  border-color: var(--accent-cyan, #4f8cff);
+  color: var(--accent-cyan, #4f8cff);
+}
+
+.flu-horario-import__btn--confirm:hover:not(:disabled) {
+  background: var(--accent-cyan, #4f8cff);
+  color: var(--bg-primary, #fff);
+}
+
+.flu-horario-import__btn--cancel:hover:not(:disabled) {
+  border-color: var(--danger, #e5484d);
+  color: var(--danger, #e5484d);
+}
+
+/* --- Workspace inline image (Pollinations) --- */
+.frame-content__image-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-height: 264px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+.frame-content__image-shell .frame-content__image {
+  display: block;
+  max-width: 100%;
+  max-height: 264px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.frame-content__image-shell .panel-frame__toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.frame-content__image-shell:hover .panel-frame__toggle {
+  opacity: 1;
+}
+
+/* --- Audit item (conversation log) --- */
+.audit-item {
+  font-size: var(--text-base);
+  line-height: 1.25;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.audit-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+.audit-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 0;
+}
+.audit-item__clock {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.2px;
+}
+.audit-item__speaker {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--accent-cyan);
+}
+.audit-item p {
+  font-size: var(--text-base);
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0;
+}
+.audit-item__vector {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* --- Audit item — system message (startupPrompt, profile changes) --- */
+.audit-item--system {
+  opacity: 0.85;
+  border-left: 2px solid var(--accent-cyan);
+  padding-left: 8px;
+  margin: 4px 0;
+  background: rgba(0, 212, 255, 0.03);
+  border-radius: 0 4px 4px 0;
+}
+.audit-item--system .audit-item__speaker {
+  color: var(--accent-cyan);
+  font-style: italic;
+}
+.audit-item--system p {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: var(--text-sm);
+}
+
+/* --- Minute Draft (minutes tab) --- */
+.minute-draft {
+  font-size: var(--text-md);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.minute-draft__textarea {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 120px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.minute-draft__textarea:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
+}
+
+/* --- Minute History (minutes tab) --- */
+.minute-history {
+  font-size: var(--text-md);
+}
+.minute-history--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.minute-history__scroll {
+  overflow-y: auto;
+  max-height: 100%;
+}
+.minute-history__row {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s ease;
+}
+.minute-history__row:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+  transform: translateX(2px);
+}
+.minute-history__row--selected {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: var(--accent-cyan);
+}
+
+/* ============================================================
+   Branding Ecológico (DeepSeek)
+   ============================================================ */
+
+/* Clase global para branding ecológico.
+   NOTA: el pizarrón ya NO se sobrescribe aquí — su identidad es
+   FIJA (--board-*). El branding ecológico decora el shell
+   (indicador 🌱, botones, tooltip) y agrega el overlay de hojas
+   vía <SeasonalEffects season='ecologico' />. */
+
+/* Indicador ecológico en el header */
+.branding-ecologico .app-header::after {
+  content: '🌱';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  opacity: 0.8;
+  animation: eco-pulse 3s infinite;
+}
+
+@keyframes eco-pulse {
+  0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
+  50% { opacity: 1; transform: translateY(-50%) scale(1.1); }
+}
+
+/* Mejora para botones con branding ecológico */
+.branding-ecologico .flu-btn--primary {
+  background: linear-gradient(135deg, var(--accent-green), color-mix(in srgb, var(--accent-green) 70%, #000000));
+  border-color: var(--accent-green);
+}
+
+.branding-ecologico .flu-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-green) 70%, #000000), color-mix(in srgb, var(--accent-green) 45%, #000000));
+  border-color: color-mix(in srgb, var(--accent-green) 70%, #000000);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-green) 25%, transparent);
+}
+
+/* Badge ecológico en el selector de IA */
+.branding-ecologico .flu-settings-image-config__field--stacked select[value*="deepseek"] {
+  background: color-mix(in srgb, var(--accent-green) 10%, transparent);
+  border-color: var(--accent-green);
+}
+
+.branding-ecologico .flu-settings-image-config__field--stacked select[value*="deepseek"]:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-green) 30%, transparent);
+}
+
+/* Tooltip informativo ecológico */
+.eco-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.eco-tooltip::before {
+  content: '🌱 72% más barato, 2-3x más rápido, 60% menos CO₂';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--bg-tertiary) 90%, transparent);
+  color: color-mix(in srgb, var(--accent-green) 65%, #ffffff);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--accent-green) 30%, transparent);
+  z-index: 1000;
+}
+
+.eco-tooltip:hover::before {
+  opacity: 1;
+}
+
+/* Animación de hojas cayendo (opcional, se puede activar con clase adicional) */
+.eco-leaves-fall {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.1;
+}
+
+.eco-leaf {
+  position: absolute;
+  color: #4ade80;
+  font-size: 20px;
+  animation: leaf-fall linear infinite;
+}
+
+@keyframes leaf-fall {
+  0% {
+    transform: translateY(-100px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  90% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   Branding de Temporada — Capa de Acento (universal)
+   ============================================================
+   Hace que los acentos hardcodeados del shell, las tabs y el
+   pizarrón sigan la paleta activa (applyPaletteToCSS), para que
+   CUALQUIER temporada/festividad elegida rebrandee toda la UI.
+   Patrón de progressive enhancement: primero se declara el
+   fallback actual (sin afectación), luego la versión var-driven
+   con color-mix(). Si el navegador no soporta color-mix(), se
+   conserva el look actual.
+   ============================================================ */
+
+/* Pizarrón (Workspace) — identidad FIJA: el pizarrón es pizarrón.
+   No sigue la paleta de temporada (ver :root --board-*).
+   La identidad del panel (.flu-tab-panel--workspace) y de sus frames
+   (.panel-frame, __header, __title) ya está definida en la sección
+   "Workspace (Pizarrón) content sections" (línea ~2233). */
+
+/* Tabs — barra inferior sigue la paleta */
+.flu-shell-tabs {
+  background: linear-gradient(90deg, var(--bg-secondary), var(--bg-primary));
+}
+
+/* Tab — subrayado, hover y activo usan el acento de la paleta */
+.flu-shell-tabs__tab::after {
+  background: #4a6cf7;
+  background: var(--accent-cyan);
+}
+
+.flu-shell-tabs__tab:hover {
+  color: #8ab4ff;
+  color: color-mix(in srgb, var(--accent-cyan) 70%, #ffffff);
+  background: rgba(100, 140, 255, 0.06);
+  background: color-mix(in srgb, var(--accent-cyan) 8%, transparent);
+}
+
+.flu-shell-tabs__tab.is-active {
+  color: #8ab4ff;
+  color: color-mix(in srgb, var(--accent-cyan) 75%, #ffffff);
+  border-bottom-color: #4a6cf7;
+  border-bottom-color: var(--accent-cyan);
+}
+
+/* Tab Workspace activo — identidad FIJA (no sigue la paleta) */
+.flu-shell-tabs__tab.is-active[aria-controls="flu-tabpanel-workspace"] {
+  color: var(--board-title);
+  border-bottom-color: var(--board-accent);
+  background: var(--board-accent-soft);
+}
+
+.flu-shell-tabs__tab.is-active[aria-controls="flu-tabpanel-workspace"]::after {
+  background: var(--board-accent);
+}
+
+/* ============================================================
+   Efectos de Temporada — <SeasonalEffects/> (overlay creativo)
+   ============================================================
+   Capa full-screen, pointer-events:none, data-driven: cada
+   temporada define emojis/cantidad/movimiento/duración/opacidad
+   en SEASONAL_EFFECTS (SeasonalEffects.tsx). NO toca el pizarrón.
+   ============================================================ */
+.seasonal-effects {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* Efectos de temporada acotados al área de FLU (avatar).
+   Sobrescribe la capa full-screen: las partículas quedan contenidas
+   dentro de la columna del avatar (position:absolute + overflow:hidden
+   del contenedor). El pizarrón y el resto de paneles NO se cubren. */
+.app-avatar-column.flu-branding-scope .seasonal-effects {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+.seasonal-effects__particle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-block;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation-name: seasonal-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  text-shadow: 0 0 12px currentColor;
+}
+
+.seasonal-effects__particle--rise {
+  animation-name: seasonal-rise;
+}
+
+@keyframes seasonal-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: var(--particle-opacity, 0.8);
+  }
+  90% {
+    opacity: var(--particle-opacity, 0.8);
+  }
+  100% {
+    transform: translate3d(var(--particle-drift, 0px), 110vh, 0) rotate(var(--particle-spin, 360deg));
+    opacity: 0;
+  }
+}
+
+@keyframes seasonal-rise {
+  0% {
+    transform: translate3d(0, 110vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: var(--particle-opacity, 0.8);
+  }
+  90% {
+    opacity: var(--particle-opacity, 0.8);
+  }
+  100% {
+    transform: translate3d(var(--particle-drift, 0px), -10vh, 0) rotate(var(--particle-spin, -360deg));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seasonal-effects {
+    display: none;
+  }
+}
+
+/* ============================================================
+   Fase 1 — Asistente personal: onboarding, notificaciones, DND
+   ------------------------------------------------------------
+   Config-driven (FLU_CONFIG) y reutiliza las variables del tema.
+   ============================================================ */
+
+/* --- Settings: hint (Asistente → No molestar) --- */
+.flu-settings-image-config__hint {
+  font-size: var(--text-md);
+  color: var(--text-secondary, #a0a0b0);
+  margin: 0;
+  opacity: 0.85;
+}
+
+/* --- Onboarding: tarjeta no bloqueante --- */
+.flu-onboarding {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-secondary, #1a1a2e);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: flu-onboarding-in 180ms ease-out;
+}
+
+@keyframes flu-onboarding-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.flu-onboarding__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.flu-onboarding__dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.flu-onboarding__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-color, #2a2a4a);
+  transition: background 160ms ease;
+}
+
+.flu-onboarding__dot--active {
+  background: var(--accent-cyan, #00d4ff);
+}
+
+.flu-onboarding__progress {
+  font-size: var(--text-md, 13px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-onboarding__prompt {
+  margin: 0;
+  font-size: var(--text-md, 13px);
+  color: var(--text-primary, #e0e0e0);
+  line-height: 1.3;
+}
+
+/* Fila inferior del overlay: alinea la etiqueta "Escuchando" a la altura
+   del botón "Omitir". El botón "Omitir" queda SIEMPRE fijo a la derecha,
+   aunque la etiqueta "Escuchando" no esté presente. */
+.flu-onboarding__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* Etiqueta "Escuchando": texto plano (no chip redondo), aparece SOLO con
+   onstart real (nunca optimista). */
+.flu-onboarding__listening {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  font-size: var(--text-sm, 12px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.flu-onboarding__listening::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-cyan, #00d4ff);
+  animation: flu-listen-pulse 1.2s ease-in-out infinite;
+}
+
+/* Transcripción provisional en vivo de lo que capta el micrófono. */
+.flu-onboarding__interim {
+  font-weight: var(--weight-regular, 400);
+  font-style: italic;
+  color: var(--text-secondary, #a0a0b0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+@keyframes flu-listen-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+/* Botón 🎤 tap-to-talk: abre el micrófono solo al tocar. */
+.flu-onboarding__mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: var(--text-sm, 12px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary, #12121f);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.flu-onboarding__mic::before {
+  content: '🎤';
+  font-size: 13px;
+  line-height: 1;
+}
+
+.flu-onboarding__mic:hover {
+  border-color: var(--accent-cyan, #00d4ff);
+}
+
+.flu-onboarding__mic--listening {
+  color: var(--accent-cyan, #00d4ff);
+  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.flu-onboarding__form {
+  display: flex;
+  gap: 6px;
+}
+
+.flu-onboarding__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: var(--text-md, 13px);
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary, #0f0f1a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 6px);
+  font-family: inherit;
+}
+
+.flu-onboarding__input:focus {
+  outline: none;
+  border-color: var(--accent-cyan, #00d4ff);
+}
+
+.flu-onboarding__submit {
+  padding: 5px 10px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: #06121a;
+  background: var(--accent-cyan, #00d4ff);
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.flu-onboarding__submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.flu-onboarding__continue {
+  align-self: flex-start;
+  padding: 5px 10px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: #06121a;
+  background: var(--accent-cyan, #00d4ff);
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.flu-onboarding__quick {
+  display: flex;
+  gap: 6px;
+}
+
+.flu-onboarding__quick-btn {
+  flex: 1 1 auto;
+  padding: 5px 10px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary, #0f0f1a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.flu-onboarding__quick-btn:hover {
+  border-color: var(--accent-cyan, #00d4ff);
+  color: var(--accent-cyan, #00d4ff);
+}
+
+/* Lista de usuarios existentes en el paso de captura del nombre: botones
+   para tocar el perfil propio (o decirlo/escribirlo) sin teclear desde cero. */
+.flu-onboarding__users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.flu-onboarding__user {
+  padding: 6px 12px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary, #0f0f1a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.flu-onboarding__user:hover {
+  border-color: var(--accent-cyan, #00d4ff);
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.flu-onboarding__skip {
+  align-self: flex-end;
+  padding: 2px 6px;
+  font-size: var(--text-md, 13px);
+  color: var(--text-secondary, #a0a0b0);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.flu-onboarding__skip:hover {
+  color: var(--accent-cyan, #00d4ff);
+}
+
+/* --- Selector "¿Quién eres?" (multiusuario): dropdown + acciones --- */
+.flu-onboarding--picker {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.flu-onboarding__picker-subtitle {
+  margin: 0;
+  font-size: var(--text-md, 13px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-onboarding__picker-empty {
+  margin: 0;
+  font-size: var(--text-md, 13px);
+  color: var(--text-secondary, #a0a0b0);
+  font-style: italic;
+}
+
+.flu-onboarding__picker-select {
+  width: 100%;
+  padding: 5px 9px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary, #0f0f1a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.flu-onboarding__picker-select:focus {
+  outline: none;
+  border-color: var(--accent-cyan, #00d4ff);
+}
+
+/* Acciones: "Crear perfil personal" y "Omitir" en el mismo renglón,
+   ambos como botones azules. */
+.flu-onboarding__picker-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 1px;
+}
+
+.flu-onboarding__picker-create,
+.flu-onboarding__picker-skip {
+  flex: 1 1 0;
+  padding: 5px 10px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: #06121a;
+  background: var(--accent-cyan, #00d4ff);
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+}
+
+.flu-onboarding__picker-create:hover,
+.flu-onboarding__picker-skip:hover {
+  filter: brightness(1.08);
+}
+
+/* --- Notificaciones: pila de toasts --- */
+.flu-notifications {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, calc(100vw - 32px));
+}
+
+.flu-notification {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-left: 3px solid var(--accent-cyan, #00d4ff);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  font-family: inherit;
+  animation: flu-toast-in 180ms ease-out;
+}
+
+.flu-notification--urgent {
+  border-left-color: var(--accent-warn, #ffb020);
+}
+
+.flu-notification strong {
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.flu-notification span {
+  font-size: var(--text-md, 13px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+@keyframes flu-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================================
+   Fase 2 — Asistente personal: recordatorios y lista de compras
+   ------------------------------------------------------------
+   Listas de los paneles RemindersPanel y ShoppingPanel.
+   Reutiliza variables del tema y clases de ajustes (Fase 1).
+   ============================================================ */
+
+.flu-reminders__heading {
+  margin: 0 0 6px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flu-reminders-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-secondary, #1a1a2e);
+}
+
+.flu-reminders-item--done {
+  opacity: 0.6;
+}
+
+.flu-reminders-item--done .flu-reminders-item__text {
+  text-decoration: line-through;
+}
+
+.flu-reminders-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flu-reminders-item__text {
+  font-size: var(--text-md, 13px);
+  color: var(--text-primary, #e8e8f0);
+  word-break: break-word;
+}
+
+.flu-reminders-item__when {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-reminders-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.flu-reminders-item__actions button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: var(--text-md, 13px);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.flu-reminders-item__actions button:hover {
+  color: var(--text-primary, #e8e8f0);
+  border-color: var(--accent-color, #7c6cff);
+}
+
+/* FASE P — editor de perfil de comunicación por participante */
+.flu-reminders-item--with-profile {
+  flex-wrap: wrap;
+}
+
+.flu-communication-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  flex-basis: 100%;
+  padding: 8px 0 2px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--border-color, #2a2a4a);
+}
+
+.flu-communication-profile__title {
+  flex-basis: 100%;
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  color: var(--text-secondary, #a0a0b0);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.flu-communication-profile__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.flu-communication-profile__field span {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-communication-profile__field select {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-secondary, #1a1a2e);
+  color: var(--text-primary, #e8e8f0);
+  font-size: var(--text-md, 13px);
+}
+
+.flu-communication-profile__reset {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: var(--text-md, 13px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flu-communication-profile__reset:hover {
+  color: var(--text-primary, #e8e8f0);
+  border-color: var(--accent-color, #7c6cff);
+}
+
+/* Punto 2 — navegador curado: perfil de navegador por participante */
+.flu-browser-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  flex-basis: 100%;
+  padding: 8px 0 2px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--border-color, #2a2a4a);
+}
+
+.flu-browser-profile__title {
+  flex-basis: 100%;
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  color: var(--text-secondary, #a0a0b0);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.flu-browser-profile__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex-basis: 100%;
+}
+
+.flu-browser-profile__label {
+  flex-basis: 100%;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-browser-profile__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flu-browser-profile__chip {
+  padding: 2px 10px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: var(--text-md, 13px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flu-browser-profile__chip--active {
+  border-color: var(--accent-color, #7c6cff);
+  color: var(--text-primary, #e8e8f0);
+}
+
+.flu-browser-profile__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.flu-browser-profile__field--wide {
+  flex-basis: 100%;
+}
+
+.flu-browser-profile__field--narrow {
+  flex: 1 1 120px;
+}
+
+.flu-browser-profile__field span {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.flu-browser-profile__field input,
+.flu-browser-profile__field select {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-secondary, #1a1a2e);
+  color: var(--text-primary, #e8e8f0);
+  font-size: var(--text-md, 13px);
+}
+
+.flu-browser-profile__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-basis: 100%;
+}
+
+.flu-browser-profile__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-md, 13px);
+  color: var(--text-primary, #e8e8f0);
+  cursor: pointer;
+}
+
+.flu-browser-profile__check input[type='checkbox'] {
+  accent-color: var(--accent-color, #7c6cff);
+  cursor: pointer;
+}
+
+.flu-browser-profile__reset {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: var(--text-md, 13px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flu-browser-profile__reset:hover {
+  color: var(--text-primary, #e8e8f0);
+  border-color: var(--accent-color, #7c6cff);
+}
+
+.flu-shopping-item__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.flu-shopping-item__label input[type='checkbox'] {
+  accent-color: var(--accent-color, #7c6cff);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flu-onboarding,
+  .flu-notification {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   Buscador del Pizarrón (F3/F4) — workspace-search
+   Estilos autocontenidos para la barra, pestañas, lista web,
+   cuadrícula de imágenes (ImageGrid) y tarjetas de vídeo
+   (VideoGrid). Etiquetas de texto desde FLU_CONFIG (sin hardcode).
+   ============================================================ */
+.workspace-search {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 2px;
+  color: var(--text-color, #2b2b3d);
+}
+
+.workspace-search__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid #d6d6e3;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.workspace-search__bar:focus-within {
+  border-color: var(--accent-color, #7c6cff);
+  box-shadow: 0 0 0 3px rgba(124, 108, 255, 0.18);
+}
+
+.workspace-search__icon {
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+/* Contenedor del input + transcripción en vivo. Absorbe el flex que antes
+   tenía el input para que la franja en vivo se superponga sin empujar. */
+.workspace-search__field {
+  position: relative;
+  flex: 1 1 140px;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+}
+
+.workspace-search__input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: inherit;
+  padding: 2px 0;
+}
+
+.workspace-search__input::placeholder {
+  color: #9a9aab;
+}
+
+/* Transcripción en vivo DENTRO de la barra de comandos (Pizarrón Un Solo
+   Objeto): se superpone al input cuando no hay consulta escrita, en azul
+   itálico, sin ocupar una franja aparte (recupera espacio vertical). */
+.workspace-search__live {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  font-size: 13px;
+  font-style: italic;
+  color: #4da6ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-search__select {
+  border: 1px solid #d6d6e3;
+  border-radius: 6px;
+  background: #f6f6fb;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.workspace-search__go {
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-color, #7c6cff);
+  color: #fff;
+  padding: 3px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.workspace-search__go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.workspace-search__go:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.workspace-search__reset {
+  border: none;
+  background: transparent;
+  color: #9a9aab;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 50%;
+}
+
+.workspace-search__reset:hover {
+  color: inherit;
+  background: #f0f0f6;
+}
+
+.workspace-search__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: #6b6b7d;
+  font-style: italic;
+}
+
+.workspace-search__spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid rgba(124, 108, 255, 0.25);
+  border-top-color: var(--accent-color, #7c6cff);
+  border-radius: 50%;
+  animation: workspace-search-spin 0.7s linear infinite;
+}
+
+@keyframes workspace-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.workspace-search__error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fdecec;
+  color: #b3261e;
+  font-size: 14px;
+}
+
+.workspace-search__error-text {
+  margin: 0;
+  font-size: 14px;
+}
+
+.workspace-search__error-hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.workspace-search__retry {
+  margin-top: 10px;
+}
+
+.workspace-search__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 18px 12px;
+  text-align: center;
+  color: #6b6b7d;
+  font-size: 14px;
+}
+
+.workspace-search__empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2b2b3d;
+}
+
+.workspace-search__empty-text {
+  margin: 0;
+}
+
+.workspace-search__empty-hint {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.workspace-search__meta {
+  margin: 0;
+  font-size: 13px;
+  color: #6b6b7d;
+}
+
+.workspace-search__overview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--accent-color, #7c6cff);
+  border-radius: 8px;
+  background: #f4f3ff;
+}
+
+.workspace-search__overview-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-color, #7c6cff);
+}
+
+.workspace-search__overview-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.workspace-search__overview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.workspace-search__tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #e2e2ec;
+  padding-bottom: 2px;
+}
+
+.workspace-search__tab {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  font-size: 14px;
+  color: #6b6b7d;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.workspace-search__tab:hover:not(:disabled) {
+  color: var(--accent-color, #7c6cff);
+}
+
+.workspace-search__tab.is-active {
+  color: var(--accent-color, #7c6cff);
+  font-weight: 700;
+}
+
+.workspace-search__tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -3px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--accent-color, #7c6cff);
+}
+
+.workspace-search__tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.workspace-search__tab-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #8a8a9c;
+  font-style: italic;
+}
+
+.workspace-search__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-search__result {
+  padding: 10px 12px;
+  border: 1px solid #e2e2ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.workspace-search__result-url {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  color: #1a7f37;
+  word-break: break-all;
+}
+
+.workspace-search__result-url.is-blocked {
+  color: #8a8a9c;
+}
+
+.workspace-search__result-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-color, #7c6cff);
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.workspace-search__result-title:hover {
+  text-decoration: underline;
+}
+
+.workspace-search__result-title.is-blocked {
+  color: #6b6b7d;
+  cursor: not-allowed;
+}
+
+.workspace-search__result-snippet {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4a4a5c;
+}
+
+.workspace-search__result-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.workspace-search__result-source {
+  font-size: 12px;
+  color: #8a8a9c;
+}
+
+.workspace-search__badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.workspace-search__badge.is-allowed {
+  background: #e6f6ec;
+  color: #1e7b45;
+}
+
+.workspace-search__badge.is-blocked {
+  background: #fdecec;
+  color: #b3261e;
+}
+
+/* ---- ImageGrid (F4) ---- */
+.workspace-search__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-search__grid-item {
+  min-width: 0;
+}
+
+.workspace-search__grid-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #e2e2ec;
+  border-radius: 10px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.workspace-search__grid-link:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.workspace-search__grid-img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  background: #f0f0f6;
+}
+
+.workspace-search__grid-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 120px;
+  font-size: 34px;
+  background: #f0f0f6;
+}
+
+.workspace-search__grid-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 8px;
+  min-width: 0;
+}
+
+.workspace-search__grid-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2b2b3d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-search__grid-source {
+  font-size: 11px;
+  color: #8a8a9c;
+}
+
+/* ---- VideoGrid (F4) ---- */
+.workspace-search__video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-search__video-item {
+  min-width: 0;
+}
+
+.workspace-search__video-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #e2e2ec;
+  border-radius: 10px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.workspace-search__video-link:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.workspace-search__video-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #1c1c28;
+}
+
+.workspace-search__video-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.workspace-search__video-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 30px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.12);
+  transition: background 0.15s ease;
+}
+
+.workspace-search__video-link:hover .workspace-search__video-play {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.workspace-search__video-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 8px;
+  min-width: 0;
+}
+
+.workspace-search__video-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2b2b3d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-search__video-source {
+  font-size: 11px;
+  color: #8a8a9c;
+}
+
+/* ============================================================
+   Sección B — Sistema de componentes unificado flu-*
    ============================================================ */
 
 /* ============================================================
@@ -491,9 +5377,13 @@ details[open].flu-card .flu-card__chev {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* de App.css (legacy): espaciado vertical del panel de Ajustes */
+  padding: 2px 0;
 }
 
 .flu-settings-section {
+  /* margin-top heredado de App.css (legacy) */
+  margin-top: 2px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
@@ -917,59 +5807,6 @@ details[open].flu-card .flu-card__chev {
   .flu-panels-column {
     width: 100%;
   }
-}
-
-/* ============================================================
-   Compatibility Layer (for migration)
-   ============================================================ */
-
-/* Keep old classes for backward compatibility during migration */
-/* These will be removed after all components are migrated */
-.voice-bar__button,
-.upload-zone__btn,
-.btn-component,
-.btn-control,
-.btn-animation,
-.btn-signal {
-  /* These will inherit from flu-btn via component updates */
-}
-
-.voice-bar__button--primary,
-.upload-zone__btn--camera {
-  /* These will inherit from flu-btn--primary via component updates */
-}
-
-.voice-bar__button--stop,
-.upload-zone__btn--clear {
-  /* These will inherit from flu-btn--danger via component updates */
-}
-
-.voice-bar__button--ghost {
-  /* This will inherit from flu-btn--ghost via component updates */
-}
-
-.panel-frame {
-  /* This will inherit from flu-panel via component updates */
-}
-
-.panel-frame__header {
-  /* This will inherit from flu-panel__header via component updates */
-}
-
-.panel-frame__body {
-  /* This will inherit from flu-panel__body via component updates */
-}
-
-.voice-profiles__item {
-  /* This will inherit from flu-voice-profiles__item via component updates */
-}
-
-.voice-profiles__name {
-  /* This will inherit from flu-voice-profiles__name via component updates */
-}
-
-.voice-profiles__actions {
-  /* This will inherit from flu-voice-profiles__actions via component updates */
 }
 
 /* ============================================================

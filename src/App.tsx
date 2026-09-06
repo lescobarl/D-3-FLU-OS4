@@ -88,7 +88,8 @@ import {
     FLU_PROFILE_IDS,
     type ConfigCatalogEntry,
 } from './core/config/voiceConfigCatalog';
-import './App.css';
+// Fase 4: el CSS de la app (antes App.css) vive en src/styles/unified.css
+// (vía @import desde src/index.css). Aquí solo queda el CSS del BunnyViewer.
 // OS1 visual parity: import BunnyViewer styles for 3D avatar rendering
 import './avatar/App.css';
 

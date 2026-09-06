@@ -1,11 +1,11 @@
 /* ============================================================
    FLU OS4 — Estilos Globales con Sistema Unificado
    ============================================================
-   Orden de importación real (desde main.tsx → App.tsx → avatar/App.tsx):
-      1. src/avatar/App.css      — :root CSS variables + BunnyControlCenter
-      2. src/App.css             — Main layout + tabs + panels
-      3. src/styles/unified.css  — Sistema CSS unificado flu-*
-      4. src/index.css           — Global overrides (este archivo, el último)
+   Orden de importación real (desde main.tsx → App.tsx → index.css):
+      1. src/avatar/App.css        — :root CSS variables + BunnyControlCenter
+      2. src/styles/unified.css    — Sistema unificado: layout legacy de la
+                                     app (ex-App.css) + componentes flu-*
+      3. src/index.css             — Global overrides (este archivo, el último)
    ============================================================ */
 
 /* Importar sistema unificado */
@@ -114,7 +114,7 @@ html {
     align-self: flex-end;
 }
 
-/* Note: .flu-shell-tabs styles moved to src/App.css (lines 665+) */
+/* Note: .flu-shell-tabs styles moved to src/styles/unified.css (Fase 4) */
 
 /* ---- VoiceControls Override (inside FluAvatarVoiceBridge) ---- */
 
