@@ -21,6 +21,7 @@
 
 // Importar servicios de IA para cambio automático de proveedor
 import { getPreferredAIProvider, setPreferredAIProvider } from '../../services/aiServiceFactory';
+import { emitAutonomyEvent } from './autonomyEvents';
 
 // -----------------------------------------------------------
 // Tipos
@@ -341,10 +342,12 @@ class RecoveryActionExecutor {
                         // Reinicio suave: recargar estado sin recargar página
                         console.log('Ejecutando reinicio suave de la aplicación');
                         // En una implementación real, esto resetearía stores y estados
-                        if (typeof window !== 'undefined') {
-                            // Disparar evento para que componentes se reinicien
-                            window.dispatchEvent(new CustomEvent('flu-soft-restart'));
-                        }
+                        // Notificar el reinicio vía bus central de autonomía
+                        emitAutonomyEvent({
+                            type: 'soft-restart',
+                            level: 'info',
+                            message: 'Reinicio suave de la aplicación ejecutado',
+                        });
                     }
                     break;
                     
@@ -390,12 +393,13 @@ class RecoveryActionExecutor {
             localStorage.setItem('flu-degraded-mode', mode);
             localStorage.setItem('flu-degraded-features', JSON.stringify(features));
             
-            // Notificar a la aplicación
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('flu-degraded-mode-changed', {
-                    detail: { mode, features }
-                }));
-            }
+            // Notificar la activación del modo degradado vía bus central de autonomía
+            emitAutonomyEvent({
+                type: 'degraded-mode-changed',
+                level: 'warning',
+                message: `Modo degradado activado: ${mode}`,
+                detail: { mode, features },
+            });
             
             this.recordExecution(incident.id, 'enable_degraded_mode');
             
@@ -465,23 +469,15 @@ class RecoveryActionExecutor {
         const { message = 'Se detectó un problema en el sistema', type = 'info' } = params;
         
         try {
-            // Mostrar notificación al usuario
-            if (typeof window !== 'undefined') {
-                // Usar sistema de notificaciones existente o crear uno básico
-                const notificationEvent = new CustomEvent('flu-user-notification', {
-                    detail: {
-                        message,
-                        type,
-                        component: incident.component,
-                        timestamp: Date.now(),
-                    }
-                });
-                window.dispatchEvent(notificationEvent);
-                
-                // También mostrar en consola para debugging
-                console.log(`[Notificación al usuario] ${type.toUpperCase()}: ${message}`);
-            }
-            
+            // Notificar al usuario vía bus central de autonomía (la UI lo
+            // convierte en notificación del panel de autonomía).
+            emitAutonomyEvent({
+                type: 'system-notification',
+                level: type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info',
+                message,
+                detail: { component: incident.component },
+            });
+
             this.recordExecution(incident.id, 'notify_user');
             
             return {

@@ -42,12 +42,13 @@ import {
     getAutoOptimizationSystem, 
     startGlobalAutoOptimization 
 } from './autoOptimization';
-import { 
-    BackupSystem, 
-    getBackupSystem, 
+import {
+    BackupSystem,
+    getBackupSystem,
     startGlobalBackupSystem,
-    RestoreResult 
+    RestoreResult
 } from './backupSystem';
+import { onAutonomyEvent, emitAutonomyEvent, type AutonomyEvent } from './autonomyEvents';
 
 // -----------------------------------------------------------
 // Tipos
@@ -312,11 +313,42 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
             notifications: [newNotification, ...prev.notifications].slice(0, 20), // Limitar a 20 notificaciones
         }));
 
-        // Disparar evento para UI
-        window.dispatchEvent(new CustomEvent('flu-autonomy-notification', {
-            detail: newNotification
-        }));
+        // Propagar al bus central (solo para suscriptores externos; este hook
+        // ignora su propio tipo 'autonomy-notification' para evitar bucles).
+        emitAutonomyEvent({
+            type: 'autonomy-notification',
+            level: notification.type,
+            message: `${notification.title} — ${notification.message}`,
+        });
     }, []);
+
+    // -----------------------------------------------------------
+    // Puente motor → UI: los eventos de los sistemas autónomos se
+    // convierten en notificaciones del estado del hook (antes eran
+    // CustomEvent 'flu-*' en window sin NINGÚN listener: muertos).
+    // -----------------------------------------------------------
+    useEffect(() => {
+        const titles: Record<AutonomyEvent['type'], string> = {
+            'ai-provider-changed': 'Proveedor de IA cambiado',
+            'system-notification': 'Notificación del sistema',
+            'soft-restart': 'Reinicio suave',
+            'degraded-mode-changed': 'Modo degradado',
+            'parameter-rollback': 'Optimización revertida',
+            'parameter-changed': 'Parámetro aplicado',
+            'autonomy-notification': 'FLU',
+        };
+
+        const unsubscribe = onAutonomyEvent((event) => {
+            if (event.type === 'autonomy-notification') return;
+            addNotification({
+                type: event.level || 'info',
+                title: titles[event.type] || 'Autonomía',
+                message: event.message,
+            });
+        });
+
+        return unsubscribe;
+    }, [addNotification]);
 
     const updateBackupStats = useCallback(() => {
         if (backupSystemRef.current) {

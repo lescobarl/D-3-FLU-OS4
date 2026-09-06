@@ -18,6 +18,8 @@
 //   - Registra justificación de cada decisión
 // ============================================================
 
+import { emitAutonomyEvent } from './autonomyEvents';
+
 // -----------------------------------------------------------
 // Tipos
 // -----------------------------------------------------------
@@ -721,18 +723,24 @@ export class DecisionEngine {
         
         localStorage.setItem('flu-provider-changes', JSON.stringify(changeHistory));
         
-        // Notificar a la aplicación del cambio
-        window.dispatchEvent(new CustomEvent('flu-ai-provider-changed', {
-            detail: { oldProvider, newProvider }
-        }));
+        // Notificar del cambio de proveedor vía bus central de autonomía
+        emitAutonomyEvent({
+            type: 'ai-provider-changed',
+            level: 'info',
+            message: `Proveedor de IA cambiado: ${oldProvider} → ${newProvider}`,
+            detail: { oldProvider, newProvider },
+        });
     }
     
     private async executeNotifySystem(params: any): Promise<void> {
         const { message, type } = params;
         
-        window.dispatchEvent(new CustomEvent('flu-system-notification', {
-            detail: { message, type, source: 'decision_engine' }
-        }));
+        emitAutonomyEvent({
+            type: 'system-notification',
+            level: type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info',
+            message: message || 'Notificación del sistema',
+            detail: { source: 'decision_engine' },
+        });
     }
     
     private async executeRecordDecision(params: any, decision: AutonomousDecision): Promise<void> {

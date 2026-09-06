@@ -5095,7 +5095,7 @@ const {
                                         onToggleExpand: handleToggleExpand,
                                     } as any}
                                 >
-                                    <AutonomyStatusPanel />
+                                    <AutonomyStatusPanel state={autonomyState} actions={autonomyActions} />
                                 </PanelFrame>
                             </FluTabPanel>
                         </div>

@@ -18,6 +18,8 @@
 //   - Mantiene historial de cambios para rollback
 // ============================================================
 
+import { emitAutonomyEvent } from './autonomyEvents';
+
 // -----------------------------------------------------------
 // Tipos
 // -----------------------------------------------------------
@@ -340,16 +342,19 @@ class ParameterOptimizer {
         // Marcar como revertido
         result.applied = false;
         
-        // Notificar al sistema
-        window.dispatchEvent(new CustomEvent('flu-parameter-rollback', {
+        // Notificar el rollback vía bus central de autonomía
+        emitAutonomyEvent({
+            type: 'parameter-rollback',
+            level: 'warning',
+            message: `Parámetro ${result.parameter} revertido: ${result.newValue} → ${result.oldValue} (impacto negativo)`,
             detail: {
                 parameter: result.parameter,
                 from: result.newValue,
                 to: result.oldValue,
                 reason: 'negative_impact',
                 improvement: result.actualResult?.improvement,
-            }
-        }));
+            },
+        });
     }
     
     private getRecentMetrics(count: number): PerformanceMetrics[] {
@@ -587,10 +592,13 @@ class ParameterOptimizer {
         // Guardar en localStorage para persistencia
         localStorage.setItem(`flu-param-${parameter}`, value.toString());
         
-        // Notificar a los componentes del cambio
-        window.dispatchEvent(new CustomEvent('flu-parameter-changed', {
-            detail: { parameter, value }
-        }));
+        // Notificar el cambio de parámetro vía bus central de autonomía
+        emitAutonomyEvent({
+            type: 'parameter-changed',
+            level: 'info',
+            message: `Parámetro ${parameter} aplicado = ${value}`,
+            detail: { parameter, value },
+        });
     }
     
     private compareMetrics(before: PerformanceMetrics[], after: PerformanceMetrics[]): {
