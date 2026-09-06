@@ -68,6 +68,14 @@ export const FLU_CAPABILITIES: CapabilityDef[] = [
     descriptionEn:
       'Move the avatar with physical animations and emotional states using the "animacion" and "emocion" contract fields.',
   },
+  {
+    id: 'acciones',
+    label: 'Crear recordatorios, notas, diario, compras, alarmas y horario',
+    descriptionEs:
+      'Crea o consulta recordatorios, lista de compras, alarmas, temporizadores, notas, diario y horario usando el campo "acciones" del contrato. Cada acción lleva {dominio, texto} con el mandato tal como lo dijo el usuario.',
+    descriptionEn:
+      'Create or query reminders, shopping list, alarms, timers, notes, diary and schedule using the "acciones" contract field. Each action carries {dominio, texto} with the command as the user said it.',
+  },
 ]
 
 /** Nombre (id) de las capacidades, útil para validación y tests. */
@@ -101,8 +109,11 @@ export function buildCapabilitiesPrompt(language: 'es' | 'en' = 'es'): string {
   const musicRule = isEnglish
     ? 'MANDATORY MUSIC RULE: whenever the user asks you to play, sing, put on or start a song (e.g. "sing La Bamba", "play Las Mañanitas", "put on Cumpleaños Feliz"), you MUST emit the "musica" contract field with accion="play_music" and cancion="<song name>". Emitting "musica" is mandatory; answering with text only is NOT enough. To pause or stop, emit accion="pause_music" or accion="stop_music".'
     : 'REGLA DE MÚSICA OBLIGATORIA: cuando el usuario te pida poner, cantar, tocar o reproducir una canción (ej. "canta La Bamba", "pon Las Mañanitas", "toca Cumpleaños Feliz"), DEBES emitir el campo "musica" del contrato con accion="play_music" y cancion="<nombre de la canción>". Emitir "musica" es obligatorio; responder solo con texto NO es suficiente. Para pausar o detener emite accion="pause_music" o accion="stop_music".'
+  const accionesRule = isEnglish
+    ? 'ACCIONES RULE (MANDATORY): when the user conversationally asks you to create, add, set, remove, list or check a reminder, shopping item, alarm, timer, diary entry, note or schedule class (e.g. "remind me to buy milk at 7", "add milk to the shopping list", "set an alarm for 7 in the morning", "set a 5 minute timer", "write in my diary today was a great day", "note down buy bread", "add math on Monday at 8 to my schedule"), you MUST emit the "acciones" array with one object per requested action: { "dominio": "reminder" | "temporal" | "diary" | "note" | "horario", "texto": "<the user\'s own command fragment, verbatim, without the wake word>" }. DOMAIN MAPPING (use ONLY these five values; there is NO "shopping" or "alarm" domain): shopping-list requests (add/remove/toggle/list an item) use "reminder"; alarms and timers use "temporal"; diary entries use "diary"; notes use "note"; schedule classes use "horario". Emitting "acciones" is mandatory for these requests; answering with text only is NOT enough. Keep your respuesta_voz natural and conversational (confirm what you will do). Do NOT emit "acciones" for ordinary conversation, questions, navigation, music, images or configuration.'
+    : 'REGLA DE ACCIONES (OBLIGATORIA): cuando el usuario te pida de forma conversacional crear, agregar, poner, quitar, listar o consultar un recordatorio, artículo de compras, alarma, temporizador, entrada de diario, nota o clase del horario (ej. "recuérdame comprar leche a las 7", "agrega leche a la lista de compras", "pon una alarma a las 7 de la mañana", "pon un temporizador de 5 minutos", "escribe en el diario hoy fue un gran día", "apunta comprar pan", "agrega matemáticas el lunes a las 8 al horario"), DEBES emitir el arreglo "acciones" con un objeto por cada acción pedida: { "dominio": "reminder" | "temporal" | "diary" | "note" | "horario", "texto": "<el fragmento del mandato tal como lo dijo el usuario, sin la wake word>" }. MAPEO DE DOMINIOS (usa SOLO estos cinco valores; NO existe dominio "shopping" ni "alarm"): las peticiones de lista de compras (agregar/quitar/marcar/listar un artículo) usan "reminder"; las alarmas y temporizadores usan "temporal"; las entradas de diario usan "diary"; las notas usan "note"; las clases del horario usan "horario". Emitir "acciones" es obligatorio para estas peticiones; responder solo con texto NO es suficiente. Mantén tu respuesta_voz natural y conversacional (confirma lo que harás). NO emitas "acciones" para conversación normal, preguntas, navegación, música, imágenes ni configuración.'
   const honest = isEnglish
     ? 'IMPORTANT: you cannot browse the web, call external APIs, or create files on your own; everything you do is expressed through the "contrato" JSON fields below. Music exception: FLU performs the online song search (Deezer) when you emit "musica.cancion" — you do not browse, you only name the song. For music use "musica.cancion": if it is in the playlist it plays instantly; otherwise FLU searches it online (Deezer).'
     : 'IMPORTANTE: no puedes navegar por internet, llamar APIs externas ni crear archivos por tu cuenta; todo lo que haces se expresa con los campos JSON del "contrato" de abajo. Excepción música: FLU realiza la búsqueda en línea (Deezer) cuando emites "musica.cancion" — tú no navegas, solo indicas la canción. Para música usa "musica.cancion": si es del playlist suena al instante; si no, FLU la busca en línea (Deezer).'
-  return [head, ...lines, '', music, '', musicRule, '', honest].join('\n')
+  return [head, ...lines, '', music, '', musicRule, '', accionesRule, '', honest].join('\n')
 }

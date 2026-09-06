@@ -161,6 +161,7 @@ import { useNotes } from './hooks/useNotes';
 import { ContactsPanel } from './components/ContactsPanel';
 import { DiaryPanel } from './components/DiaryPanel';
 import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
+import { fluDb } from './core/db/fluDatabase';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
@@ -238,7 +239,7 @@ import {
 import { buildFluSpeechAuditRows } from './voice/lib/conversationDialogue';
 import { shouldGenerateWorkspaceImage, normalizeWorkspaceContract } from './voice/lib/workspaceContract';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
-import { deleteAuditLogsBySpeaker } from './voice/lib/fluStorage';
+import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
 
 // ============================================================
 // Tipo para las pestañas del panel derecho
@@ -950,6 +951,87 @@ function isRedundantTextWorkspace(opts: {
     return overlapRatio >= 0.85;
 }
 
+// ============================================================
+// Helpers de despacho determinista (nivel módulo)
+// ============================================================
+// Se extraen a nivel módulo para que la RUTA CONVERSACIONAL (acciones del
+// LLM) y el FALLBACK OFFLINE (re-parseo del transcript crudo) compartan el
+// MISMO conjunto de manejadores __fluHandle* y las MISMAS options del
+// árbitro. Esto unifica la ejecución: el LLM decide la intención de forma
+// conversacional (Siri/Alexa/Google-style) y los parsers deterministas
+// ejecutan la intención estructurada precisa (dueAt, durationMs, etc.).
+// ============================================================
+
+/**
+ * Construye las options del árbitro determinista a partir de FLU_CONFIG.
+ * Misma fuente que usan los manejadores __fluHandle* para que el `action`
+ * devuelto sea COMPLETO (con defaultOffsetMs, defaultAlarmTimeOfDay y
+ * defaultTimerMinutes aplicados) y el despacho no tenga que re-parcear.
+ */
+function buildArbiterOptions(): Record<string, unknown> {
+    const arbiterRemindersConfig = (FLU_CONFIG as any)?.reminders || {};
+    const arbiterOffsetMinutes = Number(
+        arbiterRemindersConfig.defaultReminderOffsetMinutes,
+    );
+    const arbiterDefaultOffsetMs = (Number.isFinite(arbiterOffsetMinutes)
+        ? arbiterOffsetMinutes
+        : 10) * 60 * 1000;
+    const arbiterTemporalConfig = (FLU_CONFIG as any)?.temporal || {};
+    return {
+        defaultOffsetMs: arbiterDefaultOffsetMs,
+        now: Date.now(),
+        defaultAlarmTimeOfDay: arbiterTemporalConfig.defaultAlarmTimeOfDay,
+        defaultTimerMinutes: Number(arbiterTemporalConfig.defaultTimerMinutes) || 5,
+    };
+}
+
+/**
+ * Despacha el intent COMPLETO de un resultado del árbitro determinista al
+ * manejador __fluHandle* correspondiente según su dominio. Devuelve la
+ * confirmación hablada del manejador (o '' si no hubo dominio/intent).
+ * Los manejadores se invocan vía window en runtime (siempre tienen closures
+ * frescas porque se reasignan cada render).
+ */
+async function dispatchArbiterIntent(
+    arbiterResult: any,
+    opts: { speakerName?: string },
+): Promise<string> {
+    const w: any = window as any;
+    const domain = arbiterResult?.matched ? arbiterResult.domain : null;
+    const intent: any = arbiterResult?.action || null;
+    if (!domain || !intent) return '';
+    let reply = '';
+    try {
+        if (domain === 'reminder' && typeof w.__fluHandleReminderText === 'function') {
+            reply =
+                (await w.__fluHandleReminderText(intent, {
+                    personId: undefined,
+                    personName: opts.speakerName || undefined,
+                })) || '';
+        } else if (domain === 'temporal' && typeof w.__fluHandleTemporalText === 'function') {
+            reply = (await w.__fluHandleTemporalText(intent)) || '';
+        } else if (domain === 'diary' && typeof w.__fluHandleDiaryText === 'function') {
+            reply =
+                (await w.__fluHandleDiaryText(intent, {
+                    personId: undefined,
+                    personName: opts.speakerName || undefined,
+                })) || '';
+        } else if (domain === 'note' && typeof w.__fluHandleNoteText === 'function') {
+            reply =
+                (await w.__fluHandleNoteText(intent, {
+                    personId: undefined,
+                    personName: opts.speakerName || undefined,
+                })) || '';
+        } else if (domain === 'horario' && typeof w.__fluHandleHorarioText === 'function') {
+            reply = (await w.__fluHandleHorarioText(intent)) || '';
+        }
+    } catch (err) {
+        console.warn('[App] dispatchArbiterIntent threw (non-critical):', err);
+        relayLog('WARN', 'App', `dispatchArbiterIntent threw: ${err}`);
+    }
+    return reply;
+}
+
 function App() {
     const [currentState, setCurrentState] = useState<ConversationState>('IDLE');
     const integrationStore = useIntegrationStore();
@@ -1205,12 +1287,16 @@ function App() {
     // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
     // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
     const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
-    const [pickerMode, setPickerMode] = useState(false);
     const [newProfilePending, setNewProfilePending] = useState(false);
     const registerProfileRef = useRef(false);
-    // Guard de una sola sesión: auto-registrar solo al PRIMER participante
-    // (primer arranque). Evita re-crear un perfil si luego se elimina.
-    const firstProfileResolvedRef = useRef(false);
+    // Guard de montaje: el onboarding se reinicia (para pedirlo SIEMPRE al
+    // entrar) solo después de que los participantes carguen y el estado del
+    // onboarding esté resuelto (ready). Evita resetear antes de tiempo.
+    const onboardingMountSettledRef = useRef(false);
+    // Guard de una sola sesión: evita registrar/activar el participante varias
+    // veces cuando el efecto de completado se re-dispara (p. ej. al cambiar la
+    // lista de participantes tras el registro).
+    const onboardingHandledRef = useRef(false);
     const materiaGris = useMateriaGris({});
     // ---- FASE P — Personalización profunda por persona (nivel de explicación + tono) ----
     const communicationProfiles = useCommunicationProfiles({});
@@ -1725,25 +1811,73 @@ function App() {
             const musica = contract?.musica || null;
 
             // ============================================================
-            // INTERCEPCIÓN DETERMINISTA — Recordatorios, compras, alarmas,
-            // temporizadores, notas y diario por voz.
+            // EJECUCIÓN DE INTENCIONES — Recordatorios, compras, alarmas,
+            // temporizadores, notas, diario y horario por voz.
             // ============================================================
-            // ROOT CAUSE FIX: el contrato de Gemini NO trae campo para crear
-            // recordatorios/notas/diario/compras/alarmas. Los manejadores
-            // __fluHandle* (que SÍ parsean y crean estos ítems vía los parsers
-            // deterministas) se exponen en window en cada render, pero NUNCA
-            // se invocaban desde el flujo de voz. Aquí interceptamos el
-            // transcript crudo y despachamos al manejador correspondiente.
-            // Si un manejador devuelve una confirmación hablada, la usamos
-            // como respuesta_voz (FLU la pronuncia) y marcamos que la intención
-            // ya fue resuelta localmente para no duplicar con la IA.
+            // RUTA CONVERSACIONAL (LLM como cerebro único, estilo Siri/Alexa/
+            // Google): el LLM decide la intención de forma conversacional y la
+            // emite en su contrato como `acciones: [{dominio, texto}]`. Cada
+            // `texto` es el fragmento del mandato del usuario; aquí se re-resuelve
+            // con el árbitro determinista (para obtener la intención estructurada
+            // precisa: dueAt, durationMs, etc.) y se despacha al MISMO manejador
+            // __fluHandle* que usa el flujo offline. Así la ejecución queda
+            // UNIFICADA en un solo conjunto de manejadores.
+            //
+            // Cuando el LLM emite `acciones`, se OMITE el re-parseo del transcript
+            // crudo (evita doble creación). El re-parseo del transcript crudo queda
+            // como FALLBACK OFFLINE puro: solo corre cuando el LLM NO produjo
+            // ninguna acción (p. ej. sin API key o respuesta genérica).
+            //
+            // La respuesta conversacional del LLM (respuesta_voz) tiene PRIORIDAD
+            // sobre la confirmación del manejador: esta última solo se usa como
+            // respaldo cuando NO hay respuesta conversacional (offline).
             //
             // onContractResolved es useCallback con deps [] y se define ANTES
             // de los manejadores, por lo que se invocan vía window en runtime
             // (siempre tienen closures frescas porque se reasignan cada render).
             // ============================================================
             let localHandledReply = '';
-            if (transcript && !rawOnly) {
+            const acciones = Array.isArray(contract?.acciones) ? contract.acciones : null;
+            const hasAcciones = Boolean(acciones && acciones.length > 0);
+
+            // ============================================================
+            // RUTA LLM — despachar cada acción emitida por el cerebro
+            // conversacional al manejador determinista correspondiente.
+            // ============================================================
+            if (hasAcciones && !rawOnly) {
+                const w: any = window as any;
+                try {
+                    const wakeWords: string[] =
+                        ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
+                    const arbiterOptions = buildArbiterOptions();
+                    for (const accion of acciones) {
+                        const texto = String(accion?.texto || '').trim();
+                        if (!texto) continue;
+                        const commandText = normalizeCommandForDeterministic(texto, wakeWords);
+                        const arbiterResult: any = resolveDeterministicCommand(commandText, arbiterOptions);
+                        if (arbiterResult?.matched) {
+                            relayLog(
+                                'LOG',
+                                'App',
+                                `onContractResolved: acción LLM → dominio "${arbiterResult.domain}" (${JSON.stringify(
+                                    arbiterResult.action?.action ?? arbiterResult.action,
+                                )})`,
+                            );
+                            const reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
+                            if (reply) localHandledReply = reply;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[App] acciones dispatch threw (non-critical):', err);
+                    relayLog('WARN', 'App', `acciones dispatch threw: ${err}`);
+                }
+            }
+
+            // ============================================================
+            // FALLBACK OFFLINE — re-parseo determinista del transcript crudo.
+            // Solo corre cuando el LLM NO emitió acciones (sin API key, etc.).
+            // ============================================================
+            if (transcript && !rawOnly && !hasAcciones) {
                 const w: any = window as any;
                 try {
                     // ============================================================
@@ -1788,7 +1922,14 @@ function App() {
                     // game/environment) y navegación NO se despachan aquí: se
                     // resuelven por sus propios fast-paths (configAction, juegos,
                     // navegacion) más abajo en este mismo callback.
-                    const arbiterResult: any = resolveDeterministicCommand(commandText);
+                    // PUNTO ÚNICO DE PARSEO (Point B): el árbitro y el manejador
+                    // __fluHandleReminderText deben usar LOS MISMOS options para no
+                    // divergir. buildArbiterOptions() deriva las options desde la
+                    // MISMA fuente que los manejadores (defaultOffsetMs, now,
+                    // defaultAlarmTimeOfDay, defaultTimerMinutes) y se pasa al
+                    // árbitro, que lo reenvía al parser.
+                    const arbiterOptions = buildArbiterOptions();
+                    const arbiterResult: any = resolveDeterministicCommand(commandText, arbiterOptions);
                     const arbiterDomain = arbiterResult?.matched ? arbiterResult.domain : null;
                     if (arbiterDomain) {
                         relayLog(
@@ -1799,57 +1940,38 @@ function App() {
                             )})`,
                         );
                     }
-                    // Recordatorios + lista de compras (reminder)
-                    if (
-                        arbiterDomain === 'reminder' &&
-                        typeof w.__fluHandleReminderText === 'function'
-                    ) {
-                        const reply = await w.__fluHandleReminderText(commandText, {
-                            personId: undefined,
-                            personName: speakerName || undefined,
-                        });
-                        if (reply) localHandledReply = reply;
-                    }
-                    // Alarmas + temporizadores (temporal)
-                    if (
-                        arbiterDomain === 'temporal' &&
-                        typeof w.__fluHandleTemporalText === 'function'
-                    ) {
-                        const reply = await w.__fluHandleTemporalText(commandText);
-                        if (reply) localHandledReply = reply;
-                    }
-                    // Diario (diary) — se evalúa antes que nota porque el árbitro
-                    // ya priorizó diario sobre nota cuando el texto dice "en el diario".
-                    if (arbiterDomain === 'diary' && typeof w.__fluHandleDiaryText === 'function') {
-                        const reply = await w.__fluHandleDiaryText(commandText, {
-                            personId: undefined,
-                            personName: speakerName || undefined,
-                        });
-                        if (reply) localHandledReply = reply;
-                    }
-                    // Notas (note)
-                    if (arbiterDomain === 'note' && typeof w.__fluHandleNoteText === 'function') {
-                        const reply = await w.__fluHandleNoteText(commandText, {
-                            personId: undefined,
-                            personName: speakerName || undefined,
-                        });
-                        if (reply) localHandledReply = reply;
-                    }
-                    // Horario (horario)
-                    if (
-                        arbiterDomain === 'horario' &&
-                        typeof w.__fluHandleHorarioText === 'function'
-                    ) {
-                        const reply = await w.__fluHandleHorarioText(commandText);
-                        if (reply) localHandledReply = reply;
-                    }
+                    // ============================================================
+                    // DESPACHO ÚNICO POR CONTRATO ESTRUCTURADO (Point F / §Estructura)
+                    // ------------------------------------------------------------
+                    // El árbitro YA parceó el transcript una sola vez y devolvió el
+                    // intent COMPLETO en `arbiterResult.action` ({handled, action,
+                    // reply, data}). Aquí se pasa ESE intent al manejador, NO la
+                    // cadena cruda: el manejador ejecuta `intent.data` sin re-parcear.
+                    // Esto elimina la duplicación de regex/parsers (rutas dobles) y
+                    // hace del árbitro la ÚNICA fuente de verdad del parseo.
+                    // Los manejadores conservan compatibilidad con texto crudo para
+                    // su uso autónomo (E2E/integración): detectan si el primer
+                    // argumento ya es un intent ({handled, action}) o una cadena.
+                    // ============================================================
+                    // DESPACHO ÚNICO (Point F): el intent COMPLETO que devolvió el
+                    // árbitro en `arbiterResult.action` se pasa al manejador
+                    // correspondiente vía dispatchArbiterIntent (el MISMO helper que
+                    // usa la RUTA LLM). Esto unifica la ejecución: tanto las acciones
+                    // emitidas por el cerebro conversacional (contract.acciones) como
+                    // el fallback offline del transcript crudo despachan por el mismo
+                    // camino, al mismo conjunto de manejadores __fluHandle*.
+                    const reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
+                    if (reply) localHandledReply = reply;
                 } catch (err) {
                     console.warn('[App] Deterministic feature interception threw (non-critical):', err);
                     relayLog('WARN', 'App', `feature interception threw: ${err}`);
                 }
-                if (localHandledReply) {
+                // La respuesta conversacional del LLM (respuesta_voz) tiene
+                // PRIORIDAD. La confirmación del manejador local solo se usa como
+                // respaldo cuando NO hay respuesta conversacional (fallback offline).
+                if (localHandledReply && !respuestaVoz) {
                     respuestaVoz = localHandledReply;
-                    relayLog('LOG', 'App', `onContractResolved: intención local resuelta → "${localHandledReply}"`);
+                    relayLog('LOG', 'App', `onContractResolved: intención local resuelta (sin respuesta conversacional) → "${localHandledReply}"`);
                 }
             }
             // ============================================================
@@ -1898,10 +2020,21 @@ function App() {
                 relayLog('LOG', 'App', '[Música] stop_music');
             }
 
-            // Gate único: se admiten contratos con respuesta_voz, navegación o
-            // configuración. Antes, un contrato SOLO-configuración (fast-path) era
-            // descartado aquí en silencio; ahora pasa para aplicar applyConfigAction.
-            if (!respuestaVoz && !navegacion.comando && !configAction?.accion && !juegoAction?.action && !environmentAction?.tipo) return;
+            // Gate único: se admiten contratos con respuesta_voz, navegación,
+            // configuración o acciones (contract.acciones). Antes, un contrato
+            // SOLO-configuración (fast-path) era descartado aquí en silencio; ahora
+            // pasa para aplicar applyConfigAction. Los contratos con `acciones`
+            // (cerebro conversacional) también pasan aunque no traigan respuesta_voz,
+            // para que el resto del procesamiento (workspace, feed, etc.) continúe.
+            if (
+                !respuestaVoz &&
+                !navegacion.comando &&
+                !configAction?.accion &&
+                !juegoAction?.action &&
+                !environmentAction?.tipo &&
+                !hasAcciones
+            )
+                return;
 
             // ============================================================
             // OS2 parity: cuando viene de una consulta de minuta local exitosa
@@ -2529,6 +2662,86 @@ function App() {
         [speakFlu],
     );
     const onboarding = useOnboarding({ speak: onboardingSpeak, language, participantId: activeParticipantId });
+    // Embudo ÚNICO de respuestas del onboarding (teclado, chip y voz). Atajo
+    // para perfiles EXISTENTES: si la respuesta del paso de captura del NOMBRE
+    // coincide con un participante ya registrado (p. ej. tocar el chip "luis"
+    // en vez de teclear), se completa de inmediato (completeWithName) y se
+    // OMITE la pregunta "¿Eres niño o adulto?" — el rol de ese perfil ya está
+    // guardado y no se vuelve a preguntar (kind→role solo se usa al REGISTRAR
+    // un perfil NUEVO en el efecto de completado). Los nombres nuevos siguen
+    // por kind (niño/adulto) para derivar su rol inicial.
+    const handleOnboardingAnswer = useCallback(
+        (text: string) => {
+            const step = onboarding.currentStep;
+            const nameKey = nameCaptureKey(onboarding.config.steps);
+            const isKindStep = !!step && step.type === 'capture' && (step.options?.length || 0) > 0;
+            const isNameStep =
+                !isKindStep && !!step && step.type === 'capture' && !!step.key && step.key === nameKey;
+            relayLog('LOG', 'App', '[DIAG-answer]', {
+                text,
+                stepKey: step?.key,
+                stepType: step?.type,
+                isNameStep,
+                isKindStep,
+                captured: onboarding.state.captured,
+                completed: onboarding.state.completed,
+                stepIndex: onboarding.state.stepIndex,
+                visible: onboarding.visible,
+                activeId: activeParticipantId,
+                names: participants.participants.map((p) => p.name),
+            });
+            if (isNameStep) {
+                const typed = String(text || '').trim().toLowerCase();
+                const exists =
+                    typed !== '' &&
+                    participants.participants.some((p) => p.name.trim().toLowerCase() === typed);
+                if (exists) {
+                    onboarding.completeWithName(String(text || '').trim());
+                    return;
+                }
+            }
+            onboarding.answer(text);
+        },
+        [onboarding, participants.participants, activeParticipantId],
+    );
+    // Rescate: si el onboarding quedó (p. ej. de una sesión previa ya abierta)
+    // en la pregunta redundante "¿Eres niño o adulto?" (kind) con un NOMBRE ya
+    // capturado que pertenece a un perfil EXISTENTE, se completa al instante
+    // para no volver a pedir un rol que el perfil ya tiene guardado.
+    useEffect(() => {
+        const step = onboarding.currentStep;
+        const nameKey = nameCaptureKey(onboarding.config.steps);
+        const capturedName = nameKey ? onboarding.state.captured[nameKey] : undefined;
+        let reason = '';
+        if (!onboarding.visible) reason = '!visible';
+        else if (!step || step.type !== 'capture' || !(step.options && step.options.length > 0))
+            reason = 'not-a-kind-step';
+        else if (!capturedName) reason = 'no-captured-name';
+        else if (
+            !participants.participants.some(
+                (p) => p.name.trim().toLowerCase() === capturedName.trim().toLowerCase(),
+            )
+        )
+            reason = 'name-not-existing';
+        if (reason) {
+            relayLog('LOG', 'App', '[DIAG-rescue]', {
+                reason,
+                visible: onboarding.visible,
+                stepKey: step?.key,
+                stepType: step?.type,
+                stepIndex: onboarding.state.stepIndex,
+                completed: onboarding.state.completed,
+                capturedName,
+                nameKey,
+                captured: onboarding.state.captured,
+                activeId: activeParticipantId,
+                names: participants.participants.map((p) => p.name),
+            });
+            return;
+        }
+        onboarding.completeWithName(capturedName as string);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onboarding.visible, onboarding.currentStep, onboarding.state.captured, participants.participants, activeParticipantId]);
     // Captura dual TEXTO + VOZ: la voz alimenta el MISMO embudo `answer`
     // del teclado. Solo se activa en pasos capture/decision con
     // acceptVoice !== false (config-driven, sin hardcode). Escucha activa:
@@ -2543,7 +2756,7 @@ function App() {
     const onboardingVoice = useOnboardingVoiceCapture({
         enabled: onboardingVoiceEnabled,
         language: language === 'en' ? 'en' : 'es',
-        onFinal: onboarding.answer,
+        onFinal: handleOnboardingAnswer,
     });
     // Mantener el ref en sync con los métodos reales del hook de voz.
     onboardingVoiceControlRef.current = {
@@ -2560,13 +2773,12 @@ function App() {
     // los vencimientos de recordatorios.
     notificationServiceRef.current = notificationCenter.service;
 
-    // ---- Onboarding multiusuario: selector "¿Quién eres?" ----
+    // ---- Onboarding multiusuario: selección/creación de participante ----
     const handleSelectActiveUser = useCallback(
         (participantId: string) => {
             setActiveUser(undefined, participantId);
             setActiveParticipantId(participantId);
             setNewProfilePending(false);
-            setPickerMode(false);
         },
         [],
     );
@@ -2596,7 +2808,6 @@ function App() {
         setActiveUser(undefined);
         setActiveParticipantId(undefined);
         setNewProfilePending(true);
-        setPickerMode(false);
         if (wasLegacy) {
             // Ruta legacy (sin perfil Dexie): re-inicializa el onboarding para
             // que las preguntas vuelvan a aparecer (no hereda "completado").
@@ -2604,51 +2815,49 @@ function App() {
         }
     }, [activeParticipantId, onboarding]);
 
-    const handleSkipUserPicker = useCallback(() => {
-        // "Omitir" cierra el selector. Si no hay un participante activo (p. ej.
-        // primer arranque sin elegir perfil), se selecciona el perfil anónimo
-        // por defecto (Anónimo/Estudiante) para que siempre haya una sesión
-        // válida con la que navegar/escuchar. Si ya hay uno activo, se mantiene.
-        const finish = () => {
-            setNewProfilePending(false);
-            setPickerMode(false);
-        };
-        const hasActive =
-            activeParticipantId && activeParticipantId !== DEFAULT_ONBOARDING_USER;
-        if (hasActive) {
-            finish();
-            return;
-        }
-        void participants
-            .findAnonymous()
-            .then((anon) => {
-                if (!anon) {
-                    finish();
-                    return;
-                }
-                setActiveUser(undefined, anon.id);
-                setActiveParticipantId(anon.id);
-                finish();
-            })
-            .catch(() => finish());
-    }, [activeParticipantId, participants, setActiveUser, setActiveParticipantId]);
-
-    // Al completar el onboarding (ya sea en modo "crear perfil nuevo" o en el
-    // primer arranque sin participantes) se registra al participante con el
-    // nombre capturado, se siembra su onboarding (completado) en Dexie v14 y
-    // queda como usuario activo. Esto elimina el "estado fantasma": el primer
-    // usuario deja de quedar atrapado en localStorage completado sin perfil.
+    // "Siempre que se entre a la aplicación se pide el onboarding" (también
+    // hablado): al montar, una vez que los participantes cargaron y el estado
+    // del onboarding está resuelto (ready), si el onboarding ya estaba
+    // completado (onboarding.visible es false porque el perfil ya se configuró
+    // en una sesión anterior), se reinicia el onboarding para volver a pedirlo
+    // en esta entrada. onboarding.reset() borra el estado per-user en Dexie y
+    // vuelve a hablar la bienvenida (el hook solo habla al montar si NO estaba
+    // completado, por lo que aquí no hay doble habla). En el PRIMER arranque
+    // (onboarding pendiente → visible true) no se fuerza nada: corre el
+    // onboarding completo de configuración. Solo se dispara una vez por montaje
+    // (onboardingMountSettledRef).
     useEffect(() => {
-        const hasAnyParticipant = participants.participants.length >= 1;
-        if (hasAnyParticipant) firstProfileResolvedRef.current = true;
+        if (participants.loading) return;
+        if (!onboarding.ready) return;
+        if (onboardingMountSettledRef.current) return;
+        onboardingMountSettledRef.current = true;
+        if (!onboarding.visible) {
+            // Ya hay un perfil configurado de una sesión previa: se vuelve a
+            // pedir el onboarding en esta entrada.
+            onboarding.reset();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [participants.loading, onboarding.ready, onboarding.visible]);
+
+    // Al completar el onboarding (ya sea en el primer arranque, al crear un
+    // perfil nuevo, o al volver a pedir el onboarding en cada entrada) se
+    // resuelve el nombre capturado a un participante: si ya existe uno con ese
+    // nombre se selecciona (sin duplicar); si coincide con el anónimo por
+    // defecto se selecciona el Anónimo; si no, se registra un participante
+    // nuevo. Se siembra su onboarding (completado) en Dexie v14 y queda como
+    // usuario activo. onboardingHandledRef evita re-procesar el mismo
+    // completado cuando la lista de participantes cambia tras el registro.
+    useEffect(() => {
+        if (!onboardingMountSettledRef.current) return;
         if (!onboarding.state.completed || registerProfileRef.current) return;
-        const isCreatingProfile = newProfilePending;
-        const isFirstRun = !hasAnyParticipant && !firstProfileResolvedRef.current;
-        if (!isCreatingProfile && !isFirstRun) return;
-        firstProfileResolvedRef.current = true;
+        if (onboardingHandledRef.current) return;
+        onboardingHandledRef.current = true;
         const captureKey = nameCaptureKey(onboarding.config.steps);
         const name = captureKey ? onboarding.state.captured[captureKey] : undefined;
-        if (!name) return;
+        if (!name) {
+            onboardingHandledRef.current = false;
+            return;
+        }
         // El rol se deriva de la respuesta "¿Niño o adulto?" (config-driven vía
         // multiuser.kindToRole) → el navegador se customiza con defaultsByRole.
         const kind = onboarding.state.captured['kind'];
@@ -2689,6 +2898,27 @@ function App() {
                 cancelled = true;
             };
         }
+        // Bug 2: si ya existe un participante con el nombre capturado (p. ej. el
+        // usuario dice "Luis" y el perfil "Luis" ya está dado de alta), NO se crea
+        // un duplicado: se selecciona el perfil existente y queda como activo.
+        const existing = participants.participants.find(
+            (p) => p.name.trim().toLowerCase() === name.trim().toLowerCase(),
+        );
+        if (existing) {
+            void onboarding
+                .persistForParticipant(existing.id)
+                .then(() => {
+                    if (cancelled) return;
+                    activate(existing.id);
+                })
+                .catch(() => setNewProfilePending(false))
+                .finally(() => {
+                    registerProfileRef.current = false;
+                });
+            return () => {
+                cancelled = true;
+            };
+        }
         void participants
             .register({ name, role })
             .then(async (result) => {
@@ -2711,19 +2941,29 @@ function App() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [newProfilePending, onboarding.state.completed, participants.participants.length]);
+    }, [onboarding.state.completed, participants.participants.length, newProfilePending]);
 
     // Fase 2 — Exponer manejador de recordatorios por texto en window (E2E + integración).
     // Se asigna en CREACIÓN (expresión de asignación), disponible desde el montaje,
     // siguiendo el precedente de __fluOnContractResolved (línea 1105).
     (window as any).__fluHandleReminderText = useCallback(
-        async (text: string, opts?: { personId?: string; personName?: string }) => {
+        async (input: any, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
+            // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
             const remindersConfig = (FLU_CONFIG as any).reminders || {};
             const offsetMinutes = Number(remindersConfig.defaultReminderOffsetMinutes);
             const defaultOffsetMs = (Number.isFinite(offsetMinutes) ? offsetMinutes : 10) * 60 * 1000;
-            const intent = parseReminderIntent(String(text || ''), { defaultOffsetMs });
-            if (!intent.handled) return '';
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
+            const intent = isIntent
+                ? (input as any)
+                : parseReminderIntent(String(input || ''), { defaultOffsetMs });
+            if (!intent || !intent.handled) return '';
             const data = intent.data || {};
 
             switch (intent.action) {
@@ -2758,6 +2998,24 @@ function App() {
                     return lang === 'en'
                         ? `Pending reminders: ${lines.join(' | ')}`
                         : `Recordatorios pendientes: ${lines.join(' | ')}`;
+                }
+                case 'reminder.remove': {
+                    const target = String(data.text || '').trim().toLowerCase();
+                    const candidates = reminders.reminders.filter(
+                        (r) => r.status === 'pending' && r.text.toLowerCase().includes(target),
+                    );
+                    if (candidates.length === 0) {
+                        return lang === 'en'
+                            ? `I couldn't find a pending reminder matching "${data.text}".`
+                            : `No encontré un recordatorio pendiente que coincida con "${data.text}".`;
+                    }
+                    for (const r of candidates) {
+                        await reminders.remove(r.id);
+                    }
+                    const removedText = candidates.map((r) => r.text).join(' | ');
+                    return lang === 'en'
+                        ? `Removed reminder${candidates.length > 1 ? 's' : ''}: ${removedText}`
+                        : `Quité el recordatorio: ${removedText}`;
                 }
                 case 'shopping.add': {
                     const labels = String(data.label || '')
@@ -2822,15 +3080,25 @@ function App() {
     // Motor temporal genérico — manejador de alarmas y temporizadores por texto (E2E + integración).
     // Un único motor (trigger + recurrencia + entrega) cubre recordatorios, despertador y temporizador.
     (window as any).__fluHandleTemporalText = useCallback(
-        async (text: string) => {
+        async (input: any) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
+            // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
             const temporalConfig = (FLU_CONFIG as any).temporal || {};
-            const intent = parseTemporalIntent(String(text || ''), {
-                now: Date.now(),
-                defaultAlarmTimeOfDay: temporalConfig.defaultAlarmTimeOfDay,
-                defaultTimerMinutes: Number(temporalConfig.defaultTimerMinutes) || 5,
-            });
-            if (!intent.handled) return '';
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
+            const intent = isIntent
+                ? (input as any)
+                : parseTemporalIntent(String(input || ''), {
+                      now: Date.now(),
+                      defaultAlarmTimeOfDay: temporalConfig.defaultAlarmTimeOfDay,
+                      defaultTimerMinutes: Number(temporalConfig.defaultTimerMinutes) || 5,
+                  });
+            if (!intent || !intent.handled) return '';
             const data = intent.data || {};
 
             switch (intent.action) {
@@ -3007,101 +3275,94 @@ function App() {
     // negocio", "apunta/anota {texto}", "nota: {texto}") y crea la nota vía
     // notes.add. Devuelve la confirmación hablada (o '' si no aplica).
     (window as any).__fluHandleNoteText = useCallback(
-        async (text: string, opts?: { personId?: string; personName?: string }) => {
+        async (input: any, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            let clean = String(text || '').trim();
-            if (!clean) return '';
             const notesVoice = ((FLU_CONFIG as any).notes?.voice || {}) as any;
             const addedMsg =
                 notesVoice.added ||
                 (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
 
-            // 0) Prefijos de creación explícita: "crea/haz/pon/guarda una nota ...",
-            //    "quiero crear una nota ...". Se normalizan a la forma canónica
-            //    "nota ..." para que los patrones 1-3 los reconozcan sin duplicar
-            //    lógica (fuente única por intención).
-            const creationPrefix =
-                /^(?:crea|crear|genera|generar|genérame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i;
-            const creationMatch = creationPrefix.exec(clean);
-            if (creationMatch) {
-                const rest = creationMatch[1].trim();
-                clean = rest ? `nota ${rest}` : 'nota';
-            }
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro, que ya extrajo data.label), se ejecuta DIRECTAMENTE sin
+            // re-parcear la cadena. Si se llama con texto crudo (uso autónomo
+            // E2E/integración), se parcea aquí con la lógica de reconocimiento.
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
 
-            // Normalizar para matching (minúsculas, sin acentos).
-            const norm = clean
-                .toLowerCase()
-                .replace(/[áàäâ]/g, 'a')
-                .replace(/[éèëê]/g, 'e')
-                .replace(/[íìïî]/g, 'i')
-                .replace(/[óòöô]/g, 'o')
-                .replace(/[úùüû]/g, 'u')
-                .replace(/[ñ]/g, 'n');
+            let label: string | null = null;
+            if (isIntent) {
+                const data = (input as any).data || {};
+                label = data.label ? String(data.label).trim() : null;
+            } else {
+                let clean = String(input || '').trim();
+                if (!clean) return '';
 
-            // 1) "nota para el super" / "nota para el supermercado" / "nota para comprar X"
-            //    → nota cuyo contenido es el resto tras el marcador.
-            const paraSuper = /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i.exec(norm);
-            if (paraSuper) {
-                const rest = paraSuper[2].trim();
-                const label = rest
-                    ? `Super: ${rest}`
-                    : lang === 'en'
-                        ? 'Supermarket'
-                        : 'Super';
-                const result = await notes.add({
-                    label,
-                    personId: opts?.personId,
-                    personName: opts?.personName,
-                });
-                if (!result.ok) {
-                    return lang === 'en'
-                        ? "I couldn't create the note."
-                        : 'No pude crear la nota.';
+                // 0) Prefijos de creación explícita: "crea/haz/pon/guarda una nota ...",
+                //    "quiero crear una nota ...". Se normalizan a la forma canónica
+                //    "nota ..." para que los patrones 1-3 los reconozcan sin duplicar
+                //    lógica (fuente única por intención).
+                const creationPrefix =
+                    /^(?:crea|crear|genera|generar|genérame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i;
+                const creationMatch = creationPrefix.exec(clean);
+                if (creationMatch) {
+                    const rest = creationMatch[1].trim();
+                    clean = rest ? `nota ${rest}` : 'nota';
                 }
-                return addedMsg;
-            }
 
-            // 2) "nota para recordar un negocio" / "nota para recordar {X}"
-            const paraRecordar = /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i.exec(norm);
-            if (paraRecordar) {
-                const rest = paraRecordar[1].trim();
-                const label = rest
-                    ? `Recordar: ${rest}`
-                    : lang === 'en'
-                        ? 'Remember'
-                        : 'Recordar';
-                const result = await notes.add({
-                    label,
-                    personId: opts?.personId,
-                    personName: opts?.personName,
-                });
-                if (!result.ok) {
-                    return lang === 'en'
-                        ? "I couldn't create the note."
-                        : 'No pude crear la nota.';
+                // Normalizar para matching (minúsculas, sin acentos).
+                const norm = clean
+                    .toLowerCase()
+                    .replace(/[áàäâ]/g, 'a')
+                    .replace(/[éèëê]/g, 'e')
+                    .replace(/[íìïî]/g, 'i')
+                    .replace(/[óòöô]/g, 'o')
+                    .replace(/[úùüû]/g, 'u')
+                    .replace(/[ñ]/g, 'n');
+
+                // 1) "nota para el super" / "nota para el supermercado" / "nota para comprar X"
+                const paraSuper = /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i.exec(norm);
+                if (paraSuper) {
+                    const rest = paraSuper[2].trim();
+                    label = rest
+                        ? `Super: ${rest}`
+                        : lang === 'en'
+                            ? 'Supermarket'
+                            : 'Super';
+                } else {
+                    // 2) "nota para recordar un negocio" / "nota para recordar {X}"
+                    const paraRecordar = /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i.exec(norm);
+                    if (paraRecordar) {
+                        const rest = paraRecordar[1].trim();
+                        label = rest
+                            ? `Recordar: ${rest}`
+                            : lang === 'en'
+                                ? 'Remember'
+                                : 'Recordar';
+                    } else {
+                        // 3) "apunta/anota {texto}" o "nota: {texto}" o "nota {texto}"
+                        const apunta = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i.exec(clean);
+                        if (apunta) {
+                            label = apunta[1].trim();
+                        }
+                    }
                 }
-                return addedMsg;
             }
 
-            // 3) "apunta/anota {texto}" o "nota: {texto}" o "nota {texto}"
-            const apunta = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i.exec(clean);
-            if (apunta) {
-                const label = apunta[1].trim();
-                if (!label) return '';
-                const result = await notes.add({
-                    label,
-                    personId: opts?.personId,
-                    personName: opts?.personName,
-                });
-                if (!result.ok) {
-                    return lang === 'en'
-                        ? "I couldn't create the note."
-                        : 'No pude crear la nota.';
-                }
-                return addedMsg;
+            if (!label) return '';
+            const result = await notes.add({
+                label,
+                personId: opts?.personId,
+                personName: opts?.personName,
+            });
+            if (!result.ok) {
+                return lang === 'en'
+                    ? "I couldn't create the note."
+                    : 'No pude crear la nota.';
             }
-
-            return '';
+            return addedMsg;
         },
         [notes, languageRef],
     );
@@ -3111,10 +3372,8 @@ function App() {
     // "guarda en el diario {contenido}", "diario: {contenido}") y crea la
     // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
     (window as any).__fluHandleDiaryText = useCallback(
-        async (text: string, opts?: { personId?: string; personName?: string }) => {
+        async (input: any, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const clean = String(text || '').trim();
-            if (!clean) return '';
             const diaryVoice = ((FLU_CONFIG as any).diary?.voice || {}) as any;
             const addedMsg =
                 diaryVoice.entryAdded ||
@@ -3122,23 +3381,32 @@ function App() {
                     ? 'Done, I saved your diary entry.'
                     : 'Listo, he guardado tu entrada del diario.');
 
-            const norm = clean
-                .toLowerCase()
-                .replace(/[áàäâ]/g, 'a')
-                .replace(/[éèëê]/g, 'e')
-                .replace(/[íìïî]/g, 'i')
-                .replace(/[óòöô]/g, 'o')
-                .replace(/[úùüû]/g, 'u')
-                .replace(/[ñ]/g, 'n');
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro, que ya extrajo data.content), se ejecuta DIRECTAMENTE
+            // sin re-parcear la cadena. Si se llama con texto crudo (uso autónomo
+            // E2E/integración), se parcea aquí.
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
 
-            // "escribe/guarda/anota en el diario {contenido}"
-            const enDiario = /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
-            // "diario: {contenido}" / "diario {contenido}"
-            const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
-            const match = enDiario || diarioPrefijo;
-            if (!match) return '';
+            let content: string | null = null;
+            if (isIntent) {
+                const data = (input as any).data || {};
+                content = data.content ? String(data.content).trim() : null;
+            } else {
+                const clean = String(input || '').trim();
+                if (!clean) return '';
+                // "escribe/guarda/anota en el diario {contenido}"
+                const enDiario = /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
+                // "diario: {contenido}" / "diario {contenido}"
+                const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
+                const match = enDiario || diarioPrefijo;
+                if (!match) return '';
+                content = match[1].trim();
+            }
 
-            const content = match[1].trim();
             if (!content) return '';
             const today = new Date();
             const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -3161,12 +3429,21 @@ function App() {
     // determinista: parseHorarioIntent interpreta el transcript y aquí se
     // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
     (window as any).__fluHandleHorarioText = useCallback(
-        async (text: string) => {
+        async (input: any) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const clean = String(text || '').trim();
-            if (!clean) return '';
-            const intent = parseHorarioIntent(clean);
-            if (!intent.handled) return '';
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro, que ya ejecutó parseHorarioIntent), se ejecuta
+            // DIRECTAMENTE sin re-parcear la cadena. Si se llama con texto crudo
+            // (uso autónomo E2E/integración), se parcea aquí.
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
+            const intent = isIntent
+                ? (input as any)
+                : parseHorarioIntent(String(input || '').trim());
+            if (!intent || !intent.handled) return '';
             const data = intent.data || {};
             const voice = ((FLU_CONFIG as any).horario?.voice || {}) as any;
             const dayLabels = ((FLU_CONFIG as any).horario?.dayLabels as string[]) || [];
@@ -3278,7 +3555,9 @@ function App() {
           )
         : '';
 
-    // Selector "¿Quién eres?": perfil activo + participantes registrados.
+    // Selector de usuario del encabezado (dropdown persistente): perfil activo
+    // + participantes registrados. No es la minipantalla "¿Quién eres?" (que se
+    // eliminó); es el control de sesión del header.
     const userPickerConfig = ((FLU_CONFIG as any).onboarding?.userPicker) || {};
     const activeParticipantName = useMemo(() => {
         if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
@@ -3288,6 +3567,93 @@ function App() {
         () => participants.participants.find((p) => p.id === activeParticipantId),
         [activeParticipantId, participants.participants]
     );
+    // Sugerencias de la minipantalla de captura del nombre: SOLO perfiles reales.
+    // La lista se lee del registro de participantes (IndexedDB). Ese registro puede
+    // contener basura/duplicados de corridas anteriores (p. ej. participantes cuyo
+    // nombre quedó como la etiqueta de "¿Niño o adulto?" → "Niño / Niña", "Adulto /
+    // Adulta"). Para que la lista muestre NOMBRES y no opciones de rol ni repetidos:
+    //  - se excluye el anónimo por defecto (no es una persona a elegir),
+    //  - se excluye cualquier nombre que sea una etiqueta de rol (niño/niña/adulto/
+    //    adulta y variantes),
+    //  - se deduplican nombres repetidos (case-insensitive).
+    const onboardingUserSuggestions = useMemo(() => {
+        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').toLowerCase();
+        const kindStep = ((FLU_CONFIG as any).onboarding?.steps || []).find(
+            (s: any) => s.key === 'kind',
+        );
+        const kindTokens = new Set<string>();
+        (kindStep?.options || []).forEach((opt: any) => {
+            [opt.value, opt.es, opt.en]
+                .filter(Boolean)
+                .forEach((t: string) => kindTokens.add(String(t).toLowerCase()));
+        });
+        const seen = new Set<string>();
+        return participants.participants
+            .map((p) => p.name)
+            .filter((name) => {
+                const n = name.trim().toLowerCase();
+                if (!n) return false;
+                if (n === anonymousName) return false;
+                if (kindTokens.has(n)) return false;
+                if (seen.has(n)) return false;
+                seen.add(n);
+                return true;
+            });
+    }, [participants.participants]);
+
+    // ── DIAGNÓSTICO TEMPORAL ────────────────────────────────────────────
+    // Vuelca cada 2s todos los datos relevantes para diagnosticar por qué la
+    // lista de usuarios del onboarding muestra "niño/niña" en vez de nombres.
+    // Se elimina al confirmar la causa raíz.
+    useEffect(() => {
+        const kindStep2 = ((FLU_CONFIG as any).onboarding?.steps || []).find(
+            (s: any) => s.key === 'kind',
+        );
+        const stepsDiag = ((FLU_CONFIG as any).onboarding?.steps || []).map((s: any) => ({
+            id: s.id,
+            type: s.type,
+            key: s.key,
+            optionsEs: (s.options || []).map((o: any) => o.es),
+        }));
+        const dump = () => {
+            relayLog('LOG', 'App', '[DIAG-onboarding]', {
+                visible: onboarding.visible,
+                ready: onboarding.ready,
+                activeId: activeParticipantId,
+                completed: onboarding.state.completed,
+                stepIndex: onboarding.state.stepIndex,
+                captured: onboarding.state.captured,
+                stepId: onboarding.currentStep?.id,
+                stepType: onboarding.currentStep?.type,
+                stepKey: onboarding.currentStep?.key,
+                stepOptionsEs: (onboarding.currentStep?.options || []).map((o: any) => o.es),
+                participants: participants.participants.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    role: p.role,
+                })),
+                suggestions: onboardingUserSuggestions,
+                kindTokens: (kindStep2?.options || []).map((o: any) => o.es),
+                loading: participants.loading,
+                configSteps: stepsDiag,
+            });
+        };
+        dump();
+        const t = setInterval(dump, 2000);
+        return () => clearInterval(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        participants.participants,
+        onboarding.visible,
+        onboarding.ready,
+        onboarding.currentStep,
+        onboarding.state.completed,
+        onboarding.state.stepIndex,
+        onboarding.state.captured,
+        activeParticipantId,
+    ]);
+
     // Allowlist efectiva del Navegador Curado para el participante activo:
     // perfil guardado > defaults por rol > perfil por defecto > fallback mínimo.
     // Todo config-driven (FLU_CONFIG.browser), sin hardcode (Regla #1).
@@ -3302,55 +3668,6 @@ function App() {
         if (Array.isArray(defaultAllowlist) && defaultAllowlist.length) return defaultAllowlist;
         return ['wikipedia.org', 'educ.ar'];
     }, [browserProfiles.profiles, activeParticipantId, activeParticipant]);
-    const userPicker = {
-        title: userPickerConfig.title || '¿Quién eres?',
-        subtitle: userPickerConfig.subtitle || '',
-        createLabel: userPickerConfig.createLabel || 'Crear perfil nuevo',
-        emptyHint: userPickerConfig.emptyHint as string | undefined,
-        selectPlaceholder: userPickerConfig.selectPlaceholder || 'Elegir usuario',
-        participants: participants.participants.map((p) => ({ id: p.id, name: p.name, role: p.role })),
-        activeId: activeParticipantId,
-        onCreate: handleCreateNewProfile,
-        onSelect: handleSelectActiveUser,
-    };
-
-    // ---- Puerta de identidad al arrancar (dispositivo compartido) ----
-    // SIEMPRE se pregunta "¿Quién eres?" al abrir la app cuando ya existe al
-    // menos un perfil real (excluyendo la semilla anónima), SIN importar si
-    // quedó un perfil activo persistido de la última sesión. Motivo: los
-    // niños que aún no saben leer ni navegar necesitan ser recibidos por la
-    // puerta de identidad (tocar su perfil o guiarse por voz) en CADA carga,
-    // en lugar de ser lanzados en silencio a la sesión anterior.
-    // Único caso que NO abre el selector: el primer arranque (0 perfiles
-    // reales y onboarding de bienvenida sin completar → onboarding.visible),
-    // donde corren las preguntas de configuración guiadas por voz.
-    const pickerAutoOpenDoneRef = useRef(false);
-    useEffect(() => {
-        if (pickerAutoOpenDoneRef.current) return;
-        if (participants.loading || !onboarding.ready) return;
-        pickerAutoOpenDoneRef.current = true;
-        if (!userPickerConfig.autoOpenOnLoad) return;
-        // Primer arranque: el onboarding de bienvenida ya está visible → no
-        // interrumpir con el selector; corren las preguntas de configuración.
-        if (pickerMode || onboarding.visible) return;
-        // Perfiles reales = todos excepto la semilla anónima (config-driven
-        // vía multiuser.skipDefaults.anonymousName). El anónimo se siembra en
-        // cada montaje y NO cuenta como perfil de persona.
-        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
-        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').toLowerCase();
-        const realProfiles = participants.participants.filter(
-            (p) => p.name.trim().toLowerCase() !== anonymousName
-        );
-        // Con al menos un perfil real, SIEMPRE se abre la puerta de identidad
-        // en cada carga (regresión intencional del antiguo guard ">= 2" y de
-        // la restauración silenciosa de sesión) para el caso de los niños que
-        // no saben leer ni navegar.
-        if (realProfiles.length >= 1) {
-            setPickerMode(true);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [participants.loading, onboarding.ready, onboarding.state.completed, pickerMode, onboarding.visible, activeParticipantId]);
-
     // ---- Branding Inteligente por Temporalidad + Ecológico ----
     const branding = useEnhancedBranding();
 
@@ -3903,17 +4220,61 @@ const {
         const label = String(row?.label || '').trim();
         if (!label) return;
 
+        // 1) Perfil de voz (flu-os3 DB) — borrado físico, no solo lógico.
+        //    removeProfile() hace borrado lógico (sync.deleted=true); aquí lo
+        //    eliminamos de verdad para que no reaparezca tras un refresh.
         if (row.profileId) {
             await voiceProfiles.removeProfile(row.profileId);
+            await fluDb.voiceProfiles.delete(row.profileId).catch(console.error);
+        } else {
+            // Sin profileId (p.ej. "conejo" que nunca tuvo perfil): borrar por label.
+            const orphan = await fluDb.voiceProfiles
+                .where('label')
+                .equals(label)
+                .first()
+                .catch(() => undefined);
+            if (orphan) {
+                await fluDb.voiceProfiles.delete(orphan.id).catch(console.error);
+            }
         }
 
+        // 2) Historial de conversación en memoria (Zustand) — quitar entradas del hablante.
+        integrationStore.removeConversationEntriesBySpeaker(label);
+
+        // 3) Filas de conversación persistidas en fluDb.conversations (flu-os3 DB).
+        //    Esta es la causa raíz de que "conejo" reaparezca al recargar:
+        //    useConversationPersistence las restaura vía batchLoadHistory.
+        //    entryToRow mapea speakerId = speakerName para entradas de usuario,
+        //    así que el índice 'speakerId' cubre las filas del hablante.
+        await fluDb.conversations
+            .where('speakerId')
+            .equals(label)
+            .delete()
+            .catch(console.error);
+        // Barrido defensivo para filas legacy cuyo speakerId quedó en 'usuario'
+        // pero speakerName coincide con el label (speakerName no es índice).
+        const legacyRows = await fluDb.conversations
+            .filter((r: any) => String(r?.speakerName || '').trim() === label)
+            .primaryKeys()
+            .catch(() => [] as string[]);
+        if (legacyRows.length > 0) {
+            await fluDb.conversations.bulkDelete(legacyRows).catch(console.error);
+        }
+
+        // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado físico.
+        const localProfile = await findVoiceProfileByLabel(label).catch(() => null);
+        if (localProfile?.id) {
+            await deleteVoiceProfile(localProfile.id).catch(console.error);
+        }
+
+        // 5) Speaker de sesión en memoria (diarización) + auditoría.
         os2RemoveSessionSpeaker(label);
         // OS2 parity: delete audit logs for the removed speaker (FluShell.jsx lines 1226-1228)
         deleteAuditLogsBySpeaker(label).catch(console.error);
         auditLog.logEvent('participant:removed', 'config', uuidv4(), {
             label,
         }, 'Participant removed').catch(console.error);
-    }, [voiceProfiles, os2RemoveSessionSpeaker, auditLog]);
+    }, [voiceProfiles, integrationStore, os2RemoveSessionSpeaker, auditLog]);
 
     // ============================================================
     // OS2 parity: handleRenameProfile (Gap H)
@@ -4826,9 +5187,9 @@ const {
             {/* Indicador visual de procesamiento de IA (FLU pensando) */}
             <ThinkingIndicator />
 
-            {/* Onboarding de primera configuración (no bloqueante) */}
+            {/* Onboarding de configuración (no bloqueante) */}
             <OnboardingOverlay
-                visible={pickerMode || onboarding.visible}
+                visible={onboarding.visible}
                 prompt={onboardingPrompt}
                 stepType={onboarding.currentStep?.type}
                 progress={onboarding.progress}
@@ -4853,10 +5214,9 @@ const {
                     value: o.value,
                     label: language === 'en' ? o.en : o.es,
                 }))}
-                pickerMode={pickerMode}
-                userPicker={userPicker}
-                onAnswer={onboarding.answer}
-                onSkip={pickerMode ? handleSkipUserPicker : onboarding.skip}
+                userSuggestions={onboardingUserSuggestions}
+                onAnswer={handleOnboardingAnswer}
+                onSkip={onboarding.skip}
             />
 
             {/* Stack de notificaciones (toasts) */}

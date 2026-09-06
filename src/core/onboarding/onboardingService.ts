@@ -110,12 +110,19 @@ export function readLegacyOnboarding(storage: Storage | undefined = getLocalStor
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      return {
-        stepIndex: Number.isFinite(parsed?.stepIndex) ? parsed.stepIndex : 0,
-        completed,
-        captured: parsed?.captured && typeof parsed.captured === 'object' ? parsed.captured : {},
-        startedAt: Date.now(),
-      };
+      const stepIndex = Number.isFinite(parsed?.stepIndex) ? parsed.stepIndex : 0;
+      const captured =
+        parsed?.captured && typeof parsed.captured === 'object' ? parsed.captured : {};
+      // Auto-sanación: una sesión legacy INCOMPLETA que quedó a mitad de flujo
+      // (stepIndex > 0) puede estar atascada con artefactos de voz o elecciones
+      // previas (p. ej. captured.name = "cómo") que no coinciden con ningún
+      // participante real. En lugar de restaurarla tal cual (lo que reabriría la
+      // pregunta de rol "niño/adulto" para siempre en cada recarga), se rebobina
+      // al paso 0 para volver a preguntar el nombre con la lista de usuarios.
+      if (!completed && stepIndex > 0) {
+        return { ...base, completed };
+      }
+      return { stepIndex, completed, captured, startedAt: Date.now() };
     } catch {
       // estado corrupto → reiniciar
     }

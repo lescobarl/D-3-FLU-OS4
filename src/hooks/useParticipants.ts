@@ -27,7 +27,7 @@ import {
   type ResolvedTtsVoice,
   type UpsertResult,
 } from '../core/multiuser/participantRegistry';
-import { DEFAULT_VOICE_CONFIG } from '../core/config/appConfig';
+import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 
 // ------------------------------------------------------------
 // Tipos
@@ -162,7 +162,27 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   const remove = useCallback(
     async (id: string): Promise<boolean> => {
       const removed = await service.remove(id);
-      if (removed) await refresh();
+      if (removed) {
+        // Limpieza de estado huérfano (bug "usuarios borrados que reaparecen"):
+        // al eliminar un participante también se borra su onboarding per-user
+        // (Dexie v14 onboardingStates) y, si era el usuario activo, se limpia
+        // ACTIVE_USER. Sin esto, en la siguiente carga el id eliminado seguía
+        // activo y su onboarding completado hacía que el perfil reapareciera.
+        try {
+          await fluDb.onboardingStates.delete(id);
+        } catch (err) {
+          console.error('[useParticipants] onboarding cleanup error:', err);
+        }
+        try {
+          if (typeof window !== 'undefined') {
+            const active = window.localStorage.getItem(STORAGE_KEYS.ACTIVE_USER);
+            if (active === id) window.localStorage.removeItem(STORAGE_KEYS.ACTIVE_USER);
+          }
+        } catch (err) {
+          console.error('[useParticipants] active-user cleanup error:', err);
+        }
+        await refresh();
+      }
       return removed;
     },
     [service, refresh],

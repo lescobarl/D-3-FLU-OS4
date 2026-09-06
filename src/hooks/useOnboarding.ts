@@ -51,6 +51,12 @@ export interface UseOnboardingResult {
   currentStep: OnboardingStep | undefined;
   progress: { current: number; total: number };
   answer: (text: string) => void;
+  /**
+   * Completa el onboarding de inmediato capturando únicamente el nombre
+   * (ruta para perfiles EXISTENTES: se omite el paso "¿Niño o adulto?"
+   * porque el kind/rol de un perfil ya guardado no se vuelve a preguntar).
+   */
+  completeWithName: (name: string) => void;
   skip: () => void;
   reset: () => void;
   /** Siembra el estado actual en el onboarding de un participante. */
@@ -171,6 +177,36 @@ export function useOnboarding({
     [state, config, lang, speak, persistState, handleAction, isPerUser],
   );
 
+  /**
+   * Atajo para perfiles existentes: captura el nombre y marca el onboarding
+   * completado sin avanzar por los pasos restantes (kind/complete). El rol de
+   * un participante ya registrado NO se deriva de la pregunta "¿Niño o
+   * adulto?", por lo que esa pregunta es redundante cuando el usuario eligió
+   * un perfil que ya existe.
+   */
+  const completeWithName = useCallback(
+    (name: string) => {
+      if (state.completed || !config.enabled) return;
+      const nameKey = nameCaptureKey(config.steps);
+      const trimmed = String(name || '').trim();
+      if (!nameKey || !trimmed) return;
+      const next: OnboardingState = {
+        ...state,
+        captured: { ...state.captured, [nameKey]: trimmed },
+        stepIndex: config.steps.length,
+        completed: true,
+      };
+      setState(next);
+      persistState(next);
+      // Ruta legacy: persistir también el nombre capturado en la clave global
+      // (misma lógica que answer()).
+      if (!isPerUser && typeof window !== 'undefined' && config.nameKey) {
+        window.localStorage.setItem(config.nameKey, trimmed);
+      }
+    },
+    [state, config, persistState, isPerUser],
+  );
+
   const skip = useCallback(() => {
     if (state.completed) return;
     // "Omitir" solo marca el onboarding como completado. El perfil anónimo por
@@ -208,5 +244,17 @@ export function useOnboarding({
   const currentStep = config.steps[state.stepIndex];
   const progress = progressInfo(state, config.steps);
 
-  return { visible, ready, state, config, currentStep, progress, answer, skip, reset, persistForParticipant };
+  return {
+    visible,
+    ready,
+    state,
+    config,
+    currentStep,
+    progress,
+    answer,
+    completeWithName,
+    skip,
+    reset,
+    persistForParticipant,
+  };
 }

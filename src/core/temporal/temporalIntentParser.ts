@@ -158,7 +158,7 @@ const EN_DAY_NAMES = [
 
 // --- Horas del día --------------------------------------------
 const ES_TIME =
-  /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?/i;
+  /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)?/i;
 const EN_TIME =
   /\b(?:at|for)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i;
 const NOON_ES = /\b(?:al\s+|a\s+|el\s+)?(?:mediod[ií]a|medio\s+d[ií]a)\b/i;
@@ -288,7 +288,13 @@ function resolveEsTime(m: RegExpExecArray): string {
   let h = Number(m[1]);
   const min = m[2] ? Number(m[2]) : 0;
   const part = m[3] ? m[3].toLowerCase() : null;
-  if (part === 'tarde') {
+  // Meridiano explícito (p.m./a.m.) tiene prioridad sobre 'de la tarde/noche'.
+  const meridiem = m[4] ? m[4].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
+  if (meridiem === 'pm') {
+    if (h < 12) h += 12;
+  } else if (meridiem === 'am') {
+    if (h === 12) h = 0;
+  } else if (part === 'tarde') {
     if (h < 12) h += 12;
   } else if (part === 'noche') {
     if (h === 12) h = 0;

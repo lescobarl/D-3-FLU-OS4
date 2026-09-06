@@ -177,6 +177,36 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
     expect(result.channel).toBe('flu');
   });
 
+  it('resuelve el dominio de recordatorio (reminder.remove / negación)', () => {
+    const result = resolveDeterministicCommand('quita el recordatorio de comprar leche');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('reminder');
+    expect(result.action).toMatchObject({ handled: true, action: 'reminder.remove' });
+    expect(result.channel).toBe('flu');
+  });
+
+  it('resuelve el dominio de recordatorio (reminder.remove / "ya no quiero")', () => {
+    const result = resolveDeterministicCommand('ya no quiero el recordatorio de la junta');
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('reminder');
+    expect(result.action).toMatchObject({ handled: true, action: 'reminder.remove' });
+  });
+
+  it('Point B: propaga defaultOffsetMs al parser para fechas consistentes', () => {
+    // El árbitro y el handler de App.tsx deben resolver el MISMO dueAt cuando
+    // no hay cláusula de cuándo. Sin defaultOffsetMs el parser no fija dueAt;
+    // con él, el dueAt del árbitro coincide con el del parser directo.
+    const offset = 5 * 60 * 1000;
+    const arbiter = resolveDeterministicCommand('recuérdame comprar leche', {
+      defaultOffsetMs: offset,
+    });
+    expect(arbiter.matched).toBe(true);
+    expect(arbiter.domain).toBe('reminder');
+    const action = arbiter.action as { action?: string; data?: { dueAt?: number } };
+    expect(action.action).toBe('reminder.add');
+    expect(typeof action.data?.dueAt).toBe('number');
+  });
+
   it('resuelve el dominio temporal (alarm.add)', () => {
     const result = resolveDeterministicCommand('pon una alarma a las 7');
     expect(result.matched).toBe(true);
@@ -230,6 +260,149 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
     expect(result.matched).toBe(true);
     expect(result.domain).toBe('note');
     expect(result.action).toMatchObject({ handled: true, action: 'notes.add' });
+  });
+});
+
+// ============================================================
+// CONTRATO DE DESPACHO ÚNICO (Point F / §Estructura)
+// ------------------------------------------------------------
+// El refactor estructural hace del árbitro la ÚNICA fuente de verdad del
+// parseo: el despacho de App.tsx pasa `arbiterResult.action` (el intent
+// COMPLETO {handled, action, reply, data}) a los manejadores, que lo
+// ejecutan DIRECTAMENTE sin re-parcear la cadena. Estos tests validan ese
+// contrato: para cada dominio de función-adición, el `action` devuelto por
+// el árbitro debe ser un intent directamente consumible por el manejador
+// (misma forma que detecta el `isIntent` del handler) y su `data` debe
+// contener EXACTAMENTE los campos que el manejador necesita para ejecutar.
+// Esto es lo que garantiza que no haya rutas dobles ni parseos divergentes.
+// ============================================================
+describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () => {
+  // Un intent consumible por los manejadores debe ser un objeto con
+  // `action` string y `handled !== false` (la detección `isIntent` real).
+  const expectConsumableIntent = (action: unknown) => {
+    expect(action).toBeTruthy();
+    expect(typeof action).toBe('object');
+    const a = action as { handled?: unknown; action?: unknown; data?: unknown };
+    expect(a.handled).not.toBe(false);
+    expect(typeof a.action).toBe('string');
+    expect(a.data).toBeTruthy();
+    return a.data as Record<string, unknown>;
+  };
+
+  it('reminder.add: el intent del árbitro trae data.text/dueAt para el manejador', () => {
+    const r = resolveDeterministicCommand('recuérdame comprar leche mañana', {
+      defaultOffsetMs: 10 * 60 * 1000,
+    });
+    expect(r.domain).toBe('reminder');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('reminder.add');
+    expect(typeof data.text).toBe('string');
+    expect(typeof data.dueAt).toBe('number');
+  });
+
+  it('reminder.remove: el intent del árbitro trae data.text para localizar el recordatorio', () => {
+    const r = resolveDeterministicCommand('quita el recordatorio de comprar leche');
+    expect(r.domain).toBe('reminder');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('reminder.remove');
+    expect(typeof data.text).toBe('string');
+  });
+
+  it('shopping.add: el intent del árbitro trae data.label para la lista de compras', () => {
+    const r = resolveDeterministicCommand('agrega leche a la lista de compras');
+    expect(r.domain).toBe('reminder');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('shopping.add');
+    expect(typeof data.label).toBe('string');
+  });
+
+  it('alarm.add: el intent del árbitro trae data.kind/trigger completos (options propagadas)', () => {
+    // Con options temporales propagadas, el intent del árbitro es COMPLETO:
+    // el manejador NO necesita re-parcear la cadena para saber la hora.
+    const r = resolveDeterministicCommand('pon una alarma a las 7', {
+      now: Date.now(),
+      defaultAlarmTimeOfDay: '07:00',
+      defaultTimerMinutes: 5,
+    });
+    expect(r.domain).toBe('temporal');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('alarm.add');
+    expect(data.kind).toBe('alarm');
+    expect(data.trigger).toBeTruthy();
+    expect((data.trigger as { timeOfDay?: string }).timeOfDay).toBeTruthy();
+  });
+
+  it('timer.start: el intent del árbitro trae data.kind/trigger con duración', () => {
+    const r = resolveDeterministicCommand('pon un temporizador de 5 minutos', {
+      now: Date.now(),
+      defaultAlarmTimeOfDay: '07:00',
+      defaultTimerMinutes: 5,
+    });
+    expect(r.domain).toBe('temporal');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('timer.start');
+    expect(data.kind).toBe('timer');
+    expect((data.trigger as { durationMs?: number }).durationMs).toBeGreaterThan(0);
+  });
+
+  it('diary.addEntry: el intent del árbitro trae data.content para crear la entrada', () => {
+    const r = resolveDeterministicCommand('escribe en el diario que fui al parque');
+    expect(r.domain).toBe('diary');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('diary.addEntry');
+    expect(typeof data.content).toBe('string');
+    expect(String(data.content).length).toBeGreaterThan(0);
+  });
+
+  it('notes.add (apunta): el intent del árbitro trae data.label para crear la nota', () => {
+    const r = resolveDeterministicCommand('apunta comprar pan');
+    expect(r.domain).toBe('note');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('notes.add');
+    expect(data.label).toBe('comprar pan');
+  });
+
+  it('notes.add (para super): el intent del árbitro trae data.label con prefijo Super', () => {
+    const r = resolveDeterministicCommand('nota para el super comprar cereal');
+    expect(r.domain).toBe('note');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('notes.add');
+    expect(String(data.label)).toContain('Super');
+  });
+
+  it('notes.add (para recordar): el intent del árbitro trae data.label con prefijo Recordar', () => {
+    const r = resolveDeterministicCommand('nota para recordar la tarea');
+    expect(r.domain).toBe('note');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('notes.add');
+    expect(String(data.label)).toContain('Recordar');
+  });
+
+  it('horario.add: el intent del árbitro trae data.materia/dia/inicio para registrar', () => {
+    const r = resolveDeterministicCommand(
+      'agrega matemáticas el lunes a las 8 al horario',
+    );
+    expect(r.domain).toBe('horario');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('horario.add');
+    expect(typeof data.materia).toBe('string');
+    expect(data.dia).toBeTruthy();
+    expect(typeof data.inicio).toBe('string');
+  });
+
+  it('horario.query: el intent del árbitro trae data para consultar el horario', () => {
+    const r = resolveDeterministicCommand('qué tengo el lunes en el horario');
+    expect(r.domain).toBe('horario');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('horario.query');
+  });
+
+  it('horario.remove: el intent del árbitro trae data.materia para quitar la entrada', () => {
+    const r = resolveDeterministicCommand('quita matemáticas del horario');
+    expect(r.domain).toBe('horario');
+    const data = expectConsumableIntent(r.action);
+    expect((r.action as { action?: string }).action).toBe('horario.remove');
+    expect(typeof data.materia).toBe('string');
   });
 });
 

@@ -2286,8 +2286,13 @@
   font-style: italic;
 }
 
+/* La respuesta de Flu puede tener varias partes (p. ej. la respuesta sustantiva
+   + la pregunta final "¿te gustaría saber algo más?"). El límite de 80px ocultaba
+   la parte final tras un scroll apenas visible: FLU la pronuncia completa pero en
+   el Pizarrón solo se veía la primera parte. Se amplía el alto máximo para que la
+   respuesta completa (multi-parte) quede visible sin recortarse. */
 .frame-content--workspace .frame-content__response-scroll {
-  max-height: 80px;
+  max-height: 320px;
   overflow-y: auto;
 }
 
@@ -3960,6 +3965,32 @@
 }
 
 .flu-onboarding__quick-btn:hover {
+  border-color: var(--accent-cyan, #00d4ff);
+  color: var(--accent-cyan, #00d4ff);
+}
+
+/* Lista de usuarios existentes en el paso de captura del nombre: botones
+   para tocar el perfil propio (o decirlo/escribirlo) sin teclear desde cero. */
+.flu-onboarding__users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.flu-onboarding__user {
+  padding: 6px 12px;
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary, #0f0f1a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.flu-onboarding__user:hover {
   border-color: var(--accent-cyan, #00d4ff);
   color: var(--accent-cyan, #00d4ff);
 }

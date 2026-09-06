@@ -30,7 +30,7 @@ import type {
     GenerationInput,
     GeneratedDocumentResult,
 } from '../core/ai/IAIService';
-import type { FluContract, FluDiagnostics } from '../types/bridge';
+import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import type { DocumentContract, AppAnalysisContract } from '../types/documentContracts';
 import {
     buildMapPrompt,
@@ -480,6 +480,23 @@ Genera la minuta en formato JSON.`;
                 }
                 : undefined;
 
+        // Extract acciones (structured conversational actions) from the contract
+        const acciones = (() => {
+            const rawAcciones = Array.isArray(contract.acciones) ? contract.acciones : null;
+            if (!rawAcciones || rawAcciones.length === 0) return undefined;
+            const VALID_DOMINIOS = ['reminder', 'temporal', 'diary', 'note', 'horario'];
+            const parsed = rawAcciones
+                .map((item: any): FluAccion | null => {
+                    if (!item || typeof item !== 'object') return null;
+                    const dominio = String(item.dominio || '').trim();
+                    const texto = String(item.texto || '').trim();
+                    if (!VALID_DOMINIOS.includes(dominio) || !texto) return null;
+                    return { dominio: dominio as FluAccion['dominio'], texto };
+                })
+                .filter((a: FluAccion | null): a is FluAccion => a !== null);
+            return parsed.length > 0 ? parsed : undefined;
+        })();
+
         const resolved = resolveGeminiApiKey(options.apiKey);
 
         return {
@@ -502,6 +519,7 @@ Genera la minuta en formato JSON.`;
                         : [],
                 }
                 : null,
+            acciones,
             animacion,
             emocion,
             musica,

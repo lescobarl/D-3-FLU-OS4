@@ -130,12 +130,33 @@ function recognizeNoteIntent(text = '') {
   }
 
   const norm = stripAccentsEs(normalized)
-  const paraSuper = NOTE_PARA_SUPER.test(norm)
-  const paraRecordar = NOTE_PARA_RECORDAR.test(norm)
-  const apunta = NOTE_APUNTA.test(clean)
-  if (paraSuper || paraRecordar || apunta) {
-    return { handled: true, action: 'notes.add' }
+
+  // 1) "nota para el super / supermercado / compras / mercado" → etiqueta
+  //    "Super: {resto}" (misma semántica que el manejador de App.tsx).
+  const paraSuper = NOTE_PARA_SUPER.exec(norm)
+  if (paraSuper) {
+    const rest = paraSuper[2] ? paraSuper[2].trim() : ''
+    const label = rest ? `Super: ${rest}` : 'Super'
+    return { handled: true, action: 'notes.add', data: { label } }
   }
+
+  // 2) "nota para recordar {X}" / "nota para acordarme de {X}" → etiqueta
+  //    "Recordar: {X}" (misma semántica que el manejador de App.tsx).
+  const paraRecordar = NOTE_PARA_RECORDAR.exec(norm)
+  if (paraRecordar) {
+    const rest = paraRecordar[1] ? paraRecordar[1].trim() : ''
+    const label = rest ? `Recordar: ${rest}` : 'Recordar'
+    return { handled: true, action: 'notes.add', data: { label } }
+  }
+
+  // 3) "apunta/anota/añade/nota {texto}" → etiqueta = el texto tras el marcador.
+  const apunta = NOTE_APUNTA.exec(clean)
+  if (apunta) {
+    const label = apunta[1] ? apunta[1].trim() : ''
+    if (!label) return null
+    return { handled: true, action: 'notes.add', data: { label } }
+  }
+
   return null
 }
 
@@ -155,6 +176,14 @@ function recognizeNoteIntent(text = '') {
  * @param {string} [options.language='es'] Idioma detectado (para ambiente).
  * @param {string[]} [options.texts] Fragmentos ASR alternativos (buffer+final)
  *   usados por la resolución de navegación. Si se omite, se usa `text`.
+ * @param {number} [options.defaultOffsetMs] Desplazamiento por defecto (ms) para
+ *   recordatorios sin hora explícita. Se propaga a parseReminderIntent para que
+ *   el árbitro y el handler de App.tsx resuelvan la misma fecha.
+ * @param {number} [options.now] Marca de tiempo (ms) usada por parseTemporalIntent.
+ * @param {string} [options.defaultAlarmTimeOfDay] Hora por defecto (HH:MM) para
+ *   alarmas sin hora explícita (se propaga a parseTemporalIntent).
+ * @param {number} [options.defaultTimerMinutes] Minutos por defecto para
+ *   temporizadores sin duración explícita (se propaga a parseTemporalIntent).
  * @returns {{ matched: boolean, domain: string|null, action: object|null, channel: string|null }}
  *   - `matched`: true si algún dominio resolvió una acción.
  *   - `domain`:  nombre del dominio que ganó ('config'|'game'|'environment'|
@@ -166,7 +195,14 @@ function recognizeNoteIntent(text = '') {
  *                'documento'|'app') o null cuando no hay match.
  */
 export function resolveDeterministicCommand(text = '', options = {}) {
-  const { language = 'es', texts = null } = options || {}
+  const {
+    language = 'es',
+    texts = null,
+    defaultOffsetMs,
+    now,
+    defaultAlarmTimeOfDay,
+    defaultTimerMinutes,
+  } = options || {}
   const transcript = String(text || '').trim()
   if (!transcript && !(Array.isArray(texts) && texts.some((t) => String(t || '').trim()))) {
     return { matched: false, domain: null, action: null, channel: null }
@@ -194,13 +230,20 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   //    Solo MATCH cuando el parser devuelve una intención ACCIONABLE
   //    (action truthy). Los casos de aclaración (action === null) NO se marcan
   //    aquí: el despacho real vive en App.tsx (__fluHandleReminderText).
-  const reminder = parseReminderIntent(transcript)
+  const reminder = parseReminderIntent(transcript, { defaultOffsetMs })
   if (reminder?.handled && reminder?.action) {
     return { matched: true, domain: 'reminder', action: reminder, channel: 'flu' }
   }
 
   // 5. Temporales (temporalIntentParser): temporizadores/alarmas (función-adición).
-  const temporal = parseTemporalIntent(transcript)
+  //    Se propagan LOS MISMOS options que el manejador de App.tsx (now,
+  //    defaultAlarmTimeOfDay, defaultTimerMinutes) para que el `action` devuelto
+  //    sea COMPLETO y el despacho no tenga que re-parcear la cadena.
+  const temporal = parseTemporalIntent(transcript, {
+    now,
+    defaultAlarmTimeOfDay,
+    defaultTimerMinutes,
+  })
   if (temporal?.handled && temporal?.action) {
     return { matched: true, domain: 'temporal', action: temporal, channel: 'flu' }
   }

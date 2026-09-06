@@ -21,6 +21,7 @@ import { describeNlDateTime, parseNlDateTime } from './nlDateParser';
 export type ReminderIntentAction =
   | 'reminder.add'
   | 'reminder.list'
+  | 'reminder.remove'
   | 'shopping.add'
   | 'shopping.toggle'
   | 'shopping.remove'
@@ -59,7 +60,7 @@ export interface ReminderIntentParserOptions {
 // ------------------------------------------------------------
 
 const REMINDER_TRIGGERS_ES =
-  /^(?:recuérdame|recuerdame|recordame|recuerdale|recuérdale|recuerda|recuerdá|acordate|acuerdate|no\s+olvides)\b\s*(?:de\s+)?(?:que\s+)?/i;
+  /^(?:recuérdame|recuerdame|recordame|recuerdale|recuérdale|recuerda|recuerdá|acordate|acuerdate|no\s+olvides|pon(?:me)?\s+un\s+recordatorio|pon(?:me)?\s+una\s+alarma)\b\s*(?:de\s+)?(?:que\s+)?/i;
 const REMINDER_TRIGGERS_EN =
   /^(?:remind\s+me|remind|don'?t\s+forget)\b\s*(?:to\s+)?/i;
 
@@ -116,6 +117,35 @@ const REMINDER_LIST_EN =
   /^what(?:'s| is)?\s+(?:pending|my\s+reminders)\b|^show\s+(?:me\s+)?(?:my\s+)?(?:pending|reminders)\b/i;
 
 /**
+ * Cancelación / negación de recordatorios (voz). Reconoce pedir quitar,
+ * cancelar, eliminar o "ya no querer" un recordatorio existente. El texto
+ * capturado (grupo 1) se usa para localizar el recordatorio a eliminar.
+ * Ejemplos: 'quita el recordatorio de comprar leche', 'cancela el
+ * recordatorio de la cita', 'ya no quiero el recordatorio de X',
+ * 'no nada más ese recordatorio de X'.
+ */
+const REMINDER_REMOVE_ES =
+  /^(?:quita|quitemos|quitar|cancela|cancelar|elimina|eliminar|borra|borrar|retira|retirar)\s+(?:el\s+|ese\s+|este\s+|mi\s+)?(?:recordatorio|alarma|aviso|pendiente)(?:\s+(?:de\s+)?)?(.*?)\s*$|^(?:ya\s+no\s+quiero|no\s+quiero|no\s+nada\s+más|no\s+nada\s+mas|no\s+más|no\s+mas)\s+(?:el\s+|ese\s+|este\s+|mi\s+)?(?:recordatorio|alarma|aviso|pendiente)(?:\s+(?:de\s+)?)?(.*?)\s*$/i;
+const REMINDER_REMOVE_EN =
+  /^(?:remove|delete|cancel|clear)\s+(?:the\s+|that\s+|this\s+|my\s+)?(?:reminder|alarm)(?:\s+(?:to\s+|for\s+)?)?(.*?)\s*$|^(?:i\s+don'?t\s+want|no\s+more)\s+(?:the\s+|that\s+|this\s+|my\s+)?(?:reminder|alarm)(?:\s+(?:to\s+|for\s+)?)?(.*?)\s*$/i;
+
+/**
+ * Relleno conversacional tolerado (Point G). Los asistentes de voz reales
+ * (Alexa/Siri/Google) reciben frases con ruido: interjecciones iniciales
+ * ("sí, ", "oye ", "hey") y cortesía final ("por favor", "please"). Este
+ * preprocesado normaliza el input en un único punto para que los triggers
+ * anclados a `^` no fallen por ese ruido. No toca el contenido semántico.
+ */
+const LEADING_FILLER_ES =
+  /^(?:s[ií]|oye|hey|a\s+ver|mira|bueno|pues|vamos|ok|okay|por\s+favor|porfa|claro)\s*[,:\s]+/i;
+const LEADING_FILLER_EN =
+  /^(?:ok|okay|hey|so|well|please|right|yeah|yes|sure)\s*[,:\s]+/i;
+const TRAILING_FILLER_ES =
+  /\s+(?:por\s+favor|porfa|gracias|muchas\s+gracias)\s*$/i;
+const TRAILING_FILLER_EN =
+  /\s+(?:please|thank\s+you|thanks)\s*$/i;
+
+/**
  * Citas (agenda). No existe un modelo "cita" separado; por la regla de
  * fuente única por intención, una cita se modela como recordatorio
  * (cubre texto + persona + cuándo). Estos triggers reconocen la creación
@@ -132,6 +162,23 @@ const CITA_PERSON_EN = /^with\s+(?:the\s+|my\s+|our\s+)?([A-Za-z]+)\b/i;
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
+
+/**
+ * Normaliza el input de voz quitando el relleno conversacional (Point G):
+ * interjecciones iniciales y cortesía final. Se aplica en un único punto
+ * para que todos los triggers anclados a `^` toleren el ruido real de ASR.
+ */
+function normalizeInput(raw: string): string {
+  let t = raw.trim();
+  let prev = '';
+  while (t !== prev) {
+    prev = t;
+    const m = LEADING_FILLER_ES.exec(t) || LEADING_FILLER_EN.exec(t);
+    if (m) t = t.slice(m[0].length).trim();
+  }
+  t = t.replace(TRAILING_FILLER_ES, '').replace(TRAILING_FILLER_EN, '').trim();
+  return t;
+}
 
 /** Separa el texto del recordatorio de su cláusula 'cuándo'. */
 function splitWhen(remainder: string): { textPart: string; whenClause: string | null } {
@@ -192,6 +239,18 @@ function reminderListReply(lang: 'es' | 'en'): string {
     : 'Here are your pending reminders.';
 }
 
+function reminderRemoveReply(label: string, lang: 'es' | 'en'): string {
+  return lang === 'es'
+    ? `Listo, quité el recordatorio "${label}".`
+    : `Done, I removed the reminder "${label}".`;
+}
+
+function reminderRemoveNotFoundReply(lang: 'es' | 'en'): string {
+  return lang === 'es'
+    ? 'No encontré ningún recordatorio con ese texto.'
+    : "I couldn't find a reminder with that text.";
+}
+
 function askTextReply(lang: 'es' | 'en'): string {
   return lang === 'es'
     ? '¿Qué quieres que te recuerde?'
@@ -211,7 +270,7 @@ export function parseReminderIntent(
   options: ReminderIntentParserOptions = {},
 ): ReminderIntent {
   if (typeof input !== 'string') return { handled: false, action: null, reply: '' };
-  const text = input.trim();
+  const text = normalizeInput(input);
   if (!text) return { handled: false, action: null, reply: '' };
 
   const now = options.now ? options.now() : Date.now();
@@ -249,6 +308,27 @@ export function parseReminderIntent(
   if (reminderList) {
     const lang = REMINDER_LIST_ES.test(text) ? 'es' : 'en';
     return { handled: true, action: 'reminder.list', reply: reminderListReply(lang) };
+  }
+
+  // --- Cancelación / negación de recordatorios ------------------
+  // 'quita/cancela/elimina el recordatorio de X', 'ya no quiero el
+  // recordatorio de X', 'no nada más ese recordatorio de X'.
+  const reminderRemoveEs = REMINDER_REMOVE_ES.exec(text);
+  const reminderRemoveEn = REMINDER_REMOVE_EN.exec(text);
+  const reminderRemove = reminderRemoveEs || reminderRemoveEn;
+  if (reminderRemove) {
+    const lang = reminderRemoveEs ? 'es' : 'en';
+    // El texto a eliminar puede estar en el grupo 1 o 2 según la rama.
+    const label = (reminderRemove[1] || reminderRemove[2] || '').trim();
+    if (!label) {
+      return { handled: true, action: null, reply: askTextReply(lang) };
+    }
+    return {
+      handled: true,
+      action: 'reminder.remove',
+      reply: reminderRemoveReply(label, lang),
+      data: { text: label },
+    };
   }
 
   const triggerEs = REMINDER_TRIGGERS_ES.exec(text);

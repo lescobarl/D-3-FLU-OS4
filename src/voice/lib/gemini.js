@@ -1523,6 +1523,30 @@ export async function generateFluContract({
   const musica = musicaFromModel || undefined
   const configuracion = normalizeConfiguracion(parsed?.configuracion)
 
+  // OS4 FASE CONVERSACIONAL: el LLM (cerebro conversacional) emite acciones
+  // estructuradas cuando el usuario pide, de forma natural, crear/consultar
+  // recordatorios, compras, alarmas, temporizadores, notas, diario u horario.
+  // Cada acción lleva el dominio y el texto del mandato tal como lo dijo el
+  // usuario; el despacho (App.tsx) re-resuelve ese texto con los parsers
+  // deterministas (fuente de verdad del parseo temporal/preciso) y ejecuta el
+  // mismo manejador __fluHandle* que usa el modo offline. Así FLU es
+  // conversacional (la IA entiende y responde) pero la ejecución es precisa.
+  const VALID_ACCION_DOMINIOS = ['reminder', 'temporal', 'diary', 'note', 'horario']
+  const acciones = (() => {
+    const rawAcciones = Array.isArray(parsed.acciones) ? parsed.acciones : null
+    if (!rawAcciones || rawAcciones.length === 0) return undefined
+    const parsedAcciones = rawAcciones
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        const dominio = String(item.dominio || '').trim()
+        const texto = String(item.texto || '').trim()
+        if (!VALID_ACCION_DOMINIOS.includes(dominio) || !texto) return null
+        return { dominio, texto }
+      })
+      .filter(Boolean)
+    return parsedAcciones.length > 0 ? parsedAcciones : undefined
+  })()
+
   // OS4 FASE A: el LLM interpreta la esencia de la orden y emite el id de ambiente.
   // Sin validación aquí: normalizeEnvironment (App.tsx) es el único validador
   // (id inválido → null → sin acción, seguro). El prompt guía con el catálogo real.
@@ -1551,6 +1575,7 @@ export async function generateFluContract({
       rawText: text,
     },
     workspace,
+    ...(acciones ? { acciones } : {}),
     ...(animacion ? { animacion } : {}),
     ...(emocion ? { emocion } : {}),
     ...(musica ? { musica } : {}),

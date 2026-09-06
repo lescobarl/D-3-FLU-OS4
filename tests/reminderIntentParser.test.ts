@@ -266,3 +266,94 @@ describe('reminderIntentParser — no reconocido', () => {
     expect(parseReminderIntent(undefined as unknown as string)).toEqual({ handled: false, action: null, reply: '' });
   });
 });
+
+describe('reminderIntentParser — cancelación/negación (Point E)', () => {
+  it('"quita el recordatorio de comprar leche" → reminder.remove', () => {
+    expect(parseReminderIntent('quita el recordatorio de comprar leche')).toEqual({
+      handled: true,
+      action: 'reminder.remove',
+      reply: 'Listo, quité el recordatorio "comprar leche".',
+      data: { text: 'comprar leche' },
+    });
+  });
+
+  it('"cancela el recordatorio de la cita" → reminder.remove', () => {
+    const result = parseReminderIntent('cancela el recordatorio de la cita');
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.remove');
+    expect(result.data?.text).toBe('la cita');
+  });
+
+  it('"elimina ese recordatorio de pagar la renta" → reminder.remove', () => {
+    const result = parseReminderIntent('elimina ese recordatorio de pagar la renta');
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.remove');
+    expect(result.data?.text).toBe('pagar la renta');
+  });
+
+  it('"ya no quiero el recordatorio de comprar pan" → reminder.remove', () => {
+    const result = parseReminderIntent('ya no quiero el recordatorio de comprar pan');
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.remove');
+    expect(result.data?.text).toBe('comprar pan');
+  });
+
+  it('"no nada más ese recordatorio de la junta" → reminder.remove', () => {
+    const result = parseReminderIntent('no nada más ese recordatorio de la junta');
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.remove');
+    expect(result.data?.text).toBe('la junta');
+  });
+
+  it('"remove the reminder to buy milk" → reminder.remove (en)', () => {
+    const result = parseReminderIntent('remove the reminder to buy milk');
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.remove');
+    expect(result.data?.text).toBe('buy milk');
+  });
+
+  it('"i don\'t want the reminder for the meeting" → reminder.remove (en)', () => {
+    const result = parseReminderIntent("i don't want the reminder for the meeting");
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.remove');
+    expect(result.data?.text).toBe('the meeting');
+  });
+
+  it('"quita el recordatorio" sin texto pide aclaración', () => {
+    expect(parseReminderIntent('quita el recordatorio')).toEqual({
+      handled: true,
+      action: null,
+      reply: '¿Qué quieres que te recuerde?',
+    });
+  });
+});
+
+describe('reminderIntentParser — frases realistas con ruido (Point G)', () => {
+  it('"sí, recuérdame comprar leche por favor" tolera el relleno inicial', () => {
+    const result = parseReminderIntent('sí, recuérdame comprar leche por favor', {
+      now,
+      defaultOffsetMs: 60000,
+    });
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.add');
+    expect(result.data?.text).toBe('comprar leche');
+    expect(result.data?.dueAt).toBe(NOW + 60000);
+  });
+
+  it('"oye pon un recordatorio de comprar leche" tolera el relleno inicial', () => {
+    const result = parseReminderIntent('oye pon un recordatorio de comprar leche', {
+      now,
+      defaultOffsetMs: 60000,
+    });
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('reminder.add');
+    expect(result.data?.text).toBe('comprar leche');
+    expect(result.data?.dueAt).toBe(NOW + 60000);
+  });
+
+  it('"no nada más ese recordatorio" (sin texto tras el objeto) pide aclaración', () => {
+    const result = parseReminderIntent('no nada más ese recordatorio');
+    expect(result.handled).toBe(true);
+    expect(result.action).toBeNull();
+  });
+});

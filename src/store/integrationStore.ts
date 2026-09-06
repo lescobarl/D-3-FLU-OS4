@@ -176,6 +176,8 @@ export interface IntegrationActions {
     addSystemMessage: (text: string) => void;
     /** Cargar historial completo desde DB (sin side effects) */
     batchLoadHistory: (entries: ConversationEntry[]) => void;
+    /** Eliminar del historial todas las entradas de un hablante (por speakerName) */
+    removeConversationEntriesBySpeaker: (label: string) => void;
     /** Cambiar estado emocional */
     setEmotionalState: (state: EmotionalState) => void;
     /** Detectar emoción automática según el texto */
@@ -415,6 +417,16 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             batchLoadHistory: (entries: ConversationEntry[]) => {
                 set({ conversationHistory: entries });
+            },
+
+            removeConversationEntriesBySpeaker: (label: string) => {
+                const normalized = String(label || '').trim();
+                if (!normalized) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.filter(
+                        (entry) => String(entry.speakerName || '').trim() !== normalized,
+                    ),
+                }));
             },
 
             addUserMessage: (text: string, speakerName?: string) => {

@@ -361,6 +361,24 @@ export interface FluDiagnostics {
 }
 
 /**
+ * Acción estructurada emitida por la IA (el "cerebro conversacional") cuando el
+ * usuario pide, de forma natural, crear/consultar recordatorios, compras,
+ * alarmas, temporizadores, notas, diario u horario.
+ *
+ * La IA decide la INTENCIÓN (dominio) y deja el TEXTO del mandato tal como lo
+ * dijo el usuario; el despacho re-resuelve ese texto con los parsers
+ * deterministas (fuente de verdad del parseo temporal/preciso) y ejecuta el
+ * mismo manejador __fluHandle* que usa el modo offline. Así FLU es
+ * conversacional (la IA entiende y responde) pero la ejecución es precisa.
+ */
+export interface FluAccion {
+    /** Dominio al que pertenece la acción (recordatorio, temporal, diario, nota, horario). */
+    dominio: 'reminder' | 'temporal' | 'diary' | 'note' | 'horario';
+    /** Fragmento del mandato del usuario que dispara la acción (ej. "recuérdame comprar leche a las 7"). */
+    texto: string;
+}
+
+/**
  * FLU Contract — structured response from AI (Gemini).
  * Contains spoken response, navigation commands, and optional workspace content.
  */
@@ -378,6 +396,14 @@ export interface FluContract {
         prompt_visual: string;
         puntos_clave: string[];
     } | null;
+    /**
+     * Acciones estructuradas que la IA emite cuando el usuario pide, de forma
+     * conversacional, crear/consultar recordatorios, compras, alarmas,
+     * temporizadores, notas, diario u horario. Cada acción lleva el dominio y
+     * el texto del mandato; el despacho las ejecuta con los parsers
+     * deterministas (misma fuente de verdad que el modo offline).
+     */
+    acciones?: FluAccion[];
     /** Animación sugerida por Gemini para el avatar (darle vida) */
     animacion?: string;
     /** Expresión sugerida por Gemini para el avatar (darle vida) */

@@ -201,14 +201,20 @@ describe('onboardingService — estado legacy (readLegacyOnboarding)', () => {
     expect(readLegacyOnboarding(storage)).toMatchObject({ stepIndex: 0, completed: true, captured: {} });
   });
 
-  it('restaura stepIndex y captured desde ONBOARDING_STEP (JSON válido)', () => {
+  it('una sesión legacy incompleta a mitad de flujo se auto-sana al paso 0', () => {
     const storage = createFakeStorage({
       [STORAGE_KEYS.ONBOARDING_STEP]: JSON.stringify({ stepIndex: 2, captured: { name: 'Ana' } }),
     });
     const state = readLegacyOnboarding(storage);
-    expect(state.stepIndex).toBe(2);
-    expect(state.captured).toEqual({ name: 'Ana' });
-    expect(typeof state.startedAt).toBe('number');
+    expect(state).toMatchObject({ stepIndex: 0, completed: false, captured: {} });
+  });
+
+  it('una sesión legacy incompleta aún en el paso 0 conserva su estado', () => {
+    const storage = createFakeStorage({
+      [STORAGE_KEYS.ONBOARDING_STEP]: JSON.stringify({ stepIndex: 0, captured: {} }),
+    });
+    const state = readLegacyOnboarding(storage);
+    expect(state).toMatchObject({ stepIndex: 0, completed: false });
   });
 
   it('combina completed con el paso restaurado', () => {

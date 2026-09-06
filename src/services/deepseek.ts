@@ -33,7 +33,7 @@ import type {
     GenerationInput,
     GeneratedDocumentResult,
 } from '../core/ai/IAIService';
-import type { FluContract, FluDiagnostics } from '../types/bridge';
+import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import type { DocumentContract, AppAnalysisContract } from '../types/documentContracts';
 import {
     buildMapPrompt,
@@ -490,7 +490,13 @@ Response format (JSON):
   "musica": {
     "accion": "play_music" | "pause_music" | "stop_music" | null,
     "cancion": "song id or title"
-  } | null
+  } | null,
+  "acciones": [
+    {
+      "dominio": "reminder" | "temporal" | "diary" | "note" | "horario",
+      "texto": "the user's own command fragment, verbatim, without the wake word"
+    }
+  ] | null
 }
 
 Rules:
@@ -528,7 +534,13 @@ Formato de respuesta (JSON):
   "musica": {
     "accion": "play_music" | "pause_music" | "stop_music" | null,
     "cancion": "id o título de canción"
-  } | null
+  } | null,
+  "acciones": [
+    {
+      "dominio": "reminder" | "temporal" | "diary" | "note" | "horario",
+      "texto": "el fragmento del mandato tal como lo dijo el usuario, sin la wake word"
+    }
+  ] | null
 }
 
 Reglas:
@@ -633,6 +645,21 @@ const messages = [
                         }
                         : undefined;
                     return musicaFromModel || undefined;
+                })(),
+                acciones: (() => {
+                    const rawAcciones = Array.isArray(parsed.acciones) ? parsed.acciones : null;
+                    if (!rawAcciones || rawAcciones.length === 0) return undefined;
+                    const VALID_DOMINIOS = ['reminder', 'temporal', 'diary', 'note', 'horario'];
+                    const acciones = rawAcciones
+                        .map((item: any): FluAccion | null => {
+                            if (!item || typeof item !== 'object') return null;
+                            const dominio = String(item.dominio || '').trim();
+                            const texto = String(item.texto || '').trim();
+                            if (!VALID_DOMINIOS.includes(dominio) || !texto) return null;
+                            return { dominio: dominio as FluAccion['dominio'], texto };
+                        })
+                        .filter((a): a is FluAccion => a !== null);
+                    return acciones.length > 0 ? acciones : undefined;
                 })(),
                 diagnostics: buildDiagnostics('localStorage', model),
             };
@@ -804,7 +831,7 @@ const messages = [
      */
     private async postJson(
         messages: Array<{ role: string; content: any }>,
-        options: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
+        options: { maxTokens?: number; temperature?: number; timeoutMs?: number; jsonMode?: boolean } = {},
     ): Promise<string> {
         const url = buildTextApiUrl('/chat/completions');
         const local = isLocalTextEndpoint(url);
@@ -822,7 +849,9 @@ const messages = [
             temperature: options.temperature ?? resolveCreativityTemperature(),
         };
         // Local endpoints (Ollama, LM Studio) may not support OpenAI JSON mode.
-        if (!local) body.response_format = { type: 'json_object' };
+        // jsonMode=false (generación de documentos/guiones) pide markdown/texto libre,
+        // por lo que NO se fuerza response_format json_object (rompía el contenido).
+        if (!local && options.jsonMode !== false) body.response_format = { type: 'json_object' };
 
         const response = await fetchTextEngine(url, {
             method: 'POST',
@@ -997,7 +1026,7 @@ const messages = [
             const content = await this.postJson([
                 { role: 'system', content: buildGenerationSystemPrompt(language) },
                 { role: 'user', content: buildGenerationPrompt(payload, language) },
-            ], { maxTokens: 3000, timeoutMs: GENERATION_TIMEOUT_MS });
+            ], { maxTokens: 3000, timeoutMs: GENERATION_TIMEOUT_MS, jsonMode: false });
             return serializeDocument(payload.formato, content, nombre);
         } catch (error) {
             console.warn('Text engine generateDocument fallback to fallback content:', error);

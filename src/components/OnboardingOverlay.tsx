@@ -47,21 +47,12 @@ export interface OnboardingOverlayProps {
       localizadas como { value, label }. Si existen, el overlay renderiza un
       <select> en lugar del input de texto. */
   stepOptions?: { value: string; label: string }[];
+  /** Nombres de usuarios ya existentes (multiusuario). Cuando el paso actual
+      es el de captura del nombre (sin options), se muestran como botones para
+      que la persona toque su perfil (o lo diga/escriba) en lugar de teclear. */
+  userSuggestions?: string[];
   onAnswer: (text: string) => void;
   onSkip: () => void;
-  /** Modo selector "¿Quién eres?" (multiusuario — Fase 3). */
-  pickerMode?: boolean;
-  userPicker?: {
-    title: string;
-    subtitle: string;
-    createLabel: string;
-    emptyHint?: string;
-    selectPlaceholder?: string;
-    participants: { id: string; name: string; role?: string }[];
-    activeId?: string;
-    onCreate: () => void;
-    onSelect: (participantId: string) => void;
-  };
 }
 
 export function OnboardingOverlay({
@@ -88,9 +79,8 @@ export function OnboardingOverlay({
   reject,
   onAnswer,
   onSkip,
-  pickerMode = false,
-  userPicker,
   stepOptions,
+  userSuggestions,
 }: OnboardingOverlayProps) {
   const [value, setValue] = useState('');
   const [choice, setChoice] = useState('');
@@ -102,63 +92,6 @@ export function OnboardingOverlay({
   const label = progressLabel
     .replace('{current}', String(current))
     .replace('{total}', String(total));
-
-  // Modo selector "¿Quién eres?": dropdown de participantes + crear nuevo.
-  if (pickerMode && userPicker) {
-    return (
-      <aside
-        className="flu-onboarding flu-onboarding--picker"
-        role="region"
-        aria-label={userPicker.title}
-      >
-        {userPicker.title ? <p className="flu-onboarding__prompt">{userPicker.title}</p> : null}
-        <p className="flu-onboarding__picker-subtitle">{userPicker.subtitle}</p>
-        {userPicker.participants.length === 0 ? (
-          <p className="flu-onboarding__picker-empty">{userPicker.emptyHint ?? ''}</p>
-        ) : (
-          <select
-            className="flu-onboarding__picker-select"
-            value={userPicker.activeId ?? ''}
-            onChange={(e) => {
-              const id = e.target.value;
-              if (id) userPicker.onSelect(id);
-            }}
-            data-testid="onboarding-picker-select"
-            aria-label={userPicker.title || 'Elegir usuario'}
-          >
-            <option value="" disabled>
-              {userPicker.selectPlaceholder ?? 'Elegir usuario'}
-            </option>
-            {userPicker.participants.map((participant) => (
-              <option key={participant.id} value={participant.id}>
-                {participant.role
-                  ? `${participant.name} — ${participant.role}`
-                  : participant.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <div className="flu-onboarding__picker-actions">
-          <button
-            type="button"
-            className="flu-onboarding__picker-create"
-            onClick={userPicker.onCreate}
-            data-testid="onboarding-picker-create"
-          >
-            {userPicker.createLabel}
-          </button>
-          <button
-            className="flu-onboarding__picker-skip"
-            type="button"
-            onClick={onSkip}
-            data-testid="onboarding-skip"
-          >
-            {skipLabel}
-          </button>
-        </div>
-      </aside>
-    );
-  }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -310,6 +243,29 @@ export function OnboardingOverlay({
           {listening ? stopLabel || 'Detener' : micLabel || 'Hablar'}
         </button>
       )}
+
+      {/* Lista de usuarios existentes: en el paso de captura del nombre (un
+          capture SIN options → texto libre) se muestran los perfiles ya dados
+          de alta como botones, para que la persona toque el suyo (o lo diga /
+          escriba) en lugar de teclear el nombre desde cero. */}
+      {stepType === 'capture' &&
+        (!stepOptions || stepOptions.length === 0) &&
+        userSuggestions &&
+        userSuggestions.length > 0 && (
+          <div className="flu-onboarding__users" data-testid="onboarding-user-suggestions">
+            {userSuggestions.map((userName) => (
+              <button
+                key={userName}
+                className="flu-onboarding__user"
+                type="button"
+                onClick={() => onAnswer(userName)}
+                data-testid={`onboarding-user-${userName}`}
+              >
+                {userName}
+              </button>
+            ))}
+          </div>
+        )}
 
       {controls}
 
