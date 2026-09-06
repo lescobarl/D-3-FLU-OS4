@@ -24,7 +24,7 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useConfigPersistence } from './hooks/useConfigPersistence';
 import { useBunnyStore, ensureAvatarPantsVisible, EXPRESSION_MAP } from './avatar';
 import { relayLog } from './lib/clientLogRelay';
-import { cleanForSpeech, normalizeSpaces } from './lib/textUtils';
+import { cleanForSpeech, normalizeSpaces, pickLabel } from './lib/textUtils';
 import type { BunnyComponent } from './avatar/types/bunny';
 import { v4 as uuidv4 } from 'uuid';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -333,19 +333,6 @@ function parseBoolean(value: string): boolean | null {
     if (truthy.includes(v)) return true;
     if (falsy.includes(v)) return false;
     return null;
-}
-
-/**
- * Resuelve un rótulo bilingüe { es, en } desde FLU_CONFIG según el idioma
- * activo, con fallback final. NO HARDCODE: el texto proviene del catálogo.
- */
-function pickLabel(
-    labels: { es?: string; en?: string } | undefined,
-    language: string,
-    fallback: string
-): string {
-    if (!labels) return fallback;
-    return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
 }
 
 /**

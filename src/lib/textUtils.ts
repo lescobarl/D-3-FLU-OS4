@@ -27,3 +27,17 @@ export function cleanForSpeech(s: string): string {
             .replace(/\s+/g, ' '),
     );
 }
+
+/**
+ * Resolver un rótulo bilingüe { es, en } según el idioma activo, con
+ * fallback final. Fuente única de verdad: antes existían 4 copias
+ * locales (App.tsx, WorkspaceHub, HoyPanel, ResultFeed).
+ */
+export function pickLabel(
+    labels: { es?: string; en?: string } | undefined,
+    language: string,
+    fallback: string,
+): string {
+    if (!labels) return fallback;
+    return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
+}

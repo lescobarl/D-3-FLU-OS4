@@ -18,6 +18,7 @@
 //     (no anidado) para preservar su `position: fixed`.
 // ============================================================
 import { useEffect, useMemo } from 'react';
+import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
@@ -143,18 +144,6 @@ export interface WorkspaceHubProps {
     // lateral = HoyPanel (HOY/DIARIO/NOTAS). Opcional para no romper
     // los usos/test que aún no lo cablean.
     hoy?: HoyPanelProps;
-}
-
-// ------------------------------------------------------------
-// Helper de etiquetas (paridad con pickLabel de App.tsx)
-// ------------------------------------------------------------
-function pickLabel(
-    labels: { es?: string; en?: string } | undefined,
-    language: string,
-    fallback: string
-): string {
-    if (!labels) return fallback;
-    return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
 }
 
 // ------------------------------------------------------------

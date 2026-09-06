@@ -15,6 +15,7 @@
 // con pickLabel (Regla #1: sin hardcode).
 // ============================================================
 import { useMemo, useState, type ReactNode } from 'react';
+import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
 // ------------------------------------------------------------
@@ -49,17 +50,6 @@ export interface ResultFeedProps {
 }
 
 // ------------------------------------------------------------
-// Helper de etiquetas (paridad con pickLabel de App/WorkspaceHub)
-// ------------------------------------------------------------
-function pickLabel(
-  labels: { es?: string; en?: string } | undefined,
-  language: string,
-  fallback: string
-): string {
-  if (!labels) return fallback;
-  return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
-}
-
 // ------------------------------------------------------------
 // Componente
 // ------------------------------------------------------------

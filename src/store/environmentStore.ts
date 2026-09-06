@@ -18,6 +18,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { resolveSafeStorage } from './storage';
 import { DEFAULT_AMBIENTE_ID, isAmbienteId } from '../core/environments/environmentRegistry';
 
 // -----------------------------------------------------------
@@ -69,24 +70,9 @@ export const useEnvironmentStore = create<EnvironmentStore>()(
         {
             name: ENVIRONMENT_STORE_KEY,
             version: 1,
-            // Mismo patrón de almacenamiento que integrationStore:
-            // localStorage en el navegador, fallback en memoria en
-            // entornos sin almacenamiento (vitest/Node.js).
-            storage: createJSONStorage(() => {
-                try {
-                    if (typeof window !== 'undefined' && window.localStorage) {
-                        return window.localStorage;
-                    }
-                } catch {
-                    // localStorage no disponible (Node.js, SSR, etc.)
-                }
-                const store = new Map<string, string>();
-                return {
-                    getItem: (key: string) => store.get(key) ?? null,
-                    setItem: (key: string, value: string) => { store.set(key, value); },
-                    removeItem: (key: string) => { store.delete(key); },
-                };
-            }),
+            // Mismo patrón de almacenamiento que integrationStore
+            // (fuente única en ./storage).
+            storage: createJSONStorage(resolveSafeStorage),
             partialize: (state) => ({
                 activeAmbienteId: state.activeAmbienteId,
             }),

@@ -16,6 +16,7 @@
 //   📝 NOTAS  → listado de notas (useNotes) con toggle/remove.
 // ============================================================
 import { useState } from 'react';
+import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord } from '../core/db/fluDatabase';
 import { diaDeFecha, type NewHorarioInput } from '../core/horario/horarioService';
@@ -62,17 +63,6 @@ export interface HoyPanelProps {
 }
 
 // ------------------------------------------------------------
-// Helper de etiquetas (paridad con pickLabel de App/WorkspaceHub)
-// ------------------------------------------------------------
-function pickLabel(
-  labels: { es?: string; en?: string } | undefined,
-  language: string,
-  fallback: string
-): string {
-  if (!labels) return fallback;
-  return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
-}
-
 // ------------------------------------------------------------
 // Componente
 // ------------------------------------------------------------

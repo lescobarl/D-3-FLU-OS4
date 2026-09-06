@@ -14,6 +14,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { resolveSafeStorage } from './storage';
 import { v4 as uuidv4 } from 'uuid';
 import { relayLog } from '../lib/clientLogRelay';
 import { newSyncTuple, type SyncTuple } from '../core/db/fluDatabase';
@@ -786,26 +787,9 @@ export const useIntegrationStore = create<IntegrationStore>()(
         {
             name: 'flu-integration-store',
             version: 1,
-            // Use createJSONStorage with a fallback that gracefully handles
-            // environments without localStorage (e.g., Node.js test runner).
-            // This eliminates the "[zustand persist middleware] Unable to update
-            // item" warnings in vitest.
-            storage: createJSONStorage(() => {
-                try {
-                    if (typeof window !== 'undefined' && window.localStorage) {
-                        return window.localStorage;
-                    }
-                } catch {
-                    // localStorage not available (Node.js, SSR, etc.)
-                }
-                // In-memory fallback: still works but doesn't persist across reloads
-                const store = new Map<string, string>();
-                return {
-                    getItem: (key: string) => store.get(key) ?? null,
-                    setItem: (key: string, value: string) => { store.set(key, value); },
-                    removeItem: (key: string) => { store.delete(key); },
-                };
-            }),
+            // Almacenamiento con fallback en memoria para entornos sin
+            // localStorage (Node.js test runner). Fuente única en ./storage.
+            storage: createJSONStorage(resolveSafeStorage),
             partialize: (state) => ({
                 profile: state.profile,
                 imageConfig: state.imageConfig,
