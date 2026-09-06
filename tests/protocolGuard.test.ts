@@ -60,7 +60,21 @@ describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', (
         expect(claude).toContain('protocolGuard.test.ts');
     });
 
-    it('CLAUDE.md pre-commit (Sección 6) debe usar test:full, no la suite en el default', () => {
+    it('CLAUDE.md pre-commit (Sección 6) es LIGERO y la suite completa se delega al gate CI', () => {
+        // El commit NO ejecuta la suite completa: se hace ligero (guards + typecheck).
+        expect(claude).toMatch(/VALIDACIÓN PRE-COMMIT \(LIGERA\)/);
+        expect(claude).toContain('npm run lint');
+        expect(claude).toContain('npm run typecheck');
+        // Y la suite completa queda documentada en el gate CI (una vez por push/PR).
+        expect(claude).toContain('.github/workflows/ci.yml');
         expect(claude).toContain('npm run test:full');
+    });
+
+    it('debe existir el workflow de CI con suite completa + build (gate de entrega)', () => {
+        const ciPath = path.join(ROOT_DIR, '.github', 'workflows', 'ci.yml');
+        const ci = fs.existsSync(ciPath) ? fs.readFileSync(ciPath, 'utf-8') : '';
+        expect(ci, 'falta .github/workflows/ci.yml (gate de entrega)').toContain('test:full');
+        expect(ci).toContain('npm run build');
+        expect(ci).toContain('npm run typecheck');
     });
 });

@@ -1,0 +1,69 @@
+# ============================================================
+# CI — Gate de entrega (suite completa + build + E2E)
+# ============================================================
+# La suite completa NO corre en cada commit (pre-commit ligero:
+# CLAUDE.md §6). Corre aquí, una vez por push/PR.
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  quality:
+    name: Unit + Guards + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Guards (lint rule pragmática del proyecto)
+        run: npm run lint
+
+      - name: Puerta de tipos
+        run: npm run typecheck
+
+      - name: Suite completa de unit
+        run: npm run test:full
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E Playwright (UI)
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar navegadores Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (portal en 5173, reuse del dev server)
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            reports/
+            playwright-report/
+          retention-days: 7

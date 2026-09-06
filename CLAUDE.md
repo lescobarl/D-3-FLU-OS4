@@ -104,14 +104,15 @@ flu-os/
 └── tailwind.config.js
 ```
 
-## 6. VALIDACIÓN PRE-COMMIT
+## 6. VALIDACIÓN PRE-COMMIT (LIGERA)
 
-Antes de realizar un commit, el agente DEBE:
-1. Ejecutar `npm run test:full` (suite completa) y confirmar que todos los tests pasan
-2. Verificar que no hay código hardcodeado
-3. Verificar que no hay try-catch vacíos
-4. Verificar que toda nueva tabla tiene tupla `[revision, updated_at, deleted]`
-5. Si falla algo, revertir el último cambio automáticamente
+El commit NO ejecuta la suite completa. La suite completa corre **una sola vez en el gate de CI** (`.github/workflows/ci.yml`, en cada `push`/`pull_request`) y en cierres de hito. Antes de commitear, el agente DEBE:
+1. Ejecutar `npm run lint` (guards: hardcode / protocol / stability — rápidos)
+2. Ejecutar `npm run typecheck` (`npx tsc -b`, incremental)
+3. Verificar manualmente: sin código hardcodeado, sin try-catch vacíos, y toda tabla nueva con tupla `[revision, updated_at, deleted]`
+4. Si falla algo de lo anterior, revertir el último cambio automáticamente
+
+La suite completa (`npm run test:full`) + `npm run build` quedan reservados al **gate CI** y a cierres de hito/entregas, no a cada commit.
 
 > **📚 Especificación del proyecto:** [`CONTEXTO_FLU_OS2.md`](CONTEXTO_FLU_OS2.md) — El agente DEBE leer este archivo como fuente de especificación del sistema.
 
@@ -154,7 +155,7 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 
 | # | Regla | Descripción |
 |---|-------|-------------|
-| 1 | ⚡ Verificación por iteración mínima | El comando por defecto `npm test` ejecuta SOLO la prueba del cambio específico (`vitest run --changed --reporter=dot --silent`; añadir `-t "<nombre>"` para acotar dentro del archivo). La suite completa queda reservada a `npm run test:full`, que se usa SOLO en cierre de hitos/entregas y pre-commit (Sección 6). Esta estructura está blindada por [`tests/protocolGuard.test.ts`](tests/protocolGuard.test.ts): si `npm test` deja de ser `--changed` o se elimina `test:full`, la suite completa falla. |
+| 1 | ⚡ Verificación por iteración mínima | El comando por defecto `npm test` ejecuta SOLO la prueba del cambio específico (`vitest run --changed --reporter=dot --silent`; añadir `-t "<nombre>"` para acotar dentro del archivo). La suite completa queda reservada a `npm run test:full`, que se usa SOLO en cierre de hitos/entregas y en el **gate CI** (push/PR). El pre-commit es LIGERO (§6): guards + typecheck. Esta estructura está blindada por [`tests/protocolGuard.test.ts`](tests/protocolGuard.test.ts): si `npm test` deja de ser `--changed` o se elimina `test:full` o el gate CI, la suite completa falla. |
 | 2 | 🚪 Puerta de tipos por iteración | Correr `npx tsc -b` en cada iteración (verificación de tipos incremental). El `vite build` completo solo en cierre de hitos. El dev server + HMR sirve como capa de verificación de runtime en vivo. |
 | 3 | 📦 Sin backups por iteración | No crear backups robocopy por cada iteración; solo cuando el usuario lo indique explícitamente. |
 | 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` directamente con `start_line` y contenido ya conocido (bloques mapeados), sin re-leer archivos completos de miles de líneas. Solo re-leer un bloque si el diff falla por desajuste. |
@@ -184,7 +185,7 @@ Estas convenciones complementan la Regla 1 (NO HARDCODE). Son vinculantes para c
 | # | Regla | Descripción | Ref. |
 |---|-------|-------------|------|
 | 1 | ⚡ Commit por hito funcional en verde | Commitea CADA hito funcional en cuanto quede validado en verde (tests + tipos). No acumular cambios. | §7.4, §9 |
-| 2 | ⚡ Verificación por iteración mínima | `npm test` corre SOLO el cambio (`--changed`; añadir `-t "<nombre>"` para acotar). Suite completa solo en cierre de hitos/pre-commit. | §9.1 |
+| 2 | ⚡ Verificación por iteración mínima | `npm test` corre SOLO el cambio (`--changed`; añadir `-t "<nombre>"` para acotar). Suite completa solo en cierre de hitos y en el gate CI (push/PR); pre-commit ligero (§6). | §9.1 |
 | 3 | 🚪 Puerta de tipos por iteración | Correr `npx tsc -b` (o `tsc --noEmit`) en cada iteración. `vite build` solo en cierre de hitos. | §9.2 |
 | 4 | ✂️ Edición sobre bloques ya mapeados | Aplicar `apply_diff` con `start_line` y contenido ya conocido. Solo re-leer si el diff falla por desajuste. | §9.4 |
 | 5 | ⚙️ Paralelismo de herramientas | Ejecutar comandos y ediciones independientes en un solo mensaje (en paralelo). | §9.5 |
