@@ -14,42 +14,7 @@
 // ============================================================
 
 import { test, expect, type Page } from '@playwright/test';
-
-const BASE_URL = '/';
-
-async function gotoClean(page: Page): Promise<string[]> {
-    const errors: string[] = [];
-    page.on('pageerror', (err) => errors.push(err.message));
-    await page.addInitScript(() => {
-        localStorage.setItem('flu-onboarding-completed', 'true');
-        localStorage.setItem('flu-onboarding-step', JSON.stringify({ stepIndex: 0, captured: {} }));
-    });
-    await page.goto(BASE_URL, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForSelector('.flu-shell', { timeout: 15000 });
-    await page.evaluate(() => localStorage.clear());
-    // Esperar el tablist principal
-    const tablistSelectors = ['nav[role="tablist"]', '[role="tablist"]', '.flu-shell-tabs'];
-    const timeout = 15000;
-    const start = Date.now();
-    let lastError: any;
-    while (Date.now() - start < timeout) {
-        for (const sel of tablistSelectors) {
-            const loc = page.locator(sel).first();
-            const count = await loc.count().catch(() => 0);
-            if (count > 0) {
-                try {
-                    await loc.waitFor({ state: 'attached', timeout: 3000 });
-                    await page.waitForTimeout(300);
-                    return errors;
-                } catch (e) {
-                    lastError = e;
-                }
-            }
-        }
-        await page.waitForTimeout(200);
-    }
-    throw lastError || new Error(`gotoClean: timeout waiting for tablist after ${timeout}ms`);
-}
+import { gotoClean } from './_helpers';
 
 /** Navega a la pestaña principal "settings" y luego al grupo "FLU". */
 async function openFluSettings(page: Page): Promise<void> {
@@ -70,7 +35,7 @@ async function openFluSettings(page: Page): Promise<void> {
 }
 
 test('Fase D: Servicios Externos (APIs) es la sección principal visible', async ({ page }) => {
-    await gotoClean(page);
+    await gotoClean(page, { waitWorkspaceHub: false });
     await openFluSettings(page);
 
     const panel = page.locator('.flu-settings-panel');
@@ -92,7 +57,7 @@ test('Fase D: Servicios Externos (APIs) es la sección principal visible', async
 });
 
 test('Fase D: acordeón "Gobernado por IA" está colapsado por defecto', async ({ page }) => {
-    await gotoClean(page);
+    await gotoClean(page, { waitWorkspaceHub: false });
     await openFluSettings(page);
 
     const panel = page.locator('.flu-settings-panel');
@@ -112,7 +77,7 @@ test('Fase D: acordeón "Gobernado por IA" está colapsado por defecto', async (
 });
 
 test('Fase D: al expandir "Gobernado por IA" aparecen Configurador de FLU y Branding', async ({ page }) => {
-    await gotoClean(page);
+    await gotoClean(page, { waitWorkspaceHub: false });
     await openFluSettings(page);
 
     const panel = page.locator('.flu-settings-panel');
@@ -138,7 +103,7 @@ test('Fase D: al expandir "Gobernado por IA" aparecen Configurador de FLU y Bran
 });
 
 test('Fase D: secciones hermanas siguen presentes fuera del acordeón', async ({ page }) => {
-    const errors = await gotoClean(page);
+    const errors = await gotoClean(page, { waitWorkspaceHub: false });
     await openFluSettings(page);
 
     const panel = page.locator('.flu-settings-panel');

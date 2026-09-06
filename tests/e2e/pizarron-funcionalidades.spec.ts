@@ -29,53 +29,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
+import { gotoClean, stubLocalSpeech, captureScreenshot } from './_helpers';
 
 const SHOTS_DIR = path.join(process.cwd(), 'reports', 'pizarron-funcionalidades');
 fs.mkdirSync(SHOTS_DIR, { recursive: true });
-
-const BASE_URL = '/';
-
-// ============================================================
-// Helpers (patrón idéntico a horario-pizarron / cobertura-completa)
-// ============================================================
-
-async function gotoClean(page: Page): Promise<string[]> {
-    const errors: string[] = [];
-    page.on('pageerror', (err) => errors.push(err.message));
-    await page.addInitScript(() => {
-        localStorage.setItem('flu-onboarding-completed', 'true');
-        localStorage.setItem('flu-onboarding-step', JSON.stringify({ stepIndex: 0, captured: {} }));
-    });
-    await page.goto(BASE_URL, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForSelector('.flu-shell', { timeout: 15000 });
-    await page.evaluate(() => localStorage.clear());
-    const tablistSelectors = [
-        'nav[role="tablist"]',
-        '[role="tablist"]',
-        '.flu-shell-tabs',
-    ];
-    const timeout = 15000;
-    const start = Date.now();
-    let lastError: any;
-    while (Date.now() - start < timeout) {
-        for (const sel of tablistSelectors) {
-            const loc = page.locator(sel).first();
-            const count = await loc.count().catch(() => 0);
-            if (count > 0) {
-                try {
-                    await loc.waitFor({ state: 'attached', timeout: 3000 });
-                    await page.waitForTimeout(200);
-                    await page.waitForSelector('.workspace-hub', { timeout: 10000 });
-                    return errors;
-                } catch (e) {
-                    lastError = e;
-                }
-            }
-        }
-        await page.waitForTimeout(200);
-    }
-    throw lastError || new Error(`gotoClean: timeout waiting for tablist after ${timeout}ms`);
-}
 
 /**
  * Inyecta un contrato vía el hook DEV __fluOnContractResolved (fire-and-forget).
@@ -120,82 +77,10 @@ async function setWorkspaceArtifact(page: Page, artifact: Record<string, unknown
     await page.waitForTimeout(300);
 }
 
-/**
- * Silencia speechSynthesis y, CRÍTICO, dispara `onend` en cada utterance
- * para que la promesa de speakResponse() (fluSpeech.js) resuelva. Sin esto,
- * `await speakPromise` en App.tsx cuelga y el workspaceArtifact nunca se fija.
- *
- * IMPORTANTE (orden): usa page.addInitScript, que SOLO aplica a la SIGUIENTE
- * navegación. Debe registrarse ANTES de gotoClean(page) (que hace page.goto);
- * si se registra después, el stub queda inactivo y se usa el TTS real de
- * Chromium headless, cuyo `onend` puede no dispararse bajo carga paralela →
- * `await speakPromise` (App.tsx) cuelga y el flujo posterior nunca corre.
- *
- * El stub emula speechSynthesis de forma completa: define `speaking`/`pending`
- * (los lee speakResponse/isSpeechBusy) y `addEventListener`/`removeEventListener`
- * (los usa ensureSpeechVoicesReady cuando getVoices() devuelve vacío), para que
- * los caminos de voz funcionen con normalidad y no por fallback de error.
- */
-function stubLocalSpeech(page: Page) {
-    return page.addInitScript(() => {
-        const noop = () => {};
-        const listeners = new Map<string, Set<Function>>();
-        const synth = {
-            speaking: false,
-            pending: false,
-            speak(utterance: any) {
-                // Disparar onend de forma asíncrona para que la promesa
-                // de speakSingleChunk() resuelva (igual que el TTS real).
-                this.speaking = true;
-                setTimeout(() => {
-                    this.speaking = false;
-                    try {
-                        if (typeof utterance?.onend === 'function') utterance.onend();
-                    } catch {
-                        /* noop */
-                    }
-                }, 5);
-            },
-            cancel: noop,
-            pause: noop,
-            resume: noop,
-            getVoices: () => [],
-            onvoiceschanged: null,
-            addEventListener(type: string, cb: Function) {
-                if (!listeners.has(type)) listeners.set(type, new Set());
-                listeners.get(type)!.add(cb);
-            },
-            removeEventListener(type: string, cb: Function) {
-                listeners.get(type)?.delete(cb);
-            },
-        };
-        Object.defineProperty(window, 'speechSynthesis', {
-            value: synth,
-            configurable: true,
-        });
-        (window as any).SpeechSynthesisUtterance = class {
-            text = '';
-            lang = '';
-            rate = 1;
-            pitch = 1;
-            volume = 1;
-            voice: any = null;
-            onend: any = null;
-            onerror: any = null;
-            constructor(text?: string) {
-                this.text = text || '';
-            }
-        };
-    });
-}
-
-/** Captura una prueba visual tras una breve espera de reconciliación. */
-async function capture(page: Page, name: string): Promise<string> {
-    await page.waitForTimeout(500);
-    const file = path.join(SHOTS_DIR, name);
-    await page.screenshot({ path: file, animations: 'disabled' });
-    return file;
-}
+// stubLocalSpeech y captureScreenshot viven en ./_helpers (shared).
+// IMPORTANTE (orden): stubLocalSpeech usa addInitScript (aplica a la SIGUIENTE
+// navegación) → debe llamarse ANTES de gotoClean(page). captureScreenshot
+// recibe el directorio de capturas y el tiempo de reconciliación.
 
 // ============================================================
 // Datos de prueba
@@ -265,7 +150,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             await expect(responseEl).toBeVisible({ timeout: 10000 });
             await expect(responseEl).toContainText('fotosíntesis');
 
-            await capture(page, '1-respuesta-ia.png');
+            await captureScreenshot(page, SHOTS_DIR, '1-respuesta-ia.png');
             expect(errors.filter((e) => /cannot|undefined is not|is not a function/i.test(e))).toEqual([]);
         });
     });
@@ -284,7 +169,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             expect(text).toContain('Convierte CO₂ y agua en glucosa');
             expect(text).toContain('Libera oxígeno como subproducto');
 
-            await capture(page, '2-textos-workspace.png');
+            await captureScreenshot(page, SHOTS_DIR, '2-textos-workspace.png');
         });
 
         test('2.2 El contenido del artefacto se muestra completo en el cuerpo del Pizarrón', async ({ page }) => {
@@ -358,7 +243,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             const cardText = await card.innerText();
             expect(cardText).toContain('Arrecife de coral');
 
-            await capture(page, '3-buscador-imagenes.png');
+            await captureScreenshot(page, SHOTS_DIR, '3-buscador-imagenes.png');
         });
     });
 
@@ -434,7 +319,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
                 await expect(error).toBeVisible({ timeout: 10000 });
             }
 
-            await capture(page, '4-imagen-ia.png');
+            await captureScreenshot(page, SHOTS_DIR, '4-imagen-ia.png');
             expect(errors.filter((e) => /cannot|undefined is not|is not a function/i.test(e))).toEqual([]);
         });
     });
@@ -533,7 +418,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             const href = await link.getAttribute('href');
             expect(href).toContain('es.wikipedia.org');
 
-            await capture(page, '5-navegador.png');
+            await captureScreenshot(page, SHOTS_DIR, '5-navegador.png');
         });
     });
 
@@ -564,7 +449,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             const img = page.locator('.flu-upload-zone__img');
             await expect(img).toBeVisible({ timeout: 10000 });
 
-            await capture(page, '6-carga-archivo.png');
+            await captureScreenshot(page, SHOTS_DIR, '6-carga-archivo.png');
         });
     });
 
@@ -596,7 +481,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             const generacionCard = page.getByTestId('result-feed-card-ia-generacion');
             await expect(generacionCard).toBeVisible({ timeout: 10000 });
 
-            await capture(page, '7-generacion-documento.png');
+            await captureScreenshot(page, SHOTS_DIR, '7-generacion-documento.png');
         });
     });
 
@@ -625,7 +510,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             const preview = page.locator('.flu-upload-zone__preview');
             await expect(preview).toBeVisible({ timeout: 10000 });
 
-            await capture(page, '8-ocr-carga.png');
+            await captureScreenshot(page, SHOTS_DIR, '8-ocr-carga.png');
         });
     });
 
@@ -706,7 +591,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             expect(bodyText).toContain('Fotosíntesis - Wikipedia');
             expect(bodyText).toContain('Sitio no permitido');
 
-            await capture(page, '9-buscador-web.png');
+            await captureScreenshot(page, SHOTS_DIR, '9-buscador-web.png');
         });
     });
 
@@ -769,7 +654,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             await expect(page.getByTestId('horario-week')).toBeVisible({ timeout: 20000 });
             await expect(page.locator('.flu-horario__cls-materia', { hasText: 'Matemáticas' })).toBeVisible();
 
-            await capture(page, '10-horario.png');
+            await captureScreenshot(page, SHOTS_DIR, '10-horario.png');
         });
     });
 
@@ -800,7 +685,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             await expect(card).toBeVisible({ timeout: 15000 });
             await expect(card.locator('.frame-content__list li', { hasText: 'La mitosis produce dos células hijas' })).toBeVisible();
 
-            await capture(page, '11-documento.png');
+            await captureScreenshot(page, SHOTS_DIR, '11-documento.png');
         });
     });
 
@@ -844,7 +729,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             await expect(card.locator('.document-analysis__app-proposito', { hasText: 'Autenticar al usuario' })).toBeVisible();
             await expect(card.locator('.document-analysis__error-item', { hasText: 'Falta validación' })).toBeVisible();
 
-            await capture(page, '12-app.png');
+            await captureScreenshot(page, SHOTS_DIR, '12-app.png');
         });
     });
 });
