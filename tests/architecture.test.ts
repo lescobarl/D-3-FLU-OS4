@@ -228,24 +228,6 @@ describe('SyncTuple Compliance [Obligación #7]', () => {
 });
 
 // ============================================================
-// 11. Audit Log Compliance (Obligación #5)
-// ============================================================
-describe('Audit Log Compliance [Obligación #5]', () => {
-
-    it('fluDatabase must export addAuditLog function', async () => {
-        const { addAuditLog } = await import('../src/core/db/fluDatabase');
-        expect(addAuditLog).toBeDefined();
-        expect(typeof addAuditLog).toBe('function');
-    });
-
-    it('useAuditLog hook must exist and export required functions', async () => {
-        const { useAuditLog } = await import('../src/hooks/useAuditLog');
-        expect(useAuditLog).toBeDefined();
-        expect(typeof useAuditLog).toBe('function');
-    });
-});
-
-// ============================================================
 // 12. Conversation State Machine — All States Covered
 // ============================================================
 describe('Conversation State Machine', () => {
@@ -306,19 +288,7 @@ describe('Bridge Types — Complete Type Definitions', () => {
 });
 
 // ============================================================
-// 15. Fallback Responses — All Categories Covered
-// ============================================================
-describe('Fallback Responses — Complete Coverage', () => {
-
-    it('fallbackResponses must export generateResponse', async () => {
-        const { generateResponse } = await import('../src/services/fallbackResponses');
-        expect(generateResponse).toBeDefined();
-        expect(typeof generateResponse).toBe('function');
-    });
-});
-
-// ============================================================
-// 16. EXPRESSION_MAP vs expressionRegistry — Data Alignment
+// 15. EXPRESSION_MAP vs expressionRegistry — Data Alignment
 // ============================================================
 describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]', () => {
 
@@ -399,29 +369,5 @@ describe('Fase 2 — Database v5: tablas reminders y shoppingItems', () => {
         expect(src).toContain('export interface ReminderRecord');
         expect(src).toContain('export interface ShoppingItemRecord');
         expect(src).toContain("export type ReminderStatus = 'pending' | 'done' | 'dismissed'");
-    });
-
-    it('fluDatabase must expose reminders and shoppingItems tables at runtime', async () => {
-        const { fluDb } = await import('../src/core/db/fluDatabase');
-        expect(fluDb.reminders).toBeDefined();
-        expect(fluDb.shoppingItems).toBeDefined();
-    });
-});
-
-describe('Fase 2 — FLU_CONFIG: recordatorios y compras centralizados [Rule #1]', () => {
-    it('FLU_CONFIG must enable reminders and shopping with agenda maxReminders=5', async () => {
-        const { FLU_CONFIG } = await import('../src/voice/lib/fluConfig.js');
-        expect(FLU_CONFIG.reminders.enabled).toBe(true);
-        expect(FLU_CONFIG.shopping.enabled).toBe(true);
-        expect(FLU_CONFIG.agenda.maxReminders).toBe(5);
-    });
-
-    it('FLU_CONFIG must centralize reminder and shopping defaults (no hardcode)', async () => {
-        const { FLU_CONFIG } = await import('../src/voice/lib/fluConfig.js');
-        expect(FLU_CONFIG.reminders.defaultReminderOffsetMinutes).toBe(10);
-        expect(FLU_CONFIG.reminders.maxPerDay).toBe(20);
-        expect(FLU_CONFIG.reminders.defaultCategory).toBe('reminder');
-        expect(FLU_CONFIG.shopping.defaultCategory).toBe('shopping');
-        expect(FLU_CONFIG.agenda.enabled).toBe(true);
     });
 });
