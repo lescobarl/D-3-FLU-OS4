@@ -61,10 +61,7 @@ import DocumentResultPanel from './components/DocumentResultPanel';
 import AppAnalysisPanel from './components/AppAnalysisPanel';
 import GenerationProgressPanel from './components/GenerationProgressPanel';
 import FluCollapsibleCard from './components/FluCollapsibleCard';
-import { BrowserProfilesPanel } from './components/BrowserProfilesPanel';
-import { SearchControlCenter } from './components/SearchControlCenter';
-import { WorkspaceSearch } from './components/WorkspaceSearch';
-import { WorkspaceHub } from './components/WorkspaceHub';
+import { FluWorkspaceTabView } from './components/FluWorkspaceTabView';
 import {
     loadSearchConfigOverrides,
     saveSearchConfigOverrides,
@@ -73,7 +70,7 @@ import {
 } from './core/search/searchConfigOverrides';
 import { isSupportedDocument } from './lib/documentParser';
 import type { GenerationFormato } from './types/documentContracts';
-import { useAutonomyIntegration, AutonomyStatusPanel } from './core/autonomy';
+import { useAutonomyIntegration } from './core/autonomy';
 import {
     detectActionInTranscript,
     detectEmotionInTranscript,
@@ -97,21 +94,12 @@ import './avatar/App.css';
 // OS2 Component Imports — local paths (formerly flu-voz alias)
 // ============================================================
 import FluParticipantSettingsPanel from './voice/components/FluParticipantSettingsPanel';
-import { MinuteHistoryPanel } from './voice/components/MinuteHistoryPanel';
-import { MinuteDraftPanel } from './voice/components/MinuteDraftPanel';
-import { VoiceProfilesPanel } from './voice/components/VoiceProfilesPanel';
-import { ConversationLog } from './voice/components/ConversationLog';
-import { FluShellTabs, FluTabPanel } from './voice/components/FluShellTabs';
-import { PanelFrame } from './voice/components/PanelFrame';
-
-// ---- OS2 components are JS (no TS declarations) — cast for TypeScript compatibility ----
-const ConversationLogAny = ConversationLog as React.ComponentType<any>;
-const MinuteDraftPanelAny = MinuteDraftPanel as React.ForwardRefExoticComponent<any>;
+import { FluShellTabs } from './voice/components/FluShellTabs';
 import { VoiceAssistantBarWrapper } from './components/VoiceAssistantBarWrapper';
-import { FluSettingsPanel } from './components/FluSettingsPanel';
-import { AssistantSettingsPanel } from './components/AssistantSettingsPanel';
-import { AmbientesPanel } from './components/AmbientesPanel';
-import { PaletasPanel } from './components/PaletasPanel';
+import { FluSettingsTabView, type SettingsGroupId } from './components/FluSettingsTabView';
+import { FluSystemTabView } from './components/FluSystemTabView';
+import { FluConversationTabView } from './components/FluConversationTabView';
+import { FluMinutesTabView } from './components/FluMinutesTabView';
 import { OnboardingOverlay } from './components/OnboardingOverlay';
 import { useOnboarding } from './hooks/useOnboarding';
 import { useOnboardingVoiceCapture } from './hooks/useOnboardingVoiceCapture';
@@ -120,12 +108,9 @@ import { useDoNotDisturb } from './hooks/useDoNotDisturb';
 // ---- Fase 2 — Memoria y recordatorios: hooks, paneles y parser de intención ----
 import { useReminders } from './hooks/useReminders';
 import { useShoppingList } from './hooks/useShoppingList';
-import { RemindersPanel } from './components/RemindersPanel';
-import { ShoppingPanel } from './components/ShoppingPanel';
 import { parseReminderIntent } from './core/reminders/reminderIntentParser';
 // ---- Motor temporal genérico — alarmas y temporizadores (despertador + temporizador) ----
 import { useTemporalItems } from './hooks/useTemporalItems';
-import { TemporalItemsPanel } from './components/TemporalItemsPanel';
 import { parseTemporalIntent, formatDurationMs } from './core/temporal/temporalIntentParser';
 // ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
 import { useDeviceActions } from './hooks/useDeviceActions';
@@ -146,20 +131,14 @@ import {
 import { useParticipants } from './hooks/useParticipants';
 import { resolveKindRole } from './core/multiuser/participantRegistry';
 import { useMateriaGris } from './hooks/useMateriaGris';
-import { ParticipantsPanel } from './components/ParticipantsPanel';
-import { MateriaGrisPanel } from './components/MateriaGrisPanel';
 // ---- Fase 4 — Módulo G: hábitos y metas ----
 import { useHabits } from './hooks/useHabits';
-import { HabitsPanel } from './components/HabitsPanel';
 // ---- Fase 5 — Módulo H: bienestar y ánimo ----
 import { useMood } from './hooks/useMood';
-import { MoodPanel } from './components/MoodPanel';
 // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
 import { useContacts } from './hooks/useContacts';
 import { useDiary } from './hooks/useDiary';
 import { useNotes } from './hooks/useNotes';
-import { ContactsPanel } from './components/ContactsPanel';
-import { DiaryPanel } from './components/DiaryPanel';
 import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
 
@@ -169,7 +148,7 @@ import { fluDb } from './core/db/fluDatabase';
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
-import { stripWakeWordForDisplay, normalizeCommandForDeterministic } from './voice/lib/audioMath';
+import { normalizeCommandForDeterministic } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
@@ -245,17 +224,6 @@ import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile }
 // Tipo para las pestañas del panel derecho
 // ============================================================
 type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings' | 'system';
-
-// ============================================================
-// Sub-secciones del panel de Ajustes (Fase A2)
-// ============================================================
-type SettingsGroupId = 'flu' | 'data' | 'management';
-
-const SETTINGS_GROUPS: ReadonlyArray<{ id: SettingsGroupId; label: string }> = [
-  { id: 'flu', label: 'FLU' },
-  { id: 'data', label: 'Mis datos' },
-  { id: 'management', label: 'Gestión' },
-];
 
 // ============================================================
 // ErrorBoundary — Captura errores de renderizado y los muestra en la UI
@@ -4673,508 +4641,351 @@ const {
 
                             <div className="flu-shell__tab-content">
                                 {/* Pizarron Tab (renamed from Workspace) */}
-                            <FluTabPanel tabId="workspace" activeTab={activeTab} className="flu-tab-panel--workspace">
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.workspace || 'workspace'}
-                                    title={FLU_CONFIG.ui?.workspace?.title || ''}
-                                    className="panel-frame--workspace"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <div className="frame-content frame-content--workspace">
-                                        <WorkspaceHub
-                                            searchAllowlist={resolvedBrowserAllowlist}
-                                            searchOverrides={searchOverrides}
-                                            workspaceArtifact={integrationStore.workspaceArtifact}
-                                            latestResponse={latestResponse}
-                                            liveTranscript={liveTranscript}
-                                            currentTranscript={integrationStore.currentTranscript}
-                                            isListening={voiceStatus === 'listening'}
-                                            homeworkContext={homeworkContext}
-                                            image={{
-                                                imageUrl: workspaceImage.imageUrl,
-                                                isLoading: workspaceImage.isLoading,
-                                                isFailed: workspaceImage.isFailed,
-                                                isExpanded: workspaceImage.isExpanded,
-                                                loadAttempt: workspaceImage.loadAttempt,
-                                                loadTimeoutRef: workspaceImage.loadTimeoutRef,
-                                                expand: workspaceImage.expand,
-                                                close: workspaceImage.close,
-                                                retry: workspaceImage.retry,
-                                                retryLoad: workspaceImage.retryLoad,
-                                                fallbackToGemini: workspaceImage.fallbackToGemini,
-                                            }}
-                                            document={{
-                                                isAnalyzing: documentAnalysis.isAnalyzing,
-                                                error: documentAnalysis.error,
-                                                warnings: documentAnalysis.warnings,
-                                                artifact: integrationStore.documentArtifact,
-                                                clear: documentAnalysis.clear,
-                                            }}
-                                            app={{
-                                                isAnalyzing: appAnalysis.isAnalyzing,
-                                                error: appAnalysis.error,
-                                                artifact: integrationStore.appAnalysisArtifact,
-                                                clear: appAnalysis.clear,
-                                            }}
-                                            generation={{
-                                                isGenerating: documentGeneration.isGenerating,
-                                                error: documentGeneration.error,
-                                                job: integrationStore.generationJob,
-                                                result: documentGeneration.result,
-                                                videoResult: documentGeneration.videoResult,
-                                                clear: documentGeneration.clear,
-                                            }}
-                                            horarioImport={{
-                                                pending: pendingHorarioImport,
-                                                busy: horarioImportBusy,
-                                                onConfirm: confirmHorarioImport,
-                                                onCancel: cancelHorarioImport,
-                                            }}
-                                            upload={{
-                                                uploadedImage,
-                                                isAnalyzing,
-                                                error: uploadError,
-                                                fileInputRef,
-                                                docInputRef,
-                                                projectInputRef,
-                                                onFileDrop: handleFileDrop,
-                                                onFileSelected: handleFileSelected,
-                                                onDocumentFileSelected: handleDocumentFileSelected,
-                                                onProjectFolderSelected: handleProjectFolderSelected,
-                                                onClearImage: handleClearImage,
-                                            }}
-                                            hoy={{
-                                                horario: {
-                                                    items: horario.horario,
-                                                    loading: horario.loading,
-                                                    modo: horarioModo,
-                                                    onModoChange: setHorarioModo,
-                                                    onAdd: async (input) => horario.add(input),
-                                                    onRemove: async (id) => {
-                                                        await horario.remove(id);
-                                                    },
+                                <FluWorkspaceTabView
+                                    activeTab={activeTab}
+                                    expandedFrameId={expandedFrameId}
+                                    onToggleExpand={handleToggleExpand}
+                                    hub={{
+                                        searchAllowlist: resolvedBrowserAllowlist,
+                                        searchOverrides,
+                                        workspaceArtifact: integrationStore.workspaceArtifact,
+                                        latestResponse,
+                                        liveTranscript,
+                                        currentTranscript: integrationStore.currentTranscript,
+                                        isListening: voiceStatus === 'listening',
+                                        homeworkContext,
+                                        image: workspaceImage,
+                                        document: {
+                                            isAnalyzing: documentAnalysis.isAnalyzing,
+                                            error: documentAnalysis.error,
+                                            warnings: documentAnalysis.warnings,
+                                            artifact: integrationStore.documentArtifact,
+                                            clear: documentAnalysis.clear,
+                                        },
+                                        app: {
+                                            isAnalyzing: appAnalysis.isAnalyzing,
+                                            error: appAnalysis.error,
+                                            artifact: integrationStore.appAnalysisArtifact,
+                                            clear: appAnalysis.clear,
+                                        },
+                                        generation: {
+                                            isGenerating: documentGeneration.isGenerating,
+                                            error: documentGeneration.error,
+                                            job: integrationStore.generationJob,
+                                            result: documentGeneration.result,
+                                            videoResult: documentGeneration.videoResult,
+                                            clear: documentGeneration.clear,
+                                        },
+                                        horarioImport: {
+                                            pending: pendingHorarioImport,
+                                            busy: horarioImportBusy,
+                                            onConfirm: confirmHorarioImport,
+                                            onCancel: cancelHorarioImport,
+                                        },
+                                        upload: {
+                                            uploadedImage,
+                                            isAnalyzing,
+                                            error: uploadError,
+                                            fileInputRef,
+                                            docInputRef,
+                                            projectInputRef,
+                                            onFileDrop: handleFileDrop,
+                                            onFileSelected: handleFileSelected,
+                                            onDocumentFileSelected: handleDocumentFileSelected,
+                                            onProjectFolderSelected: handleProjectFolderSelected,
+                                            onClearImage: handleClearImage,
+                                        },
+                                        hoy: {
+                                            horario: {
+                                                items: horario.horario,
+                                                loading: horario.loading,
+                                                modo: horarioModo,
+                                                onModoChange: setHorarioModo,
+                                                onAdd: async (input) => horario.add(input),
+                                                onRemove: async (id) => {
+                                                    await horario.remove(id);
                                                 },
-                                                diary: {
-                                                    entries: diary.entries,
-                                                    loading: diary.loading,
-                                                },
-                                                notes: {
-                                                    notes: notes.notes,
-                                                    loading: notes.loading,
-                                                    onToggle: async (id) => notes.toggle(id),
-                                                    onRemove: async (id) => notes.remove(id),
-                                                },
-                                                language,
-                                            }}
-                                            language={language}
-                                        />
-                                    </div>
-                                </PanelFrame>
-                            </FluTabPanel>
+                                            },
+                                            diary: {
+                                                entries: diary.entries,
+                                                loading: diary.loading,
+                                            },
+                                            notes: {
+                                                notes: notes.notes,
+                                                loading: notes.loading,
+                                                onToggle: async (id) => notes.toggle(id),
+                                                onRemove: async (id) => notes.remove(id),
+                                            },
+                                            language,
+                                        },
+                                        language,
+                                    }}
+                                />
 
                             {/* Conversation Tab */}
-                            <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.conversation || 'conversation'}
-                                    title={FLU_CONFIG.ui?.workspace?.visibleLabels?.log || 'Bitácora'}
-                                    subtitle={FLU_CONFIG.ui?.workspace?.conversationSubtitle || 'Transcripción en vivo de la conversación'}
-                                    className="panel-frame--log"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    {/* OS3 parity: live phrase display above conversation log — sin label para ahorrar espacio */}
-                                    <div className="conversation-live-phrase frame-content__response">
-                                        <div className="conversation-live-phrase__scroll">
-                                            <span>{stripWakeWordForDisplay(liveTranscript || integrationStore.currentTranscript || '', FLU_CONFIG.voiceCommands?.wakeWords || []) || '\u00a0'}</span>
-                                        </div>
-                                    </div>
-                                    <ConversationLogAny
-                                        entries={integrationStore.conversationHistory}
-                                        emptyLabel={FLU_CONFIG.ui?.workspace?.conversationEmpty || 'Sin conversación'}
-                                    />
-                                </PanelFrame>
-
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.voiceProfiles || 'voiceProfiles'}
-                                    title={FLU_CONFIG.ui?.workspace?.participantsTitle || 'Participantes'}
-                                    className="panel-frame--participants"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                    <VoiceProfilesPanel {...({
-                                        // OS2 parity: sessionParticipants = history participants + voice profiles
-                                        // Memoized via voiceParticipants useMemo to avoid recomputation on every render.
-                                        participants: voiceParticipants,
-                                        onRenameProfile: handleRenameProfile,
-                                        onRenameSessionSpeaker: handleRenameProfile,
-                                        onRemoveParticipant: handleRemoveParticipant,
-                                    } as any)} />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluConversationTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                liveTranscript={liveTranscript}
+                                currentTranscript={integrationStore.currentTranscript}
+                                conversationHistory={integrationStore.conversationHistory}
+                                voiceParticipants={voiceParticipants}
+                                onRenameProfile={handleRenameProfile}
+                                onRemoveParticipant={handleRemoveParticipant}
+                            />
 
                             {/* Minutes Tab */}
-                            <FluTabPanel tabId="minutes" activeTab={activeTab} className="flu-tab-panel--minutes">
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.minute || 'minute'}
-                                    title={FLU_CONFIG.ui?.workspace?.visibleLabels?.summary || 'Minuta'}
-                                    className="panel-frame--minute"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <div className="minute-actions-row" style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                                        <button
-                                            type="button"
-                                            className="flu-btn flu-btn--primary"
-                                            onClick={() => handleGenerateSummary({ announce: true })}
-                                            disabled={!isSupported || isSummarizing}
-                                        >
-                                            {isSummarizing
-                                                ? `${FLU_CONFIG.ui?.buttons?.generateMinute || 'Generar Minuta'}...`
-                                                : FLU_CONFIG.ui?.buttons?.generateMinute || 'Generar Minuta'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="flu-btn"
-                                            onClick={() => minutePanelRef.current?.save()}
-                                        >
-                                            {FLU_CONFIG.ui?.buttons?.saveMinute || 'Guardar Minuta'}
-                                        </button>
-                                    </div>
-                                    <MinuteDraftPanelAny
-                                        ref={minutePanelRef}
-                                        draft={minuteDraft}
-                                        onChange={setMinuteDraft}
-                                        onSave={handleSaveMinute}
-                                        emptyLabel={FLU_CONFIG.ui?.workspace?.minuteDraftEmpty || 'Sin borrador de minuta'}
-                                    />
-                                </PanelFrame>
-
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.history || 'history'}
-                                    title={FLU_CONFIG.ui?.workspace?.visibleLabels?.history || 'Historial de minutas'}
-                                    className="panel-frame--history"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <MinuteHistoryPanel
-                                        entries={minuteKnowledge.minutes as any}
-                                        selectedId={selectedMinuteId || undefined}
-                                        onSelect={handleSelectMinuteHistory}
-                                        emptyLabel={FLU_CONFIG.ui?.workspace?.minuteHistoryEmpty || 'Sin minutas guardadas'}
-                                    />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluMinutesTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                isSupported={isSupported}
+                                isSummarizing={isSummarizing}
+                                onGenerateSummary={handleGenerateSummary}
+                                draft={minuteDraft}
+                                onDraftChange={setMinuteDraft}
+                                onSaveMinute={handleSaveMinute}
+                                minutePanelRef={minutePanelRef}
+                                history={minuteKnowledge.minutes}
+                                selectedId={selectedMinuteId}
+                                onSelect={handleSelectMinuteHistory}
+                            />
 
                             {/* Settings Tab — OS2 parity structure */}
-                            <FluTabPanel tabId="settings" activeTab={activeTab} className="flu-tab-panel--settings">
-                                <PanelFrame
-                                    frameId="settings"
-                                    title="Configuración"
-                                    className="panel-frame--settings"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    {/* Sub-menú de secciones (Fase A2): mismas pestañas, mismo estado, agrupación visual */}
-                                    <div className="flu-settings-groups" role="tablist" aria-label="Secciones de ajustes">
-                                        {SETTINGS_GROUPS.map((group) => (
-                                            <button
-                                                key={group.id}
-                                                type="button"
-                                                role="tab"
-                                                aria-selected={settingsGroup === group.id}
-                                                className={[
-                                                    'flu-settings-groups__pill',
-                                                    settingsGroup === group.id ? 'is-active' : '',
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join(' ')}
-                                                onClick={() => setSettingsGroup(group.id)}
-                                            >
-                                                {group.label}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* Grupo FLU — identidad, voz y participantes */}
-                                    <div
-                                        className="flu-settings-group flu-settings-group--flu"
-                                        role="tabpanel"
-                                        hidden={settingsGroup !== 'flu'}
-                                    >
-                                        <FluSettingsPanel
-                                            language={language}
-                                            apiKey={apiKey}
-                                            textModel={textModel}
-                                            textApiUrl={textApiUrl}
-                                            geminiApiKey={geminiApiKey}
-                                            imageModel={imageModel}
-                                            imageApiKey={imageApiKey}
-                                            imageApiUrl={imageApiUrl}
-                                            ocrApiKey={ocrApiKey}
-                                            ocrModel={ocrModel}
-                                            ocrApiUrl={ocrApiUrl}
-                                            voices={voices}
-                                            handleTextModelCommit={handleTextModelCommit}
-                                            handleTextApiKeyCommit={handleTextApiKeyCommit}
-                                            handleTextApiUrlCommit={handleTextApiUrlCommit}
-                                            handleGeminiApiKeyCommit={handleGeminiApiKeyCommit}
-                                            handleImageModelCommit={handleImageModelCommit}
-                                            handleImageApiKeyCommit={handleImageApiKeyCommit}
-                                            handleImageApiUrlCommit={handleImageApiUrlCommit}
-                                            handleOcrApiKeyCommit={handleOcrApiKeyCommit}
-                                            handleOcrModelCommit={handleOcrModelCommit}
-                                            handleOcrApiUrlCommit={handleOcrApiUrlCommit}
-                                            onClearCache={handleClearCache}
-                                            wakeWords={wakeWords}
-                                            setWakeWords={setWakeWords}
-                                            debugLogsEnabled={debugLogsEnabled}
-                                            setDebugLogsEnabled={setDebugLogsEnabled}
-                                            handleParticipantConfigChange={handleParticipantConfigChange}
-                                            // ---- Branding Inteligente por Temporalidad ----
-                                            brandingMode={branding.config.mode}
-                                            brandingSeason={branding.config.activeSeason}
-                                            brandingBirthday={branding.config.birthday}
-                                            brandingCelebrateAchievements={branding.config.celebrateAchievements}
-                                            onBrandingModeChange={branding.seasonalActions.setMode}
-                                            onBrandingSeasonChange={branding.seasonalActions.setActiveSeason}
-                                            onBrandingBirthdayChange={branding.seasonalActions.setBirthday}
-                                            onBrandingCelebrateAchievementsChange={branding.seasonalActions.setCelebrateAchievements}
-                                            // ---- AI Provider Selection ----
-                                            aiProvider={aiProvider}
-                                            setAiProvider={handleSetAiProvider}
-                                        />
-                                        <AmbientesPanel
-                                            ambientes={ambientes}
-                                            activeAmbienteId={activeAmbienteId}
-                                            onActivate={handleActivateAmbiente}
-                                            dynamicIds={dynamicAmbienteIds}
-                                            onRegister={handleRegisterAmbiente}
-                                            onUpdate={handleUpdateAmbiente}
-                                            onRemove={handleRemoveAmbiente}
-                                        />
-                                        <PaletasPanel
-                                            paletas={paletas}
-                                            activeSeason={branding.config.activeSeason}
-                                            onActivate={handleActivatePaleta}
-                                            dynamicIds={dynamicPaletaIds}
-                                            onRegister={handleRegisterPaleta}
-                                            onUpdate={handleUpdatePaleta}
-                                            onRemove={handleRemovePaleta}
-                                        />
-                                        <AssistantSettingsPanel
-                                            channel={notificationCenter.channel}
-                                            onChannelChange={notificationCenter.setChannel}
-                                            dnd={dnd}
-                                            onSetDndEnabled={dndActions.setEnabled}
-                                            onSetDndSchedule={dndActions.setSchedule}
-                                            onSetDndAllowUrgent={dndActions.setAllowUrgent}
-                                            onReplayOnboarding={onboarding.reset}
-                                        />
-                                        <ParticipantsPanel
-                                            items={participants.participants}
-                                            loading={participants.loading}
-                                            birthdayNear={birthdayNear}
-                                            profiles={communicationProfiles.profiles}
-                                            onSetManual={communicationProfiles.setManual}
-                                            onResetPerson={communicationProfiles.resetPerson}
-                                            onRegister={async (input) => {
-                                                return participants.register(input);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await handleRemoveMultiuserParticipant(id);
-                                            }}
-                                        />
-                                        <BrowserProfilesPanel
-                                            items={participants.participants}
-                                            loading={participants.loading}
-                                            profiles={browserProfiles.profiles}
-                                            onUpdate={browserProfiles.update}
-                                            onReset={browserProfiles.reset}
-                                        />
-                                        <SearchControlCenter
-                                            overrides={searchOverrides}
-                                            onChange={handleSearchConfigChange}
-                                            onReset={handleSearchConfigReset}
-                                            allowlist={resolvedBrowserAllowlist}
-                                            sites={searchSites.sites}
-                                            dynamicDomains={searchSites.dynamicDomains}
-                                            loading={searchSites.loading}
-                                            onRegister={searchSites.register}
-                                            onUpdate={searchSites.update}
-                                            onRemove={searchSites.remove}
-                                        />
-                                    </div>
-
-                                    {/* Grupo Mis datos — agenda personal */}
-                                    <div
-                                        className="flu-settings-group flu-settings-group--data"
-                                        role="tabpanel"
-                                        hidden={settingsGroup !== 'data'}
-                                    >
-                                        <ContactsPanel
-                                            participants={participants.participants}
-                                            contacts={contacts.contacts}
-                                            birthdayNear={contacts.birthdayNear}
-                                            loading={contacts.loading}
-                                            onAdd={async (input) => {
-                                                await contacts.addContact(input);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await contacts.removeContact(id);
-                                            }}
-                                        />
-                                        <DiaryPanel
-                                            participants={participants.participants}
-                                            entries={diary.entries}
-                                            loading={diary.loading}
-                                            onAdd={async (input) => {
-                                                await diary.addEntry(input);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await diary.removeEntry(id);
-                                            }}
-                                        />
-                                        <MoodPanel
-                                            participants={participants.participants}
-                                            moods={mood.moods}
-                                            summary={mood.summary}
-                                            loading={mood.loading}
-                                            onLog={async (input) => {
-                                                await mood.logMood(input);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await mood.removeMood(id);
-                                            }}
-                                        />
-                                        <HabitsPanel
-                                            participants={participants.participants}
-                                            stats={habits.stats}
-                                            loading={habits.loading}
-                                            onAdd={async (input) => {
-                                                await habits.addGoal(input);
-                                            }}
-                                            onCheckIn={async (goalId, date, done) => {
-                                                await habits.checkIn({ goalId, date, done });
-                                            }}
-                                            onStatus={async (id, status) => {
-                                                await habits.updateStatus(id, status);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await habits.removeGoal(id);
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* Grupo Gestión — recordatorios, compras y reconocimiento */}
-                                    <div
-                                        className="flu-settings-group flu-settings-group--management"
-                                        role="tabpanel"
-                                        hidden={settingsGroup !== 'management'}
-                                    >
-                                        <RemindersPanel
-                                            items={reminders.reminders}
-                                            loading={reminders.loading}
-                                            pendingCount={reminders.pendingCount}
-                                            authorFilter={remindersAuthor}
-                                            authorPending={pendingByAuthor}
-                                            onAuthorFilterChange={setRemindersAuthor}
-                                            onAdd={async (input) => {
-                                                await reminders.add(input);
-                                            }}
-                                            onComplete={async (id) => {
-                                                await reminders.complete(id);
-                                            }}
-                                            onDismiss={async (id) => {
-                                                await reminders.dismiss(id);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await reminders.remove(id);
-                                            }}
-                                        />
-                                        <TemporalItemsPanel
-                                            alarms={temporals.alarms}
-                                            timers={temporals.timers}
-                                            loading={temporals.loading}
-                                            onAdd={async (input) => {
-                                                await temporals.add(input);
-                                            }}
-                                            onCancel={async (id) => {
-                                                await temporals.cancel(id);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await temporals.remove(id);
-                                            }}
-                                        />
-                                        <ShoppingPanel
-                                            items={shopping.items}
-                                            loading={shopping.loading}
-                                            remainingCount={shopping.remainingCount}
-                                            onAdd={async (label) => {
-                                                await shopping.addMany(
-                                                    label
-                                                        .split(',')
-                                                        .map((s) => s.trim())
-                                                        .filter(Boolean),
-                                                );
-                                            }}
-                                            onToggle={async (id) => {
-                                                await shopping.toggle(id);
-                                            }}
-                                            onRemove={async (id) => {
-                                                await shopping.remove(id);
-                                            }}
-                                            onClearChecked={async () => {
-                                                await shopping.clearChecked();
-                                            }}
-                                        />
-                                        <MateriaGrisPanel
-                                            participants={participants.participants}
-                                            leaderboard={materiaGris.leaderboard}
-                                            history={materiaGris.history}
-                                            loading={materiaGris.loading}
-                                            onAward={async (input) => {
-                                                await materiaGris.awardPoints(input);
-                                            }}
-                                        />
-                                    </div>
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluSettingsTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                group={settingsGroup}
+                                onGroupChange={setSettingsGroup}
+                                flu={{
+                                    language,
+                                    apiKey,
+                                    textModel,
+                                    textApiUrl,
+                                    geminiApiKey,
+                                    imageModel,
+                                    imageApiKey,
+                                    imageApiUrl,
+                                    ocrApiKey,
+                                    ocrModel,
+                                    ocrApiUrl,
+                                    voices,
+                                    handleTextModelCommit,
+                                    handleTextApiKeyCommit,
+                                    handleTextApiUrlCommit,
+                                    handleGeminiApiKeyCommit,
+                                    handleImageModelCommit,
+                                    handleImageApiKeyCommit,
+                                    handleImageApiUrlCommit,
+                                    handleOcrApiKeyCommit,
+                                    handleOcrModelCommit,
+                                    handleOcrApiUrlCommit,
+                                    onClearCache: handleClearCache,
+                                    wakeWords,
+                                    setWakeWords,
+                                    debugLogsEnabled,
+                                    setDebugLogsEnabled,
+                                    handleParticipantConfigChange,
+                                    brandingMode: branding.config.mode,
+                                    brandingSeason: branding.config.activeSeason,
+                                    brandingBirthday: branding.config.birthday,
+                                    brandingCelebrateAchievements: branding.config.celebrateAchievements,
+                                    onBrandingModeChange: branding.seasonalActions.setMode,
+                                    onBrandingSeasonChange: branding.seasonalActions.setActiveSeason,
+                                    onBrandingBirthdayChange: branding.seasonalActions.setBirthday,
+                                    onBrandingCelebrateAchievementsChange: branding.seasonalActions.setCelebrateAchievements,
+                                    aiProvider,
+                                    setAiProvider: handleSetAiProvider,
+                                }}
+                                ambientes={{
+                                    ambientes,
+                                    activeAmbienteId,
+                                    onActivate: handleActivateAmbiente,
+                                    dynamicIds: dynamicAmbienteIds,
+                                    onRegister: handleRegisterAmbiente,
+                                    onUpdate: handleUpdateAmbiente,
+                                    onRemove: handleRemoveAmbiente,
+                                }}
+                                paletas={{
+                                    paletas,
+                                    activeSeason: branding.config.activeSeason,
+                                    onActivate: handleActivatePaleta,
+                                    dynamicIds: dynamicPaletaIds,
+                                    onRegister: handleRegisterPaleta,
+                                    onUpdate: handleUpdatePaleta,
+                                    onRemove: handleRemovePaleta,
+                                }}
+                                assistant={{
+                                    channel: notificationCenter.channel,
+                                    onChannelChange: notificationCenter.setChannel,
+                                    dnd,
+                                    onSetDndEnabled: dndActions.setEnabled,
+                                    onSetDndSchedule: dndActions.setSchedule,
+                                    onSetDndAllowUrgent: dndActions.setAllowUrgent,
+                                    onReplayOnboarding: onboarding.reset,
+                                }}
+                                participants={{
+                                    items: participants.participants,
+                                    loading: participants.loading,
+                                    birthdayNear,
+                                    profiles: communicationProfiles.profiles,
+                                    onSetManual: communicationProfiles.setManual,
+                                    onResetPerson: communicationProfiles.resetPerson,
+                                    onRegister: async (input) => {
+                                        return participants.register(input);
+                                    },
+                                    onRemove: async (id) => {
+                                        await handleRemoveMultiuserParticipant(id);
+                                    },
+                                }}
+                                browser={{
+                                    items: participants.participants,
+                                    loading: participants.loading,
+                                    profiles: browserProfiles.profiles,
+                                    onUpdate: browserProfiles.update,
+                                    onReset: browserProfiles.reset,
+                                }}
+                                search={{
+                                    overrides: searchOverrides,
+                                    onChange: handleSearchConfigChange,
+                                    onReset: handleSearchConfigReset,
+                                    allowlist: resolvedBrowserAllowlist,
+                                    sites: searchSites.sites,
+                                    dynamicDomains: searchSites.dynamicDomains,
+                                    loading: searchSites.loading,
+                                    onRegister: searchSites.register,
+                                    onUpdate: searchSites.update,
+                                    onRemove: searchSites.remove,
+                                }}
+                                contacts={{
+                                    participants: participants.participants,
+                                    contacts: contacts.contacts,
+                                    birthdayNear: contacts.birthdayNear,
+                                    loading: contacts.loading,
+                                    onAdd: async (input) => {
+                                        await contacts.addContact(input);
+                                    },
+                                    onRemove: async (id) => {
+                                        await contacts.removeContact(id);
+                                    },
+                                }}
+                                diary={{
+                                    participants: participants.participants,
+                                    entries: diary.entries,
+                                    loading: diary.loading,
+                                    onAdd: async (input) => {
+                                        await diary.addEntry(input);
+                                    },
+                                    onRemove: async (id) => {
+                                        await diary.removeEntry(id);
+                                    },
+                                }}
+                                mood={{
+                                    participants: participants.participants,
+                                    moods: mood.moods,
+                                    summary: mood.summary,
+                                    loading: mood.loading,
+                                    onLog: async (input) => {
+                                        await mood.logMood(input);
+                                    },
+                                    onRemove: async (id) => {
+                                        await mood.removeMood(id);
+                                    },
+                                }}
+                                habits={{
+                                    participants: participants.participants,
+                                    stats: habits.stats,
+                                    loading: habits.loading,
+                                    onAdd: async (input) => {
+                                        await habits.addGoal(input);
+                                    },
+                                    onCheckIn: async (goalId, date, done) => {
+                                        await habits.checkIn({ goalId, date, done });
+                                    },
+                                    onStatus: async (id, status) => {
+                                        await habits.updateStatus(id, status);
+                                    },
+                                    onRemove: async (id) => {
+                                        await habits.removeGoal(id);
+                                    },
+                                }}
+                                reminders={{
+                                    items: reminders.reminders,
+                                    loading: reminders.loading,
+                                    pendingCount: reminders.pendingCount,
+                                    authorFilter: remindersAuthor,
+                                    authorPending: pendingByAuthor,
+                                    onAuthorFilterChange: setRemindersAuthor,
+                                    onAdd: async (input) => {
+                                        await reminders.add(input);
+                                    },
+                                    onComplete: async (id) => {
+                                        await reminders.complete(id);
+                                    },
+                                    onDismiss: async (id) => {
+                                        await reminders.dismiss(id);
+                                    },
+                                    onRemove: async (id) => {
+                                        await reminders.remove(id);
+                                    },
+                                }}
+                                temporals={{
+                                    alarms: temporals.alarms,
+                                    timers: temporals.timers,
+                                    loading: temporals.loading,
+                                    onAdd: async (input) => {
+                                        await temporals.add(input);
+                                    },
+                                    onCancel: async (id) => {
+                                        await temporals.cancel(id);
+                                    },
+                                    onRemove: async (id) => {
+                                        await temporals.remove(id);
+                                    },
+                                }}
+                                shopping={{
+                                    items: shopping.items,
+                                    loading: shopping.loading,
+                                    remainingCount: shopping.remainingCount,
+                                    onAdd: async (label) => {
+                                        await shopping.addMany(
+                                            label
+                                                .split(',')
+                                                .map((s) => s.trim())
+                                                .filter(Boolean),
+                                        );
+                                    },
+                                    onToggle: async (id) => {
+                                        await shopping.toggle(id);
+                                    },
+                                    onRemove: async (id) => {
+                                        await shopping.remove(id);
+                                    },
+                                    onClearChecked: async () => {
+                                        await shopping.clearChecked();
+                                    },
+                                }}
+                                materiaGris={{
+                                    participants: participants.participants,
+                                    leaderboard: materiaGris.leaderboard,
+                                    history: materiaGris.history,
+                                    loading: materiaGris.loading,
+                                    onAward: async (input) => {
+                                        await materiaGris.awardPoints(input);
+                                    },
+                                }}
+                            />
 
                             {/* System Tab — Autonomous Systems Monitoring */}
-                            <FluTabPanel tabId="system" activeTab={activeTab} className="flu-tab-panel--system">
-                                <PanelFrame
-                                    frameId="autonomy"
-                                    title="Sistemas Autónomos"
-                                    className="panel-frame--autonomy"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <AutonomyStatusPanel state={autonomyState} actions={autonomyActions} />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluSystemTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                state={autonomyState}
+                                actions={autonomyActions}
+                            />
                         </div>
                     </div>
                 </div>

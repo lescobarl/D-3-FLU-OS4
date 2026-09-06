@@ -22,7 +22,7 @@ import type { BunnyComponent } from '../avatar/types/bunny';
 import type { VoiceConfig } from '../types/bridge';
 import { useAuditLog } from '../hooks/useAuditLog';
 
-interface FluSettingsPanelProps {
+export interface FluSettingsPanelProps {
     // External Services Config props
     voiceConfig?: VoiceConfig;
     setVoiceConfig?: (config: Partial<VoiceConfig>) => void;
