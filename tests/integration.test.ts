@@ -1301,7 +1301,6 @@ describe('🤖 Gemini Service — IAIService Interface', () => {
             'generateResponse',
             'generateParticipantEvaluation',
             'generateConversationSummary',
-            'generateFluContract',
             'generateWorkspaceImage',
         ];
         for (const m of methods) {

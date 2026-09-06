@@ -879,5 +879,5 @@ Genera la minuta en formato JSON.`;
 }
 
 // -----------------------------------------------------------
-/** Singleton instance of GeminiService */
-export const geminiService: IAIService = new GeminiService();
+/** Singleton instance of GeminiService (tipo concreto: conserva generateFluContract). */
+export const geminiService: GeminiService = new GeminiService();

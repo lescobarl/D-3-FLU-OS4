@@ -179,13 +179,6 @@ export interface IAIService {
         history: AIHistoryEntry[],
     ): Promise<AISummaryResult>;
 
-    /** Generate a Gemini contract for conversation */
-    generateFluContract(
-        options: AIRequestOptions,
-        transcript: string,
-        history: AIHistoryEntry[],
-    ): Promise<FluContract>;
-
     /** Generate a workspace image from a prompt */
     generateWorkspaceImage(
         prompt: string,

@@ -110,7 +110,6 @@ function createIntelligentAIService(): IAIService {
         generateResponse: primaryService.generateResponse.bind(primaryService),
         generateParticipantEvaluation: primaryService.generateParticipantEvaluation.bind(primaryService),
         generateConversationSummary: primaryService.generateConversationSummary.bind(primaryService),
-        generateFluContract: primaryService.generateFluContract.bind(primaryService),
         generateVisionAnalysis: primaryService.generateVisionAnalysis.bind(primaryService),
         
         // F1/F2/F3 — text-only operations (text engine)
