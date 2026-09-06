@@ -255,6 +255,98 @@ function isBareContentGenerationTrigger(text = '', voiceCommands = {}) {
   )
 }
 
+/**
+ * Comandos que ESPERAN contenido tras el gatillo (búsqueda web, generación de
+ * video/documento). Si el turno (tras wake word) es SOLO uno de esos gatillos
+ * (o termina en una palabra de gatillo sin contenido), el ASR aún puede estar
+ * enviando el resto en un fragmento final posterior ("ok flu busca en la web"
+ * + pausa + "cómo saltan los conejos"). Disparar ahí produce consultas vacías
+ * o truncadas.
+ */
+function isIncompleteContentTurn(afterWake = '', voiceCommands = {}) {
+  const norm = normalizeVoiceCommandText(afterWake).toLowerCase()
+  if (!norm) return false
+
+  // 1) El turno ES EXACTAMENTE un gatillo canónico que espera contenido.
+  const contentTriggers = [
+    ...(voiceCommands.buscar || []),
+    ...(voiceCommands.generateVideo || []),
+    ...(voiceCommands.generateDocument || []),
+  ]
+  if (contentTriggers.some((phrase) => normalizeVoiceCommandText(phrase).toLowerCase() === norm)) {
+    return true
+  }
+
+  // 2) El turno termina en una palabra de gatillo suelta (aún sin contenido):
+  //    "ok flu busca", "ok flu navega", "genera", "crea"…
+  if (/(?:busca|buscar|buscame|navega|navegar|busqueda|genera|generar|generame|crea|crear|creame|haz|hacer|search|find|browse|navigate|look\s+up)\s*$/i.test(norm)) {
+    return true
+  }
+  return false
+}
+
+/**
+ * DECISIÓN ÚNICA de turno de voz (fuente única para estabilización de
+ * fragmentos): dado el transcript COMPLETO acumulado hasta ahora, ¿el turno
+ * está LISTO para ejecutarse o falta contenido (esperar el siguiente fragmento
+ * final antes de despachar)?
+ *
+ * @param {string} fullTranscript Transcript acumulado (fragmentos finales ya
+ *   unidos por el motor de turnos), con o sin wake word.
+ * @param {object} [voiceCommands] Comandos de voz configurados
+ *   (FLU_CONFIG.voiceCommands).
+ * @param {object} [options]
+ * @param {boolean} [options.requireWake=true] true si el turno debe llevar
+ *   wake word (modo pasivo). Con false se evalúa igualmente el texto tras la
+ *   wake si la hubiera.
+ * @returns {{ ready: boolean, reason?: string, text?: string }}
+ */
+export function decideVoiceTurnDispatch(fullTranscript = '', voiceCommands = {}, options = {}) {
+  const { requireWake = true } = options || {}
+  const snapshot = cleanForSpeech(fullTranscript)
+  if (!snapshot) return { ready: true }
+
+  const wakeWords = voiceCommands.wakeWords || []
+  const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
+  const afterWake = cleanForSpeech(split.afterWake || split.commandText || snapshot)
+
+  // Modo pasivo sin wake word: no es un comando de wake; quien decide el
+  // destino es el flujo conversacional, no esta estabilización.
+  if (requireWake && !split.wakeWordMatched) return { ready: true }
+
+  if (!afterWake) return { ready: true }
+  if (!isIncompleteContentTurn(afterWake, voiceCommands)) {
+    return { ready: true }
+  }
+  return { ready: false, reason: 'incomplete-content-command', text: afterWake }
+}
+
+/**
+ * Extrae la CONSULTA real de una frase de búsqueda web quitando el gatillo
+ * reconocido ("busca en la web cómo saltan los conejos" → "cómo saltan los
+ * conejos"). Sin hardcode: los gatillos vienen de voiceCommands.buscar.
+ */
+export function extractQueryFromWebSearchPhrase(phrase = '', voiceCommands = {}) {
+  const snapshot = cleanForSpeech(phrase)
+  if (!snapshot) return ''
+  const split = splitTranscriptAtWakeWord(snapshot, voiceCommands.wakeWords || [])
+  const body = cleanForSpeech(split.afterWake || split.commandText || snapshot)
+  if (!body) return snapshot
+  const buscar = (voiceCommands.buscar || [])
+    .slice()
+    .sort((a, b) => normalizeVoiceCommandText(b).length - normalizeVoiceCommandText(a).length)
+  for (const trigger of buscar) {
+    const target = normalizeVoiceCommandText(trigger).toLowerCase()
+    if (!target) continue
+    const norm = normalizeVoiceCommandText(body).toLowerCase()
+    if (!norm.startsWith(target)) continue
+    const triggerWords = target.split(/\s+/).filter(Boolean).length
+    const restWords = body.split(/\s+/).filter(Boolean).slice(triggerWords)
+    return restWords.join(' ')
+  }
+  return body
+}
+
 const RECOVERABLE_RECOGNITION_ERRORS = new Set(['no-speech', 'aborted', 'network'])
 
 export function matchWakeWordPrefix(text = '', wakeWords = []) {
@@ -650,6 +742,15 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
     if (
       (command === 'GENERAR_VIDEO' || command === 'GENERAR_DOCUMENTO') &&
       isBareContentGenerationTrigger(text, voiceCommands)
+    ) {
+      return { kind: 'wait' }
+    }
+    // Estabilización de fragmentos: si el turno quedó en un gatillo SIN
+    // contenido ("ok flu busca en la web", "navega", "crea un video"), se
+    // espera el siguiente fragmento final antes de ejecutar (Bug #3/#4).
+    // Se evalúa el transcript COMPLETO (puede llevar o no wake word).
+    if (
+      decideVoiceTurnDispatch(snapshot, voiceCommands, { requireWake: false }).ready === false
     ) {
       return { kind: 'wait' }
     }

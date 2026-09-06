@@ -291,17 +291,16 @@ describe('§2D flujo voz→acción — búsqueda web determinista (BUSCAR)', () 
     expect(result.action).toBe('BUSCAR');
   });
 
-  it('en conversación la acción final es command BUSCAR (no flu → no Gemini)', () => {
-    // resolveFinalConversationAction decide la ruta de dispatch en modo
-    // conversación. Si devuelve {kind:'command', command:'BUSCAR'}, el flujo
-    // va por dispatchPassiveVoiceCommand (determinista) y NUNCA por
-    // processConversationFluQuery (que es quien llama a Gemini).
+  it('en conversación el gatillo pelado "Busca en la web" queda en ESPERA (fragmento incompleto)', () => {
+    // Estabilización de fragmentos (Bug #3/#4): un final que es SOLO el gatillo
+    // ("ok flu busca en la web" + pausa) NO debe disparar una búsqueda con
+    // consulta vacía. La acción es {kind:'wait'} hasta que llegue la consulta
+    // en el siguiente fragmento final.
     const action = resolveFinalConversationAction('Busca en la web', vc);
-    expect(action.kind).toBe('command');
-    expect(action.command).toBe('BUSCAR');
+    expect(action.kind).toBe('wait');
   });
 
-  it('en conversación la búsqueda con consulta también es command BUSCAR', () => {
+  it('en conversación la búsqueda con consulta es command BUSCAR', () => {
     const action = resolveFinalConversationAction('busca en la web capital de Francia', vc);
     expect(action.kind).toBe('command');
     expect(action.command).toBe('BUSCAR');

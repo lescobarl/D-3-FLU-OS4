@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   computeAudioSignature,
   cleanForSpeech,
+  decideVoiceTurnDispatch,
   detectIntroducedName,
   detectWakeIntroducedName,
   detectRole,
@@ -2181,6 +2182,14 @@ export function useFluVoiceAssistant({
         const baseDelay = validation.wakeWordMatched
           ? timingCfg.wakeWordCommandDelayMs
           : timingCfg.interimCommandDelayMs
+        // Estabilización de fragmentos (Bug #3/#4): si el turno acumulado quedó
+        // en un comando incompleto ("ok flu busca en la web" sin consulta,
+        // "navega", "crea un video"…), NO se ejecuta todavía: se espera a que
+        // llegue el siguiente fragmento final. Mientras tanto se amplía el
+        // margen desde el último fragmento con incompleteCommandWaitMs.
+        const turnDecision = decideVoiceTurnDispatch(turnPhrase, FLU_CONFIG.voiceCommands, {
+          requireWake,
+        })
         // Dictado: una frase larga en curso indica que el usuario sigue hablando
         // (p. ej. dictando una lista). Se amplía el margen antes de auto-procesar
         // para no cortarlo cuando hace una pausa breve pensando entre ítems.
@@ -2194,6 +2203,9 @@ export function useFluVoiceAssistant({
             timingCfg.dictationGraceMaxMs || 0,
           )
           pauseDelay = baseDelay + extra
+        }
+        if (turnDecision.ready === false) {
+          pauseDelay = Math.max(pauseDelay, timingCfg.incompleteCommandWaitMs || 0)
         }
         scheduleAutoProcess(pauseDelay)
       }

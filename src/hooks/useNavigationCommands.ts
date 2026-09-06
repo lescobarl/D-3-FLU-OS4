@@ -18,6 +18,7 @@ import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch } from '../core/events/
 import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
 import { extractReadableContent, truncateContent } from '../core/browser/browserReadability';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
+import { extractQueryFromWebSearchPhrase } from '../voice/lib/audioMath';
 import {
     applyLanguageToHost,
     resolveSearchLanguage,
@@ -438,7 +439,15 @@ export function useNavigationCommands(
                 const profileLang = String(browserCfg.defaultProfile?.language || 'es');
                 const requestLang = resolveSearchLanguage(transcript, profileLang, languageWords);
                 const rawQuery = String(
-                    parametros.consulta || parametros.query || parametros.busqueda || transcript || '',
+                    parametros.consulta ||
+                        parametros.query ||
+                        parametros.busqueda ||
+                        // Voz determinista (parametros vacíos): la consulta real es
+                        // el transcript SIN el gatillo de búsqueda ("busca en la web
+                        // cómo saltan los conejos" → "cómo saltan los conejos"). Así
+                        // la barra de búsqueda muestra lo que se envió realmente.
+                        extractQueryFromWebSearchPhrase(transcript, (FLU_CONFIG as any).voiceCommands) ||
+                        '',
                 ).trim();
                 const query = stripLanguageWords(rawQuery, languageWords);
                 if (!query) {

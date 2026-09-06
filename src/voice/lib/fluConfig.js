@@ -272,6 +272,14 @@ export const FLU_CONFIG = {
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 500,
     /**
+     * Estabilización de fragmentos (Bug #3/#4): si el turno quedó en un comando
+     * incompleto que espera contenido ("busca en la web", "navega", "crea un
+     * video"…) se espera este margen desde el último fragmento final antes de
+     * ejecutar, para dar tiempo a que el ASR entregue la continuación en un
+     * fragmento posterior sin disparar consultas vacías.
+     */
+    incompleteCommandWaitMs: 6000,
+    /**
      * Dictado: cuanto más larga es la frase en curso, más margen se da antes de
      * auto-procesar. Evita cortar al usuario que dicta una lista pensando y
      * hablando entre ítems ("estoy pensando y hablando, lleva tiempo… no puedes
