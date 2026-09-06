@@ -20,7 +20,8 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useConfigPersistence } from './hooks/useConfigPersistence';
 import { useCatalogsSettings } from './hooks/useCatalogsSettings';
 import { useDocumentGenerationBridge } from './hooks/useDocumentGenerationBridge';
@@ -63,7 +64,6 @@ import DocumentResultPanel from './components/DocumentResultPanel';
 import AppAnalysisPanel from './components/AppAnalysisPanel';
 import GenerationProgressPanel from './components/GenerationProgressPanel';
 import FluCollapsibleCard from './components/FluCollapsibleCard';
-import { FluWorkspaceTabView } from './components/FluWorkspaceTabView';
 import {
     loadSearchConfigOverrides,
     saveSearchConfigOverrides,
@@ -98,10 +98,7 @@ import './avatar/App.css';
 import FluParticipantSettingsPanel from './voice/components/FluParticipantSettingsPanel';
 import { FluShellTabs } from './voice/components/FluShellTabs';
 import { VoiceAssistantBarWrapper } from './components/VoiceAssistantBarWrapper';
-import { FluSettingsTabView, type SettingsGroupId } from './components/FluSettingsTabView';
-import { FluSystemTabView } from './components/FluSystemTabView';
-import { FluConversationTabView } from './components/FluConversationTabView';
-import { FluMinutesTabView } from './components/FluMinutesTabView';
+import type { SettingsGroupId } from './components/FluSettingsTabView';
 import { OnboardingOverlay } from './components/OnboardingOverlay';
 import { useOnboarding } from './hooks/useOnboarding';
 import { useOnboardingVoiceCapture } from './hooks/useOnboardingVoiceCapture';
@@ -204,6 +201,35 @@ import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile }
 // Tipo para las pestañas del panel derecho
 // ============================================================
 type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings' | 'system';
+
+// ============================================================
+// Rutas por tab — React Router v6 (Fase 3: code-split por tab)
+// ============================================================
+const TAB_ROUTES: ReadonlyArray<{ tab: RightTab; path: string }> = [
+    { tab: 'workspace', path: '/workspace' },
+    { tab: 'conversation', path: '/conversation' },
+    { tab: 'minutes', path: '/minutes' },
+    { tab: 'settings', path: '/settings' },
+    { tab: 'system', path: '/system' },
+];
+
+const DEFAULT_TAB: RightTab = 'workspace';
+
+function tabFromPath(pathname: string): RightTab {
+    const match = TAB_ROUTES.find((r) => r.path === pathname);
+    return match ? match.tab : DEFAULT_TAB;
+}
+
+function pathForTab(tab: RightTab): string {
+    return TAB_ROUTES.find((r) => r.tab === tab)?.path || `/${tab}`;
+}
+
+// Vistas por tab cargadas con lazy (cada una es un chunk separado).
+const FluWorkspaceTabView = lazy(() => import('./components/FluWorkspaceTabView'));
+const FluConversationTabView = lazy(() => import('./components/FluConversationTabView'));
+const FluMinutesTabView = lazy(() => import('./components/FluMinutesTabView'));
+const FluSettingsTabView = lazy(() => import('./components/FluSettingsTabView'));
+const FluSystemTabView = lazy(() => import('./components/FluSystemTabView'));
 
 // ============================================================
 // ErrorBoundary — Captura errores de renderizado y los muestra en la UI
@@ -1044,14 +1070,33 @@ function App() {
 
     // ---- Pestaña activa del panel derecho ----
     // Always start on Pizarron (workspace) tab as default
-    const [activeTab, setActiveTab] = useState<RightTab>('workspace');
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState<RightTab>(() => tabFromPath(location.pathname));
+
+    // Sincroniza la tab activa con la URL (React Router Fase 3).
+    useEffect(() => {
+        setActiveTab(tabFromPath(location.pathname));
+    }, [location.pathname]);
+
+    // Navegación de tab: actualiza la URL; el efecto superior sincroniza el estado.
+    const changeTab = useCallback(
+        (tab: RightTab) => {
+            if (tab !== tabFromPath(location.pathname)) {
+                navigate(pathForTab(tab));
+            } else {
+                setActiveTab(tab);
+            }
+        },
+        [navigate, location.pathname]
+    );
 
     // Mantener la pestaña activa dentro de las visibles del ambiente activo
     useEffect(() => {
         if (visibleTabIds.length > 0 && !visibleTabIds.includes(activeTab)) {
-            setActiveTab(visibleTabIds[0]);
+            changeTab(visibleTabIds[0]);
         }
-    }, [visibleTabIds, activeTab]);
+    }, [visibleTabIds, activeTab, changeTab]);
 
     // ---- Estado para imagen subida (digitalización OCR) ----
     const [uploadedImage, setUploadedImage] = useState<{ dataUrl: string; mimeType: string; fileName: string } | null>(null);
@@ -1897,7 +1942,7 @@ function App() {
                         setSelectedMinuteId(minuteSelection.matched.id);
                     }
                     if (minuteSelection.shouldSwitchTab) {
-                        setActiveTab('minutes');
+                        changeTab('minutes');
                     }
                 } catch (err) {
                     console.warn('[App] minuteSelection handler threw (non-critical):', err);
@@ -4444,9 +4489,10 @@ const {
 
                         {/* Panels Column (right) */}
                         <div className="app-panels-column">
-                            <FluShellTabs activeTab={activeTab} onTabChange={setActiveTab} visibleIds={visibleTabIds} />
+                            <FluShellTabs activeTab={activeTab} onTabChange={changeTab} visibleIds={visibleTabIds} />
 
                             <div className="flu-shell__tab-content">
+                                <Suspense fallback={null}>
                                 {/* Pizarron Tab (renamed from Workspace) */}
                                 <FluWorkspaceTabView
                                     activeTab={activeTab}
@@ -4793,6 +4839,7 @@ const {
                                 state={autonomyState}
                                 actions={autonomyActions}
                             />
+                                </Suspense>
                         </div>
                     </div>
                 </div>
