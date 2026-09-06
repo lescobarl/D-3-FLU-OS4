@@ -22,7 +22,7 @@ if (
 ) {
   navigator.serviceWorker
     .register('/sw.js')
-    .catch(() => undefined);
+    .catch((err) => console.error('Error al registrar el Service Worker de la PWA:', err));
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

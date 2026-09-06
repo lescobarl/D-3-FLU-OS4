@@ -24,4 +24,9 @@ debug.log
 
 # Backups (safety net — excluded from git)
 backups/
-"test-output.txt"  
+
+# Playwright output reglamentario
+test-output.txt
+
+# Evidencia E2E regenerable (los specs escriben los PNG en cada corrida)
+reports/

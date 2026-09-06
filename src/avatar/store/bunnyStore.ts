@@ -321,7 +321,6 @@ export const useBunnyStore = create<BunnyStore>((set, get) => ({
             const anims = EXPRESSION_MAP[expression];
             const firstAnim = anims && anims.length > 0 ? anims[0] : state.currentAnimation;
             const blendQueueStr = JSON.stringify(anims || []);
-            console.log(`[DIAG bunnyStore] setExpression("${expression}") → EXPRESSION_MAP=${blendQueueStr}, firstAnim=${firstAnim}`);
             relayLog('LOG', 'bunnyStore', `setExpression("${expression}") → anims=${blendQueueStr}, firstAnim=${firstAnim}`);
             return {
                 currentExpression: expression,
@@ -365,7 +364,6 @@ export const useBunnyStore = create<BunnyStore>((set, get) => ({
                 ]
                 : state.logs;
             const animsStr = anims.join(', ');
-            console.log(`[DIAG bunnyStore] blendAnimation([${animsStr}]) → currentAnimation=${anims.length > 0 ? anims[0] : state.currentAnimation}`);
             relayLog('LOG', 'bunnyStore', `blendAnimation([${animsStr}]) → currentAnimation=${anims.length > 0 ? anims[0] : state.currentAnimation}`);
             return {
                 blendQueue: anims,

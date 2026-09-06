@@ -1336,12 +1336,9 @@ export async function generateFluContract({
   const buildActiveSystemPrompt = () =>
     simpleRequest ? systemPrompt + schemaFormatBlock : systemPrompt
 
-  console.log('[FLU-DEBUG] generateFluContract called. apiKey param present:', Boolean(apiKey), 'resolvedKey source:', resolvedKey.apiKeySource, 'resolvedKey length:', resolvedKey.apiKey.length, 'model:', model, 'transcript:', (transcript || '').slice(0, 80))
-
   if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
     // Graceful fallback: return a no-op contract instead of throwing.
     // The voice system will use local fallback responses and continue without blocking.
-    console.log('[FLU-DEBUG] generateFluContract: NO API KEY - returning graceful fallback')
     const fallbackText = language === 'en'
       ? 'API key not configured. Set it in the settings panel.'
       : 'API key no configurada. Configúrala en el panel de ajustes.'
@@ -1486,11 +1483,6 @@ export async function generateFluContract({
   ) {
     const fallbackWorkspace = buildBareVisualFallbackWorkspace(transcript, history, language)
     if (fallbackWorkspace) {
-      // eslint-disable-next-line no-console
-      console.log(
-        '[FLU-DEBUG] bareVisualFallback activado: modelo devolvió workspace no visual; ' +
-          `se construye image_prompt determinista con tema "${fallbackWorkspace._subject}".`,
-      )
       workspace = fallbackWorkspace
       fallbackRespuestaVoz = fallbackWorkspace._respuestaVoz || ''
     }

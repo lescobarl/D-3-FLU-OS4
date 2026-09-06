@@ -3546,7 +3546,7 @@ export function useFluVoiceAssistant({
         sampleRate,
         fallbackSpeaker,
       ).catch((speakerError) => {
-        console.log('[FLU-DEBUG] processCapture resolveSpeaker falló; se usa orador rápido:', speakerError?.message || speakerError)
+        console.error('processCapture resolveSpeaker falló; se usa orador rápido:', speakerError?.message || speakerError)
         return null
       })
 
@@ -3678,9 +3678,9 @@ export function useFluVoiceAssistant({
             phase: 'CONFIGURACION',
           })
         } catch (error) {
-          console.log('[FLU-DEBUG] processCapture CONFIGURACION catch. error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
+          console.error('processCapture CONFIGURACION error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
           const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-          console.log('[FLU-DEBUG] processCapture CONFIGURACION error message:', errorMessage)
+          console.error('processCapture CONFIGURACION error message:', errorMessage)
           // La diarización (en paralelo) ya terminó en el caso común; se reconcilia el
           // orador real para el commit y la voz de error (mismo patrón conversacional).
           const { resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
@@ -3857,9 +3857,9 @@ export function useFluVoiceAssistant({
           phase: 'SESION_ACTIVA',
         })
       } catch (error) {
-        console.log('[FLU-DEBUG] processCapture SESION_ACTIVA catch. error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
+        console.error('processCapture SESION_ACTIVA error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
         const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-        console.log('[FLU-DEBUG] processCapture SESION_ACTIVA error message:', errorMessage)
+        console.error('processCapture SESION_ACTIVA error message:', errorMessage)
         // Reconciliar el orador diarizado (resuelto en paralelo) para commit y voz de error.
         const { resolvedSpeakerName, speakerAlias, signatureVector } = await resolveTurnSpeaker()
         setError(errorMessage)

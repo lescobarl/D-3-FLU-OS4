@@ -258,7 +258,6 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
             contractCacheKey = buildContractCacheKey(body);
             const cached = getCachedResponse(CONTRACT_CACHE, contractCacheKey, CONTRACT_CACHE_TTL_MS);
             if (cached) {
-                console.log('[FLU-DEBUG-PROXY] handleContract cache HIT for transcript:', (body.transcript || '').slice(0, 80));
                 return sendJson(res, 200, cached);
             }
         }
@@ -280,7 +279,7 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
 
         sendJson(res, 200, result);
     } catch (error: any) {
-        console.error('[FLU-DEBUG-PROXY] handleContract ERROR:', error.message, {
+        console.error('[geminiProxy] handleContract ERROR:', error.message, {
             code: error.code,
             status: error.status,
             apiKeySource: error.apiKeySource,
@@ -339,7 +338,6 @@ async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) 
             const cacheKey = buildEvalCacheKey(body);
             const cached = getCachedResponse(EVAL_CACHE, cacheKey, EVAL_CACHE_TTL_MS);
             if (cached) {
-                console.log('[FLU-DEBUG-PROXY] handleParticipantEval cache HIT');
                 return sendJson(res, 200, cached);
             }
         }
@@ -416,7 +414,6 @@ async function handleVisionAnalysis(req: IncomingMessage, res: ServerResponse) {
         const cacheKey = `vision:${(imageBase64 || '').slice(0, 100)}`;
         const cached = getCachedResponse(VISION_CACHE, cacheKey, VISION_CACHE_TTL_MS);
         if (cached) {
-            console.log('[FLU-DEBUG-PROXY] handleVisionAnalysis cache HIT');
             return sendJson(res, 200, cached);
         }
 
@@ -505,9 +502,6 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
     serverEnvApiKey = String(
         env.VITE_OPENROUTER_API_KEY || env.VITE_GEMINI_API_KEY || env.VITE_DEEPSEEK_API_KEY || ''
     ).trim();
-    if (serverEnvApiKey) {
-        console.log('[FLU-DEBUG-PROXY] server env API key loaded (length):', serverEnvApiKey.length);
-    }
     return {
         name: 'gemini-proxy',
         configureServer(server: any) {

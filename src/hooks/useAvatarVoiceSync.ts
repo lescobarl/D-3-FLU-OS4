@@ -256,9 +256,7 @@ export function useAvatarVoiceSync() {
         const store = bunnyActionsRef.current;
         const options = getEngineOptions();
 
-        // DIAGNÓSTICO: siempre loguear llamadas a syncAvatarToState
         const emotionAnimsStr = emotionAnims ? `[${emotionAnims.join(', ')}]` : 'undefined';
-        console.log(`[DIAG] syncAvatarToState(state=${state}, emotionAnims=${emotionAnimsStr})`);
         relayLog('LOG', 'AvatarVoiceSync', `syncAvatarToState(state=${state}, emotionAnims=${emotionAnimsStr})`);
 
         // Use EmotionEngine to resolve state expression (for avatarState only)
@@ -276,7 +274,6 @@ export function useAvatarVoiceSync() {
                 const remain = sustained.sustainUntilSong
                     ? '∞ (canción sonando)'
                     : `${Math.round((sustained.until - Date.now()) / 1000)}s`;
-                console.log(`[DIAG] LISTENING → sustained action [${sustained.anims.join(', ')}] (+${remain})`);
                 relayLog('LOG', 'AvatarVoiceSync', `LISTENING → sustained action [${sustained.anims.join(', ')}] (+${remain})`);
                 return;
             }
@@ -295,7 +292,6 @@ export function useAvatarVoiceSync() {
             // igual que el restore de acciones sostenidas (2026-08-16).
             store.clearExpression();
             store.setExpression(alt.expression);
-            console.log(`[DIAG] LISTENING → setExpression(${alt.expression}) → EXPRESSION_MAP: [${alt.anims.join(', ')}]`);
             if (options.debug) {
                 console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DATA-DRIVEN: ${alt.expression}, anims: [${alt.anims.join(', ')}])`);
             }
@@ -339,7 +335,6 @@ export function useAvatarVoiceSync() {
                 store.blendAnimation(blended);
                 // Guardar el estado previo para que el reset de 7s (solo IA) lo restaure.
                 emotionRestoreRef.current = alt?.expression ?? 'hablando';
-                console.log(`[DIAG] SPEAKING EMOTION → blendAnimation([${blended.join(', ')}])`);
                 relayLog('LOG', 'AvatarVoiceSync', `SPEAKING EMOTION → blendAnimation([${blended.join(', ')}])`);
                 if (options.debug) {
                     console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (EMOTION: blendAnimation([${blended.join(', ')}]))`);
@@ -368,7 +363,6 @@ export function useAvatarVoiceSync() {
             if (alt) {
                 store.setExpression(alt.expression);
                 const altAnimsStr = alt.anims.join(', ');
-                console.log(`[DIAG] SPEAKING → setExpression(${alt.expression}) → EXPRESSION_MAP: [${altAnimsStr}]`);
                 relayLog('LOG', 'AvatarVoiceSync', `SPEAKING → setExpression(${alt.expression}) → anims=[${altAnimsStr}]`);
                 if (options.debug) {
                     console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DATA-DRIVEN: setExpression(${alt.expression}) → EXPRESSION_MAP[${altAnimsStr}])`);
@@ -376,7 +370,6 @@ export function useAvatarVoiceSync() {
             } else {
                 // Fallback defensivo: setExpression ya resuelve 'hablando' → ['Idle_2','MouthMove']
                 store.setExpression('hablando');
-                console.log(`[DIAG] SPEAKING FALLBACK → setExpression(hablando)`);
                 relayLog('WARN', 'AvatarVoiceSync', `SPEAKING FALLBACK → setExpression(hablando) — alt era null`);
                 if (options.debug) {
                     console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (FALLBACK: setExpression(hablando))`);

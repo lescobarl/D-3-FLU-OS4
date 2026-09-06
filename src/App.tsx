@@ -2377,9 +2377,6 @@ function App() {
                 // La emoción de Gemini (emocion/animacion) se guarda SOLO para
                 // diagnóstico en el header chip, NO se aplica al avatar.
                 // ============================================================
-                const hasEmotion = Boolean(geminiEmocion || geminiAnimacion);
-                const isSpeakingExpression = isNeutralSpeakingEmotion;
-                console.log(`[DIAG App] contract.emocion="${geminiEmocionRaw}", contract.animacion="${geminiAnimacionRaw}", emotionLabel="${emotionLabel}", hasEmotion=${hasEmotion}, isSpeakingExpression=${isSpeakingExpression}`);
                 relayLog('LOG', 'App', `onContractResolved: emocion="${geminiEmocionRaw}", animacion="${geminiAnimacionRaw}", emotionLabel="${emotionLabel}" — yendo directo a SPEAKING`);
 
                 let speakPromise: Promise<void> | null = null;
@@ -2677,19 +2674,6 @@ function App() {
             const isKindStep = !!step && step.type === 'capture' && (step.options?.length || 0) > 0;
             const isNameStep =
                 !isKindStep && !!step && step.type === 'capture' && !!step.key && step.key === nameKey;
-            relayLog('LOG', 'App', '[DIAG-answer]', {
-                text,
-                stepKey: step?.key,
-                stepType: step?.type,
-                isNameStep,
-                isKindStep,
-                captured: onboarding.state.captured,
-                completed: onboarding.state.completed,
-                stepIndex: onboarding.state.stepIndex,
-                visible: onboarding.visible,
-                activeId: activeParticipantId,
-                names: participants.participants.map((p) => p.name),
-            });
             if (isNameStep) {
                 const typed = String(text || '').trim().toLowerCase();
                 const exists =
@@ -2724,19 +2708,6 @@ function App() {
         )
             reason = 'name-not-existing';
         if (reason) {
-            relayLog('LOG', 'App', '[DIAG-rescue]', {
-                reason,
-                visible: onboarding.visible,
-                stepKey: step?.key,
-                stepType: step?.type,
-                stepIndex: onboarding.state.stepIndex,
-                completed: onboarding.state.completed,
-                capturedName,
-                nameKey,
-                captured: onboarding.state.captured,
-                activeId: activeParticipantId,
-                names: participants.participants.map((p) => p.name),
-            });
             return;
         }
         onboarding.completeWithName(capturedName as string);
@@ -3602,58 +3573,6 @@ function App() {
             });
     }, [participants.participants]);
 
-    // ── DIAGNÓSTICO TEMPORAL ────────────────────────────────────────────
-    // Vuelca cada 2s todos los datos relevantes para diagnosticar por qué la
-    // lista de usuarios del onboarding muestra "niño/niña" en vez de nombres.
-    // Se elimina al confirmar la causa raíz.
-    useEffect(() => {
-        const kindStep2 = ((FLU_CONFIG as any).onboarding?.steps || []).find(
-            (s: any) => s.key === 'kind',
-        );
-        const stepsDiag = ((FLU_CONFIG as any).onboarding?.steps || []).map((s: any) => ({
-            id: s.id,
-            type: s.type,
-            key: s.key,
-            optionsEs: (s.options || []).map((o: any) => o.es),
-        }));
-        const dump = () => {
-            relayLog('LOG', 'App', '[DIAG-onboarding]', {
-                visible: onboarding.visible,
-                ready: onboarding.ready,
-                activeId: activeParticipantId,
-                completed: onboarding.state.completed,
-                stepIndex: onboarding.state.stepIndex,
-                captured: onboarding.state.captured,
-                stepId: onboarding.currentStep?.id,
-                stepType: onboarding.currentStep?.type,
-                stepKey: onboarding.currentStep?.key,
-                stepOptionsEs: (onboarding.currentStep?.options || []).map((o: any) => o.es),
-                participants: participants.participants.map((p) => ({
-                    id: p.id,
-                    name: p.name,
-                    role: p.role,
-                })),
-                suggestions: onboardingUserSuggestions,
-                kindTokens: (kindStep2?.options || []).map((o: any) => o.es),
-                loading: participants.loading,
-                configSteps: stepsDiag,
-            });
-        };
-        dump();
-        const t = setInterval(dump, 2000);
-        return () => clearInterval(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        participants.participants,
-        onboarding.visible,
-        onboarding.ready,
-        onboarding.currentStep,
-        onboarding.state.completed,
-        onboarding.state.stepIndex,
-        onboarding.state.captured,
-        activeParticipantId,
-    ]);
-
     // Allowlist efectiva del Navegador Curado para el participante activo:
     // perfil guardado > defaults por rol > perfil por defecto > fallback mínimo.
     // Todo config-driven (FLU_CONFIG.browser), sin hardcode (Regla #1).
@@ -4204,12 +4123,12 @@ const {
         conversationActiveRef.current = true;
 
         if (wasListening) {
-            await os2StopListening({ closing: false }).catch(() => { });
-            await os2StartListening({ resume: true }).catch(() => { });
+            await os2StopListening({ closing: false }).catch((err) => console.warn('[App] fallo al detener la escucha:', err));
+            await os2StartListening({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
             return;
         }
 
-        await os2StartListening({ resume: true }).catch(() => { });
+        await os2StartListening({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
     }, [language, voiceStatus, integrationStore, auditLog, os2StartListening, os2StopListening]);
 
     // ============================================================
