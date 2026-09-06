@@ -1532,21 +1532,6 @@ describe('🎬 Darle Vida — Animación/Emoción en FluContract', () => {
         expect(EMOTION_TO_GESTURE.sad.anims).toContain('Cap_front');
     });
 
-    it('BunnyAnimator debe tener método crossFadeTo', () => {
-        // Verificar que la interfaz del BunnyAnimator tiene crossFadeTo
-        const animatorProto = Object.getOwnPropertyNames(
-            Object.getPrototypeOf({ crossFadeTo: () => true, crossFadeToBlended: () => true })
-        );
-        // Solo verificamos que el concepto existe
-        expect(typeof (() => { })).toBe('function');
-    });
-
-    it('BunnyAnimator debe tener método crossFadeToBlended', () => {
-        // El método crossFadeToBlended existe en el código fuente de BunnyAnimator
-        // (verificado en bunnyAnimator.ts línea 606)
-        expect(true).toBe(true);
-    });
-
     it('FLU_CONTRACT_SCHEMA debe tener campo animacion con enum', () => {
         const schema = {
             properties: {
