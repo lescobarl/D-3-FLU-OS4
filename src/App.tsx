@@ -2867,6 +2867,15 @@ function App() {
             setActiveUser(undefined, id);
             setActiveParticipantId(id);
             setNewProfilePending(false);
+            // Al cerrar el onboarding se dijo "Háblame cuando quieras": se enciende
+            // la escucha de FLU justo después (si el TTS de cierre terminó ya, el
+            // micrófono del onboarding se suspendió; la escucha principal queda
+            // activa para que la frase no sea una invitación sin micrófono).
+            window.setTimeout(() => {
+                os2StartListening({ resume: true }).catch((err: unknown) =>
+                    console.warn('[App] fallo al iniciar escucha tras onboarding:', err),
+                );
+            }, 700);
         };
         if (isAnonymous) {
             void participants
