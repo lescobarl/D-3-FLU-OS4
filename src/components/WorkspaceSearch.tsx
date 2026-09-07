@@ -26,6 +26,7 @@ import {
 } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { splitTranscriptAtWakeWord } from '../voice/lib/audioMath';
+import { useIntegrationStore } from '../store/integrationStore';
 import type { SearchLevel } from '../hooks/useWorkspaceSearch';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import type { SearchConfig } from '../core/search/searchSession';
@@ -97,9 +98,10 @@ export function WorkspaceSearch({
         inputRef.current?.focus();
     }, []);
 
-    // El ÚLTIMO comando "OK FLU…" reconocido se conserva en la barra aunque la
-    // transcripción en vivo se limpie al procesar. Se borra solo al escribir.
-    const [lastCommand, setLastCommand] = useState('');
+    // El ÚLTIMO comando "OK FLU…" reconocido vive en el store de integración
+    // (fuente única): sobrevive remounts/cambios de vista. Se borra al escribir.
+    const lastCommand = useIntegrationStore((s) => s.lastVoiceCommand);
+    const setLastCommand = useIntegrationStore((s) => s.setLastVoiceCommand);
 
     const handleSubmit = useCallback(
         (event: FormEvent) => {
