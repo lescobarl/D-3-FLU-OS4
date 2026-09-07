@@ -282,6 +282,14 @@ function isIncompleteContentTurn(afterWake = '', voiceCommands = {}) {
   if (/(?:busca|buscar|buscame|navega|navegar|busqueda|genera|generar|generame|crea|crear|creame|haz|hacer|search|find|browse|navigate|look\s+up)\s*$/i.test(norm)) {
     return true
   }
+
+  // 3) El turno termina en el DESTINO de búsqueda sin la consulta: "busca en la
+  //    web", "busca en internet", "navega en la web" (el ASR cortó ahí por la
+  //    pausa y la consulta llega en el siguiente fragmento final). Antes esta
+  //    forma disparaba con query vacía ("Bug #3": búsqueda de nada).
+  const searchVerb = /(?:busca|buscar|buscame|busquedame|navega|navegar|busqueda|search|find|browse|navigate|look\s+up)\b/i.test(norm)
+  const endsOnWebTarget = /(?:\bweb\b|\binternet\b|\bweb\s*)$/i.test(norm)
+  if (searchVerb && endsOnWebTarget) return true
   return false
 }
 

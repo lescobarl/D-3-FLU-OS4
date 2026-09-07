@@ -2746,7 +2746,17 @@ function App() {
         (id: string) => {
             setActiveUser(undefined, id);
             setActiveParticipantId(id);
-            const tryStartListening = () => {
+            const tryStartListening = async () => {
+                try {
+                    // El TTS de cierre ("Háblame cuando quieras") puede seguir
+                    // sonando cuando este arranque se dispara: si la reconocedora
+                    // se abre durante el habla, el anti-eco la aborta y nadie la
+                    // restaura (Bug #2: "detenido"). Se espera el fin REAL del
+                    // habla del asistente antes de intentar abrir el micrófono.
+                    await waitForSpeechIdle();
+                } catch {
+                    // Sin habla activa / timeout: continuar igual.
+                }
                 os2StartListening({ resume: true }).catch((err: unknown) => {
                     const errorName = String((err as any)?.name || '');
                     const blocked =
