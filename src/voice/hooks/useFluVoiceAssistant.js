@@ -2214,7 +2214,7 @@ export function useFluVoiceAssistant({
         const errorCode = String(event.error || '').trim()
 
         if (errorCode === 'no-speech' || errorCode === 'aborted') {
-          if (isListeningRef.current && !isStoppingRef.current) {
+          if ((isListeningRef.current || (conversationActiveRef?.current && !isStoppingRef.current)) && !isStoppingRef.current) {
             requestRecognitionRestart(FLU_CONFIG.listening?.restartAfterNoSpeechMs)
           }
           return
@@ -2265,7 +2265,7 @@ export function useFluVoiceAssistant({
           return
         }
 
-        if (!isListeningRef.current) return
+        if (!isListeningRef.current && !(conversationActiveRef?.current && !isStoppingRef.current)) return
 
         if (conversationActiveRef?.current && !isStoppingRef.current) {
           ingressRuntimeRef.current?.pushRecognitionEndEvent({ immediate: true })
