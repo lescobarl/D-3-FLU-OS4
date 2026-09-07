@@ -30,6 +30,7 @@ import { relayLog } from './lib/clientLogRelay';
 import { cleanForSpeech, normalizeSpaces, pickLabel } from './lib/textUtils';
 import type { BunnyComponent } from './avatar/types/bunny';
 import { v4 as uuidv4 } from 'uuid';
+import { NotificationCenterBell } from './components/NotificationCenterBell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FluBridgeProvider } from './context/FluBridgeContext';
 import { FluAvatarVoiceBridge } from './components/FluAvatarVoiceBridge';
@@ -4412,6 +4413,13 @@ const {
                                 )}
                             </div>
                         </div>
+                        <NotificationCenterBell
+                            items={notificationCenter.history}
+                            unread={notificationCenter.unread}
+                            onMarkAllRead={notificationCenter.markAllRead}
+                            onClear={notificationCenter.clear}
+                            language={language}
+                        />
                     </div>
                 </header>
 

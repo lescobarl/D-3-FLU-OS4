@@ -25,6 +25,11 @@ export interface NotificationToast {
   timestamp: number;
 }
 
+/** Entrada persistida del centro de notificaciones (historial consultable). */
+export interface NotificationCenterItem extends NotificationToast {
+  read: boolean;
+}
+
 export interface UseNotificationCenterOptions {
   speak: (text: string, lang: string) => Promise<void>;
   language?: string;
@@ -33,12 +38,20 @@ export interface UseNotificationCenterOptions {
 
 export interface NotificationCenterState {
   toasts: NotificationToast[];
+  /** Historial consultable del centro de notificaciones (últimas N, sin expirar). */
+  history: NotificationCenterItem[];
+  /** Número de notificaciones no leídas en el historial. */
+  unread: number;
   channel: NotificationChannel;
   service: NotificationService;
   /** Cambia el canal y sincroniza el estado de React para la UI. */
   setChannel: (channel: NotificationChannel) => void;
   /** Descarta un toast por id (visible al hacer clic). */
   dismiss: (id: string) => void;
+  /** Marca todo el historial como leído. */
+  markAllRead: () => void;
+  /** Limpia el historial del centro. */
+  clear: () => void;
 }
 
 export function useNotificationCenter({
@@ -48,6 +61,7 @@ export function useNotificationCenter({
 }: UseNotificationCenterOptions): NotificationCenterState {
   const config = (FLU_CONFIG as any).notifications || {};
   const maxStack = Number(config.maxStack) || 4;
+  const maxHistory = Number(config.maxHistory) || 50;
   const toastDurationMs = Number(config.toastDurationMs) || 6000;
   const lang = language === 'en' ? 'en' : 'es';
 
@@ -65,6 +79,7 @@ export function useNotificationCenter({
   const service = serviceRef.current;
 
   const [toasts, setToasts] = useState<NotificationToast[]>([]);
+  const [history, setHistory] = useState<NotificationCenterItem[]>([]);
   const [channel, setChannelState] = useState<NotificationChannel>(() => service.getChannel());
 
   // Mantener el DND del servicio sincronizado con el estado del hook padre.
@@ -75,6 +90,16 @@ export function useNotificationCenter({
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const markAllRead = useCallback(() => {
+    setHistory((prev) => prev.map((item) => ({ ...item, read: true })));
+  }, []);
+
+  const clear = useCallback(() => {
+    setHistory([]);
+  }, []);
+
+  const unread = history.filter((item) => !item.read).length;
 
   const setChannel = useCallback(
     (next: NotificationChannel) => {
@@ -107,6 +132,22 @@ export function useNotificationCenter({
         timers.set(notification.id, timer);
       }
 
+      // Historial consultable del centro: toda notificación entregada (toast
+      // y/o voz) queda registrada para revisarse después (no solo como toast
+      // transitorio que desaparece).
+      if (shouldToast || shouldSpeak) {
+        const item: NotificationCenterItem = {
+          id: notification.id,
+          title: notification.title,
+          body: notification.body,
+          category: notification.category,
+          urgent: notification.urgent,
+          timestamp: notification.timestamp,
+          read: false,
+        };
+        setHistory((prev) => [item, ...prev].slice(0, maxHistory));
+      }
+
       if (shouldSpeak && typeof speak === 'function') {
         speak(notification.body, lang).catch(() => undefined);
       }
@@ -119,5 +160,15 @@ export function useNotificationCenter({
     };
   }, [speak, lang, toastDurationMs, maxStack, dismissToast]);
 
-  return { toasts, channel, service, setChannel, dismiss: dismissToast };
+  return {
+    toasts,
+    history,
+    unread,
+    channel,
+    service,
+    setChannel,
+    dismiss: dismissToast,
+    markAllRead,
+    clear,
+  };
 }
