@@ -90,6 +90,13 @@ export default defineConfig(({ mode }) => {
             // Auto-open SOLO en dev manual; Playwright levanta su propio server
             // (PLAYWRIGHT_SERVER=1) y no debe abrir pestañas del navegador.
             open: process.env.PLAYWRIGHT_SERVER === '1' ? false : true,
+            // ffmpeg.wasm (videoAssembler) requiere aislamiento cruzado (SAB):
+            // sin COOP/COEP el core no carga y el video degrada a texto
+            // (el "prompt" que veía el usuario). Cabeceras necesarias.
+            headers: {
+                'Cross-Origin-Opener-Policy': 'same-origin',
+                'Cross-Origin-Embedder-Policy': 'require-corp',
+            },
             // Proxy same-origin para la búsqueda de música en línea (Deezer).
             // La API de Deezer NO envía CORS: un fetch directo desde el
             // navegador sería bloqueado. Este proxy reescribe /api/deezer →
@@ -100,6 +107,12 @@ export default defineConfig(({ mode }) => {
                     changeOrigin: true,
                     rewrite: (p) => p.replace(/^\/api\/deezer/, ''),
                 },
+            },
+        },
+        preview: {
+            headers: {
+                'Cross-Origin-Opener-Policy': 'same-origin',
+                'Cross-Origin-Embedder-Policy': 'require-corp',
             },
         },
         build: {
