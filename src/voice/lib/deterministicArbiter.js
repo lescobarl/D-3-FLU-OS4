@@ -20,6 +20,7 @@
 
 import { resolveConfigCommandFromText } from './configCommands.js'
 import { resolveGameCommandFromText } from './gameCommands.js'
+import { parseNoteIntentText } from './noteIntentParser.js'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
 import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
