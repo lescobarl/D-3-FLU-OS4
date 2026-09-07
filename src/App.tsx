@@ -2785,7 +2785,15 @@ function App() {
                           ? 'Done! Talk to me whenever you want.'
                           : '¡Listo! Háblame cuando quieras.';
                     if (ackText) {
-                        speakFluRef.current(ackText, currentLang).catch(() => undefined);
+                        // Esperar a que el saludo TERMINE de hablarse antes de abrir
+                        // el micrófono: si se abre durante el TTS, FLU se escucha a sí
+                        // misma (eco → fila fantasma "Hablante 1: háblame cuando
+                        // quieras") y el anti-eco aborta la escucha (se cierra sola).
+                        try {
+                            await speakFluRef.current(ackText, currentLang);
+                        } catch {
+                            // Sin TTS disponible: continuar igual.
+                        }
                     }
                 }
                 try {
