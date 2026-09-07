@@ -20,9 +20,6 @@ import { ParticipantsPanel, type ParticipantsPanelProps } from './ParticipantsPa
 import { BrowserProfilesPanel, type BrowserProfilesPanelProps } from './BrowserProfilesPanel';
 import { SearchControlCenter, type SearchControlCenterProps } from './SearchControlCenter';
 import { ContactsPanel, type ContactsPanelProps } from './ContactsPanel';
-import { DiaryPanel, type DiaryPanelProps } from './DiaryPanel';
-import { MoodPanel, type MoodPanelProps } from './MoodPanel';
-import { HabitsPanel, type HabitsPanelProps } from './HabitsPanel';
 import { RemindersPanel, type RemindersPanelProps } from './RemindersPanel';
 import { TemporalItemsPanel, type TemporalItemsPanelProps } from './TemporalItemsPanel';
 import { ShoppingPanel, type ShoppingPanelProps } from './ShoppingPanel';
@@ -68,12 +65,6 @@ export interface FluSettingsTabViewProps {
     // ---- Grupo Mis datos — agenda personal ----
     /** Contactos de la agenda personal. */
     contacts: ContactsPanelProps;
-    /** Entradas del diario personal. */
-    diary: DiaryPanelProps;
-    /** Registro de ánimo (bienestar). */
-    mood: MoodPanelProps;
-    /** Hábitos y metas. */
-    habits: HabitsPanelProps;
 
     // ---- Grupo Gestión — recordatorios, compras y reconocimiento ----
     /** Recordatorios por autor. */
@@ -105,9 +96,6 @@ export function FluSettingsTabView({
     browser,
     search,
     contacts,
-    diary,
-    mood,
-    habits,
     reminders,
     temporals,
     shopping,
@@ -168,9 +156,6 @@ export function FluSettingsTabView({
                     hidden={group !== 'data'}
                 >
                     <ContactsPanel {...contacts} />
-                    <DiaryPanel {...diary} />
-                    <MoodPanel {...mood} />
-                    <HabitsPanel {...habits} />
                 </div>
 
                 {/* Grupo Gestión — recordatorios, compras y reconocimiento */}

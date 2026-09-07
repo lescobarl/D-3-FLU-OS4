@@ -4748,46 +4748,6 @@ const {
                                         await contacts.removeContact(id);
                                     },
                                 }}
-                                diary={{
-                                    participants: participants.participants,
-                                    entries: diary.entries,
-                                    loading: diary.loading,
-                                    onAdd: async (input) => {
-                                        await diary.addEntry(input);
-                                    },
-                                    onRemove: async (id) => {
-                                        await diary.removeEntry(id);
-                                    },
-                                }}
-                                mood={{
-                                    participants: participants.participants,
-                                    moods: mood.moods,
-                                    summary: mood.summary,
-                                    loading: mood.loading,
-                                    onLog: async (input) => {
-                                        await mood.logMood(input);
-                                    },
-                                    onRemove: async (id) => {
-                                        await mood.removeMood(id);
-                                    },
-                                }}
-                                habits={{
-                                    participants: participants.participants,
-                                    stats: habits.stats,
-                                    loading: habits.loading,
-                                    onAdd: async (input) => {
-                                        await habits.addGoal(input);
-                                    },
-                                    onCheckIn: async (goalId, date, done) => {
-                                        await habits.checkIn({ goalId, date, done });
-                                    },
-                                    onStatus: async (id, status) => {
-                                        await habits.updateStatus(id, status);
-                                    },
-                                    onRemove: async (id) => {
-                                        await habits.removeGoal(id);
-                                    },
-                                }}
                                 reminders={{
                                     items: reminders.reminders,
                                     loading: reminders.loading,
