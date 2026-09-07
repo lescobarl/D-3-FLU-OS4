@@ -449,7 +449,12 @@ export function useNavigationCommands(
                         extractQueryFromWebSearchPhrase(transcript, (FLU_CONFIG as any).voiceCommands) ||
                         '',
                 ).trim();
-                const query = stripLanguageWords(rawQuery, languageWords);
+                // Si el LLM puso en parametros la frase ENTERA (con wake word o
+                // con el gatillo "busca en la web"), se limpia igual para que la
+                // barra muestre SOLO la consulta ("cómo saltan los conejos"), no
+                // el comando (Bug #4).
+                const extracted = extractQueryFromWebSearchPhrase(rawQuery, (FLU_CONFIG as any).voiceCommands);
+                const query = stripLanguageWords(extracted || rawQuery, languageWords);
                 if (!query) {
                     // Sin consulta → FLU anuncia la etiqueta voiceNoQuery y no
                     // se escribe nada en el Pizarrón (los resultados web viven

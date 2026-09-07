@@ -9,7 +9,6 @@
 // ============================================================
 import type { ComponentType } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { stripWakeWordForDisplay } from '../voice/lib/audioMath';
 import { FluTabPanel } from '../voice/components/FluShellTabs';
 import { PanelFrame } from '../voice/components/PanelFrame';
 import { ConversationLog } from '../voice/components/ConversationLog';
@@ -55,7 +54,24 @@ export function FluConversationTabView({
     onRemoveParticipant,
 }: FluConversationTabViewProps) {
     const ws = FLU_CONFIG.ui?.workspace || {};
-    const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [];
+    // La frase en vivo muestra el texto COMPLETO que FLU oyó (incluida la wake
+    // word "ok flu"): antes se quitaba con stripWakeWordForDisplay y, al limpiar
+    // liveTranscript tras ejecutar, el display quedaba sin "ok flu" o vacío
+    // (Bug #4). Fuente: liveTranscript; si ya se limpió, la ÚLTIMA frase del
+    // usuario del historial (que conserva la frase completa); respaldo final.
+    const entries = Array.isArray(conversationHistory) ? conversationHistory : [];
+    let lastHeard = '';
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+        const entry = entries[i];
+        if (!entry) continue;
+        const role = String(entry.role || '').toLowerCase();
+        const speaker = String(entry.speakerName || '');
+        if (role === 'user' || (speaker && speaker !== 'FLU' && speaker !== 'flu')) {
+            lastHeard = String(entry.text || entry.content || '').trim();
+            break;
+        }
+    }
+    const livePhrase = (liveTranscript || lastHeard || currentTranscript || '').trim();
 
     return (
         <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">
@@ -73,7 +89,7 @@ export function FluConversationTabView({
                 {/* OS3 parity: live phrase display above conversation log — sin label para ahorrar espacio */}
                 <div className="conversation-live-phrase frame-content__response">
                     <div className="conversation-live-phrase__scroll">
-                        <span>{stripWakeWordForDisplay(liveTranscript || currentTranscript || '', wakeWords) || '\u00a0'}</span>
+                        <span>{livePhrase || '\u00a0'}</span>
                     </div>
                 </div>
                 <ConversationLogAny
