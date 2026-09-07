@@ -1218,6 +1218,11 @@ export function useFluVoiceAssistant({
   const finalizeRecognition = useCallback(async () => {
     if (!recognitionRef.current) return
 
+    relayLog('LOG', 'useFluVoiceAssistant', '[REC] stop: finalizeRecognition', {
+      isListening: isListeningRef.current,
+      conversationActive: Boolean(conversationActiveRef?.current),
+    })
+
     const finalizeMs = conversationActiveRef?.current
       ? FLU_CONFIG.timing.recognitionFinalizeMs
       : FLU_CONFIG.timing.recognitionStopMs
@@ -2589,6 +2594,10 @@ export function useFluVoiceAssistant({
 
       try {
         if (closing && recognitionRef.current) {
+          relayLog('LOG', 'useFluVoiceAssistant', '[REC] stop: commitConversationTurn(closing)', {
+            isListening: isListeningRef.current,
+            conversationActive: Boolean(conversationActiveRef?.current),
+          })
           isStoppingRef.current = true
           await finalizeRecognition()
           isStoppingRef.current = false
@@ -3462,6 +3471,10 @@ export function useFluVoiceAssistant({
 
     setStatus('processing')
     isProcessingRef.current = true
+    relayLog('LOG', 'useFluVoiceAssistant', '[REC] stop: processConversationFluQuery/processing', {
+      isListening: isListeningRef.current,
+      conversationActive: Boolean(conversationActiveRef?.current),
+    })
     isStoppingRef.current = true
     clearAutoProcessTimer()
 
