@@ -90,12 +90,14 @@ export default defineConfig(({ mode }) => {
             // Auto-open SOLO en dev manual; Playwright levanta su propio server
             // (PLAYWRIGHT_SERVER=1) y no debe abrir pestañas del navegador.
             open: process.env.PLAYWRIGHT_SERVER === '1' ? false : true,
-            // ffmpeg.wasm (videoAssembler) requiere aislamiento cruzado (SAB):
-            // sin COOP/COEP el core no carga y el video degrada a texto
-            // (el "prompt" que veía el usuario). Cabeceras necesarias.
+            // ffmpeg.wasm (videoAssembler) puede necesitar aislamiento cruzado (SAB)
+            // con COOP+COEP; pero COEP=require-corp BLOQUEA cargar imágenes
+            // cross-origin (Pollinations) que no mandan CORP → "No se pudo cargar la
+            // imagen" aunque la URL abra en el navegador. El ensamblado mp4 ya
+            // funcionó sin estas cabeceras, así que se mantiene SOLO COOP (no bloquea
+            // imágenes) y se retira COEP.
             headers: {
                 'Cross-Origin-Opener-Policy': 'same-origin',
-                'Cross-Origin-Embedder-Policy': 'require-corp',
             },
             // Proxy same-origin para la búsqueda de música en línea (Deezer).
             // La API de Deezer NO envía CORS: un fetch directo desde el
@@ -112,7 +114,6 @@ export default defineConfig(({ mode }) => {
         preview: {
             headers: {
                 'Cross-Origin-Opener-Policy': 'same-origin',
-                'Cross-Origin-Embedder-Policy': 'require-corp',
             },
         },
         build: {
