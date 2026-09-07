@@ -21,6 +21,7 @@ import {
     useEffect,
     useMemo,
     useRef,
+    useState,
     type FormEvent,
 } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
@@ -96,6 +97,10 @@ export function WorkspaceSearch({
         inputRef.current?.focus();
     }, []);
 
+    // El ÚLTIMO comando "OK FLU…" reconocido se conserva en la barra aunque la
+    // transcripción en vivo se limpie al procesar. Se borra solo al escribir.
+    const [lastCommand, setLastCommand] = useState('');
+
     const handleSubmit = useCallback(
         (event: FormEvent) => {
             event.preventDefault();
@@ -124,7 +129,14 @@ export function WorkspaceSearch({
     // verse en la barra. Antes se ocultaban cuando isListening dejaba de ser
     // true (la bandera no siempre coincide con una captura en curso). Ahora se
     // muestra cualquier comando reconocido mientras no haya consulta escrita.
-    const showLive = Boolean(live.length) && !hasQuery;
+    const effectiveLive = live || lastCommand;
+    const showLive = Boolean(effectiveLive.length) && !hasQuery;
+
+    // Conservar el último comando reconocido tras el proceso (el live se limpia).
+    useEffect(() => {
+        if (live) setLastCommand(live);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [live]);
 
     return (
         <div className="workspace-search" data-testid="workspace-search">
@@ -138,14 +150,17 @@ export function WorkspaceSearch({
                         type="text"
                         className="workspace-search__input"
                         value={query}
-                        onChange={(e) => onQueryChange(e.target.value)}
+                        onChange={(e) => {
+                            setLastCommand('');
+                            onQueryChange(e.target.value);
+                        }}
                         placeholder={ui.placeholder}
                         aria-label={ui.inputLabel}
                         disabled={loading}
                     />
                     {showLive && (
                         <span className="workspace-search__live" aria-hidden="true">
-                            {live}
+                            {effectiveLive}
                         </span>
                     )}
                 </div>
