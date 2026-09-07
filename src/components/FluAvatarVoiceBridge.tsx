@@ -46,6 +46,9 @@ import type { ResolvedCommunicationProfile } from '../core/personalization/commu
 interface FluAvatarVoiceBridgeProps {
     height?: string;
     width?: string;
+    /** Última frase completa del usuario (fallback de transcripción del área del
+        personaje cuando liveTranscript/currentTranscript están vacíos tras ejecutar). */
+    lastUserText?: string;
     /** Estado de branding para decoraciones estacionales del avatar */
     brandingMode?: 'auto' | 'manual' | 'disabled';
     brandingSeason?: string;
@@ -155,16 +158,19 @@ function useKeyboardShortcuts({
 interface VoiceControlsProps {
     liveTranscript: string;
     transcript: string;
+    /** Última frase completa del usuario (fallback cuando live/store están vacíos). */
+    fallback?: string;
 }
 
 function VoiceControls({
     liveTranscript,
     transcript,
+    fallback = '',
 }: VoiceControlsProps) {
     // Solo se muestra lo que viene después del wake word (si lo hay), para no
     // repetir el prefijo de activación ("Flu, ...") en la transcripción visible.
     const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [];
-    const rawText = liveTranscript || transcript || '';
+    const rawText = liveTranscript || transcript || fallback || '';
     const displayText = stripWakeWordForDisplay(rawText, wakeWords);
     return (
         <div className="voice-controls">
@@ -204,6 +210,7 @@ function VoiceControls({
 export function FluAvatarVoiceBridge({
     height = '100%',
     width = '100%',
+    lastUserText = '',
     brandingMode,
     brandingSeason,
     brandingIsBirthday,
@@ -612,6 +619,7 @@ export function FluAvatarVoiceBridge({
             <VoiceControls
                 liveTranscript={liveTranscript || ''}
                 transcript={integrationStore.currentTranscript}
+                fallback={lastUserText}
             />
 
         </div>

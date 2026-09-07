@@ -1352,6 +1352,23 @@ function App() {
         };
     }, [integrationStore.conversationHistory]);
 
+    // Última frase completa del usuario (para el área del personaje / barra):
+    // fuente única desde el historial real, usada como fallback de transcripción
+    // cuando liveTranscript se limpió tras ejecutar el comando.
+    const avatarLastUserText = useMemo(() => {
+        const history = integrationStore.conversationHistory || [];
+        for (let i = history.length - 1; i >= 0; i -= 1) {
+            const entry = history[i];
+            if (!entry) continue;
+            const role = String(entry.role || '').toLowerCase();
+            const speaker = String(entry.speakerName || '');
+            if (role === 'user' || (speaker && speaker !== 'FLU' && speaker !== 'flu')) {
+                return String(entry.text || '').trim();
+            }
+        }
+        return '';
+    }, [integrationStore.conversationHistory]);
+
     // Cache for isDuplicateSystemEvent: store recent dedup keys in a Set to avoid
     // O(n) scan of the entire conversation history on every ignored event.
     // The cache is bounded by time (entries older than systemEventDedupBucketMs are pruned).
@@ -4504,10 +4521,11 @@ const {
                                     }
                                 },
                             }}>
-                                <FluAvatarVoiceBridge
-                                    height="100%"
-                                    width="100%"
-                                    // ---- FASE P — Resolución del perfil de comunicación por persona ----
+                                 <FluAvatarVoiceBridge
+                                     height="100%"
+                                     width="100%"
+                                     lastUserText={avatarLastUserText}
+                                     // ---- FASE P — Resolución del perfil de comunicación por persona ----
                                     onResolveCommunicationProfile={onResolveCommunicationProfile}
                                     // ---- Branding Inteligente por Temporalidad ----
                                     brandingMode={branding.config.mode}
