@@ -120,7 +120,11 @@ export function WorkspaceSearch({
     // mientras el asistente está escuchando de verdad y no hay una consulta
     // escrita/confirmada. Así no queda texto residual ("Busca…") pegado en la
     // barra cuando la escucha ya terminó.
-    const showLive = Boolean(isListening) && !hasQuery && live.length > 0;
+    // Definición: TODOS los comandos "OK FLU …" (buscar O consultar IA) deben
+    // verse en la barra. Antes se ocultaban cuando isListening dejaba de ser
+    // true (la bandera no siempre coincide con una captura en curso). Ahora se
+    // muestra cualquier comando reconocido mientras no haya consulta escrita.
+    const showLive = Boolean(live.length) && !hasQuery;
 
     return (
         <div className="workspace-search" data-testid="workspace-search">
