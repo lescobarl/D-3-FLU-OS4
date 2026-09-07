@@ -15,6 +15,12 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { aiService } from '../services/aiServiceFactory';
 import { fetchGeminiImageFallback } from '../voice/lib/imageGeneration';
 import { resolveGeminiApiKey } from '../core/config/appConfig';
+import { relayLog } from '../lib/clientLogRelay';
+
+/** Traza visible en el dev server (relayLog) para diagnosticar el eslabón de imagen. */
+function traceImage(label: string, extra: Record<string, unknown>) {
+    relayLog('LOG', 'WorkspaceImage', label, extra);
+}
 
 export interface WorkspaceImageState {
     /** URL de la imagen generada, o null si no hay */
@@ -117,6 +123,10 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
 
     // ---- Mark failed (for onError handlers in JSX) ----
     const markFailed = useCallback(() => {
+        traceImage('markFailed (img onError/agotada)', {
+            url: String(urlRef.current || '').slice(0, 120),
+            prompt: String(promptRef.current || '').slice(0, 60),
+        });
         setIsFailed(true);
         clearLoadTimeout();
     }, [clearLoadTimeout]);
@@ -155,6 +165,10 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
                 setIsLoading(false);
                 setIsFailed(false);
             } else {
+                traceImage('gemini-fallback:sin-URL', {
+                    trace: (result as any)?.trace || undefined,
+                    prompt: String(prompt).slice(0, 60),
+                });
                 console.warn('[useWorkspaceImage] Gemini fallback returned no image:', result.trace);
                 setIsLoading(false);
                 setIsFailed(true);
@@ -200,6 +214,14 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         try {
             const result = await aiService.generateWorkspaceImage(promptVisual, tipo, language);
             if (requestRef.current !== requestId) return;
+            traceImage('generateFromContract:result', {
+                tipo,
+                prompt: String(promptVisual).slice(0, 60),
+                provider: (result as any)?.trace?.provider || (result as any)?.provider || '?',
+                ok: Boolean(result.image_url),
+                url: String(result.image_url || '').slice(0, 90),
+                trace: (result as any)?.trace || undefined,
+            });
             if (result.image_url) {
                 urlRef.current = result.image_url;
                 setImageUrl(result.image_url);
