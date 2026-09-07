@@ -1066,6 +1066,9 @@ function App() {
     // speakFlu from the FIRST render's closure. Keeping a ref ensures the callback
     // always reads the latest speakFlu even across re-renders.
     const speakFluRef = useRef<(text: string, lang: string) => Promise<void>>(async () => {});
+    // Guarda "ya se anunció el saludo de cierre" para no repetirlo con cada
+    // re-render/re-efecto del mismo participante (una vez por activación).
+    const onboardingAckSpokenForRef = useRef<string | null>(null);
 
     // Cache for rawOnly speaker lookup: Map<speakerName, { index, entry }>
     // Avoids O(n) backward scan of conversation history on every raw transcript.
@@ -2766,6 +2769,25 @@ function App() {
             setActiveUser(undefined, id);
             setActiveParticipantId(id);
             const tryStartListening = async () => {
+                // Saludo de cierre "¡Listo… Háblame cuando quieras": se anuncia UNA
+                // vez por participante al completar el onboarding (texto del paso
+                // 'complete' de la config, sin hardcode).
+                const currentLang = (languageRef.current as 'es' | 'en') || 'es';
+                if (onboardingAckSpokenForRef.current !== id) {
+                    onboardingAckSpokenForRef.current = id;
+                    const steps = ((FLU_CONFIG as any)?.onboarding?.steps || []) as any[];
+                    const completeStep = steps.find((s: any) => s.id === 'complete');
+                    const name = participants.participants.find((p) => p.id === id)?.name as string;
+                    const ackText = completeStep
+                        ? String(completeStep[currentLang === 'en' ? 'en' : 'es'] || '')
+                              .replace('{name}', name || '')
+                        : currentLang === 'en'
+                          ? 'Done! Talk to me whenever you want.'
+                          : '¡Listo! Háblame cuando quieras.';
+                    if (ackText) {
+                        speakFluRef.current(ackText, currentLang).catch(() => undefined);
+                    }
+                }
                 try {
                     // El TTS de cierre ("Háblame cuando quieras") puede seguir
                     // sonando cuando este arranque se dispara: si la reconocedora
