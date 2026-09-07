@@ -5,6 +5,12 @@
 //   guion (markdown) → storyboard (diapositivas) → TTS (opcional)
 //   → ffmpeg.wasm (autohospedado en public/ffmpeg/) → mp4.
 //
+// Visual del sujeto (Bug #5 — "video de un conejo saltando" mostraba
+// solo texto del guion): cada frame dibuja, además del título y la
+// narración, una IMAGEN REAL del sujeto (params.tema) generada por
+// Pollinations, para que el video se VEA del sujeto pedido y no sea
+// una diapositiva de texto.
+//
 // ffmpeg.wasm v0.12 (100% local):
 //   - Core single-threaded copiado por scripts/sync-ffmpeg-core.mjs
 //     a public/ffmpeg/ y cargado vía import.meta.env.BASE_URL
@@ -15,7 +21,8 @@
 // Degradación elegante (Rule #1: NO HARDCODE — límites aquí):
 //   - Si ffmpeg.wasm no carga, se devuelve guion + storyboard +
 //     duración estimada (degraded=true).
-//   - El ensamblado real solo se intenta si el módulo está disponible.
+//   - Si la imagen del sujeto no puede generarse, el frame cae a
+//     texto (sin romper el video).
 // ============================================================
 
 export interface VideoStoryboardItem {
@@ -48,6 +55,41 @@ export interface VideoAssemblyParams {
     duracion_min?: number;
     orientacion?: 'vertical' | 'horizontal';
     tema?: string;
+}
+
+// Imagen del sujeto (Bug #5): base de Pollinations desde appConfig (sin hardcode).
+import { POLLINATIONS_CONFIG } from '../core/config/appConfig';
+
+/** URL de imagen del sujeto pedido por el usuario (p. ej. "un conejo saltando"). */
+function buildSubjectImageUrl(prompt: string): string {
+    const base = String(POLLINATIONS_CONFIG?.BASE_URL || 'https://image.pollinations.ai/prompt');
+    return `${base}/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 999999)}`;
+}
+
+/** Precarga la imagen del sujeto con timeout; null si no se pudo generar. */
+function loadSubjectImage(prompt: string, timeoutMs = 12000): Promise<HTMLImageElement | null> {
+    return new Promise((resolve) => {
+        if (typeof window === 'undefined' || typeof Image === 'undefined' || !prompt.trim()) {
+            resolve(null);
+            return;
+        }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const timer = window.setTimeout(() => {
+            img.onload = null;
+            img.onerror = null;
+            resolve(null);
+        }, timeoutMs);
+        img.onload = () => {
+            window.clearTimeout(timer);
+            resolve(img);
+        };
+        img.onerror = () => {
+            window.clearTimeout(timer);
+            resolve(null);
+        };
+        img.src = buildSubjectImageUrl(prompt);
+    });
 }
 
 /** Descripción pura de una diapositiva para el render del frame (testeable). */
@@ -197,6 +239,7 @@ function renderFrameToPng(
     item: VideoStoryboardItem,
     params: VideoAssemblyParams,
     preset: { width: number; height: number; fps: number; bitrate: string },
+    subject: HTMLImageElement | null = null,
 ): Uint8Array {
     const desc = describeFrame(item, params);
     const width = params.orientacion === 'vertical' ? preset.height : preset.width;
@@ -214,6 +257,21 @@ function renderFrameToPng(
     gradient.addColorStop(1, desc.bgEnd);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
+
+    // Imagen REAL del sujeto (Bug #5): el video debe MOSTRAR lo pedido
+    // ("un conejo saltando"), no solo texto del guion. Cover + overlay
+    // oscuro inferior para que el texto siga siendo legible.
+    if (subject && subject.naturalWidth > 0 && subject.naturalHeight > 0) {
+        const scale = Math.max(width / subject.naturalWidth, height / subject.naturalHeight);
+        const dw = subject.naturalWidth * scale;
+        const dh = subject.naturalHeight * scale;
+        ctx.drawImage(subject, (width - dw) / 2, (height - dh) / 2, dw, dh);
+        const overlay = ctx.createLinearGradient(0, height * 0.35, 0, height);
+        overlay.addColorStop(0, 'rgba(0,0,0,0)');
+        overlay.addColorStop(1, 'rgba(0,0,0,0.78)');
+        ctx.fillStyle = overlay;
+        ctx.fillRect(0, height * 0.35, width, height * 0.65);
+    }
 
     // Barra de acento superior.
     ctx.fillStyle = desc.accent;
@@ -314,9 +372,16 @@ export async function assembleVideo(
     try {
         const preset = QUALITY_PRESETS[params.calidad || 'media'] || QUALITY_PRESETS.media;
 
+        // Imagen del sujeto pedido por el usuario (Bug #5): se precarga UNA vez y
+        // se dibuja en cada frame para que el video muestre lo solicitado.
+        const subject = await loadSubjectImage(params.tema || '');
+        if (params.tema && !subject) {
+            warnings.push('No se pudo generar la imagen del sujeto; el video usará solo texto (sin romper el ensamblado).');
+        }
+
         const args: string[] = [];
         for (let i = 0; i < storyboard.length; i++) {
-            const png = renderFrameToPng(storyboard[i], params, preset);
+            const png = renderFrameToPng(storyboard[i], params, preset, subject);
             await ffmpeg.writeFile(`frame_${i}.png`, png);
             const duration = Math.max(1, Math.round(storyboard[i].durationSec || 3));
             args.push('-loop', '1', '-t', String(duration), '-i', `frame_${i}.png`);
