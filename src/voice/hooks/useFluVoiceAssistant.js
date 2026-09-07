@@ -2212,6 +2212,13 @@ export function useFluVoiceAssistant({
 
       Recognition.onerror = (event) => {
         const errorCode = String(event.error || '').trim()
+        relayLog('LOG', 'useFluVoiceAssistant', '[REC] onerror', {
+          error: errorCode,
+          isListening: isListeningRef.current,
+          conversationActive: Boolean(conversationActiveRef?.current),
+          isStopping: isStoppingRef.current,
+          recognitionActive: recognitionActiveRef.current,
+        })
 
         if (errorCode === 'no-speech' || errorCode === 'aborted') {
           if ((isListeningRef.current || (conversationActiveRef?.current && !isStoppingRef.current)) && !isStoppingRef.current) {
@@ -2254,6 +2261,12 @@ export function useFluVoiceAssistant({
       Recognition.onend = () => {
         recognitionActiveRef.current = false
         lastRecognitionEndAtRef.current = Date.now()
+        relayLog('LOG', 'useFluVoiceAssistant', '[REC] onend', {
+          isListening: isListeningRef.current,
+          conversationActive: Boolean(conversationActiveRef?.current),
+          isStopping: isStoppingRef.current,
+          endStream: Boolean(conversationActiveRef?.current),
+        })
         if (import.meta.env.DEV && debugHotPath && conversationActiveRef?.current) {
           fluDebugHot('recognition-end', {})
         }
