@@ -1274,7 +1274,12 @@ export function useFluVoiceAssistant({
 
     // Reanudar la escucha si estaba activa antes del habla del asistente.
     if (wasListeningBefore) {
+      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras habla', {
+        wasListeningBefore,
+      })
       requestRecognitionRestart(0)
+    } else {
+      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: sin reanudar (no estaba escuchando)')
     }
   }, [requestRecognitionRestart])
 
