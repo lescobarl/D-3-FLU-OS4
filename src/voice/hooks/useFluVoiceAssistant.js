@@ -1244,6 +1244,11 @@ export function useFluVoiceAssistant({
   const suspendRecognitionForAssistantSpeech = useCallback(async () => {
     if (!recognitionRef.current || !recognitionActiveRef.current) return
 
+    // La escucha estaba activa antes de hablar: al terminar la suspensión se
+    // debe volver a encender (log evidencia: onend con isStopping=true y luego
+    // nadie reabría → "se cierra la conversación").
+    const wasListeningBefore = isListeningRef.current || recognitionActiveRef.current
+
     isStoppingRef.current = true
     const waitForEnd = new Promise((resolve) => {
       recognitionEndResolverRef.current = resolve
@@ -1266,7 +1271,12 @@ export function useFluVoiceAssistant({
     ])
     isStoppingRef.current = false
     recognitionEndResolverRef.current = null
-  }, [])
+
+    // Reanudar la escucha si estaba activa antes del habla del asistente.
+    if (wasListeningBefore) {
+      requestRecognitionRestart(0)
+    }
+  }, [requestRecognitionRestart])
 
   const restartRecognition = useCallback(() => {
     requestRecognitionRestart(0)
