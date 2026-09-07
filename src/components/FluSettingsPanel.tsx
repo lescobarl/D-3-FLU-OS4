@@ -298,8 +298,8 @@ export function FluSettingsPanel({
                                 </label>
                                 <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
                                     {language === 'en'
-                                        ? 'If empty, falls back to the Text API key. The Gemini image fallback activates automatically when a key is present.'
-                                        : 'Si está vacía, se usa la API key de Texto. El fallback de imagen Gemini se activa automáticamente cuando hay una clave configurada.'}
+                                        ? 'If empty, falls back to the OpenRouter key. Image fallback is generated via OpenRouter using the cheapest model (google/gemini-2.5-flash-image) and activates automatically when a key is set.'
+                                        : 'Si está vacía, se usa la API key de OpenRouter. La imagen se genera via OpenRouter con el modelo más barato (google/gemini-2.5-flash-image) y se activa automáticamente cuando hay una clave configurada.'}
                                 </p>
                             </div>
                         </div>
