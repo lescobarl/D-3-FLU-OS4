@@ -31,7 +31,7 @@ import { useIntegrationStore, detectSentiment } from '../store/integrationStore'
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
 import { geminiService } from '../services/gemini';
 import { generateResponse } from '../services/fallbackResponses';
-import { WELCOME_MESSAGE } from '../core/config/appConfig';
+import { STORAGE_KEYS, WELCOME_MESSAGE } from '../core/config/appConfig';
 import { relayLog } from '../lib/clientLogRelay';
 import type { ConversationState } from '../types/bridge';
 import { useFluBridge } from '../context/FluBridgeContext';
@@ -376,7 +376,7 @@ export function FluAvatarVoiceBridge({
                 let geminiAnimacion: string | undefined;
                 const hasStoredApiKey = (() => {
                     try {
-                        return Boolean(String(localStorage.getItem('flu-text-api-key') ?? '').trim());
+                        return Boolean(String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim());
                     } catch { return false; }
                 })();
                 // Key resuelta: prop de React o lectura fresca de localStorage
@@ -384,7 +384,7 @@ export function FluAvatarVoiceBridge({
                 const resolvedApiKey = String(
                     apiKey ||
                     (() => {
-                        try { return localStorage.getItem('flu-text-api-key') ?? ''; } catch { return ''; }
+                        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? ''; } catch { return ''; }
                     })()
                 ).trim();
                 // FASE P — Personalización profunda por persona:
