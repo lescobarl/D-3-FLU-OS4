@@ -3247,20 +3247,40 @@ function App() {
                             ? 'Supermarket'
                             : 'Super';
                 } else {
-                    // 2) "nota para recordar un negocio" / "nota para recordar {X}"
-                    const paraRecordar = /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i.exec(norm);
-                    if (paraRecordar) {
-                        const rest = paraRecordar[1].trim();
+                    // 1b) "apunta/agrega [en la lista de] super ...": mismo destino
+                    // "Super:", sin gatillos ni conectores en el label (Bug notas:
+                    // guardaba "en la lista super comprar conejos").
+                    const superList =
+                        /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i.exec(norm);
+                    if (superList) {
+                        const rest = superList[2].trim();
                         label = rest
-                            ? `Recordar: ${rest}`
+                            ? `Super: ${rest}`
                             : lang === 'en'
-                                ? 'Remember'
-                                : 'Recordar';
+                                ? 'Supermarket'
+                                : 'Super';
                     } else {
-                        // 3) "apunta/anota {texto}" o "nota: {texto}" o "nota {texto}"
-                        const apunta = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i.exec(clean);
-                        if (apunta) {
-                            label = apunta[1].trim();
+                        // 2) "nota para recordar un negocio" / "nota para recordar {X}"
+                        const paraRecordar = /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i.exec(norm);
+                        if (paraRecordar) {
+                            const rest = paraRecordar[1].trim();
+                            label = rest
+                                ? `Recordar: ${rest}`
+                                : lang === 'en'
+                                    ? 'Remember'
+                                    : 'Recordar';
+                        } else {
+                            // 3) "apunta/anota {texto}" o "nota: {texto}" o "nota {texto}"
+                            const apunta = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i.exec(clean);
+                            if (apunta) {
+                                label = apunta[1]
+                                    .trim()
+                                    // Quitar conectores de relleno iniciales
+                                    // ("apunta que tengo que llamar al dentista" → "llamar al dentista").
+                                    .replace(/^que\s+tengo\s+que\s+/i, '')
+                                    .replace(/^que\s+/i, '')
+                                    .trim();
+                            }
                         }
                     }
                 }

@@ -102,6 +102,10 @@ const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|genérame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i
 const NOTE_PARA_SUPER =
   /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
+// "apunta/agrega [en la lista [de]] super …" → misma etiqueta "Super:" (Bug
+// notas: guardaba "en la lista super comprar conejos").
+const NOTE_SUPER_LIST =
+  /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
 const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
 const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
@@ -140,6 +144,14 @@ function recognizeNoteIntent(text = '') {
     return { handled: true, action: 'notes.add', data: { label } }
   }
 
+  // 1b) "apunta/agrega [en la lista de] super …" → "Super: {resto}".
+  const superList = NOTE_SUPER_LIST.exec(norm)
+  if (superList) {
+    const rest = superList[2] ? superList[2].trim() : ''
+    const label = rest ? `Super: ${rest}` : 'Super'
+    return { handled: true, action: 'notes.add', data: { label } }
+  }
+
   // 2) "nota para recordar {X}" / "nota para acordarme de {X}" → etiqueta
   //    "Recordar: {X}" (misma semántica que el manejador de App.tsx).
   const paraRecordar = NOTE_PARA_RECORDAR.exec(norm)
@@ -152,7 +164,15 @@ function recognizeNoteIntent(text = '') {
   // 3) "apunta/anota/añade/nota {texto}" → etiqueta = el texto tras el marcador.
   const apunta = NOTE_APUNTA.exec(clean)
   if (apunta) {
-    const label = apunta[1] ? apunta[1].trim() : ''
+    const label = apunta[1]
+      ? apunta[1]
+          .trim()
+          // Quitar conectores de relleno iniciales
+          // ("apunta que tengo que llamar al dentista" → "llamar al dentista").
+          .replace(/^que\s+tengo\s+que\s+/i, '')
+          .replace(/^que\s+/i, '')
+          .trim()
+      : ''
     if (!label) return null
     return { handled: true, action: 'notes.add', data: { label } }
   }
