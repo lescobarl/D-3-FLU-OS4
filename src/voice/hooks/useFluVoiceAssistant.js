@@ -1227,6 +1227,7 @@ export function useFluVoiceAssistant({
       ? FLU_CONFIG.timing.recognitionFinalizeMs
       : FLU_CONFIG.timing.recognitionStopMs
 
+    const wasListeningHere = isListeningRef.current || recognitionActiveRef.current
     isStoppingRef.current = true
     const waitForEnd = new Promise((resolve) => {
       recognitionEndResolverRef.current = resolve
@@ -1243,7 +1244,17 @@ export function useFluVoiceAssistant({
 
     isStoppingRef.current = false
     recognitionEndResolverRef.current = null
-  }, [conversationActiveRef])
+
+    // Evidencia del log: tras procesar una captura (audio ambiente sin wake) en
+    // modo pasivo se finalizaba y NO se reabría → "se cierra la escucha". Si el
+    // micrófono estaba abierto y no hay conversación activa, se vuelve a encender.
+    if (wasListeningHere && !conversationActiveRef?.current) {
+      relayLog('LOG', 'useFluVoiceAssistant', '[REC] finalize: reabriendo escucha pasiva', {
+        wasListeningHere,
+      })
+      requestRecognitionRestart(0)
+    }
+  }, [conversationActiveRef, requestRecognitionRestart])
 
   /** Libera el micrófono antes de TTS para que Chrome no mute/interrumpa la voz. */
   const suspendRecognitionForAssistantSpeech = useCallback(async () => {
