@@ -152,6 +152,7 @@ import { FLU_CONFIG } from './voice/lib/fluConfig';
 import { normalizeCommandForDeterministic } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
+import { parseNoteIntentText } from './voice/lib/noteIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import {
@@ -3229,78 +3230,11 @@ function App() {
                 const data = (input as any).data || {};
                 label = data.label ? String(data.label).trim() : null;
             } else {
-                let clean = String(input || '').trim();
-                if (!clean) return '';
-
-                // 0) Prefijos de creación explícita: "crea/haz/pon/guarda una nota ...",
-                //    "quiero crear una nota ...". Se normalizan a la forma canónica
-                //    "nota ..." para que los patrones 1-3 los reconozcan sin duplicar
-                //    lógica (fuente única por intención).
-                const creationPrefix =
-                    /^(?:crea|crear|genera|generar|genérame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i;
-                const creationMatch = creationPrefix.exec(clean);
-                if (creationMatch) {
-                    const rest = creationMatch[1].trim();
-                    clean = rest ? `nota ${rest}` : 'nota';
-                }
-
-                // Normalizar para matching (minúsculas, sin acentos).
-                const norm = clean
-                    .toLowerCase()
-                    .replace(/[áàäâ]/g, 'a')
-                    .replace(/[éèëê]/g, 'e')
-                    .replace(/[íìïî]/g, 'i')
-                    .replace(/[óòöô]/g, 'o')
-                    .replace(/[úùüû]/g, 'u')
-                    .replace(/[ñ]/g, 'n');
-
-                // 1) "nota para el super" / "nota para el supermercado" / "nota para comprar X"
-                const paraSuper = /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i.exec(norm);
-                if (paraSuper) {
-                    const rest = paraSuper[2].trim();
-                    label = rest
-                        ? `Super: ${rest}`
-                        : lang === 'en'
-                            ? 'Supermarket'
-                            : 'Super';
-                } else {
-                    // 1b) "apunta/agrega [en la lista de] super ...": mismo destino
-                    // "Super:", sin gatillos ni conectores en el label (Bug notas:
-                    // guardaba "en la lista super comprar conejos").
-                    const superList =
-                        /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i.exec(norm);
-                    if (superList) {
-                        const rest = superList[2].trim();
-                        label = rest
-                            ? `Super: ${rest}`
-                            : lang === 'en'
-                                ? 'Supermarket'
-                                : 'Super';
-                    } else {
-                        // 2) "nota para recordar un negocio" / "nota para recordar {X}"
-                        const paraRecordar = /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i.exec(norm);
-                        if (paraRecordar) {
-                            const rest = paraRecordar[1].trim();
-                            label = rest
-                                ? `Recordar: ${rest}`
-                                : lang === 'en'
-                                    ? 'Remember'
-                                    : 'Recordar';
-                        } else {
-                            // 3) "apunta/anota {texto}" o "nota: {texto}" o "nota {texto}"
-                            const apunta = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i.exec(clean);
-                            if (apunta) {
-                                label = apunta[1]
-                                    .trim()
-                                    // Quitar conectores de relleno iniciales
-                                    // ("apunta que tengo que llamar al dentista" → "llamar al dentista").
-                                    .replace(/^que\s+tengo\s+que\s+/i, '')
-                                    .replace(/^que\s+/i, '')
-                                    .trim();
-                            }
-                        }
-                    }
-                }
+                // Ruta cruda (E2E/integración/uso autónomo): parser ÚNICO de notas
+                // (src/voice/lib/noteIntentParser.js) — misma lógica que el árbitro
+                // (sin duplicación de regex en App).
+                const parsed = parseNoteIntentText(String(input || '').trim());
+                label = parsed && parsed.label ? parsed.label : null;
             }
 
             if (!label) return '';
