@@ -85,21 +85,6 @@ function resolveChannelForNavigation(commandId = '') {
 // Orden nota-vs-diario: el patrón de diario ("... en el diario ...") es MÁS
 // específico que el apunta genérico de nota ("anota {texto}"), así que el diario
 // se evalúa ANTES que la nota para que "anota X en el diario" se enrute bien.
-const DIARY_EN = /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i
-const DIARY_PREFIX = /^diario\s*[:,\-]?\s+(.+)$/i
-
-function recognizeDiaryIntent(text = '') {
-  const clean = String(text || '').trim()
-  if (!clean) return null
-  const match = DIARY_EN.exec(clean) || DIARY_PREFIX.exec(clean)
-  if (!match) return null
-  const content = match[1].trim()
-  if (!content) return null
-  return { handled: true, action: 'diary.addEntry', data: { content } }
-}
-
-import { parseNoteIntentText } from './noteIntentParser.js'
-
 function recognizeNoteIntent(text = '') {
   const parsed = parseNoteIntentText(text)
   if (!parsed || !parsed.label) return null
@@ -195,11 +180,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   }
 
   // 6. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
-  //    ("... en el diario ...") es más específico que el apunta genérico de nota.
-  const diary = recognizeDiaryIntent(transcript)
-  if (diary) {
-    return { matched: true, domain: 'diary', action: diary, channel: 'flu' }
-  }
+  // Diario PAUSADO (se reimplementará): no se reconoce por voz.
 
   // 7. Nota (función-adición): "nota ...", "apunta/anota {texto}", etc.
   const note = recognizeNoteIntent(transcript)

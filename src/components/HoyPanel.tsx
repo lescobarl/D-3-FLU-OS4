@@ -84,6 +84,8 @@ export function HoyPanel({
 }: HoyPanelProps) {
   const hoyUi = FLU_CONFIG.hoy?.ui ?? {};
   const diaryUi = FLU_CONFIG.diary?.ui ?? {};
+  // Diario PAUSADO: no se muestra en el panel hasta su reimplementación.
+  const diarioEnabled = Boolean((FLU_CONFIG as any)?.diary?.enabled);
   const notesUi = FLU_CONFIG.notes?.ui ?? {};
   const horarioUi = FLU_CONFIG.horario?.ui ?? {};
   // Acceso por clave dinámica (mood_1..mood_5) — Regla #1: sin hardcode.
@@ -223,34 +225,36 @@ export function HoyPanel({
         </div>
       </details>
 
-      {/* ============ 📓 DIARIO (+ánimo) ============ */}
-      <details className="hoy-panel__block" data-testid="diario-block">
-        <summary className="hoy-panel__summary">
-          {pickLabel(hoyUi.diarioTitle, language, '📓 Diario')}
-        </summary>
-        <div className="hoy-panel__body">
-          {diary.loading ? (
-            <p className="hoy-panel__empty">…</p>
-          ) : !ultimaEntrada ? (
-            <p className="hoy-panel__empty">
-              {pickLabel(hoyUi.sinDiario, language, 'Aún no hay entradas en el diario.')}
-            </p>
-          ) : (
-            <article className="hoy-panel__diario" data-testid="diario-ultima">
-              <h4 className="hoy-panel__diario-title">
-                {ultimaEntrada.title || diaryUi.untitledLabel || 'Sin título'}
-              </h4>
-              {ultimaEntrada.mood !== undefined && ultimaEntrada.mood !== null && (
-                <span className="hoy-panel__diario-mood" data-testid="diario-mood">
-                  {moodLabel(ultimaEntrada.mood)}
-                </span>
-              )}
-              <p className="hoy-panel__diario-content">{ultimaEntrada.content}</p>
-              <span className="hoy-panel__diario-date">{ultimaEntrada.date}</span>
-            </article>
-          )}
-        </div>
-      </details>
+      {/* ============ 📓 DIARIO (+ánimo) — PAUSADO (se reimplementará) ============ */}
+      {diarioEnabled && (
+        <details className="hoy-panel__block" data-testid="diario-block">
+          <summary className="hoy-panel__summary">
+            {pickLabel(hoyUi.diarioTitle, language, '📓 Diario')}
+          </summary>
+          <div className="hoy-panel__body">
+            {diary.loading ? (
+              <p className="hoy-panel__empty">…</p>
+            ) : !ultimaEntrada ? (
+              <p className="hoy-panel__empty">
+                {pickLabel(hoyUi.sinDiario, language, 'Aún no hay entradas en el diario.')}
+              </p>
+            ) : (
+              <article className="hoy-panel__diario" data-testid="diario-ultima">
+                <h4 className="hoy-panel__diario-title">
+                  {ultimaEntrada.title || diaryUi.untitledLabel || 'Sin título'}
+                </h4>
+                {ultimaEntrada.mood !== undefined && ultimaEntrada.mood !== null && (
+                  <span className="hoy-panel__diario-mood" data-testid="diario-mood">
+                    {moodLabel(ultimaEntrada.mood)}
+                  </span>
+                )}
+                <p className="hoy-panel__diario-content">{ultimaEntrada.content}</p>
+                <span className="hoy-panel__diario-date">{ultimaEntrada.date}</span>
+              </article>
+            )}
+          </div>
+        </details>
+      )}
 
       {/* ============ 📝 NOTAS ============ */}
       <details className="hoy-panel__block" data-testid="notas-block">

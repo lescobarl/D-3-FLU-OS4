@@ -974,7 +974,7 @@ async function dispatchArbiterIntent(
                 })) || '';
         } else if (domain === 'temporal' && typeof w.__fluHandleTemporalText === 'function') {
             reply = (await w.__fluHandleTemporalText(intent)) || '';
-        } else if (domain === 'diary' && typeof w.__fluHandleDiaryText === 'function') {
+        } else if (domain === 'diary' && (FLU_CONFIG as any).diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
             reply =
                 (await w.__fluHandleDiaryText(intent, {
                     personId: undefined,
@@ -3259,6 +3259,8 @@ function App() {
     // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
     (window as any).__fluHandleDiaryText = useCallback(
         async (input: any, opts?: { personId?: string; personName?: string }) => {
+            // DIARIO PAUSADO: no se crean entradas hasta su reimplementación.
+            if (!(FLU_CONFIG as any).diary?.enabled) return '';
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const diaryVoice = ((FLU_CONFIG as any).diary?.voice || {}) as any;
             const addedMsg =

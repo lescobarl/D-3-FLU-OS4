@@ -1432,7 +1432,9 @@ export const FLU_CONFIG = {
    * diario, escala y etiquetas viven aquí (config-driven).
    */
   diary: {
-    enabled: true,
+    // PAUSADO: el diario se reimplementará después. Hasta entonces no se
+    // reconoce por voz ni se muestra en el panel.
+    enabled: false,
     maxEntriesPerDay: 50,
     moodMax: 5,
     ui: {
