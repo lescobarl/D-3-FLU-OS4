@@ -4,12 +4,11 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
 import { buildGenerationPrompt } from './fluVisualPipeline.js'
 import {
-  buildGeminiApiUrl,
-  buildGeminiPredictUrl,
   buildPollinationsUrl,
   buildTextApiUrl,
   isLocalTextEndpoint,
   OPENROUTER_CONFIG,
+  FALAI_CONFIG,
   resolveTextApiKey,
   WORKSPACE_TIPOS,
 } from '../../core/config/appConfig'
@@ -109,9 +108,32 @@ async function postChatCompletion({
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
+  // Normalizar mensajes antes de enviar (evita "Invalid prompt: The messages do
+  // not match the ModelMessage[] schema"): descarta entradas vacías/sin contenido
+  // y fuerza roles válidos. Único chokepoint de todas las llamadas de texto.
+  const safeMessages = (Array.isArray(messages) ? messages : [])
+    .map((message) => {
+      if (!message || typeof message !== 'object') return null
+      const role = String(message.role || '').toLowerCase()
+      const validRole =
+        role === 'system' || role === 'assistant' || role === 'user' || role === 'tool'
+          ? role
+          : 'user'
+      const content = message.content
+      const hasContent =
+        typeof content === 'string'
+          ? content.trim().length > 0
+          : Array.isArray(content)
+            ? content.length > 0
+            : content != null
+      if (!hasContent) return null
+      return { role: validRole, content }
+    })
+    .filter(Boolean)
+
   const body = {
     model,
-    messages,
+    messages: safeMessages,
     max_tokens: maxTokens,
     ...(temperature !== undefined && temperature !== null ? { temperature } : {}),
     ...(topP !== undefined && topP !== null ? { top_p: topP } : {}),
@@ -282,48 +304,39 @@ export async function generateWorkspaceImage({ apiKey, workspace, language = 'es
 }
 
 /**
- * Genera una imagen con la API NATIVA de Gemini (servidor, apiKey segura).
- * Paso 5 del plan visual: fallback real cuando la URL de Pollinations falla
- * al cargar en el navegador (evita dejar el placeholder «chipote»).
- *
- * Soportados (config visualConfig.js → geminiImage.models):
- *  - kind 'generateContent' (gemini-2.5-flash-image / gemini-3.1-flash-image-preview):
- *    POST buildGeminiApiUrl(model) → candidates[0].content.parts[].inlineData
- *    { data: base64, mimeType } → data URL.
- *  - kind 'predict' (imagen-4.0-*): POST buildGeminiPredictUrl(model) →
- *    predictions[0].bytesBase64Encoded → data URL (image/png).
- *
- * Requiere apiKey (env del servidor vía resolveServerApiKey o cliente).
+ * Genera una imagen con la Image API de OpenRouter (POST /images) usando el
+ * modelo y endpoint centralizados en OPENROUTER_CONFIG (appConfig). Es el ÚNICO
+ * fallback de imagen: cuando la URL de Pollinations falla al cargar, se genera
+ * la imagen por OpenRouter (google/gemini-2.5-flash-image por defecto).
  * Devuelve { imageUrl, trace }; imageUrl vacío si no hay key o falla.
  */
-export async function generateGeminiImage({
+export async function generateOpenRouterImage({
   apiKey = '',
   prompt = '',
   language = 'es',
-  model = '',
-  kind = '',
 } = {}) {
   if (!prompt) {
     return {
       imageUrl: '',
       trace: {
-        provider: 'gemini',
-        model: model || '',
-        kind: 'none',
+        provider: 'openrouter',
+        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        kind: 'images',
         source: 'empty_prompt',
         hasImage: false,
+        prompt,
       },
     }
   }
 
-  const resolvedKey = resolveGeminiApiKey(apiKey)
-  if (!resolvedKey.apiKey) {
+  const url = buildTextApiUrl(OPENROUTER_CONFIG.IMAGE_ENDPOINT)
+  if (!apiKey || isLocalTextEndpoint(url)) {
     return {
       imageUrl: '',
       trace: {
-        provider: 'gemini',
-        model: model || '',
-        kind: 'none',
+        provider: 'openrouter',
+        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        kind: 'images',
         source: 'missing_api_key',
         hasImage: false,
         prompt,
@@ -331,119 +344,84 @@ export async function generateGeminiImage({
     }
   }
 
-  const resolvedKind = String(kind || '').trim().toLowerCase()
-  const resolvedModel = String(model || '').trim()
-
   try {
-    let imageUrl = ''
-    let usedKind = resolvedKind
-
-    if (resolvedKind === 'predict') {
-      const url = buildGeminiPredictUrl(resolvedModel)
-      const body = {
-        instances: [{ prompt }],
-        parameters: {
-          sampleCount: 1,
-          aspectRatio: '16:9',
+    const response = await fetchTextEngine(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
         },
-      }
-      const response = await fetchTextEngine(
-        url,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${resolvedKey.apiKey}`,
-          },
-          body: JSON.stringify(body),
-        },
-        REQUEST_TIMEOUT_PRESETS.image,
-      )
-      if (!response.ok) {
-        const detail = await response.text().catch(() => '')
-        throw new Error(`Gemini predict error ${response.status}: ${detail || response.statusText}`)
-      }
-      const payload = await response.json()
-      const bytes = payload?.predictions?.[0]?.bytesBase64Encoded
-      if (bytes) {
-        imageUrl = `data:image/png;base64,${bytes}`
-      }
-    } else {
-      // generateContent (default)
-      usedKind = 'generateContent'
-      const url = buildGeminiApiUrl(resolvedModel)
-      const body = {
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          responseModalities: ['IMAGE'],
-        },
-      }
-      const response = await fetchTextEngine(
-        url,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${resolvedKey.apiKey}`,
-          },
-          body: JSON.stringify(body),
-        },
-        REQUEST_TIMEOUT_PRESETS.image,
-      )
-      if (!response.ok) {
-        const detail = await response.text().catch(() => '')
-        throw new Error(`Gemini generateContent error ${response.status}: ${detail || response.statusText}`)
-      }
-      const payload = await response.json()
-      const parts = payload?.candidates?.[0]?.content?.parts || []
-      const inline = parts.find((p) => p?.inlineData?.data)
-      if (inline?.inlineData?.data) {
-        const mimeType = String(inline.inlineData.mimeType || 'image/png')
-        imageUrl = `data:${mimeType};base64,${inline.inlineData.data}`
-      }
-    }
-
-    if (!imageUrl) {
+        body: JSON.stringify({
+          model: OPENROUTER_CONFIG.IMAGE_MODEL,
+          prompt,
+          n: 1,
+          aspect_ratio: OPENROUTER_CONFIG.IMAGE_ASPECT_RATIO,
+        }),
+      },
+      REQUEST_TIMEOUT_PRESETS.image,
+    )
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      const message = `OpenRouter image error ${response.status}: ${String(detail).slice(0, 300)}`
+      console.error('[gemini]', message)
       return {
         imageUrl: '',
         trace: {
-          provider: 'gemini',
-          model: resolvedModel || '',
-          kind: usedKind,
-          source: 'empty_response',
+          provider: 'openrouter',
+          model: OPENROUTER_CONFIG.IMAGE_MODEL,
+          kind: 'images',
+          source: 'openrouter_image_error',
+          hasImage: false,
+          error: message,
+          prompt,
+          language,
+        },
+      }
+    }
+    const payload = await response.json()
+    const image = payload?.data?.[0]
+    const b64 = String(image?.b64_json || '')
+    if (!b64) {
+      return {
+        imageUrl: '',
+        trace: {
+          provider: 'openrouter',
+          model: OPENROUTER_CONFIG.IMAGE_MODEL,
+          kind: 'images',
+          source: 'openrouter_image_empty',
           hasImage: false,
           prompt,
           language,
         },
       }
     }
-
+    const mediaType = String(image?.media_type || 'image/png')
     return {
-      imageUrl,
+      imageUrl: `data:${mediaType};base64,${b64}`,
       trace: {
-        provider: 'gemini',
-        model: resolvedModel || '',
-        kind: usedKind,
-        source: 'gemini_native',
+        provider: 'openrouter',
+        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        kind: 'images',
+        source: 'openrouter_image_fallback',
         hasImage: true,
         prompt,
         language,
       },
     }
   } catch (error) {
+    const message = error?.message || 'unknown'
+    console.error('[gemini] OpenRouter image fallback error:', message)
     return {
       imageUrl: '',
       trace: {
-        provider: 'gemini',
-        model: resolvedModel || '',
-        kind: resolvedKind || 'generateContent',
-        source: 'generation_failed',
+        provider: 'openrouter',
+        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        kind: 'images',
+        source: 'openrouter_image_error',
         hasImage: false,
-        error: error?.message || 'unknown',
+        error: message,
         prompt,
         language,
       },
@@ -1668,4 +1646,96 @@ try {
     texto_extraido: text,
   }
 }
+}
+
+/**
+ * Genera un VIDEO real con fal.ai (text-to-video, queue API).
+ * Servidor-only: la apiKey se resuelve en el servidor y nunca se expone.
+ * Flujo: POST /{model} → status_url → poll status_url → GET response_url.
+ * Devuelve { videoUrl, trace }; videoUrl vacío si no hay key o falla.
+ */
+export async function generateVideoViaFal({
+  apiKey = '',
+  prompt = '',
+  language = 'es',
+  aspectRatio = '',
+} = {}) {
+  const base = String(FALAI_CONFIG.VIDEO_ENDPOINT || '').replace(/\/$/, '')
+  const model = FALAI_CONFIG.VIDEO_MODEL
+  if (!prompt || !apiKey || !base) {
+    return {
+      videoUrl: '',
+      trace: {
+        provider: 'falai',
+        model,
+        source: !prompt ? 'empty_prompt' : 'missing_api_key',
+        hasVideo: false,
+        prompt,
+      },
+    }
+  }
+
+  try {
+    const submit = await fetch(`${base}/${model}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Key ${apiKey}`,
+      },
+      body: JSON.stringify({
+        prompt,
+        aspect_ratio: aspectRatio || FALAI_CONFIG.ASPECT_RATIO,
+      }),
+    })
+    if (!submit.ok) {
+      const detail = await submit.text().catch(() => '')
+      const message = `fal.ai submit error ${submit.status}: ${String(detail).slice(0, 300)}`
+      console.error('[falai]', message)
+      return {
+        videoUrl: '',
+        trace: { provider: 'falai', model, source: 'submit_error', hasVideo: false, error: message, prompt },
+      }
+    }
+    const payload = await submit.json()
+    const statusUrl = String(payload?.status_url || '')
+    if (!statusUrl) {
+      return { videoUrl: '', trace: { provider: 'falai', model, source: 'no_status_url', hasVideo: false, prompt } }
+    }
+
+    const deadline = Date.now() + FALAI_CONFIG.POLL_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      const statusRes = await fetch(statusUrl, { headers: { Authorization: `Key ${apiKey}` } })
+      if (statusRes.ok) {
+        const statusPayload = await statusRes.json()
+        if (statusPayload?.status === 'COMPLETED') {
+          const resultUrl = String(statusPayload?.response_url || '')
+          if (resultUrl) {
+            const resultRes = await fetch(resultUrl, { headers: { Authorization: `Key ${apiKey}` } })
+            const resultPayload = await resultRes.json()
+            const videoUrl = String(resultPayload?.video?.url || resultPayload?.url || '')
+            return {
+              videoUrl,
+              trace: {
+                provider: 'falai',
+                model,
+                source: videoUrl ? 'falai_video' : 'empty_video',
+                hasVideo: Boolean(videoUrl),
+                prompt,
+                language,
+              },
+            }
+          }
+        }
+        if (statusPayload?.status === 'FAILED' || statusPayload?.status === 'ERROR') {
+          return { videoUrl: '', trace: { provider: 'falai', model, source: 'job_failed', hasVideo: false, prompt } }
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+    }
+    return { videoUrl: '', trace: { provider: 'falai', model, source: 'poll_timeout', hasVideo: false, prompt } }
+  } catch (error) {
+    const message = error?.message || 'unknown'
+    console.error('[falai] generateVideoViaFal error:', message)
+    return { videoUrl: '', trace: { provider: 'falai', model, source: 'error', hasVideo: false, error: message, prompt } }
+  }
 }

@@ -13,8 +13,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { aiService } from '../services/aiServiceFactory';
-import { fetchGeminiImageFallback } from '../voice/lib/imageGeneration';
-import { resolveGeminiApiKey } from '../core/config/appConfig';
+import { fetchOpenRouterImageFallback } from '../voice/lib/imageGeneration';
+import { resolveTextApiKey } from '../core/config/appConfig';
 import { relayLog } from '../lib/clientLogRelay';
 
 /** Traza visible en el dev server (relayLog) para diagnosticar el eslabón de imagen. */
@@ -43,8 +43,8 @@ export interface WorkspaceImageState {
     close: () => void;
     /** Marcar como fallido (para onError en JSX) */
     markFailed: () => void;
-    /** Intentar fallback con generación nativa de Gemini (paso 5) cuando Pollinations falla */
-    fallbackToGemini: () => Promise<void>;
+    /** Intentar fallback con generación por OpenRouter (único fallback) cuando Pollinations falla */
+    fallbackToOpenRouter: () => Promise<void>;
     /** Generar imagen desde un contract de Gemini */
     generateFromContract: (promptVisual: string, tipo: string | null) => Promise<void>;
     /** Limpiar todo el estado de imagen */
@@ -131,18 +131,18 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         clearLoadTimeout();
     }, [clearLoadTimeout]);
 
-    // ---- Fallback to Gemini native image generation (paso 5) ----
+    // ---- Fallback a OpenRouter image generation (único fallback) ----
     // Cuando la URL de Pollinations falla al cargar en el <img>, intentamos
-    // generar la imagen con la API nativa de Gemini (si hay clave configurada)
-    // antes de mostrar el placeholder. Devuelve un data URL que no depende de red.
-    // El fallback es automático: si hay clave de Gemini, se considera.
-    const fallbackToGemini = useCallback(async () => {
+    // generar la imagen por OpenRouter (si hay clave configurada) antes de
+    // mostrar el placeholder. Devuelve un data URL que no depende de red.
+    // El fallback es automático: si hay clave de OpenRouter, se considera.
+    const fallbackToOpenRouter = useCallback(async () => {
         const prompt = promptRef.current;
         if (!prompt) {
             markFailed();
             return;
         }
-        const apiKey = resolveGeminiApiKey();
+        const apiKey = resolveTextApiKey();
         if (!apiKey) {
             markFailed();
             return;
@@ -153,7 +153,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         setIsLoading(true);
         setIsFailed(false);
         try {
-            const result = await fetchGeminiImageFallback({
+            const result = await fetchOpenRouterImageFallback({
                 workspace: { prompt_visual: prompt, tipo: tipoRef.current },
                 language,
                 apiKey,
@@ -165,17 +165,17 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
                 setIsLoading(false);
                 setIsFailed(false);
             } else {
-                traceImage('gemini-fallback:sin-URL', {
+                traceImage('openrouter-fallback:sin-URL', {
                     trace: (result as any)?.trace || undefined,
                     prompt: String(prompt).slice(0, 60),
                 });
-                console.warn('[useWorkspaceImage] Gemini fallback returned no image:', result.trace);
+                console.warn('[useWorkspaceImage] OpenRouter fallback returned no image:', result.trace);
                 setIsLoading(false);
                 setIsFailed(true);
             }
         } catch (err) {
             if (requestRef.current !== requestId) return;
-            console.warn('[useWorkspaceImage] Gemini fallback failed:', err);
+            console.warn('[useWorkspaceImage] OpenRouter fallback failed:', err);
             setIsLoading(false);
             setIsFailed(true);
         }
@@ -191,14 +191,22 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             markFailed();
             return;
         }
+        // Los data/blob URLs (fallback de generación real: Gemini/OpenRouter)
+        // no son stateless como Pollinations: si fallan, no se reintenta ni se
+        // vuelve a generar en bucle; se marca el fallo y se deja decidir al usuario.
+        const currentUrl = urlRef.current;
+        if (currentUrl.startsWith('data:') || currentUrl.startsWith('blob:')) {
+            markFailed();
+            return;
+        }
         if (loadAttemptRef.current >= MAX_LOAD_RETRIES) {
-            // Agotados los reintentos de URL → fallback a Gemini (si hay clave)
-            void fallbackToGemini();
+            // Agotados los reintentos de URL → fallback a OpenRouter (si hay clave)
+            void fallbackToOpenRouter();
             return;
         }
         loadAttemptRef.current += 1;
         setLoadAttempt(loadAttemptRef.current);
-    }, [fallbackToGemini, markFailed]);
+    }, [fallbackToOpenRouter, markFailed]);
 
     // ---- Generate from contract ----
     const generateFromContract = useCallback(async (promptVisual: string, tipo: string | null) => {
@@ -276,8 +284,13 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
     }, [clearLoadTimeout]);
 
     // ---- Image load timeout ----
+    // Solo aplica a URLs de red (Pollinations y similares). Los data/blob URLs
+    // (imagen generada por el servidor: Gemini/OpenRouter) no dependen de red y
+    // cargan casi instantáneamente; aplicarles el watchdog provocaba un falso
+    // "No se pudo cargar la imagen" bajo una imagen ya visible (el onLoad puede
+    // dispararse antes de registrar el temporizador).
     useEffect(() => {
-        if (imageUrl && !isFailed) {
+        if (imageUrl && !isFailed && !imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:')) {
             clearLoadTimeout();
             loadTimeoutRef.current = window.setTimeout(() => {
                 console.warn('[useWorkspaceImage] Image load timeout (30s) for:', imageUrl);
@@ -301,7 +314,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         expand,
         close,
         markFailed,
-        fallbackToGemini,
+        fallbackToOpenRouter,
         generateFromContract,
         clear,
         loadTimeoutRef,

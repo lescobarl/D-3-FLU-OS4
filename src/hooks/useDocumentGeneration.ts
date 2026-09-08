@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { aiService } from '../services/aiServiceFactory';
 import { useIntegrationStore } from '../store/integrationStore';
 import { assembleVideo, type VideoAssemblyResult } from '../services/videoAssembler';
+import { fetchFalVideo } from '../voice/lib/imageGeneration';
+import { FALAI_CONFIG } from '../core/config/appConfig';
 import type {
     GenerationFormato,
     GenerationParams,
@@ -148,6 +150,30 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
 
                 if (formato === 'video') {
                     setJob('ensamblando', formato, { progreso: 85 });
+                    // 1) Video REAL con fal.ai (text-to-video). El prompt es el tema
+                    //    pedido por el usuario ("un conejo saltando"); si no hay tema,
+                    //    se usa el contenido del guion (truncado).
+                    const temaPrompt = String((parametros as GenerationInputParams).tema || '').trim();
+                    const falPrompt = temaPrompt || (docResult.content || '').trim().slice(0, 500);
+                    const fal = await fetchFalVideo({
+                        prompt: falPrompt,
+                        language,
+                        apiKey: FALAI_CONFIG.API_KEY,
+                    });
+                    if (fal.video_url) {
+                        const realVideo: VideoAssemblyResult = {
+                            url: fal.video_url,
+                            script: docResult.content || '',
+                            storyboard: [],
+                            estimatedSeconds: 0,
+                            degraded: false,
+                            warnings: [],
+                        };
+                        setVideoResult(realVideo);
+                        setJob('listo', formato, { progreso: 100 });
+                        return docResult;
+                    }
+                    // 2) Fallback: ensamblado offline (ffmpeg.wasm walkthrough).
                     const video = await assembleVideo(docResult.content || '', {
                         calidad: parametros.calidad,
                         duracion_min: parametros.duracion_min,

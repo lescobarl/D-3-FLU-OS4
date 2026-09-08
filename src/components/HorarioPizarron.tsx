@@ -44,6 +44,8 @@ export interface HorarioPizarronProps {
   /** Registra una clase (el alta es gestionado por App vía useHorario). */
   onAdd: (input: NewHorarioInput) => Promise<{ ok: boolean }>;
   onRemove: (id: string) => Promise<void>;
+  /** Oculta la cabecera "Horario" (cuando se embebe en el panel "Hoy"). */
+  hideHeader?: boolean;
   /** Referencia de reloj (por defecto: Date.now()) para pruebas. */
   now?: () => number;
   /** Idioma actual para etiquetas bilingües (es/en). */
@@ -109,6 +111,7 @@ export function HorarioPizarron({
   onModoChange,
   onAdd,
   onRemove,
+  hideHeader = false,
   now = () => Date.now(),
   language = 'es',
 }: HorarioPizarronProps) {
@@ -416,12 +419,14 @@ export function HorarioPizarron({
 
   return (
     <details className="flu-settings-image-config" open>
-      <summary className="flu-settings-image-config__summary">
-        <span className="flu-horario__summary-title">
-          {ui.panelTitle || 'Horario'}
-          {badgeCount && <span className="flu-badge">{badgeCount}</span>}
-        </span>
-      </summary>
+      {!hideHeader && (
+        <summary className="flu-settings-image-config__summary">
+          <span className="flu-horario__summary-title">
+            {ui.panelTitle || 'Horario'}
+            {badgeCount && <span className="flu-badge">{badgeCount}</span>}
+          </span>
+        </summary>
+      )}
       {toast && (
         <div className="flu-toast" role="status">
           {toast}

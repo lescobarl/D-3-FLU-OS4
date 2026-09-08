@@ -272,6 +272,12 @@ export const FLU_CONFIG = {
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 500,
     /**
+     * Consolidación de BUSCAR: los reinicios del reconocedor entregan el mismo
+     * comando en varias revisiones (parcial → completo). Para NO buscar 2 veces,
+     * la búsqueda se ejecuta cuando el turno se asienta (la última revisión gana).
+     */
+    searchCommandSettleMs: 2800,
+    /**
      * Estabilización de fragmentos (Bug #3/#4): si el turno quedó en un comando
      * incompleto que espera contenido ("busca en la web", "navega", "crea un
      * video"…) se espera este margen desde el último fragmento final antes de
@@ -677,6 +683,8 @@ export const FLU_CONFIG = {
       proximaClaseLabel: { es: 'Próxima', en: 'Next' },
       agendaTitle: { es: 'Próximas citas', en: 'Upcoming appointments' },
       sinAgenda: { es: 'Sin citas próximas', en: 'No upcoming appointments' },
+      alarmasTitle: { es: '⏰ Alarmas', en: '⏰ Alarms' },
+      sinTemporales: { es: 'Sin alarmas ni temporizadores', en: 'No alarms or timers' },
       clasesHoyLabel: { es: 'Clases de hoy', en: "Today's classes" },
       sinProxima: { es: 'Sin próxima entrada', en: 'No upcoming entry' },
       sinClasesHoy: { es: 'Hoy no tienes entradas', en: 'No entries today' },
@@ -2083,7 +2091,8 @@ export const FLU_CONFIG = {
     minVoicedRms: 0.0025,
   },
   voiceCommands: {
- /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo). Un solo punto de verdad. */
+ /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo). Un solo punto de verdad.
+  *  Configurable en Ajustes (wakeWords). NO existe "flu" suelto como wake word. */
  wakeWords: [
    'oye flu',
    'oye flow',

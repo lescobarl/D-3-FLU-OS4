@@ -26,6 +26,7 @@ import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
 import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
 import { parseTemporalIntent } from '../../core/temporal/temporalIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
+import { cleanForSpeech, splitTranscriptAtWakeWord } from './audioMath.js'
 
 /**
  * Dominios deterministas soportados por el árbitro.
@@ -236,6 +237,61 @@ export function resolveStatefulDomains(text = '', options = {}) {
     game: transcript ? resolveGameCommandFromText(transcript) : null,
     env: transcript ? resolveEnvironmentIntent(transcript, language) : null,
   }
+}
+
+/**
+ * Entry point ÚNICO de resolución de voz (wake-first + árbitro determinista).
+ * Sustituye a la "doble ruta" (resolveNavigationCommand / resolveFinalConversationAction
+ * / extractFluVoiceCommand dispersos) por una sola decisión:
+ *
+ *  1. Wake gate: si `requireWake` y no hay wake word → `{ kind: 'ambient' }`
+ *     (ni comando ni consulta a la IA).
+ *  2. Árbitro único: `resolveDeterministicCommand` sobre el texto post-wake.
+ *  3. Fallthrough: si hubo wake y no matcheó → `{ kind: 'flu' }` (IA); sin wake → ambiente.
+ *
+ * Devuelve `{ kind, command, domain, action, channel, text }`; `kind` ∈
+ * 'ambient' | 'command' | 'flu'. Regla #1: las wake words vienen por opciones
+ * (nunca hardcodeadas aquí).
+ */
+export function resolveVoiceCommand(text = '', options = {}) {
+  const {
+    requireWake = false,
+    wakeWords = [],
+    language = 'es',
+    texts = null,
+    ...arbiterOptions
+  } = options || {}
+  const transcript = String(text || '').trim()
+  if (!transcript) {
+    return { kind: 'ambient', command: null, domain: null, action: null, channel: null, text: '' }
+  }
+
+  const split = splitTranscriptAtWakeWord(transcript, wakeWords)
+  const hasWake = Boolean(split.wakeWordMatched)
+
+  if (requireWake && !hasWake) {
+    return { kind: 'ambient', command: null, domain: null, action: null, channel: null, text: transcript }
+  }
+
+  const commandText = cleanForSpeech(hasWake ? split.afterWake : transcript)
+  const resolved = resolveDeterministicCommand(commandText, { language, texts, ...arbiterOptions })
+
+  if (resolved.matched) {
+    const command =
+      resolved.domain === 'navigation'
+        ? resolved.action
+        : resolved.action?.action || resolved.domain
+    return {
+      kind: 'command',
+      command,
+      domain: resolved.domain,
+      action: resolved.action,
+      channel: resolved.channel,
+      text: commandText,
+    }
+  }
+
+  return { kind: 'flu', command: null, domain: null, action: null, channel: null, text: commandText }
 }
 
 // ------------------------------------------------------------

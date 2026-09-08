@@ -81,7 +81,7 @@ export interface WorkspaceHubProps {
         retry: () => void;
         /** Reintentar la carga de la MISMA URL (Pollinations es stateless). */
         retryLoad: () => void;
-        fallbackToGemini: () => Promise<void>;
+        fallbackToOpenRouter: () => Promise<void>;
     };
 
     // Análisis de documento
@@ -352,7 +352,11 @@ export function WorkspaceHub({
                         <div className="generated-image__preview">
                             <img
                                 className="generated-image__img"
-                                src={image.imageUrl ? `${image.imageUrl}${image.imageUrl.includes('?') ? '&' : '?'}retry=${image.loadAttempt}` : undefined}
+                                src={image.imageUrl
+                                    ? (image.imageUrl.startsWith('data:') || image.imageUrl.startsWith('blob:')
+                                        ? image.imageUrl
+                                        : `${image.imageUrl}${image.imageUrl.includes('?') ? '&' : '?'}retry=${image.loadAttempt}`)
+                                    : undefined}
                                 alt={workspaceArtifact?.prompt_visual || ws.imageAlt || 'Visual generado por Flu'}
                                 onLoad={() => {
                                     if (image.loadTimeoutRef.current) {
@@ -525,7 +529,7 @@ export function WorkspaceHub({
         image.loadTimeoutRef,
         image.expand,
         image.retry,
-        image.fallbackToGemini,
+        image.fallbackToOpenRouter,
         document.artifact,
         document.isAnalyzing,
         document.warnings,
@@ -680,6 +684,7 @@ export function WorkspaceHub({
                                 diary={hoy.diary}
                                 notes={hoy.notes}
                                 reminders={hoy.reminders}
+                                temporals={hoy.temporals}
                                 now={hoy.now}
                                 language={language}
                             />

@@ -4,6 +4,7 @@ import {
   cleanForSpeech,
   decideVoiceTurnDispatch,
   detectIntroducedName,
+  detectListeningControl,
   detectWakeIntroducedName,
   detectRole,
   detectTranscriptLanguage,
@@ -31,6 +32,7 @@ import {
   resolveDeterministicCommand,
   resolveDeterministicSkipGeminiContract,
   resolveStatefulDomains,
+  resolveVoiceCommand,
 } from '../lib/deterministicArbiter'
 import { relayLog } from '../../lib/clientLogRelay'
 import { useIntegrationStore } from '../../store/integrationStore'
@@ -364,6 +366,7 @@ export function useFluVoiceAssistant({
   resolveMinuteLookup = () => ({ mode: 'gemini' }),
   participantRef,
   activeParticipantName = '',
+  wakeWords = '',
 }) {
   const [status, setStatus] = useState('idle')
   const [phase, setPhase] = useState('CONFIGURACION')
@@ -380,6 +383,19 @@ export function useFluVoiceAssistant({
   })
   const [isSupported, setIsSupported] = useState(true)
   const [listeningAck, setListeningAck] = useState('')
+
+  // Wake words configurables (Ajustes) — fuente única para toda la resolución
+  // de comandos. Nunca hardcodeadas aquí: si Ajustes no provee ninguna, se cae
+  // al default de FLU_CONFIG.voiceCommands.wakeWords.
+  const configuredWakeWords = Array.isArray(wakeWords)
+    ? wakeWords.filter(Boolean)
+    : String(wakeWords || '')
+        .split('\n')
+        .map((word) => word.trim())
+        .filter(Boolean)
+  const resolvedWakeWords = configuredWakeWords.length
+    ? configuredWakeWords
+    : FLU_CONFIG.voiceCommands.wakeWords
 
   const getParticipantLogSnapshotRef = useRef(() => ({ texts: [], speakers: [] }))
 
@@ -1227,7 +1243,6 @@ export function useFluVoiceAssistant({
       ? FLU_CONFIG.timing.recognitionFinalizeMs
       : FLU_CONFIG.timing.recognitionStopMs
 
-    const wasListeningHere = isListeningRef.current || recognitionActiveRef.current
     isStoppingRef.current = true
     const waitForEnd = new Promise((resolve) => {
       recognitionEndResolverRef.current = resolve
@@ -1244,17 +1259,7 @@ export function useFluVoiceAssistant({
 
     isStoppingRef.current = false
     recognitionEndResolverRef.current = null
-
-    // Evidencia del log: tras procesar una captura (audio ambiente sin wake) en
-    // modo pasivo se finalizaba y NO se reabría → "se cierra la escucha". Si el
-    // micrófono estaba abierto y no hay conversación activa, se vuelve a encender.
-    if (wasListeningHere && !conversationActiveRef?.current) {
-      relayLog('LOG', 'useFluVoiceAssistant', '[REC] finalize: reabriendo escucha pasiva', {
-        wasListeningHere,
-      })
-      requestRecognitionRestart(0)
-    }
-  }, [conversationActiveRef, requestRecognitionRestart])
+  }, [conversationActiveRef])
 
   /** Libera el micrófono antes de TTS para que Chrome no mute/interrumpa la voz. */
   const suspendRecognitionForAssistantSpeech = useCallback(async () => {
@@ -2115,6 +2120,12 @@ export function useFluVoiceAssistant({
       }
 
       Recognition.onresult = (event) => {
+        // Supresión de eco: mientras FLU habla (TTS), ignorar resultados del
+        // reconocedor para no capturar la propia voz de FLU y re-mandarla a la IA
+        // (causa del bucle de respuestas repetidas en otro idioma).
+        if (isSpeechSynthesisSpeaking()) {
+          return
+        }
         logMicRaw(event)
         lastOnresultAtRef.current = Date.now()
         recognitionRetryCountRef.current = 0
@@ -2190,7 +2201,7 @@ export function useFluVoiceAssistant({
         const uiCommand = resolveNavigationCommand(turnPhrase)
         const validation = extractFluVoiceCommand(turnPhrase, {
           requireWake,
-          wakeWords: FLU_CONFIG.voiceCommands.wakeWords,
+          wakeWords: resolvedWakeWords,
         })
         if (uiCommand === 'CERRAR_ESCUCHA') {
           scheduleAutoProcess(0)
@@ -2895,7 +2906,7 @@ export function useFluVoiceAssistant({
 
   const grantParticipantFloor = useCallback(async () => {
     if (fluParticipantRef.current?.shouldIgnoreDuplicateFloorGrant?.()) return
-    const wakeWord = String(FLU_CONFIG.voiceCommands.wakeWords?.[0] || 'flu').trim()
+    const wakeWord = String(resolvedWakeWords[0] || 'flu').trim()
     const phrase = `ok ${wakeWord} adelante`
     await emitActiveConversationCommand('FLU_ADELANTE', phrase)
   }, [emitActiveConversationCommand])
@@ -3191,6 +3202,22 @@ export function useFluVoiceAssistant({
           return
         }
 
+        // TRACE escenario: ¿el árbitro determinista matchearía reminder/temporal/
+        // nota/horario sobre la question ANTES de llamar a Gemini? Esto muestra si el
+        // mandato ("crea una cita...", "pon una alarma...") debía despacharse sin IA.
+        try {
+          const probe = resolveDeterministicCommand(question, {
+            language: detectedLanguage,
+          })
+          relayLog(
+            'LOG',
+            'useFluVoiceAssistant',
+            `processConversationFluQuery TRACE: determinista sobre question="${(question || '').slice(0, 80)}" → matched=${Boolean(probe?.matched)} domain="${probe?.domain || ''}" action="${JSON.stringify(probe?.action?.action ?? probe?.action ?? null)?.slice(0, 120)}"`,
+          )
+        } catch (probeError) {
+          relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery TRACE determinista lanzó: ${probeError?.message || probeError}`)
+        }
+
         const knowledgeMode = isMinuteKnowledgeRequest(question) ? 'minutes' : 'general'
         setActiveKnowledgeBase(knowledgeMode)
 
@@ -3393,6 +3420,25 @@ export function useFluVoiceAssistant({
         return false
       }
 
+      // Dedupe unificada de revisiones ASR (turno canónico): Chrome entrega la
+      // misma frase en finales que CRECEN ("…Cómo" → "…Cómo sal" → "…cómo saltan").
+      // Solo la última (la más larga tras pausa) debe despacharse como comando.
+      const prevText = String(lastConversationActionRef.current.text || '').toLowerCase().trim()
+      const prevAt = Number(lastConversationActionRef.current.at || 0)
+      const curText = phrase.toLowerCase().trim()
+      const isAsrRevision =
+        prevText &&
+        curText &&
+        prevText !== curText &&
+        Date.now() - prevAt < 1600 &&
+        (curText.startsWith(prevText) || prevText.startsWith(curText))
+      if (isAsrRevision) {
+        if (import.meta.env.DEV && debugHotPath) {
+          fluDebugHot('conversation-dispatch', { source, plan: 'dedup', kind: 'asr-revision', phrase, prev: prevText })
+        }
+        return true
+      }
+
       const plan = planVoiceCommandDispatch(text, {
         interim,
         lastSignature: lastConversationActionRef.current.signature,
@@ -3416,7 +3462,7 @@ export function useFluVoiceAssistant({
       if (plan.plan === 'skip') return false
       if (plan.plan === 'dedup') return true
 
-      lastConversationActionRef.current = { signature: plan.signature, at: Date.now() }
+      lastConversationActionRef.current = { signature: plan.signature, at: Date.now(), text: phrase }
 
       const invoke = async (handler) => {
         if (awaitHandlers) await handler()
@@ -3462,13 +3508,39 @@ export function useFluVoiceAssistant({
     if (!snapshot && !closing) return
 
     const requireWake = !conversationActiveRef?.current
-    const wakeWords = FLU_CONFIG.voiceCommands.wakeWords
+    const wakeWords = resolvedWakeWords
+    // Captura pasiva: recordar si el micrófono estaba abierto para reabrirlo al
+    // final del turno, salvo que sea un cierre explícito (p. ej. CERRAR_ESCUCHA)
+    // o la escucha se esté cerrando a propósito.
+    let reopenListeningAfterCapture =
+      (isListeningRef.current || recognitionActiveRef.current) && !closing
 
     if (conversationActiveRef?.current && snapshot) {
       relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONVERSATION MODE: calling awaitConversationAction with text="${(snapshot || '').slice(0, 60)}"`)
       const handled = await awaitConversationAction(snapshot, { interim: false, source: 'capture' })
       relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONVERSATION MODE: awaitConversationAction returned handled=${handled}`)
       return
+    }
+
+    // Escucha pasiva (sin conversación activa): el wake word es la ÚNICA
+    // compuerta para que una frase sea comando o consulta a la IA. Sin wake,
+    // es audio ambiente (TV/sala) → solo se registra y se sigue escuchando.
+    // Excepción explícita: los comandos de control de escucha (abrir/cerrar)
+    // siguen funcionando sin wake para poder detener la escucha por voz.
+    if (requireWake && !closing && snapshot) {
+      const resolution = resolveVoiceCommand(snapshot, { requireWake: true, wakeWords })
+      const listeningControl = detectListeningControl(snapshot, FLU_CONFIG.voiceCommands)
+      if (resolution.kind === 'ambient' && !listeningControl) {
+        const toLog = cleanForSpeech(snapshot)
+        if (toLog) {
+          await emitConversationLog(toLog, {
+            fallbackSpeaker: lastSpeakerRef.current || 'Hablante 1',
+            currentClock: formatClock(),
+          })
+        }
+        releaseTurnAfterLog(toLog || lastLoggedCaptureRef.current)
+        return
+      }
     }
 
     if (!snapshot) {
@@ -3639,6 +3711,11 @@ export function useFluVoiceAssistant({
         if (directCommand === 'INICIAR_CONVERSACION' && conversationActiveRef?.current) {
           await emitActiveConversationCommand('INICIAR_CONVERSACION', capturedTranscript)
           return
+        }
+
+        // "cerrar escucha" debe cerrar de verdad: no reabrir la captura pasiva.
+        if (directCommand === 'CERRAR_ESCUCHA') {
+          reopenListeningAfterCapture = false
         }
 
         finishTurn()
@@ -4084,6 +4161,17 @@ export function useFluVoiceAssistant({
       isCommittingRef.current = false
       commitBaselineRef.current = ''
       recognitionEndResolverRef.current = null
+      // Captura pasiva: cleanupAudio() ya cerró el micrófono y anuló la
+      // reconocedora. Si estaba abierta y no es un cierre explícito, reabrir la
+      // escucha aquí (única política de reapertura) para que no "se cierre sola"
+      // al decir, por ejemplo, "estas ahí" sin wake word.
+      if (reopenListeningAfterCapture) {
+        // Marcar 'listening' de forma síncrona antes del startListening asíncrono:
+        // React agrupa este set con el 'idle' transitorio de la rama y evita que el
+        // chip de "Cerrar escucha" parpadee (idle → listening) mientras se abre el mic.
+        setStatus('listening')
+        startListeningRef.current({ resume: true }).catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
+      }
     }
   }, [
     apiKey,

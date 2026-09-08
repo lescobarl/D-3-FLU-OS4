@@ -149,7 +149,7 @@ import { fluDb } from './core/db/fluDatabase';
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
-import { normalizeCommandForDeterministic } from './voice/lib/audioMath';
+import { normalizeCommandForDeterministic, spokenUtteranceRevision } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
@@ -963,36 +963,48 @@ async function dispatchArbiterIntent(
     const w: any = window as any;
     const domain = arbiterResult?.matched ? arbiterResult.domain : null;
     const intent: any = arbiterResult?.action || null;
-    if (!domain || !intent) return '';
+    relayLog('LOG', 'App', `dispatchArbiterIntent: domain="${domain}" action="${intent?.action ?? intent?.gameId ?? intent?.comando ?? JSON.stringify(intent ?? null)?.slice(0, 120)}"`);
+    if (!domain || !intent) {
+        relayLog('LOG', 'App', 'dispatchArbiterIntent: SIN domain/intent → no se despacha');
+        return '';
+    }
     let reply = '';
     try {
         if (domain === 'reminder' && typeof w.__fluHandleReminderText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleReminderText (reminder)');
             reply =
                 (await w.__fluHandleReminderText(intent, {
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
         } else if (domain === 'temporal' && typeof w.__fluHandleTemporalText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleTemporalText (temporal)');
             reply = (await w.__fluHandleTemporalText(intent)) || '';
         } else if (domain === 'diary' && (FLU_CONFIG as any).diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleDiaryText (diary)');
             reply =
                 (await w.__fluHandleDiaryText(intent, {
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
         } else if (domain === 'note' && typeof w.__fluHandleNoteText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleNoteText (note)');
             reply =
                 (await w.__fluHandleNoteText(intent, {
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
         } else if (domain === 'horario' && typeof w.__fluHandleHorarioText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleHorarioText (horario)');
             reply = (await w.__fluHandleHorarioText(intent)) || '';
+        } else {
+            relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
         }
     } catch (err) {
         console.warn('[App] dispatchArbiterIntent threw (non-critical):', err);
         relayLog('WARN', 'App', `dispatchArbiterIntent threw: ${err}`);
     }
+    relayLog('LOG', 'App', `dispatchArbiterIntent → reply="${String(reply).slice(0, 120)}"`);
     return reply;
 }
 
@@ -1511,6 +1523,8 @@ function App() {
     } = useFluVoiceAssistant({
         apiKey,
         language,
+        // Wake words configurables (Ajustes) — fuente única de resolución de comandos.
+        wakeWords,
         // OS2 parity: pass conversationActiveRef for resume logic (FluShell.jsx line 154)
         conversationActiveRef,
         // OS2 parity: pasar knowledgeBase para resolución de minutas
@@ -1615,12 +1629,16 @@ function App() {
                 const normalizedTranscript = cleanForSpeech(transcript);
                 if (!normalizedTranscript) return;
 
-                // OS2 dedup: isExactDuplicateLogEntry + rowDuplicatesPrior + phrasesEquivalent
-                // OS2 parity: scan backward for the same speaker (FluShell.jsx lines 332-448)
-                // No solo la última entrada — buscar la última entrada del mismo speaker
-                // Optimized: use speakerIndexRef Map for O(1) lookup instead of O(n) backward scan
-                const history = integrationStore.conversationHistory;
-                const speakerKey = speakerName || '__default__';
+                // OS2 dedup (con ESTADO VIVO): isExactDuplicateLogEntry +
+                // rowDuplicatesPrior + phrasesEquivalent. NO usar el snapshot de
+                // este render (useIntegrationStore()): el callback es memoizado y
+                // quedaría congelado en conversationHistory=[] haciendo que cada
+                // revisión ASR se APPENDEE en vez de reemplazar (filas duplicadas).
+                const liveStore = useIntegrationStore.getState();
+                const history = liveStore.conversationHistory;
+                const targetSpeaker = String(speakerName || '').trim().toLowerCase();
+                const speakerKey = targetSpeaker || '__default__';
+                const wakeWords = ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[] | undefined) || [];
                 let lastEntryForSpeaker: any = null;
                 let lastEntryIndex = -1;
                 const cached = speakerIndexRef.current.get(speakerKey);
@@ -1631,7 +1649,9 @@ function App() {
                     // Cache miss or stale — fall back to backward scan and update cache
                     for (let i = history.length - 1; i >= 0; i--) {
                         const entry = history[i];
-                        if (entry.speakerName === speakerName || (!speakerName && !entry.speakerName)) {
+                        const entrySpeaker = String(entry.speakerName || '').trim().toLowerCase();
+                        const matches = targetSpeaker ? entrySpeaker === targetSpeaker : !entrySpeaker;
+                        if (matches) {
                             lastEntryForSpeaker = entry;
                             lastEntryIndex = i;
                             break;
@@ -1644,13 +1664,14 @@ function App() {
 
                 if (lastEntryForSpeaker) {
                     const lastText = cleanForSpeech(lastEntryForSpeaker.text || '');
-                    // isExactDuplicateLogEntry: mismo speaker + mismo texto normalizado
-                    if (lastText === normalizedTranscript) {
+                    // Misma emisión (crece o igual) tras quitar wake/casing/acentos:
+                    // NO es una fila nueva; si crece, se reemplaza la última (OS2
+                    // replaceLastRawLog) para que un turno quede en UNA fila.
+                    const revision = spokenUtteranceRevision(lastText, transcript, wakeWords);
+                    if (revision === 'equal') {
                         return;
                     }
-                    // rowDuplicatesPrior: el nuevo texto empieza con el anterior (ASR revision)
-                    if (lastText && normalizedTranscript.startsWith(lastText)) {
-                        // Reemplazar la última entrada del mismo speaker (OS2: replaceLastRawLog)
+                    if (revision === 'grow') {
                         const updated = [...history];
                         updated[lastEntryIndex] = {
                             ...lastEntryForSpeaker,
@@ -1658,20 +1679,16 @@ function App() {
                             speakerName: speakerName || lastEntryForSpeaker.speakerName || 'Hablante 1',
                             timestamp: Date.now(),
                         };
-                        integrationStore.batchLoadHistory(updated);
+                        useIntegrationStore.getState().batchLoadHistory(updated);
                         // Update cache: the replaced entry is now at the same index with new content
                         speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: updated[lastEntryIndex] });
-                        return;
-                    }
-                    // phrasesEquivalent: foldSpeechKey (cleanForSpeech + lowercase)
-                    if (lastText && lastText.toLowerCase() === normalizedTranscript.toLowerCase()) {
                         return;
                     }
                 }
 
                 // Agregar entrada raw al historial (OS2: optimisticRow)
                 // Obligación #6: UUIDv4
-                integrationStore.addConversationEntry({
+                useIntegrationStore.getState().addConversationEntry({
                     id: uuidv4(),
                     role: 'user',
                     text: transcript,
@@ -1681,7 +1698,7 @@ function App() {
                 });
 
                 // Update cache: new entry appended at the end
-                const newHistory = integrationStore.conversationHistory;
+                const newHistory = useIntegrationStore.getState().conversationHistory;
                 speakerIndexRef.current.set(speakerKey, { index: newHistory.length - 1, entry: newHistory[newHistory.length - 1] });
 
                 // OS2 parity: audit log for rawOnly entries (Gap 4)
@@ -1839,6 +1856,12 @@ function App() {
                                 arbiterResult.action?.action ?? arbiterResult.action,
                             )})`,
                         );
+                    } else {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: árbitro NO matcheó. commandText="${commandText}" (transcript="${String(transcript).slice(0, 80)}") → cae a IA/flu`,
+                        );
                     }
                     // ============================================================
                     // DESPACHO ÚNICO POR CONTRATO ESTRUCTURADO (Point F / §Estructura)
@@ -1860,7 +1883,17 @@ function App() {
                     // emitidas por el cerebro conversacional (contract.acciones) como
                     // el fallback offline del transcript crudo despachan por el mismo
                     // camino, al mismo conjunto de manejadores __fluHandle*.
-                    const reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
+                    let reply = '';
+                    if (arbiterDomain === 'navigation') {
+                        // Navegación (BUSCAR/NAVEGAR/GENERAR_VIDEO/GENERAR_DOCUMENTO) NO se
+                        // despacha por dispatchArbiterIntent (que no tiene rama navigation):
+                        // se marca el comando en `navegacion` y lo ejecuta handleNavigationCommand
+                        // más abajo, por el MISMO camino que el contrato navegacion del LLM.
+                        (navegacion as any).comando = arbiterResult.action;
+                        relayLog('LOG', 'App', `onContractResolved: navigation → comando="${arbiterResult.action}" (handleNavigationCommand)`);
+                    } else {
+                        reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
+                    }
                     if (reply) localHandledReply = reply;
                 } catch (err) {
                     console.warn('[App] Deterministic feature interception threw (non-critical):', err);
@@ -4593,6 +4626,11 @@ const {
                                                 items: reminders.reminders,
                                                 loading: reminders.loading,
                                             },
+                                            temporals: {
+                                                alarms: temporals.alarms,
+                                                timers: temporals.timers,
+                                                loading: temporals.loading,
+                                            },
                                             language,
                                         },
                                         language,
@@ -4605,6 +4643,7 @@ const {
                                 expandedFrameId={expandedFrameId}
                                 onToggleExpand={handleToggleExpand}
                                 liveTranscript={liveTranscript}
+                                lastTranscript={lastTranscript}
                                 currentTranscript={integrationStore.currentTranscript}
                                 conversationHistory={integrationStore.conversationHistory}
                                 voiceParticipants={voiceParticipants}

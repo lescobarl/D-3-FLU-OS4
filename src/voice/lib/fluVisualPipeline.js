@@ -22,8 +22,6 @@ export const VISUAL_PIPELINE_KEYS = [
   'openverseApiBase',
   'promptMaxSubjectChars',
   'promptMaxContextChars',
-  'geminiImageModel',
-  'geminiImageKind',
 ]
 
 function cfg() {
@@ -36,11 +34,6 @@ export function getVisualPipelineConfig() {
   const pollinations = image.pollinations || {}
   const openverse = image.openverse || {}
   const prompt = image.prompt || {}
-  const geminiImage = pipeline.geminiImage || {}
-  const geminiModels = Array.isArray(geminiImage.models) ? geminiImage.models : []
-  const defaultModel = String(geminiImage.defaultModel || '').trim()
-  const defaultKind = String(geminiImage.defaultKind || 'generateContent').trim()
-  const firstModel = geminiModels[0]
   return {
     primary: String(pipeline.primary || 'pollinations').trim(),
     visualTypes: Array.isArray(pipeline.visualTypes)
@@ -61,8 +54,6 @@ export function getVisualPipelineConfig() {
     openverseApiBase: String(openverse.apiBase || '').trim(),
     promptMaxSubjectChars: Number(prompt.maxSubjectChars),
     promptMaxContextChars: Number(prompt.maxContextChars),
-    geminiImageModel: defaultModel || String(firstModel?.model || '').trim(),
-    geminiImageKind: defaultKind || String(firstModel?.kind || 'generateContent').trim(),
   }
 }
 

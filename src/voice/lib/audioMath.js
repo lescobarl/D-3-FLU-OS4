@@ -1107,6 +1107,27 @@ export function removeWakeWord(text = '', wakeWords = []) {
   return result.accepted ? result.commandText : normalizeVoiceCommandText(text)
 }
 
+/** Plegado para comparar si dos textos son la MISMA emisión (sin wake word). */
+function foldSpokenUtterance(text = '', wakeWords = []) {
+  return normalizeSpaces(stripDiacritics(removeWakeWord(text, wakeWords) || ''))
+    .toLowerCase()
+    .trim()
+}
+
+/**
+ * ¿nextText es la MISMA emisión que lastText (revisión ASR que crece o igual)?
+ * Comparación SIN wake word (config), minúsculas y sin diacríticos/puntuación.
+ * Devuelve 'equal' (misma emisión), 'grow' (next extiende a last) o false.
+ */
+export function spokenUtteranceRevision(lastText = '', nextText = '', wakeWords = []) {
+  const last = foldSpokenUtterance(lastText, wakeWords)
+  const next = foldSpokenUtterance(nextText, wakeWords)
+  if (!next) return false
+  if (!last) return 'grow'
+  if (next === last) return 'equal'
+  return next.startsWith(`${last} `) ? 'grow' : false
+}
+
 /**
  * Para mostrar la transcripción en la UI: si el texto contiene una palabra de
  * activación (wake word), se muestra SOLO lo que viene después de ella; si no

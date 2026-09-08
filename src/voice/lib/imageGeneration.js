@@ -249,35 +249,30 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
 }
 
 /**
- * Paso 5: fallback real de imagen con la API NATIVA de Gemini (servidor).
- * Se invoca cuando la imagen de Pollinations falla al cargar en el navegador
- * (onError del <img>), para no dejar el placeholder «chipote».
- * POST /api/gemini-image → { imageUrl (data URL), trace }.
+ * Fallback real de imagen por OpenRouter (servidor). Se invoca cuando la
+ * imagen de Pollinations falla al cargar en el navegador (onError del <img>),
+ * para no dejar el placeholder «chipote».
+ * POST /api/openrouter-image → { imageUrl (data URL), trace }.
  * Devuelve { image_url, trace }; image_url vacío si no hay key o falla.
  */
-export async function fetchGeminiImageFallback({
+export async function fetchOpenRouterImageFallback({
   workspace = {},
   language = 'es',
   apiKey = '',
-  model = '',
-  kind = '',
 } = {}) {
-  const c = getVisualPipelineConfig()
   const prompt = buildGenerationPrompt(workspace, language)
   const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetch('/api/gemini-image', {
+    const response = await fetch('/api/openrouter-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
         prompt,
         language,
-        model: model || c.geminiImageModel,
-        kind: kind || c.geminiImageKind,
         ...(apiKey ? { apiKey } : {}),
       }),
     })
@@ -287,12 +282,12 @@ export async function fetchGeminiImageFallback({
       return {
         image_url: '',
         trace: {
-          provider: 'gemini',
-          model: model || c.geminiImageModel,
-          kind: kind || c.geminiImageKind,
+          provider: 'openrouter',
+          model: '',
+          kind: 'images',
           source: 'proxy_error',
           hasImage: false,
-          error: detail || `gemini_image_http_${response.status}`,
+          error: detail || `openrouter_image_http_${response.status}`,
           prompt,
         },
       }
@@ -303,9 +298,9 @@ export async function fetchGeminiImageFallback({
       return {
         image_url: '',
         trace: payload?.trace || {
-          provider: 'gemini',
-          model: model || c.geminiImageModel,
-          kind: kind || c.geminiImageKind,
+          provider: 'openrouter',
+          model: '',
+          kind: 'images',
           source: 'empty_response',
           hasImage: false,
           prompt,
@@ -316,10 +311,10 @@ export async function fetchGeminiImageFallback({
     return {
       image_url: payload.imageUrl,
       trace: payload.trace || {
-        provider: 'gemini',
-        model: model || c.geminiImageModel,
-        kind: kind || c.geminiImageKind,
-        source: 'gemini_native',
+        provider: 'openrouter',
+        model: '',
+        kind: 'images',
+        source: 'openrouter_image_fallback',
         hasImage: true,
         prompt,
         language,
@@ -329,11 +324,67 @@ export async function fetchGeminiImageFallback({
     return {
       image_url: '',
       trace: {
-        provider: 'gemini',
-        model: model || c.geminiImageModel,
-        kind: kind || c.geminiImageKind,
-        source: error?.name === 'AbortError' ? 'gemini_image_timeout' : 'generation_failed',
+        provider: 'openrouter',
+        model: '',
+        kind: 'images',
+        source: error?.name === 'AbortError' ? 'openrouter_image_timeout' : 'generation_failed',
         hasImage: false,
+        error: error?.message || 'unknown',
+        prompt,
+      },
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Video REAL con fal.ai (text-to-video). Se invoca desde la generación de
+ * video (GENERAR_VIDEO) con el tema/prompt del usuario.
+ * POST /api/fal-video → { videoUrl (url del clip), trace }.
+ * Devuelve { video_url, trace }; video_url vacío si no hay key o falla.
+ */
+export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '' } = {}) {
+  if (!prompt.trim()) {
+    return {
+      video_url: '',
+      trace: { provider: 'falai', source: 'empty_prompt', hasVideo: false, prompt },
+    }
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 200000)
+  try {
+    const response = await fetch('/api/fal-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ prompt, language, ...(apiKey ? { apiKey } : {}) }),
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      return {
+        video_url: '',
+        trace: {
+          provider: 'falai',
+          source: 'proxy_error',
+          hasVideo: false,
+          error: detail || `fal_video_http_${response.status}`,
+          prompt,
+        },
+      }
+    }
+    const payload = await response.json()
+    return {
+      video_url: payload?.videoUrl || '',
+      trace: payload?.trace || { provider: 'falai', source: 'empty_response', hasVideo: false, prompt },
+    }
+  } catch (error) {
+    return {
+      video_url: '',
+      trace: {
+        provider: 'falai',
+        source: error?.name === 'AbortError' ? 'fal_video_timeout' : 'generation_failed',
+        hasVideo: false,
         error: error?.message || 'unknown',
         prompt,
       },

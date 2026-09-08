@@ -28,7 +28,8 @@ import {
 import {
     generateFluContract,
     generateConversationSummary,
-    generateGeminiImage,
+    generateOpenRouterImage,
+    generateVideoViaFal,
     generateParticipantEvaluation,
     generateWorkspaceImage,
     analyzeImage,
@@ -385,17 +386,30 @@ async function handleWorkspaceImage(req: IncomingMessage, res: ServerResponse) {
     }
 }
 
-// Paso 5: generación de imagen con la API NATIVA de Gemini (fallback real
-// cuando la URL de Pollinations falla al cargar en el navegador). La apiKey
-// se resuelve en el servidor (env > cliente) y nunca se expone al browser.
-async function handleGeminiImage(req: IncomingMessage, res: ServerResponse) {
+// Paso 5: fallback de imagen por OpenRouter (único fallback real cuando la
+// URL de Pollinations falla al cargar en el navegador). La apiKey se resuelve
+// en el servidor (env > cliente) y nunca se expone al browser.
+async function handleOpenRouterImage(req: IncomingMessage, res: ServerResponse) {
     try {
         let body = await parseBody(req);
         body = resolveServerApiKey(body);
-        const result = await generateGeminiImage(body || {});
+        const result = await generateOpenRouterImage(body || {});
         sendJson(res, 200, result);
     } catch (error: any) {
-        console.error('[geminiProxy] /api/gemini-image error:', error.message);
+        console.error('[geminiProxy] /api/openrouter-image error:', error.message);
+        sendJson(res, error.status || 500, { error: error.message });
+    }
+}
+
+// Video real con fal.ai (text-to-video). La apiKey viaja del cliente (FALAI_CONFIG.API_KEY)
+// o de env; nunca se resuelve con la clave de texto/OpenRouter.
+async function handleFalVideo(req: IncomingMessage, res: ServerResponse) {
+    try {
+        const body = await parseBody(req);
+        const result = await generateVideoViaFal(body || {});
+        sendJson(res, 200, result);
+    } catch (error: any) {
+        console.error('[geminiProxy] /api/fal-video error:', error.message);
         sendJson(res, error.status || 500, { error: error.message });
     }
 }
@@ -548,14 +562,27 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     } catch { /* ignore write errors after connection close */ }
                 }
             });
-            // POST /api/gemini-image — generación de imagen con la API nativa de Gemini
-            // (Paso 5: fallback real cuando la URL de Pollinations falla al cargar).
-            server.middlewares.use('/api/gemini-image', async (req: any, res: any, next: any) => {
+            // POST /api/openrouter-image — fallback de imagen por OpenRouter
+            // (único fallback real cuando la URL de Pollinations falla al cargar).
+            server.middlewares.use('/api/openrouter-image', async (req: any, res: any, next: any) => {
                 if (req.method !== 'POST') return next();
                 try {
-                    await handleGeminiImage(req, res);
+                    await handleOpenRouterImage(req, res);
                 } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini-image:', err?.message || err);
+                    console.error('[geminiProxy] Unhandled error in /api/openrouter-image:', err?.message || err);
+                    try {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'internal_error', detail: err?.message || 'Unknown error' }));
+                    } catch { /* ignore write errors after connection close */ }
+                }
+            });
+            // POST /api/fal-video — video real con fal.ai (text-to-video)
+            server.middlewares.use('/api/fal-video', async (req: any, res: any, next: any) => {
+                if (req.method !== 'POST') return next();
+                try {
+                    await handleFalVideo(req, res);
+                } catch (err: any) {
+                    console.error('[geminiProxy] Unhandled error in /api/fal-video:', err?.message || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: err?.message || 'Unknown error' }));

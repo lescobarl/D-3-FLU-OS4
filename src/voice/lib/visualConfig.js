@@ -26,22 +26,6 @@ export const VISUAL_CONFIG = {
           'desguace',
         ],
       },
-      /** Paso 5: fallback real de imagen con la API NATIVA de Gemini (servidor).
-       *  enabled=false por defecto: solo se usa cuando el usuario configura una
-       *  apiKey de Gemini (env del servidor o cliente) y la imagen de Pollinations
-       *  falla al cargar en el navegador. La apiKey nunca se expone al browser. */
-      geminiImage: {
-        enabled: false,
-        models: [
-          { model: 'gemini-2.5-flash-image', kind: 'generateContent' },
-          { model: 'gemini-3.1-flash-image-preview', kind: 'generateContent' },
-          { model: 'imagen-4.0-fast-generate-001', kind: 'predict' },
-          { model: 'imagen-4.0-generate-001', kind: 'predict' },
-        ],
-        /** Modelo por defecto para el fallback (primero de la lista). */
-        defaultModel: 'gemini-2.5-flash-image',
-        defaultKind: 'generateContent',
-      },
     },
     pollinations: {
       baseUrl: 'https://image.pollinations.ai',
@@ -187,7 +171,7 @@ export const VISUAL_CONFIG = {
     cache: {
       ttlMs: 24 * 60 * 60 * 1000,
     },
-    /** Timeout cliente → POST /api/workspace-image y /api/gemini-image (evita «Cargando…» infinito). */
+    /** Timeout cliente → POST /api/workspace-image y /api/openrouter-image (evita «Cargando…» infinito). */
     clientFetchTimeoutMs: 100000,
   },
 }

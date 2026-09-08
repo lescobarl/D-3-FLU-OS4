@@ -20,6 +20,8 @@ import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord, ReminderRecord } from '../core/db/fluDatabase';
 import { describeNlDateTime } from '../core/reminders/nlDateParser';
+import type { TemporalItemRecord } from '../core/temporal/temporalService';
+import { formatTimeOfDay, timerRemainingMs, formatCountdown } from '../core/temporal/scheduleEngine';
 import { diaDeFecha, type NewHorarioInput } from '../core/horario/horarioService';
 import {
   HorarioPizarron,
@@ -31,6 +33,19 @@ import {
 // ------------------------------------------------------------
 // Tipos
 // ------------------------------------------------------------
+
+/** Fecha legible para la cabecera del panel (locale-aware, sin hardcode). */
+function formatPanelDate(ts: number, language: string): string {
+  try {
+    return new Intl.DateTimeFormat(language === 'en' ? 'en' : 'es', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date(ts));
+  } catch {
+    return '';
+  }
+}
 
 /** Shape del horario — paridad con WorkspaceHubProps.horario. */
 export interface HoyHorarioProps {
@@ -64,6 +79,13 @@ export interface HoyPanelProps {
     items: ReminderRecord[];
     loading: boolean;
   };
+  /** Alarmas y temporizadores (motor temporal): vista compacta Outlook-style
+      en el bloque HOY. Opcional para no romper consumidores que no lo proveen. */
+  temporals?: {
+    alarms: TemporalItemRecord[];
+    timers: TemporalItemRecord[];
+    loading: boolean;
+  };
   /** Referencia de reloj (por defecto: Date.now()) para pruebas. */
   now?: () => number;
   /** Idioma actual para etiquetas bilingües (es/en). */
@@ -79,6 +101,7 @@ export function HoyPanel({
   diary,
   notes,
   reminders,
+  temporals,
   now = () => Date.now(),
   language = 'es',
 }: HoyPanelProps) {
@@ -108,6 +131,13 @@ export function HoyPanel({
     .sort((a, b) => a.dueAt - b.dueAt)
     .slice(0, 3);
 
+  // ---- Cabecera Outlook: fecha legible del día ----
+  const fechaHoy = formatPanelDate(now(), language);
+
+  // ---- Temporales (alarmas + temporizadores) ordenados por próximo disparo ----
+  const alarmas = (temporals?.alarms ?? []).slice().sort((a, b) => a.nextAt - b.nextAt);
+  const temporizadores = (temporals?.timers ?? []).slice().sort((a, b) => a.nextAt - b.nextAt);
+
   // ---- DIARIO: última entrada (una sola) ----
   const ultimaEntrada = diary.entries.length > 0 ? diary.entries[0] : null;
 
@@ -123,6 +153,11 @@ export function HoyPanel({
 
   return (
     <aside className="hoy-panel" data-testid="hoy-panel">
+      {/* Cabecera estilo Outlook: fecha del día */}
+      <header className="hoy-panel__header" data-testid="hoy-header">
+        {fechaHoy ? <span className="hoy-panel__header-date">{fechaHoy}</span> : null}
+      </header>
+
       {/* ============ 📅 HOY ============ */}
       <details className="hoy-panel__block" open data-testid="hoy-block">
         <summary className="hoy-panel__summary">
@@ -148,6 +183,39 @@ export function HoyPanel({
                       <span className="hoy-panel__clase-meta">{describeNlDateTime(item.dueAt)}</span>
                     </li>
                   ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {temporals && (
+            <section className="hoy-panel__section" data-testid="hoy-temporales">
+              <h4 className="hoy-panel__section-title">
+                {pickLabel(hoyUi.alarmasTitle, language, '⏰ Alarmas')}
+              </h4>
+              {temporals.loading ? (
+                <p className="hoy-panel__empty">…</p>
+              ) : alarmas.length === 0 && temporizadores.length === 0 ? (
+                <p className="hoy-panel__empty">
+                  {pickLabel(hoyUi.sinTemporales, language, 'Sin alarmas ni temporizadores')}
+                </p>
+              ) : (
+                <ul className="hoy-panel__list" data-testid="hoy-temporales-list">
+                  {alarmas.map((alarma) => (
+                    <li key={alarma.id} className="hoy-panel__clase">
+                      <span className="hoy-panel__clase-materia">🔔 {alarma.label}</span>
+                      <span className="hoy-panel__clase-meta">{formatTimeOfDay(alarma.nextAt)}</span>
+                    </li>
+                  ))}
+                  {temporizadores.map((temporizador) => {
+                    const remaining = timerRemainingMs(temporizador.trigger, now()) ?? 0;
+                    return (
+                      <li key={temporizador.id} className="hoy-panel__clase">
+                        <span className="hoy-panel__clase-materia">⏱️ {temporizador.label}</span>
+                        <span className="hoy-panel__clase-meta">{formatCountdown(remaining)}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -217,6 +285,7 @@ export function HoyPanel({
                 onModoChange={horario.onModoChange}
                 onAdd={horario.onAdd}
                 onRemove={horario.onRemove}
+                hideHeader
                 now={now}
                 language={language}
               />

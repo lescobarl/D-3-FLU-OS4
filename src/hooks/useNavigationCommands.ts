@@ -9,7 +9,7 @@
 //   - handleNavigationCommand: manejar comando de navegación unificado
 // ============================================================
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG, isSessionResetCommand } from '../voice/lib/fluConfig';
@@ -117,6 +117,60 @@ export function useNavigationCommands(
             os2StartListening({ resume: true }).catch(() => { });
         }, delayMs);
     }, [clearResumeListeningTimer, os2StartListening, voiceStatus, conversationActiveRef, resumeListeningTimerRef, resolveResumeAfterSpeechMs]);
+
+    // ============================================================
+    // Consolidación BUSCAR — una sola ejecución por turno de voz.
+    // Chrome reinicia el reconocedor y entrega el mismo comando en varias
+    // revisiones (parcial → completo). Ejecutar cada una dispararía la
+    // búsqueda 2+ veces; se ejecuta cuando el turno se asienta (la última
+    // revisión gana).
+    // ============================================================
+    const pendingBuscarRef = useRef<{ query: string; run: () => void } | null>(null);
+    const buscarSettleTimerRef = useRef<number | null>(null);
+
+    const flushBuscar = useCallback(() => {
+        if (buscarSettleTimerRef.current !== null) {
+            window.clearTimeout(buscarSettleTimerRef.current);
+            buscarSettleTimerRef.current = null;
+        }
+        const pending = pendingBuscarRef.current;
+        pendingBuscarRef.current = null;
+        if (pending) pending.run();
+    }, []);
+
+    const scheduleBuscar = useCallback((query: string, run: () => void) => {
+        if (typeof window === 'undefined') {
+            run();
+            return;
+        }
+        const prev = pendingBuscarRef.current;
+        // Misma emisión (una extiende a la otra): reemplazar sin ejecutar el parcial.
+        const related = Boolean(prev) && (query.startsWith(prev!.query) || prev!.query.startsWith(query));
+        if (prev && !related) {
+            // Búsqueda distinta ya pendiente: ejecutarla antes de encolar la nueva.
+            flushBuscar();
+        }
+        pendingBuscarRef.current = { query, run };
+        if (buscarSettleTimerRef.current !== null) {
+            window.clearTimeout(buscarSettleTimerRef.current);
+            buscarSettleTimerRef.current = null;
+        }
+        const settleMs = Number((FLU_CONFIG as any)?.timing?.searchCommandSettleMs) || 2800;
+        buscarSettleTimerRef.current = window.setTimeout(() => {
+            buscarSettleTimerRef.current = null;
+            const pending = pendingBuscarRef.current;
+            pendingBuscarRef.current = null;
+            if (pending) pending.run();
+        }, settleMs);
+    }, [flushBuscar]);
+
+    // Limpieza del timer de asentamiento al desmontar.
+    useEffect(() => () => {
+        if (buscarSettleTimerRef.current !== null) {
+            window.clearTimeout(buscarSettleTimerRef.current);
+            buscarSettleTimerRef.current = null;
+        }
+    }, []);
 
     // ============================================================
     // handleNavigationCommand — unified navigation command handler
@@ -477,26 +531,27 @@ export function useNavigationCommands(
                 // (WorkspaceSearch), que aplica la curación de allowlist y
                 // muestra los resultados. Aquí no se hace fetch ni se escribe
                 // workspaceArtifact.
-                dispatchFluSearch({ query, lang: requestLang });
-                if (transcript) {
-                    auditLog.logEvent('command:buscar', 'navigation', uuidv4(), {
-                        speaker: speakerName || undefined,
-                        transcript,
-                        response: query,
-                        comando: 'BUSCAR',
-                        phase,
-                        query,
-                        lang: requestLang,
-                    }, 'BUSCAR command executed').catch(console.error);
-                }
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        console.warn('[useNavigationCommands] BUSCAR command speech failed:', speechErr);
+                // Consolidación: la búsqueda se ejecuta UNA vez cuando el turno se
+                // asienta (la última revisión del comando gana). Evita buscar 2
+                // veces por los reinicios del reconocedor (parcial → completo).
+                scheduleBuscar(query, () => {
+                    dispatchFluSearch({ query, lang: requestLang });
+                    if (transcript) {
+                        auditLog.logEvent('command:buscar', 'navigation', uuidv4(), {
+                            speaker: speakerName || undefined,
+                            transcript,
+                            response: query,
+                            comando: 'BUSCAR',
+                            phase,
+                            query,
+                            lang: requestLang,
+                        }, 'BUSCAR command executed').catch(console.error);
                     }
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
+                    if (commandSpeech) {
+                        speakFlu(commandSpeech, resolvedLanguage).catch(console.error);
+                    }
+                    scheduleResumeListening(commandSpeech?.length ?? 0);
+                });
                 break;
             }
             // P1-C (§1.3.4) — autoconocimiento (CONOCER_FLU): fast-path local sin

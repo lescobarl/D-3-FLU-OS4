@@ -153,6 +153,29 @@ export const OPENROUTER_CONFIG = {
     API_KEY: (import.meta as any)?.env?.VITE_OPENROUTER_API_KEY || '',
     DEFAULT_TEMPERATURE: 0.7,
     DEFAULT_MAX_TOKENS: 1200,
+    /** Modelo de la Image API de OpenRouter (respaldo real cuando Pollinations falla). */
+    IMAGE_MODEL: (import.meta as any)?.env?.VITE_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
+    /** Endpoint relativo de la Image API de OpenRouter (relativo a API_URL). */
+    IMAGE_ENDPOINT: '/images',
+    IMAGE_ASPECT_RATIO: '16:9',
+} as const;
+
+// -----------------------------------------------------------
+// Fal.ai — generación de VIDEO real (text-to-video)
+// -----------------------------------------------------------
+// API de video independiente de OpenRouter/Texto: el video NO lo genera
+// ni Pollinations ni la Image API. Configurable (Rule #1: NO HARDCODE).
+// El endpoint/modelo/key salen de env (VITE_*) con defaults seguros.
+export const FALAI_CONFIG = {
+    /** Endpoint del servicio de video (queue de fal.ai). */
+    VIDEO_ENDPOINT: (import.meta as any)?.env?.VITE_FALAI_VIDEO_ENDPOINT || 'https://queue.fal.run',
+    /** Modelo text-to-video (p. ej. 'fal-ai/veo3', 'fal-ai/kling-video/v1.6'). */
+    VIDEO_MODEL: (import.meta as any)?.env?.VITE_FALAI_VIDEO_MODEL || 'fal-ai/veo3/fast',
+    /** Clave de fal.ai (nunca se expone al browser: se resuelve en servidor). */
+    API_KEY: (import.meta as any)?.env?.VITE_FALAI_API_KEY || '',
+    ASPECT_RATIO: '16:9',
+    /** Tiempo máximo de espera del job (ms). */
+    POLL_TIMEOUT_MS: 180_000,
 } as const;
 
 // -----------------------------------------------------------
@@ -763,9 +786,7 @@ export const SYSTEM_EVENT_CONFIG = {
  */
 export function readStorage<T>(key: string, defaultValue: T): T {
     // En entornos sin localStorage (Node/SSR/proxy del dev server), no hay
-    // storage: devolver el default SIN lanzar ni loguear. Evita el
-    // ReferenceError + construcción del stack trace en CADA llamada de IA
-    // (buildGeminiApiUrl se ejecuta también en el servidor).
+    // storage: devolver el default SIN lanzar ni loguear.
     if (typeof localStorage === 'undefined') return defaultValue;
     try {
         const raw = localStorage.getItem(key);
@@ -796,26 +817,6 @@ export function buildPollinationsUrl(prompt: string): string {
     const baseUrl = readStorage(STORAGE_KEYS.IMAGE_API_URL, POLLINATIONS_CONFIG.BASE_URL);
     const encoded = encodeURIComponent(prompt);
     return `${baseUrl}/${encoded}?width=${POLLINATIONS_CONFIG.DEFAULT_WIDTH}&height=${POLLINATIONS_CONFIG.DEFAULT_HEIGHT}&${POLLINATIONS_CONFIG.DEFAULT_PARAMS}`;
-}
-
-/**
- * Build the text (Gemini) API URL for a given model.
- * Reads localStorage override for text API URL and model; falls back to GEMINI_CONFIG.
- */
-export function buildGeminiApiUrl(model?: string): string {
-    const apiUrl = readStorage(STORAGE_KEYS.TEXT_API_URL, GEMINI_CONFIG.API_URL);
-    const resolvedModel = model || readStorage(STORAGE_KEYS.TEXT_MODEL, GEMINI_CONFIG.MODEL);
-    return apiUrl.replace('{model}', resolvedModel);
-}
-
-/**
- * Build the Gemini "predict" API URL for a given model (image generation endpoint).
- * Uses GEMINI_CONFIG.PREDICT_API_URL; the model is URL-encoded to match the
- * previous inline behavior in src/voice/lib/gemini.js.
- */
-export function buildGeminiPredictUrl(model?: string): string {
-    const resolvedModel = model || readStorage(STORAGE_KEYS.TEXT_MODEL, GEMINI_CONFIG.MODEL);
-    return GEMINI_CONFIG.PREDICT_API_URL.replace('{model}', encodeURIComponent(resolvedModel));
 }
 
 /**

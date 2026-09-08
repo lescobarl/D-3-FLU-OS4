@@ -26,6 +26,8 @@ export interface FluConversationTabViewProps {
     onToggleExpand: (frameId: string) => void;
     /** Transcripción en vivo del micrófono (STT). */
     liveTranscript: string;
+    /** Última frase completa que FLU ejecutó (fuente canónica tras el silencio). */
+    lastTranscript?: string;
     /** Transcript actual de la conversación (store). */
     currentTranscript: string;
     /** Historial de conversación (entradas de FLU + usuarios). */
@@ -47,6 +49,7 @@ export function FluConversationTabView({
     expandedFrameId,
     onToggleExpand,
     liveTranscript,
+    lastTranscript = '',
     currentTranscript,
     conversationHistory,
     voiceParticipants,
@@ -71,7 +74,7 @@ export function FluConversationTabView({
             break;
         }
     }
-    const livePhrase = (liveTranscript || lastHeard || currentTranscript || '').trim();
+    const livePhrase = (liveTranscript || lastTranscript || lastHeard || currentTranscript || '').trim();
 
     return (
         <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">

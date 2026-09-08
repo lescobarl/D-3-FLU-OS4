@@ -9,7 +9,6 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConfigPersistence } from '../../src/hooks/useConfigPersistence';
-import { VISUAL_CONFIG } from '../../src/voice/lib/visualConfig';
 
 // Mock localStorage
 const mockLocalStorage = {
@@ -58,12 +57,6 @@ describe('useConfigPersistence', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
-    // Restaura el singleton VISUAL_CONFIG: algún test escribe-through a
-    // geminiImage.enabled=true y, sin reset, contamina los tests posteriores
-    // (p.ej. el de valores por defecto que espera el default false).
-    if (VISUAL_CONFIG.image?.pipeline?.geminiImage) {
-      VISUAL_CONFIG.image.pipeline.geminiImage.enabled = false;
-    }
   });
 
   test('1. Carga valores iniciales desde localStorage', () => {

@@ -26,7 +26,6 @@ import { BunnyViewer, useBunnyStore } from '../avatar';
 import type { BunnyAnimation } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { stripWakeWordForDisplay } from '../voice/lib/audioMath';
 import { useIntegrationStore, detectSentiment } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
 import { geminiService } from '../services/gemini';
@@ -167,11 +166,14 @@ function VoiceControls({
     transcript,
     fallback = '',
 }: VoiceControlsProps) {
-    // Solo se muestra lo que viene después del wake word (si lo hay), para no
-    // repetir el prefijo de activación ("Flu, ...") en la transcripción visible.
-    const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [];
-    const rawText = liveTranscript || transcript || fallback || '';
-    const displayText = stripWakeWordForDisplay(rawText, wakeWords);
+    // La transcripción visible conserva la frase COMPLETA tal como FLU la oyó,
+    // incluida la wake word ("ok flu"). La wake word solo se quita en la barra
+    // de búsqueda (extractQueryFromWebSearchPhrase), no aquí.
+    // Precedencia: live (interino) → ÚLTIMA frase confirmada del usuario
+    // (fallback = fila commitida, completa) → espejo del store. El espejo puede
+    // quedar con un interino INCOMPLETO tras limpiar live, por eso va al final.
+    const rawText = liveTranscript || fallback || transcript || '';
+    const displayText = rawText;
     return (
         <div className="voice-controls">
             {/* Transcripción en vivo — siempre visible con scroll */}

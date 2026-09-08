@@ -2423,6 +2423,29 @@
   gap: 2px;
 }
 
+.hoy-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--flu-border, var(--border-color, #2a2a4a));
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-card, var(--flu-bg-card, #1e1e36));
+  border-left: 3px solid var(--accent-color, #7c6cff);
+}
+
+.hoy-panel__header-title {
+  font-size: var(--text-md, 13px);
+  font-weight: var(--weight-bold, 700);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.hoy-panel__header-date {
+  font-size: var(--text-xs, 11px);
+  color: var(--text-secondary, #a0a0b0);
+  text-transform: capitalize;
+}
+
 .hoy-panel__block {
   border: 1px solid var(--flu-border, var(--border-color, #2a2a4a));
   border-radius: var(--radius-md, 10px);
@@ -2494,6 +2517,7 @@
   padding: 4px 6px;
   border-radius: var(--radius-sm, 6px);
   background: var(--bg-tertiary, rgba(0, 0, 0, 0.15));
+  border-left: 3px solid var(--accent-color, #7c6cff);
 }
 
 .hoy-panel__clase-materia {

@@ -140,7 +140,7 @@ function baseProps(overrides: Partial<WorkspaceHubProps> = {}): WorkspaceHubProp
             close: () => {},
             retry: () => {},
             retryLoad: () => {},
-            fallbackToGemini: async () => {},
+            fallbackToOpenRouter: async () => {},
         },
         document: {
             isAnalyzing: false,
