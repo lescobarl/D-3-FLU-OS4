@@ -19,8 +19,8 @@
 //   - Micro-expresiones para comportamiento idle (dar vida)
 //
 // NOTA: El ciclo de vida SPEAKING (incluyendo monitoreo de fin de habla)
-// es manejado por FluAvatarVoiceBridge.tsx a través de onContractResolved
-// y handleSpeak, que hacen await speakResponse() directamente.
+// es manejado por FluAvatarVoiceBridge.tsx a través de onContractResolved,
+// que hace await speakResponse() directamente.
 // Este hook SOLO sincroniza el estado del avatar (expresión + animación).
 // ============================================================
 

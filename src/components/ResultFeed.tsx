@@ -38,6 +38,12 @@ export interface ResultFeedItem {
   kind: ResultKind;
   title: string;
   body: ReactNode;
+  /**
+   * Cuando es true, la tarjeta SOLO aparece bajo el filtro de su tipo
+   * (p. ej. "Imágenes"), nunca en "Todo". Útil para contenido generado
+   * por IA que no debe intercalarse bajo la respuesta de texto.
+   */
+  onlyInKind?: boolean;
 }
 
 export interface ResultFeedProps {
@@ -88,14 +94,17 @@ export function ResultFeed({
   );
 
   // Un ítem entra en el filtro "doc" si es documento o video.
-  const matchesFilter = (kind: ResultKind): boolean => {
-    if (filter === 'all') return true;
-    if (filter === 'image') return kind === 'image';
-    return kind === 'doc' || kind === 'video';
+  // Un ítem marcado `onlyInKind` SOLO se muestra con su filtro de tipo
+  // activo (nunca en "Todo"): evita que contenido de imagen generada se
+  // intercale bajo la Respuesta de Flu en la vista general del pizarrón.
+  const matchesFilter = (item: ResultFeedItem): boolean => {
+    if (filter === 'all') return !item.onlyInKind;
+    if (filter === 'image') return item.kind === 'image';
+    return item.kind === 'doc' || item.kind === 'video';
   };
 
   const visible = useMemo(
-    () => items.filter((item) => matchesFilter(item.kind)),
+    () => items.filter(matchesFilter),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, filter]
   );

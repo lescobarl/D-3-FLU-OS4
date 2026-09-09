@@ -157,10 +157,14 @@ const EN_DAY_NAMES = [
 ];
 
 // --- Horas del día --------------------------------------------
+// El ASR (Chrome) suele transcribir "12:13 p.m" como "12 13 p m"
+// (dos puntos y punto del meridiano → espacios). El patrón acepta:
+//   "a las 12", "a las 12:13", "a las 12 13", "12 13 p m", "5 pm", "5 00 p m".
+// El meridiano admite puntos y espacios: p.m., p m, a.m., a m.
 const ES_TIME =
-  /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)?/i;
+  /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:\s*[:.]\s*(\d{2})|\s+(\d{2}))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)?/i;
 const EN_TIME =
-  /\b(?:at|for)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i;
+  /\b(?:at|for)\s+(\d{1,2})(?::(\d{2})|\s+(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i;
 const NOON_ES = /\b(?:al\s+|a\s+|el\s+)?(?:mediod[ií]a|medio\s+d[ií]a)\b/i;
 const NOON_EN = /\b(?:at\s+)?noon\b/i;
 const MIDNIGHT_ES = /\b(?:a\s+la\s+|la\s+)?(?:medianoche|media\s+noche)\b/i;
@@ -286,10 +290,10 @@ function extractRecurrence(text: string): { recurrence: TemporalRecurrence | nul
 
 function resolveEsTime(m: RegExpExecArray): string {
   let h = Number(m[1]);
-  const min = m[2] ? Number(m[2]) : 0;
-  const part = m[3] ? m[3].toLowerCase() : null;
-  // Meridiano explícito (p.m./a.m.) tiene prioridad sobre 'de la tarde/noche'.
-  const meridiem = m[4] ? m[4].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
+  const min = m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : 0;
+  const part = m[4] ? m[4].toLowerCase() : null;
+  // Meridiano explícito (p.m./a.m./p m) tiene prioridad sobre 'de la tarde/noche'.
+  const meridiem = m[5] ? m[5].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
   if (meridiem === 'pm') {
     if (h < 12) h += 12;
   } else if (meridiem === 'am') {
@@ -305,8 +309,8 @@ function resolveEsTime(m: RegExpExecArray): string {
 
 function resolveEnTime(m: RegExpExecArray): string {
   let h = Number(m[1]);
-  const min = m[2] ? Number(m[2]) : 0;
-  const meridiem = m[3] ? m[3].toLowerCase().replace(/\./g, '') : null;
+  const min = m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : 0;
+  const meridiem = m[4] ? m[4].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
   if (meridiem === 'pm') {
     if (h < 12) h += 12;
   } else if (meridiem === 'am') {

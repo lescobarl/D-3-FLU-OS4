@@ -23,6 +23,9 @@ export interface FluBridgeContextValue {
     voiceStatus?: string;
     voiceError?: string | null;
     liveTranscript?: string;
+    /** Última frase completa confirmada por el hook (fuente canónica compartida
+        con la bitácora — regla: burbuja y transcripción muestran lo mismo). */
+    lastTranscript?: string;
 
     // Voice actions
     onStartListening?: () => Promise<void>;
@@ -67,6 +70,7 @@ export function FluBridgeProvider({
         value.voiceStatus,
         value.voiceError,
         value.liveTranscript,
+        value.lastTranscript,
         value.onStartListening,
         value.onStopListening,
         value.onToggleListening,

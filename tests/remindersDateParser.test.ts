@@ -242,6 +242,25 @@ describe('nlDateParser — relativos (pasado mañana / mañana / hoy)', () => {
     expect(result.type).toBe('today');
     expect(result.at).toBe(new Date(2026, 0, 15, 14, 0).getTime());
   });
+
+  it('interpreta "hoy a las 5 00 p m" (ASR) como HOY a las 17:00, NO mañana', () => {
+    // Bug 5: el ASR transcribe "5:00 p.m" como "5 00 p m"; antes se leía como
+    // 05:00 (ya pasada a las 10:00) y saltaba a mañana. Ahora p.m. → 17:00 hoy.
+    const result = parsed(parseNlDateTime('hoy a las 5 00 p m', { now }));
+    expect(result.type).toBe('today');
+    expect(result.at).toBe(new Date(2026, 0, 15, 17, 0).getTime());
+  });
+
+  it('interpreta "hoy a las 5:00 p.m." (con puntos) como HOY a las 17:00', () => {
+    const result = parsed(parseNlDateTime('hoy a las 5:00 p.m.', { now }));
+    expect(result.at).toBe(new Date(2026, 0, 15, 17, 0).getTime());
+  });
+
+  it('interpreta "a las 12 13 p m" como las 12:13 (minutos separados por espacio)', () => {
+    const result = parsed(parseNlDateTime('a las 12 13 p m', { now }));
+    expect(result.at).toBe(new Date(2026, 0, 15, 12, 13).getTime());
+    expect(result.label).toBe('a las 12:13');
+  });
 });
 
 describe('nlDateParser — hora simple (time-only)', () => {

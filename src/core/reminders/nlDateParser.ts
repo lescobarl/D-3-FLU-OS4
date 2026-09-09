@@ -172,34 +172,40 @@ function extractTime(text: string): ParsedTime | null {
   if (midnight) return { hour: 0, minute: 0 };
 
   // 'a las 3 de la tarde', 'a la(s) N', 'at N', '3 de la tarde'
-  const withQualifier = /a\s+las?\s+(\d{1,2})(?:\s*[.:]\s*(\d{2}))?\s+(de\s+la\s+(manana|tarde|noche)|in\s+the\s+(morning|afternoon|evening|night))/i.exec(
+  // El ASR (Chrome) suele transcribir "5:00 p.m" como "5 00 p m": el reloj
+  // acepta minutos separados por espacio y el meridiano con puntos/espacios.
+  const withQualifier = /a\s+las?\s+(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s+(de\s+la\s+(manana|tarde|noche)|in\s+the\s+(morning|afternoon|evening|night))/i.exec(
     text,
   );
   if (withQualifier) {
     const hour = parseInt(withQualifier[1], 10);
-    const period = withQualifier[3].toLowerCase();
+    const minRaw = withQualifier[2] || withQualifier[3];
+    const period = withQualifier[4] || withQualifier[5];
+    const periodLower = String(period || '').toLowerCase();
     let base = hour;
-    if (/tarde|noche|afternoon|evening|night/.test(period) && hour < 12) base += 12;
-    if (/manana|morning/.test(period) && hour === 12) base = 0;
-    return { hour: base, minute: withQualifier[2] ? parseInt(withQualifier[2], 10) : 0 };
+    if (/tarde|noche|afternoon|evening|night/.test(periodLower) && hour < 12) base += 12;
+    if (/manana|morning/.test(periodLower) && hour === 12) base = 0;
+    return { hour: base, minute: minRaw ? parseInt(minRaw, 10) : 0 };
   }
 
-  // '3pm', '3 pm', '9am', '3:30 pm'
-  const meridiem = /(\d{1,2})(?:\s*[.:]\s*(\d{2}))?\s*(am|pm)\b/i.exec(text);
+  // '3pm', '3 pm', '9am', '3:30 pm', '5 00 p m' (p.m./a.m. con puntos y espacios)
+  const meridiem = /(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)\b/i.exec(text);
   if (meridiem) {
     let hour = parseInt(meridiem[1], 10);
-    const suffix = meridiem[3].toLowerCase();
+    const minRaw = meridiem[2] || meridiem[3];
+    const suffix = meridiem[4].toLowerCase().replace(/\./g, '').replace(/\s+/g, '');
     if (suffix === 'pm' && hour < 12) hour += 12;
     if (suffix === 'am' && hour === 12) hour = 0;
-    return { hour, minute: meridiem[2] ? parseInt(meridiem[2], 10) : 0 };
+    return { hour, minute: minRaw ? parseInt(minRaw, 10) : 0 };
   }
 
-  // 'HH:mm' literal o 'a las 14:30'
-  const clock = /(?:a\s+las?\s+)?(\d{1,2})[.:](\d{2})\b/.exec(text);
+  // 'HH:mm' literal, 'a las 14:30', o '14 30' (ASR con espacio entre hora y minutos)
+  const clock = /(?:a\s+las?\s+)?(\d{1,2})[.:](\d{2})\b|(?:a\s+las?\s+)?(\d{1,2})\s+(\d{2})\b/i.exec(text);
   if (clock) {
-    const hour = parseInt(clock[1], 10);
+    const hour = parseInt(clock[1] || clock[3], 10);
     if (hour > 23) return null;
-    return { hour, minute: parseInt(clock[2], 10) };
+    const minRaw = clock[2] || clock[4];
+    return { hour, minute: minRaw ? parseInt(minRaw, 10) : 0 };
   }
 
   // 'a las 3' / 'at 3' (hora simple, 24h literal)

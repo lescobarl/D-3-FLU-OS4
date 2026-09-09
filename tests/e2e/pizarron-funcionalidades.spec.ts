@@ -289,33 +289,40 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
 
             await waitForWorkspaceArtifact(page);
 
-            // La imagen generada vive en la tarjeta `ia-imagen` del feed
-            // consolidado (no hay pestañas internas que conmutar).
+            // La imagen generada es una CELDA del grid de imágenes y su tarjeta
+            // (`ia-imagen`, origen IA) SOLO vive bajo el filtro "Imágenes" —
+            // nunca intercalada bajo la Respuesta de Flu en "Todo". Activamos
+            // el filtro de imágenes para verla.
+            await page.getByRole('button', { name: /Imágenes/i }).click();
+
+            // La celda IA abre el overlay al hacer click.
             const card = page.getByTestId('result-feed-card-ia-imagen');
             await expect(card).toBeVisible({ timeout: 10000 });
 
             // Esperar a que aparezca la imagen generada (o el estado de carga)
             await page.waitForTimeout(1500);
-            const img = page.locator('.generated-image__img');
-            const loading = page.locator('.generated-image__loading');
-            const error = page.locator('.generated-image__error');
+            const img = page.locator('.workspace-search__grid-item--generated .workspace-search__grid-img');
+            const loading = page.locator('.workspace-search__grid-item--generated .workspace-search__grid-loading');
+            const error = page.locator('.workspace-search__grid-item--generated');
 
             const imgCount = await img.count();
             const loadingCount = await loading.count();
-            const errorCount = await error.count();
 
-            // Debe existir al menos el contenedor de imagen generada
-            const container = page.locator('.frame-content__generated-image');
-            await expect(container).toBeVisible({ timeout: 10000 });
-
-            // Si la imagen cargó, validar su src; si no, validar que hay estado de carga/error
+            // Si la imagen cargó, validar su src y que el click abre el overlay;
+            // si no, validar que hay estado de carga.
             if (imgCount > 0) {
                 await expect(img).toBeVisible({ timeout: 10000 });
                 const src = await img.getAttribute('src');
                 expect(src).toBeTruthy();
+                await img.click();
+                const overlay = page.locator('.workspace-image-overlay');
+                await expect(overlay).toBeVisible({ timeout: 10000 });
+                // Cerrar: click en el fondo del overlay (fuera de la imagen)
+                await overlay.click({ position: { x: 5, y: 5 } });
+                await expect(overlay).not.toBeVisible({ timeout: 10000 });
             } else if (loadingCount > 0) {
                 await expect(loading).toBeVisible({ timeout: 10000 });
-            } else if (errorCount > 0) {
+            } else {
                 await expect(error).toBeVisible({ timeout: 10000 });
             }
 

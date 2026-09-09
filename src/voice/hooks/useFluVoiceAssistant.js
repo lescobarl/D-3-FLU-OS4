@@ -1294,15 +1294,25 @@ export function useFluVoiceAssistant({
     recognitionEndResolverRef.current = null
 
     // Reanudar la escucha si estaba activa antes del habla del asistente.
-    if (wasListeningBefore) {
-      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras habla', {
+    // SOLO en modo pasivo (sin conversación activa): ahí no hay quien reabra
+    // tras el TTS (scheduleResumeListening solo aplica con conversación activa),
+    // y sin esto la escucha ambiental moría (bug que motivó el parche 3132d2e).
+    // En conversación ACTIVA NO se reabre aquí: reabrir durante el habla fuerza
+    // syncAvatarToState(LISTENING) en el mismo ms del SPEAKING → corta MouthMove
+    // (boca congelada) aunque el audio siga. La reapertura activa la hace App
+    // (onContractResolved → scheduleResumeListening) al terminar el TTS.
+    if (wasListeningBefore && !conversationActiveRef?.current) {
+      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras habla (modo pasivo)', {
         wasListeningBefore,
       })
       requestRecognitionRestart(0)
     } else {
-      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: sin reanudar (no estaba escuchando)')
+      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: sin reanudar en suspend (conversación activa o no escuchaba)', {
+        wasListeningBefore,
+        conversationActive: Boolean(conversationActiveRef?.current),
+      })
     }
-  }, [requestRecognitionRestart])
+  }, [conversationActiveRef, requestRecognitionRestart])
 
   const restartRecognition = useCallback(() => {
     requestRecognitionRestart(0)

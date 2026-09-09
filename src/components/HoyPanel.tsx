@@ -4,16 +4,13 @@
 // Componente presentacional controlado: recibe TODO por props desde
 // App (patrón de AgendaHub / WorkspaceHub). NO hace fetching propio.
 //
-// Tres bloques <details> colapsables, cada etiqueta desde
-// FLU_CONFIG con pickLabel (Regla #1: sin hardcode):
-//   📅 HOY    → próxima clase (proximaClaseDe) + clases del día
-//               (clasesDelDia) + botón "Ver horario completo" que
-//               expande un HorarioPizarron (mismo shape de props que
-//               WorkspaceHub le pasa).
-//   📓 DIARIO → última entrada (useDiary) con su campo de ánimo
-//               (mood?: number) renderizado con la etiqueta de
-//               FLU_CONFIG.diary.ui / mood.ui.
-//   📝 NOTAS  → listado de notas (useNotes) con toggle/remove.
+// Diseño estilo Outlook ("Mi día"): tarjetas cronológicas con una
+// columna de hora/estado a la izquierda, cuerpo y botón de acción
+// (quitar/cancelar) a la derecha. Mismo lenguaje visual en Notas.
+// Tres bloques <details> colapsables (etiquetas desde FLU_CONFIG):
+//   📅 HOY    → "Mi día": próxima clase + citas + alarmas + clases.
+//   📓 DIARIO → última entrada (useDiary) con su ánimo.
+//   📝 NOTAS  → listado con checkbox + quitar (mismo diseño de card).
 // ============================================================
 import { useState } from 'react';
 import { pickLabel } from '../lib/textUtils';
@@ -78,6 +75,8 @@ export interface HoyPanelProps {
   reminders?: {
     items: ReminderRecord[];
     loading: boolean;
+    /** Quitar (borrado lógico) una cita/recordatorio desde la card (manual). */
+    onRemove?: (id: string) => Promise<void>;
   };
   /** Alarmas y temporizadores (motor temporal): vista compacta Outlook-style
       en el bloque HOY. Opcional para no romper consumidores que no lo proveen. */
@@ -85,6 +84,8 @@ export interface HoyPanelProps {
     alarms: TemporalItemRecord[];
     timers: TemporalItemRecord[];
     loading: boolean;
+    /** Cancelar una alarma/temporizador desde la card (manual). */
+    onCancel?: (id: string) => Promise<void>;
   };
   /** Referencia de reloj (por defecto: Date.now()) para pruebas. */
   now?: () => number;
@@ -92,7 +93,6 @@ export interface HoyPanelProps {
   language?: string;
 }
 
-// ------------------------------------------------------------
 // ------------------------------------------------------------
 // Componente
 // ------------------------------------------------------------
@@ -151,6 +151,12 @@ export function HoyPanel({
   const notasPendientes = notes.notes.filter((n) => !n.done);
   const notasHechas = notes.notes.filter((n) => n.done);
 
+  // Etiquetas de acción desde config (strings directos, sin hardcode).
+  const removeLabel = String(notesUi.removeTitle || 'Quitar');
+  const cancelLabel = String(
+    (FLU_CONFIG as any)?.temporals?.ui?.cancelTitle ?? (FLU_CONFIG as any)?.hoy?.ui?.cancelTitle ?? 'Cancelar',
+  );
+
   return (
     <aside className="hoy-panel" data-testid="hoy-panel">
       {/* Cabecera estilo Outlook: fecha del día */}
@@ -164,11 +170,35 @@ export function HoyPanel({
           {pickLabel(hoyUi.hoyTitle, language, '📅 Hoy')}
         </summary>
         <div className="hoy-panel__body">
+          <section className="hoy-panel__section" data-testid="hoy-proxima">
+            <h4 className="hoy-panel__section-title">
+              {pickLabel(hoyUi.proximaClaseLabel, language, 'Próxima')}
+            </h4>
+            {horario.loading ? (
+              <p className="hoy-panel__empty">…</p>
+            ) : !proxima ? (
+              <p className="hoy-panel__empty">
+                {pickLabel(hoyUi.sinProxima, language, 'Sin próxima entrada')}
+              </p>
+            ) : (
+              <div className="hoy-panel__card" data-testid="hoy-proxima-clase">
+                <span className="hoy-panel__card-time">📚</span>
+                <span className="hoy-panel__card-body">
+                  <span className="hoy-panel__card-title">{proxima.materia}</span>
+                  <span className="hoy-panel__card-meta">
+                    {proxima.inicio}–{proxima.fin}
+                    {proxima.aula ? ` · ${proxima.aula}` : ''}
+                  </span>
+                </span>
+              </div>
+            )}
+          </section>
+
           {reminders && (
             <section className="hoy-panel__section" data-testid="hoy-agenda">
-              <h4 className="hoy-panel__section-title">
-                {pickLabel(hoyUi.agendaTitle, language, 'Próximas citas')}
-              </h4>
+            <h4 className="hoy-panel__section-title">
+              📅 {pickLabel(hoyUi.agendaTitle, language, 'Próximas citas')}
+            </h4>
               {reminders.loading ? (
                 <p className="hoy-panel__empty">…</p>
               ) : proximasCitas.length === 0 ? (
@@ -178,9 +208,30 @@ export function HoyPanel({
               ) : (
                 <ul className="hoy-panel__list" data-testid="hoy-agenda-list">
                   {proximasCitas.map((item) => (
-                    <li key={item.id} className="hoy-panel__clase" data-testid="hoy-agenda-item">
-                      <span className="hoy-panel__clase-materia">{item.text}</span>
-                      <span className="hoy-panel__clase-meta">{describeNlDateTime(item.dueAt)}</span>
+                    <li key={item.id} className="hoy-panel__list-item" data-testid="hoy-agenda-item">
+                      <div className="hoy-panel__card">
+                        <span className="hoy-panel__card-time">
+                          {formatTimeOfDay(item.dueAt)}
+                        </span>
+                        <span className="hoy-panel__card-body">
+                          <span className="hoy-panel__card-title">📌 {item.text}</span>
+                          <span className="hoy-panel__card-meta">
+                            {describeNlDateTime(item.dueAt)}
+                          </span>
+                        </span>
+                        {reminders.onRemove && (
+                          <button
+                            type="button"
+                            className="hoy-panel__card-remove"
+                            title={`${removeLabel}: ${item.text}`}
+                            aria-label={`${removeLabel}: ${item.text}`}
+                            data-testid={`reminder-remove-${item.id}`}
+                            onClick={() => reminders.onRemove!(item.id)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -202,17 +253,55 @@ export function HoyPanel({
               ) : (
                 <ul className="hoy-panel__list" data-testid="hoy-temporales-list">
                   {alarmas.map((alarma) => (
-                    <li key={alarma.id} className="hoy-panel__clase">
-                      <span className="hoy-panel__clase-materia">🔔 {alarma.label}</span>
-                      <span className="hoy-panel__clase-meta">{formatTimeOfDay(alarma.nextAt)}</span>
+                    <li key={alarma.id} className="hoy-panel__list-item">
+                      <div className="hoy-panel__card">
+                        <span className="hoy-panel__card-time">
+                          {formatTimeOfDay(alarma.nextAt)}
+                        </span>
+                        <span className="hoy-panel__card-body">
+                          <span className="hoy-panel__card-title">🔔 {alarma.label}</span>
+                          <span className="hoy-panel__card-meta">
+                            {formatTimeOfDay(alarma.nextAt)}
+                          </span>
+                        </span>
+                        {temporals.onCancel && (
+                          <button
+                            type="button"
+                            className="hoy-panel__card-remove"
+                            title={`${cancelLabel}: ${alarma.label}`}
+                            aria-label={`${cancelLabel}: ${alarma.label}`}
+                            data-testid={`temporal-cancel-${alarma.id}`}
+                            onClick={() => temporals.onCancel!(alarma.id)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                   {temporizadores.map((temporizador) => {
                     const remaining = timerRemainingMs(temporizador.trigger, now()) ?? 0;
                     return (
-                      <li key={temporizador.id} className="hoy-panel__clase">
-                        <span className="hoy-panel__clase-materia">⏱️ {temporizador.label}</span>
-                        <span className="hoy-panel__clase-meta">{formatCountdown(remaining)}</span>
+                      <li key={temporizador.id} className="hoy-panel__list-item">
+                        <div className="hoy-panel__card">
+                          <span className="hoy-panel__card-time">⏱️</span>
+                          <span className="hoy-panel__card-body">
+                            <span className="hoy-panel__card-title">⏱️ {temporizador.label}</span>
+                            <span className="hoy-panel__card-meta">{formatCountdown(remaining)}</span>
+                          </span>
+                          {temporals.onCancel && (
+                            <button
+                              type="button"
+                              className="hoy-panel__card-remove"
+                              title={`${cancelLabel}: ${temporizador.label}`}
+                              aria-label={`${cancelLabel}: ${temporizador.label}`}
+                              data-testid={`temporal-cancel-${temporizador.id}`}
+                              onClick={() => temporals.onCancel!(temporizador.id)}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
                       </li>
                     );
                   })}
@@ -220,30 +309,10 @@ export function HoyPanel({
               )}
             </section>
           )}
-          <section className="hoy-panel__section" data-testid="hoy-proxima">
-            <h4 className="hoy-panel__section-title">
-              {pickLabel(hoyUi.proximaClaseLabel, language, 'Próxima')}
-            </h4>
-            {horario.loading ? (
-              <p className="hoy-panel__empty">…</p>
-            ) : !proxima ? (
-              <p className="hoy-panel__empty">
-                {pickLabel(hoyUi.sinProxima, language, 'Sin próxima entrada')}
-              </p>
-            ) : (
-              <div className="hoy-panel__clase" data-testid="hoy-proxima-clase">
-                <span className="hoy-panel__clase-materia">{proxima.materia}</span>
-                <span className="hoy-panel__clase-meta">
-                  {proxima.inicio}–{proxima.fin}
-                  {proxima.aula ? ` · ${proxima.aula}` : ''}
-                </span>
-              </div>
-            )}
-          </section>
 
           <section className="hoy-panel__section" data-testid="hoy-clases">
             <h4 className="hoy-panel__section-title">
-              {pickLabel(hoyUi.clasesHoyLabel, language, 'Clases de hoy')}
+              📚 {pickLabel(hoyUi.clasesHoyLabel, language, 'Clases de hoy')}
             </h4>
             {horario.loading ? (
               <p className="hoy-panel__empty">…</p>
@@ -253,13 +322,18 @@ export function HoyPanel({
               </p>
             ) : (
               <ul className="hoy-panel__list" data-testid="hoy-clases-list">
-                {clasesHoy.map((clase) => (
-                  <li key={clase.id} className="hoy-panel__clase">
-                    <span className="hoy-panel__clase-materia">{clase.materia}</span>
-                    <span className="hoy-panel__clase-meta">
-                      {clase.inicio}–{clase.fin}
-                      {clase.aula ? ` · ${clase.aula}` : ''}
-                    </span>
+                  {clasesHoy.map((clase) => (
+                  <li key={clase.id} className="hoy-panel__list-item">
+                    <div className="hoy-panel__card">
+                      <span className="hoy-panel__card-time">📚</span>
+                      <span className="hoy-panel__card-body">
+                        <span className="hoy-panel__card-title">{clase.materia}</span>
+                        <span className="hoy-panel__card-meta">
+                          {clase.inicio}–{clase.fin}
+                          {clase.aula ? ` · ${clase.aula}` : ''}
+                        </span>
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -308,17 +382,20 @@ export function HoyPanel({
                 {pickLabel(hoyUi.sinDiario, language, 'Aún no hay entradas en el diario.')}
               </p>
             ) : (
-              <article className="hoy-panel__diario" data-testid="diario-ultima">
-                <h4 className="hoy-panel__diario-title">
-                  {ultimaEntrada.title || diaryUi.untitledLabel || 'Sin título'}
-                </h4>
-                {ultimaEntrada.mood !== undefined && ultimaEntrada.mood !== null && (
-                  <span className="hoy-panel__diario-mood" data-testid="diario-mood">
-                    {moodLabel(ultimaEntrada.mood)}
+              <article className="hoy-panel__card" data-testid="diario-ultima">
+                <span className="hoy-panel__card-time">📓</span>
+                <span className="hoy-panel__card-body">
+                  <span className="hoy-panel__card-title">
+                    {ultimaEntrada.title || diaryUi.untitledLabel || 'Sin título'}
                   </span>
-                )}
-                <p className="hoy-panel__diario-content">{ultimaEntrada.content}</p>
-                <span className="hoy-panel__diario-date">{ultimaEntrada.date}</span>
+                  {ultimaEntrada.mood !== undefined && ultimaEntrada.mood !== null && (
+                    <span className="hoy-panel__diario-mood" data-testid="diario-mood">
+                      {moodLabel(ultimaEntrada.mood)}
+                    </span>
+                  )}
+                  <span className="hoy-panel__card-meta">{ultimaEntrada.date}</span>
+                  <span className="hoy-panel__diario-content">{ultimaEntrada.content}</span>
+                </span>
               </article>
             )}
           </div>
@@ -342,26 +419,30 @@ export function HoyPanel({
               {notasPendientes.length > 0 && (
                 <ul className="hoy-panel__list" data-testid="notas-pendientes">
                   {notasPendientes.map((nota) => (
-                    <li key={nota.id} className="hoy-panel__nota">
-                      <label className="hoy-panel__nota-label">
-                        <input
-                          type="checkbox"
-                          checked={nota.done}
-                          onChange={() => notes.onToggle(nota.id)}
-                          aria-label={nota.label}
-                        />
-                        <span>{nota.label}</span>
-                      </label>
-                      <button
-                        type="button"
-                        className="hoy-panel__nota-remove"
-                        title={notesUi.removeTitle || 'Quitar nota'}
-                        aria-label={`${notesUi.removeTitle || 'Quitar nota'}: ${nota.label}`}
-                        data-testid={`nota-remove-${nota.id}`}
-                        onClick={() => notes.onRemove(nota.id)}
-                      >
-                        ×
-                      </button>
+                    <li key={nota.id} className="hoy-panel__list-item">
+                      <div className="hoy-panel__card">
+                        <label className="hoy-panel__nota-check" aria-label={nota.label}>
+                          <input
+                            type="checkbox"
+                            checked={nota.done}
+                            onChange={() => notes.onToggle(nota.id)}
+                            aria-label={nota.label}
+                          />
+                        </label>
+                        <span className="hoy-panel__card-body">
+                          <span className="hoy-panel__card-title">{nota.label}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="hoy-panel__card-remove"
+                          title={notesUi.removeTitle || 'Quitar nota'}
+                          aria-label={`${notesUi.removeTitle || 'Quitar nota'}: ${nota.label}`}
+                          data-testid={`nota-remove-${nota.id}`}
+                          onClick={() => notes.onRemove(nota.id)}
+                        >
+                          ×
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -369,26 +450,30 @@ export function HoyPanel({
               {notasHechas.length > 0 && (
                 <ul className="hoy-panel__list" data-testid="notas-hechas">
                   {notasHechas.map((nota) => (
-                    <li key={nota.id} className="hoy-panel__nota hoy-panel__nota--done">
-                      <label className="hoy-panel__nota-label">
-                        <input
-                          type="checkbox"
-                          checked={nota.done}
-                          onChange={() => notes.onToggle(nota.id)}
-                          aria-label={nota.label}
-                        />
-                        <span>{nota.label}</span>
-                      </label>
-                      <button
-                        type="button"
-                        className="hoy-panel__nota-remove"
-                        title={notesUi.removeTitle || 'Quitar nota'}
-                        aria-label={`${notesUi.removeTitle || 'Quitar nota'}: ${nota.label}`}
-                        data-testid={`nota-remove-${nota.id}`}
-                        onClick={() => notes.onRemove(nota.id)}
-                      >
-                        ×
-                      </button>
+                    <li key={nota.id} className="hoy-panel__list-item">
+                      <div className="hoy-panel__card hoy-panel__card--done">
+                        <label className="hoy-panel__nota-check" aria-label={nota.label}>
+                          <input
+                            type="checkbox"
+                            checked={nota.done}
+                            onChange={() => notes.onToggle(nota.id)}
+                            aria-label={nota.label}
+                          />
+                        </label>
+                        <span className="hoy-panel__card-body">
+                          <span className="hoy-panel__card-title">{nota.label}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="hoy-panel__card-remove"
+                          title={notesUi.removeTitle || 'Quitar nota'}
+                          aria-label={`${notesUi.removeTitle || 'Quitar nota'}: ${nota.label}`}
+                          data-testid={`nota-remove-${nota.id}`}
+                          onClick={() => notes.onRemove(nota.id)}
+                        >
+                          ×
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

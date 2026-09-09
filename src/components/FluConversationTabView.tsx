@@ -30,6 +30,12 @@ export interface FluConversationTabViewProps {
     lastTranscript?: string;
     /** Transcript actual de la conversación (store). */
     currentTranscript: string;
+    /**
+     * Última frase completa del usuario derivada del historial (fuente única
+     * canónica, calculada en App.tsx — misma que usa la burbuja del avatar).
+     * Reemplaza el escaneo local duplicado: burbuja y bitácora ya no pueden divergir.
+     */
+    lastHeardText?: string;
     /** Historial de conversación (entradas de FLU + usuarios). */
     conversationHistory: readonly any[];
     /** Participantes de voz: label + profileId (unión historial + perfiles). */
@@ -51,6 +57,7 @@ export function FluConversationTabView({
     liveTranscript,
     lastTranscript = '',
     currentTranscript,
+    lastHeardText = '',
     conversationHistory,
     voiceParticipants,
     onRenameProfile,
@@ -62,18 +69,10 @@ export function FluConversationTabView({
     // liveTranscript tras ejecutar, el display quedaba sin "ok flu" o vacío
     // (Bug #4). Fuente: liveTranscript; si ya se limpió, la ÚLTIMA frase del
     // usuario del historial (que conserva la frase completa); respaldo final.
-    const entries = Array.isArray(conversationHistory) ? conversationHistory : [];
-    let lastHeard = '';
-    for (let i = entries.length - 1; i >= 0; i -= 1) {
-        const entry = entries[i];
-        if (!entry) continue;
-        const role = String(entry.role || '').toLowerCase();
-        const speaker = String(entry.speakerName || '');
-        if (role === 'user' || (speaker && speaker !== 'FLU' && speaker !== 'flu')) {
-            lastHeard = String(entry.text || entry.content || '').trim();
-            break;
-        }
-    }
+    // Fuente única de "última frase del usuario": la deriva App.tsx desde el
+    // historial real (misma que alimenta la burbuja del avatar). El escaneo
+    // local duplicado se eliminó para que burbuja y bitácora nunca difieran.
+    const lastHeard = String(lastHeardText || '').trim();
     const livePhrase = (liveTranscript || lastTranscript || lastHeard || currentTranscript || '').trim();
 
     return (

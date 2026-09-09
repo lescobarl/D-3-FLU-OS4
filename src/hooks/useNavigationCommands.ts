@@ -1,12 +1,12 @@
+﻿// ============================================================
+// useNavigationCommands â€” Hook para comandos de navegaciÃ³n
 // ============================================================
-// useNavigationCommands — Hook para comandos de navegación
-// ============================================================
-// Extraído de App.tsx para reducir la carga del componente principal.
+// ExtraÃ­do de App.tsx para reducir la carga del componente principal.
 // Maneja:
 //   - speakFlu: suspender reconocimiento, hablar, esperar idle
-//   - clearResumeListeningTimer: limpiar timer de reanudación
-//   - scheduleResumeListening: programar reanudación con retry
-//   - handleNavigationCommand: manejar comando de navegación unificado
+//   - clearResumeListeningTimer: limpiar timer de reanudaciÃ³n
+//   - scheduleResumeListening: programar reanudaciÃ³n con retry
+//   - handleNavigationCommand: manejar comando de navegaciÃ³n unificado
 // ============================================================
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -71,7 +71,7 @@ export function useNavigationCommands(
     }, [resumeListeningTimerRef]);
 
     // ============================================================
-    // speakFlu — suspend recognition, speak, wait for idle
+    // speakFlu â€” suspend recognition, speak, wait for idle
     // ============================================================
     const speakFlu = useCallback(async (text: string, lang: string, opts?: FluSpeechOptions) => {
         clearResumeListeningTimer();
@@ -81,7 +81,7 @@ export function useNavigationCommands(
     }, [clearResumeListeningTimer, os2SuspendRecognition]);
 
     // ============================================================
-    // resolveResumeAfterSpeechMs — retraso dinámico según la longitud
+    // resolveResumeAfterSpeechMs â€” retraso dinÃ¡mico segÃºn la longitud
     // de la respuesta hablada (Fase 7): base + len * factor, con
     // clamp en [min, max] para no degradar la paridad OS2.
     // ============================================================
@@ -119,61 +119,61 @@ export function useNavigationCommands(
     }, [clearResumeListeningTimer, os2StartListening, voiceStatus, conversationActiveRef, resumeListeningTimerRef, resolveResumeAfterSpeechMs]);
 
     // ============================================================
-    // Consolidación BUSCAR — una sola ejecución por turno de voz.
+    // ConsolidaciÃ³n BUSCAR â€” una sola ejecuciÃ³n por turno de voz.
     // Chrome reinicia el reconocedor y entrega el mismo comando en varias
-    // revisiones (parcial → completo). Ejecutar cada una dispararía la
-    // búsqueda 2+ veces; se ejecuta cuando el turno se asienta (la última
-    // revisión gana).
+    // revisiones (parcial â†’ completo). Ejecutar cada una dispararÃ­a la
+    // bÃºsqueda 2+ veces; se ejecuta cuando el turno se asienta (la Ãºltima
+    // revisiÃ³n gana).
     // ============================================================
-    const pendingBuscarRef = useRef<{ query: string; run: () => void } | null>(null);
-    const buscarSettleTimerRef = useRef<number | null>(null);
+    const pendingNavRef = useRef<{ query: string; run: () => void } | null>(null);
+    const navSettleTimerRef = useRef<number | null>(null);
 
-    const flushBuscar = useCallback(() => {
-        if (buscarSettleTimerRef.current !== null) {
-            window.clearTimeout(buscarSettleTimerRef.current);
-            buscarSettleTimerRef.current = null;
+    const flushNavSettle = useCallback(() => {
+        if (navSettleTimerRef.current !== null) {
+            window.clearTimeout(navSettleTimerRef.current);
+            navSettleTimerRef.current = null;
         }
-        const pending = pendingBuscarRef.current;
-        pendingBuscarRef.current = null;
+        const pending = pendingNavRef.current;
+        pendingNavRef.current = null;
         if (pending) pending.run();
     }, []);
 
-    const scheduleBuscar = useCallback((query: string, run: () => void) => {
+    const scheduleNavSettle = useCallback((query: string, run: () => void) => {
         if (typeof window === 'undefined') {
             run();
             return;
         }
-        const prev = pendingBuscarRef.current;
-        // Misma emisión (una extiende a la otra): reemplazar sin ejecutar el parcial.
+        const prev = pendingNavRef.current;
+        // Misma emisiÃ³n (una extiende a la otra): reemplazar sin ejecutar el parcial.
         const related = Boolean(prev) && (query.startsWith(prev!.query) || prev!.query.startsWith(query));
         if (prev && !related) {
-            // Búsqueda distinta ya pendiente: ejecutarla antes de encolar la nueva.
-            flushBuscar();
+            // BÃºsqueda distinta ya pendiente: ejecutarla antes de encolar la nueva.
+            flushNavSettle();
         }
-        pendingBuscarRef.current = { query, run };
-        if (buscarSettleTimerRef.current !== null) {
-            window.clearTimeout(buscarSettleTimerRef.current);
-            buscarSettleTimerRef.current = null;
+        pendingNavRef.current = { query, run };
+        if (navSettleTimerRef.current !== null) {
+            window.clearTimeout(navSettleTimerRef.current);
+            navSettleTimerRef.current = null;
         }
         const settleMs = Number((FLU_CONFIG as any)?.timing?.searchCommandSettleMs) || 2800;
-        buscarSettleTimerRef.current = window.setTimeout(() => {
-            buscarSettleTimerRef.current = null;
-            const pending = pendingBuscarRef.current;
-            pendingBuscarRef.current = null;
+        navSettleTimerRef.current = window.setTimeout(() => {
+            navSettleTimerRef.current = null;
+            const pending = pendingNavRef.current;
+            pendingNavRef.current = null;
             if (pending) pending.run();
         }, settleMs);
-    }, [flushBuscar]);
+    }, [flushNavSettle]);
 
     // Limpieza del timer de asentamiento al desmontar.
     useEffect(() => () => {
-        if (buscarSettleTimerRef.current !== null) {
-            window.clearTimeout(buscarSettleTimerRef.current);
-            buscarSettleTimerRef.current = null;
+        if (navSettleTimerRef.current !== null) {
+            window.clearTimeout(navSettleTimerRef.current);
+            navSettleTimerRef.current = null;
         }
     }, []);
 
     // ============================================================
-    // handleNavigationCommand — unified navigation command handler
+    // handleNavigationCommand â€” unified navigation command handler
     // ============================================================
     const handleNavigationCommand = useCallback(async ({
         navegacion,
@@ -318,11 +318,11 @@ export function useNavigationCommands(
                 break;
             }
             case 'INICIAR_CONVERSACION': {
-                // Guardián de voz: INICIAR_CONVERSACION solo se ejecuta si el
-                // usuario lo pidió explícitamente ("iniciar conversación").
-                // Una pregunta conversacional ("platícame de los autos") que la
+                // GuardiÃ¡n de voz: INICIAR_CONVERSACION solo se ejecuta si el
+                // usuario lo pidiÃ³ explÃ­citamente ("iniciar conversaciÃ³n").
+                // Una pregunta conversacional ("platÃ­came de los autos") que la
                 // IA clasifique por error como INICIAR_CONVERSACION NO debe
-                // reiniciar la conversación ni hablar el comando tras responder.
+                // reiniciar la conversaciÃ³n ni hablar el comando tras responder.
                 if (!userRequested) break;
                 conversationActiveRef.current = true;
                 fluParticipant.resetParticipant();
@@ -349,8 +349,8 @@ export function useNavigationCommands(
                 break;
             }
             case 'CERRAR_ESCUCHA': {
-                // Guardián de voz: solo se ejecuta si el usuario lo pidió
-                // explícitamente ("cerrar escucha"). Evita que la IA cierre la
+                // GuardiÃ¡n de voz: solo se ejecuta si el usuario lo pidiÃ³
+                // explÃ­citamente ("cerrar escucha"). Evita que la IA cierre la
                 // escucha por error tras una respuesta conversacional.
                 if (!userRequested) break;
                 conversationActiveRef.current = false;
@@ -375,8 +375,8 @@ export function useNavigationCommands(
                 break;
             }
             case 'ABRIR_ESCUCHA': {
-                // Guardián de voz: solo se ejecuta si el usuario lo pidió
-                // explícitamente ("abrir escucha"). Evita que la IA abra la
+                // GuardiÃ¡n de voz: solo se ejecuta si el usuario lo pidiÃ³
+                // explÃ­citamente ("abrir escucha"). Evita que la IA abra la
                 // escucha por error tras una respuesta conversacional.
                 if (!userRequested) break;
                 conversationActiveRef.current = true;
@@ -397,8 +397,8 @@ export function useNavigationCommands(
                 break;
             }
             case 'NAVEGAR': {
-                // Guardián de voz: NAVEGAR solo se ejecuta si el usuario lo pidió
-                // explícitamente ("navega a wikipedia"). Una pregunta conversacional
+                // GuardiÃ¡n de voz: NAVEGAR solo se ejecuta si el usuario lo pidiÃ³
+                // explÃ­citamente ("navega a wikipedia"). Una pregunta conversacional
                 // ("platicame de los aviones") que la IA clasifique por error como
                 // NAVEGAR NO debe disparar nada; Flu responde conversacional en App.
                 if (!userRequested) break;
@@ -410,20 +410,20 @@ export function useNavigationCommands(
                 const siteStopwords = Array.isArray(browserCfg.siteStopwords)
                     ? browserCfg.siteStopwords
                     : [];
-                // Si el sitio llegó explícito (contrato de IA: parametros.sitio/url)
+                // Si el sitio llegÃ³ explÃ­cito (contrato de IA: parametros.sitio/url)
                 // se respeta. Si no, se extrae de la frase por voz
-                // ("navega en wikipedia" → "wikipedia") y se resuelve contra la
-                // allowlist ("wikipedia" → "wikipedia.org"). Así una frase natural
+                // ("navega en wikipedia" â†’ "wikipedia") y se resuelve contra la
+                // allowlist ("wikipedia" â†’ "wikipedia.org"). AsÃ­ una frase natural
                 // navega de verdad en vez de pasarse entera como host (%20) y
                 // terminar bloqueada con "Sitio: navega%20en%20wikipedia".
                 const explicitSite = String(
                     parametros.sitio || parametros.url || parametros.destino || navegacion.destino || '',
                 ).trim();
-                // F1 — Idioma: el idioma pedido por voz ("…en inglés") define
+                // F1 â€” Idioma: el idioma pedido por voz ("â€¦en inglÃ©s") define
                 // el subdominio (Wikipedia es/en) y el Accept-Language del
                 // proxy. Los marcadores de idioma se quitan de la frase para
                 // que no se cuelen en el candidato de sitio ("navega en
-                // wikipedia en inglés" → sitio "wikipedia").
+                // wikipedia en inglÃ©s" â†’ sitio "wikipedia").
                 const languageWords = browserCfg.languageWords || {};
                 const languageHosts = browserCfg.languageHosts || {};
                 const profileLang = String(browserCfg.defaultProfile?.language || 'es');
@@ -437,47 +437,48 @@ export function useNavigationCommands(
                 const langInput = applyLanguageToHost(input, requestLang, languageHosts);
                 const browserUi = (FLU_CONFIG as any).browser?.ui || {};
                 const result = resolveBrowserNavigation(langInput, allowlist, scheme, {
-                    resultTitle: browserUi.resultTitle || 'Navegación curada',
+                    resultTitle: browserUi.resultTitle || 'NavegaciÃ³n curada',
                     blockedTitle: browserUi.blockedTitle || 'Sitio no permitido',
-                    invalidTitle: browserUi.invalidTitle || 'No pude entender la dirección',
+                    invalidTitle: browserUi.invalidTitle || 'No pude entender la direcciÃ³n',
                     pointSite: browserUi.pointSite || 'Sitio: ',
                     pointUrl: browserUi.pointUrl || 'URL: ',
-                    pointQuery: browserUi.pointQuery || 'Búsqueda: ',
+                    pointQuery: browserUi.pointQuery || 'BÃºsqueda: ',
                 });
-                // Los resultados de navegación web viven SOLO en la pestaña
-                // "Buscar" del Pizarrón (requisito del usuario), nunca en la
-                // pestaña "Respuesta de Flu". NAVEGAR se unifica con BUSCAR:
-                // se dispara una búsqueda web del sitio resuelto en la pestaña
-                // Buscar (WorkspaceSearch), que aplica la curación de allowlist.
+                // Los resultados de navegaciÃ³n web viven SOLO en la pestaÃ±a
+                // "Buscar" del PizarrÃ³n (requisito del usuario), nunca en la
+                // pestaÃ±a "Respuesta de Flu". NAVEGAR se unifica con BUSCAR:
+                // se dispara una bÃºsqueda web del sitio resuelto en la pestaÃ±a
+                // Buscar (WorkspaceSearch), que aplica la curaciÃ³n de allowlist.
                 const searchQuery = result.host || input || '';
-                if (searchQuery) {
-                    dispatchFluSearch({ query: searchQuery, lang: requestLang });
-                }
-                if (transcript) {
-                    auditLog.logEvent('command:navegar', 'navigation', uuidv4(), {
-                        speaker: speakerName || undefined,
-                        transcript,
-                        response: searchQuery,
-                        comando: 'NAVEGAR',
-                        phase,
-                        url: result.url,
-                        host: result.host,
-                        lang: requestLang,
-                    }, 'NAVEGAR command executed').catch(console.error);
-                }
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        console.warn('[useNavigationCommands] NAVEGAR command speech failed:', speechErr);
+                // Consolidación: una sola ejecución por turno (la última revisión
+                // del comando gana) — evita navegar/buscar 2 veces por los
+                // reinicios del reconocedor (parcial → completo).
+                scheduleNavSettle(searchQuery || transcript, () => {
+                    if (searchQuery) {
+                        dispatchFluSearch({ query: searchQuery, lang: requestLang });
                     }
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
+                    if (transcript) {
+                        auditLog.logEvent('command:navegar', 'navigation', uuidv4(), {
+                            speaker: speakerName || undefined,
+                            transcript,
+                            response: searchQuery,
+                            comando: 'NAVEGAR',
+                            phase,
+                            url: result.url,
+                            host: result.host,
+                            lang: requestLang,
+                        }, 'NAVEGAR command executed').catch(console.error);
+                    }
+                    if (commandSpeech) {
+                        speakFlu(commandSpeech, resolvedLanguage).catch(console.error);
+                    }
+                    scheduleResumeListening(commandSpeech?.length ?? 0);
+                });
                 break;
             }
             case 'BUSCAR': {
-                // Guardián de voz: BUSCAR solo se ejecuta si el usuario lo pidió
-                // explícitamente ("buscá capital de Francia"). Una pregunta
+                // GuardiÃ¡n de voz: BUSCAR solo se ejecuta si el usuario lo pidiÃ³
+                // explÃ­citamente ("buscÃ¡ capital de Francia"). Una pregunta
                 // conversacional que la IA clasifique por error como BUSCAR NO
                 // debe disparar nada; Flu responde conversacional en App.
                 if (!userRequested) break;
@@ -485,10 +486,10 @@ export function useNavigationCommands(
                 const browserCfg = (FLU_CONFIG as any).browser || {};
                 const searchCfg = browserCfg.search || {};
                 const searchUi = searchCfg.ui || {};
-                // F1 — Idioma: igual que NAVEGAR, el idioma pedido por voz
-                // ("…en inglés") define el idioma de la búsqueda y se quita de
+                // F1 â€” Idioma: igual que NAVEGAR, el idioma pedido por voz
+                // ("â€¦en inglÃ©s") define el idioma de la bÃºsqueda y se quita de
                 // la frase para que los marcadores no se cuelen en la consulta
-                // ("buscá capital de Francia en inglés" → "capital de Francia").
+                // ("buscÃ¡ capital de Francia en inglÃ©s" â†’ "capital de Francia").
                 const languageWords = searchCfg.languageWords || browserCfg.languageWords || {};
                 const profileLang = String(browserCfg.defaultProfile?.language || 'es');
                 const requestLang = resolveSearchLanguage(transcript, profileLang, languageWords);
@@ -496,24 +497,24 @@ export function useNavigationCommands(
                     parametros.consulta ||
                         parametros.query ||
                         parametros.busqueda ||
-                        // Voz determinista (parametros vacíos): la consulta real es
-                        // el transcript SIN el gatillo de búsqueda ("busca en la web
-                        // cómo saltan los conejos" → "cómo saltan los conejos"). Así
-                        // la barra de búsqueda muestra lo que se envió realmente.
+                        // Voz determinista (parametros vacÃ­os): la consulta real es
+                        // el transcript SIN el gatillo de bÃºsqueda ("busca en la web
+                        // cÃ³mo saltan los conejos" â†’ "cÃ³mo saltan los conejos"). AsÃ­
+                        // la barra de bÃºsqueda muestra lo que se enviÃ³ realmente.
                         extractQueryFromWebSearchPhrase(transcript, (FLU_CONFIG as any).voiceCommands) ||
                         '',
                 ).trim();
                 // Si el LLM puso en parametros la frase ENTERA (con wake word o
                 // con el gatillo "busca en la web"), se limpia igual para que la
-                // barra muestre SOLO la consulta ("cómo saltan los conejos"), no
+                // barra muestre SOLO la consulta ("cÃ³mo saltan los conejos"), no
                 // el comando (Bug #4).
                 const extracted = extractQueryFromWebSearchPhrase(rawQuery, (FLU_CONFIG as any).voiceCommands);
                 const query = stripLanguageWords(extracted || rawQuery, languageWords);
                 if (!query) {
-                    // Sin consulta → FLU anuncia la etiqueta voiceNoQuery y no
-                    // se escribe nada en el Pizarrón (los resultados web viven
-                    // SOLO en la pestaña Buscar).
-                    const noQuerySpeech = searchUi.voiceNoQuery || '¿Qué querés que busque?';
+                    // Sin consulta â†’ FLU anuncia la etiqueta voiceNoQuery y no
+                    // se escribe nada en el PizarrÃ³n (los resultados web viven
+                    // SOLO en la pestaÃ±a Buscar).
+                    const noQuerySpeech = searchUi.voiceNoQuery || 'Â¿QuÃ© querÃ©s que busque?';
                     if (noQuerySpeech) {
                         try {
                             await speakFlu(noQuerySpeech, resolvedLanguage);
@@ -524,17 +525,17 @@ export function useNavigationCommands(
                     scheduleResumeListening(noQuerySpeech?.length ?? 0);
                     break;
                 }
-                // Los resultados de búsqueda web viven SOLO en la pestaña
-                // "Buscar" del Pizarrón (requisito del usuario), nunca en la
-                // pestaña "Respuesta de Flu". BUSCAR se unifica con NAVEGAR:
-                // se dispara una búsqueda web en la pestaña Buscar
-                // (WorkspaceSearch), que aplica la curación de allowlist y
-                // muestra los resultados. Aquí no se hace fetch ni se escribe
+                // Los resultados de bÃºsqueda web viven SOLO en la pestaÃ±a
+                // "Buscar" del PizarrÃ³n (requisito del usuario), nunca en la
+                // pestaÃ±a "Respuesta de Flu". BUSCAR se unifica con NAVEGAR:
+                // se dispara una bÃºsqueda web en la pestaÃ±a Buscar
+                // (WorkspaceSearch), que aplica la curaciÃ³n de allowlist y
+                // muestra los resultados. AquÃ­ no se hace fetch ni se escribe
                 // workspaceArtifact.
-                // Consolidación: la búsqueda se ejecuta UNA vez cuando el turno se
-                // asienta (la última revisión del comando gana). Evita buscar 2
-                // veces por los reinicios del reconocedor (parcial → completo).
-                scheduleBuscar(query, () => {
+                // ConsolidaciÃ³n: la bÃºsqueda se ejecuta UNA vez cuando el turno se
+                // asienta (la Ãºltima revisiÃ³n del comando gana). Evita buscar 2
+                // veces por los reinicios del reconocedor (parcial â†’ completo).
+                scheduleNavSettle(query, () => {
                     dispatchFluSearch({ query, lang: requestLang });
                     if (transcript) {
                         auditLog.logEvent('command:buscar', 'navigation', uuidv4(), {
@@ -554,9 +555,9 @@ export function useNavigationCommands(
                 });
                 break;
             }
-            // P1-C (§1.3.4) — autoconocimiento (CONOCER_FLU): fast-path local sin
+            // P1-C (Â§1.3.4) â€” autoconocimiento (CONOCER_FLU): fast-path local sin
             // Gemini. FLU responde enumerando sus capacidades reales compiladas
-            // desde la configuración (buildSelfManifesto, nunca hardcode).
+            // desde la configuraciÃ³n (buildSelfManifesto, nunca hardcode).
             case 'CONOCER_FLU': {
                 const manifestoLang: 'es' | 'en' = resolvedLanguage === 'en' ? 'en' : 'es';
                 const manifesto = buildSelfManifesto(manifestoLang);

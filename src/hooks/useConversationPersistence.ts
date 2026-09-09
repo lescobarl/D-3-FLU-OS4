@@ -156,6 +156,15 @@ export function useConversationPersistence() {
                 console.error('[ConversationPersistence] Error saving entries:', err);
             });
             savedLengthRef.current = historyLength;
+            return;
+        }
+        if (historyLength === 0 && savedLengthRef.current > 0) {
+            // El historial se vació en memoria ("iniciar conversación"/limpiar):
+            // borrar también lo persistido para que NO reaparezca al recargar.
+            savedLengthRef.current = 0;
+            fluDb.conversations.clear().catch((err) => {
+                console.error('[ConversationPersistence] Error clearing persisted history:', err);
+            });
         }
     }, [historyLength]);
 }

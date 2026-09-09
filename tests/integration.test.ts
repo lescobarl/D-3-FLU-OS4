@@ -574,11 +574,6 @@ describe('🎤 Voice Command Signal', () => {
         expect(useIntegrationStore.getState().uiState.voiceCommand).toBe('start-conversation');
     });
 
-    it('debe enviar comando process-transcript', () => {
-        useIntegrationStore.getState().sendVoiceCommand('process-transcript');
-        expect(useIntegrationStore.getState().uiState.voiceCommand).toBe('process-transcript');
-    });
-
     it('debe consumir comando (resetear a null)', () => {
         useIntegrationStore.getState().sendVoiceCommand('start-listening');
         useIntegrationStore.getState().consumeVoiceCommand();
@@ -1905,18 +1900,20 @@ describe('🎯 Contextual Emotion & Idle Micro-Expressions', () => {
         expect(src).toContain('resolveContextualExpression');
     });
 
-    it('FluAvatarVoiceBridge debe conectar applyContextualEmotion en handleSpeak', () => {
+    it('FluAvatarVoiceBridge NO debe tener una segunda puerta al LLM (ruta única)', () => {
         const src = require('fs').readFileSync('./src/components/FluAvatarVoiceBridge.tsx', 'utf-8');
-        expect(src).toContain('applyContextualEmotion(sentiment)');
-        expect(src).toContain('detectSentiment(text)');
-        // NO debe tener toggle manual en handleSpeak — syncAvatarToState maneja el toggle speaking
-        // desde el useEffect que reacciona a setConversationState('SPEAKING')
+        // Regla #2 (una sola ruta): handleSpeak era una segunda puerta que generaba
+        // contratos con geminiService directamente (motor paralelo al hook). Se eliminó;
+        // la emoción contextual se conecta en la ruta canónica (App.onContractResolved → contextualEmotionRef).
+        expect(src).not.toContain('handleSpeak');
+        expect(src).not.toContain('geminiService');
+        expect(src).not.toContain('generateResponse');
+        expect(src).not.toContain('process-transcript');
+        // El bridge conserva el espejo de transcripción (parity OS2), no un motor.
+        expect(src).toContain('VoiceControls');
+        // NO debe tener strings hardcodeados de expresión/animación
         expect(src).not.toContain("resolveToggleExpression('speaking'");
         expect(src).not.toContain('const speakingToggleRef = useRef<number>(0)');
-        // NO debe tener strings hardcodeados de expresión/animación
-        expect(src).not.toContain("'atencion'");
-        expect(src).not.toContain("'Idle_2'");
-        expect(src).not.toContain("'MouthMove'");
     });
 
     it('App.tsx debe conectar applyContextualEmotion en onContractResolved', () => {

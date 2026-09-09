@@ -1834,7 +1834,7 @@ export const FLU_CONFIG = {
         en: 'Generate documents or videos from here.',
       },
       uploadTitle: { es: 'Subir archivo', en: 'Upload file' },
-      uploadDropHint: { es: 'Arrastra una imagen aquí', en: 'Drag an image here' },
+      uploadDropHint: { es: 'Arrastra tu documento aquí', en: 'Drag your document here' },
       uploadDropOr: { es: '— o —', en: '— or —' },
       uploadSelectLabel: { es: '📁 Subir imagen', en: '📁 Upload image' },
       uploadCameraLabel: { es: '📷 Tomar foto', en: '📷 Take photo' },

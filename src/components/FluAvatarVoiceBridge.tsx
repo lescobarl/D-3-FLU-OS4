@@ -26,18 +26,14 @@ import { BunnyViewer, useBunnyStore } from '../avatar';
 import type { BunnyAnimation } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { useIntegrationStore, detectSentiment } from '../store/integrationStore';
+import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
-import { geminiService } from '../services/gemini';
-import { generateResponse } from '../services/fallbackResponses';
-import { STORAGE_KEYS, WELCOME_MESSAGE } from '../core/config/appConfig';
-import { relayLog } from '../lib/clientLogRelay';
+import { WELCOME_MESSAGE } from '../core/config/appConfig';
 import type { ConversationState } from '../types/bridge';
 import { useFluBridge } from '../context/FluBridgeContext';
 import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
 import { useEnvironmentStore } from '../store/environmentStore';
 import { getAmbiente } from '../core/environments/environmentRegistry';
-import type { ResolvedCommunicationProfile } from '../core/personalization/communicationProfileService';
 
 // -----------------------------------------------------------
 // Props — mínimas, el resto viene de FluBridgeContext
@@ -53,18 +49,6 @@ interface FluAvatarVoiceBridgeProps {
     brandingSeason?: string;
     brandingIsBirthday?: boolean;
     brandingCelebrandoA?: string;
-    /**
-     * FASE P — Personalización profunda por persona.
-     * Perfil de comunicación ya resuelto para la persona del turno actual
-     * (nivel de explicación + tono + ttsRate). null/undefined = sin perfil.
-     */
-    communicationProfile?: ResolvedCommunicationProfile | null;
-    /**
-     * FASE P — Resolución perezosa del perfil a partir del texto del turno.
-     * Se usa cuando communicationProfile no viene pre-resuelto desde App.
-     * Debe devolver null si no hay persona/participante identificable.
-     */
-    onResolveCommunicationProfile?: (text: string) => Promise<ResolvedCommunicationProfile | null>;
 }
 
 // -----------------------------------------------------------
@@ -156,6 +140,9 @@ function useKeyboardShortcuts({
 // -----------------------------------------------------------
 interface VoiceControlsProps {
     liveTranscript: string;
+    /** Última frase completa confirmada (fuente canónica del hook — regla #3:
+        la burbuja debe mostrar exactamente lo que muestra la bitácora). */
+    lastTranscript?: string;
     transcript: string;
     /** Última frase completa del usuario (fallback cuando live/store están vacíos). */
     fallback?: string;
@@ -163,16 +150,17 @@ interface VoiceControlsProps {
 
 function VoiceControls({
     liveTranscript,
+    lastTranscript = '',
     transcript,
     fallback = '',
 }: VoiceControlsProps) {
     // La transcripción visible conserva la frase COMPLETA tal como FLU la oyó,
     // incluida la wake word ("ok flu"). La wake word solo se quita en la barra
     // de búsqueda (extractQueryFromWebSearchPhrase), no aquí.
-    // Precedencia: live (interino) → ÚLTIMA frase confirmada del usuario
-    // (fallback = fila commitida, completa) → espejo del store. El espejo puede
-    // quedar con un interino INCOMPLETO tras limpiar live, por eso va al final.
-    const rawText = liveTranscript || fallback || transcript || '';
+    // Precedencia ÚNICA y canónica (idéntica a la de la bitácora):
+    //   live (interino) → última frase confirmada del hook (lastTranscript)
+    //   → ÚLTIMA frase commitida del usuario (fallback = historial) → espejo.
+    const rawText = liveTranscript || lastTranscript || fallback || transcript || '';
     const displayText = rawText;
     return (
         <div className="voice-controls">
@@ -204,7 +192,6 @@ function VoiceControls({
 //   1. Renderizar el avatar 3D (OS1) + controles de voz (UI)
 //   2. Conectar useFluVoiceAssistant al integrationStore (OS3)
 //   3. Sincronizar avatar con estado de conversación (useAvatarVoiceSync)
-//   4. Manejar input manual de texto (handleSpeak)
 //
 // Las props de voz (voiceStatus, voiceError, liveTranscript, etc.)
 // se obtienen de FluBridgeContext en lugar de props directas.
@@ -217,8 +204,6 @@ export function FluAvatarVoiceBridge({
     brandingSeason,
     brandingIsBirthday,
     brandingCelebrandoA,
-    communicationProfile,
-    onResolveCommunicationProfile,
 }: FluAvatarVoiceBridgeProps) {
     const integrationStore = useIntegrationStore();
     // Ambiente activo (rebranding por oficio): decoración con precedencia sobre la estacional
@@ -318,12 +303,15 @@ export function FluAvatarVoiceBridge({
     }, [voiceStatus]);
 
     // -------------------------------------------------------
-    // Sincronizar liveTranscript al store
+    // Sincronizar liveTranscript al store (espejo FIEL: set y clear).
+    // Antes solo se escribía cuando liveTranscript tenía texto y el espejo
+    // quedaba con un interino INCOMPLETO tras limpiar live — contaminando
+    // las cadenas de display que caían al mirror. Las cadenas ya resuelven
+    // con lastTranscript + historial ANTES del mirror, así que limpiarlo
+    // no pierde la última frase real.
     // -------------------------------------------------------
     useEffect(() => {
-        if (liveTranscript) {
-            storeRef.current.setCurrentTranscript(liveTranscript);
-        }
+        storeRef.current.setCurrentTranscript(liveTranscript || '');
     }, [liveTranscript]);
 
     // -------------------------------------------------------
@@ -353,145 +341,6 @@ export function FluAvatarVoiceBridge({
     const handleStopListening = useCallback(async () => {
         await onStopListening?.({ closing: true });
     }, [onStopListening]);
-
-    const handleSpeak = useCallback((text: string) => {
-        const store = storeRef.current;
-        const botName = store.config.personality.name || 'FLU';
-        // User typed text manually — add to history first (not from speech recognition)
-        store.addUserMessage(text, botName);
-        store.setConversationState('THINKING');
-        // Indicador visual de procesamiento (se apaga en el finally de processText)
-        store.setThinking(true);
-        store.pushBridgeEvent({ type: 'thinking:start', timestamp: Date.now() });
-
-        // DATA-DRIVEN: aplicar expresión contextual basada en sentimiento del usuario
-        // Crea un arco emocional natural: usuario dice algo positivo → FLU reacciona feliz
-        // Usa el EmotionEngine (resolveContextualExpression) — NO hay switch hardcodeado
-        const sentiment = detectSentiment(text);
-        applyContextualEmotion(sentiment);
-
-        // Use Gemini if apiKey is available, otherwise use local response
-        const processText = async () => {
-            try {
-                let responseText = '';
-                let geminiEmocion: string | undefined;
-                let geminiAnimacion: string | undefined;
-                const hasStoredApiKey = (() => {
-                    try {
-                        return Boolean(String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim());
-                    } catch { return false; }
-                })();
-                // Key resuelta: prop de React o lectura fresca de localStorage
-                // (defiende contra desync prop↔storage — Fix "API key no configurada")
-                const resolvedApiKey = String(
-                    apiKey ||
-                    (() => {
-                        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? ''; } catch { return ''; }
-                    })()
-                ).trim();
-                // FASE P — Personalización profunda por persona:
-                // Perfil de comunicación (nivel de explicación + tono + ttsRate).
-                // Se resuelve ANTES de generar el contrato para poder inyectar
-                // explanationLevel/tone en el prompt y aplicar el multiplicador TTS.
-                // Regla: usa el perfil pre-resuelto si viene; si no, inténtalo
-                // desde el texto (tolerante a fallos: sin perfil → comportamiento actual).
-                let resolvedProfile: ResolvedCommunicationProfile | null = communicationProfile ?? null;
-                if (!resolvedProfile && typeof onResolveCommunicationProfile === 'function') {
-                    try {
-                        resolvedProfile = await onResolveCommunicationProfile(text);
-                    } catch (profileError) {
-                        console.warn('[Bridge] No se pudo resolver el perfil de comunicación:', profileError);
-                    }
-                }
-                const explanationLevel = resolvedProfile?.explanationLevel ?? '';
-                const profileTone = resolvedProfile?.tone ?? '';
-                // Multiplicador TTS: speakSingleChunk REEMPLAZA utterance.rate con el
-                // override (no lo multiplica), así que combinamos la velocidad global
-                // del usuario con el factor del perfil. Sin perfil → sin override (la
-                // velocidad global de la store se aplica de forma natural).
-                const baseRate = integrationStore.voiceConfig?.rate ?? 1;
-                if (resolvedApiKey) {
-                    try {
-                        const personality = store.config.personality;
-                        const contract = await geminiService.generateFluContract(
-                            {
-                                apiKey: resolvedApiKey,
-                                language,
-                                role: personality.profile,
-                                theme: '',
-                                traits: personality.traits,
-                                tone: profileTone || personality.tone,
-                                explanationLevel,
-                            },
-                            text,
-                            store.conversationHistory.map((e) => ({
-                                role: e.speakerName === personality.name ? 'assistant' : 'user',
-                                text: e.text || '',
-                                speakerName: e.speakerName,
-                            })),
-                        );
-                        responseText = contract.respuesta_voz;
-                        // Extraer animación/emoción del contrato para pasarlas al avatar
-                        geminiEmocion = contract.emocion;
-                        geminiAnimacion = contract.animacion;
-                    } catch (geminiError: any) {
-                        const errorMsg = geminiError?.message || String(geminiError);
-                        console.warn('[Bridge] Gemini error, falling back to local response:', errorMsg);
-                        onGeminiError?.(errorMsg);
-                        responseText = generateResponse(text, store.config.personality.name, store.conversationHistory, language);
-                    }
-                } else {
-                    responseText = generateResponse(text, store.config.personality.name, store.conversationHistory, language);
-                }
-
-                // CRÍTICO: NO aplicar animaciones de emoción durante THINKING.
-                // Hacerlo cambia currentAnimation y blendQueue, disparando una
-                // recarga completa de BunnyViewer (limpieza de huesos + recarga
-                // de FBX). Si luego cambiamos a SPEAKING, se dispara OTRA recarga,
-                // causando doble recarga en rápida sucesión → corrupción de
-                // Three.js → WebGL context loss → pantalla negra.
-                //
-                // Flujo correcto: ir directo a SPEAKING para que BunnyViewer
-                // cargue UNA SOLA VEZ Idle_2 + MouthMove.
-                const emotionLabel = geminiEmocion || geminiAnimacion || '';
-                const isSpeakingExpression = emotionLabel === 'hablando' || emotionLabel === 'hablando2';
-                relayLog('LOG', 'FluBridge', `handleSpeak: emotionLabel="${emotionLabel}", geminiEmocion="${geminiEmocion}", geminiAnimacion="${geminiAnimacion}" — yendo directo a SPEAKING`);
-
-                store.setLastResponse(responseText);
-                store.addFluMessage(responseText);
-
-                // Ir directo a SPEAKING — syncAvatarToState aplicará
-                // setExpression hablando/etc., que resuelve las animaciones del habla.
-                // Una sola recarga de BunnyViewer, sin doble carga.
-                store.setConversationState('SPEAKING');
-                store.setFluSpeaking(true);
-                store.incrementInteractionCount();
-                store.pushBridgeEvent({ type: 'speaking:start', timestamp: Date.now() });
-
-                await speakResponse(
-                    responseText,
-                    language,
-                    resolvedProfile ? { rate: baseRate * resolvedProfile.ttsRate } : undefined,
-                );
-
-                // Transición de estado: SPEAKING → IDLE después de terminar de hablar
-                // Esto asegura que la animación de boca (MouthMove) se detenga
-                // y el avatar vuelva a su estado de reposo natural
-                store.setConversationState('IDLE');
-                store.setFluSpeaking(false);
-                store.pushBridgeEvent({ type: 'speaking:end', timestamp: Date.now() });
-            } catch (error) {
-                console.error('[Bridge] Error:', error);
-                store.setConversationState('ERROR');
-                store.pushBridgeEvent({ type: 'error', timestamp: Date.now(), payload: error });
-            } finally {
-                // Apagar el indicador de procesamiento SIEMPRE (éxito o error)
-                store.setThinking(false);
-            }
-        };
-
-        processText();
-    }, [apiKey, language, applyContextualEmotion, onGeminiError, pendingEmotionAnimsRef, communicationProfile, onResolveCommunicationProfile]);
 
     // -------------------------------------------------------
     // Push-to-talk: iniciar escucha
@@ -572,16 +421,6 @@ export function FluAvatarVoiceBridge({
                 const iniciarText = FLU_CONFIG.ui.commandSpeech.INICIAR_CONVERSACION?.[langKey] || FLU_CONFIG.ui.commandSpeech.INICIAR_CONVERSACION?.es || 'Iniciando conversación';
                 speakResponse(iniciarText, language).catch(() => { });
                 break;
-            case 'process-transcript':
-                // Procesar el transcript actual (desde "Flu participa")
-                const transcript = integrationStore.currentTranscript;
-                if (transcript && transcript.trim()) {
-                    handleSpeak(transcript);
-                } else {
-                    const emptyText = FLU_CONFIG.ui.commandSpeech.FLU_ADELANTE_EMPTY[langKey] || FLU_CONFIG.ui.commandSpeech.FLU_ADELANTE_EMPTY.es;
-                    speakResponse(emptyText, language).catch(() => { });
-                }
-                break;
         }
     }, [integrationStore.uiState.voiceCommand]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -620,6 +459,7 @@ export function FluAvatarVoiceBridge({
             {/* VoiceControls — Transcript display only (OS2 parity: live transcript from useFluVoiceAssistant) */}
             <VoiceControls
                 liveTranscript={liveTranscript || ''}
+                lastTranscript={bridge.lastTranscript || ''}
                 transcript={integrationStore.currentTranscript}
                 fallback={lastUserText}
             />

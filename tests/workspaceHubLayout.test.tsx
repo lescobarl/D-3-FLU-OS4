@@ -24,6 +24,7 @@ import { render } from '@testing-library/react';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord } from '../src/core/db/fluDatabase';
 import type { HoyPanelProps } from '../src/components/HoyPanel';
 import type { WorkspaceHubProps } from '../src/components/WorkspaceHub';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 
 // ---- Mocks de los hijos pesados (stubs ligeros) ----
 vi.mock('../src/components/WorkspaceSearch', () => ({
@@ -270,7 +271,7 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         expect(filters).toEqual(['all', 'image', 'doc']);
     });
 
-    it('la columna lateral conserva el HoyPanel con sus bloques HOY/DIARIO/NOTAS', () => {
+    it('la columna lateral conserva el HoyPanel (HOY/NOTAS; DIARIO si está habilitado)', () => {
         const { container } = render(
             <WorkspaceHub {...baseProps({ hoy: hoyProps() })} />
         );
@@ -281,7 +282,14 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         const hoyPanel = side!.querySelector('[data-testid="hoy-panel"]');
         expect(hoyPanel).not.toBeNull();
         expect(hoyPanel!.querySelector('[data-testid="hoy-block"]')).not.toBeNull();
-        expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).not.toBeNull();
+        // DIARIO está PAUSADO (FLU_CONFIG.diary.enabled=false) y HoyPanel lo oculta
+        // hasta su reimplementación; el test respeta esa config en vez de hardcodear.
+        const diarioEnabled = Boolean((FLU_CONFIG as any)?.diary?.enabled);
+        if (diarioEnabled) {
+            expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).not.toBeNull();
+        } else {
+            expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).toBeNull();
+        }
         expect(hoyPanel!.querySelector('[data-testid="notas-block"]')).not.toBeNull();
     });
 });

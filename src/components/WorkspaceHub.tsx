@@ -17,7 +17,7 @@
 //   - El overlay de imagen se renderiza como hermano del contenido
 //     (no anidado) para preservar su `position: fixed`.
 // ============================================================
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { WorkspaceSearch } from './WorkspaceSearch';
@@ -26,7 +26,7 @@ import { HoyPanel, type HoyPanelProps } from './HoyPanel';
 import DocumentResultPanel from './DocumentResultPanel';
 import AppAnalysisPanel from './AppAnalysisPanel';
 import GenerationProgressPanel from './GenerationProgressPanel';
-import { ImageGrid } from './ImageGrid';
+import { ImageGrid, type GeneratedGridCell } from './ImageGrid';
 import { VideoGrid } from './VideoGrid';
 import { useWorkspaceSearch } from '../hooks/useWorkspaceSearch';
 import type { WorkspaceEntry } from '../types/bridge';
@@ -57,6 +57,14 @@ export interface WorkspaceHubProps {
     latestResponse: string;
     liveTranscript: string;
     currentTranscript: string;
+    /**
+     * Fuentes canónicas de la frase (regla #6: la barra muestra la MISMA
+     * transcripción que bitácora/burbuja, solo sin wake word).
+     * lastTranscript = última frase confirmada por el hook.
+     * lastUserText = última frase del usuario derivada del historial.
+     */
+    lastTranscript?: string;
+    lastUserText?: string;
     /** Indica si el asistente está capturando voz (para el overlay en vivo). */
     isListening?: boolean;
     homeworkContext: {
@@ -240,6 +248,8 @@ export function WorkspaceHub({
     latestResponse,
     liveTranscript,
     currentTranscript,
+    lastTranscript = '',
+    lastUserText = '',
     isListening,
     homeworkContext,
     image,
@@ -270,13 +280,24 @@ export function WorkspaceHub({
         overrides: searchOverrides,
     });
 
+    // Búsqueda nueva → limpiar la imagen generada (IA) de un turno anterior para
+    // que no quede "colgada" junto a los resultados de otra consulta. La imagen
+    // IA generada se muestra dentro de la zona de imágenes (ver feedItems).
+    const handleRunSearch = useCallback(
+        (opts?: Parameters<typeof runSearch>[0]) => {
+            (image as any).clear?.();
+            return runSearch(opts);
+        },
+        [image, runSearch],
+    );
+
     // Comando de voz NAVEGAR/BUSCAR (evento RUN_SEARCH): ejecuta la búsqueda
     // externa inyectando consulta e idioma, y vuelca los resultados al feed
     // consolidado (Sección 2). Antes vivía en WorkspaceSearch; al elevar el
     // hook a WorkspaceHub, el listener se registra aquí.
     useEffect(() => {
         const offSearch = onFluSearch((payload) => {
-            void runSearch({ query: payload.query, lang: payload.lang });
+            void handleRunSearch({ query: payload.query, lang: payload.lang });
         });
         // Cuando comienza un turno NO relacionado con búsqueda (conversación,
         // generación de imagen, etc.), App emite RESET_SEARCH para limpiar los
@@ -290,7 +311,7 @@ export function WorkspaceHub({
             offSearch();
             offReset();
         };
-    }, [runSearch, resetSearch]);
+    }, [handleRunSearch, resetSearch]);
 
     // ---- Feed de resultados consolidado (Paso 1 del plan) ----
     // Ensambla ResultFeedItem[] desde el estado real que llega por props.
@@ -298,6 +319,33 @@ export function WorkspaceHub({
     // lógica) y lleva su insignia de origen (WEB/IA/OCR).
     const feedItems = useMemo<ResultFeedItem[]>(() => {
         const items: ResultFeedItem[] = [];
+
+        // IA imagen generada: se muestra como PRIMERA celda del grid de imágenes
+        // (misma cuadrícula que las imágenes web) y al hacer click se amplía el
+        // overlay. Comportamiento web/IA unificado (opción 2).
+        const generatedCell: GeneratedGridCell | null =
+            image.imageUrl || image.isLoading || image.isFailed
+                ? {
+                    title: workspaceArtifact?.prompt_visual || ws.imageAlt || 'Imagen generada',
+                    imageUrl: image.imageUrl,
+                    isLoading: image.isLoading,
+                    isFailed: image.isFailed,
+                    loadAttempt: image.loadAttempt,
+                    onExpand: image.expand,
+                    onRetry: image.retry,
+                    // La imagen cargó → limpiar el watchdog de 30 s (sin esto, un
+                    // onLoad lento marcaba un fallo FALSO aunque la imagen se veía).
+                    onLoaded: () => {
+                        if (image.loadTimeoutRef.current) {
+                            clearTimeout(image.loadTimeoutRef.current);
+                            image.loadTimeoutRef.current = 0;
+                        }
+                    },
+                    // La imagen falló al cargar → reintentar la MISMA URL
+                    // (Pollinations es stateless), como hacía el bloque original.
+                    onLoadFailed: () => image.retryLoad(),
+                }
+                : null;
 
         // IA texto: respuesta de Flu + contenido + puntos clave + tarea.
         const iaTextParts: string[] = [];
@@ -323,73 +371,6 @@ export function WorkspaceHub({
                     <div className="frame-content__response">
                         <div className="frame-content__response-scroll">
                             <span>{iaTextParts.join('\n\n')}</span>
-                        </div>
-                    </div>
-                ),
-            });
-        }
-
-        // IA imagen: la imagen generada.
-        if (image.imageUrl || image.isLoading || image.isFailed) {
-            items.push({
-                id: 'ia-imagen',
-                origin: 'ia',
-                kind: 'image',
-                title: pickLabel(ws.imageTitle, language, 'Imagen generada'),
-                body: (
-                    <div className="frame-content__generated-image">
-                        <div className="generated-image__header" style={{ justifyContent: 'flex-end', gap: 8 }}>
-                            <button
-                                type="button"
-                                className="panel-frame__toggle"
-                                onClick={() => image.expand()}
-                                aria-label={pickLabel(ws.imageExpandLabel, language, 'Ampliar')}
-                                title={pickLabel(ws.imageExpandLabel, language, 'Ampliar')}
-                            >
-                                ⤢
-                            </button>
-                        </div>
-                        <div className="generated-image__preview">
-                            <img
-                                className="generated-image__img"
-                                src={image.imageUrl
-                                    ? (image.imageUrl.startsWith('data:') || image.imageUrl.startsWith('blob:')
-                                        ? image.imageUrl
-                                        : `${image.imageUrl}${image.imageUrl.includes('?') ? '&' : '?'}retry=${image.loadAttempt}`)
-                                    : undefined}
-                                alt={workspaceArtifact?.prompt_visual || ws.imageAlt || 'Visual generado por Flu'}
-                                onLoad={() => {
-                                    if (image.loadTimeoutRef.current) {
-                                        clearTimeout(image.loadTimeoutRef.current);
-                                        image.loadTimeoutRef.current = 0;
-                                    }
-                                }}
-                                onError={() => {
-                                    console.warn('[WorkspaceHub] Generated image failed to load:', image.imageUrl);
-                                    if (image.loadTimeoutRef.current) {
-                                        clearTimeout(image.loadTimeoutRef.current);
-                                        image.loadTimeoutRef.current = 0;
-                                    }
-                                    // Reintenta la MISMA URL (Pollinations es stateless) hasta
-                                    // MAX_LOAD_RETRIES; solo entonces cae al fallback de Gemini.
-                                    image.retryLoad();
-                                }}
-                            />
-                            {image.isLoading && (
-                                <div className="generated-image__loading">🔄 Generando imagen...</div>
-                            )}
-                            {image.isFailed && (
-                                <div className="generated-image__error">
-                                    <p>{pickLabel(ws.imageErrorTitle, language, 'No se pudo cargar la imagen')}</p>
-                                    <button
-                                        type="button"
-                                        className="flu-btn flu-btn--small"
-                                        onClick={() => image.retry()}
-                                    >
-                                        {pickLabel(ws.imageRetryLabel, language, 'Reintentar')}
-                                    </button>
-                                </div>
-                            )}
                         </div>
                     </div>
                 ),
@@ -496,14 +477,31 @@ export function WorkspaceHub({
             });
         }
 
-        // WEB búsqueda: imágenes → tarjeta tipo 'image'.
-        if (searchState.images.length > 0) {
+        // Imágenes → UNA sola cuadrícula bajo el filtro Imágenes.
+        // - SOLO imagen IA generada (sin búsqueda web): tarjeta de ORIGEN IA,
+        //   título "Imagen generada" y `onlyInKind` → aparece únicamente al
+        //   activar "Imágenes", NO intercalada bajo la Respuesta de Flu en "Todo".
+        // - Con imágenes web: tarjeta web mixta (IA encabeza + grid web).
+        const soloIa = generatedCell !== null && searchState.images.length === 0;
+        if (generatedCell !== null || searchState.images.length > 0) {
             items.push({
-                id: 'web-imagenes',
-                origin: 'web',
+                id: soloIa ? 'ia-imagen' : 'web-imagenes',
+                origin: soloIa ? 'ia' : 'web',
                 kind: 'image',
-                title: pickLabel(undefined, language, 'Imágenes'),
-                body: <ImageGrid results={searchState.images} loading={searchState.loading} />,
+                onlyInKind: soloIa,
+                title: soloIa
+                    ? pickLabel(ws.imageTitle, language, 'Imagen generada')
+                    : pickLabel(undefined, language, 'Imágenes'),
+                body: (
+                    <div className="workspace-images__zone">
+                        <ImageGrid
+                            results={searchState.images}
+                            loading={searchState.loading}
+                            generated={generatedCell}
+                            language={language}
+                        />
+                    </div>
+                ),
             });
         }
 
@@ -570,9 +568,12 @@ export function WorkspaceHub({
                     onQueryChange={setSearchQuery}
                     onLangChange={setSearchLang}
                     onLevelChange={setSearchLevel}
-                    onSubmit={() => void runSearch()}
+                    onSubmit={() => void handleRunSearch()}
                     onReset={resetSearch}
-                    livePhrase={liveTranscript || currentTranscript}
+                    // Fuente canónica única de la frase (regla #6): la barra
+                    // recibe la MISMA cadena que bitácora/burbuja y solo le quita
+                    // la wake word para pintar comandos.
+                    livePhrase={liveTranscript || lastTranscript || lastUserText || currentTranscript}
                     isListening={isListening}
                 />
             </div>
@@ -594,8 +595,7 @@ export function WorkspaceHub({
                                         onDragOver={(e) => e.preventDefault()}
                                         onDrop={upload.onFileDrop}
                                     >
-                                        <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra una imagen aquí')}</p>
-                                        <p className="flu-upload-zone__or">{pickLabel(ws.uploadDropOr, language, '— o —')}</p>
+                                        <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra tu documento aquí')}</p>
                                         <div className="flu-upload-zone__buttons">
                                             <button
                                                 type="button"
@@ -611,13 +611,6 @@ export function WorkspaceHub({
                                             >
                                                 {pickLabel(ws.uploadDocumentLabel, language, '📄 Analizar documento')}
                                             </button>
-                                            <button
-                                                type="button"
-                                                className="flu-btn"
-                                                onClick={() => upload.projectInputRef.current?.click()}
-                                            >
-                                                {pickLabel(ws.uploadAppLabel, language, '🧭 Analizar app')}
-                                            </button>
                                         </div>
                                         <input
                                             ref={upload.fileInputRef}
@@ -632,14 +625,6 @@ export function WorkspaceHub({
                                             accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
                                             hidden
                                             onChange={upload.onDocumentFileSelected}
-                                        />
-                                        <input
-                                            ref={upload.projectInputRef}
-                                            type="file"
-                                            multiple
-                                            hidden
-                                            onChange={upload.onProjectFolderSelected}
-                                            {...({ webkitdirectory: '', directory: '' } as any)}
                                         />
                                     </div>
                                 ) : (
@@ -703,8 +688,7 @@ export function WorkspaceHub({
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={upload.onFileDrop}
                                 >
-                                    <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra una imagen aquí')}</p>
-                                    <p className="flu-upload-zone__or">{pickLabel(ws.uploadDropOr, language, '— o —')}</p>
+                                    <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra tu documento aquí')}</p>
                                     <div className="flu-upload-zone__buttons">
                                         <button
                                             type="button"
@@ -720,13 +704,6 @@ export function WorkspaceHub({
                                         >
                                             {pickLabel(ws.uploadDocumentLabel, language, '📄 Analizar documento')}
                                         </button>
-                                        <button
-                                            type="button"
-                                            className="flu-btn"
-                                            onClick={() => upload.projectInputRef.current?.click()}
-                                        >
-                                            {pickLabel(ws.uploadAppLabel, language, '🧭 Analizar app')}
-                                        </button>
                                     </div>
                                     <input
                                         ref={upload.fileInputRef}
@@ -741,14 +718,6 @@ export function WorkspaceHub({
                                         accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
                                         hidden
                                         onChange={upload.onDocumentFileSelected}
-                                    />
-                                    <input
-                                        ref={upload.projectInputRef}
-                                        type="file"
-                                        multiple
-                                        hidden
-                                        onChange={upload.onProjectFolderSelected}
-                                        {...({ webkitdirectory: '', directory: '' } as any)}
                                     />
                                 </div>
                             ) : (

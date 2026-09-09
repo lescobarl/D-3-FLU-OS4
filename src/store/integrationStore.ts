@@ -94,7 +94,7 @@ export interface UIState {
      * FluAvatarVoiceBridge observa esta señal en un useEffect y ejecuta la acción.
      * Se resetea a null después de ser consumida.
      */
-    voiceCommand: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation' | 'process-transcript' | null;
+    voiceCommand: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation' | null;
     /**
      * Indicador de que FLU está procesando una solicitud de IA (pensando).
      * Alimenta el indicador visual de procesamiento (ThinkingIndicator).
@@ -226,7 +226,7 @@ export interface IntegrationActions {
     /** Extraer puntos clave del historial de conversación */
     extractKeyPoints: () => string[];
     /** Enviar un comando de voz que FluAvatarVoiceBridge consumirá */
-    sendVoiceCommand: (command: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation' | 'process-transcript') => void;
+    sendVoiceCommand: (command: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation') => void;
     /** Consumir el comando de voz actual (lo resetea a null) */
     consumeVoiceCommand: () => void;
 

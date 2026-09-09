@@ -278,7 +278,7 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
     // FLUJO UNIFICADO DE HABLA (única ruta): asegurar que el avatar entre en
     // SPEAKING (MouthMove) antes de hablar y restaurar el estado previo al
     // terminar. Idempotente: si ya está en SPEAKING (flujos que lo manejan
-    // explícitamente — onContractResolved, handleSpeak), no toca nada.
+    // explícitamente — onContractResolved), no toca nada.
     const restoreSpeaking = await enterSpeakingState()
     try {
       // Refrescar configuración de voz desde el integrationStore de OS3

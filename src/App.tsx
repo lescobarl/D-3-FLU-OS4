@@ -49,7 +49,6 @@ import { useCommunicationProfiles } from './hooks/useCommunicationProfiles';
 import { useBrowserProfiles } from './hooks/useBrowserProfiles';
 import { useSearchSites } from './hooks/useSearchSites';
 import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
-import type { ResolvedCommunicationProfile } from './core/personalization/communicationProfileService';
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
 import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING } from './core/config/appConfig';
 import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
@@ -1287,31 +1286,6 @@ function App() {
         contacts: contacts.contacts,
     });
 
-    // ---- FASE P — Resolución del perfil de comunicación para el turno de voz en curso ----
-    const onResolveCommunicationProfile = useCallback(
-        async (_text: string): Promise<ResolvedCommunicationProfile | null> => {
-            try {
-                const history = integrationStore.conversationHistory;
-                let speakerLabel: string | undefined;
-                for (let i = history.length - 1; i >= 0; i--) {
-                    const e = history[i] as any;
-                    if (e.role === 'user' && e.speakerName) {
-                        speakerLabel = e.speakerName;
-                        break;
-                    }
-                }
-                if (!speakerLabel) return null;
-                const participant = await participants.resolveParticipantBySpeakerLabel(speakerLabel);
-                if (!participant) return null;
-                return communicationProfiles.resolveForTurn(participant.id);
-            } catch (err) {
-                console.warn('[App] No se pudo resolver el perfil de comunicación:', err);
-                return null;
-            }
-        },
-        [integrationStore.conversationHistory, participants.resolveParticipantBySpeakerLabel, communicationProfiles.resolveForTurn]
-    );
-
     // B9: cumpleaños próximos dentro de la ventana configurada (FLU_CONFIG.multiuser).
     // Se recalcula cuando cambia el registro de participantes.
     const [birthdayNear, setBirthdayNear] = useState<ParticipantRecord[]>([]);
@@ -2165,7 +2139,28 @@ function App() {
             // En juegos por voz la voz es SIEMPRE del motor local (determinista):
             // se suprime la respuesta_voz de cortesía de Gemini para evitar doble
             // habla (juegoAction) y la del contrato fast-path (fastPathGame).
-            if (respuestaVoz && !juegoAction?.action && !environmentAction?.tipo && !(resolved as any)?.fastPathGame && !(resolved as any)?.fastPathEnvironment) {
+            // El cambio de ambiente (environmentAction) también suprime la respuesta
+            // SOLO cuando el ambiente va a CAMBIAR de verdad (el bloque de ambiente
+            // hablará su bienvenida como reemplazo). Si el ambiente objetivo ya está
+            // activo (reset idempotente a "asistente" que el LLM manda por defecto),
+            // NO hay bienvenida que hablar: la respuesta_voz conversacional debe
+            // hablarse normal. Un reset espurio NO debe dejar el turno mudo.
+            const environmentTargetId =
+                environmentAction?.tipo === 'reset'
+                    ? DEFAULT_AMBIENTE_ID
+                    : environmentAction?.tipo === 'activar'
+                        ? environmentAction.ambienteId
+                        : null;
+            const environmentWillChange =
+                environmentTargetId !== null &&
+                environmentTargetId !== useEnvironmentStore.getState().activeAmbienteId;
+            if (
+                respuestaVoz &&
+                !juegoAction?.action &&
+                !environmentWillChange &&
+                !(resolved as any)?.fastPathGame &&
+                !(resolved as any)?.fastPathEnvironment
+            ) {
                 integrationStore.setLastResponse(respuestaVoz);
                 integrationStore.addFluMessage(respuestaVoz);
 
@@ -4502,6 +4497,7 @@ const {
                                 voiceStatus,
                                 voiceError,
                                 liveTranscript,
+                                lastTranscript,
                                 onStartListening: os2StartListening,
                                 onStopListening: os2StopListening,
                                 onToggleListening: handleToggleListening,
@@ -4524,9 +4520,7 @@ const {
                                      height="100%"
                                      width="100%"
                                      lastUserText={avatarLastUserText}
-                                     // ---- FASE P — Resolución del perfil de comunicación por persona ----
-                                    onResolveCommunicationProfile={onResolveCommunicationProfile}
-                                    // ---- Branding Inteligente por Temporalidad ----
+                                     // ---- Branding Inteligente por Temporalidad ----
                                     brandingMode={branding.config.mode}
                                     brandingSeason={branding.config.activeSeason}
                                     brandingIsBirthday={branding.isBirthday}
@@ -4558,6 +4552,8 @@ const {
                                         latestResponse,
                                         liveTranscript,
                                         currentTranscript: integrationStore.currentTranscript,
+                                        lastTranscript,
+                                        lastUserText: avatarLastUserText,
                                         isListening: voiceStatus === 'listening',
                                         homeworkContext,
                                         image: workspaceImage,
@@ -4625,11 +4621,17 @@ const {
                                             reminders: {
                                                 items: reminders.reminders,
                                                 loading: reminders.loading,
+                                                onRemove: async (id) => {
+                                                    await reminders.remove(id);
+                                                },
                                             },
                                             temporals: {
                                                 alarms: temporals.alarms,
                                                 timers: temporals.timers,
                                                 loading: temporals.loading,
+                                                onCancel: async (id) => {
+                                                    await temporals.cancel(id);
+                                                },
                                             },
                                             language,
                                         },
@@ -4645,6 +4647,7 @@ const {
                                 liveTranscript={liveTranscript}
                                 lastTranscript={lastTranscript}
                                 currentTranscript={integrationStore.currentTranscript}
+                                lastHeardText={avatarLastUserText}
                                 conversationHistory={integrationStore.conversationHistory}
                                 voiceParticipants={voiceParticipants}
                                 onRenameProfile={handleRenameProfile}

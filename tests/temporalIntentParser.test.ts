@@ -116,6 +116,43 @@ describe('parseTemporalIntent — un solo disparo (día concreto)', () => {
   });
 });
 
+describe('parseTemporalIntent — formato ASR (Chrome: "12 13 p m")', () => {
+  it('hoy "12 13 p m" → absolute 12:13 PM del día de referencia (hoy, 15-ene 2026)', () => {
+    const r = parse('pon una alarma a las 12 13 p m hoy');
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('alarm.add');
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 13) });
+    expect(r.reply).toContain('12:13');
+  });
+
+  it('"12 13 p m" sin día → daily 12:13 (minutos separados por espacio)', () => {
+    const r = parse('pon una alarma a las 12 13 p m');
+    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:13' });
+    expect(r.reply).toContain('12:13');
+  });
+
+  it('"5 00 p m" → daily 17:00 (meridiano p.m. con espacios)', () => {
+    const r = parse('pon una alarma a las 5 00 p m');
+    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '17:00' });
+  });
+
+  it('"12 13" literal con dos puntos → daily 12:13', () => {
+    const r = parse('pon una alarma a las 12:13');
+    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:13' });
+  });
+
+  it('"12 13 p.m." con puntos en el meridiano → daily 12:13', () => {
+    const r = parse('pon una alarma a las 12:13 p.m.');
+    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:13' });
+  });
+
+  it('la etiqueta NO queda con residuos de hora ("13 p m")', () => {
+    const r = parse('pon una alarma a las 12 13 p m');
+    expect(r.data?.label).toBe('Alarma a las 12:13');
+    expect(r.data?.label).not.toContain('13 p m');
+  });
+});
+
 describe('parseTemporalIntent — recurrencia explícita (gana sobre el día)', () => {
   it('los lunes a las 6 → daily 06:00 + weekdays[1]', () => {
     const r = parse('pon una alarma los lunes a las 6');
