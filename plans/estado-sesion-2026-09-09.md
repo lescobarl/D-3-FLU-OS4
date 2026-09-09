@@ -81,3 +81,11 @@ Con usuario `luis` activo, decir por voz:
 - Trabajar en hitos pequeños con `tsc -b` y tests acotados; NO correr la suite completa.
 - Antes de cambiar voz/UI, confirmar con el usuario en pantalla.
 - No declarar "listo"; reportar "Cambios aplicados · Validado contra · No validado".
+
+## Dónde están los LOGS para validación en vivo (si otra sesión pregunta)
+El servidor dev corre como proceso en background de Kilo con id `bgp_083bd2f44001MxmsZxhcjRDZVX`.
+- **Forma correcta de leerlos**: usar la herramienta `background_process` → `action: "logs"` con ese id. Contiene las trazas `[CLIENT-LOG]` de voz: `processConversationFluQuery`, `dispatchArbiterIntent`, `onContractResolved`, `__fluHandle*`, `[REC]`, `[geminiProxy]`.
+- **Fallback si la herramienta no está disponible**: archivos en `C:\Users\luis_\.local\share\kilo\log\background-process\` (carpetas por scope, log de `npm run dev`).
+- **Volcado capturado en esta sesión** (traza del bug de alarma, turno 18:47): `C:\Users\luis_\.local\share\kilo\tool-output\tool_0870829ef001KYEmW9PAIcfNsv`.
+- **Evidencia visual**: `reports/ui-review/*.png` (panel Hoy), `reports/comandos-luis/*.png` y `reports/comandos-luis-real/*.png` (screenshots de comandos por usuario).
+- Cómo validar con el log: pedir al usuario que ejecute la frase por voz y leer la traza del turno; buscar si `dispatchArbiterIntent` ejecutó el manejador y qué `timeOfDay`/`dueAt` se calculó.
