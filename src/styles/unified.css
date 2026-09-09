@@ -2391,7 +2391,7 @@
    del tema (--board-* / --text-* / --accent-color / --radius-*). */
 .workspace-hub__columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 255px);
   gap: 4px;
   align-items: stretch;
   flex: 1;
@@ -2607,6 +2607,22 @@
   white-space: nowrap;
 }
 
+/* Card de clase: materia y horario fluyen juntos en un renglón que puede
+   envolver (sin nowrap/ellipsis), aprovechando todo el ancho del panel. */
+.hoy-panel__card--clase .hoy-panel__card-title {
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.hoy-panel__card-horario {
+  margin-left: 4px;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: 10px;
+  font-weight: var(--weight-normal, 400);
+}
+
 .hoy-panel__card-meta {
   font-size: 10px;
   color: var(--text-secondary, #a0a0b0);
@@ -2645,6 +2661,34 @@
   cursor: pointer;
   width: 12px;
   height: 12px;
+}
+
+/* Toda la fila de nota es clicable (checkbox + texto): evita que el click
+   en el texto de una nota actúe sobre otra (el área clicable era solo el
+   checkbox de 12px y las filas compactas quedaban pegadas). */
+.hoy-panel__nota-row {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.hoy-panel__nota-row input {
+  accent-color: var(--accent-color, #7c6cff);
+  flex: 0 0 auto;
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+  margin-top: 1px;
+}
+
+.hoy-panel__nota-row .hoy-panel__card-title {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
 }
 
 .hoy-panel__card--done .hoy-panel__card-title {
@@ -5719,18 +5763,17 @@ details[open].flu-card .flu-card__chev {
 
 .flu-upload-zone__drop {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px 8px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 8px 10px;
   border: 1px dashed rgba(100, 140, 255, 0.3);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 40px;
+  min-height: 72px;
 }
 
 .flu-upload-zone__drop:hover {

@@ -148,7 +148,11 @@ import { fluDb } from './core/db/fluDatabase';
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
-import { normalizeCommandForDeterministic, spokenUtteranceRevision } from './voice/lib/audioMath';
+import {
+    normalizeCommandForDeterministic,
+    spokenUtteranceRevision,
+    actionBelongsToTranscript,
+} from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
@@ -1744,6 +1748,20 @@ function App() {
                     for (const accion of acciones) {
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
+                        // Guard anti-arrastre (Bug #5): el contrato exige que
+                        // accion.texto sea un fragmento del mandato ACTUAL. Si el
+                        // LLM repite una acción de turnos anteriores (historial en
+                        // el prompt), se omite: evita re-crear alarmas/notas que el
+                        // usuario no pidió en este turno.
+                        const belongsToTurn = actionBelongsToTranscript(texto, transcript, wakeWords);
+                        if (!belongsToTurn) {
+                            relayLog(
+                                'WARN',
+                                'App',
+                                `onContractResolved: acción LLM ignorada (no pertenece al turno) → "${texto.slice(0, 100)}"`,
+                            );
+                            continue;
+                        }
                         const commandText = normalizeCommandForDeterministic(texto, wakeWords);
                         const arbiterResult: any = resolveDeterministicCommand(commandText, arbiterOptions);
                         if (arbiterResult?.matched) {
@@ -3296,6 +3314,25 @@ function App() {
             }
 
             if (!label) return '';
+            // Append semántico a una nota "Super:" existente (bug: "agrega papel
+            // de baño a la lista del super" creaba una FILA nueva por ítem). Si la
+            // nota objetivo ya existe pendiente, se renombra concatenando el ítem;
+            // si no existe, se crea.
+            const target = /^Super:\s*/i.test(label)
+                ? label
+                : null;
+            if (target) {
+                const item = label.replace(/^Super:\s*/i, '').trim();
+                const existing = [...(notes?.notes ?? [])]
+                    .filter((n: any) => !n.done && /^Super:/i.test(n.label || ''))
+                    .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+                const head = existing[0];
+                if (head && item && head.id !== undefined) {
+                    const merged = `${String(head.label).trim().replace(/[,;]\s*$/, '')}, ${item}`;
+                    await notes.rename(head.id, merged);
+                    return addedMsg;
+                }
+            }
             const result = await notes.add({
                 label,
                 personId: opts?.personId,

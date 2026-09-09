@@ -162,7 +162,7 @@ const EN_DAY_NAMES = [
 //   "a las 12", "a las 12:13", "a las 12 13", "12 13 p m", "5 pm", "5 00 p m".
 // El meridiano admite puntos y espacios: p.m., p m, a.m., a m.
 const ES_TIME =
-  /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:\s*[:.]\s*(\d{2})|\s+(\d{2}))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)?/i;
+  /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:(?:\s*[:.]\s*(\d{2}))|(?:\s+(\d{2}))|(?:\s+con\s+(\d{1,2})\s+minutos?))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)?/i;
 const EN_TIME =
   /\b(?:at|for)\s+(\d{1,2})(?::(\d{2})|\s+(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i;
 const NOON_ES = /\b(?:al\s+|a\s+|el\s+)?(?:mediod[ií]a|medio\s+d[ií]a)\b/i;
@@ -290,10 +290,10 @@ function extractRecurrence(text: string): { recurrence: TemporalRecurrence | nul
 
 function resolveEsTime(m: RegExpExecArray): string {
   let h = Number(m[1]);
-  const min = m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : 0;
-  const part = m[4] ? m[4].toLowerCase() : null;
+  const min = m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : m[4] ? Number(m[4]) : 0;
+  const part = m[5] ? m[5].toLowerCase() : null;
   // Meridiano explícito (p.m./a.m./p m) tiene prioridad sobre 'de la tarde/noche'.
-  const meridiem = m[5] ? m[5].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
+  const meridiem = m[6] ? m[6].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
   if (meridiem === 'pm') {
     if (h < 12) h += 12;
   } else if (meridiem === 'am') {
@@ -641,7 +641,11 @@ export function parseTemporalIntent(
       recurrence = rec.recurrence as TemporalRecurrence;
     } else if (day.dayOffset !== null) {
       // Día concreto (hoy, mañana o un día de la semana): una sola vez.
-      trigger = { kind: 'absolute', at: absoluteAt(now, day.dayOffset, timeOfDay) };
+      // 'hoy' con hora ya pasada → mañana a esa hora (mismo criterio que
+      // nlDateParser en recordatorios): evita rechazar el alta en silencio.
+      let at = absoluteAt(now, day.dayOffset, timeOfDay);
+      if (day.dayOffset === 0 && at <= now) at += MS_DAY;
+      trigger = { kind: 'absolute', at };
       recurrence = onceRecurrence();
     } else {
       // Solo hora → despertador diario.

@@ -151,6 +151,21 @@ describe('parseTemporalIntent — formato ASR (Chrome: "12 13 p m")', () => {
     expect(r.data?.label).toBe('Alarma a las 12:13');
     expect(r.data?.label).not.toContain('13 p m');
   });
+
+  it('"2 con 13 minutos p.m" hoy → absolute 14:13 (conector verbal ASR)', () => {
+    const r = parse('pon una alarma hoy a las 2 con 13 minutos p.m');
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('alarm.add');
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 14, 13) });
+    expect(r.reply).toContain('14:13');
+  });
+
+  it('"hoy" con hora ya pasada → se rola a mañana a esa hora (no se rechaza)', () => {
+    const r = parse('pon una alarma hoy a las 8 con 30 minutos a.m');
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('alarm.add');
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 16, 8, 30) });
+  });
 });
 
 describe('parseTemporalIntent — recurrencia explícita (gana sobre el día)', () => {

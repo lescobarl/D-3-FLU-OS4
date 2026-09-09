@@ -39,8 +39,10 @@ export interface ReminderNotifyInput {
 export interface UseRemindersOptions {
   /** Anuncio por voz del vencimiento (opcional). */
   speak?: (text: string, lang: string) => Promise<void>;
-  /** Dispara la notificación (esperado: notificationCenter.service.notify). */
-  notify?: (input: ReminderNotifyInput) => void;
+  /** Dispara la notificación (esperado: notificationCenter.service.notify).
+   *  Devuelve el canal entregado ('voice'|'both'|'toast') o null/undefined
+   *  si no se entregó; si el canal YA incluye voz, el hook no repite speak. */
+  notify?: (input: ReminderNotifyInput) => unknown;
   /** Idioma para los anuncios por voz. */
   language?: string;
   /** Referencia de reloj (por defecto: Date.now()). */
@@ -101,6 +103,15 @@ export function useReminders({
   const nowRef = useRef(now || (() => Date.now()));
   nowRef.current = now || (() => Date.now());
 
+  // speak/notify "latest": App los pasa inline (identidad nueva en cada
+  // render). Guardarlos en refs evita que runTick (y el efecto del
+  // scheduler) se re-cree en cada render y dispare el vencimiento varias
+  // veces (recordatorio/alarma duplicados).
+  const speakRef = useRef(speak);
+  speakRef.current = speak;
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
+
   const [reminders, setReminders] = useState<ReminderRecord[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -132,16 +143,20 @@ export function useReminders({
       const due = collectDueOrdered(pending, current, ['pending'], 20, graceMs);
       for (const record of due) {
         await service.complete(record.id);
-        if (typeof notify === 'function') {
-          notify({
+        // Entrega única: si notify devuelve un canal con voz ('voice'/'both'),
+        // el centro ya hablará → no repetir speak directo.
+        let deliveredByVoice = false;
+        if (typeof notifyRef.current === 'function') {
+          const delivery = notifyRef.current({
             category: 'reminder',
             title: lang === 'en' ? 'Reminder' : 'Recordatorio',
             body: `${voiceDue} ${record.text}`,
             urgent: true,
           });
+          deliveredByVoice = delivery === 'voice' || delivery === 'both';
         }
-        if (typeof speak === 'function') {
-          speak(`${voiceDue} ${record.text}`, lang).catch(() => undefined);
+        if (!deliveredByVoice && typeof speakRef.current === 'function') {
+          speakRef.current(`${voiceDue} ${record.text}`, lang).catch(() => undefined);
         }
       }
       if (due.length > 0) {
@@ -152,7 +167,7 @@ export function useReminders({
     } finally {
       runningRef.current = false;
     }
-  }, [service, notify, speak, graceMs, voiceDue, lang, refresh]);
+  }, [service, graceMs, voiceDue, lang, refresh]);
 
   // Carga inicial.
   useEffect(() => {

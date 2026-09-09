@@ -18,7 +18,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord, ReminderRecord } from '../core/db/fluDatabase';
 import { describeNlDateTime } from '../core/reminders/nlDateParser';
 import type { TemporalItemRecord } from '../core/temporal/temporalService';
-import { formatTimeOfDay, timerRemainingMs, formatCountdown } from '../core/temporal/scheduleEngine';
+import { formatTimeOfDayMeridiem, timerRemainingMs, formatCountdown } from '../core/temporal/scheduleEngine';
 import { diaDeFecha, type NewHorarioInput } from '../core/horario/horarioService';
 import {
   HorarioPizarron,
@@ -129,7 +129,7 @@ export function HoyPanel({
     .filter((item) => item.status === 'pending')
     .slice()
     .sort((a, b) => a.dueAt - b.dueAt)
-    .slice(0, 3);
+    .slice(0, 5);
 
   // ---- Cabecera Outlook: fecha legible del día ----
   const fechaHoy = formatPanelDate(now(), language);
@@ -181,13 +181,15 @@ export function HoyPanel({
                 {pickLabel(hoyUi.sinProxima, language, 'Sin próxima entrada')}
               </p>
             ) : (
-              <div className="hoy-panel__card" data-testid="hoy-proxima-clase">
+              <div className="hoy-panel__card hoy-panel__card--clase" data-testid="hoy-proxima-clase">
                 <span className="hoy-panel__card-time">📚</span>
                 <span className="hoy-panel__card-body">
-                  <span className="hoy-panel__card-title">{proxima.materia}</span>
-                  <span className="hoy-panel__card-meta">
-                    {proxima.inicio}–{proxima.fin}
-                    {proxima.aula ? ` · ${proxima.aula}` : ''}
+                  <span className="hoy-panel__card-title">
+                    {proxima.materia}
+                    <span className="hoy-panel__card-horario">
+                      {proxima.inicio}–{proxima.fin}
+                      {proxima.aula ? ` · ${proxima.aula}` : ''}
+                    </span>
                   </span>
                 </span>
               </div>
@@ -211,7 +213,7 @@ export function HoyPanel({
                     <li key={item.id} className="hoy-panel__list-item" data-testid="hoy-agenda-item">
                       <div className="hoy-panel__card">
                         <span className="hoy-panel__card-time">
-                          {formatTimeOfDay(item.dueAt)}
+                          {formatTimeOfDayMeridiem(item.dueAt, language)}
                         </span>
                         <span className="hoy-panel__card-body">
                           <span className="hoy-panel__card-title">📌 {item.text}</span>
@@ -256,12 +258,12 @@ export function HoyPanel({
                     <li key={alarma.id} className="hoy-panel__list-item">
                       <div className="hoy-panel__card">
                         <span className="hoy-panel__card-time">
-                          {formatTimeOfDay(alarma.nextAt)}
+                          {formatTimeOfDayMeridiem(alarma.nextAt, language)}
                         </span>
                         <span className="hoy-panel__card-body">
                           <span className="hoy-panel__card-title">🔔 {alarma.label}</span>
                           <span className="hoy-panel__card-meta">
-                            {formatTimeOfDay(alarma.nextAt)}
+                            {formatTimeOfDayMeridiem(alarma.nextAt, language)}
                           </span>
                         </span>
                         {temporals.onCancel && (
@@ -324,13 +326,15 @@ export function HoyPanel({
               <ul className="hoy-panel__list" data-testid="hoy-clases-list">
                   {clasesHoy.map((clase) => (
                   <li key={clase.id} className="hoy-panel__list-item">
-                    <div className="hoy-panel__card">
+                    <div className="hoy-panel__card hoy-panel__card--clase">
                       <span className="hoy-panel__card-time">📚</span>
                       <span className="hoy-panel__card-body">
-                        <span className="hoy-panel__card-title">{clase.materia}</span>
-                        <span className="hoy-panel__card-meta">
-                          {clase.inicio}–{clase.fin}
-                          {clase.aula ? ` · ${clase.aula}` : ''}
+                        <span className="hoy-panel__card-title">
+                          {clase.materia}
+                          <span className="hoy-panel__card-horario">
+                            {clase.inicio}–{clase.fin}
+                            {clase.aula ? ` · ${clase.aula}` : ''}
+                          </span>
                         </span>
                       </span>
                     </div>
@@ -421,17 +425,17 @@ export function HoyPanel({
                   {notasPendientes.map((nota) => (
                     <li key={nota.id} className="hoy-panel__list-item">
                       <div className="hoy-panel__card">
-                        <label className="hoy-panel__nota-check" aria-label={nota.label}>
+                        <label className="hoy-panel__nota-row" title={nota.label}>
                           <input
                             type="checkbox"
                             checked={nota.done}
                             onChange={() => notes.onToggle(nota.id)}
                             aria-label={nota.label}
                           />
+                          <span className="hoy-panel__card-body">
+                            <span className="hoy-panel__card-title">{nota.label}</span>
+                          </span>
                         </label>
-                        <span className="hoy-panel__card-body">
-                          <span className="hoy-panel__card-title">{nota.label}</span>
-                        </span>
                         <button
                           type="button"
                           className="hoy-panel__card-remove"
@@ -452,17 +456,17 @@ export function HoyPanel({
                   {notasHechas.map((nota) => (
                     <li key={nota.id} className="hoy-panel__list-item">
                       <div className="hoy-panel__card hoy-panel__card--done">
-                        <label className="hoy-panel__nota-check" aria-label={nota.label}>
+                        <label className="hoy-panel__nota-row" title={nota.label}>
                           <input
                             type="checkbox"
                             checked={nota.done}
                             onChange={() => notes.onToggle(nota.id)}
                             aria-label={nota.label}
                           />
+                          <span className="hoy-panel__card-body">
+                            <span className="hoy-panel__card-title">{nota.label}</span>
+                          </span>
                         </label>
-                        <span className="hoy-panel__card-body">
-                          <span className="hoy-panel__card-title">{nota.label}</span>
-                        </span>
                         <button
                           type="button"
                           className="hoy-panel__card-remove"

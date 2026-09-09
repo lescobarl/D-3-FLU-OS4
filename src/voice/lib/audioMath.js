@@ -110,6 +110,46 @@ export function normalizeVoiceCommandText(text = '') {
   )
 }
 
+// Palabras vacías mínimas (es/en) para comparar acciones LLM contra el
+// transcript del turno: no aportan contenido y solo añadirían ruido.
+const COMMAND_STOPWORDS = new Set([
+  'a', 'al', 'la', 'las', 'el', 'los', 'lo', 'le', 'les', 'de', 'del', 'para', 'por',
+  'con', 'sin', 'en', 'y', 'o', 'u', 'que', 'una', 'un', 'unos', 'unas', 'hoy',
+  'the', 'and', 'for', 'to', 'of', 'in', 'on', 'at', 'an', 'a',
+])
+
+/**
+ * Determina si el `texto` de una acción emitida por el LLM pertenece al
+ * turno actual (transcript). El contrato exige que accion.texto sea un
+ * fragmento del mandato del usuario; al validarlo se evita re-ejecutar
+ * acciones de turnos ANTERIORES que el LLM repita por el contexto (Bug #5).
+ * Heurística: solape de tokens significativos (sin acentos/puntuación y sin
+ * stopwords). Devuelve true si el texto es subcadena del transcript o si
+ * comparten al menos un token significativo real.
+ */
+export function actionBelongsToTranscript(actionText = '', transcript = '', wakeWords = []) {
+  const action = String(actionText || '').trim()
+  const spoken = String(transcript || '').trim()
+  if (!action) return false
+  if (!spoken) return true // sin transcript no hay base para descartar
+
+  const cleanAction = normalizeCommandForDeterministic(action, wakeWords)
+  const cleanSpoken = normalizeCommandForDeterministic(spoken, wakeWords)
+  const normAction = normalizeVoiceCommandText(cleanAction)
+  const normSpoken = normalizeVoiceCommandText(cleanSpoken)
+  if (!normAction) return false
+
+  // Subcadena directa (caso más común: el LLM copia el fragmento exacto).
+  if (normSpoken.includes(normAction) || normAction.includes(normSpoken)) return true
+
+  const tokens = (raw) => raw.split(' ').filter((word) => word && !COMMAND_STOPWORDS.has(word))
+  const actionTokens = tokens(normAction)
+  if (actionTokens.length === 0) return false
+  const spokenTokens = new Set(tokens(normSpoken))
+  const overlap = actionTokens.filter((word) => spokenTokens.has(word))
+  return overlap.length >= Math.min(2, actionTokens.length)
+}
+
 function levenshteinDistance(left = '', right = '') {
   const a = String(left)
   const b = String(right)

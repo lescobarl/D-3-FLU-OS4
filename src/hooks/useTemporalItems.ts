@@ -52,8 +52,10 @@ export interface TemporalNotifyInput {
 export interface UseTemporalItemsOptions {
   /** Anuncio por voz del vencimiento (opcional). */
   speak?: (text: string, lang: string) => Promise<void>;
-  /** Dispara la notificación (esperado: notificationCenter.service.notify). */
-  notify?: (input: TemporalNotifyInput) => void;
+  /** Dispara la notificación (esperado: notificationCenter.service.notify).
+   *  Devuelve el canal entregado ('voice'|'both'|'toast') o null/undefined
+   *  si no se entregó; si el canal YA incluye voz, el hook no repite speak. */
+  notify?: (input: TemporalNotifyInput) => unknown;
   /** Idioma para los anuncios por voz. */
   language?: string;
   /** Referencia de reloj (por defecto: Date.now()). */
@@ -129,6 +131,15 @@ export function useTemporalItems({
   const nowRef = useRef(now || (() => Date.now()));
   nowRef.current = now || (() => Date.now());
 
+  // speak/notify "latest": App los pasa inline (identidad nueva en cada
+  // render). Guardarlos en refs evita que runTick (y por tanto el efecto
+  // del scheduler) se re-cree en cada render y re-registre el intervalo,
+  // lo que podía disparar el vencimiento más de una vez (alarma triplicada).
+  const speakRef = useRef(speak);
+  speakRef.current = speak;
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
+
   const [alarms, setAlarms] = useState<TemporalItemRecord[]>([]);
   const [timers, setTimers] = useState<TemporalItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,13 +147,16 @@ export function useTemporalItems({
   // Ref de guardia para no solapar ticks asíncronos del scheduler.
   const runningRef = useRef(false);
 
-  /** Recarga las listas desde IndexedDB (ordenadas por próximo disparo). */
+  /** Recarga las listas desde IndexedDB (ordenadas por próximo disparo).
+   *  Solo expone ítems activos (status 'pending'): un ítem cancelado o
+   *  completado debe salir de la UI (Hoy y Ajustes) al pulsar su botón ×,
+   *  mismo criterio que listActive/listDue del servicio. */
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const all = await service.list();
       const sorted = all.slice().sort((a, b) => a.nextAt - b.nextAt);
-      setAlarms(sorted.filter((r) => r.kind === 'alarm'));
-      setTimers(sorted.filter((r) => r.kind === 'timer'));
+      setAlarms(sorted.filter((r) => r.kind === 'alarm' && r.status === 'pending'));
+      setTimers(sorted.filter((r) => r.kind === 'timer' && r.status === 'pending'));
     } catch (err) {
       console.error('[useTemporalItems] refresh error:', err);
     } finally {
@@ -169,16 +183,21 @@ export function useTemporalItems({
         const dueText = isAlarm ? voiceAlarmDue : voiceTimerDue;
         const dueTitle = isAlarm ? alarmsLabel : timersLabel;
         const dueBody = isAlarm ? `${dueText} ${item.label}` : `${dueText} (${item.label})`;
-        if (typeof notify === 'function') {
-          notify({
+        // Entrega única: si notify devuelve un canal con voz ('voice'/'both'),
+        // el centro de notificaciones YA hablará → no repetir speak directo.
+        // (Antes se llamaba speak SIEMPRE además de notify → voz duplicada.)
+        let deliveredByVoice = false;
+        if (typeof notifyRef.current === 'function') {
+          const delivery = notifyRef.current({
             category: item.kind,
             title: dueTitle,
             body: dueBody,
             urgent: true,
           });
+          deliveredByVoice = delivery === 'voice' || delivery === 'both';
         }
-        if (typeof speak === 'function') {
-          speak(dueBody, lang).catch(() => undefined);
+        if (!deliveredByVoice && typeof speakRef.current === 'function') {
+          speakRef.current(dueBody, lang).catch(() => undefined);
         }
         audioDriver.play(sound).catch(() => undefined);
       }
@@ -192,8 +211,6 @@ export function useTemporalItems({
     }
   }, [
     service,
-    notify,
-    speak,
     graceMs,
     voiceAlarmDue,
     voiceTimerDue,

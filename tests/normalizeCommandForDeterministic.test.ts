@@ -8,7 +8,7 @@
 // limpio. Es la "una tubería" del hub de integración.
 // ============================================================
 import { describe, expect, it } from 'vitest';
-import { normalizeCommandForDeterministic } from '../src/voice/lib/audioMath';
+import { actionBelongsToTranscript, normalizeCommandForDeterministic } from '../src/voice/lib/audioMath';
 
 const WAKE_WORDS = ['flu', 'hey flu', 'oye flu', 'okay flu'];
 
@@ -50,5 +50,33 @@ describe('normalizeCommandForDeterministic', () => {
 
     it('sin wake words configuradas devuelve el texto recortado tal cual', () => {
         expect(normalizeCommandForDeterministic('  hola mundo  ', [])).toBe('hola mundo');
+    });
+});
+
+describe('actionBelongsToTranscript — guard anti-arrastre de acciones LLM (Bug #5)', () => {
+    const transcript = 'Okay flu Crea una nota para el súper que traiga jamón queso y frutsie';
+
+    it('true cuando el texto de la acción es subcadena del transcript (fragmento del mandato)', () => {
+        const action = 'crea una nota para el súper que traiga jamón queso y frutsie';
+        expect(actionBelongsToTranscript(action, transcript, WAKE_WORDS)).toBe(true);
+    });
+
+    it('true cuando comparte el sustantivo real aunque el LLM reformule el verbo', () => {
+        const action = 'anota jamón queso frutsie en el super';
+        expect(actionBelongsToTranscript(action, transcript, WAKE_WORDS)).toBe(true);
+    });
+
+    it('false cuando la acción repite un mandato de OTRO turno (alarma previa)', () => {
+        const staleAction = 'pon una alarma a las 2:15 p.m. hoy';
+        expect(actionBelongsToTranscript(staleAction, transcript, WAKE_WORDS)).toBe(false);
+    });
+
+    it('false sin solape de tokens significativos', () => {
+        const unrelated = 'reproduce la canción de los pájaros';
+        expect(actionBelongsToTranscript(unrelated, transcript, WAKE_WORDS)).toBe(false);
+    });
+
+    it('true sin transcript disponible (no hay base para descartar)', () => {
+        expect(actionBelongsToTranscript('crea una alarma', '', WAKE_WORDS)).toBe(true);
     });
 });

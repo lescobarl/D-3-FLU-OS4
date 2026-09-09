@@ -261,6 +261,12 @@ describe('nlDateParser — relativos (pasado mañana / mañana / hoy)', () => {
     expect(result.at).toBe(new Date(2026, 0, 15, 12, 13).getTime());
     expect(result.label).toBe('a las 12:13');
   });
+
+  it('interpreta "hoy a las 2 con 13 minutos p.m" como HOY a las 14:13 (conector verbal ASR)', () => {
+    const result = parsed(parseNlDateTime('hoy a las 2 con 13 minutos p.m', { now }));
+    expect(result.type).toBe('today');
+    expect(result.at).toBe(new Date(2026, 0, 15, 14, 13).getTime());
+  });
 });
 
 describe('nlDateParser — hora simple (time-only)', () => {

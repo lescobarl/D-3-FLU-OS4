@@ -16,6 +16,8 @@ const NOTE_PARA_SUPER =
   /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_SUPER_LIST =
   /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
+const NOTE_SUPER_APPEND =
+  /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(.+?)\s+(?:en\s+la\s+lista\s+del\s+|a\s+la\s+lista\s+del\s+|en\s+la\s+lista\s+de\s+la\s+|a\s+la\s+lista\s+de\s+la\s+|al\s+|a\s+la\s+|en\s+el\s+)(super|supermercado|mercado)\s*$/i
 const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
 const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
@@ -60,6 +62,15 @@ export function parseNoteIntentText(rawText = '') {
   const superList = NOTE_SUPER_LIST.exec(norm)
   if (superList) {
     const rest = superList[2] ? superList[2].trim() : ''
+    return { label: rest ? `Super: ${rest}` : 'Super' }
+  }
+
+  // 1c) "agrega {ítem} a la lista del super/mercado" (ítem ANTES de la
+  // lista) → "Super: {ítem}". Patrón ASR común: "agrega papel de baño a la
+  // lista del super".
+  const superAppend = NOTE_SUPER_APPEND.exec(norm)
+  if (superAppend) {
+    const rest = superAppend[1] ? superAppend[1].trim() : ''
     return { label: rest ? `Super: ${rest}` : 'Super' }
   }
 

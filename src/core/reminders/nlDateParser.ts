@@ -165,17 +165,21 @@ interface ParsedTime {
 
 /** Extrae una hora explícita del texto, o null. */
 function extractTime(text: string): ParsedTime | null {
+  // El ASR (Chrome) transcribe "2 con 13 minutos p.m" como conector verbal:
+  // se normaliza a "2 :13 p.m" para que las ramas de reloj/meridiano apliquen.
+  const src = text.replace(/\bcon\s+(\d{1,2})\s+minutos?\b/gi, ' :$1');
+
   // mediodía / medianoche / noon / midnight
-  const noon = /(mediodia|medio\s+dia|noon)/i.exec(text);
+  const noon = /(mediodia|medio\s+dia|noon)/i.exec(src);
   if (noon) return { hour: 12, minute: 0 };
-  const midnight = /(medianoche|midnight)/i.exec(text);
+  const midnight = /(medianoche|midnight)/i.exec(src);
   if (midnight) return { hour: 0, minute: 0 };
 
   // 'a las 3 de la tarde', 'a la(s) N', 'at N', '3 de la tarde'
   // El ASR (Chrome) suele transcribir "5:00 p.m" como "5 00 p m": el reloj
   // acepta minutos separados por espacio y el meridiano con puntos/espacios.
   const withQualifier = /a\s+las?\s+(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s+(de\s+la\s+(manana|tarde|noche)|in\s+the\s+(morning|afternoon|evening|night))/i.exec(
-    text,
+    src,
   );
   if (withQualifier) {
     const hour = parseInt(withQualifier[1], 10);
@@ -189,7 +193,7 @@ function extractTime(text: string): ParsedTime | null {
   }
 
   // '3pm', '3 pm', '9am', '3:30 pm', '5 00 p m' (p.m./a.m. con puntos y espacios)
-  const meridiem = /(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)\b/i.exec(text);
+  const meridiem = /(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)\b/i.exec(src);
   if (meridiem) {
     let hour = parseInt(meridiem[1], 10);
     const minRaw = meridiem[2] || meridiem[3];
@@ -200,7 +204,7 @@ function extractTime(text: string): ParsedTime | null {
   }
 
   // 'HH:mm' literal, 'a las 14:30', o '14 30' (ASR con espacio entre hora y minutos)
-  const clock = /(?:a\s+las?\s+)?(\d{1,2})[.:](\d{2})\b|(?:a\s+las?\s+)?(\d{1,2})\s+(\d{2})\b/i.exec(text);
+  const clock = /(?:a\s+las?\s+)?(\d{1,2})[.:](\d{2})\b|(?:a\s+las?\s+)?(\d{1,2})\s+(\d{2})\b/i.exec(src);
   if (clock) {
     const hour = parseInt(clock[1] || clock[3], 10);
     if (hour > 23) return null;
@@ -209,7 +213,7 @@ function extractTime(text: string): ParsedTime | null {
   }
 
   // 'a las 3' / 'at 3' (hora simple, 24h literal)
-  const bare = /a\s+las?\s+(\d{1,2})\b|at\s+(\d{1,2})\b/i.exec(text);
+  const bare = /a\s+las?\s+(\d{1,2})\b|at\s+(\d{1,2})\b/i.exec(src);
   if (bare) {
     const hour = parseInt(bare[1] || bare[2], 10);
     if (hour > 23) return null;
@@ -234,7 +238,11 @@ export function parseNlDateTime(
   if (typeof input !== 'string') return null;
   const raw = input.trim();
   if (!raw) return null;
-  const text = normalize(raw);
+  let text = normalize(raw);
+  // El ASR (Chrome) transcribe "a las 2 con 13 minutos p.m" con conector
+  // verbal; se normaliza ANTES de la rama OFFSET para que "13 minutos" no
+  // se lea como desplazamiento relativo ("en 13 minutos").
+  text = text.replace(/\bcon\s+(\d{1,2})\s+minutos?\b/g, ' :$1');
 
   const now = options.now ? options.now() : Date.now();
   const nowDate = new Date(now);

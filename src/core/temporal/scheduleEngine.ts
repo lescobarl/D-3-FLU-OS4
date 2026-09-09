@@ -54,6 +54,22 @@ export function formatTimeOfDay(at: number): string {
   return `${hh}:${mm}`;
 }
 
+/**
+ * Hora en reloj de 12 horas CON meridiano a partir de un timestamp.
+ * Ej (es): "5:13 p.m." · (en): "5:13 PM". Mantiene 24h solo si el
+ * reloj del sistema lo está (hour12=false → HH:MM).
+ */
+export function formatTimeOfDayMeridiem(at: number, lang: string): string {
+  const d = new Date(at);
+  const h24 = d.getHours();
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const isPm = h24 >= 12;
+  const meridiem = isPm ? 'p.m.' : 'a.m.';
+  const meridiemEn = isPm ? 'PM' : 'AM';
+  return `${h12}:${mm} ${lang === 'en' ? meridiemEn : meridiem}`;
+}
+
 // ------------------------------------------------------------
 // Núcleo: próximo disparo estrictamente después de `after`
 // ------------------------------------------------------------

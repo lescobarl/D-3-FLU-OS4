@@ -31,6 +31,9 @@
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* .hoy-panel (unified.css) referencia --font-ui: alias a la misma familia
+     para que el panel lateral NO caiga a system-ui (tipografía divergente). */
+  --font-ui: var(--font-sans);
 
   /* ---- Unified Typography Scale (settings module standard) ---- */
   --text-xs:   10px;  /* badges, vector previews, error details */
