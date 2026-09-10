@@ -10,7 +10,6 @@ import {
   isMinuteGenerationRequest,
   isMinuteSaveRequest,
   planConversationDispatch,
-  resolveFinalConversationAction,
 } from './audioMath.js'
 
 export const NAVIGATION_COMMAND_IDS = Object.freeze([
@@ -99,7 +98,9 @@ export function planVoiceCommandDispatch(
 }
 
 export function resolveVoiceConversationAction(text = '', voiceCommands = getVoiceCommands()) {
-  return resolveFinalConversationAction(text, voiceCommands)
+  // Derivación ÚNICA: delega en el planificador canónico, el único que llama a
+  // resolveFinalConversationAction. Fallback no-nulo ({kind:'log'}).
+  return planConversationDispatch(text, voiceCommands).action ?? { kind: 'log' }
 }
 
 export function getCommandSpeech(

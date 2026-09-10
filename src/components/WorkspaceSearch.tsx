@@ -26,7 +26,6 @@ import {
 } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { splitTranscriptAtWakeWord } from '../voice/lib/audioMath';
-import { useIntegrationStore } from '../store/integrationStore';
 import type { SearchLevel } from '../hooks/useWorkspaceSearch';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import type { SearchConfig } from '../core/search/searchSession';
@@ -98,10 +97,9 @@ export function WorkspaceSearch({
         inputRef.current?.focus();
     }, []);
 
-    // El ÚLTIMO comando "OK FLU…" reconocido vive en el store de integración
-    // (fuente única): sobrevive remounts/cambios de vista. Se borra al escribir.
-    const lastCommand = useIntegrationStore((s) => s.lastVoiceCommand);
-    const setLastCommand = useIntegrationStore((s) => s.setLastVoiceCommand);
+    // §9.5: la barra es un componente PURO. No cachea comandos en un segundo
+    // almacén; recibe la frase canónica por `livePhrase` y solo le quita la wake
+    // word para presentación.
 
     const handleSubmit = useCallback(
         (event: FormEvent) => {
@@ -131,14 +129,8 @@ export function WorkspaceSearch({
     // verse en la barra. Antes se ocultaban cuando isListening dejaba de ser
     // true (la bandera no siempre coincide con una captura en curso). Ahora se
     // muestra cualquier comando reconocido mientras no haya consulta escrita.
-    const effectiveLive = live || lastCommand;
+    const effectiveLive = live;
     const showLive = Boolean(effectiveLive.length) && !hasQuery;
-
-    // Conservar el último comando reconocido tras el proceso (el live se limpia).
-    useEffect(() => {
-        if (live) setLastCommand(live);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [live]);
 
     return (
         <div className="workspace-search" data-testid="workspace-search">
@@ -153,7 +145,6 @@ export function WorkspaceSearch({
                         className="workspace-search__input"
                         value={query}
                         onChange={(e) => {
-                            setLastCommand('');
                             onQueryChange(e.target.value);
                         }}
                         placeholder={ui.placeholder}

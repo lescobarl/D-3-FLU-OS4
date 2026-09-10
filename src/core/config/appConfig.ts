@@ -733,7 +733,6 @@ export const INTERRUPTION_KEYWORDS: string[] = [
     'espera', 'esperate', 'para', 'detente', 'alto', 'calma', 'un momento',
     'wait', 'hold on', 'stop', 'hang on', 'one moment', 'hold it',
     'no no no', 'no no', 'no por favor', 'no espera',
-    'oye flu', 'hey flu', 'listen flu', 'look flu', 'oye tú', 'hey you', 'listen tú', 'look tú',
     'déjame', 'déjame decir', 'let me', 'let me speak',
 ];
 

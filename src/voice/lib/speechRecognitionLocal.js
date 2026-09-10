@@ -28,6 +28,15 @@ export function createSpeechRecognition(language = 'es', activeLocale = '') {
   return instance
 }
 
+/**
+ * §9.1: ÚNICA puerta de creación de instancias de reconocimiento. Todo
+ * consumidor (motor de voz, onboarding) obtiene su instancia por aquí; nadie
+ * más invoca la fábrica de Web Speech API.
+ */
+export function acquireSpeechRecognition(language = 'es', activeLocale = '') {
+  return createSpeechRecognition(language, activeLocale)
+}
+
 /** Instala paquetes de idioma on-device cuando el navegador lo soporta (Chrome). */
 export async function ensureSpeechRecognitionLocales(language = 'es') {
   if (typeof window === 'undefined' || !isSpeechRecognitionSupported()) return false

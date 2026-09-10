@@ -25,8 +25,8 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  acquireSpeechRecognition,
   bindSpeechRecognition,
-  createSpeechRecognition,
   isSpeechRecognitionSupported,
   startSpeechRecognition,
   stopSpeechRecognition,
@@ -172,7 +172,7 @@ export function useOnboardingVoiceCapture({
   // Crea la instancia una sola vez (perezosamente, si hay soporte).
   useEffect(() => {
     if (!supported) return;
-    const recognition = createSpeechRecognition(languageRef.current, '');
+    const recognition = acquireSpeechRecognition(languageRef.current, '');
     if (!recognition) return;
     recognitionRef.current = recognition;
 

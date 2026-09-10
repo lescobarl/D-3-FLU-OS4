@@ -181,9 +181,105 @@ La unificación NO es fase final: es una invariante que debe decrecer en cada hi
    `tests/hardcodeGuard.test.ts`) que falle si hay N>1 implementaciones del símbolo/ruta.
    Un guard que falla solo es la ÚNICA barrera que el agente no puede maquillar.
 
+## 9. PIEDRA INAMOVIBLE — TUBERÍA DE VOZ/TRANSCRIPCIÓN
+
+Invariantes del usuario sobre la conversación por voz. Cualquier cambio en escucha,
+transcripción, bitácora, burbuja del avatar, barra de búsqueda o query a la IA debe
+CUMPLIR las 7 reglas y se verifica con el criterio numérico de §8 en cada hito:
+
+1. **La escucha debe ser centralizada**: UNA sola instancia de reconocimiento
+   (`speechRecognitionLocal`) para el flujo principal. Prohibido instanciar escucha en
+   otros componentes (ej. onboarding) mientras la principal esté activa.
+2. **Ningún otro elemento debe tener tratamiento sobre la escucha/transcripción**:
+   normalización, deduplicación y commit de la frase viven en UN solo lugar (el motor de
+   voz). Prohibido re-normalizar la frase en consumidores (App, views, memoria LLM).
+3. **Lo que se ve tal cual en la "última frase" debe verse en la transcripción de la zona
+   de FLU**: burbuja del avatar, bitácora y phrase-display se alimentan de la MISMA frase
+   canónica. Prohibidas cascadas de respaldo distintas por componente
+   (`a||b||c` con orden distinto en cada vista).
+4. **El único wake word es el configurado** en `FLU_CONFIG.voiceCommands.wakeWords`
+   (`fluConfig.js`). Prohibido hardcodear wake words ("ok flu", etc.) fuera de config;
+   hoy es "ok flu" pero puede cambiar.
+5. **La barra de búsqueda debe mostrar lo mismo que la transcripción**, solo sin la wake
+   word y solo los comandos: recibe la misma frase canónica y le quita la wake word de
+   config (`splitTranscriptAtWakeWord`) ÚNICAMENTE para presentación, nunca para decidir
+   contenido.
+6. **Lo que escucha FLU debe ser lo mismo que la transcripción**: la `question` enviada a
+   Gemini se deriva de la MISMA frase canónica commiteada. Prohibido que la query pase
+   por limpiezas/parseos distintos a los que producen la fila visible.
+7. (La lista original del usuario numeró 1-4,6,7; la regla 5 de arriba es la "barra de
+   búsqueda", quedando esta nota solo como referencia del mapeo.)
+
+**Invariante verificable por hito**: una frase hablada → UNA fila visible en bitácora Y
+UNA query a la IA con el mismo texto. Guard: test que falle si N>1 criterios de
+deduplicación/commit de la misma señal (patrón §8.6).
+
+## 10. CONTRATO DE TAREA Y VERIFICACIÓN POR COMANDO (anti-sustitución)
+
+Toda tarea se ejecuta contra un contrato escrito ANTES de tocar código. Sin contrato no
+se empieza. El contrato tiene 4 campos obligatorios: objetivo único, DoD, alcance y guard.
+
+1. **DoD = comando, no descripción.** El criterio de "hecho" es un comando ejecutable con
+   valor esperado. Prohibido cerrar con frases ("funciona", "quedó bien"): se cierra con la
+   salida cruda del comando ANTES y DESPUÉS. Si el valor no cambió, la tarea NO está hecha;
+   se reporta `No lo hice; hice solo X parcial en [archivo:línea]`.
+
+2. **Guard primero, en ROJO.** Toda tarea de unificación/refactor/eliminación de duplicados
+   nace con un test-guard que FALLA mientras exista la duplicación (N>1) y PASA cuando queda
+   en 1. Su mensaje lista los duplicados (`archivo:símbolo:línea`). Si el guard no nace rojo,
+   la tarea no está definida.
+
+3. **Baseline de fallos.** Antes de tocar nada se registra la lista de tests que YA fallan
+   (fallos preexistentes). La puerta de cierre es **0 fallos NUEVOS**, no "0 fallos". Los
+   preexistentes se excluyen del criterio, se documentan como deuda y NO se "arreglan" en
+   esta tarea salvo que el DoD lo pida. Prohibido declarar verde ignorando el baseline o
+   usarlo como excusa para no entregar.
+
+4. **Prohibida la sustitución de alcance.** No se puede reemplazar la tarea pedida por una
+   versión más fácil, parcial o "de paso". Si el DoD no se puede cumplir, el agente SE DETIENE
+   y lo dice. Un avance parcial honesto se reporta como parcial; nunca como cumplido.
+
+5. **Alcance cerrado.** El contrato fija los archivos que se PUEDEN tocar y prohíbe el resto.
+   Todo hallazgo fuera de alcance se ANOTA al final (`archivo:línea`) y se sigue la tarea.
+
+6. **Una tarea por instrucción.** No se agrupan varios hitos en un turno; el lote es lo que
+   permite posponer lo importante. Un turno = un contrato.
+
+**Cierre obligatorio (salida cruda, sin resúmenes):**
+(a) `git diff --stat` · (b) comando DoD ANTES y DESPUÉS · (c) salida del guard ·
+(d) baseline de fallos preexistentes y confirmación de 0 nuevos.
+
+## 11. RECETA DE INVARIANTES (replicable en cualquier proyecto)
+
+Para convertir un pedido difuso ("unifícalo", "una sola fuente") en algo verificable, el
+agente DEBE producir, ANTES de tocar código:
+
+1. **Intención en una frase**: "X se entrega igual a todos" / "una sola fuente para Y".
+2. **Sustantivos contables**, no adjetivos: cuántos almacenes, cuántas decisiones, cuántas
+   queries, cuántos productores.
+3. **Número HOY y META**: comando que lo cuenta (`rg -n ...`) y valor actual; meta natural
+   `1` (unificar) o `0` (eliminar duplicado). Prohibidos umbrales inventados.
+4. **Guard que nace ROJO** por invariante (§8.6/§10.2), listando `archivo:símbolo:línea`.
+5. **Hito = 1 invariante**: `git diff --stat` + conteo ANTES/DESPUÉS; si el conteo no baja,
+   el hito se revierte (§8.5).
+6. **Cierre**: salida cruda del guard en verde + 0 fallos nuevos (§10).
+
+Plantilla para pedirlo (pegable):
+
+    Antes de tocar código, dame un contrato con:
+    1) objetivo en una frase;
+    2) por cada duplicación: comando que la cuenta, valor HOY y META (0 o 1);
+    3) por cada invariante, un guard que HOY falle y liste archivo:línea;
+    4) DoD = comando ejecutable con valor esperado;
+    5) un invariante por turno, con conteo ANTES/DESPUÉS;
+    6) no cerrar sin guard verde y 0 fallos nuevos;
+    7) congelar el criterio (hash del guard) para que no se cambie en silencio.
+
+Regla corta: **cada duplicación con un número; cada número con un guard que nace rojo.**
+
 ---
 
-**Última actualización**: 2026-09-09
-**Versión del documento**: 5.0
-**Cambio clave**: Verdades y validación promovidas a §1 (anti-truncamiento); duplicados
-eliminados; numeración única; aceleración/tokens fusionados en §6.
+**Última actualización**: 2026-09-10
+**Versión del documento**: 7.1
+**Cambio clave**: §11 Receta de invariantes (intención → número HOY/META → guard rojo →
+hito con conteo ANTES/DESPUÉS; plantilla pegable y regla corta).

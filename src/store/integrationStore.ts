@@ -113,9 +113,6 @@ export interface IntegrationState {
     currentTranscript: string;
     /** Texto de la última respuesta de FLU */
     lastResponse: string;
-    /** Último comando "OK FLU…" reconocido (fuente única para la barra de
-        comandos; sobrevive remount/cambios de vista). Se borra al escribir. */
-    lastVoiceCommand: string;
     /** Historial completo de la conversación */
     conversationHistory: ConversationEntry[];
     /** Estado emocional actual del avatar */
@@ -171,7 +168,7 @@ export interface IntegrationActions {
     setCurrentTranscript: (transcript: string) => void;
     /** Registrar la última respuesta de FLU */
     setLastResponse: (response: string) => void;
-    setLastVoiceCommand: (command: string) => void;
+
     /** Añadir una entrada al historial de conversación */
     addConversationEntry: (entry: ConversationEntry) => void;
     /** Detectar sentimiento de un texto y añadirlo al historial */
@@ -316,7 +313,6 @@ const initialState: IntegrationState = {
     lastBridgeEvent: null,
     currentTranscript: '',
     lastResponse: '',
-    lastVoiceCommand: '',
     conversationHistory: [],
     emotionalState: 'neutral',
     eventLog: [],
@@ -413,9 +409,6 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             setLastResponse: (response: string) => {
                 set({ lastResponse: response });
-            },
-            setLastVoiceCommand: (command: string) => {
-                set({ lastVoiceCommand: command });
             },
 
             addConversationEntry: (entry: ConversationEntry) => {
@@ -567,7 +560,6 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 set({
                     conversationHistory: [],
     lastResponse: '',
-    lastVoiceCommand: '',
                     currentTranscript: '',
                     sessionStats: {
                         ...initialState.sessionStats,

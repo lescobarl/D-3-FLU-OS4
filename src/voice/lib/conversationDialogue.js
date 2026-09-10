@@ -188,6 +188,50 @@ export function recordConversationExchange(
   return nextDialogue
 }
 
+/**
+ * §9 ÚNICA FUENTE DE VERDAD: deriva el diálogo de Gemini DESDE el store
+ * `conversationHistory`. No existe un almacén de diálogo independiente; el motor
+ * de voz consume estas vistas de solo lectura.
+ */
+export function deriveDialogueHistory(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  return list.map((entry) => ({
+    role: entry?.role === 'flu' ? 'assistant' : entry?.role === 'system' ? 'system' : 'user',
+    speaker: entry?.speakerName || (entry?.role === 'flu' ? FLU_DIALOGUE_SPEAKER : 'Hablante 1'),
+    text: entry?.text || '',
+    phase: entry?.phase || 'SESION_ACTIVA',
+    source: DIALOGUE_SOURCE.LOG,
+  }))
+}
+
+/** Textos de las filas de usuario commiteadas, derivados del store. */
+export function deriveUserRowTexts(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  return list.filter((entry) => entry?.role === 'user').map((entry) => entry?.text || '')
+}
+
+/** Hablantes de las filas de usuario commiteadas, derivados del store. */
+export function deriveUserRowSpeakers(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  return list
+    .filter((entry) => entry?.role === 'user')
+    .map((entry) => entry?.speakerName || 'Hablante 1')
+}
+
+/**
+ * §9.3: ÚNICA derivación de la frase visible (burbuja · bitácora · barra).
+ * Todas las vistas la consumen con los MISMOS insumos → misma cadena exacta.
+ * No normaliza: solo selecciona la fuente vigente por prioridad.
+ */
+export function selectVisiblePhrase({
+  live = '',
+  lastTranscript = '',
+  lastUserText = '',
+  currentTranscript = '',
+} = {}) {
+  return String(live || lastTranscript || lastUserText || currentTranscript || '').trim()
+}
+
 export function getDialogueContextSlice(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {
   return trimDialogueHistory(history, max)
 }

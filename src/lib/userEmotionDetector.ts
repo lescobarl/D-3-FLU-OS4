@@ -20,6 +20,9 @@ import {
     INTERRUPTION_KEYWORDS,
     DEFAULT_ADVANCED_CONFIG,
 } from '../core/config/appConfig';
+// §9.4: las wake words vienen SOLO de config; aquí se combinan con las
+// interrupciones para no duplicar el literal en appConfig.
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
 // -----------------------------------------------------------
 // Types
@@ -119,7 +122,10 @@ function buildKeywordPatterns(keywords: string[]): RegExp[] {
 const PRAISE_PATTERNS = buildKeywordPatterns(USER_PRAISE_KEYWORDS);
 const CRITICISM_PATTERNS = buildKeywordPatterns(USER_CRITICISM_KEYWORDS);
 const TOPIC_CHANGE_INDICATORS = buildKeywordPatterns(TOPIC_CHANGE_KEYWORDS);
-const INTERRUPTION_INDICATORS = buildKeywordPatterns(INTERRUPTION_KEYWORDS);
+const INTERRUPTION_INDICATORS = buildKeywordPatterns([
+    ...INTERRUPTION_KEYWORDS,
+    ...(FLU_CONFIG.voiceCommands?.wakeWords || []),
+]);
 
 // -----------------------------------------------------------
 // Detection Functions

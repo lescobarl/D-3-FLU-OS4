@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { selectVisiblePhrase } from '../voice/lib/conversationDialogue';
 import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
 import { HoyPanel, type HoyPanelProps } from './HoyPanel';
@@ -573,7 +574,7 @@ export function WorkspaceHub({
                     // Fuente canónica única de la frase (regla #6): la barra
                     // recibe la MISMA cadena que bitácora/burbuja y solo le quita
                     // la wake word para pintar comandos.
-                    livePhrase={liveTranscript || lastTranscript || lastUserText || currentTranscript}
+                    livePhrase={selectVisiblePhrase({ live: liveTranscript, lastTranscript, lastUserText, currentTranscript })}
                     isListening={isListening}
                 />
             </div>

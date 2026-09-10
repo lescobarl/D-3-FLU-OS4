@@ -11,6 +11,7 @@
 // ============================================================
 
 import React, { useState, useMemo } from 'react';
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
 // -----------------------------------------------------------
 // Types
@@ -25,11 +26,17 @@ interface CommandGroup {
 // Constants
 // -----------------------------------------------------------
 
+// §9.4: la wake word mostrada se DERIVA de config, no se hardcodea.
+const WAKE_PHRASE = (FLU_CONFIG.voiceCommands?.wakeWords || [])
+    .slice(0, 2)
+    .map((word: string) => `"${word}"`)
+    .join(' / ') || 'Wake word';
+
 const COMMAND_GROUPS: CommandGroup[] = [
     {
         category: 'Wake & Listen',
         commands: [
-            { phrase: '"Oye FLU" / "Hey FLU"', description: 'Activar escucha para comando de voz' },
+            { phrase: WAKE_PHRASE, description: 'Activar escucha para comando de voz' },
             { phrase: '"FLU escucha" / "FLU listen"', description: 'Abrir micrófono para escuchar' },
             { phrase: '"FLU silence" / "FLU silencio"', description: 'Cerrar micrófono temporalmente' },
         ],

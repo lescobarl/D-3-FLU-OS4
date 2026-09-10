@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   computeAudioSignature,
   cleanForSpeech,
@@ -116,7 +116,7 @@ import {
   collapseMisorderedMicMerge,
 } from '../lib/activeListen.js'
 import {
-  createSpeechRecognition,
+  acquireSpeechRecognition,
   ensureSpeechRecognitionLocales,
   startSpeechRecognition,
   stopSpeechRecognition,
@@ -174,12 +174,11 @@ import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isSpeechBusy, waitForSpeechIdle } from '../lib/fluSpeech.js'
 import {
   FLU_DIALOGUE_SPEAKER,
-  appendDialogueEntry,
+  deriveDialogueHistory,
+  deriveUserRowSpeakers,
+  deriveUserRowTexts,
   getDialogueContextSlice,
   isFluSpeaker,
-  recordConversationExchange,
-  recordConversationTurn,
-  DIALOGUE_SOURCE,
 } from '../lib/conversationDialogue.js'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
@@ -338,7 +337,7 @@ async function stopMediaStream(stream) {
 }
 
 function createRecognition(language, activeLocale = '') {
-  return createSpeechRecognition(language, activeLocale)
+  return acquireSpeechRecognition(language, activeLocale)
 }
 
 function deriveSession(transcript, currentRole = '', language = 'es') {
@@ -440,7 +439,17 @@ export function useFluVoiceAssistant({
   const sampleRateRef = useRef(48000)
   const chunksRef = useRef([])
   const sessionLoadedRef = useRef(false)
-  const dialogueHistoryRef = useRef([])
+  // §9 ÚNICA FUENTE DE VERDAD: vistas de SOLO LECTURA derivadas del store
+  // `conversationHistory` (el motor no tiene almacén propio). No exponen setter:
+  // cualquier escritura (`x.current = ...`) lanza error en vez de descartarse.
+  const dialogueView = useMemo(
+    () => ({
+      get current() {
+        return deriveDialogueHistory(useIntegrationStore.getState().conversationHistory)
+      },
+    }),
+    [],
+  )
   const speakerClustersRef = useRef([])
   const knowledgeBaseRef = useRef(knowledgeBase)
   const getMinuteKnowledgeBaseRef = useRef(getMinuteKnowledgeBase)
@@ -469,9 +478,22 @@ export function useFluVoiceAssistant({
   const lastEmittedTranscriptRef = useRef('')
   /** Hay preview interino abierto (sin commit al log aún). */
   const openPreviewTurnRef = useRef(false)
-  /** Textos de filas cerradas (para recortar interinos acumulativos). */
-  const logRowsTextRef = useRef([])
-  const logRowSpeakersRef = useRef([])
+  const userRowsTextView = useMemo(
+    () => ({
+      get current() {
+        return deriveUserRowTexts(useIntegrationStore.getState().conversationHistory)
+      },
+    }),
+    [],
+  )
+  const userSpeakersView = useMemo(
+    () => ({
+      get current() {
+        return deriveUserRowSpeakers(useIntegrationStore.getState().conversationHistory)
+      },
+    }),
+    [],
+  )
 
   /** Evita re-sync si Chrome repite el mismo interino. */
   const lastStreamPreviewRef = useRef('')
@@ -554,8 +576,8 @@ export function useFluVoiceAssistant({
   }
 
   getParticipantLogSnapshotRef.current = () => ({
-    texts: logRowsTextRef.current,
-    speakers: logRowSpeakersRef.current,
+    texts: userRowsTextView.current,
+    speakers: userSpeakersView.current,
   })
 
   // OS3 parity: if an external participantRef is provided, use it instead of creating a new instance.
@@ -677,34 +699,9 @@ export function useFluVoiceAssistant({
             theme: saved.theme || FLU_CONFIG.sessionDefaults.theme,
           })
         }
-        if (Array.isArray(saved.history) && saved.history.length) {
-          // Filter out system event entries (participant_ignored, etc.) from
-          // restored dialogue history so Gemini doesn't see old emotional events
-          // and respond to them as if they were current conversation context.
-          // This covers both the raw system event text and Gemini's responses
-          // to those events (which contain the emotional language but without
-          // the [FLU recuerda] prefix).
-          const SYSTEM_EVENT_PATTERNS = [
-            '[FLU recuerda]',
-            '[FLU remembers]',
-            'Me enojé porque levanté la mano',
-            'I got upset because I raised my hand',
-            'Me siento realmente molesto y triste porque levanté la mano',
-            'I feel really upset and sad because I raised my hand',
-          ]
-          const filtered = saved.history.filter(
-            (entry) =>
-              entry &&
-              !SYSTEM_EVENT_PATTERNS.some((pattern) =>
-                String(entry.text || '').includes(pattern)
-              )
-          )
-          const removedCount = saved.history.length - filtered.length
-          if (removedCount > 0) {
-            console.log(`[FluVoice] Filtered ${removedCount} system event(s) from restored dialogue history`)
-          }
-          dialogueHistoryRef.current = filtered
-        }
+        // §9: el historial restaurado lo carga `useConversationPersistence` en el
+        // store; el motor NO mantiene diálogo propio. El filtrado de eventos de
+        // sistema pertenece a la persistencia, no a este hook.
         if (saved.phase === 'SESION_ACTIVA' || saved.phase === 'CONFIGURACION') {
           setPhase(saved.phase)
         }
@@ -880,8 +877,6 @@ export function useFluVoiceAssistant({
     lastLoggedCaptureRef.current = ''
     lastEmittedTranscriptRef.current = ''
     openPreviewTurnRef.current = false
-    logRowsTextRef.current = []
-    logRowSpeakersRef.current = []
     turnAudioStartSampleRef.current = 0
     lastStreamPreviewRef.current = ''
     resetActiveListenState(listenStateRef.current)
@@ -901,7 +896,6 @@ export function useFluVoiceAssistant({
     lastSpeakerRef.current = speakers.defaultLabel
     lastLoggedSpeakerRef.current = speakers.defaultLabel
     lastTurnSignatureRef.current = null
-    dialogueHistoryRef.current = []
   }, [clearListeningAck, resetVoiceDisplay])
 
   const advanceConversationSpeaker = useCallback(() => {
@@ -912,7 +906,7 @@ export function useFluVoiceAssistant({
       return next
     }
 
-    const known = listSessionSpeakers(dialogueHistoryRef.current)
+    const known = listSessionSpeakers(dialogueView.current)
     const labels = [
       lastSpeakerRef.current,
       lastLoggedSpeakerRef.current,
@@ -1019,7 +1013,7 @@ export function useFluVoiceAssistant({
   }, [])
 
   const getConversationContext = useCallback(
-    () => getDialogueContextSlice(dialogueHistoryRef.current, CONTEXT_HISTORY_LIMIT),
+    () => getDialogueContextSlice(dialogueView.current, CONTEXT_HISTORY_LIMIT),
     [],
   )
 
@@ -1385,7 +1379,7 @@ export function useFluVoiceAssistant({
         allowNewCluster,
         getPreferSpeaker: () => lastLoggedSpeakerRef.current || '',
         getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
-        getReservedLabels: () => [...logRowSpeakersRef.current].filter(Boolean),
+        getReservedLabels: () => [...userSpeakersView.current].filter(Boolean),
       }),
     [getContinuousBufferAdapter],
   )
@@ -1691,15 +1685,7 @@ export function useFluVoiceAssistant({
   )
 
   const commitSessionTurn = useCallback(
-    (
-      text,
-      speakerName,
-      {
-        replaceLast = false,
-        phase = 'SESION_ACTIVA',
-        source = DIALOGUE_SOURCE.LOG,
-      } = {},
-    ) => {
+    (text, speakerName) => {
       const capture = cleanForSpeech(text)
       if (!capture) return
 
@@ -1714,63 +1700,18 @@ export function useFluVoiceAssistant({
         archiveCommittedTurn(listenStateRef.current, capture, {
           maxChars: FLU_CONFIG.limits.sessionTranscriptMaxChars,
         })
-      }
-
-      dialogueHistoryRef.current = recordConversationTurn(
-        logRowsTextRef.current,
-        logRowSpeakersRef.current,
-        dialogueHistoryRef.current,
-        {
-          speaker,
-          text: capture,
-          phase,
-          source,
-        },
-        {
-          replaceLast,
-          maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-          maxDialogue: CONTEXT_HISTORY_LIMIT,
-        },
-      )
-
-      if (!isFluSpeaker(speaker)) {
-        reconcileSpeakerClusters(logRowSpeakersRef.current)
+        reconcileSpeakerClusters(userSpeakersView.current)
       }
     },
     [reconcileSpeakerClusters],
   )
 
-  /**
-   * Injects an external entry into dialogueHistoryRef so Gemini sees it as part
-   * of the conversation context. Used by OS3 to inject system events (1st person
-   * FLU memories) that are not part of the regular voice pipeline.
-   *
-   * The entry.role should be 'flu' (OS3 convention) which maps to 'assistant'.
-   * The entry.speakerName becomes the dialogue speaker label.
-   */
-  const injectDialogueEntry = useCallback((entry) => {
-    if (!entry || !entry.text) return
-    dialogueHistoryRef.current = appendDialogueEntry(
-      dialogueHistoryRef.current,
-      {
-        role: entry.role === 'flu' ? 'assistant' : entry.role || 'user',
-        speaker: entry.speakerName || 'FLU',
-        text: entry.text,
-        phase: entry.phase || 'SESION_ACTIVA',
-        source: DIALOGUE_SOURCE.LOG,
-      },
-      CONTEXT_HISTORY_LIMIT,
-    )
-  }, [])
+  // §9: se eliminó `injectDialogueEntry`. App ya persiste el evento en el store
+  // (`addConversationEntry`) y el diálogo se DERIVA del store; el canal lateral
+  // del motor era redundante.
 
   const commitTurnToSessionRows = useCallback(
-    (capture, speakerName, { replaceLast = true } = {}) => {
-      commitSessionTurn(capture, speakerName, {
-        replaceLast,
-        phase: 'SESION_ACTIVA',
-        source: DIALOGUE_SOURCE.LOG,
-      })
-    },
+    (capture, speakerName) => commitSessionTurn(capture, speakerName),
     [commitSessionTurn],
   )
 
@@ -1786,7 +1727,7 @@ export function useFluVoiceAssistant({
           scheduleLiveTranscriptUpdate,
           applyConversationSpeaker,
           flushPendingStreamLog,
-          logRowsTextRef,
+          logRowsTextRef: userRowsTextView,
           turnCommitIdRef,
           activeTurnIdRef,
           flushPcmAfterTurnCommit,
@@ -1801,7 +1742,7 @@ export function useFluVoiceAssistant({
           createSpeakerAudioResolver,
           sessionPrimarySpeakerRef,
           lastLoggedSpeakerRef,
-          logRowSpeakersRef,
+          logRowSpeakersRef: userSpeakersView,
           speakerClustersRef,
           lastSpeakerRef,
           lastTurnSignatureRef,
@@ -2695,9 +2636,6 @@ export function useFluVoiceAssistant({
         resetActiveListenState(listenStateRef.current)
         lastEmittedTranscriptRef.current = ''
         openPreviewTurnRef.current = false
-        logRowsTextRef.current = []
-        logRowSpeakersRef.current = []
-        dialogueHistoryRef.current = []
         turnAudioStartSampleRef.current = 0
         lastStreamPreviewRef.current = ''
         lastLogLineTextRef.current = ''
@@ -2807,10 +2745,7 @@ export function useFluVoiceAssistant({
         }
 
         participant?.beginFloorDelivery?.()
-        commitSessionTurn(draft, FLU_DIALOGUE_SPEAKER, {
-          phase: 'SESION_ACTIVA',
-          source: DIALOGUE_SOURCE.PARTICIPANT,
-        })
+        commitSessionTurn(draft, FLU_DIALOGUE_SPEAKER)
         try {
           await respondParticipantFloor(draft, { floor: true })
           participant?.recordInterventionDelivered?.()
@@ -2862,7 +2797,7 @@ export function useFluVoiceAssistant({
         }) || cleanForSpeech(transcript)
         : cleanForSpeech(transcript)
       const wakeAnalysis = analyzeWakeTurn(phrase, {
-        lastCommitted: logRowsTextRef.current.at(-1) || '',
+        lastCommitted: userRowsTextView.current.at(-1) || '',
       })
       const passivePrefix = wakeAnalysis.passiveOnly
       const commandLogText = wakeAnalysis.commandLogText
@@ -3171,22 +3106,6 @@ export function useFluVoiceAssistant({
           setLastDiagnostics({ route: 'deterministic-arbiter', provider: 'local', skipGemini: true })
           setError('')
           setLastErrorEvent(null)
-          dialogueHistoryRef.current = recordConversationExchange(
-            logRowsTextRef.current,
-            logRowSpeakersRef.current,
-            dialogueHistoryRef.current,
-            {
-              user: { speaker: resolvedSpeakerName, text: question },
-              assistant: { text: courtesy },
-              phase: 'SESION_ACTIVA',
-              userSource: DIALOGUE_SOURCE.QUERY,
-              assistantSource: DIALOGUE_SOURCE.QUERY,
-            },
-            {
-              maxDialogue: CONTEXT_HISTORY_LIMIT,
-              maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-            },
-          )
           await saveSessionState({
             phase: 'SESION_ACTIVA',
             ...session,
@@ -3328,22 +3247,6 @@ export function useFluVoiceAssistant({
         setLastDiagnostics(contract.diagnostics || null)
         setError('')
         setLastErrorEvent(null)
-        dialogueHistoryRef.current = recordConversationExchange(
-          logRowsTextRef.current,
-          logRowSpeakersRef.current,
-          dialogueHistoryRef.current,
-          {
-            user: { speaker: resolvedSpeakerName, text: question },
-            assistant: { text: resolvedContract.respuesta_voz },
-            phase: 'SESION_ACTIVA',
-            userSource: DIALOGUE_SOURCE.QUERY,
-            assistantSource: DIALOGUE_SOURCE.QUERY,
-          },
-          {
-            maxDialogue: CONTEXT_HISTORY_LIMIT,
-            maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-          },
-        )
         await saveSessionState({
           phase: 'SESION_ACTIVA',
           ...session,
@@ -3425,7 +3328,7 @@ export function useFluVoiceAssistant({
     async (text, { interim = false, source = 'interim', awaitHandlers = false } = {}) => {
       if (!conversationActiveRef?.current) return false
       const phrase = cleanForSpeech(text)
-      const lastCommitted = logRowsTextRef.current.at(-1) || ''
+      const lastCommitted = userRowsTextView.current.at(-1) || ''
       if (isSpeechBusy()) {
         return false
       }
@@ -3603,7 +3506,7 @@ export function useFluVoiceAssistant({
       let passivePrefix = ''
       if (conversationActiveRef?.current && capturedTranscript) {
         const wakeAnalysis = analyzeWakeTurn(capturedTranscript, {
-          lastCommitted: logRowsTextRef.current.at(-1) || '',
+          lastCommitted: userRowsTextView.current.at(-1) || '',
         })
         if (wakeAnalysis.hasInlineBoundary) {
           passivePrefix = wakeAnalysis.passiveOnly
@@ -3852,11 +3755,7 @@ export function useFluVoiceAssistant({
           setLastTranscript(capturedTranscript)
           setLastContract(null)
           if (bufferedTranscript) {
-            commitSessionTurn(bufferedTranscript, resolvedSpeakerName, {
-              replaceLast: false,
-              phase: 'CONFIGURACION',
-              source: DIALOGUE_SOURCE.CAPTURE,
-            })
+            commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
             await saveSessionState({
               phase: 'SESION_ACTIVA',
               ...nextSession,
@@ -3923,22 +3822,6 @@ export function useFluVoiceAssistant({
         setLastContract(finalContract)
         setLastDiagnostics(contract.diagnostics || null)
         setLastErrorEvent(null)
-        dialogueHistoryRef.current = recordConversationExchange(
-          logRowsTextRef.current,
-          logRowSpeakersRef.current,
-          dialogueHistoryRef.current,
-          {
-            user: { speaker: resolvedSpeakerName, text: bufferedTranscript },
-            assistant: { text: finalContract.respuesta_voz },
-            phase: 'CONFIGURACION',
-            userSource: DIALOGUE_SOURCE.CAPTURE,
-            assistantSource: DIALOGUE_SOURCE.CAPTURE,
-          },
-          {
-            maxDialogue: CONTEXT_HISTORY_LIMIT,
-            maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-          },
-        )
 
         await saveSessionState({
           phase: 'SESION_ACTIVA',
@@ -4030,11 +3913,7 @@ export function useFluVoiceAssistant({
         setLastTranscript(capturedTranscript)
         setLastContract(null)
         if (bufferedTranscript) {
-          commitSessionTurn(bufferedTranscript, resolvedSpeakerName, {
-            replaceLast: false,
-            phase: 'SESION_ACTIVA',
-            source: DIALOGUE_SOURCE.CAPTURE,
-          })
+          commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
           await saveSessionState({
             phase: 'SESION_ACTIVA',
             ...session,
@@ -4109,27 +3988,6 @@ export function useFluVoiceAssistant({
       setLastContract(resolvedContract)
       setLastDiagnostics(contract.diagnostics || null)
       setLastErrorEvent(null)
-      dialogueHistoryRef.current = recordConversationExchange(
-        logRowsTextRef.current,
-        logRowSpeakersRef.current,
-        dialogueHistoryRef.current,
-        {
-          // La transcripción que se PERSISTE en el historial debe ser la MISMA que
-          // FLU realmente procesó (bufferedTranscript, ya limpio de wake word + eco
-          // ASR), NO el transcript crudo (capturedTranscript) que arrastra la wake
-          // word pegada y el ruido de fondo. Así la transcripción == lo que escucha
-          // FLU (mismo criterio que la ruta CONFIGURACION).
-          user: { speaker: resolvedSpeakerName, text: bufferedTranscript },
-          assistant: { text: resolvedContract.respuesta_voz },
-          phase: 'SESION_ACTIVA',
-          userSource: DIALOGUE_SOURCE.CAPTURE,
-          assistantSource: DIALOGUE_SOURCE.CAPTURE,
-        },
-        {
-          maxDialogue: CONTEXT_HISTORY_LIMIT,
-          maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-        },
-      )
 
       await saveSessionState({
         phase: 'SESION_ACTIVA',
@@ -4374,8 +4232,8 @@ export function useFluVoiceAssistant({
     listenStateRef,
     publishedLiveRef,
     openPreviewTurnRef,
-    logRowsTextRef,
-    logRowSpeakersRef,
+    logRowsTextRef: userRowsTextView,
+    logRowSpeakersRef: userSpeakersView,
     lastEmittedTranscriptRef,
     lastLoggedSpeakerRef,
     lastStreamPreviewRef,
@@ -4487,8 +4345,6 @@ export function useFluVoiceAssistant({
     grantParticipantFloor,
     endParticipantFloorDelivery: () => fluParticipantRef.current?.endFloorDelivery?.(),
     suspendRecognitionForAssistantSpeech,
-    /** Inject an external entry into dialogueHistoryRef (Gemini context). */
-    injectDialogueEntry,
     /** Set a recent memory text that gets injected into the system prompt on next contract request. */
     setRecentMemory,
   }

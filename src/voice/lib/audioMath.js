@@ -1606,7 +1606,6 @@ const NAME_INVALID_PHRASES = [
   'tan pronto',
   'cuando quieras',
   'vino tinto',
-  'okay flu',
   'generar minuta',
   'iniciar conversacion',
   'nadie para poder',
@@ -1618,6 +1617,15 @@ export function isPlausiblePersonName(candidate = '') {
   const normalized = normalizeSpaces(stripDiacritics(candidate)).toLowerCase()
   if (!normalized) return false
   if (NAME_INVALID_PHRASES.some((phrase) => normalized.includes(phrase))) return false
+
+  // Wake words vienen SOLO de config (§9.4): un candidato que contenga una wake
+  // word configurada no es un nombre.
+  const normalizedCommand = normalizeVoiceCommandText(candidate)
+  const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
+  if (wakeWords.some((wakeWord) => {
+    const key = normalizeVoiceCommandText(wakeWord)
+    return key && normalizedCommand.includes(key)
+  })) return false
 
   const tokens = normalized.split(' ').filter(Boolean)
   if (!tokens.length || tokens.length > 3) return false

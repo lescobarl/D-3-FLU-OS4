@@ -179,7 +179,7 @@ export const FLU_CONFIG = {
         /** No escribir clusters en preflight continuo; solo al commit de turno. */
         deferClusterWritesUntilCommit: true,
         /** Desactivado: pausas no abren H2+ en la misma voz (causa H46 en monólogo/TV). */
-        segmentChronoSplit: true,
+        segmentChronoSplit: false,
         /** No vaciar openLine al límite de turno (evita perder frase al cambiar hablante). */
         preservePreviewOnTurnBoundary: true,
         /** No bloquear previews más cortos (TV/ASR fluctúa). */
@@ -685,7 +685,7 @@ export const FLU_CONFIG = {
       sinAgenda: { es: 'Sin recordatorios próximos', en: 'No upcoming reminders' },
       alarmasTitle: { es: '⏰ Alarmas', en: '⏰ Alarms' },
       sinTemporales: { es: 'Sin alarmas ni temporizadores', en: 'No alarms or timers' },
-      clasesHoyLabel: { es: 'Clases de hoy', en: "Today's classes" },
+      clasesHoyLabel: { es: 'Agenda de hoy', en: "Today's agenda" },
       sinProxima: { es: 'Sin próxima entrada', en: 'No upcoming entry' },
       sinClasesHoy: { es: 'Hoy no tienes entradas', en: 'No entries today' },
       sinDiario: { es: 'Aún no hay entradas en el diario.', en: 'No diary entries yet.' },

@@ -25,6 +25,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { BunnyViewer, useBunnyStore } from '../avatar';
 import type { BunnyAnimation } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
+import { selectVisiblePhrase } from '../voice/lib/conversationDialogue';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
@@ -160,7 +161,7 @@ function VoiceControls({
     // Precedencia ÚNICA y canónica (idéntica a la de la bitácora):
     //   live (interino) → última frase confirmada del hook (lastTranscript)
     //   → ÚLTIMA frase commitida del usuario (fallback = historial) → espejo.
-    const rawText = liveTranscript || lastTranscript || fallback || transcript || '';
+    const rawText = selectVisiblePhrase({ live: liveTranscript, lastTranscript, lastUserText: fallback, currentTranscript: transcript });
     const displayText = rawText;
     return (
         <div className="voice-controls">

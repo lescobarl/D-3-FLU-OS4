@@ -337,6 +337,18 @@ export function HoyPanel({
                           </span>
                         </span>
                       </span>
+                      {horario.onRemove && (
+                        <button
+                          type="button"
+                          className="hoy-panel__card-remove"
+                          title={FLU_CONFIG.horario?.ui?.removeTitle || 'Quitar entrada'}
+                          aria-label={`${FLU_CONFIG.horario?.ui?.removeTitle || 'Quitar entrada'}: ${clase.materia}`}
+                          data-testid={`hoy-clase-remove-${clase.id}`}
+                          onClick={() => horario.onRemove!(clase.id)}
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}

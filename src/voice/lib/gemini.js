@@ -704,8 +704,11 @@ export function buildUserPrompt({
       ? `Curated browser allowlist: ${browserAllowlist.join(', ') || '(empty)'}. If the user asks which sites they have access to, enumerate these sites.`
       : `Sitios permitidos del navegador curado (allowlist): ${browserAllowlist.join(', ') || '(vacía)'}. Si el usuario pregunta a qué sitios tiene acceso, enumera estos sitios.`,
     isEnglish
-      ? 'Continue the current thread naturally and keep references from earlier turns.'
-      : 'Continua el hilo naturalmente y conserva las referencias de los turnos anteriores.',
+      ? 'Continue the current thread naturally using earlier turns only as context. NEVER re-execute, re-confirm or repeat actions (alarms, reminders, notes, appointments, searches) that were already executed or acknowledged in a previous turn; those belong to the past and must not be mentioned again as if new.'
+      : 'Continua el hilo naturalmente usando los turnos anteriores SOLO como contexto. NUNCA re-ejecutes, re-confirmes ni repitas acciones (alarmas, recordatorios, notas, citas, búsquedas) que ya se ejecutaron o confirmaron en un turno anterior: esas pertenecen al pasado y no deben volver a mencionarse como si fueran nuevas.',
+    isEnglish
+      ? 'Only act on the CURRENT user request. If the latest message asks for something else, do not reproduce stale confirmations from history.'
+      : 'Actúa SOLO sobre la petición ACTUAL del usuario. Si el último mensaje pide otra cosa, no reproduzcas confirmaciones viejas del historial.',
     isEnglish
       ? 'Do not include the wake word in workspace fields unless it is part of the actual content.'
       : 'No incluyas la wake word en los campos de workspace salvo que forme parte del contenido real.',

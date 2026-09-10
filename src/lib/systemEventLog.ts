@@ -179,9 +179,8 @@ function eventSentiment(type: SystemEventType): 'positive' | 'negative' | 'neutr
  * para que flu-voz la clasifique como assistant y Gemini la
  * vea como un mensaje propio de FLU en el historial.
  *
- * La entrada se inyecta TANTO en integrationStore.conversationHistory
- * (UI) como en dialogueHistoryRef (contexto Gemini) vía el
- * método injectDialogueEntry expuesto por flu-voz.
+ * La entrada se inyecta en integrationStore.conversationHistory (única fuente
+ * de verdad); el contexto de Gemini se DERIVA de ese store.
  */
 export function buildSystemConversationEntry(
     event: SystemEvent,

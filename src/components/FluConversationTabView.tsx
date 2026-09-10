@@ -9,6 +9,7 @@
 // ============================================================
 import type { ComponentType } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { selectVisiblePhrase } from '../voice/lib/conversationDialogue';
 import { FluTabPanel } from '../voice/components/FluShellTabs';
 import { PanelFrame } from '../voice/components/PanelFrame';
 import { ConversationLog } from '../voice/components/ConversationLog';
@@ -73,7 +74,7 @@ export function FluConversationTabView({
     // historial real (misma que alimenta la burbuja del avatar). El escaneo
     // local duplicado se eliminó para que burbuja y bitácora nunca difieran.
     const lastHeard = String(lastHeardText || '').trim();
-    const livePhrase = (liveTranscript || lastTranscript || lastHeard || currentTranscript || '').trim();
+    const livePhrase = selectVisiblePhrase({ live: liveTranscript, lastTranscript, lastUserText: lastHeard, currentTranscript });
 
     return (
         <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">

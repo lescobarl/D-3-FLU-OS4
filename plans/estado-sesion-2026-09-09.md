@@ -89,3 +89,35 @@ El servidor dev corre como proceso en background de Kilo con id `bgp_083bd2f4400
 - **Volcado capturado en esta sesiÃ³n** (traza del bug de alarma, turno 18:47): `C:\Users\luis_\.local\share\kilo\tool-output\tool_0870829ef001KYEmW9PAIcfNsv`.
 - **Evidencia visual**: `reports/ui-review/*.png` (panel Hoy), `reports/comandos-luis/*.png` y `reports/comandos-luis-real/*.png` (screenshots de comandos por usuario).
 - CÃ³mo validar con el log: pedir al usuario que ejecute la frase por voz y leer la traza del turno; buscar si `dispatchArbiterIntent` ejecutÃ³ el manejador y quÃ© `timeOfDay`/`dueAt` se calculÃ³.
+- NOTA 2026-09-09 20:05: el dev server se reiniciÃ³ en otra sesiÃ³n. Id actual del background process: `bgp_087c30492001ECWNpb2wl3MBpK` (pid 19092). Su log vive en la misma carpeta `log\background-process\` bajo el scope de ESE id; el id `bgp_083bd2f44001...` corresponde al arranque previo.
+
+## Bloque 8 (sesión clon 2026-09-09 ~15:21) — 10 reportes de usuario
+Código aplicado (sin commitear, sobre HEAD 32ea9e3), validado con tsc -b + 190 tests acotados:
+- P1 borrar alarmas: refresh de useTemporalItems expone solo status pending (causa: list() devolvía todos).
+- P2 AM/PM: formatTimeOfDayMeridiem (scheduleEngine) usado en citas y alarmas (HoyPanel).
+- P3 parsers: ES_TIME acepta "con N minutos"; normalize "con N minutos" antes de OFFSET en nlDateParser; "hoy" con hora pasada rola a mañana (temporalIntentParser). +tests.
+- P4 alarma triplicada: refs latest para notify/speak + entrega única de voz (voice/both no repite speak) en useReminders/useTemporalItems; quitar notify/speak de deps de runTick.
+- P5 nota que repite alarma: guard actionBelongsToTranscript en audioMath + aplicado en onContractResolved (App) + tests.
+- P6 notas: fila clicable label (checkbox+texto) .hoy-panel__nota-row; contenido completo con wrap; parser "agrega X a la lista del super"; append semántico a nota Super: existente (App __fluHandleNoteText).
+- P7 recordatorios: sección renombrada "Recordatorios y citas"; top 5 en vez de 3.
+- P8 horario: card de clase materia+horario en un renglón con wrap; --font-ui = --font-sans (App.css) para tipografía unificada.
+- P9 zona arrastre: .flu-upload-zone__drop a columna (2 renglones).
+- P10 OCR horario: REVISADO (sin implementar): imágenes?visión+structureHorarioText+HorarioImportConfirm ya existe; PDF ruta F1 no parsea horario (el OCR cae al artifact, no a structureHorarioText). Propuesta si se autoriza: en useDocumentAnalysis/analyzeFile, tras obtener rawText OCR correr structureHorarioText y abrir pendingHorarioImport igual que processImageFile.
+- 3 fallos preexistentes de diario (hoyPanel.test) NO tocados.
+PENDIENTE validación en vivo con luis: P1 (×), P2, P3 frases, P4 (alarma a hora real), P5 nota, P6-9 visual.
+
+## Bloque 9 (sesión clon 2026-09-09 ~18:00) — Tubería única de voz §9 (hitos)
+Basado en AGENTS.md §9 (nueva Piedra Inamovible) + plans/plan-tuberia-unica-voz.md. Aplicado y validado (tsc -b + 358 tests acotados verdes; 3 fallos preexistentes diario NO tocados):
+- H1 App respeta replaceLastRawLog del payload (eliminado re-dedup con spokenUtteranceRevision en App.tsx rawOnly; ahora reemplaza si el motor dice replace, append si no, con dedup exacto residual). Invariante: rg spokenUtteranceRevision en App.tsx = 0.
+- H2 Frase canónica única: helper puro resolveDisplayPhrase (audioMath.js) usado por FluAvatarVoiceBridge/FluConversationTabView/WorkspaceHub; eliminado phraseDisplay muerto en App. Invariante: sin cascadas a||b||c de transcripción en componentes.
+- H3 Escucha centralizada: speechRecognitionLocal.js registra instancias vivas; startSpeechRecognition aborta cualquier otra activa (nunca 2 micrófonos). Onboarding y principal comparten la exclusión.
+- H5 Prompt anti-arrastre: gemini.js instrucción ahora prohíbe re-ejecutar/re-mentar acciones de turnos anteriores (solo contexto).
+- H4 (query = misma canónica / web partida) NO ejecutado: requiere decisión de timing en motor de voz (esperar turno completo antes de BUSCAR) — validar en vivo.
+PENDIENTE validación en vivo con luis (micrófono): frase unica "busca en la web como saltan los chapulines" ? 1 fila en bitácora + 1 búsqueda completa; confirmar IA no repite turnos previos; P1-P9 visual.
+
+## Bloque 10 (sesión clon 2026-09-09 ~18:43) — P1 diarización + P2 agenda + P3 estética
+- P1 diarización (causa raíz con evidencia): fluConfig.js roomCapture.segmentChronoSplit estaba en true CONTRADICIENDO su comentario "Desactivado: pausas no abren H2+ en la misma voz (causa H46)". El código turnSpeakerCommit.js:123-148 forzaba etiqueta nueva (segment-chrono-split -> nextSpeakerLabel) en cada segmento de audio nuevo con la MISMA voz -> "Hablante N" por intervención. Cambiado a false (config, sin hardcode). tsc OK + turnSpeakerCommit 16/16.
+- P2 agenda: etiqueta 'Clases de hoy' -> 'Agenda de hoy'; botón × en tarjetas del día (HoyPanel, usa horario.onRemove) data-testid hoy-clase-remove-{id}; borrado por voz ya existía (horario.remove App:3509, con match por materia/día). Toda la agenda (clases Y reuniones) borrable manual y por voz.
+- P3 estética: CSS scope .hoy-panel__horario neutraliza el chrome de .flu-settings-* y alinea tipografía/tokens del HorarioPizarron embebido al panel (unified.css).
+- No tocado: H4 (timing motor de voz). Pendiente validación en vivo usuario.
+- 394 tests acotados verdes; 3 fallos preexistentes DIARIO.

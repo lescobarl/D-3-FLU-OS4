@@ -150,7 +150,6 @@ import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluS
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import {
     normalizeCommandForDeterministic,
-    spokenUtteranceRevision,
     actionBelongsToTranscript,
 } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
@@ -1413,11 +1412,9 @@ function App() {
                         dedupCacheLastPruneRef.current = now;
                     }
                     const entry = buildSystemConversationEntry(systemEvent, language === 'en' ? 'en' : 'es');
-                    // Update UI log
+                    // Store único (§9): el evento entra al historial (única fuente de
+                    // verdad) y Gemini lo ve por derivación; no hay canal lateral.
                     integrationStore.addConversationEntry(entry);
-                    // Inject into dialogueHistoryRef so Gemini sees it as part of the
-                    // conversation context (FLU's own memory).
-                    injectDialogueEntry(entry);
                     // FIX "¿por qué estás enojado?": además de la línea de contexto,
                     // forzar el bloque CRÍTICO del system prompt (gemini.js:458-463) en el
                     // SIGUIENTE contract request vía setRecentMemory, para que FLU EXPRESE
@@ -1494,8 +1491,6 @@ function App() {
         resetVoiceDisplay: os2ResetVoiceDisplay,
         endParticipantFloorDelivery: os2EndParticipantFloorDelivery,
         suspendRecognitionForAssistantSpeech: os2SuspendRecognition,
-        /** Inject system events into dialogueHistoryRef so Gemini sees them as FLU's own memory. */
-        injectDialogueEntry,
         /** Set recent memory text that gets injected into the system prompt on next contract request. */
         setRecentMemory,
     } = useFluVoiceAssistant({
@@ -1607,16 +1602,15 @@ function App() {
                 const normalizedTranscript = cleanForSpeech(transcript);
                 if (!normalizedTranscript) return;
 
-                // OS2 dedup (con ESTADO VIVO): isExactDuplicateLogEntry +
-                // rowDuplicatesPrior + phrasesEquivalent. NO usar el snapshot de
-                // este render (useIntegrationStore()): el callback es memoizado y
-                // quedaría congelado en conversationHistory=[] haciendo que cada
-                // revisión ASR se APPENDEE en vez de reemplazar (filas duplicadas).
+                // Decisión ÚNICA de commit (§9): el motor ya calculó si esta emisión
+                // reemplaza la última fila (misma emisión creciendo) o si es una fila
+                // nueva, y lo envía en el payload como `replaceLastRawLog`. App OBEDECE
+                // esa señal; NO re-decide con heurística propia.
                 const liveStore = useIntegrationStore.getState();
                 const history = liveStore.conversationHistory;
                 const targetSpeaker = String(speakerName || '').trim().toLowerCase();
                 const speakerKey = targetSpeaker || '__default__';
-                const wakeWords = ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[] | undefined) || [];
+                const replaceLastRawLog = resolved?.replaceLastRawLog === true;
                 let lastEntryForSpeaker: any = null;
                 let lastEntryIndex = -1;
                 const cached = speakerIndexRef.current.get(speakerKey);
@@ -1640,26 +1634,23 @@ function App() {
                     }
                 }
 
-                if (lastEntryForSpeaker) {
-                    const lastText = cleanForSpeech(lastEntryForSpeaker.text || '');
-                    // Misma emisión (crece o igual) tras quitar wake/casing/acentos:
-                    // NO es una fila nueva; si crece, se reemplaza la última (OS2
-                    // replaceLastRawLog) para que un turno quede en UNA fila.
-                    const revision = spokenUtteranceRevision(lastText, transcript, wakeWords);
-                    if (revision === 'equal') {
-                        return;
-                    }
-                    if (revision === 'grow') {
-                        const updated = [...history];
-                        updated[lastEntryIndex] = {
-                            ...lastEntryForSpeaker,
-                            text: transcript,
-                            speakerName: speakerName || lastEntryForSpeaker.speakerName || 'Hablante 1',
-                            timestamp: Date.now(),
-                        };
-                        useIntegrationStore.getState().batchLoadHistory(updated);
-                        // Update cache: the replaced entry is now at the same index with new content
-                        speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: updated[lastEntryIndex] });
+                if (replaceLastRawLog && lastEntryForSpeaker) {
+                    // Misma emisión creciendo (decidido por el motor): reemplaza en sitio.
+                    const updated = [...history];
+                    updated[lastEntryIndex] = {
+                        ...lastEntryForSpeaker,
+                        text: transcript,
+                        speakerName: speakerName || lastEntryForSpeaker.speakerName || 'Hablante 1',
+                        timestamp: Date.now(),
+                    };
+                    useIntegrationStore.getState().batchLoadHistory(updated);
+                    speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: updated[lastEntryIndex] });
+                    return;
+                }
+
+                if (!replaceLastRawLog && lastEntryForSpeaker) {
+                    // Duplicado exacto de la última fila: descartar (re-entrada idéntica).
+                    if (cleanForSpeech(lastEntryForSpeaker.text || '') === normalizedTranscript) {
                         return;
                     }
                 }
@@ -2034,7 +2025,13 @@ function App() {
             // generación de imagen, etc.). WorkspaceHub escucha RESET_SEARCH y
             // llama a resetSearch(). Si este turno SÍ es una búsqueda, el
             // dispatchFluSearch posterior (más abajo) re-puebla resultados frescos.
-            dispatchFluResetSearch();
+            // Invariante (searchSingleRouteGuard G8): en un turno de BÚSQUEDA el
+            // FILL (`dispatchFluSearch`) es el ÚNICO escritor del estado de Buscar.
+            // Limpiar aquí borraba los resultados recién pintados cuando el ASR
+            // emitía más revisiones del mismo comando (barra con query, grilla vacía).
+            const comandoNavegacion = String((navegacion as any)?.comando || '').toUpperCase();
+            const isSearchFillTurn = comandoNavegacion === 'BUSCAR' || comandoNavegacion === 'NAVEGAR';
+            if (!isSearchFillTurn) dispatchFluResetSearch();
             if (workspace) {
                 const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
                 const titulo = workspace.titulo || '';
@@ -3624,7 +3621,7 @@ function App() {
     });
 
     // ---- Handlers para digitalización OCR (tutor experience) ----
-    // These must be declared AFTER speakFlu and injectDialogueEntry are available.
+    // These must be declared AFTER speakFlu is available.
     const processImageFile = useCallback(async (file: File) => {
         if (!file || !file.type.startsWith('image/')) return;
         const reader = new FileReader();
@@ -3677,11 +3674,8 @@ function App() {
 
                 // ── Tutor experience: FLU speaks proactively after analysis ──
                 if (result.texto_extraido) {
-                    // 1. Inject context into dialogueHistoryRef so Gemini sees it as
-                    //    FLU's own memory (preferred over addConversationEntry because
-                    //    injectDialogueEntry adds it as a regular conversation entry
-                    //    that Gemini sees in-context but does NOT persist beyond the
-                    //    context window).
+                    // 1. El contexto entra al historial (única fuente de verdad); Gemini
+                    //    lo ve por derivación del store, sin canal lateral.
                     const contextLabel = language === 'en'
                         ? `[Document context uploaded by user: ${result.texto_extraido}]`
                         : `[Contexto de documento subido por el usuario: ${result.texto_extraido}]`;
@@ -3693,7 +3687,6 @@ function App() {
                         speakerName: 'system',
                     };
                     integrationStore.addConversationEntry(entry);
-                    injectDialogueEntry(entry);
 
                     // 2. Store analysis in workspaceArtifact for persistence across
                     //    conversation turns (so the Pizarrón tab shows the analysis
@@ -3746,7 +3739,7 @@ function App() {
             }
         };
         reader.readAsDataURL(file);
-    }, [language, integrationStore, speakFlu, injectDialogueEntry]);
+    }, [language, integrationStore, speakFlu]);
 
     const handleClearImage = useCallback(() => {
         setUploadedImage(null);

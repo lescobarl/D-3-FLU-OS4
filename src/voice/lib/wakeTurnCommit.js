@@ -7,7 +7,7 @@ import {
   cleanForSpeech,
   splitTranscriptAtWakeWord,
   peelWakeQuestionEcho,
-  resolveFinalConversationAction,
+  planConversationDispatch,
   resolveCommandConversationLogText,
 } from './audioMath.js'
 
@@ -32,7 +32,7 @@ export function getWakeWords(config = FLU_CONFIG) {
  *   afterWake: string,
  *   question: string,
  *   commandLogText: string,
- *   action: ReturnType<typeof resolveFinalConversationAction>,
+ *   action: ReturnType<typeof planConversationDispatch>['action'],
  *   split: ReturnType<typeof splitTranscriptAtWakeWord>,
  *   commitCapture: string,
  *   fluTail: { fullCapture: string, action: object } | null,
@@ -63,9 +63,9 @@ export function analyzeWakeTurn(capture = '', { lastCommitted = '', wakeWords = 
   const echoSources = [passiveOnly, cleanForSpeech(lastCommitted)].filter(Boolean)
   const afterWakeRaw = cleanForSpeech(split.afterWake || split.commandText || '')
   const afterWake = peelWakeQuestionEcho(afterWakeRaw, echoSources)
-  const action = resolveFinalConversationAction(cleaned, FLU_CONFIG.voiceCommands, {
+  const action = planConversationDispatch(cleaned, FLU_CONFIG.voiceCommands, {
     lastCommitted: passiveOnly || cleanForSpeech(lastCommitted),
-  })
+  }).action
   const commandLogText = resolveCommandConversationLogText(cleaned, split, passiveOnly)
   const question =
     action.kind === 'flu'

@@ -2714,6 +2714,49 @@
   margin-top: 3px;
 }
 
+/* Horario embebido en el panel Hoy: neutralizar el chrome de "settings"
+   (borde/fondo/paddings grandes) para que use los mismos tokens y tipografía
+   del panel. Scope local: NO afecta al HorarioPizarron de Ajustes. */
+.hoy-panel__horario .flu-settings-image-config {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-ui, var(--font-sans));
+}
+
+.hoy-panel__horario .flu-settings-image-config__group {
+  gap: 4px;
+}
+
+.hoy-panel__horario .flu-settings-section {
+  margin-top: 4px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.hoy-panel__horario .flu-settings-section__body {
+  padding: 0;
+}
+
+.hoy-panel__horario .flu-horario__toolbar {
+  margin-bottom: 4px;
+}
+
+.hoy-panel__horario .flu-horario__week {
+  padding: 4px;
+}
+
+.hoy-panel__horario .flu-horario__modo-select {
+  font-size: var(--text-xs, 11px);
+  padding: 2px 6px;
+}
+
+.hoy-panel__horario .flu-horario__form {
+  gap: 4px;
+}
+
 /* Diario (pausado): contenido dentro de la misma card unificada */
 .hoy-panel__diario-mood {
   align-self: flex-start;
