@@ -1966,21 +1966,19 @@ export const FLU_CONFIG = {
    */
   transcript: {
     /**
-     * §9 Motor ÚNICO de escucha (B): Whisper WASM on-device + segmentador VAD
-     * sobre el PCM. Reemplaza Chrome SR (texto) y alimenta también la identidad
-     * de voz. Todo configurable; prohibido hardcodear en el motor.
+     * Config del transcriptor Whisper — SOLO para el laboratorio dev
+     * (`src/dev/asrLab/`). PRODUCCIÓN usa Chrome SpeechRecognition (Google,
+     * online); el resto del pipeline es agnóstico al motor.
      */
     asr: {
       provider: 'whisper-wasm',
-      /** Modelo FINAL (preciso) para la fila commiteada. */
-      modelId: 'Xenova/whisper-base',
-      /** Modelo INTERIM (rápido) para el texto en vivo mientras se habla. */
-      interimModelId: 'Xenova/whisper-tiny',
+      /** §9 UN solo modelo (`tiny`) para final e interim: sin contención de CPU
+       *  (antes corrían `base`+`tiny` a la vez) ni doble memoria. */
+      modelId: 'Xenova/whisper-tiny',
       language: 'es',
       /**
-       * dtype del modelo. `q8` rompía el decoder de whisper-base
-       * (TransposeDQWeightsForMatMulNBits: falta scale en embed_tokens).
-       * Se usa 'fp32' (seguro) + modelo `tiny` para velocidad.
+       * dtype fp32. El q8 COMPLETO NO es viable: el decoder cuantizado falla en
+       * ORT Web (WASM). Medido en escritorio: `tiny` fp32 ≈1.3 s por 4 s de audio.
        */
       dtype: 'fp32',
       /** Tasa objetivo del modelo (Hz). */
@@ -1994,22 +1992,31 @@ export const FLU_CONFIG = {
         'Conversación en español con el asistente. Palabras clave: ok flu, oye flu, ' +
         'estás ahí, cuéntame, busca en la web, recuérdame, anota.',
       /** Parciales en vivo (interim): la "última frase" se escribe mientras se
-       *  escucha. El COMMIT de la conversación sigue siendo solo con el final
-       *  (fin de habla / silencio / cambio de hablante). Con `tiny` es viable. */
+       *  escucha. El COMMIT de la conversación sigue siendo solo con el final. */
       partialsEnabled: true,
-      partialIntervalMs: 1200,
+      partialIntervalMs: 1000,
+      /** Ventana de audio del interim. Se usa el TURNO COMPLETO (tope 10 s ≥
+       *  maxSegmentMs): una ventana deslizante corta perdía el inicio de la
+       *  frase ("se comía el primero") y mostraba solo la cola. */
+      partialWindowMs: 10000,
+      /** Audio mínimo para el PRIMER parcial (ms). Con <1 s Whisper no tiene
+       *  contexto y entra en bucle de repetición ("2,2,2,3,4"). */
+      partialMinMs: 1200,
       /** Segmentador / VAD: corta turnos y emite parciales. */
       vad: {
         /** Ventana de análisis (ms). */
         frameMs: 30,
         /** Umbral de energía RMS para considerar voz. Único knob de voz del VAD;
-         *  valor inicial — se mide/ajusta en validación, no es un valor secreto. */
-        energyThreshold: 0.015,
-        /** Voz mínima para abrir turno (ms). */
-        minSpeechMs: 300,
-        /** Silencio mínimo para cerrar turno (ms). Alineado a `segmentSilenceGapMs`
-         *  (1200) del respaldo afinado: no parte "ok flu" del comando. */
-        minSilenceMs: 1000,
+         *  valor inicial — se mide/ajusta en validación, no es un valor secreto.
+         *  Subido a 0.02: con 0.015 el ruido de ambiente abría turno y Whisper
+         *  alucinaba ("¡Vamos!", "¡Ahh!"). */
+        energyThreshold: 0.02,
+        /** Voz mínima para abrir turno (ms). Subido a 450: exige voz sostenida
+         *  (un chasquido/ruido corto ya no abre turno). */
+        minSpeechMs: 450,
+        /** Silencio para cerrar turno (ms). 900 junta "ok flu" con el comando
+         *  (evita fragmentos); la ventana de wake del hook es la red de apoyo. */
+        minSilenceMs: 900,
         /** Turno máximo antes de forzar corte (ms). Corto = menos bucles. */
         maxSegmentMs: 8000,
         /** Audio previo al inicio de voz que se incluye en el turno (ms). */

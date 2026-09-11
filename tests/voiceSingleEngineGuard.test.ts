@@ -44,27 +44,27 @@ function grep(re: RegExp, files: string[] = FILES): string[] {
 const count = (re: RegExp, files?: string[]) => grep(re, files).length
 
 describe('voiceSingleEngineGuard — 1 motor + 1 fuente de verdad', () => {
-  it('E1 — el motor operativo no adquiere Chrome SR', () => {
+  it('E1 — el motor operativo adquiere Chrome SR exactamente una vez', () => {
     const motor = join(SRC, 'voice', 'hooks', 'useFluVoiceAssistant.js')
-    const offenders = grep(
-      /acquireSpeechRecognition\s*\(|createSpeechRecognition\s*\(|new SpeechRecognition|webkitSpeechRecognition/,
-      [motor],
-    )
+    const acquisitions = grep(/acquireSpeechRecognition\s*\(/, [motor])
     expect(
-      offenders,
-      `El motor sigue instanciando Chrome SR (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
-    ).toEqual([])
+      acquisitions.length,
+      `El motor debe adquirir Chrome SR en UN solo punto (N=${acquisitions.length}):\n  ${acquisitions.join('\n  ')}`,
+    ).toBe(1)
   })
 
-  it('E2 — el motor transcribe con el motor único (Whisper)', () => {
+  it('E2 — el motor es Chrome SR (no Whisper)', () => {
     const motor = join(SRC, 'voice', 'hooks', 'useFluVoiceAssistant.js')
-    const uses = grep(/createWhisperRecognitionEngine/, [motor])
+    const whisper = grep(/createWhisperRecognitionEngine/, [motor])
     expect(
-      uses.length,
-      `El motor debe crear el transcriptor único (N=${uses.length})`,
-    ).toBeGreaterThanOrEqual(1)
+      whisper,
+      `El motor no debe usar el motor Whisper (N=${whisper.length}):\n  ${whisper.join('\n  ')}`,
+    ).toEqual([])
     const sr = grep(/window\.SpeechRecognition|window\.webkitSpeechRecognition/, [motor])
-    expect(sr, `Sin referencia a Chrome SR en el motor (N=${sr.length}):\n  ${sr.join('\n  ')}`).toEqual([])
+    expect(
+      sr.length,
+      `El motor debe exigir/consultar SpeechRecognition (N=${sr.length})`,
+    ).toBeGreaterThanOrEqual(1)
   })
 
   it('E3 — sin selección dual de fuente de transcripción', () => {

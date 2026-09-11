@@ -74,18 +74,27 @@ export function createWhisperRecognitionEngine({
   const asrConfig = getAsrConfig()
   const targetRate = getAsrSampleRate(asrConfig)
   const whisper = finalTranscriber || transcriber || createWhisperWasmTranscriber()
-  // Interim con modelo rápido (tiny) y final con modelo preciso (base): resuelve
-  // velocidad del texto en vivo + precisión de la fila commiteada.
+  // §9: si no hay modelo interim distinto, se reutiliza el MISMO transcriptor
+  // (un solo worker/modelo). Antes corrían `base`+`tiny` a la vez: contención.
+  const interimModelId = asrConfig.interimModelId || asrConfig.modelId
+  const sameModel = interimModelId === asrConfig.modelId
   const whisperInterim =
     interimTranscriber ||
     transcriber ||
-    createWhisperWasmTranscriber({
-      modelId: asrConfig.interimModelId || asrConfig.modelId,
-      dtype: asrConfig.dtype,
-    })
+    (sameModel
+      ? whisper
+      : createWhisperWasmTranscriber({
+          modelId: interimModelId,
+          dtype: asrConfig.interimDtype || asrConfig.dtype,
+        }))
   const segmenter = createVoiceSegmenter(asrConfig.vad, targetRate)
   const partialsEnabled = asrConfig.partialsEnabled !== false
   const partialIntervalMs = Math.max(300, Number(asrConfig.partialIntervalMs) || 900)
+  const partialWindowMs = Math.max(500, Number(asrConfig.partialWindowMs) || 3000)
+  const partialMinSamples = Math.max(
+    1,
+    Math.round(((Number(asrConfig.partialMinMs) || 600) / 1000) * targetRate),
+  )
 
   let active = false
   let inSpeech = false
@@ -94,6 +103,7 @@ export function createWhisperRecognitionEngine({
   let queue = Promise.resolve()
   let partialInFlight = false
   let partialDirty = false
+  let finalInFlight = false
 
   const engine = {
     onstart: null,
@@ -112,7 +122,7 @@ export function createWhisperRecognitionEngine({
       if (active) return
       active = true
       Promise.resolve(whisper.preload?.()).catch(() => {})
-      Promise.resolve(whisperInterim.preload?.()).catch(() => {})
+      if (whisperInterim !== whisper) Promise.resolve(whisperInterim.preload?.()).catch(() => {})
       if (typeof engine.onstart === 'function') engine.onstart()
     },
     stop() {
@@ -149,7 +159,7 @@ export function createWhisperRecognitionEngine({
       segmenter.reset()
       resetTurn()
       whisper.dispose?.()
-      whisperInterim.dispose?.()
+      if (whisperInterim !== whisper) whisperInterim.dispose?.()
     },
   }
 
@@ -177,6 +187,9 @@ export function createWhisperRecognitionEngine({
 
   function maybeEmitPartial() {
     if (!partialsEnabled || !inSpeech) return
+    // No competir con el final: mientras el turno se transcribe (modelo grande),
+    // no se lanzan parciales (se peleaban la CPU y el final tardaba más).
+    if (finalInFlight) return
     const now = Date.now()
     if (now - lastPartialAt < partialIntervalMs) return
     lastPartialAt = now
@@ -193,8 +206,11 @@ export function createWhisperRecognitionEngine({
   async function runPartial() {
     partialInFlight = true
     try {
-      const audio = concatChunks(turnChunks)
-      if (audio.length >= targetRate) {
+      const full = concatChunks(turnChunks)
+      // Solo los últimos `partialWindowMs`: no re-transcribir todo el turno.
+      const maxSamples = Math.round((partialWindowMs / 1000) * targetRate)
+      const audio = full.length > maxSamples ? full.subarray(full.length - maxSamples) : full
+      if (audio.length >= partialMinSamples) {
         const text = await whisperInterim.transcribe(audio)
         if (active && inSpeech && text && typeof engine.onresult === 'function') {
           engine.onresult(buildResultEvent(text, false))
@@ -221,9 +237,16 @@ export function createWhisperRecognitionEngine({
   }
 
   function enqueueTranscription(audio, isFinal) {
+    if (isFinal) finalInFlight = true
     queue = queue.then(async () => {
-      if (!active || !audio.length) return
-      if (isSpeechSynthesisSpeaking()) return
+      if (!active || !audio.length) {
+        if (isFinal) finalInFlight = false
+        return
+      }
+      if (isSpeechSynthesisSpeaking()) {
+        if (isFinal) finalInFlight = false
+        return
+      }
       try {
         const text = await whisper.transcribe(audio)
         if (!active || !text) return
@@ -237,6 +260,8 @@ export function createWhisperRecognitionEngine({
             message: String(error?.message || error),
           })
         }
+      } finally {
+        if (isFinal) finalInFlight = false
       }
     })
   }

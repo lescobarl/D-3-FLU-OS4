@@ -1,16 +1,17 @@
 import { FLU_CONFIG } from './fluConfig.js'
 
 /**
- * Configuración de transcripción — MOTOR ÚNICO (§9).
+ * Configuración de transcripción — motor de escucha único (Chrome SR).
  *
- * Ya no existe selector de fuente (`browser`/`stream`/`hybrid`): el transcriptor
- * es uno solo, Whisper WASM on-device, alimentado por el AudioWorklet PCM.
+ * No existe selector de fuente (`browser`/`stream`/`hybrid`): el transcriptor es
+ * uno solo (Chrome SpeechRecognition, Google online) y el resto del pipeline es
+ * agnóstico al motor.
  */
 export function getTranscriptConfig(config = FLU_CONFIG) {
   return config.transcript || {}
 }
 
-/** Etiqueta UI del motor único de transcripción. */
+/** Etiqueta UI del motor de transcripción. */
 export function formatStreamSttUiStatus(status = '', { listening = false } = {}) {
   if (!listening) {
     return { label: 'STT off', tone: 'fallback' }
@@ -19,5 +20,5 @@ export function formatStreamSttUiStatus(status = '', { listening = false } = {})
   if (raw === 'error') {
     return { label: 'STT error', tone: 'error' }
   }
-  return { label: 'Whisper', tone: 'ok' }
+  return { label: 'Chrome', tone: 'ok' }
 }

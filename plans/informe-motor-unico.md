@@ -272,6 +272,26 @@ Cerrado el último punto literal: antes la query se derivaba del **texto** de la
 
 ---
 
+## 13.bis Actualización (sesión 11) — DECISIÓN de motor: Chrome SR
+
+Tras el laboratorio comparativo (`src/dev/asrLab/`), el usuario decidió **Chrome SpeechRecognition (Google, online)**: en vivo, preciso, sin fallas. Queda **fuera** el requisito de offline.
+
+**Cambio aplicado (swap de motor sobre la MISMA unificación):**
+- `createRecognition` → `acquireSpeechRecognition` (Chrome SR). El resto (ingress/commit/query/display/clusters) intacto.
+- Chequeo de soporte vuelve a exigir `SpeechRecognition`.
+- Guard `voiceSingleEngineGuard` actualizado: E1 = Chrome SR adquirido 1 vez; E2 = sin Whisper en el motor. **9/9 verde**.
+
+**Limpieza (decisión tomada, sin basura):**
+- Removido `vosk-browser` (dev) y `public/models/vosk-es/` (falló).
+- Removida la instrumentación temporal `[LIVE]`/`asr-live`.
+- **Se conserva el laboratorio dev** `src/dev/asrLab/` (dev-gated) con los módulos Whisper como dependencia **solo del lab**.
+
+**Verificación:** `tsc -b` limpio · guard 9/9 · suite `2756 · 2750 passed · 6 preexistentes` → **0 fallos nuevos**.
+
+**Nota:** el bloque `transcript.asr` (Whisper) queda **solo para el lab**; producción usa Chrome SR.
+
+---
+
 ## 13. Actualización (sesión 7) — CAUSA RAÍZ del "no se ve nada"
 
 Validación runtime destapó que el motor **transcribía bien** (`transcribe OK final text= Ok, flu, platicame de la capital de Francia.`) pero nada llegaba a la conversación (sin fila, sin query, mudo).

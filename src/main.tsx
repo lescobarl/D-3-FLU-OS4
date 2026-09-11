@@ -26,10 +26,22 @@ if (
     .catch((err) => console.error('Error al registrar el Service Worker de la PWA:', err));
 }
 
+// Arnés de comparación ASR: SOLO en desarrollo y solo en /asr-lab.
+// En producción el import dinámico se elimina del bundle (import.meta.env.DEV=false).
+const isAsrLab =
+  import.meta.env.DEV && window.location.pathname.replace(/\/+$/, '') === '/asr-lab'
+const AsrLab = isAsrLab ? React.lazy(() => import('./dev/asrLab/AsrLab')) : null
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>,
+  isAsrLab && AsrLab ? (
+    <React.Suspense fallback={null}>
+      <AsrLab />
+    </React.Suspense>
+  ) : (
+    <React.StrictMode>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </React.StrictMode>
+  ),
 );

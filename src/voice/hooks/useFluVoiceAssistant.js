@@ -116,10 +116,10 @@ import {
   collapseMisorderedMicMerge,
 } from '../lib/activeListen.js'
 import {
+  acquireSpeechRecognition,
   startSpeechRecognition,
   stopSpeechRecognition,
 } from '../lib/speechRecognitionLocal'
-import { createWhisperRecognitionEngine } from '../lib/asr/whisperRecognitionEngine.js'
 import { fluEvent, logMicRaw, getListenLogRing, clearListenLogRing } from '../lib/listenLog'
 import {
   debugHotPath,
@@ -330,8 +330,10 @@ async function stopMediaStream(stream) {
 }
 
 function createRecognition(language, activeLocale = '') {
-  // §9 Motor ÚNICO: Whisper WASM on-device (recibe PCM del AudioWorklet).
-  return createWhisperRecognitionEngine({ sampleRate: 48000 })
+  // §9 Motor de escucha: Chrome SpeechRecognition (Google, online) — en vivo y
+  // preciso. El resto del pipeline (ingress/commit/query/display/diarización)
+  // sigue unificado y es agnóstico al motor.
+  return acquireSpeechRecognition(language, activeLocale)
 }
 
 function deriveSession(transcript, currentRole = '', language = 'es') {
@@ -695,21 +697,23 @@ export function useFluVoiceAssistant({
 
   useEffect(() => {
     const hasGetUserMedia = Boolean(navigator.mediaDevices?.getUserMedia)
+    const hasSpeechRecognition = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
     const hasAudioContext = Boolean(window.AudioContext)
-    const hasAudioWorklet = Boolean(window.AudioContext && 'audioWorklet' in AudioContext.prototype)
-    // §9 Motor ÚNICO: ya no se requiere Chrome SpeechRecognition; se usa
-    // AudioWorklet + Whisper WASM.
-    const supported = hasGetUserMedia && hasAudioContext && hasAudioWorklet
+    // §9 Motor: Chrome SpeechRecognition (Google, online) + AudioContext para la
+    // captura PCM (identidad de voz). El resto del pipeline es agnóstico.
+    const supported = hasGetUserMedia && hasSpeechRecognition && hasAudioContext
     setIsSupported(supported)
     if (!supported) {
       const missing = []
       if (!hasGetUserMedia) missing.push('getUserMedia (micrófono)')
+      if (!hasSpeechRecognition) missing.push('SpeechRecognition (reconocimiento de voz)')
       if (!hasAudioContext) missing.push('AudioContext (audio)')
-      if (!hasAudioWorklet) missing.push('AudioWorklet (captura de audio)')
       const isSecureContext = typeof window !== 'undefined' && window.isSecureContext
       let hint = ''
       if (!isSecureContext) {
         hint = ' Requiere un contexto seguro (HTTPS o localhost) para estas APIs. Accede vía https:// o http://localhost.'
+      } else if (!hasSpeechRecognition) {
+        hint = ' Usá Chrome actualizado para el reconocimiento de voz.'
       }
       setError(`Este navegador necesita: ${missing.join(', ')}.${hint}`)
     }
@@ -831,9 +835,12 @@ export function useFluVoiceAssistant({
   const flushLiveTranscript = useCallback(() => {
     if (conversationActiveRef?.current) {
       const capture = readStreamDisplay(listenStateRef.current)
-      if (capture && capture !== publishedLiveRef.current) {
-        publishedLiveRef.current = capture
-        setLiveTranscript(capture)
+      // Monótono: nunca mostrar menos texto que el ya visible (evita el
+      // "escribió y luego lo borró" cuando un parcial sale más corto).
+      const stable = capture ? monotonicDisplay(publishedLiveRef.current, capture) : ''
+      if (stable && stable !== publishedLiveRef.current) {
+        publishedLiveRef.current = stable
+        setLiveTranscript(stable)
       }
       return
     }
@@ -1923,11 +1930,13 @@ export function useFluVoiceAssistant({
   }, [])
 
   const needsConversationPassiveAudio = useCallback(() => {
-    // §9 Motor ÚNICO: el PCM del AudioWorklet es la entrada del transcriptor
-    // (Whisper WASM) y de la identidad de voz → la captura está SIEMPRE activa
-    // mientras se escucha, también en conversación.
-    return true
-  }, [])
+    const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
+    if (!conversationActiveRef?.current) return true
+    return (
+      captureCfg.conversationUsePassiveAudio === true &&
+      captureCfg.conversationAutoDiarize === true
+    )
+  }, [conversationActiveRef])
 
   const setupPassiveAudioCapture = useCallback(async () => {
     const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
@@ -2009,8 +2018,6 @@ export function useFluVoiceAssistant({
           FLU_CONFIG.voiceIdentity?.capture?.passiveBufferMs,
           chunkTotalSamplesRef,
         )
-        // §9 Motor ÚNICO: el mismo PCM alimenta al transcriptor (Whisper WASM).
-        recognitionRef.current?.pushAudio?.(input, sampleRateRef.current || 48000)
       },
     })
 
@@ -2133,6 +2140,10 @@ export function useFluVoiceAssistant({
               fluDebugHot('history-error', { detail: String(error?.message || error) })
             }
           }
+          // §9: publicar la frase viva también en conversación. Antes solo se
+          // publicaba al iniciar la escucha, así que los parciales NO se veían
+          // hasta el commit ("aparecía de golpe").
+          publishLiveFromTurn()
           return
         }
 
@@ -4177,12 +4188,6 @@ export function useFluVoiceAssistant({
       if (!isListeningRef.current || isStoppingRef.current) return
 
       if (conversationActiveRef?.current) {
-        // §9: un motor CONTINUO (Whisper) gestiona su propia captura y NO se
-        // detiene: el watchdog de "stall" (heredado de Chrome SR, que sí se
-        // detenía) no aplica. Re-crearlo en silencio partía turnos y descartaba
-        // transcripciones. El commit por gap (srGap) sigue funcionando igual.
-        const engineContinuous = recognitionRef.current?.continuous === true
-
         const restartCfg = getConversationRestartConfig(true)
         const now = Date.now()
         const sinceMeaningful = now - (lastMeaningfulIngressAtRef.current || 0)
@@ -4192,7 +4197,6 @@ export function useFluVoiceAssistant({
         const rebuildCooldown = restartCfg.stallRebuildMinMs
 
         if (
-          !engineContinuous &&
           recognitionActiveRef.current &&
           sinceMeaningful >= restartCfg.silentMicStallMs &&
           sinceRebuild >= rebuildCooldown
@@ -4205,7 +4209,6 @@ export function useFluVoiceAssistant({
         }
 
         if (
-          !engineContinuous &&
           !recognitionActiveRef.current &&
           !recognitionRestartPendingRef.current &&
           sinceEnd >= deadMs
@@ -4216,11 +4219,7 @@ export function useFluVoiceAssistant({
           return
         }
 
-        if (
-          !engineContinuous &&
-          sinceMeaningful >= restartCfg.stallMs &&
-          sinceRebuild >= rebuildCooldown
-        ) {
+        if (sinceMeaningful >= restartCfg.stallMs && sinceRebuild >= rebuildCooldown) {
           lastStallRebuildAtRef.current = now
           if (!rebuildRecognitionRef.current()) {
             requestRecognitionRestart(restartCfg.retryBackoffMs)

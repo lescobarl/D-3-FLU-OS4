@@ -318,14 +318,14 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // §9 Motor ÚNICO: se usa AudioWorklet + Whisper WASM (no Web Speech API).
-        const hasAudioWorklet =
+        // §9 Motor de escucha: Chrome SpeechRecognition (Google, online).
+        const hasSpeechRecognition =
             typeof window !== 'undefined' &&
-            'AudioContext' in window &&
-            'audioWorklet' in (window.AudioContext as unknown as { prototype: object }).prototype;
-        if (!hasAudioWorklet) {
+            Boolean((window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition ||
+                (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
+        if (!hasSpeechRecognition) {
             hasError = true;
-            message = 'AudioWorklet no disponible en este navegador';
+            message = 'SpeechRecognition no disponible en este navegador';
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;

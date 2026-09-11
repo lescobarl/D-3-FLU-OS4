@@ -1,7 +1,7 @@
 /**
  * Traza consola (dev) + ring opcional (__FLU_LISTEN_DEBUG).
  * Panel mic: solo vía micIngressLog.js (texto publicado en ingress).
- * Consola chrome-raw / stream-stt: opcional, no alimenta el panel.
+ * Consola chrome-raw: opcional, no alimenta el panel.
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
@@ -12,7 +12,7 @@ export { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 const IS_DEV = import.meta.env.DEV
 const RING_MAX = 200
 const SIM_STAGES = new Set(['sim-start', 'sim-done', 'sim-abort'])
-const FILE_STAGES = new Set(['chrome-raw', 'stream-stt', 'stream', 'final', 'mic-ingress'])
+const FILE_STAGES = new Set(['chrome-raw', 'final', 'mic-ingress'])
 
 const ring = new Array(RING_MAX)
 let ringHead = 0
@@ -95,8 +95,7 @@ export function listenLog(stage, data = {}) {
 }
 
 function logChromeRawConsole(channel, kind, text, seq) {
-  const tag = channel === 'stream-stt' ? '[Flu][stream-stt]' : '[Flu][chrome-raw]'
-  console.info(`${tag} #${seq} ${kind} ${text}`)
+  console.info(`[Flu][chrome-raw] #${seq} ${kind} ${text}`)
 }
 
 /** Consola dev: fragmentos Chrome sin procesar (no alimenta panel ingress). */
