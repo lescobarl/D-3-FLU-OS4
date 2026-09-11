@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { resolveAppLanguage } from '../lib/audioMath.js'
 import { resolveFluParticipantLabel } from '../lib/participantFloor.js'
+import { speakResponse } from '../lib/fluSpeech.js'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import {
   FLU_PARTICIPANT_EDITABLE_FIELDS,
@@ -107,16 +108,15 @@ export default function FluParticipantSettingsPanel({
                 className="flu-btn flu-btn--primary"
                 style={{ whiteSpace: 'nowrap' }}
                 onClick={() => {
-                  const selected = safeVoices.find(v => v.voiceURI === integrationStore?.voiceConfig?.voiceURI);
-                  const utterance = new SpeechSynthesisUtterance(
+                  // §9: el preview de voz usa la ruta ÚNICA de TTS (speakResponse),
+                  // no `window.speechSynthesis.speak` directo. Así respeta el estado
+                  // de voz (eco/barge-in) y suspende la escucha como el resto de FLU.
+                  speakResponse(
                     lang === 'en'
                       ? 'Hello, I am FLU. This is my voice.'
-                      : 'Hola, soy FLU. Esta es mi voz.'
-                  );
-                  if (selected) utterance.voice = selected;
-                  utterance.rate = integrationStore?.voiceConfig?.rate ?? 1.0;
-                  utterance.lang = lang === 'en' ? 'en-US' : 'es-MX';
-                  window.speechSynthesis.speak(utterance);
+                      : 'Hola, soy FLU. Esta es mi voz.',
+                    lang === 'en' ? 'en' : 'es'
+                  ).catch(() => {});
                 }}
               >
                 ▶ Probar

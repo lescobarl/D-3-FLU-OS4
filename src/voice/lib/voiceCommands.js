@@ -99,8 +99,14 @@ export function planVoiceCommandDispatch(
 
 export function resolveVoiceConversationAction(text = '', voiceCommands = getVoiceCommands()) {
   // Derivación ÚNICA: delega en el planificador canónico, el único que llama a
-  // resolveFinalConversationAction. Fallback no-nulo ({kind:'log'}).
-  return planConversationDispatch(text, voiceCommands).action ?? { kind: 'log' }
+  // deriveQueryFromRow. Fallback no-nulo con la misma forma.
+  return (
+    planConversationDispatch(text, voiceCommands).action ?? {
+      kind: 'log',
+      question: '',
+      searchQuery: '',
+    }
+  )
 }
 
 export function getCommandSpeech(

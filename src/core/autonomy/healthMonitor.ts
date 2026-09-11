@@ -318,28 +318,37 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // Verificar si Web Speech API está disponible
-        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        // §9 Motor ÚNICO: se usa AudioWorklet + Whisper WASM (no Web Speech API).
+        const hasAudioWorklet =
+            typeof window !== 'undefined' &&
+            'AudioContext' in window &&
+            'audioWorklet' in (window.AudioContext as unknown as { prototype: object }).prototype;
+        if (!hasAudioWorklet) {
             hasError = true;
-            message = 'Web Speech API no disponible en este navegador';
+            message = 'AudioWorklet no disponible en este navegador';
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;
         }
 
-        // Verificar permisos de micrófono
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Verificar permiso de micrófono SIN abrir un segundo stream: la captura
+        // la posee el motor único de escucha. Abrir otro getUserMedia aquí era
+        // una segunda captura del mismo micrófono (ruta doble).
+        if (navigator.permissions?.query) {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                metrics.microphonePermission = true;
-                stream.getTracks().forEach(track => track.stop());
-            } catch (error) {
-                hasError = true;
-                message = 'Permiso de micrófono no concedido';
-                metrics.microphonePermission = false;
+                const permission = await navigator.permissions.query({
+                    name: 'microphone' as PermissionName,
+                });
+                metrics.microphonePermission = permission.state !== 'denied';
+                if (permission.state === 'denied') {
+                    hasError = true;
+                    message = 'Permiso de micrófono no concedido';
+                }
+            } catch {
+                metrics.microphonePermission = 'unknown';
             }
         } else {
-            metrics.microphonePermission = false;
+            metrics.microphonePermission = 'unknown';
         }
     } catch (error) {
         hasError = true;

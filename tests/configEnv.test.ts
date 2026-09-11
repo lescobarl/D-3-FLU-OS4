@@ -52,11 +52,6 @@ describe('appConfig — env overrides (Rule #1)', () => {
         expect(mod.DEVICE_ACTIONS_CONFIG.WHATSAPP_WEB_BASE).toBe('https://wa.test');
     });
 
-    it('VITE_STREAM_STT_DEV_URL sobreescribe STREAM_STT_DEV_URL', async () => {
-        const mod = await loadConfig({ VITE_STREAM_STT_DEV_URL: 'ws://localhost:9999' });
-        expect(mod.STREAM_STT_DEV_URL).toBe('ws://localhost:9999');
-    });
-
     it('VITE_POLLINATIONS_URL sobreescribe POLLINATIONS_CONFIG.BASE_URL', async () => {
         const mod = await loadConfig({ VITE_POLLINATIONS_URL: 'https://img.example.test/prompt' });
         expect(mod.POLLINATIONS_CONFIG.BASE_URL).toBe('https://img.example.test/prompt');
@@ -80,7 +75,6 @@ describe('appConfig — env overrides (Rule #1)', () => {
         expect(mod.GEMINI_CONFIG.MODEL).toBe('gemini-2.5-flash-lite');
         expect(mod.DEEPSEEK_CONFIG.API_URL).toBe('https://api.deepseek.com/v1');
         expect(mod.OPENROUTER_CONFIG.API_URL).toBe('https://openrouter.ai/api/v1');
-        expect(mod.STREAM_STT_DEV_URL).toBe('ws://127.0.0.1:8787');
         expect(mod.POLLINATIONS_CONFIG.BASE_URL).toBe('https://image.pollinations.ai/prompt');
         expect(mod.NETWORK_PROBE_URLS).toEqual(['https://example.com', 'https://one.one.one.one']);
         expect(mod.DEVICE_ACTIONS_CONFIG.WHATSAPP_WEB_BASE).toBe('https://wa.me');

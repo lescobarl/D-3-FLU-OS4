@@ -9,7 +9,6 @@
 // ============================================================
 import type { ComponentType } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { selectVisiblePhrase } from '../voice/lib/conversationDialogue';
 import { FluTabPanel } from '../voice/components/FluShellTabs';
 import { PanelFrame } from '../voice/components/PanelFrame';
 import { ConversationLog } from '../voice/components/ConversationLog';
@@ -25,18 +24,11 @@ export interface FluConversationTabViewProps {
     expandedFrameId: string;
     /** Alterna la expansión de un frame por su id. */
     onToggleExpand: (frameId: string) => void;
-    /** Transcripción en vivo del micrófono (STT). */
-    liveTranscript: string;
-    /** Última frase completa que FLU ejecutó (fuente canónica tras el silencio). */
-    lastTranscript?: string;
-    /** Transcript actual de la conversación (store). */
-    currentTranscript: string;
     /**
-     * Última frase completa del usuario derivada del historial (fuente única
-     * canónica, calculada en App.tsx — misma que usa la burbuja del avatar).
-     * Reemplaza el escaneo local duplicado: burbuja y bitácora ya no pueden divergir.
+     * Frase visible canónica (§9.3): misma cadena que burbuja del avatar y barra.
+     * La deriva App (`selectVisiblePhrase`) una sola vez; la bitácora NO recalcula.
      */
-    lastHeardText?: string;
+    visiblePhrase: string;
     /** Historial de conversación (entradas de FLU + usuarios). */
     conversationHistory: readonly any[];
     /** Participantes de voz: label + profileId (unión historial + perfiles). */
@@ -55,26 +47,16 @@ export function FluConversationTabView({
     activeTab,
     expandedFrameId,
     onToggleExpand,
-    liveTranscript,
-    lastTranscript = '',
-    currentTranscript,
-    lastHeardText = '',
+    visiblePhrase,
     conversationHistory,
     voiceParticipants,
     onRenameProfile,
     onRemoveParticipant,
 }: FluConversationTabViewProps) {
     const ws = FLU_CONFIG.ui?.workspace || {};
-    // La frase en vivo muestra el texto COMPLETO que FLU oyó (incluida la wake
-    // word "ok flu"): antes se quitaba con stripWakeWordForDisplay y, al limpiar
-    // liveTranscript tras ejecutar, el display quedaba sin "ok flu" o vacío
-    // (Bug #4). Fuente: liveTranscript; si ya se limpió, la ÚLTIMA frase del
-    // usuario del historial (que conserva la frase completa); respaldo final.
-    // Fuente única de "última frase del usuario": la deriva App.tsx desde el
-    // historial real (misma que alimenta la burbuja del avatar). El escaneo
-    // local duplicado se eliminó para que burbuja y bitácora nunca difieran.
-    const lastHeard = String(lastHeardText || '').trim();
-    const livePhrase = selectVisiblePhrase({ live: liveTranscript, lastTranscript, lastUserText: lastHeard, currentTranscript });
+    // §9.3: la frase visible llega ya derivada desde App (misma que burbuja y
+    // barra). La bitácora no vuelve a seleccionar ni normalizar.
+    const livePhrase = String(visiblePhrase || '');
 
     return (
         <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">

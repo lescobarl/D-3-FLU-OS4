@@ -118,8 +118,10 @@ export function WorkspaceSearch({
     const wakeWords: string[] =
         (FLU_CONFIG as any)?.voiceCommands?.wakeWords || [];
     const split = splitTranscriptAtWakeWord(rawLive, wakeWords);
+    // §9.5/§9.6: conserva el texto original (acentos/mayúsculas) tras la wake word;
+    // la barra muestra lo mismo que la transcripción, solo sin la wake word.
     const live = split.wakeWordMatched
-        ? String(split.afterWake || split.commandText || '').trim()
+        ? String(split.afterWakeText || split.afterWake || split.commandText || '').trim()
         : '';
     // La transcripción en vivo se muestra como "valor" de la barra SOLO
     // mientras el asistente está escuchando de verdad y no hay una consulta

@@ -5,33 +5,21 @@
 import { readCommandText, matchesListeningAck } from './activeListen.js'
 import { createEventQueue } from './eventQueue.js'
 import {
-  pushBrowserSpeechEvent,
+  pushMicSpeechEvent,
   pushRecognitionEndEvent,
-  pushStreamSpeechEvent,
   pushSrGapEvent,
 } from './micEventProducer.js'
 import { createTranscriptConsumer } from './transcriptEventConsumer.js'
-import {
-  shouldIngestBrowserConversation,
-  shouldIngestStreamTranscript,
-  getTranscriptSource,
-} from './transcriptConfig.js'
-import { FLU_CONFIG } from './fluConfig.js'
 
 /**
  * @param {object} bindings — refs y callbacks del hook (lectura en cada evento).
  */
 export function buildConversationIngressCtx(bindings = {}) {
   const conversationActive = Boolean(bindings.conversationActiveRef?.current)
-  const transcriptSource = bindings.transcriptSource || getTranscriptSource(FLU_CONFIG)
-  const streamConnected = Boolean(bindings.streamSttConnected)
-  const streamProvider = bindings.streamSttProvider || FLU_CONFIG.transcript?.streamProvider || 'mock'
 
   return {
     conversationActive,
-    ingressSource: 'browser',
-    streamConnected,
-    streamProvider,
+    ingressSource: 'mic',
     listenState: bindings.listenStateRef?.current,
     publishedLiveRef: bindings.publishedLiveRef,
     openPreviewTurnRef: bindings.openPreviewTurnRef,
@@ -42,13 +30,6 @@ export function buildConversationIngressCtx(bindings = {}) {
     lastStreamPreviewRef: bindings.lastStreamPreviewRef,
     lastCommitAtRef: bindings.lastCommitAtRef,
     preflightScheduledForTurnRef: bindings.preflightScheduledForTurnRef,
-    skipConversationLog: !shouldIngestBrowserConversation(
-      FLU_CONFIG,
-      streamConnected,
-      streamProvider,
-    ),
-    ingestStream: shouldIngestStreamTranscript(FLU_CONFIG, streamConnected, streamProvider),
-    ingestBrowser: shouldIngestBrowserConversation(FLU_CONFIG, streamConnected, streamProvider),
     tryDispatch: (text, opts) => bindings.tryDispatchConversationAction?.(text, opts) === true,
     maybeSwitchLocale: (text) => bindings.maybeSwitchRecognitionLocale?.(text),
     syncConversationStream: (payload) => bindings.syncConversationStream?.(payload),
@@ -74,8 +55,6 @@ export function buildConversationIngressCtx(bindings = {}) {
     consumeTurnBridgeText: () => bindings.consumeTurnBridgeText?.() || '',
     touchMeaningfulIngress: (payload) => bindings.touchMeaningfulIngress?.(payload),
     scheduleIdentityPreflight: (payload) => bindings.scheduleIdentityPreflight?.(payload),
-    transcriptSource,
-    streamProvider,
   }
 }
 
@@ -100,15 +79,8 @@ export function createConversationIngressRuntime({ getBindings, onAfterBrowserEv
   return Object.freeze({
     queue,
     consumer,
-    pushBrowserRecognitionEvent(event) {
-      const pushed = pushBrowserSpeechEvent(event, queue)
-      if (pushed) {
-        consumer.scheduleDrain(queue)
-      }
-      return pushed
-    },
-    pushStreamTranscriptEvent({ text = '', isFinal = false } = {}) {
-      const pushed = pushStreamSpeechEvent({ text, isFinal }, queue)
+    pushMicRecognitionEvent(event) {
+      const pushed = pushMicSpeechEvent(event, queue)
       if (pushed) {
         consumer.scheduleDrain(queue)
       }

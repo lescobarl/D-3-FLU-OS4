@@ -18,7 +18,7 @@ import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch } from '../core/events/
 import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
 import { extractReadableContent, truncateContent } from '../core/browser/browserReadability';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
-import { extractQueryFromWebSearchPhrase } from '../voice/lib/audioMath';
+import { deriveSearchQuery } from '../voice/lib/audioMath';
 import {
     applyLanguageToHost,
     resolveSearchLanguage,
@@ -493,23 +493,15 @@ export function useNavigationCommands(
                 const languageWords = searchCfg.languageWords || browserCfg.languageWords || {};
                 const profileLang = String(browserCfg.defaultProfile?.language || 'es');
                 const requestLang = resolveSearchLanguage(transcript, profileLang, languageWords);
-                const rawQuery = String(
-                    parametros.consulta ||
-                        parametros.query ||
-                        parametros.busqueda ||
-                        // Voz determinista (parametros vacÃ­os): la consulta real es
-                        // el transcript SIN el gatillo de bÃºsqueda ("busca en la web
-                        // cÃ³mo saltan los conejos" â†’ "cÃ³mo saltan los conejos"). AsÃ­
-                        // la barra de bÃºsqueda muestra lo que se enviÃ³ realmente.
-                        extractQueryFromWebSearchPhrase(transcript, (FLU_CONFIG as any).voiceCommands) ||
-                        '',
-                ).trim();
-                // Si el LLM puso en parametros la frase ENTERA (con wake word o
-                // con el gatillo "busca en la web"), se limpia igual para que la
-                // barra muestre SOLO la consulta ("cÃ³mo saltan los conejos"), no
-                // el comando (Bug #4).
-                const extracted = extractQueryFromWebSearchPhrase(rawQuery, (FLU_CONFIG as any).voiceCommands);
-                const query = stripLanguageWords(extracted || rawQuery, languageWords);
+                // §9: ÚNICA derivación de la query. Toma los parámetros del LLM si
+                // existen o el transcript canónico, y limpia con un solo limpiador
+                // (deriveSearchQuery). Antes había dos derivadores en el mismo bloque.
+                const rawQuery = deriveSearchQuery({
+                    provided: parametros.consulta || parametros.query || parametros.busqueda || '',
+                    transcript,
+                    voiceCommands: (FLU_CONFIG as any).voiceCommands,
+                });
+                const query = stripLanguageWords(rawQuery, languageWords);
                 if (!query) {
                     // Sin consulta â†’ FLU anuncia la etiqueta voiceNoQuery y no
                     // se escribe nada en el PizarrÃ³n (los resultados web viven

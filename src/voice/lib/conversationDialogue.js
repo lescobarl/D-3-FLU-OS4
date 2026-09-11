@@ -219,6 +219,24 @@ export function deriveUserRowSpeakers(conversationHistory = []) {
 }
 
 /**
+ * §9.3: Última frase de usuario commiteada, derivada del store (fuente única de
+ * la frase visible). Reemplaza el escaneo inline duplicado en App/consumidores.
+ */
+export function deriveUserLastText(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const entry = list[index]
+    if (!entry) continue
+    const role = String(entry.role || '').toLowerCase()
+    const speaker = String(entry.speakerName || '')
+    if (role === 'user' || (speaker && speaker !== FLU_DIALOGUE_SPEAKER)) {
+      return String(entry.text || '').trim()
+    }
+  }
+  return ''
+}
+
+/**
  * §9.3: ÚNICA derivación de la frase visible (burbuja · bitácora · barra).
  * Todas las vistas la consumen con los MISMOS insumos → misma cadena exacta.
  * No normaliza: solo selecciona la fuente vigente por prioridad.

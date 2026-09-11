@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   acquireSpeechRecognition,
+  abortSpeechRecognition,
   bindSpeechRecognition,
   isSpeechRecognitionSupported,
   startSpeechRecognition,
@@ -149,12 +150,9 @@ export function useOnboardingVoiceCapture({
     onEventRef.current?.('suspend');
     const recognition = recognitionRef.current;
     if (recognition) {
-      try {
-        if (typeof recognition.abort === 'function') recognition.abort();
-        else stopSpeechRecognition(recognition);
-      } catch {
-        // ignore
-      }
+      // §9.1: aborta y libera el lock central para que el motor principal
+      // pueda volver a escuchar sin doble captura.
+      abortSpeechRecognition(recognition);
     }
   }, [clearRestartTimer]);
 

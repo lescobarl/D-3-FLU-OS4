@@ -18,7 +18,7 @@ import {
     micPublishedParityOk,
     hasSpeechAnchor,
 } from '../src/voice/lib/speechMerge.js';
-import { collectBrowserResultChunks } from '../src/voice/lib/transcriptIngress.js';
+import { collectRecognitionResultChunks } from '../src/voice/lib/transcriptIngress.js';
 
 describe('speechMerge — collapseRepeatedSpeech', () => {
     it('colapsa bloque contiguo repetido', () => {
@@ -161,7 +161,7 @@ describe('speechMerge — reempalme por re-escucha del ASR (wake word duplicado)
     });
 });
 
-describe('transcriptIngress — collectBrowserResultChunks', () => {
+describe('transcriptIngress — collectRecognitionResultChunks', () => {
     it('separa interinos y finales respetando resultIndex', () => {
         const event = {
             resultIndex: 0,
@@ -171,7 +171,7 @@ describe('transcriptIngress — collectBrowserResultChunks', () => {
                 1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
             },
         };
-        expect(collectBrowserResultChunks(event)).toEqual({
+        expect(collectRecognitionResultChunks(event)).toEqual({
             interimChunks: ['hola como'],
             finalChunks: ['hola como estas'],
         });
@@ -186,14 +186,14 @@ describe('transcriptIngress — collectBrowserResultChunks', () => {
                 1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
             },
         };
-        expect(collectBrowserResultChunks(event)).toEqual({
+        expect(collectRecognitionResultChunks(event)).toEqual({
             interimChunks: [],
             finalChunks: ['hola como estas'],
         });
     });
 
     it('evento vacío → listas vacías sin pérdida de datos', () => {
-        expect(collectBrowserResultChunks({})).toEqual({ interimChunks: [], finalChunks: [] });
-        expect(collectBrowserResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
+        expect(collectRecognitionResultChunks({})).toEqual({ interimChunks: [], finalChunks: [] });
+        expect(collectRecognitionResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
     });
 });

@@ -111,6 +111,8 @@ export interface IntegrationState {
     lastBridgeEvent: VoiceBridgeEvent | null;
     /** Transcripción actual (lo que el usuario está diciendo) */
     currentTranscript: string;
+    /** §9 Última frase canónica commiteada (fuente única de la frase visible) */
+    lastCommittedTranscript: string;
     /** Texto de la última respuesta de FLU */
     lastResponse: string;
     /** Historial completo de la conversación */
@@ -166,6 +168,8 @@ export interface IntegrationActions {
     pushBridgeEvent: (event: VoiceBridgeEvent) => void;
     /** Actualizar la transcripción actual */
     setCurrentTranscript: (transcript: string) => void;
+    /** §9 Escribir la última frase canónica commiteada (fuente única visible) */
+    setLastCommittedTranscript: (transcript: string) => void;
     /** Registrar la última respuesta de FLU */
     setLastResponse: (response: string) => void;
 
@@ -312,6 +316,7 @@ const initialState: IntegrationState = {
     conversationState: 'IDLE',
     lastBridgeEvent: null,
     currentTranscript: '',
+    lastCommittedTranscript: '',
     lastResponse: '',
     conversationHistory: [],
     emotionalState: 'neutral',
@@ -405,6 +410,10 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             setCurrentTranscript: (transcript: string) => {
                 set({ currentTranscript: transcript });
+            },
+
+            setLastCommittedTranscript: (transcript: string) => {
+                set({ lastCommittedTranscript: transcript });
             },
 
             setLastResponse: (response: string) => {
@@ -559,8 +568,9 @@ export const useIntegrationStore = create<IntegrationStore>()(
             resetConversationHistory: () => {
                 set({
                     conversationHistory: [],
-    lastResponse: '',
+                    lastResponse: '',
                     currentTranscript: '',
+                    lastCommittedTranscript: '',
                     sessionStats: {
                         ...initialState.sessionStats,
                         sessionStartTime: Date.now(),

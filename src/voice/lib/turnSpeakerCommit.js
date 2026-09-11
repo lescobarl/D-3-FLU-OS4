@@ -48,11 +48,6 @@ export function resolveCommitRowSignature({
   return normalizeRowSignature(lastSignature) || null
 }
 
-/** @deprecated Usar resolveTurnSpeakerAtCommit con preflight del pipeline continuo. */
-export function resolveOptimisticSpeakerAtCommit(options = {}) {
-  return resolveTurnSpeakerAtCommit({ ...options, preflight: options.preflight ?? null })
-}
-
 export function resolveTurnSpeakerAtCommit({
   phrase = '',
   wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [],
@@ -192,7 +187,12 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   if (refs.sessionPrimarySpeakerRef && !refs.sessionPrimarySpeakerRef.current) {
     refs.sessionPrimarySpeakerRef.current = name
   }
-  if (resolved.workingClusters?.length && refs.speakerClustersRef) {
-    refs.speakerClustersRef.current = resolved.workingClusters
+  if (resolved.workingClusters?.length) {
+    // §9: el único escritor de clusters es `setSpeakerClusters`; fallback al ref.
+    if (typeof refs.setSpeakerClusters === 'function') {
+      refs.setSpeakerClusters(resolved.workingClusters)
+    } else if (refs.speakerClustersRef) {
+      refs.speakerClustersRef.current = resolved.workingClusters
+    }
   }
 }

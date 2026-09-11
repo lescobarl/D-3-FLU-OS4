@@ -3,12 +3,12 @@
  */
 import { buildCurrentPhraseFromResults } from './audioMath.js'
 import { logMicProducerRaw } from './micIngressLog.js'
-import { collectBrowserResultChunks } from './transcriptIngress.js'
+import { collectRecognitionResultChunks } from './transcriptIngress.js'
 
-export function pushBrowserSpeechEvent(event, queue) {
+export function pushMicSpeechEvent(event, queue) {
   if (!queue || !event?.results?.length) return null
 
-  const { interimChunks, finalChunks } = collectBrowserResultChunks(event)
+  const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
   const text = buildCurrentPhraseFromResults(event.results, event.resultIndex)
   const kind = finalChunks.length ? 'final' : 'interim'
   const chunks = kind === 'final' ? finalChunks : interimChunks
@@ -24,7 +24,7 @@ export function pushBrowserSpeechEvent(event, queue) {
   })
 }
 
-export function buildBrowserBurstEvent({ interim = '', final = '' } = {}) {
+export function buildMicBurstEvent({ interim = '', final = '' } = {}) {
   const results = []
   const inter = String(interim ?? '').trim()
   const fin = String(final ?? '').trim()
@@ -38,7 +38,7 @@ export function buildBrowserBurstEvent({ interim = '', final = '' } = {}) {
   return { resultIndex: 0, results }
 }
 
-export function convertSimEventsToBrowserBursts(events = []) {
+export function convertSimEventsToMicBursts(events = []) {
   const bursts = []
   let lastInterim = ''
 
@@ -50,52 +50,18 @@ export function convertSimEventsToBrowserBursts(events = []) {
     }
     if (event?.type === 'final') {
       const fin = String(event.text ?? '').trim()
-      const mock = buildBrowserBurstEvent({ interim: lastInterim, final: fin })
+      const mock = buildMicBurstEvent({ interim: lastInterim, final: fin })
       if (mock) bursts.push(mock)
       lastInterim = ''
     }
   }
 
   if (lastInterim) {
-    const mock = buildBrowserBurstEvent({ interim: lastInterim })
+    const mock = buildMicBurstEvent({ interim: lastInterim })
     if (mock) bursts.push(mock)
   }
 
   return bursts
-}
-
-export function buildMockBrowserSpeechEvent({ text = '', isFinal = false } = {}) {
-  const phrase = String(text ?? '').trim()
-  if (!phrase) return null
-  return {
-    resultIndex: 0,
-    results: [
-      {
-        isFinal: Boolean(isFinal),
-        0: { transcript: phrase },
-        length: 1,
-      },
-    ],
-  }
-}
-
-export function pushStreamSpeechEvent({ text = '', isFinal = false }, queue) {
-  if (!queue) return null
-  const phrase = String(text ?? '').trim()
-  if (!phrase) return null
-
-  logMicProducerRaw({
-    source: 'stream',
-    kind: isFinal ? 'final' : 'interim',
-    text: phrase,
-  })
-
-  return queue.push({
-    source: 'stream',
-    kind: isFinal ? 'final' : 'interim',
-    text: phrase,
-    isFinal: Boolean(isFinal),
-  })
 }
 
 export function pushRecognitionEndEvent(queue) {

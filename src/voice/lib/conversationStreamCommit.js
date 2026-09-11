@@ -127,6 +127,7 @@ export function handleConversationStreamSync(
     lastLoggedSpeakerRef,
     logRowSpeakersRef,
     speakerClustersRef,
+    setSpeakerClusters,
     lastSpeakerRef,
     lastTurnSignatureRef,
     lastLogLineTextRef,
@@ -349,6 +350,7 @@ export function handleConversationStreamSync(
           lastLoggedSpeakerRef,
           sessionPrimarySpeakerRef,
           speakerClustersRef,
+          setSpeakerClusters,
         },
       )
       if (resolved.signatureVector?.length) {
@@ -401,6 +403,7 @@ export function handleConversationStreamSync(
       lastLoggedSpeakerRef,
       sessionPrimarySpeakerRef,
       speakerClustersRef,
+      setSpeakerClusters,
     },
   )
   if (resolved.signatureVector?.length) {

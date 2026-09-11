@@ -20,7 +20,7 @@ import {
   isPlausiblePersonName,
   normalizeSpaces,
   pickRichestVoiceCommandCapture,
-  resolveFinalConversationAction,
+  deriveQueryFromRow,
   stripDiacritics,
 } from '../lib/audioMath'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
@@ -116,18 +116,16 @@ import {
   collapseMisorderedMicMerge,
 } from '../lib/activeListen.js'
 import {
-  acquireSpeechRecognition,
-  ensureSpeechRecognitionLocales,
   startSpeechRecognition,
   stopSpeechRecognition,
 } from '../lib/speechRecognitionLocal'
+import { createWhisperRecognitionEngine } from '../lib/asr/whisperRecognitionEngine.js'
 import { fluEvent, logMicRaw, getListenLogRing, clearListenLogRing } from '../lib/listenLog'
 import {
   debugHotPath,
   fluDebugHot,
   getFluDebugApi,
 } from '../lib/fluDebug'
-import { buildChromeLikeEvents } from '../dev/bookRecognitionSim.js'
 import {
   appendSpillText,
   applyRecognitionResult,
@@ -145,8 +143,8 @@ import {
 import { wireMicCapturePipeline } from '../lib/micCaptureBridge.js'
 import { createConversationIngressRuntime } from '../lib/conversationIngressBridge.js'
 import { formatGeminiUserMessage, buildGeminiDiagnosticsFromError } from '../lib/geminiDiagnostics.js'
-import { convertSimEventsToBrowserBursts } from '../lib/micEventProducer.js'
-import { collectBrowserResultChunks } from '../lib/transcriptIngress.js'
+import { convertSimEventsToMicBursts } from '../lib/micEventProducer.js'
+import { collectRecognitionResultChunks } from '../lib/transcriptIngress.js'
 import {
   flushTranscriptStateOnFinal,
   flushPcmStateAfterCommit,
@@ -182,11 +180,6 @@ import {
 } from '../lib/conversationDialogue.js'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
-
-function getSpeechRecognition() {
-  if (typeof window === 'undefined') return null
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null
-}
 
 function flattenChunks(chunks) {
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
@@ -337,7 +330,8 @@ async function stopMediaStream(stream) {
 }
 
 function createRecognition(language, activeLocale = '') {
-  return acquireSpeechRecognition(language, activeLocale)
+  // §9 Motor ÚNICO: Whisper WASM on-device (recibe PCM del AudioWorklet).
+  return createWhisperRecognitionEngine({ sampleRate: 48000 })
 }
 
 function deriveSession(transcript, currentRole = '', language = 'es') {
@@ -372,7 +366,14 @@ export function useFluVoiceAssistant({
   const [error, setError] = useState('')
   const [activeKnowledgeBase, setActiveKnowledgeBase] = useState('general')
   const [liveTranscript, setLiveTranscript] = useState('')
-  const [lastTranscript, setLastTranscript] = useState('')
+  /**
+   * §9 FUENTE ÚNICA de la frase visible: `lastTranscript` vive en el store
+   * (`lastCommittedTranscript`). El hook ya no mantiene un estado local espejo.
+   */
+  const lastTranscript = useIntegrationStore((state) => state.lastCommittedTranscript)
+  const commitVisibleTranscript = useCallback((text) => {
+    useIntegrationStore.getState().setLastCommittedTranscript(typeof text === 'string' ? text : '')
+  }, [])
   const [lastContract, setLastContract] = useState(null)
   const [lastDiagnostics, setLastDiagnostics] = useState(null)
   const [lastErrorEvent, setLastErrorEvent] = useState(null)
@@ -451,6 +452,33 @@ export function useFluVoiceAssistant({
     [],
   )
   const speakerClustersRef = useRef([])
+  /**
+   * §9 ÚNICO punto de escritura de los clusters de hablante.
+   * El COMMIT es autoritativo; el segmento solo propone (no persiste).
+   */
+  const setSpeakerClusters = useCallback((next) => {
+    speakerClustersRef.current =
+      typeof next === 'function' ? next(speakerClustersRef.current) : next
+  }, [])
+
+  /**
+   * §9 ÚNICO punto de cálculo de la firma de voz por turno.
+   * Cachea por snapshot (WeakMap): el MISMO audio no se re-embebe dos veces,
+   * y todas las ramas pasan por aquí. Devuelve el mismo shape que
+   * `computeAudioSignature` (`{ vector, stats }`).
+   */
+  const turnSignatureCacheRef = useRef(new WeakMap())
+  const computeTurnSignature = useCallback((snapshot, sampleRate) => {
+    if (!snapshot?.length) {
+      return Promise.resolve({ vector: [], stats: { empty: true, dim: 0 } })
+    }
+    const cache = turnSignatureCacheRef.current
+    const cached = cache.get(snapshot)
+    if (cached) return cached
+    const promise = computeAudioSignature(snapshot, sampleRate)
+    cache.set(snapshot, promise)
+    return promise
+  }, [])
   const knowledgeBaseRef = useRef(knowledgeBase)
   const getMinuteKnowledgeBaseRef = useRef(getMinuteKnowledgeBase)
   const getDailyAgendaRef = useRef(getDailyAgenda)
@@ -667,21 +695,21 @@ export function useFluVoiceAssistant({
 
   useEffect(() => {
     const hasGetUserMedia = Boolean(navigator.mediaDevices?.getUserMedia)
-    const hasSpeechRecognition = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
     const hasAudioContext = Boolean(window.AudioContext)
-    const supported = hasGetUserMedia && hasSpeechRecognition && hasAudioContext
+    const hasAudioWorklet = Boolean(window.AudioContext && 'audioWorklet' in AudioContext.prototype)
+    // §9 Motor ÚNICO: ya no se requiere Chrome SpeechRecognition; se usa
+    // AudioWorklet + Whisper WASM.
+    const supported = hasGetUserMedia && hasAudioContext && hasAudioWorklet
     setIsSupported(supported)
     if (!supported) {
       const missing = []
       if (!hasGetUserMedia) missing.push('getUserMedia (micrófono)')
-      if (!hasSpeechRecognition) missing.push('SpeechRecognition (reconocimiento de voz)')
       if (!hasAudioContext) missing.push('AudioContext (audio)')
+      if (!hasAudioWorklet) missing.push('AudioWorklet (captura de audio)')
       const isSecureContext = typeof window !== 'undefined' && window.isSecureContext
       let hint = ''
       if (!isSecureContext) {
-        hint = ' Chrome requiere un contexto seguro (HTTPS o localhost) para estas APIs. Accede vía https:// o http://localhost.'
-      } else if (!hasSpeechRecognition) {
-        hint = ' Verifica que Chrome esté actualizado o usa chrome://flags/#speech-recognition.'
+        hint = ' Requiere un contexto seguro (HTTPS o localhost) para estas APIs. Accede vía https:// o http://localhost.'
       }
       setError(`Este navegador necesita: ${missing.join(', ')}.${hint}`)
     }
@@ -884,14 +912,14 @@ export function useFluVoiceAssistant({
     lastLogLineAtRef.current = 0
     lastTurnSignatureRef.current = null
     publishedLiveRef.current = ''
-    setLastTranscript('')
+    commitVisibleTranscript('')
     setLiveTranscript('')
   }, [clearCaptureState])
 
   const resetConversationSession = useCallback(() => {
     resetVoiceDisplay()
     clearListeningAck()
-    speakerClustersRef.current = []
+    setSpeakerClusters([])
     const { speakers } = getConversationConfig()
     lastSpeakerRef.current = speakers.defaultLabel
     lastLoggedSpeakerRef.current = speakers.defaultLabel
@@ -923,8 +951,10 @@ export function useFluVoiceAssistant({
     const target = String(toLabel || '').trim()
     if (!source || !target || source === target) return
 
-    speakerClustersRef.current = speakerClustersRef.current.map((cluster) =>
-      String(cluster?.label || '').trim() === source ? { ...cluster, label: target } : cluster,
+    setSpeakerClusters((prev) =>
+      prev.map((cluster) =>
+        String(cluster?.label || '').trim() === source ? { ...cluster, label: target } : cluster,
+      ),
     )
 
     if (lastSpeakerRef.current === source) lastSpeakerRef.current = target
@@ -935,8 +965,8 @@ export function useFluVoiceAssistant({
     const source = String(label || '').trim()
     if (!source) return
 
-    speakerClustersRef.current = speakerClustersRef.current.filter(
-      (cluster) => String(cluster?.label || '').trim() !== source,
+    setSpeakerClusters((prev) =>
+      prev.filter((cluster) => String(cluster?.label || '').trim() !== source),
     )
 
     if (lastSpeakerRef.current === source) lastSpeakerRef.current = ''
@@ -948,12 +978,10 @@ export function useFluVoiceAssistant({
     if (roomCfg.pruneGhostClusters === false) return
 
     const before = speakerClustersRef.current.map((cluster) => cluster.label)
-    speakerClustersRef.current = pruneGhostSpeakerClusters(
-      speakerClustersRef.current,
-      committedSpeakers,
-      {
+    setSpeakerClusters((prev) =>
+      pruneGhostSpeakerClusters(prev, committedSpeakers, {
         keepLabels: [lastSpeakerRef.current, lastLoggedSpeakerRef.current].filter(Boolean),
-      },
+      }),
     )
     const after = speakerClustersRef.current.map((cluster) => cluster.label)
     const removed = before.filter((label) => !after.includes(label))
@@ -1404,10 +1432,9 @@ export function useFluVoiceAssistant({
         turnId,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
         {
-          onClusters: (clusters) => {
-            if (captureCfg.roomCapture?.deferClusterWritesUntilCommit !== false) return
-            speakerClustersRef.current = clusters
-          },
+          // §9 Decisión: el COMMIT es autoritativo; el segmento solo propone
+          // (no persiste clusters). Persistir aquí era una 2ª ruta de escritura.
+          onClusters: () => {},
         },
       )
     },
@@ -1502,7 +1529,7 @@ export function useFluVoiceAssistant({
   const resolveSpeaker = useCallback(
     async (transcriptForIntro = '', audioSnapshot, sampleRate, fallbackSpeaker) => {
       const signatureVector = audioSnapshot.length
-        ? (await computeAudioSignature(audioSnapshot, sampleRate)).vector
+        ? (await computeTurnSignature(audioSnapshot, sampleRate)).vector
         : [0, 0, 0, 0]
 
       if (conversationActiveRef?.current) {
@@ -1554,13 +1581,8 @@ export function useFluVoiceAssistant({
       const speakerAlias = introducedName && introducedName !== speakerName ? speakerName : null
 
       if (introducedName && introducedName !== speakerName) {
-        speakerClustersRef.current = speakerClustersRef.current.filter(
-          (cluster) => String(cluster.label || '').trim() !== speakerName,
-        )
-        speakerClustersRef.current.push({
-          label: introducedName,
-          signature: signatureVector,
-        })
+        // §9 Decisión: el segmento solo PROPONE; el COMMIT persiste los clusters.
+        // Aquí no se escribe `speakerClustersRef` (era una 2ª ruta de escritura).
         saveVoiceProfile({
           label: introducedName,
           signature: signatureVector,
@@ -1572,16 +1594,6 @@ export function useFluVoiceAssistant({
             ]
           })
           .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-      } else if (speakerName) {
-        const clusterExists = speakerClustersRef.current.some(
-          (cluster) => String(cluster.label || '').trim() === String(speakerName || '').trim(),
-        )
-        if (!clusterExists) {
-          speakerClustersRef.current.push({
-            label: speakerName,
-            signature: signatureVector,
-          })
-        }
       }
 
       lastSpeakerRef.current = resolvedSpeakerName
@@ -1632,10 +1644,10 @@ export function useFluVoiceAssistant({
       lastLoggedSpeakerRef.current = speakerName
       lastSpeakerRef.current = speakerName
       if (conversationActiveRef?.current) {
-        setLastTranscript(capture)
+        commitVisibleTranscript(capture)
       }
       if (!conversationActiveRef?.current) {
-        setLastTranscript(capture)
+        commitVisibleTranscript(capture)
         lastEmittedTranscriptRef.current = capture
       }
 
@@ -1744,6 +1756,7 @@ export function useFluVoiceAssistant({
           lastLoggedSpeakerRef,
           logRowSpeakersRef: userSpeakersView,
           speakerClustersRef,
+          setSpeakerClusters,
           lastSpeakerRef,
           lastTurnSignatureRef,
           lastLogLineTextRef,
@@ -1910,13 +1923,11 @@ export function useFluVoiceAssistant({
   }, [])
 
   const needsConversationPassiveAudio = useCallback(() => {
-    const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
-    if (!conversationActiveRef?.current) return true
-    return (
-      captureCfg.conversationUsePassiveAudio === true &&
-      captureCfg.conversationAutoDiarize === true
-    )
-  }, [conversationActiveRef])
+    // §9 Motor ÚNICO: el PCM del AudioWorklet es la entrada del transcriptor
+    // (Whisper WASM) y de la identidad de voz → la captura está SIEMPRE activa
+    // mientras se escucha, también en conversación.
+    return true
+  }, [])
 
   const setupPassiveAudioCapture = useCallback(async () => {
     const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
@@ -1998,6 +2009,8 @@ export function useFluVoiceAssistant({
           FLU_CONFIG.voiceIdentity?.capture?.passiveBufferMs,
           chunkTotalSamplesRef,
         )
+        // §9 Motor ÚNICO: el mismo PCM alimenta al transcriptor (Whisper WASM).
+        recognitionRef.current?.pushAudio?.(input, sampleRateRef.current || 48000)
       },
     })
 
@@ -2106,14 +2119,14 @@ export function useFluVoiceAssistant({
         if (conversationActiveRef?.current) {
           try {
             if (import.meta.env.DEV && debugHotPath) {
-              const { interimChunks, finalChunks } = collectBrowserResultChunks(event)
+              const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
               fluDebugHot('mic-fragments', {
                 rawInterims: interimChunks,
                 rawFinals: finalChunks,
                 mergedInterim: pickBestMicInterim(interimChunks),
               })
             }
-            ingressRuntimeRef.current.pushBrowserRecognitionEvent(event)
+            ingressRuntimeRef.current.pushMicRecognitionEvent(event)
           } catch (error) {
             console.error('[Flu][mic] onresult-conversation-failed', error)
             if (import.meta.env.DEV) {
@@ -2207,6 +2220,7 @@ export function useFluVoiceAssistant({
         const errorCode = String(event.error || '').trim()
         relayLog('LOG', 'useFluVoiceAssistant', '[REC] onerror', {
           error: errorCode,
+          message: String(event.message || ''),
           isListening: isListeningRef.current,
           conversationActive: Boolean(conversationActiveRef?.current),
           isStopping: isStoppingRef.current,
@@ -2331,6 +2345,7 @@ export function useFluVoiceAssistant({
       previous.onerror = null
       previous.onend = null
       stopSpeechRecognition(previous)
+      previous.dispose?.()
     }
 
     recognitionRef.current = Recognition
@@ -2404,8 +2419,8 @@ export function useFluVoiceAssistant({
       ingressRuntimeRef.current?.reset()
       fluEvent('sim-start', { events: events.length })
 
-      for (const mockEvent of convertSimEventsToBrowserBursts(events)) {
-        ingressRuntimeRef.current?.pushBrowserRecognitionEvent(mockEvent)
+      for (const mockEvent of convertSimEventsToMicBursts(events)) {
+        ingressRuntimeRef.current?.pushMicRecognitionEvent(mockEvent)
       }
 
       ingressRuntimeRef.current?.drainAll()
@@ -2430,7 +2445,6 @@ export function useFluVoiceAssistant({
         window.__FLU_LISTEN_DEBUG = true
       },
       simulateRecognition: injectSimulatedRecognition,
-      simulateBook: () => injectSimulatedRecognition(buildChromeLikeEvents()),
       debug: getFluDebugApi(),
     }
     return () => {
@@ -2439,7 +2453,6 @@ export function useFluVoiceAssistant({
         delete window.__fluDev.clearListenLog
         delete window.__fluDev.enableListenTrace
         delete window.__fluDev.simulateRecognition
-        delete window.__fluDev.simulateBook
         delete window.__fluDev.debug
       }
     }
@@ -2511,8 +2524,6 @@ export function useFluVoiceAssistant({
       recognitionLocaleRef.current = getRecognitionLanguage(language)
       localeSwitchDetectRef.current = ''
       localeSwitchCountRef.current = 0
-
-      await ensureSpeechRecognitionLocales(language)
 
       const Recognition = createRecognition(language, recognitionLocaleRef.current)
       if (!Recognition) {
@@ -2641,7 +2652,7 @@ export function useFluVoiceAssistant({
         lastLogLineTextRef.current = ''
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
-        speakerClustersRef.current = []
+        setSpeakerClusters([])
         lastSpeakerRef.current = 'Hablante 1'
         lastLoggedSpeakerRef.current = 'Hablante 1'
         sessionPrimarySpeakerRef.current = ''
@@ -2665,7 +2676,7 @@ export function useFluVoiceAssistant({
 
       if (command === 'FLU_ESPERA') {
         fluParticipantRef.current?.dismissRaisedHand?.()
-        setLastTranscript(cleaned)
+        commitVisibleTranscript(cleaned)
         await onContractResolved?.({
           contract: {
             respuesta_voz: getCommandSpeech('FLU_ESPERA', language),
@@ -2689,7 +2700,7 @@ export function useFluVoiceAssistant({
           lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
         const participant = fluParticipantRef.current
         const respondParticipantFloor = async (speechText, { floor = false } = {}) => {
-          setLastTranscript(cleaned)
+          commitVisibleTranscript(cleaned)
           await onContractResolved?.({
             contract: {
               respuesta_voz: speechText,
@@ -2756,7 +2767,7 @@ export function useFluVoiceAssistant({
         return
       }
 
-      setLastTranscript(cleaned)
+      commitVisibleTranscript(cleaned)
       await onContractResolved?.({
         contract: {
           respuesta_voz: getCommandSpeech(command, language),
@@ -3049,7 +3060,15 @@ export function useFluVoiceAssistant({
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
       const displayPhrase = cleanForSpeech(fullTranscript || question)
-      setLastTranscript(displayPhrase)
+      commitVisibleTranscript(displayPhrase)
+      // §9: la query se deriva de la fila canónica LEÍDA DEL STORE
+      // (`lastCommittedTranscript`), no del texto suelto de la captura.
+      // El commit de arriba deja la fila en el store; la query sale de ahí.
+      question =
+        deriveQueryFromRow(
+          useIntegrationStore.getState().lastCommittedTranscript,
+          FLU_CONFIG.voiceCommands,
+        ).question || question
       publishedLiveRef.current = ''
       setLiveTranscript('')
 
@@ -3101,7 +3120,7 @@ export function useFluVoiceAssistant({
         if (skipGemini) {
           const { domain: statefulDomain, contract: deterministicContract } = skipGemini
           const courtesy = deterministicContract.respuesta_voz || ''
-          setLastTranscript(fullTranscript)
+          commitVisibleTranscript(fullTranscript)
           setLastContract(deterministicContract)
           setLastDiagnostics({ route: 'deterministic-arbiter', provider: 'local', skipGemini: true })
           setError('')
@@ -3122,7 +3141,7 @@ export function useFluVoiceAssistant({
             phase: 'SESION_ACTIVA',
             session,
             timestamp: currentClock,
-            signature: (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+            signature: (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
             language: detectedLanguage,
             fastPathConfig: statefulDomain === 'config',
             fastPathGame: statefulDomain === 'game',
@@ -3163,7 +3182,7 @@ export function useFluVoiceAssistant({
             role: session.role,
             phase: 'SESION_ACTIVA',
           }),
-          computeAudioSignature(audioSnapshot, sampleRate).then((s) => s.vector),
+          computeTurnSignature(audioSnapshot, sampleRate).then((s) => s.vector),
           // Fast-path determinista UNIFICADO (§3.1): el árbitro resuelve y despacha
           // configuración/juego/ambiente desde un único punto, en paralelo con la IA.
           // Se espera su `dispatch` para garantizar el orden: el efecto del fast-path
@@ -3242,7 +3261,7 @@ export function useFluVoiceAssistant({
               : contract?.contract?.ambiente ?? null,
         }
 
-        setLastTranscript(fullTranscript)
+        commitVisibleTranscript(fullTranscript)
         setLastContract(resolvedContract)
         setLastDiagnostics(contract.diagnostics || null)
         setError('')
@@ -3264,7 +3283,7 @@ export function useFluVoiceAssistant({
           phase: 'SESION_ACTIVA',
           session,
           timestamp: currentClock,
-          signature: audioSignatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+          signature: audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
           // En juegos por voz la voz es SIEMPRE del motor local (determinista).
           fastPathGame: Boolean(fastGame?.gameId),
@@ -3292,7 +3311,7 @@ export function useFluVoiceAssistant({
           phase: 'SESION_ACTIVA',
           session,
           timestamp: currentClock,
-          signature: audioSignatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+          signature: audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
         })
         if (isListeningRef.current && !recognitionActiveRef.current) {
@@ -3532,7 +3551,7 @@ export function useFluVoiceAssistant({
         ) {
           finishTurn()
           restartRecognition()
-          setLastTranscript(cleanForSpeech(capturedTranscript))
+          commitVisibleTranscript(cleanForSpeech(capturedTranscript))
           return
         }
 
@@ -3636,7 +3655,7 @@ export function useFluVoiceAssistant({
         setStatus('idle')
         isListeningRef.current = false
         setActiveKnowledgeBase('general')
-        setLastTranscript(capturedTranscript)
+        commitVisibleTranscript(capturedTranscript)
         relayLog('LOG', 'useFluVoiceAssistant', `processCapture DIRECT COMMAND: calling onContractResolved with command="${directCommand}"`)
         await onContractResolved?.({
           contract: {
@@ -3653,7 +3672,7 @@ export function useFluVoiceAssistant({
           speakerAlias,
           phase,
           timestamp: currentClock,
-          signature: signatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+          signature: signatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
         })
         return
@@ -3752,7 +3771,7 @@ export function useFluVoiceAssistant({
             transcript: bufferedTranscript,
             error: errorMessage,
           })
-          setLastTranscript(capturedTranscript)
+          commitVisibleTranscript(capturedTranscript)
           setLastContract(null)
           if (bufferedTranscript) {
             commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
@@ -3777,7 +3796,7 @@ export function useFluVoiceAssistant({
               phase: 'CONFIGURACION',
               session: nextSession,
               timestamp: currentClock,
-              signature: (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+              signature: (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
               language: detectedLanguage,
               // Si el fast-path de juego ya arrancó la partida, la voz es la del motor.
               fastPathGame: Boolean(fastGame?.gameId),
@@ -3818,7 +3837,7 @@ export function useFluVoiceAssistant({
               : contract?.contract?.ambiente ?? null,
         }
 
-        setLastTranscript(capturedTranscript)
+        commitVisibleTranscript(capturedTranscript)
         setLastContract(finalContract)
         setLastDiagnostics(contract.diagnostics || null)
         setLastErrorEvent(null)
@@ -3846,7 +3865,7 @@ export function useFluVoiceAssistant({
           phase: 'CONFIGURACION',
           session: nextSession,
           timestamp: currentClock,
-          signature: (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+          signature: (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
           // En juegos por voz la voz es SIEMPRE del motor local (determinista).
           fastPathGame: Boolean(fastGame?.gameId),
@@ -3910,7 +3929,7 @@ export function useFluVoiceAssistant({
           transcript: bufferedTranscript,
           error: errorMessage,
         })
-        setLastTranscript(capturedTranscript)
+        commitVisibleTranscript(capturedTranscript)
         setLastContract(null)
         if (bufferedTranscript) {
           commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
@@ -3935,7 +3954,7 @@ export function useFluVoiceAssistant({
             phase: 'SESION_ACTIVA',
             session,
             timestamp: currentClock,
-            signature: signatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+            signature: signatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
             language: detectedLanguage,
             // Si el fast-path de juego ya despachó el turno, la voz es la del motor.
             fastPathGame: Boolean(fastGame?.gameId),
@@ -3984,7 +4003,7 @@ export function useFluVoiceAssistant({
             : contract?.contract?.ambiente ?? null,
       }
 
-      setLastTranscript(capturedTranscript)
+      commitVisibleTranscript(capturedTranscript)
       setLastContract(resolvedContract)
       setLastDiagnostics(contract.diagnostics || null)
       setLastErrorEvent(null)
@@ -4011,7 +4030,7 @@ export function useFluVoiceAssistant({
         phase: 'SESION_ACTIVA',
         session,
         timestamp: currentClock,
-        signature: signatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+        signature: signatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
         language: detectedLanguage,
         // En juegos por voz la voz es SIEMPRE del motor local (determinista).
         fastPathGame: Boolean(fastGame?.gameId),
@@ -4158,6 +4177,12 @@ export function useFluVoiceAssistant({
       if (!isListeningRef.current || isStoppingRef.current) return
 
       if (conversationActiveRef?.current) {
+        // §9: un motor CONTINUO (Whisper) gestiona su propia captura y NO se
+        // detiene: el watchdog de "stall" (heredado de Chrome SR, que sí se
+        // detenía) no aplica. Re-crearlo en silencio partía turnos y descartaba
+        // transcripciones. El commit por gap (srGap) sigue funcionando igual.
+        const engineContinuous = recognitionRef.current?.continuous === true
+
         const restartCfg = getConversationRestartConfig(true)
         const now = Date.now()
         const sinceMeaningful = now - (lastMeaningfulIngressAtRef.current || 0)
@@ -4167,6 +4192,7 @@ export function useFluVoiceAssistant({
         const rebuildCooldown = restartCfg.stallRebuildMinMs
 
         if (
+          !engineContinuous &&
           recognitionActiveRef.current &&
           sinceMeaningful >= restartCfg.silentMicStallMs &&
           sinceRebuild >= rebuildCooldown
@@ -4179,6 +4205,7 @@ export function useFluVoiceAssistant({
         }
 
         if (
+          !engineContinuous &&
           !recognitionActiveRef.current &&
           !recognitionRestartPendingRef.current &&
           sinceEnd >= deadMs
@@ -4189,7 +4216,11 @@ export function useFluVoiceAssistant({
           return
         }
 
-        if (sinceMeaningful >= restartCfg.stallMs && sinceRebuild >= rebuildCooldown) {
+        if (
+          !engineContinuous &&
+          sinceMeaningful >= restartCfg.stallMs &&
+          sinceRebuild >= rebuildCooldown
+        ) {
           lastStallRebuildAtRef.current = now
           if (!rebuildRecognitionRef.current()) {
             requestRecognitionRestart(restartCfg.retryBackoffMs)

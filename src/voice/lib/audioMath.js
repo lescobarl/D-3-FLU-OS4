@@ -395,6 +395,19 @@ export function extractQueryFromWebSearchPhrase(phrase = '', voiceCommands = {})
   return body
 }
 
+/**
+ * §9 ÚNICA derivación de la query de búsqueda web.
+ *
+ * Recibe los parámetros del LLM (si los hay) o el transcript canónico y
+ * devuelve la consulta limpia usando UN SOLO limpiador
+ * (`extractQueryFromWebSearchPhrase`), sin el `||` de dos derivadores.
+ */
+export function deriveSearchQuery({ provided = '', transcript = '', voiceCommands = {} } = {}) {
+  const source = cleanForSpeech(provided) || cleanForSpeech(transcript)
+  if (!source) return ''
+  return cleanForSpeech(extractQueryFromWebSearchPhrase(source, voiceCommands) || source)
+}
+
 const RECOVERABLE_RECOGNITION_ERRORS = new Set(['no-speech', 'aborted', 'network'])
 
 export function matchWakeWordPrefix(text = '', wakeWords = []) {
@@ -445,14 +458,17 @@ function speechWords(text = '') {
 
 /** Quita eco TV/ASR repetido al inicio de la pregunta tras «ok flu» (p. ej. «primeros partidos platicame…»). */
 export function peelWakeQuestionEcho(question = '', echoSources = []) {
-  let words = speechWords(question)
-  if (words.length < 2) return cleanForSpeech(question)
+  // §9.6: la comparación es insensible a acentos/mayúsculas, pero el texto que
+  // se devuelve conserva la forma original de la frase (no se pasa a minúsculas).
+  const originalWords = cleanForSpeech(question).split(/\s+/).filter(Boolean)
+  if (originalWords.length < 2) return cleanForSpeech(question)
 
+  let words = originalWords
   for (const source of echoSources) {
     const srcWords = speechWords(source)
     if (!srcWords.length) continue
     for (let len = Math.min(8, words.length - 1); len >= 1; len -= 1) {
-      const prefixStr = words.slice(0, len).join(' ')
+      const prefixStr = normalizeVoiceCommandText(words.slice(0, len).join(' '))
       const srcTail = srcWords.slice(-len).join(' ')
       const srcHead = srcWords.slice(0, len).join(' ')
       if (prefixStr === srcTail || prefixStr === srcHead) {
@@ -469,8 +485,51 @@ export function hasInlineWakeBoundary(text = '', wakeWords = []) {
   return Boolean(split.wakeWordMatched && cleanForSpeech(split.beforeWake))
 }
 
+/**
+ * §9.5/§9.6: localiza la wake word sobre el texto ORIGINAL y devuelve los
+ * recortes conservando acentos y mayúsculas. La detección se hace con el texto
+ * normalizado ya probado; los wake words son ASCII, así que se ubican por
+ * índice insensible a mayúsculas y se recorta el original.
+ */
+function sliceWakeWordFromSource(source = '', wakeWords = []) {
+  const text = typeof source === 'string' ? source : ''
+  if (!text.trim() || !wakeWords.length) {
+    return { matched: false, beforeWakeText: cleanForSpeech(text), afterWakeText: '' }
+  }
+
+  const candidates = wakeWords
+    .map((wakeWord) => normalizeVoiceCommandText(wakeWord))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length) // primero los compuestos ("oye flu")
+  const lower = text.toLowerCase()
+  let foundIndex = -1
+  let foundLength = 0
+  for (const candidate of candidates) {
+    const index = lower.indexOf(candidate)
+    if (index < 0) continue
+    const before = index === 0 ? '' : lower[index - 1]
+    const after = lower[index + candidate.length] || ''
+    if (before && /\w/.test(before)) continue // parte de otra palabra
+    if (after && /\w/.test(after)) continue // parte de otra palabra
+    if (foundIndex < 0 || index < foundIndex) {
+      foundIndex = index
+      foundLength = candidate.length
+    }
+  }
+  if (foundIndex < 0) {
+    return { matched: false, beforeWakeText: cleanForSpeech(text), afterWakeText: '' }
+  }
+
+  const beforeWakeText = cleanForSpeech(text.slice(0, foundIndex))
+  const afterWakeText = cleanForSpeech(
+    text.slice(foundIndex + foundLength).replace(/^[\s,.;:!?\-—]+/, ''),
+  )
+  return { matched: true, beforeWakeText, afterWakeText }
+}
+
 export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
   const normalizedText = normalizeVoiceCommandText(text)
+  const sliced = sliceWakeWordFromSource(text, wakeWords)
   if (!normalizedText) {
     return {
       wakeWordMatched: false,
@@ -478,6 +537,8 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
       afterWake: '',
       commandText: '',
       normalizedText: '',
+      beforeWakeText: '',
+      afterWakeText: '',
     }
   }
 
@@ -490,6 +551,8 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
       afterWake,
       commandText: afterWake,
       normalizedText,
+      beforeWakeText: '',
+      afterWakeText: sliced.afterWakeText,
     }
   }
 
@@ -501,6 +564,8 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
       afterWake: '',
       commandText: '',
       normalizedText,
+      beforeWakeText: sliced.beforeWakeText,
+      afterWakeText: '',
     }
   }
 
@@ -512,6 +577,8 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
     afterWake,
     commandText: afterWake,
     normalizedText,
+    beforeWakeText: sliced.beforeWakeText,
+    afterWakeText: sliced.afterWakeText,
   }
 }
 
@@ -759,18 +826,25 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
   const snapshot = cleanForSpeech(text)
   const wakeWords = voiceCommands.wakeWords || []
   const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
-  const beforeWake = cleanForSpeech(split.beforeWake)
+  const beforeWake = cleanForSpeech(split.beforeWakeText || split.beforeWake)
+  // Detección: texto normalizado (sin acentos) para los matchers.
   const afterWakeRaw = cleanForSpeech(split.afterWake || split.commandText || '')
+  // §9.6: la pregunta que escucha la IA se deriva de la MISMA frase canónica,
+  // conservando acentos/mayúsculas (texto original tras la wake word).
+  const questionTextRaw = cleanForSpeech(
+    split.afterWakeText || split.afterWake || split.commandText || '',
+  )
   /** Solo pelar eco TV (beforeWake); lastCommitted solo en wake inline con TV — no repetir fila del usuario. */
   const echoSources = beforeWake
     ? [beforeWake, cleanForSpeech(lastCommitted)].filter(Boolean)
     : [beforeWake].filter(Boolean)
   const afterWake = peelWakeQuestionEcho(afterWakeRaw, echoSources)
+  const question = peelWakeQuestionEcho(questionTextRaw, echoSources)
 
   if (split.wakeWordMatched && afterWake && isMinuteKnowledgeRequest(afterWake)) {
     return {
       kind: 'flu',
-      question: afterWake,
+      question,
       beforeWake,
     }
   }
@@ -832,9 +906,34 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
 
   return {
     kind: 'flu',
-    question: afterWake,
+    question,
     beforeWake,
   }
+}
+
+/**
+ * §9 ÚNICA FUENTE DE VERDAD de la query.
+ *
+ * A partir de la fila canónica (la MISMA frase que se commitea en el store),
+ * deriva la acción y el texto de consulta que consumen Gemini y la búsqueda
+ * web. Esa derivación ocurre en UN SOLO lugar: aquí. Nadie más construye la
+ * query por su cuenta.
+ *
+ * @param {string} rowText Texto de la fila canónica (con o sin wake word).
+ * @param {object} voiceCommands `FLU_CONFIG.voiceCommands`.
+ * @param {object} [options] Opciones de `resolveFinalConversationAction`.
+ */
+export function deriveQueryFromRow(rowText = '', voiceCommands = {}, options = {}) {
+  const row = cleanForSpeech(rowText)
+  if (!row) return { kind: 'log', question: '', searchQuery: '' }
+  const action = resolveFinalConversationAction(row, voiceCommands, options)
+  const wakeWords = voiceCommands.wakeWords || []
+  const searchQuery = cleanForSpeech(
+    extractQueryFromWebSearchPhrase(row, voiceCommands) ||
+      action.question ||
+      removeWakeWord(row, wakeWords),
+  )
+  return { ...action, question: action.question || row, searchQuery }
 }
 
 /** Interino: solo consultas de minuta (Chrome a veces no manda final). Flu general → final. */
@@ -948,7 +1047,8 @@ export function planConversationDispatch(
   const phrase = cleanForSpeech(text)
   if (!phrase) return { plan: 'skip', reason: 'empty', action: null, signature: '' }
 
-  const action = resolveFinalConversationAction(phrase, voiceCommands, {
+  // §9: la query se deriva de la fila canónica en UN solo lugar.
+  const action = deriveQueryFromRow(phrase, voiceCommands, {
     lastCommitted: cleanForSpeech(lastCommitted),
   })
   if (
@@ -1182,37 +1282,11 @@ export function stripWakeWordForDisplay(text = '', wakeWords = []) {
   const source = typeof text === 'string' ? text : ''
   if (!source.trim() || !wakeWords.length) return source
 
-  // Confirmamos que hay un wake word usando la detección normalizada ya probada.
+  // §9.5/§9.6: un solo recorte, sobre el texto original (conserva acentos).
+  // `splitTranscriptAtWakeWord` ya expone la versión con texto original.
   const split = splitTranscriptAtWakeWord(source, wakeWords)
   if (!split.wakeWordMatched) return source
-
-  // Los wake words son ASCII (sin acentos), así que podemos localizarlos en el
-  // texto original con una búsqueda insensible a mayúsculas y recortar desde ahí
-  // conservando los acentos del resto de la frase.
-  const candidates = wakeWords
-    .map((wakeWord) => normalizeVoiceCommandText(wakeWord))
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length) // primero los compuestos ("oye flu")
-  const lower = source.toLowerCase()
-  let foundIndex = -1
-  let foundLength = 0
-  for (const candidate of candidates) {
-    const index = lower.indexOf(candidate)
-    if (index < 0) continue
-    const before = index === 0 ? '' : lower[index - 1]
-    const after = lower[index + candidate.length] || ''
-    if (before && /\w/.test(before)) continue // parte de otra palabra
-    if (after && /\w/.test(after)) continue // parte de otra palabra
-    if (foundIndex < 0 || index < foundIndex) {
-      foundIndex = index
-      foundLength = candidate.length
-    }
-  }
-  if (foundIndex < 0) return source
-
-  // Salta puntuación/espacios que sigan al wake word (p. ej. "flu, crea...").
-  const rest = source.slice(foundIndex + foundLength).replace(/^[\s,.;:!?\-—]+/, '')
-  return rest || source
+  return split.afterWakeText || source
 }
 
 // ============================================================

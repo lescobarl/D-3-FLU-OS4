@@ -171,7 +171,7 @@ import {
 import type { GameId, GameSession } from './core/games/types';
 import { resolveGameSpeechOptions, type GameSpeechOptions } from './core/games/gameSpeech';
 import { getCommandSpeech } from './voice/lib/voiceCommands';
-import { formatStreamSttUiStatus, getTranscriptSource } from './voice/lib/transcriptConfig';
+import { formatStreamSttUiStatus } from './voice/lib/transcriptConfig';
 import {
     getFluParticipantConfig,
     setFluParticipantOverrides,
@@ -197,7 +197,8 @@ import {
     isDuplicateSystemEvent,
     type SystemEvent,
 } from './lib/systemEventLog';
-import { buildFluSpeechAuditRows } from './voice/lib/conversationDialogue';
+import { buildFluSpeechAuditRows, deriveUserLastText, selectVisiblePhrase } from './voice/lib/conversationDialogue';
+import { evaluateListenParity } from './voice/lib/listenParity';
 import { shouldGenerateWorkspaceImage, normalizeWorkspaceContract } from './voice/lib/workspaceContract';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
@@ -1347,19 +1348,10 @@ function App() {
 
     // Última frase completa del usuario (para el área del personaje / barra):
     // fuente única desde el historial real, usada como fallback de transcripción
-    // cuando liveTranscript se limpió tras ejecutar el comando.
+    // cuando liveTranscript se limpió tras ejecutar el comando. La derivación vive
+    // en la lib (deriveUserLastText), no inline en el componente.
     const avatarLastUserText = useMemo(() => {
-        const history = integrationStore.conversationHistory || [];
-        for (let i = history.length - 1; i >= 0; i -= 1) {
-            const entry = history[i];
-            if (!entry) continue;
-            const role = String(entry.role || '').toLowerCase();
-            const speaker = String(entry.speakerName || '');
-            if (role === 'user' || (speaker && speaker !== 'FLU' && speaker !== 'flu')) {
-                return String(entry.text || '').trim();
-            }
-        }
-        return '';
+        return deriveUserLastText(integrationStore.conversationHistory);
     }, [integrationStore.conversationHistory]);
 
     // Cache for isDuplicateSystemEvent: store recent dedup keys in a Set to avoid
@@ -4187,32 +4179,23 @@ const {
     const listenParity = useMemo(() => {
         const history = integrationStore.conversationHistory;
         const lastLog = history.length > 0 ? history[history.length - 1]?.text || '' : '';
-        const live = liveTranscript || '';
-        if (!live && !lastLog) return null;
-        // OS2 parity: evaluateListenParity from listenParity.js
-        // Compare live transcript with last log entry
-        const liveNorm = live.replace(/\s+/g, ' ').trim().toLowerCase();
-        const lastNorm = lastLog.replace(/\s+/g, ' ').trim().toLowerCase();
-        if (liveNorm && lastNorm && liveNorm !== lastNorm) {
-            return { level: 'info', message: 'Nuevo transcript en vivo' };
-        }
-        return null;
+        // §9.3: la normalización/derivación de paridad vive en la lib única
+        // (evaluateListenParity). App no re-normaliza inline.
+        const parity = evaluateListenParity({ live: liveTranscript || '', lastLog });
+        if (parity.level !== 'warn') return null;
+        return { level: 'info', message: parity.message };
     }, [liveTranscript, integrationStore.conversationHistory]);
 
     // ============================================================
-    // OS2 parity: phraseDisplay (Gap B)
+    // §9.3: ÚNICA derivación de la frase visible. Avatar, bitácora y barra
+    // consumen esta MISMA cadena; ningún consumidor la re-deriva.
     // ============================================================
-    const phraseDisplay = useMemo(() => {
-        const live = liveTranscript || '';
-        if (live) return live;
-        const history = integrationStore.conversationHistory;
-        if (history.length > 0) {
-            const last = history[history.length - 1];
-            const text = last?.text || '';
-            if (text) return text;
-        }
-        return '\u00a0';
-    }, [liveTranscript, integrationStore.conversationHistory]);
+    const visiblePhrase = useMemo(() => selectVisiblePhrase({
+        live: liveTranscript,
+        lastTranscript,
+        lastUserText: avatarLastUserText,
+        currentTranscript: integrationStore.currentTranscript,
+    }), [liveTranscript, lastTranscript, avatarLastUserText, integrationStore.currentTranscript]);
 
     // ============================================================
     // OS2 parity: latestResponse (Gap C)
@@ -4288,7 +4271,6 @@ const {
         // by the conditional rendering below (sttUi.label ? ...).
         const sttUi = formatStreamSttUiStatus('', {
             listening: voiceStatus === 'listening',
-            transcriptSource: getTranscriptSource(),
         });
         return sttUi.label || null;
     }, [voiceStatus]);
@@ -4549,7 +4531,7 @@ const {
                                  <FluAvatarVoiceBridge
                                      height="100%"
                                      width="100%"
-                                     lastUserText={avatarLastUserText}
+                                     visiblePhrase={visiblePhrase}
                                      // ---- Branding Inteligente por Temporalidad ----
                                     brandingMode={branding.config.mode}
                                     brandingSeason={branding.config.activeSeason}
@@ -4580,10 +4562,7 @@ const {
                                         searchOverrides,
                                         workspaceArtifact: integrationStore.workspaceArtifact,
                                         latestResponse,
-                                        liveTranscript,
-                                        currentTranscript: integrationStore.currentTranscript,
-                                        lastTranscript,
-                                        lastUserText: avatarLastUserText,
+                                        livePhrase: visiblePhrase,
                                         isListening: voiceStatus === 'listening',
                                         homeworkContext,
                                         image: workspaceImage,
@@ -4674,10 +4653,7 @@ const {
                                 activeTab={activeTab}
                                 expandedFrameId={expandedFrameId}
                                 onToggleExpand={handleToggleExpand}
-                                liveTranscript={liveTranscript}
-                                lastTranscript={lastTranscript}
-                                currentTranscript={integrationStore.currentTranscript}
-                                lastHeardText={avatarLastUserText}
+                                visiblePhrase={visiblePhrase}
                                 conversationHistory={integrationStore.conversationHistory}
                                 voiceParticipants={voiceParticipants}
                                 onRenameProfile={handleRenameProfile}

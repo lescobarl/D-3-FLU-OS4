@@ -128,8 +128,7 @@ function baseProps(overrides: Partial<WorkspaceHubProps> = {}): WorkspaceHubProp
         searchOverrides: {},
         workspaceArtifact: null,
         latestResponse: '',
-        liveTranscript: '',
-        currentTranscript: '',
+        livePhrase: '',
         homeworkContext: null,
         image: {
             imageUrl: null,

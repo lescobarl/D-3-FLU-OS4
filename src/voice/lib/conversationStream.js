@@ -58,6 +58,49 @@ export function utterancesAsrProgress(previous = '', next = '') {
   return false
 }
 
+/**
+ * §9 (anti-fragmentación): ¿`capture` es la MISMA emisión creciendo respecto de
+ * `lastCommitted`? Si lo es, NO se debe pelar el prefijo ya comprometido (eso
+ * produciría residuos como "tas de cafe" a partir de "busca en la web rece" +
+ * "busca en la web recetas de cafe").
+ *
+ * Fuente ÚNICA del criterio: la usan por igual el camino de FINALES y el de
+ * INTERIMS de transcriptIngress.js, para que no puedan divergir.
+ */
+export function isProgressiveExtension(capture = '', lastCommitted = '') {
+  const next = cleanForSpeech(capture)
+  const prior = cleanForSpeech(lastCommitted)
+  if (!next || !prior || next.length <= prior.length) return false
+  return (
+    next.toLowerCase().startsWith(prior.toLowerCase()) ||
+    utterancesAsrProgress(prior, next)
+  )
+}
+
+/**
+ * §9 ÚNICA FUENTE DE VERDAD del texto de un turno en ingress.
+ *
+ * Decide, en UN SOLO lugar, qué texto corresponde al turno actual frente a la
+ * última fila commiteada: conserva la emisión que crece, pela el prefijo ya
+ * commiteado cuando corresponde y no inventa residuos. La usan por igual el
+ * camino de FINALES y el de INTERIMS; antes cada uno tenía su propia lógica y
+ * podían divergir (residuo "tas de cafe" del log).
+ *
+ * @param {string} raw Texto entrante (final o interim).
+ * @param {string} lastCommitted Última fila commiteada.
+ * @param {{ atFreshVoice?: boolean }} [options] `atFreshVoice` conserva el texto
+ *   cuando no continúa la fila (voz nueva), en vez de pelar.
+ */
+export function resolveIngressCaptureText(raw = '', lastCommitted = '', { atFreshVoice = false } = {}) {
+  const current = cleanForSpeech(raw)
+  const prior = cleanForSpeech(lastCommitted)
+  if (!current || !prior) return current
+  if (isProgressiveExtension(current, prior)) return current
+  if (atFreshVoice) return current
+  const peeled = cleanForSpeech(peelCommittedPrefixFromInterim(current, prior))
+  return peeled || current
+}
+
 function speechWords(text = '') {
   return cleanForSpeech(text).split(/\s+/).filter(Boolean)
 }

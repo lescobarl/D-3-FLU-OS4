@@ -281,54 +281,6 @@ export function passesRoomRematchStrict(similarity, thresholds = {}) {
   return Number.isFinite(similarity) && similarity >= floor
 }
 
-/** Diarización solo con clusters de la sesión actual (sin perfiles guardados). */
-export function matchSessionSpeaker(signatureVector, speakerClusters = [], thresholds = {}) {
-  const vector = normalizeEmbeddingVector(signatureVector)
-  const matchThreshold = cosineThreshold(thresholds, 'cosineMatchThreshold', 0.76)
-
-  let clusterMatch = null
-  let clusterSimilarity = -1
-
-  speakerClusters.forEach((cluster) => {
-    if (!Array.isArray(cluster?.signature)) return
-    const similarity = compareAudioSignatures(vector, cluster.signature)
-    if (similarity > clusterSimilarity) {
-      clusterSimilarity = similarity
-      clusterMatch = cluster
-    }
-  })
-
-  if (clusterMatch && clusterSimilarity >= matchThreshold) {
-    updateClusterSignature(clusterMatch, vector)
-    return clusterMatch.label || 'Hablante 1'
-  }
-
-  const label = nextAvailableSpeakerLabel(speakerClusters)
-  speakerClusters.push({ label, signature: [...vector], signatureHistory: [[...vector]] })
-  return label
-}
-
-export function resolveSessionSpeaker({
-  signatureVector,
-  speakerClusters = [],
-  lastSpeaker = '',
-  lastSignature = null,
-}) {
-  const vector = Array.isArray(signatureVector) ? signatureVector : [0, 0, 0, 0]
-
-  const continuityThreshold = cosineThreshold({}, 'cosineContinuityThreshold', 0.74)
-  if (
-    lastSpeaker &&
-    Array.isArray(lastSignature) &&
-    lastSignature.length &&
-    compareAudioSignatures(vector, lastSignature) >= continuityThreshold
-  ) {
-    return lastSpeaker
-  }
-
-  return matchSessionSpeaker(vector, speakerClusters)
-}
-
 function nextSessionSpeakerLabel(speakerClusters = [], extraLabels = [], maxAutoSpeakers = 0) {
   return nextAvailableSpeakerLabel(speakerClusters, extraLabels, { maxSpeakers: maxAutoSpeakers })
 }

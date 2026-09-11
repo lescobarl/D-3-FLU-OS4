@@ -20,7 +20,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { selectVisiblePhrase } from '../voice/lib/conversationDialogue';
 import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
 import { HoyPanel, type HoyPanelProps } from './HoyPanel';
@@ -56,16 +55,12 @@ export interface WorkspaceHubProps {
 
     // Respuesta de Flu (texto IA)
     latestResponse: string;
-    liveTranscript: string;
-    currentTranscript: string;
     /**
-     * Fuentes canónicas de la frase (regla #6: la barra muestra la MISMA
-     * transcripción que bitácora/burbuja, solo sin wake word).
-     * lastTranscript = última frase confirmada por el hook.
-     * lastUserText = última frase del usuario derivada del historial.
+     * Frase visible canónica (§9.3): MISMA cadena que bitácora/burbuja.
+     * La barra solo le quita la wake word para presentación. Se deriva una
+     * única vez en App (`selectVisiblePhrase`); ningún consumidor la recalcula.
      */
-    lastTranscript?: string;
-    lastUserText?: string;
+    livePhrase: string;
     /** Indica si el asistente está capturando voz (para el overlay en vivo). */
     isListening?: boolean;
     homeworkContext: {
@@ -247,10 +242,7 @@ export function WorkspaceHub({
     searchOverrides,
     workspaceArtifact,
     latestResponse,
-    liveTranscript,
-    currentTranscript,
-    lastTranscript = '',
-    lastUserText = '',
+    livePhrase,
     isListening,
     homeworkContext,
     image,
@@ -574,7 +566,7 @@ export function WorkspaceHub({
                     // Fuente canónica única de la frase (regla #6): la barra
                     // recibe la MISMA cadena que bitácora/burbuja y solo le quita
                     // la wake word para pintar comandos.
-                    livePhrase={selectVisiblePhrase({ live: liveTranscript, lastTranscript, lastUserText, currentTranscript })}
+                    livePhrase={livePhrase}
                     isListening={isListening}
                 />
             </div>

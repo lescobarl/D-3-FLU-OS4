@@ -207,9 +207,6 @@ export const WORKSPACE_TIPOS: readonly string[] = ['text', 'image_prompt', 'diag
 /** Tipos visuales que activan generación de imagen (Pollinations). */
 export const VALID_VISUAL_TIPOS: readonly string[] = ['image_prompt', 'diagram', '3d'];
 
-/** URL del servidor STT standalone de desarrollo (devServerUrl). */
-export const STREAM_STT_DEV_URL = (import.meta as any)?.env?.VITE_STREAM_STT_DEV_URL || 'ws://127.0.0.1:8787';
-
 // -----------------------------------------------------------
 // Device Actions — WhatsApp web base (Rule #1: NO HARDCODE)
 // -----------------------------------------------------------

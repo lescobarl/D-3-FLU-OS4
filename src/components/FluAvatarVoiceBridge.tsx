@@ -25,7 +25,6 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { BunnyViewer, useBunnyStore } from '../avatar';
 import type { BunnyAnimation } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
-import { selectVisiblePhrase } from '../voice/lib/conversationDialogue';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
@@ -42,9 +41,11 @@ import { getAmbiente } from '../core/environments/environmentRegistry';
 interface FluAvatarVoiceBridgeProps {
     height?: string;
     width?: string;
-    /** Última frase completa del usuario (fallback de transcripción del área del
-        personaje cuando liveTranscript/currentTranscript están vacíos tras ejecutar). */
-    lastUserText?: string;
+    /**
+     * Frase visible canónica (§9.3): misma cadena que bitácora y barra.
+     * La deriva App una sola vez; el avatar no recalcula.
+     */
+    visiblePhrase?: string;
     /** Estado de branding para decoraciones estacionales del avatar */
     brandingMode?: 'auto' | 'manual' | 'disabled';
     brandingSeason?: string;
@@ -140,29 +141,14 @@ function useKeyboardShortcuts({
 // VoiceControls — Panel de control de voz
 // -----------------------------------------------------------
 interface VoiceControlsProps {
-    liveTranscript: string;
-    /** Última frase completa confirmada (fuente canónica del hook — regla #3:
-        la burbuja debe mostrar exactamente lo que muestra la bitácora). */
-    lastTranscript?: string;
-    transcript: string;
-    /** Última frase completa del usuario (fallback cuando live/store están vacíos). */
-    fallback?: string;
+    /** Frase visible canónica (§9.3): misma cadena que bitácora y barra. */
+    visiblePhrase?: string;
 }
 
-function VoiceControls({
-    liveTranscript,
-    lastTranscript = '',
-    transcript,
-    fallback = '',
-}: VoiceControlsProps) {
-    // La transcripción visible conserva la frase COMPLETA tal como FLU la oyó,
-    // incluida la wake word ("ok flu"). La wake word solo se quita en la barra
-    // de búsqueda (extractQueryFromWebSearchPhrase), no aquí.
-    // Precedencia ÚNICA y canónica (idéntica a la de la bitácora):
-    //   live (interino) → última frase confirmada del hook (lastTranscript)
-    //   → ÚLTIMA frase commitida del usuario (fallback = historial) → espejo.
-    const rawText = selectVisiblePhrase({ live: liveTranscript, lastTranscript, lastUserText: fallback, currentTranscript: transcript });
-    const displayText = rawText;
+function VoiceControls({ visiblePhrase = '' }: VoiceControlsProps) {
+    // §9.3: la frase visible llega ya derivada desde App (misma que bitácora y
+    // barra). El avatar no vuelve a seleccionar ni normalizar.
+    const displayText = String(visiblePhrase || '');
     return (
         <div className="voice-controls">
             {/* Transcripción en vivo — siempre visible con scroll */}
@@ -200,7 +186,7 @@ function VoiceControls({
 export function FluAvatarVoiceBridge({
     height = '100%',
     width = '100%',
-    lastUserText = '',
+    visiblePhrase = '',
     brandingMode,
     brandingSeason,
     brandingIsBirthday,
@@ -458,12 +444,7 @@ export function FluAvatarVoiceBridge({
             </div>
 
             {/* VoiceControls — Transcript display only (OS2 parity: live transcript from useFluVoiceAssistant) */}
-            <VoiceControls
-                liveTranscript={liveTranscript || ''}
-                lastTranscript={bridge.lastTranscript || ''}
-                transcript={integrationStore.currentTranscript}
-                fallback={lastUserText}
-            />
+            <VoiceControls visiblePhrase={visiblePhrase} />
 
         </div>
     );

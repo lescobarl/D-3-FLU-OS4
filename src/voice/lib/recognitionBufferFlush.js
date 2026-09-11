@@ -27,7 +27,6 @@ export function flushPcmStateAfterCommit({
   chunkTotalSamplesRef = null,
   turnAudioStartSampleRef = null,
   micBridgeRef = null,
-  streamSttClient = null,
 } = {}) {
   return flushAudioAccumulationOnFinal({
     audioBuffer,
@@ -35,6 +34,5 @@ export function flushPcmStateAfterCommit({
     chunkTotalSamplesRef,
     turnAudioStartSampleRef,
     micBridgeRef,
-    streamSttClient,
   })
 }

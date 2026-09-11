@@ -2,11 +2,7 @@
  * Envoltorio local de SpeechRecognition (navegador).
  */
 import { getActiveListenConfig } from './fluConfig'
-import {
-  getRecognitionLanguage,
-  isBilingualListenMode,
-  listBilingualLocales,
-} from './activeListen'
+import { getRecognitionLanguage } from './activeListen'
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false
@@ -37,25 +33,6 @@ export function acquireSpeechRecognition(language = 'es', activeLocale = '') {
   return createSpeechRecognition(language, activeLocale)
 }
 
-/** Instala paquetes de idioma on-device cuando el navegador lo soporta (Chrome). */
-export async function ensureSpeechRecognitionLocales(language = 'es') {
-  if (typeof window === 'undefined' || !isSpeechRecognitionSupported()) return false
-
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (typeof Recognition.install !== 'function') return false
-
-  const locales = isBilingualListenMode(language)
-    ? listBilingualLocales()
-    : [getRecognitionLanguage(language)].filter(Boolean)
-
-  try {
-    await Recognition.install({ langs: locales })
-    return true
-  } catch {
-    return false
-  }
-}
-
 export function bindSpeechRecognition(recognition, handlers = {}) {
   if (!recognition) return
 
@@ -65,14 +42,39 @@ export function bindSpeechRecognition(recognition, handlers = {}) {
   recognition.onend = handlers.onEnd || null
 }
 
+// ============================================================
+// §9.1: UNA sola escucha activa a la vez (choke point central).
+// Toda instancia arranca/para por estos envoltorios; nadie llama
+// `.start()`/`.stop()` directo. El lock evita la doble captura
+// (motor principal + onboarding) y nunca queda pegado: al arrancar
+// una segunda instancia se detiene la anterior (última gana).
+// ============================================================
+let activeRecognition = null
+
+/** Instancia que está capturando ahora mismo (o null). Solo lectura. */
+export function getActiveRecognition() {
+  return activeRecognition
+}
+
+/** Solo para tests: limpia el lock entre casos. */
+export function resetActiveRecognitionForTest() {
+  activeRecognition = null
+}
+
 export function startSpeechRecognition(recognition) {
   if (!recognition) return false
+  if (activeRecognition && activeRecognition !== recognition) {
+    // Otra instancia estaba capturando: se detiene antes de arrancar esta.
+    stopSpeechRecognition(activeRecognition)
+  }
   try {
     recognition.start()
+    activeRecognition = recognition
     return true
   } catch (error) {
     const message = String(error?.message || error).toLowerCase()
     if (message.includes('already') && message.includes('start')) {
+      activeRecognition = recognition
       return true
     }
     return false
@@ -85,5 +87,22 @@ export function stopSpeechRecognition(recognition) {
     recognition.stop()
   } catch {
     // ignore
+  }
+  if (activeRecognition === recognition) {
+    activeRecognition = null
+  }
+}
+
+/** Aborta (anti-eco) y libera el lock para que otro flujo pueda escuchar. */
+export function abortSpeechRecognition(recognition) {
+  if (!recognition) return
+  try {
+    if (typeof recognition.abort === 'function') recognition.abort()
+    else recognition.stop()
+  } catch {
+    // ignore
+  }
+  if (activeRecognition === recognition) {
+    activeRecognition = null
   }
 }

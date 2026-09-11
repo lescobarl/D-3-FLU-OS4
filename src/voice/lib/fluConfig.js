@@ -1,4 +1,4 @@
-import { STREAM_STT_DEV_URL } from '../../core/config/appConfig'
+/** Configuración central de FLU. */
 
 const LISTENING_ACK_PHRASES = Object.freeze([
   'estas escuchando',
@@ -1928,8 +1928,6 @@ export const FLU_CONFIG = {
     enabled: true,
     /** `[Flu][chrome-raw]` — evento SpeechRecognition sin procesar (solo dev). */
     chromeRawConsole: true,
-    /** `[Flu][stream-stt]` — texto del STT por mic nativo (solo dev). */
-    streamSttConsole: true,
     /** Panel flotante: log ingress (texto publicado completo). */
     micConsolePanel: false,
     /** Log autoritativo desde transcriptIngress (misma fuente que ÚLTIMA FRASE). */
@@ -1967,8 +1965,57 @@ export const FLU_CONFIG = {
    * No usar hybrid/stream salvo API de pago (p. ej. Deepgram). Ver docs/transcripcion-conversaciones.md § Stack gratuito.
    */
   transcript: {
-    source: 'browser',
-    commandsFromBrowser: true,
+    /**
+     * §9 Motor ÚNICO de escucha (B): Whisper WASM on-device + segmentador VAD
+     * sobre el PCM. Reemplaza Chrome SR (texto) y alimenta también la identidad
+     * de voz. Todo configurable; prohibido hardcodear en el motor.
+     */
+    asr: {
+      provider: 'whisper-wasm',
+      /** Modelo FINAL (preciso) para la fila commiteada. */
+      modelId: 'Xenova/whisper-base',
+      /** Modelo INTERIM (rápido) para el texto en vivo mientras se habla. */
+      interimModelId: 'Xenova/whisper-tiny',
+      language: 'es',
+      /**
+       * dtype del modelo. `q8` rompía el decoder de whisper-base
+       * (TransposeDQWeightsForMatMulNBits: falta scale en embed_tokens).
+       * Se usa 'fp32' (seguro) + modelo `tiny` para velocidad.
+       */
+      dtype: 'fp32',
+      /** Tasa objetivo del modelo (Hz). */
+      targetSampleRate: 16000,
+      /**
+       * Texto de sesgo (initial_prompt) para el decoder: mezcla de idioma +
+       * wake word + muletillas típicas. Hace que Whisper escriba "ok flu"
+       * correctamente en vez de alucinar en audios cortos.
+       */
+      initialPrompt:
+        'Conversación en español con el asistente. Palabras clave: ok flu, oye flu, ' +
+        'estás ahí, cuéntame, busca en la web, recuérdame, anota.',
+      /** Parciales en vivo (interim): la "última frase" se escribe mientras se
+       *  escucha. El COMMIT de la conversación sigue siendo solo con el final
+       *  (fin de habla / silencio / cambio de hablante). Con `tiny` es viable. */
+      partialsEnabled: true,
+      partialIntervalMs: 1200,
+      /** Segmentador / VAD: corta turnos y emite parciales. */
+      vad: {
+        /** Ventana de análisis (ms). */
+        frameMs: 30,
+        /** Umbral de energía RMS para considerar voz. Único knob de voz del VAD;
+         *  valor inicial — se mide/ajusta en validación, no es un valor secreto. */
+        energyThreshold: 0.015,
+        /** Voz mínima para abrir turno (ms). */
+        minSpeechMs: 300,
+        /** Silencio mínimo para cerrar turno (ms). Alineado a `segmentSilenceGapMs`
+         *  (1200) del respaldo afinado: no parte "ok flu" del comando. */
+        minSilenceMs: 1000,
+        /** Turno máximo antes de forzar corte (ms). Corto = menos bucles. */
+        maxSegmentMs: 8000,
+        /** Audio previo al inicio de voz que se incluye en el turno (ms). */
+        preRollMs: 180,
+      },
+    },
     /** all | last-only | off — con 3+ filas en log escala a all (Chrome acumulativo). */
     stripPriorTurnsOnInterim: true,
     stripPriorTurnsMode: 'last-only',
@@ -2078,17 +2125,6 @@ export const FLU_CONFIG = {
     logRowPauseForceNewMs: 1000,
     /** Solapamiento acústico (ms) al pasar al siguiente turno tras commit confirmado. */
     turnAudioOverlapMs: 800,
-  },
-  streamStt: {
-    wsPath: '/stream-stt',
-    wsUrl: '',
-    devServerUrl: STREAM_STT_DEV_URL,
-    targetSampleRate: 16000,
-    chunkMs: 80,
-    reconnectMs: 1500,
-    maxReconnectAttempts: 0,
-    utteranceSilenceMs: 900,
-    minVoicedRms: 0.0025,
   },
   voiceCommands: {
  /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo). Un solo punto de verdad.

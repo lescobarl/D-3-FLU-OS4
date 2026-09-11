@@ -20,7 +20,6 @@ let ringCount = 0
 let devFlushTimer = null
 const devPending = []
 let chromeRawSeq = 0
-let streamSttSeq = 0
 
 function syncListenLogGlobals() {
   if (typeof window === 'undefined') return
@@ -39,13 +38,6 @@ export function isChromeRawConsoleEnabled() {
   if (window.__FLU_CHROME_RAW_CONSOLE === true) return true
   if (window.__FLU_MIC_RAW_CONSOLE === true) return true
   return FLU_CONFIG.debug?.chromeRawConsole !== false
-}
-
-export function isStreamSttConsoleEnabled() {
-  if (!IS_DEV || typeof window === 'undefined') return false
-  if (window.__FLU_STREAM_STT_CONSOLE === false) return false
-  if (window.__FLU_STREAM_STT_CONSOLE === true) return true
-  return FLU_CONFIG.debug?.streamSttConsole !== false
 }
 
 /** @deprecated Usar isChromeRawConsoleEnabled */
@@ -132,21 +124,6 @@ export function logChromeSpeechResult(event) {
   }
 }
 
-/** Consola dev: STT streaming sin procesar (no alimenta panel ingress). */
-export function logStreamSttText(text = '', isFinal = false) {
-  if (typeof window === 'undefined' || !isStreamSttConsoleEnabled()) return
-  const kind = isFinal ? 'final' : 'interim'
-  streamSttSeq += 1
-  logChromeRawConsole('stream-stt', kind, text, streamSttSeq)
-  pushRing({
-    t: Date.now(),
-    stage: 'stream-stt',
-    seq: streamSttSeq,
-    kind,
-    text,
-  })
-}
-
 /** @deprecated Usar logChromeSpeechResult */
 export function logMicRaw(event) {
   logChromeSpeechResult(event)
@@ -158,7 +135,6 @@ export function logStreamPublish() {}
 
 export function resetMicConsole() {
   chromeRawSeq = 0
-  streamSttSeq = 0
 }
 
 export function getListenLogRing() {
@@ -174,7 +150,7 @@ export function clearListenLogRing() {
 }
 
 export function getListenStats() {
-  return { chromeRawSeq, streamSttSeq }
+  return { chromeRawSeq }
 }
 
 export function printListenSummary() {
