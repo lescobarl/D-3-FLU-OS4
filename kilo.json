@@ -9,6 +9,7 @@
       ".task/**": "deny",
       "scripts/task-gate*.mjs": "deny",
       "scripts/hito.mjs": "deny",
+      "scripts/corregir.mjs": "deny",
       "tests/*Guard*.test.ts": "deny",
       "tests/*guard*.test.ts": "deny",
       "tests/taskGateInvariant.test.ts": "deny",
