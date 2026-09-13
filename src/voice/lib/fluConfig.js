@@ -275,7 +275,7 @@ export const FLU_CONFIG = {
     /** @deprecated Interinos ya no escriben al log; solo aplica a rutas legacy. */
     streamLogThrottleMs: 0,
     wakeWordCommandDelayMs: 3000,
-    interimCommandDelayMs: 500,
+    interimCommandDelayMs: 1400,
     /**
      * Consolidación de BUSCAR: los reinicios del reconocedor entregan el mismo
      * comando en varias revisiones (parcial → completo). Para NO buscar 2 veces,
@@ -296,13 +296,13 @@ export const FLU_CONFIG = {
      * hablando entre ítems ("estoy pensando y hablando, lleva tiempo… no puedes
      * cortarlo"). Los comandos cortos siguen disparando rápido.
      */
-    dictationGraceWords: 6,
-    dictationGraceBaseMs: 500,
+    dictationGraceWords: 2,
+    dictationGraceBaseMs: 800,
     dictationGracePerWordMs: 120,
     dictationGraceMaxMs: 4000,
-    conversationMinMsAfterLastResult: 30,
-    interimFinalizeGraceMs: 25,
-    conversationSettleStableMs: 80,
+    conversationMinMsAfterLastResult: 250,
+    interimFinalizeGraceMs: 250,
+    conversationSettleStableMs: 300,
     /** Retraso antes de auto-stop en modo pasivo (ms). */
     scheduleAutoProcessDelayMs: 150,
     /** Reintento mientras hay commit en curso (ms). */
