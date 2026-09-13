@@ -391,3 +391,62 @@ describe('temporalService — transiciones, rearm y borrado', () => {
     expect(addAuditLog).not.toHaveBeenCalled();
   });
 });
+
+describe('temporalService — update (editar etiqueta)', () => {
+  it('edita la etiqueta e incrementa la revisión', async () => {
+    const service = createService(createMapDb());
+    const created = (
+      await service.add({ kind: 'alarm', label: 'Despertar', trigger: { kind: 'countdown', at: NOW, durationMs: 1000 } })
+    ).record!;
+    const updated = await service.update(created.id, { label: 'Despertar temprano' });
+    expect(updated?.label).toBe('Despertar temprano');
+    expect(updated?.sync.revision).toBe(created.sync.revision + 1);
+  });
+
+  it('etiqueta vacía no cambia el registro', async () => {
+    const service = createService(createMapDb());
+    const created = (
+      await service.add({ kind: 'timer', label: 'Café', trigger: { kind: 'countdown', at: NOW, durationMs: 1000 } })
+    ).record!;
+    const same = await service.update(created.id, { label: '   ' });
+    expect(same?.label).toBe('Café');
+  });
+
+  it('id inexistente → null', async () => {
+    const service = createService(createMapDb());
+    expect(await service.update('no-existe', { label: 'x' })).toBeNull();
+  });
+
+  it('cambia la HORA (timeOfDay) y recalcula nextAt (rearm)', async () => {
+    const service = createService(createMapDb());
+    const created = (
+      await service.add({
+        kind: 'alarm',
+        label: 'Despertar',
+        trigger: { kind: 'daily', timeOfDay: '07:00' },
+        recurrence: { kind: 'daily' },
+      })
+    ).record!;
+
+    const updated = await service.update(created.id, { timeOfDay: '13:40' });
+    expect((updated?.trigger as any).timeOfDay).toBe('13:40');
+    expect(updated?.nextAt).not.toBe(created.nextAt);
+    const d = new Date(updated!.nextAt);
+    expect(d.getHours()).toBe(13);
+    expect(d.getMinutes()).toBe(40);
+  });
+
+  it('hora inválida no cambia nada', async () => {
+    const service = createService(createMapDb());
+    const created = (
+      await service.add({
+        kind: 'alarm',
+        label: 'A',
+        trigger: { kind: 'daily', timeOfDay: '07:00' },
+        recurrence: { kind: 'daily' },
+      })
+    ).record!;
+    const same = await service.update(created.id, { timeOfDay: '99:99' });
+    expect((same?.trigger as any).timeOfDay).toBe('07:00');
+  });
+});

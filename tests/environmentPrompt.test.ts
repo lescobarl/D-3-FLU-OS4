@@ -121,6 +121,21 @@ describe('buildSystemPrompt — inyección del bloque de ambientes (gemini.js)',
     })
     expect(prompt).toContain('"modo-selva"')
   })
+
+  test('inyecta la personalidad del perfil Y su directiva proactiva', () => {
+    const prompt = buildSystemPrompt({
+      role: '',
+      theme: '',
+      phase: '',
+      language: 'es',
+      startupPrompt: 'Eres FLU, el alma de la fiesta.',
+      includeConfig: true,
+    })
+    // Personalidad del perfil.
+    expect(prompt).toContain('Eres FLU, el alma de la fiesta.')
+    // Directiva proactiva (config): que ACTÚE su personaje.
+    expect(prompt).toContain('Sé proactivo')
+  })
 })
 
 describe('buildMinimalContractSchema — campo ambiente en el schema mínimo', () => {

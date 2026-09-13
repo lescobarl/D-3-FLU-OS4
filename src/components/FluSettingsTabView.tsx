@@ -19,11 +19,13 @@ import {
 import { ParticipantsPanel, type ParticipantsPanelProps } from './ParticipantsPanel';
 import { BrowserProfilesPanel, type BrowserProfilesPanelProps } from './BrowserProfilesPanel';
 import { SearchControlCenter, type SearchControlCenterProps } from './SearchControlCenter';
+import { SettingsSaveProvider, SettingsSaveBar } from './SettingsSaveContext';
 import { ContactsPanel, type ContactsPanelProps } from './ContactsPanel';
 import { RemindersPanel, type RemindersPanelProps } from './RemindersPanel';
 import { TemporalItemsPanel, type TemporalItemsPanelProps } from './TemporalItemsPanel';
 import { ShoppingPanel, type ShoppingPanelProps } from './ShoppingPanel';
 import { MateriaGrisPanel, type MateriaGrisPanelProps } from './MateriaGrisPanel';
+import { DocumentsHistoryPanel, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 
 // Sub-secciones del panel de Ajustes (Fase A2): FLU / Mis datos / Gestión.
 export type SettingsGroupId = 'flu' | 'data' | 'management';
@@ -75,6 +77,8 @@ export interface FluSettingsTabViewProps {
     shopping: ShoppingPanelProps;
     /** Tabla de reconocimiento (materia gris). */
     materiaGris: MateriaGrisPanelProps;
+    /** Historial de documentos/imágenes generados o cargados (por usuario). */
+    documents?: DocumentsHistoryPanelProps;
 }
 
 /**
@@ -100,6 +104,7 @@ export function FluSettingsTabView({
     temporals,
     shopping,
     materiaGris,
+    documents,
 }: FluSettingsTabViewProps) {
     return (
         <FluTabPanel tabId="settings" activeTab={activeTab} className="flu-tab-panel--settings">
@@ -113,6 +118,7 @@ export function FluSettingsTabView({
                     onToggleExpand,
                 } as any}
             >
+                <SettingsSaveProvider>
                 {/* Sub-menú de secciones (Fase A2): mismas pestañas, mismo estado, agrupación visual */}
                 <div className="flu-settings-groups" role="tablist" aria-label="Secciones de ajustes">
                     {SETTINGS_GROUPS.map((grp) => (
@@ -168,7 +174,12 @@ export function FluSettingsTabView({
                     <TemporalItemsPanel {...temporals} />
                     <ShoppingPanel {...shopping} />
                     <MateriaGrisPanel {...materiaGris} />
+                    {documents ? <DocumentsHistoryPanel {...documents} /> : null}
                 </div>
+
+                {/* Acción GLOBAL: un solo Guardar/Restablecer para todo el configurador */}
+                <SettingsSaveBar language={flu.language} />
+                </SettingsSaveProvider>
             </PanelFrame>
         </FluTabPanel>
     );

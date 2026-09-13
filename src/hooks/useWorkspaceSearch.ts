@@ -195,9 +195,17 @@ export async function fetchAiOverview(
     }
 }
 
+export interface ProviderError {
+    provider: string;
+    reason: string;
+    status?: number;
+}
+
 export interface TypeFetchResult {
     ok: boolean;
     results: SearchResult[];
+    /** Motivos de fallo por proveedor (diagnóstico; vacío si todo fue bien). */
+    errors: ProviderError[];
 }
 
 /**
@@ -228,11 +236,15 @@ export async function fetchTypeResults(
         const response = await fetch(`${endpoint}?${params.toString()}`);
         const data = await response.json().catch(() => null);
         if (response.ok && data?.ok && Array.isArray(data.results)) {
-            return { ok: true, results: data.results as SearchResult[] };
+            return {
+                ok: true,
+                results: data.results as SearchResult[],
+                errors: Array.isArray(data.errors) ? (data.errors as ProviderError[]) : [],
+            };
         }
-        return { ok: false, results: [] };
+        return { ok: false, results: [], errors: [] };
     } catch {
-        return { ok: false, results: [] };
+        return { ok: false, results: [], errors: [] };
     }
 }
 
@@ -322,6 +334,20 @@ export function useWorkspaceSearch(
             if (!webResult.ok) {
                 webError = true;
                 setError(cfg.errorState);
+            }
+
+            // Diagnóstico visible: si algún proveedor falló (clave inválida, sin
+            // crédito, modelo inexistente…), mostrarlo en vez de caer en silencio.
+            const providerIssues = [
+                ...webResult.errors,
+                ...imageResult.errors,
+                ...videoResult.errors,
+            ];
+            if (providerIssues.length > 0) {
+                const detail = providerIssues
+                    .map((e) => `${e.provider}${e.status ? ` ${e.status}` : ` ${e.reason}`}`)
+                    .join(', ');
+                setError(`Proveedores con error: ${detail}.`);
             }
 
             let aiText = '';

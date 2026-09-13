@@ -1130,10 +1130,15 @@ export function resolveConversationSpeaker({
         note({ reason: 'registered-pinned-rematch', speaker: preferSpeaker, clusterSimilarity: pinnedSimilarity })
         return preferSpeaker
       }
+      // La voz NO coincide con el perfil registrado: NO se fuerza el nombre;
+      // se continúa para asignar el hablante real (evita "voz distinta → nombre
+      // del participante", p. ej. la hija etiquetada como el titular).
+      note({ reason: 'registered-pinned-mismatch', speaker: effectiveSticky, clusterSimilarity: pinnedSimilarity })
+    } else {
+      ensureClusterForLabel(speakerClusters, preferSpeaker, vector)
+      note({ reason: 'registered-pinned-cluster', speaker: preferSpeaker })
+      return preferSpeaker
     }
-    ensureClusterForLabel(speakerClusters, preferSpeaker, vector)
-    note({ reason: 'registered-pinned-cluster', speaker: preferSpeaker })
-    return preferSpeaker
   }
 
   if ((strictCosine || !soloSticky) && atTurnBoundary && vector.length) {
@@ -1224,10 +1229,13 @@ export function resolveConversationSpeaker({
           note({ reason: 'room-pinned-rematch', speaker: preferSpeaker, clusterSimilarity: pinnedSimilarity })
           return preferSpeaker
         }
+        // Voz que NO coincide con el perfil registrado: no se fuerza el nombre.
+        note({ reason: 'room-pinned-mismatch', speaker: effectiveSticky, clusterSimilarity: pinnedSimilarity })
+      } else {
+        ensureClusterForLabel(speakerClusters, preferSpeaker, vector)
+        note({ reason: 'room-pinned-cluster', speaker: preferSpeaker })
+        return preferSpeaker
       }
-      ensureClusterForLabel(speakerClusters, preferSpeaker, vector)
-      note({ reason: 'room-pinned-cluster', speaker: preferSpeaker })
-      return preferSpeaker
     }
 
     const strictRematch = resolveRoomRematchThreshold({ thresholds })

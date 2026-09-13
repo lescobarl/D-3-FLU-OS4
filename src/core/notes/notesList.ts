@@ -98,3 +98,15 @@ export function notesForPerson(items: readonly Note[], personId?: string): Note[
   if (!personId) return items.slice();
   return items.filter((note) => note.personId === personId);
 }
+
+/**
+ * Aísla notas por usuario: `scope = participantId || 'global'`; una nota sin
+ * `personId` se considera del alcance 'global' (legacy). A no ve B.
+ */
+export function filterNotesByScope<T extends { personId?: string }>(
+  items: readonly T[],
+  participantId?: string,
+): T[] {
+  const scope = participantId || 'global';
+  return items.filter((note) => (note.personId || 'global') === scope);
+}

@@ -29,7 +29,15 @@ export type ResultOrigin = 'web' | 'ia' | 'ocr';
 export type ResultKind = 'text' | 'image' | 'doc' | 'video';
 
 /** Filtro por tipo visible en la cabecera del feed. */
-export type ResultFeedFilter = 'all' | 'image' | 'doc';
+export type ResultFeedFilter = 'all' | 'image' | 'video' | 'doc';
+
+/** Filtro inicial derivado del contenido: si hay video → Vídeos, si hay
+ *  imagen → Imágenes, si no → Todo. */
+function pickInitialFilter(list: ResultFeedItem[]): ResultFeedFilter {
+  if (list.some((item) => item.onlyInKind && item.kind === 'video')) return 'video';
+  if (list.some((item) => item.onlyInKind && item.kind === 'image')) return 'image';
+  return 'all';
+}
 
 /** Un ítem del feed: origen + tipo + título + cuerpo ya renderizado. */
 export interface ResultFeedItem {
@@ -64,7 +72,7 @@ export function ResultFeed({
   title,
   language = 'es',
 }: ResultFeedProps) {
-  const [filter, setFilter] = useState<ResultFeedFilter>('all');
+  const [filter, setFilter] = useState<ResultFeedFilter>(() => pickInitialFilter(items));
 
   // Etiquetas de la UI (Regla #1: sin hardcode).
   const ui = FLU_CONFIG.ui?.workspace || {};
@@ -81,8 +89,10 @@ export function ResultFeed({
     pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterAll, language, 'Todo');
   const filterImages =
     pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterImages, language, 'Imágenes');
+  const filterVideo =
+    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterVideo, language, 'Vídeos');
   const filterDoc =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterDoc, language, 'Doc/Video');
+    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterDoc, language, 'Documentos');
 
   // Etiquetas de origen (insignias).
   const originWeb = pickLabel(ui.origenWebLabel, language, 'Web');
@@ -100,7 +110,8 @@ export function ResultFeed({
   const matchesFilter = (item: ResultFeedItem): boolean => {
     if (filter === 'all') return !item.onlyInKind;
     if (filter === 'image') return item.kind === 'image';
-    return item.kind === 'doc' || item.kind === 'video';
+    if (filter === 'video') return item.kind === 'video';
+    return item.kind === 'doc';
   };
 
   const visible = useMemo(
@@ -144,6 +155,7 @@ export function ResultFeed({
         <div className="result-feed__filters" role="group" aria-label="Filtrar por tipo">
           {filterBtn('all', filterAll)}
           {filterBtn('image', filterImages)}
+          {filterBtn('video', filterVideo)}
           {filterBtn('doc', filterDoc)}
         </div>
       </header>

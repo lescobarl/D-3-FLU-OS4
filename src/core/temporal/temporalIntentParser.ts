@@ -46,9 +46,11 @@ export type TemporalIntentAction =
   | 'alarm.add'
   | 'alarm.list'
   | 'alarm.cancel'
+  | 'alarm.stop'
   | 'timer.start'
   | 'timer.list'
-  | 'timer.cancel';
+  | 'timer.cancel'
+  | 'timer.stop';
 
 export interface TemporalIntentData {
   /** alarm o timer. */
@@ -102,6 +104,17 @@ const ALARM_CANCEL_ES =
   /^(?:cancela|cancelar|quita|quitar|borra|borrar|elimina|apaga|apagar|desactiva)\s+(?:todas\s+las\s+|la\s+|el\s+|las\s+|los\s+|una\s+)?(?:alarmas?|despertador)\b/i;
 const ALARM_CANCEL_EN =
   /^(?:cancel|stop|turn\s+off|delete|remove|clear)\s+(?:all\s+the\s+|all\s+|the\s+|an?\s+)?alarms?\b/i;
+
+// "detén/para/silencia la alarma (que está sonando)" → silenciar el TONO sin
+// cancelar el ítem pendiente. Se evalúa ANTES que cancel.
+const ALARM_STOP_ES =
+  /^(?:det[eé]n|detener|detiene|para|parar|silencia|silenciar|calla|callar)\s+(?:la\s+|el\s+|esa\s+|esta\s+)?(?:alarma|despertador)(?:\s+que\s+est[aá]\s+sonando)?\b/i;
+const ALARM_STOP_EN =
+  /^(?:silence|mute)\s+(?:the\s+|that\s+|this\s+)?(?:alarm|alarm\s+sound)\b/i;
+const TIMER_STOP_ES =
+  /^(?:det[eé]n|detener|detiene|para|parar|silencia|silenciar|calla|callar)\s+(?:el\s+|ese\s+|este\s+)?(?:temporizador|cron[oó]metro|alarma)\s+del\s+temporizador\b|^(?:det[eé]n|detener|detiene|para|parar|silencia|silenciar|calla|callar)\s+(?:el\s+|ese\s+|este\s+)?temporizador(?:\s+que\s+est[aá]\s+sonando)?\b/i;
+const TIMER_STOP_EN =
+  /^(?:silence|mute)\s+(?:the\s+|that\s+|this\s+)?timer\b/i;
 
 const TIMER_START_ES =
   /^(?:pon|ponme|configura|crea|activa|inicia|arranca)\s+(?:un\s+|el\s+|una\s+)?(?:temporizador|cron[oó]metro|cronometro|cuenta\s+regresiva|cuenta\s+atr[aá]s)|^(?:temporizador|cron[oó]metro|cronometro|cuenta\s+regresiva)\b/i;
@@ -536,6 +549,26 @@ export function parseTemporalIntent(
   if (alarmList) {
     const lang = ALARM_LIST_ES.test(text) ? 'es' : 'en';
     return { handled: true, action: 'alarm.list', reply: alarmListReply(lang) };
+  }
+
+  // --- Alarmas/Temporizadores: DETENER el tono que está sonando -----------
+  // Se evalúa ANTES que cancelar: "detén/para/silencia la alarma" solo
+  // silencia el tono, no borra el ítem pendiente.
+  if (ALARM_STOP_ES.test(text) || ALARM_STOP_EN.test(text)) {
+    const lang = ALARM_STOP_ES.test(text) ? 'es' : 'en';
+    return {
+      handled: true,
+      action: 'alarm.stop',
+      reply: lang === 'es' ? 'Alarma detenida.' : 'Alarm stopped.',
+    };
+  }
+  if (TIMER_STOP_ES.test(text) || TIMER_STOP_EN.test(text)) {
+    const lang = TIMER_STOP_ES.test(text) ? 'es' : 'en';
+    return {
+      handled: true,
+      action: 'timer.stop',
+      reply: lang === 'es' ? 'Temporizador detenido.' : 'Timer stopped.',
+    };
   }
 
   // --- Temporizadores: cancelar --------------------------------

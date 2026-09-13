@@ -160,7 +160,7 @@ export function PaletasPanel({
                         submitLabel={
                             editor.mode === 'create'
                                 ? ui.createLabel || 'Crear temporada'
-                                : ui.saveLabel || 'Guardar cambios'
+                                : ui.saveLabel || 'Guardar temporada'
                         }
                         cancelLabel={ui.cancelLabel || 'Cancelar'}
                         onCancel={() => setEditor(null)}

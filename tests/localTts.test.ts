@@ -8,6 +8,7 @@ import {
     getLocalVoices,
     isLocalTtsAvailable,
     pickBestLocalVoice,
+    sanitizeForNarration,
     speakLocal,
     stopLocalSpeech,
 } from '../src/services/localTts';
@@ -237,5 +238,32 @@ describe('localTts — speakLocal / stopLocalSpeech', () => {
 
     test('stopLocalSpeech es inofensivo sin speechSynthesis', () => {
         expect(() => stopLocalSpeech()).not.toThrow();
+    });
+});
+
+describe('localTts — narración sin marcas (punto 10)', () => {
+    test('sanitizeForNarration quita markdown, viñetas y slashes', () => {
+        const out = sanitizeForNarration('# Título\n- uno // dos *tres*');
+        expect(out).not.toContain('#');
+        expect(out).not.toContain('/');
+        expect(out).not.toContain('*');
+        expect(out).toContain('Título');
+        expect(out).toContain('uno');
+    });
+
+    test('los segmentos narrados no contienen marcas (no dice "slash slash")', () => {
+        const segs = buildLocalNarrationSegments('# Carta\n// nota\n- item');
+        const joined = segs.map((s) => s.text).join(' ');
+        expect(joined).not.toContain('/');
+        expect(joined).not.toContain('#');
+    });
+
+    test('sin voz del idioma pedido NO se fuerza la voz extranjera', () => {
+        const { speak } = installSpeechSynthesis([EN_US]);
+        const result = speakLocal('Hola mundo', { lang: 'es' });
+        expect(result.started).toBe(true);
+        const utterance = speak.mock.calls[0][0] as MockUtterance;
+        expect(utterance.lang).toBe('es');
+        expect(utterance.voice).toBeNull();
     });
 });

@@ -210,8 +210,13 @@ export function OnboardingOverlay({
     );
 
   return (
-    <aside className="flu-onboarding" role="region" aria-label={label}>
-      <div className="flu-onboarding__header">
+    <>
+      {/* §1: modal REAL. Bloquea la interacción detrás mientras el onboarding
+          está abierto para que no choquen la escucha del onboarding y la del
+          motor principal (dos SpeechRecognition). */}
+      <div className="flu-onboarding__backdrop" data-testid="onboarding-backdrop" aria-hidden="true" />
+      <aside className="flu-onboarding" role="dialog" aria-modal="true" aria-label={label}>
+        <div className="flu-onboarding__header">
         <span className="flu-onboarding__dots" aria-hidden="true">
           {Array.from({ length: total }, (_, index) => (
             <span
@@ -287,6 +292,7 @@ export function OnboardingOverlay({
           {skipLabel}
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

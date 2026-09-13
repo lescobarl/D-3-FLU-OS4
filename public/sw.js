@@ -10,7 +10,7 @@
  * Regla #2 (dev): en localhost/127.0.0.1 el SW NO intercepta (siempre red)
  * para que HMR y el código fuente reflejen los cambios al instante.
  * ============================================================ */
-const CACHE_NAME = 'flu-os4-shell-v1';
+const CACHE_NAME = 'flu-os4-shell-v2';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -66,15 +66,23 @@ async function networkFirstNavigation(request) {
   }
 }
 
-async function cacheFirstStatic(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response && response.ok) {
-    const cache = await caches.open(CACHE_NAME);
-    cache.put(request, response.clone());
+async function networkFirstStatic(request) {
+  // Network-first: con red siempre se sirve el bundle RECIÉN servido; la caché
+  // queda solo como respaldo offline. Antes era cache-first con CACHE_NAME fijo,
+  // lo que servía JS viejo tras recargar en orígenes no-localhost (IP de LAN,
+  // dominio) y hacía que los arreglos "no aparecieran".
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    throw error;
   }
-  return response;
 }
 
 self.addEventListener('fetch', (event) => {
@@ -85,7 +93,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirstNavigation(request));
     return;
   }
-  event.respondWith(cacheFirstStatic(request));
+  event.respondWith(networkFirstStatic(request));
 });
 
 self.addEventListener('message', (event) => {

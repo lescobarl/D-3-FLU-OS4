@@ -208,6 +208,37 @@ export function createReminderService({
   const dismiss = (id: string): Promise<ReminderRecord | null> =>
     transition(id, 'dismissed', 'reminder.dismiss');
 
+  /** Edita texto y/o vencimiento de un recordatorio (mismo patrón que transition). */
+  const update = async (
+    id: string,
+    patch: { text?: string; dueAt?: number },
+  ): Promise<ReminderRecord | null> => {
+    const row = await db.get(id);
+    if (!row) return null;
+    const nextText = typeof patch.text === 'string' ? patch.text.trim() : row.text;
+    if (!nextText) return toRecord(row);
+    const nextDueAt =
+      typeof patch.dueAt === 'number' && !Number.isNaN(patch.dueAt) ? patch.dueAt : row.dueAt;
+    if (nextText === row.text && nextDueAt === row.dueAt) return toRecord(row);
+    const updated: ReminderRecord = {
+      ...row,
+      text: nextText,
+      dueAt: nextDueAt,
+      updatedAt: timestamp(),
+      sync: buildSync(row.sync),
+    };
+    await db.put(updated);
+    await addAuditLog(
+      'reminder.update',
+      'reminder',
+      id,
+      { text: row.text, dueAt: row.dueAt },
+      { text: updated.text, dueAt: updated.dueAt },
+      'reminderService',
+    );
+    return toRecord(updated);
+  };
+
   const remove = async (id: string): Promise<boolean> => {
     const row = await db.get(id);
     if (!row) return false;
@@ -226,6 +257,7 @@ export function createReminderService({
     listPendingByAuthor,
     complete,
     dismiss,
+    update,
     remove,
     countCreatedToday,
   };

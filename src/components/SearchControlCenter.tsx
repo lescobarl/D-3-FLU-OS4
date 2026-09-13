@@ -35,7 +35,9 @@ import {
   resolveMergedSearchConfig,
 } from '../hooks/useWorkspaceSearch';
 import {
+  applyProviderOverrides,
   mergeSearchConfig,
+  parsePositiveInt,
   type SearchConfigOverrides,
   type SearchProviderOverride,
 } from '../core/search/searchConfigOverrides';
@@ -47,12 +49,16 @@ import type {
 import type { SearchSite } from '../core/search/searchSiteTypes';
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
 import { SearchCatalogPanel } from './SearchCatalogPanel';
+import { useSettingsSaveRegistration } from './SettingsSaveContext';
 
 export interface SearchControlCenterProps {
   /** Overrides persistidos vigentes (cargados en App). */
   overrides: SearchConfigOverrides;
-  /** Persiste los overrides normalizados (App: estado + storage + audit). */
-  onChange: (overrides: SearchConfigOverrides) => void;
+  /** Persiste los overrides. Acepta un objeto o un updater `(prev) => next`
+   *  para que varios commits de la barra global compongan sin pisarse. */
+  onChange: (
+    next: SearchConfigOverrides | ((prev: SearchConfigOverrides) => SearchConfigOverrides),
+  ) => void;
   /** Restablece los overrides a la config base (App: limpiar storage + audit). */
   onReset?: () => void;
   /** Allowlist curada del perfil (para la vista previa segura). */
@@ -68,18 +74,6 @@ export interface SearchControlCenterProps {
 }
 
 const SEARCH_TYPES: SearchResultType[] = ['web', 'images', 'video'];
-
-/** Parsea un entero positivo; undefined si no es válido (para commit). */
-function parsePositiveInt(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-    return Math.floor(value);
-  }
-  if (typeof value === 'string' && value.trim() !== '') {
-    const n = Number(value);
-    if (Number.isFinite(n) && n > 0) return Math.floor(n);
-  }
-  return undefined;
-}
 
 /** Convierte un valor numérico de override a texto para los inputs. */
 function numText(value: number | string | undefined): string {
@@ -139,7 +133,6 @@ export function SearchControlCenter({
   const [dailyLimitText, setDailyLimitText] = useState(() =>
     overrides.dailyLimit !== undefined ? String(overrides.dailyLimit) : '',
   );
-  const [feedback, setFeedback] = useState('');
   const [previewQuery, setPreviewQuery] = useState('');
   const [preview, setPreview] = useState<PreviewState>(PREVIEW_IDLE);
 
@@ -147,7 +140,6 @@ export function SearchControlCenter({
   useEffect(() => {
     setDraft(overrides);
     setDailyLimitText(overrides.dailyLimit !== undefined ? String(overrides.dailyLimit) : '');
-    setFeedback('');
   }, [overrides]);
 
   // Config efectiva (base + borrador) para mostrar valores reales en UI.
@@ -182,12 +174,10 @@ export function SearchControlCenter({
       providers[type] = group;
       return { ...prev, providers };
     });
-    setFeedback('');
   };
 
   const setSecurity = (field: 'safeSearch' | 'supervised', value: boolean): void => {
     setDraft((prev) => ({ ...prev, [field]: value }));
-    setFeedback('');
   };
 
   /**
@@ -196,45 +186,27 @@ export function SearchControlCenter({
    * el límite diario usa 0 (sin límite) si no hay valor válido.
    */
   const handleSave = (): void => {
-    const providers: SearchConfigOverrides['providers'] = {};
-    SEARCH_TYPES.forEach((type) => {
-      const baseList = runtime.providers[type] || [];
-      const typeOverrides = draft.providers?.[type];
-      if (!typeOverrides) return;
-      const acc: Record<string, SearchProviderOverride> = {};
-      baseList.forEach((provider) => {
-        const id = provider.id || '';
-        const ov = typeOverrides[id];
-        if (!ov) return;
-        const out: SearchProviderOverride = {};
-        if (ov.enabled !== undefined && ov.enabled !== (provider.enabled !== false)) {
-          out.enabled = ov.enabled;
-        }
-        if (typeof ov.key === 'string' && ov.key.trim() !== '') {
-          out.key = ov.key.trim();
-        }
-        const maxResults = parsePositiveInt(ov.maxResults);
-        if (maxResults !== undefined && maxResults !== provider.maxResults) {
-          out.maxResults = maxResults;
-        }
-        const timeoutMs = parsePositiveInt(ov.timeoutMs);
-        if (timeoutMs !== undefined && timeoutMs !== provider.timeoutMs) {
-          out.timeoutMs = timeoutMs;
-        }
-        if (Object.keys(out).length > 0) acc[id] = out;
-      });
-      if (Object.keys(acc).length > 0) providers[type] = acc;
+    onChange((prev) => {
+      // Merge campo a campo (no reemplaza el grupo): conserva lo que
+      // administra "Búsqueda web" y otros paneles.
+      const providers = applyProviderOverrides(prev.providers, runtime.providers, draft.providers);
+
+      const next: SearchConfigOverrides = { ...prev };
+      if (providers && Object.keys(providers).length > 0) {
+        next.providers = providers;
+      } else {
+        delete next.providers;
+      }
+      if (draft.safeSearch !== undefined) next.safeSearch = draft.safeSearch;
+      else delete next.safeSearch;
+      if (draft.supervised !== undefined) next.supervised = draft.supervised;
+      else delete next.supervised;
+      const dailyLimit = parsePositiveInt(dailyLimitText);
+      if (dailyLimit !== undefined) next.dailyLimit = dailyLimit;
+      else delete next.dailyLimit;
+
+      return next;
     });
-
-    const next: SearchConfigOverrides = {};
-    if (Object.keys(providers).length > 0) next.providers = providers;
-    if (draft.safeSearch !== undefined) next.safeSearch = draft.safeSearch;
-    if (draft.supervised !== undefined) next.supervised = draft.supervised;
-    const dailyLimit = parsePositiveInt(dailyLimitText);
-    if (dailyLimit !== undefined) next.dailyLimit = dailyLimit;
-
-    onChange(next);
-    setFeedback(label('configSaved', 'Configuración guardada.'));
   };
 
   const handleReset = (): void => {
@@ -247,8 +219,10 @@ export function SearchControlCenter({
     } else {
       onChange({});
     }
-    setFeedback(label('configReset', 'Configuración restablecida.'));
   };
+
+  // Guardar/Restablecer GLOBAL del configurador (barra al pie de Configuración).
+  useSettingsSaveRegistration('search-control', { commit: handleSave, reset: handleReset });
 
   /**
    * Vista previa (dev): ejecuta la consulta contra el proxy con la config
@@ -412,22 +386,39 @@ export function SearchControlCenter({
                             </label>
                           </div>
                           <div className="flu-browser-profile__row flu-browser-profile__row--wrap">
-                            <label className="flu-browser-profile__field">
-                              <span className="flu-settings-image-config__hint">
-                                {label('providerKey', 'Clave (API)')}
-                              </span>
-                              <input
-                                type="text"
-                                value={typeof ov.key === 'string' ? ov.key : ''}
-                                placeholder={
-                                  provider.key
-                                    ? String(provider.key)
-                                    : label('providerKeyPlaceholder', 'Dejalo vacío para usar la config')
-                                }
-                                data-testid={`search-provider-key-${type}-${id}`}
-                                onChange={(e) => setProviderField(type, id, 'key', e.target.value)}
-                              />
-                            </label>
+                            {provider.externalConfig !== true && (
+                              <label className="flu-browser-profile__field">
+                                <span className="flu-settings-image-config__hint">
+                                  {label('providerKey', 'Clave (API)')}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={typeof ov.key === 'string' ? ov.key : ''}
+                                  placeholder={
+                                    provider.key
+                                      ? String(provider.key)
+                                      : label('providerKeyPlaceholder', 'Dejalo vacío para usar la config')
+                                  }
+                                  data-testid={`search-provider-key-${type}-${id}`}
+                                  onChange={(e) => setProviderField(type, id, 'key', e.target.value)}
+                                />
+                              </label>
+                            )}
+                            {provider.externalConfig !== true && provider.model !== undefined && (
+                              <label className="flu-browser-profile__field">
+                                <span className="flu-settings-image-config__hint">
+                                  {label('providerModel', 'Modelo')}
+                                </span>
+                                <input
+                                  type="text"
+                                  style={{ fontFamily: 'monospace' }}
+                                  value={typeof ov.model === 'string' ? ov.model : ''}
+                                  placeholder={String(provider.model || '')}
+                                  data-testid={`search-provider-model-${type}-${id}`}
+                                  onChange={(e) => setProviderField(type, id, 'model', e.target.value)}
+                                />
+                              </label>
+                            )}
                             <label className="flu-browser-profile__field">
                               <span className="flu-settings-image-config__hint">
                                 {label('providerMaxResults', 'Máx. resultados')}
@@ -512,7 +503,6 @@ export function SearchControlCenter({
                 data-testid="search-security-dailylimit"
                 onChange={(e) => {
                   setDailyLimitText(e.target.value);
-                  setFeedback('');
                 }}
               />
             </label>
@@ -588,28 +578,6 @@ export function SearchControlCenter({
                 {label('previewEmpty', 'Ejecutá una consulta para ver la vista previa.')}
               </p>
             )}
-          </div>
-        </div>
-
-        {/* Acciones de persistencia */}
-        <div className="flu-settings-section">
-          <div className="flu-settings-section__body">
-            <p className="flu-settings-image-config__hint">
-              {label('saveConfigHint', 'Guardá los cambios para aplicarlos al buscador (se persisten como overrides sobre la configuración).')}
-            </p>
-            <div className="flu-browser-profile__row">
-              <button type="button" className="flu-ambientes-panel__create" data-testid="search-control-save" onClick={handleSave}>
-                {label('saveConfig', 'Guardar configuración')}
-              </button>
-              <button type="button" className="flu-browser-profile__reset" data-testid="search-control-reset" onClick={handleReset}>
-                {label('resetConfig', 'Restablecer')}
-              </button>
-            </div>
-            {feedback ? (
-              <p className="flu-settings-image-config__hint" data-testid="search-control-feedback">
-                {feedback}
-              </p>
-            ) : null}
           </div>
         </div>
       </div>

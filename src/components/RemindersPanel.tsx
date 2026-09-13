@@ -28,6 +28,8 @@ export interface RemindersPanelProps {
   onComplete: (id: string) => Promise<void>;
   onDismiss: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Edita el texto de un recordatorio desde la lista. */
+  onEdit?: (id: string, text: string) => Promise<unknown>;
   /** Referencia de reloj (por defecto: Date.now()) para pruebas. */
   now?: () => number;
   /** Filtro por autor (B11): lista pendientes de un autor concreto. */
@@ -47,6 +49,7 @@ export function RemindersPanel({
   onComplete,
   onDismiss,
   onRemove,
+  onEdit,
   now = () => Date.now(),
   authorFilter = '',
   authorPending,
@@ -59,6 +62,14 @@ export function RemindersPanel({
   const [text, setText] = useState('');
   const [when, setWhen] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const commitEdit = (id: string): void => {
+    const value = editValue.trim();
+    setEditingId(null);
+    if (value) void onEdit?.(id, value);
+  };
 
   const pending = items
     .filter((item) => item.status === 'pending')
@@ -164,10 +175,44 @@ export function RemindersPanel({
                 {effectivePending.map((item) => (
                   <li key={item.id} className="flu-reminders-item">
                     <div className="flu-reminders-item__info">
-                      <span className="flu-reminders-item__text">{item.text}</span>
+                      {editingId === item.id ? (
+                        <input
+                          className="flu-reminders-item__edit"
+                          type="text"
+                          value={editValue}
+                          autoFocus
+                          data-testid={`reminders-edit-input-${item.id}`}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => commitEdit(item.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              commitEdit(item.id);
+                            } else if (e.key === 'Escape') {
+                              setEditingId(null);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="flu-reminders-item__text">{item.text}</span>
+                      )}
                       <span className="flu-reminders-item__when">{describeNlDateTime(item.dueAt)}</span>
                     </div>
                     <div className="flu-reminders-item__actions">
+                      {onEdit && (
+                        <button
+                          type="button"
+                          title={ui.editTitle || 'Editar'}
+                          aria-label={ui.editTitle || 'Editar'}
+                          data-testid={`reminders-edit-${item.id}`}
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditValue(item.text);
+                          }}
+                        >
+                          ✎
+                        </button>
+                      )}
                       <button
                         type="button"
                         title={ui.completeTitle || 'Marcar como hecho'}

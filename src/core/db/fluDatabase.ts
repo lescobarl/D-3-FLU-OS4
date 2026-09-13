@@ -55,13 +55,37 @@ export interface ConversationRow {
     signature?: number[] | null;
     phase?: string;
     navigation?: Record<string, unknown> | null;
+    /** Usuario (participante) dueño de la fila: aísla conversaciones por usuario. */
+    participantId?: string;
+    sync: SyncTuple;
+}
+
+// -----------------------------------------------------------
+// Document Record (historial de documentos/imágenes generados o cargados)
+// -----------------------------------------------------------
+export interface DocumentRecord {
+    id: string; // UUIDv4
+    /** 'generated' (IA: pdf/video/imagen) | 'uploaded' (archivo del usuario). */
+    kind: 'generated' | 'uploaded';
+    /** Formato/origen: 'pdf' | 'video' | 'image' | 'docx' | 'txt' | … */
+    formato: string;
+    titulo: string;
+    nombre: string;
+    mime?: string;
+    tamaño?: number;
+    /** URL/ref (p. ej. mp4 remoto) o fragmento de contenido. */
+    ref?: string;
+    contenido?: string;
+    /** Usuario dueño (aislamiento por usuario). */
+    personId?: string;
+    createdAt: number;
+    updatedAt: number;
     sync: SyncTuple;
 }
 
 // -----------------------------------------------------------
 // Minute Record (persistente) — OS2 compatible
 // -----------------------------------------------------------
-
 /**
  * Snapshot del resumen de la minuta (OS2: summarySnapshot).
  * Coincide con createMinuteDraftFromSummary / AISummaryResult.
@@ -456,6 +480,8 @@ export interface HorarioRecord {
     aula?: string;
     color?: string;
     reminders?: string[];
+    /** Usuario dueño de la entrada (aislamiento por usuario). */
+    personId?: string;
     createdAt: number;
     updatedAt: number;
     sync: SyncTuple;
@@ -589,6 +615,7 @@ export class FluDatabase extends Dexie {
     browserProfiles!: EntityTable<BrowserProfileRecord, 'id'>;
     searchSites!: EntityTable<SearchSiteRecord, 'id'>;
     notes!: EntityTable<NoteRecord, 'id'>;
+    documents!: EntityTable<DocumentRecord, 'id'>;
 
     constructor() {
         super('flu-os3');
@@ -677,6 +704,22 @@ export class FluDatabase extends Dexie {
             notes: 'id, done, personId, createdAt',
         });
 
+        // v18: Aislar la conversación por usuario (participantId indexado).
+        this.version(18).stores({
+            conversations: 'id, role, timestamp, speakerId, participantId',
+        });
+
+        // v19: Aislar horario y temporales por usuario (personId indexado).
+        this.version(19).stores({
+            horario: 'id, dia, materia, createdAt, personId',
+            temporalItems: 'id, kind, status, nextAt, createdAt, personId',
+        });
+
+        // v20: Historial de documentos/imágenes generados o cargados por usuario.
+        this.version(20).stores({
+            documents: 'id, kind, formato, createdAt, personId',
+        });
+
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
         this.minutes = this.table('minutes');
@@ -701,6 +744,7 @@ export class FluDatabase extends Dexie {
         this.browserProfiles = this.table('browserProfiles');
         this.searchSites = this.table('searchSites');
         this.notes = this.table('notes');
+        this.documents = this.table('documents');
     }
 }
 

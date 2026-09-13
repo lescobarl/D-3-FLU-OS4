@@ -192,15 +192,15 @@
 
 /* --- Avatar Column --- */
 .app-avatar-column {
-  flex: 1;
+  flex: 0 0 35%;
   display: flex;
   flex-direction: column;
   align-items: center;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   overflow: hidden;
-  min-width: 320px;
-  max-width: 50%;
+  min-width: 280px;
+  max-width: 35%;
 }
 
 /* --- Área de FLU: contenedor de branding (recibe la paleta de temporada) --- */
@@ -211,12 +211,12 @@
 
 /* --- Panels Column (right side) --- */
 .app-panels-column {
-  flex: 1;
+  flex: 1 1 65%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
-  max-width: 50%;
+  max-width: 65%;
 }
 
 /* --- Panels Content Area --- */
@@ -1509,12 +1509,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
+  padding: 2px 8px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  font-size: var(--text-base);
+  font-size: 11px;
   font-weight: var(--weight-medium);
-  min-height: 30px;
+  min-height: 22px;
   gap: 8px;
 }
 .panel-frame__header-titles {
@@ -1525,13 +1525,13 @@
   flex: 1;
 }
 .panel-frame__title {
-  font-size: var(--text-md);
+  font-size: 12px;
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   white-space: nowrap;
 }
 .panel-frame__subtitle {
-  font-size: var(--text-xs);
+  font-size: 10px;
   font-weight: var(--weight-normal);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -1546,8 +1546,8 @@
 
 /* --- Panel Frame Header Button (minute actions, etc.) --- */
 .panel-frame__header-button {
-  font-size: var(--text-base);
-  padding: 2px 10px;
+  font-size: 11px;
+  padding: 1px 6px;
 }
 
 /* --- Panel Hint (empty state) --- */
@@ -1568,8 +1568,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -2391,7 +2391,9 @@
    del tema (--board-* / --text-* / --accent-color / --radius-*). */
 .workspace-hub__columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(210px, 255px);
+  /* Reparto pedido: avatar 35% / paneles 65%; panel Hoy 360px (−20% de 450).
+     Revertir lateral a: minmax(210px, 255px). */
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 4px;
   align-items: stretch;
   flex: 1;
@@ -2410,7 +2412,7 @@
 .workspace-hub__side {
   min-width: 0;
   border-left: 1px solid var(--board-content-divider, #e2e2ec);
-  padding-left: 12px;
+  padding-left: 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2424,7 +2426,7 @@
     border-left: none;
     border-top: 1px solid var(--board-content-divider, #e2e2ec);
     padding-left: 0;
-    padding-top: 12px;
+    padding-top: 6px;
   }
 }
 
@@ -2444,7 +2446,7 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 6px 10px 4px;
+  padding: 4px 0 2px;
   border: none;
   background: transparent;
   border-left: 3px solid var(--accent-color, #7c6cff);
@@ -2483,7 +2485,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 4px 0;
   cursor: pointer;
   font-size: 10px;
   text-transform: uppercase;
@@ -2508,7 +2510,7 @@
 }
 
 .hoy-panel__body {
-  padding: 2px 10px 8px;
+  padding: 2px 0 4px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2524,7 +2526,7 @@
    el aire vertical: se compensa en el gap del contenedor (6px → 4px). */
 .hoy-panel__section + .hoy-panel__section {
   border-top: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .hoy-panel__section-title {
@@ -2570,8 +2572,8 @@
 .hoy-panel__card {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  padding: 4px 6px;
+  gap: 4px;
+  padding: 2px 0;
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   border-left: 2px solid var(--accent-color, #7c6cff);
@@ -2633,16 +2635,100 @@
   border: none;
   background: transparent;
   color: var(--text-secondary, #a0a0b0);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  padding: 1px 3px;
-  border-radius: 4px;
+  padding: 0 1px;
+  width: 14px;
+  text-align: center;
+  border-radius: 3px;
 }
 
 .hoy-panel__card-remove:hover {
   color: #ff5c5c;
   background: rgba(255, 92, 92, 0.12);
+}
+
+/* Nota: botón editar (✎) junto al de quitar */
+.hoy-panel__card-edit {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 1px;
+  width: 14px;
+  text-align: center;
+  border-radius: 3px;
+}
+
+.hoy-panel__card-edit:hover {
+  color: var(--accent, #22c55e);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+/* Alarma sonando: banner con acción Detener */
+.hoy-panel__ringing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 92, 92, 0.14);
+  border: 1px solid rgba(255, 92, 92, 0.35);
+}
+
+.hoy-panel__ringing-text {
+  font-size: var(--text-xs, 11px);
+  font-weight: var(--weight-medium, 500);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.hoy-panel__ringing-stop {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #fff;
+  background: #e5484d;
+}
+
+.hoy-panel__ringing-stop:hover {
+  background: #ff5c5c;
+}
+
+/* Nota: título clickeable para expandir/colapsar (sin checkbox) */
+.hoy-panel__nota-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hoy-panel__card-title--expanded {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Nota: input de edición en línea */
+.hoy-panel__nota-edit {
+  width: 100%;
+  font-size: var(--text-xs, 11px);
+  color: var(--text-primary, #e0e0e0);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 /* Checkbox de nota alineado como columna de estado de la card */
@@ -2744,17 +2830,233 @@
   margin-bottom: 4px;
 }
 
-.hoy-panel__horario .flu-horario__week {
-  padding: 4px;
+/* ── Horario embebido en el panel: MISMO lenguaje que las cards del panel ──
+   Re-mapea los tokens propios del horario (--flu-*) a los del panel y
+   neutraliza los bloques sólidos que le daban aspecto "de otro sistema". */
+.hoy-panel__horario {
+  --flu-bg-secondary: transparent;
+  --flu-bg-card: transparent;
+  --flu-border: var(--board-content-divider, rgba(0, 0, 0, 0.1));
+  --flu-accent: var(--accent-color, #7c6cff);
+  --flu-accent-soft: rgba(124, 108, 255, 0.1);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+}
+
+.hoy-panel__horario .flu-horario__toolbar {
+  margin-bottom: 2px;
+}
+
+.hoy-panel__horario .flu-horario__modo-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #a0a0b0);
 }
 
 .hoy-panel__horario .flu-horario__modo-select {
-  font-size: var(--text-xs, 11px);
-  padding: 2px 6px;
+  font-size: 10px;
+  padding: 1px 4px;
 }
 
+.hoy-panel__horario .flu-horario__empty {
+  font-size: 10px;
+}
+
+/* Grilla semanal: fondo del panel + scroll fino con snap por día. */
+.hoy-panel__horario .flu-horario__week {
+  padding: 2px;
+  gap: 1px;
+  background: transparent;
+  border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--board-scroll-thumb, rgba(255, 255, 255, 0.18)) transparent;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hoy-panel__horario .flu-horario__week::-webkit-scrollbar {
+  height: 6px;
+}
+
+.hoy-panel__horario .flu-horario__week::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hoy-panel__horario .flu-horario__week::-webkit-scrollbar-thumb {
+  background: var(--board-scroll-thumb, rgba(255, 255, 255, 0.18));
+  border-radius: 999px;
+}
+
+.hoy-panel__horario .flu-horario__week:hover::-webkit-scrollbar-thumb {
+  background: var(--board-scroll-thumb-hover, rgba(255, 255, 255, 0.32));
+}
+
+.hoy-panel__horario .flu-horario__dayhead {
+  background: transparent;
+  border-radius: 0;
+  padding: 2px 2px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #a0a0b0);
+  scroll-snap-align: start;
+}
+
+.hoy-panel__horario .flu-horario__corner {
+  font-size: 9px;
+}
+
+.hoy-panel__horario .flu-horario__daycol {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+
+.hoy-panel__horario .flu-horario__timelabel {
+  font-size: 9px;
+  padding-right: 4px;
+}
+
+.hoy-panel__horario .flu-horario__cls {
+  left: 1px;
+  right: 1px;
+  border-left: 2px solid var(--accent-color, #7c6cff);
+  border-radius: 4px;
+  padding: 2px 4px;
+  box-shadow: none;
+}
+
+.hoy-panel__horario .flu-horario__cls-materia {
+  font-size: 10px;
+}
+
+.hoy-panel__horario .flu-horario__cls-meta {
+  font-size: 9px;
+}
+
+.hoy-panel__horario .flu-horario__hourline {
+  border-top-color: var(--board-content-divider, rgba(0, 0, 0, 0.06));
+  opacity: 0.6;
+}
+
+/* Listas (día / recordatorios) y filas: cards planas del panel. */
+.hoy-panel__horario .flu-horario__list {
+  gap: 2px;
+}
+
+.hoy-panel__horario .flu-horario__row {
+  gap: 4px;
+  padding: 2px 2px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--accent-color, #7c6cff);
+  border-radius: 4px;
+}
+
+.hoy-panel__horario .flu-horario__row-materia {
+  font-size: 11px;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.hoy-panel__horario .flu-horario__row-meta {
+  font-size: 10px;
+}
+
+.hoy-panel__horario .flu-horario__row-remove {
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* Próxima clase dentro del panel: card plana. */
+.hoy-panel__horario .flu-horario__proxima {
+  gap: 2px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--accent-color, #7c6cff);
+  border-radius: 4px;
+}
+
+.hoy-panel__horario .flu-horario__proxima-dia {
+  font-size: 9px;
+}
+
+.hoy-panel__horario .flu-horario__proxima-materia {
+  font-size: 11px;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.hoy-panel__horario .flu-horario__proxima-meta {
+  font-size: 10px;
+}
+
+/* Recordatorios agrupados por día: sin bloques. */
+.hoy-panel__horario .flu-horario__recordatorios {
+  gap: 4px;
+}
+
+.hoy-panel__horario .flu-horario__grupo {
+  gap: 2px;
+}
+
+.hoy-panel__horario .flu-horario__grupo-dia {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #a0a0b0);
+}
+
+/* Formulario/alta compacto y con controles del panel (no nativos). */
 .hoy-panel__horario .flu-horario__form {
   gap: 4px;
+}
+
+.hoy-panel__horario .flu-horario__form span,
+.hoy-panel__horario .flu-horario__form label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.hoy-panel__horario .flu-horario__form input,
+.hoy-panel__horario .flu-horario__form select,
+.hoy-panel__horario .flu-horario__form textarea,
+.hoy-panel__horario .flu-horario__modo-select {
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  height: auto;
+  color: var(--text-primary, #e0e0e0);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.hoy-panel__horario .flu-horario__form input[type='time'] {
+  font-family: var(--font-mono, monospace);
+  color-scheme: dark;
+}
+
+.hoy-panel__horario .flu-horario__submit {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: var(--weight-medium, 500);
+  color: #0b0b12;
+  background: var(--accent-color, #7c6cff);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.hoy-panel__horario .flu-horario__submit:disabled {
+  opacity: 0.5;
 }
 
 /* Diario (pausado): contenido dentro de la misma card unificada */
@@ -3805,6 +4107,15 @@
 }
 
 /* --- Onboarding: tarjeta no bloqueante --- */
+.flu-onboarding__backdrop {
+  /* §1: modal real mientras el onboarding está abierto: cubre todo y captura
+     clicks para que no choquen los dos motores de escucha. */
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  background: rgba(0, 0, 0, 0.35);
+}
+
 .flu-onboarding {
   position: fixed;
   left: 16px;
@@ -4254,6 +4565,18 @@
   word-break: break-word;
 }
 
+/* Input de edición en línea (recordatorios/alarmas) */
+.flu-reminders-item__edit {
+  width: 100%;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary, #e8e8f0);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 .flu-reminders-item__when {
   font-size: var(--text-sm, 12px);
   color: var(--text-secondary, #a0a0b0);
@@ -4267,9 +4590,10 @@
 }
 
 .flu-reminders-item__actions button {
-  min-width: 26px;
-  height: 26px;
-  padding: 0 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  font-size: 12px;
   border: 1px solid var(--border-color, #2a2a4a);
   border-radius: var(--radius-sm, 8px);
   background: transparent;
@@ -5696,6 +6020,50 @@ details[open].flu-card .flu-card__chev {
   padding: 4px 8px;
 }
 
+/* Barra de voz compacta: adelgaza el contenedor, los clusters, los botones
+   y los chips SOLO dentro de la barra (no afecta otras vistas). */
+.flu-voice-bar {
+  padding: 3px 8px;
+}
+
+.flu-voice-bar__top {
+  gap: 6px;
+}
+
+.flu-voice-bar__clusters {
+  gap: 8px;
+}
+
+.flu-voice-bar__cluster--flu,
+.flu-voice-bar__cluster--listen {
+  padding: 2px 6px;
+}
+
+.flu-voice-bar .flu-btn {
+  gap: 4px;
+  padding: 2px 8px;
+  min-height: 22px;
+  font-size: 11px;
+}
+
+.flu-voice-bar .flu-btn--small {
+  padding: 1px 6px;
+  min-height: 18px;
+  font-size: 10px;
+}
+
+.flu-voice-bar .flu-status-chip {
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  min-height: 18px;
+}
+
+.flu-voice-bar .flu-status-chip__dot {
+  width: 6px;
+  height: 6px;
+}
+
 .flu-voice-profiles {
   display: flex;
   flex-direction: column;
@@ -5730,8 +6098,8 @@ details[open].flu-card .flu-card__chev {
 .flu-transcript {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px;
+  gap: 2px;
+  padding: 4px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
 }
@@ -5766,31 +6134,32 @@ details[open].flu-card .flu-card__chev {
   box-shadow: 0 0 0 3px rgba(100, 140, 255, 0.1);
 }
 
-/* Error Block */
+/* Error Block (compacto: no debe robar espacio en la barra) */
 .flu-error-block {
-  padding: 8px 12px;
+  padding: 4px 8px;
   background: rgba(255, 68, 68, 0.08);
   border-top: 1px solid rgba(255, 68, 68, 0.2);
-  margin-top: 8px;
+  margin-top: 4px;
   border-radius: var(--radius-sm);
 }
 
 .flu-error {
   margin: 0;
-  font-size: var(--text-base);
+  font-size: 11px;
+  line-height: 1.25;
   color: var(--accent-red);
   font-weight: var(--weight-medium);
 }
 
 .flu-error-hint {
-  margin: 4px 0 0;
-  font-size: var(--text-sm);
+  margin: 2px 0 0;
+  font-size: 10px;
   color: var(--text-secondary);
 }
 
 .flu-error-detail {
-  margin: 4px 0 0;
-  font-size: var(--text-xs);
+  margin: 2px 0 0;
+  font-size: 10px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
 }

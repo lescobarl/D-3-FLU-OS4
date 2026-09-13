@@ -6,6 +6,132 @@
 
 ---
 
+## 0. PROTOCOLO DE VERDAD Y EJECUCIÓN (par de trabajo)
+
+> **Fuente canónica del protocolo de ejecución.** Donde solape con §1/§8/§9/§10,
+> prevalece la formulación más estricta. Este protocolo funde conducta (§A),
+> mecánica anti-maquillaje (§B), contrato (§C), paro (§D) y cierre (§E).
+
+**Principio:** mentir debe ser más caro que decir la verdad. Todo lo de abajo
+existe para eso: no depende de la buena voluntad del agente; vive en el repo y en
+comandos verificables.
+
+### §A. CONDUCTA
+
+1. **Dos niveles de "hecho" (no confundir):**
+   - **DoD-técnico** (comando/gate): lo cierra el **agente**.
+   - **DoD-producto** (pantalla/uso real): lo cierra **el usuario**.
+   El agente **solo adjunta evidencia**; **nunca** declara el de producto. Sin
+   confirmación del usuario el estado es: `en progreso: hice X, falta Y`.
+2. **Toda afirmación cita su fuente:** comando + salida real copiada, o
+   `archivo:línea`. **Sin fuente no se afirma nada.**
+3. **Si no sabes: UNA pregunta con propuesta por defecto y paro.** Prohibido
+   inventar; prohibido encadenar preguntas hasta paralizar.
+4. **Parcial honesto:** `No lo hice; hice solo X parcial en [archivo:línea]`.
+   Reportar parcial **nunca** se penaliza; disfrazarlo, sí.
+5. **Si algo tuyo rompe:** revertir **ESE hito**, mostrar el `git diff` real y
+   re-medir. Sin reverts silenciosos ni "ya lo arreglé" sin evidencia.
+6. **Distinguir HECHO de SUPUESTO.** Etiquetar explícito: `HECHO` (con fuente) vs
+   `SUPUESTO` (sin verificar). **Un supuesto no cierra nada.**
+7. **Autonomía sin el usuario:** el sustituto de "mi pantalla" es **evidencia
+   cruda** (logs reales, `curl`, fila real en DB, salida del gate), definida por
+   tarea en §B17. Si no hay sustituto, el hito queda **no validado**.
+8. **Cierre en lugar inmutable:** commit/PR body **y**, durante el trabajo,
+   `.task/report` **append-only**. No basta el chat.
+
+### §B. MECÁNICA ANTI-MAQUILLAJE (lo que vuelve §A imposible de fingir)
+
+9. **Contrato ANTES de tocar código**, con 4 campos: **objetivo único, DoD,
+   alcance y guard**. Sin contrato, no se empieza.
+10. **DoD = comando con valor esperado, no descripción.** Se registra el valor
+    **ANTES** y **DESPUÉS**. Si el valor no cambió, **la tarea no está hecha**.
+11. **Guard primero, EN ROJO.** Nace fallando mientras exista la duplicación
+    (`N>1`) y enumera los duplicados **programáticamente** como
+    `archivo:símbolo:línea`. **Si nace verde, la tarea no está definida.**
+12. **Guard de COMPORTAMIENTO obligatorio.** Todo invariante crítico necesita
+    **≥1 test que EJECUTE el flujo** (no solo conteo por nombre). Lección real: un
+    guard `9/9` convivió con el sistema **roto**. Un guard de conteo **no cierra
+    solo**.
+13. **Tabla de invariantes obligatoria** (antes de empezar, aprobada por el usuario):
+
+    | # | Invariante (una frase) | Comando (valor HOY) | META | Guard (hoy ROJO) |
+    |---|------------------------|---------------------|------|------------------|
+    | 1 | `<...>`                | `rg ... \| wc -l = N` | 0/1 | test que lista duplicados |
+
+14. **Métrica, contrato y guard CONGELADOS por hash.** El agente **no** elige el
+    comando de medición ni puede editarlo. **Enmienda formal:** declarar el
+    cambio, re-aprobar el usuario, **nuevo hash** y **reiniciar el hito**.
+    Prohibido editar a escondidas.
+15. **Baseline de fallos** capturado antes de tocar nada. Cierre = **0 fallos
+    NUEVOS** (no "0 fallos"). Los preexistentes se documentan como **deuda** y no
+    se "arreglan" salvo que el DoD lo pida, ni se usan como excusa.
+16. **Alcance cerrado.** El contrato fija `allow` y `deny`. `.task/**` y el gate
+    son **inmutables por el agente**. La **única fuente** del contrato es
+    `.task/contract.json`; lo pegado en el chat **se ignora**.
+17. **"Equivalente de mi pantalla" por tarea** (no visual): salida cruda de
+    `curl`, fila real en DB, o salida del gate — **definido y aprobado** antes de
+    empezar. Es el ground truth cuando no hay UI.
+18. **Checkpoint / rollback.** Commit o backup **antes** de un hito riesgoso. Si
+    el hito rompe: **revertir ESE hito** (mostrando el diff) y re-medir.
+19. **Modo LIGHT vs FULL.**
+    - **LIGHT** (docs, typos, formato): sin guard; cierre con `git diff`.
+    - **FULL** (lógica, arquitectura, duplicación): todo este protocolo.
+    El modo se declara en el contrato.
+20. **La barrera vive en el repo, no en la buena voluntad:** pre-commit hook + job
+    de CI que ejecutan el gate. Reglas en el chat son promesas; en el repo, son
+    **imposibilidad de mentir**.
+
+### §C. CONTRATO (formato mínimo)
+
+```jsonc
+{
+  "id": "T-###",
+  "mode": "full",                       // "light" | "full"
+  "objective": "<una frase>",
+  "dod":      { "command": "...", "expect": "valor o regex" },
+  "guard":    { "command": "...", "expect": "0", "mustStartRed": true,
+                "behavior": "tests/<flujo>.test.ts" },   // test que EJECUTA el flujo
+  "groundTruth": { "command": "...", "expect": "..." },    // equivalente de "mi pantalla"
+  "baseline": { "command": "...", "failPattern": "\\bFAIL\\b" },
+  "invariants": [
+    { "id": "I1", "statement": "<una frase>", "count": "rg ... | wc -l",
+      "today": 3, "target": 1, "guard": "tests/<...>.test.ts" }
+  ],
+  "allow":    ["src/**", "tests/**"],
+  "deny":     [".task/**", "scripts/task-gate.mjs"],
+  "frozen":   { "contractHash": "<sha256>", "guardHash": "<sha256>" }
+}
+```
+
+### §D. PARO (cuándo detenerse)
+
+- **Falta información real** → 1 pregunta con propuesta por defecto → **paro**.
+- **DoD no cumplible** → **PARAR y decirlo**; prohibido sustituir, ampliar o
+  maquillar alcance; prohibido entregar una versión más fácil "de paso".
+- **Guard no nace rojo** → la tarea **no está definida**; no se empieza.
+- **La métrica no baja** tras el hito → **revertir el hito** y re-planificar.
+- **Algo validado se rompe** → revertir, mostrar `git diff`, corregir de raíz.
+- **Se termina el alcance permitido** → parar y pedir enmienda (nuevo hash).
+
+### §E. CIERRE (obligatorio)
+
+Formato fijo, corto en el chat y en el lugar inmutable (commit/PR + `.task/report`):
+
+```
+Cambios aplicados: <lista>
+Validado contra: <comando + salida cruda ANTES/DESPUÉS; guard; baseline y 0 nuevos>
+No validado: <lo que falta — típicamente el DoD-producto, "pendiente del usuario">
+```
+
+Evidencia cruda: `git diff --stat` · salida del **DoD** ANTES y DESPUÉS · salida
+del **guard** (rojo → verde) · **baseline** de fallos preexistentes y confirmación
+de **0 nuevos**.
+
+> El **DoD-producto** (pantalla del usuario) queda **reservado al usuario**. El
+> agente cierra lo técnico; **no** declara lo de producto.
+
+---
+
 ## 1. VERDAD Y VALIDACIÓN (lo primero, siempre)
 
 Núcleo anti-mentira. Cualquier otra regla se interpreta bajo esta sección.

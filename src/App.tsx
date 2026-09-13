@@ -51,6 +51,7 @@ import { useSearchSites } from './hooks/useSearchSites';
 import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
 import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING } from './core/config/appConfig';
+import { dayKey, shouldRolloverDay } from './core/days/dayRollover';
 import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
@@ -60,6 +61,9 @@ import { extractTextFromImage, extractTextFromPdf } from './services/ocrService'
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
+import { buildGenerationTopic, type GenerationConversationSlice } from './lib/generationTopic';
+import { createMediaRequestGate } from './core/media/mediaRequestGate';
+import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
 import DocumentResultPanel from './components/DocumentResultPanel';
 import AppAnalysisPanel from './components/AppAnalysisPanel';
 import GenerationProgressPanel from './components/GenerationProgressPanel';
@@ -118,7 +122,9 @@ import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/dev
 // ---- Horario de clases (Pizarrón): hook temprano y panel presentacional ----
 import { useHorario } from './hooks/useHorario';
 import { HorarioPizarron, clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
-import { structureHorarioText, diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
+import { diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
+import { createScheduleAdapter } from './core/documents/scheduleAdapter';
+import { buildDocumentInsumo } from './core/documents/documentInsumo';
 import { parseHorarioIntent } from './core/horario/horarioIntentParser';
 import type { NotificationService } from './core/notifications/notificationService';
 import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
@@ -139,6 +145,7 @@ import { useMood } from './hooks/useMood';
 import { useContacts } from './hooks/useContacts';
 import { useDiary } from './hooks/useDiary';
 import { useNotes } from './hooks/useNotes';
+import { useDocuments } from './hooks/useDocuments';
 import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
 
@@ -151,6 +158,7 @@ import { FLU_CONFIG } from './voice/lib/fluConfig';
 import {
     normalizeCommandForDeterministic,
     actionBelongsToTranscript,
+    isRecoverableRecognitionError,
 } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
@@ -202,6 +210,7 @@ import { evaluateListenParity } from './voice/lib/listenParity';
 import { shouldGenerateWorkspaceImage, normalizeWorkspaceContract } from './voice/lib/workspaceContract';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
+import { planRawCommit } from './voice/lib/rawCommitPlan';
 
 // ============================================================
 // Tipo para las pestañas del panel derecho
@@ -952,6 +961,56 @@ function buildArbiterOptions(): Record<string, unknown> {
     };
 }
 
+/** Marca si la última acción despachada NO logró escribir (para no confirmar en falso). */
+let lastActionFailed = false;
+
+/**
+ * Adaptador OCR→horario (config-driven). Solo PROPONE si el texto parece un
+ * horario real; con documentos genéricos devuelve null (evita falsos positivos).
+ */
+const scheduleAdapter = createScheduleAdapter({
+    minEntries: Number((FLU_CONFIG as any)?.horario?.ocrAdapter?.minEntries) || 2,
+});
+
+/**
+ * Resuelve una intención ESTRUCTURADA a partir del `dominio` que el cerebro
+ * conversacional ya clasificó (`accion.dominio`), cuando el re-parseo del texto
+ * libre con el árbitro NO matcheó. No cambia la autoridad del parser: usa el
+ * MISMO parser de dominio, solo que sin exigir el trigger verbal.
+ */
+function resolveDomainScopedIntent(
+    domain: string | null | undefined,
+    text: string,
+    opts: { defaultOffsetMs?: number; now?: number; language?: 'es' | 'en' },
+): any | null {
+    if (!domain || !text) return null;
+    if (domain === 'reminder') {
+        const intent = parseReminderIntent(text, {
+            now: opts.now ? () => opts.now as number : undefined,
+            defaultOffsetMs: opts.defaultOffsetMs,
+            assumedDomain: 'reminder',
+            language: opts.language,
+        });
+        if (intent?.handled && intent?.action) {
+            return { matched: true, domain: 'reminder', action: intent, channel: 'flu' };
+        }
+        return null;
+    }
+    if (domain === 'note') {
+        const parsed = parseNoteIntentText(text);
+        if (parsed?.label) {
+            return {
+                matched: true,
+                domain: 'note',
+                action: { handled: true, action: 'notes.add', data: { label: parsed.label } },
+                channel: 'flu',
+            };
+        }
+        return null;
+    }
+    return null;
+}
+
 /**
  * Despacha el intent COMPLETO de un resultado del árbitro determinista al
  * manejador __fluHandle* correspondiente según su dominio. Devuelve la
@@ -1019,9 +1078,12 @@ function App() {
     const visibleTabIds = useMemo(() => getVisibleTabIds(activeAmbienteId), [activeAmbienteId]);
 
     const auditLog = useAuditLog();
-    const minuteKnowledge = useMinuteKnowledge();
+    // Usuario activo (se declara temprano: lo consumen varios hooks con aislamiento).
+    const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
+    const minuteKnowledge = useMinuteKnowledge(activeParticipantId);
     const voiceProfiles = useVoiceProfiles();
-    useConversationPersistence();
+    // Historial de documentos/imágenes generados o cargados (por usuario).
+    const documentHistory = useDocuments({ participantId: activeParticipantId });
 
     // ---- Autonomy Systems Integration ----
     const [autonomyState, autonomyActions] = useAutonomyIntegration();
@@ -1088,6 +1150,26 @@ function App() {
     // Cache for rawOnly speaker lookup: Map<speakerName, { index, entry }>
     // Avoids O(n) backward scan of conversation history on every raw transcript.
     const speakerIndexRef = useRef<Map<string, { index: number; entry: any }>>(new Map());
+
+    // §9 — Identidad de la emisión cruda en curso: id de la última fila cruda
+    // commiteada. Permite que `replaceLastRawLog` (decisión del motor) actualice
+    // ESA fila aunque el hablante recién se resuelva y difiera del provisional.
+    const lastRawEntryIdRef = useRef<string | null>(null);
+
+    // ---- Medios (video/documento): ruta ÚNICA e idempotente ----
+    // El ASR puede re-capturar el mismo comando; sin gate, cada captura
+    // dispararía una generación PAGA nueva. `mediaGateRef` es la fuente única
+    // del criterio y `requestMediaRef` la única puerta de generación.
+    const mediaGateRef = useRef(
+        createMediaRequestGate(Number((FLU_CONFIG as any)?.media?.dedupWindowMs) || 120000),
+    );
+    const requestMediaRef = useRef<
+        (tipo: 'video' | 'doc', commandText: string, prepare?: () => void) => boolean
+    >(() => false);
+
+    // Idempotencia por turno de la RESPUESTA: si el mismo turno (texto+respuesta)
+    // se vuelve a entregar por una re-captura/eco, NO se repite el habla/fila.
+    const lastResponseRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
 
     // ---- Pestaña activa del panel derecho ----
     // Always start on Pizarron (workspace) tab as default
@@ -1163,6 +1245,8 @@ function App() {
         imageApiKey,
         imageModel,
         imageApiUrl,
+        falApiKey,
+        falVideoModel,
         ocrApiKey,
         ocrModel,
         ocrApiUrl,
@@ -1178,6 +1262,8 @@ function App() {
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,
+        handleFalApiKeyCommit,
+        handleFalVideoModelCommit,
         handleOcrApiKeyCommit,
         handleOcrModelCommit,
         handleOcrApiUrlCommit,
@@ -1203,17 +1289,19 @@ function App() {
         speak: (text, lang) => speakFluRef.current(text, lang),
         notify: (input) => notificationServiceRef.current?.notify(input),
         language,
+        participantId: activeParticipantId,
     });
     // ---- Motor temporal genérico: alarmas y temporizadores (despertador + temporizador) ----
     const temporals = useTemporalItems({
         speak: (text, lang) => speakFluRef.current(text, lang),
         notify: (input) => notificationServiceRef.current?.notify(input),
         language,
+        participantId: activeParticipantId,
     });
     const shopping = useShoppingList({});
 
     // ---- Horario de clases: hook temprano (Pizarrón + consulta por voz) ----
-    const horario = useHorario({});
+    const horario = useHorario({ participantId: activeParticipantId });
     const [horarioModo, setHorarioModo] = useState<HorarioModo>('semana');
     // Entradas de horario pendientes de confirmar (parseadas desde una imagen
     // digitalizada). Nada se escribe en fluDb.horario sin el visto bueno del
@@ -1260,7 +1348,10 @@ function App() {
     const participants = useParticipants({});
     // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
     // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
-    const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
+    // (La declaración de activeParticipantId vive arriba, antes de useReminders.)
+    // Aislamiento por usuario: la conversación persistida se filtra por el
+    // participante activo (cada usuario ve sólo la suya).
+    useConversationPersistence(activeParticipantId);
     // Guard de montaje: el onboarding se reinicia (para pedirlo SIEMPRE al
     // entrar) solo después de que los participantes carguen y el estado del
     // onboarding esté resuelto (ready). Evita resetear antes de tiempo.
@@ -1283,7 +1374,7 @@ function App() {
     // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
     const contacts = useContacts({});
     const diary = useDiary({});
-    const notes = useNotes({});
+    const notes = useNotes({ participantId: activeParticipantId });
     // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
     const deviceActions = useDeviceActions({
         service: contacts.service,
@@ -1430,6 +1521,11 @@ function App() {
     const fluParticipantPresentation = fluParticipant.presentation;
     const [participantConfig, setParticipantConfig] = useState(() => getFluParticipantConfig());
     const [searchOverrides, setSearchOverrides] = useState<SearchConfigOverrides>(() => loadSearchConfigOverrides());
+    // Ref sincronizada: permite que varios commits de la barra GLOBAL de
+    // Configuración (buscador + búsqueda web) compongan en el mismo tick sin
+    // pisarse con estado obsoleto.
+    const searchOverridesRef = useRef<SearchConfigOverrides>(searchOverrides);
+    searchOverridesRef.current = searchOverrides;
 
 
     // ============================================================
@@ -1584,6 +1680,28 @@ function App() {
             const speakerName: string = resolved?.speakerName || '';
             const phase: string = resolved?.phase || '';
 
+            // §9: la frase canónica del usuario debe verse SIEMPRE, también en
+            // turnos de COMANDO (navegación/medios) que NO pasan por la ruta
+            // rawOnly. Commit único por texto (dedup contra la última fila user).
+            if (!rawOnly && transcript) {
+                const norm = cleanForSpeech(transcript).toLowerCase();
+                const hist = useIntegrationStore.getState().conversationHistory;
+                const last = hist[hist.length - 1];
+                const alreadyLogged =
+                    last?.role === 'user' &&
+                    cleanForSpeech(last.text || '').toLowerCase() === norm;
+                if (!alreadyLogged) {
+                    useIntegrationStore.getState().addConversationEntry({
+                        id: uuidv4(),
+                        role: 'user',
+                        text: transcript,
+                        speakerName: speakerName || undefined,
+                        timestamp: Date.now(),
+                        sentiment: 'neutral',
+                    });
+                }
+            }
+
             // ============================================================
             // OS2 parity: raw transcript logging with dedup
             // (FluShell.jsx lines 332-448: rawOnly path)
@@ -1603,6 +1721,32 @@ function App() {
                 const targetSpeaker = String(speakerName || '').trim().toLowerCase();
                 const speakerKey = targetSpeaker || '__default__';
                 const replaceLastRawLog = resolved?.replaceLastRawLog === true;
+
+                // §9 — La decisión de reemplazo la toma el MOTOR (`replaceLastRawLog`).
+                // `planRawCommit` resuelve la fila objetivo por el id de la emisión
+                // cruda en curso, NO por la etiqueta de hablante: entre commits la voz
+                // puede resolverse (provisional "Hablante 1" → nombre real) y la
+                // búsqueda por nombre fallaba, duplicando la fila.
+                const plan = planRawCommit(history, {
+                    replaceLastRawLog,
+                    lastRawEntryId: lastRawEntryIdRef.current,
+                    speakerName,
+                });
+
+                if (plan.action === 'replace') {
+                    const prev = history[plan.index];
+                    const updated = [...history];
+                    updated[plan.index] = {
+                        ...prev,
+                        text: transcript,
+                        speakerName: plan.speakerName,
+                        timestamp: Date.now(),
+                    };
+                    useIntegrationStore.getState().batchLoadHistory(updated);
+                    speakerIndexRef.current.set(speakerKey, { index: plan.index, entry: updated[plan.index] });
+                    return;
+                }
+
                 let lastEntryForSpeaker: any = null;
                 let lastEntryIndex = -1;
                 const cached = speakerIndexRef.current.get(speakerKey);
@@ -1626,22 +1770,8 @@ function App() {
                     }
                 }
 
-                if (replaceLastRawLog && lastEntryForSpeaker) {
-                    // Misma emisión creciendo (decidido por el motor): reemplaza en sitio.
-                    const updated = [...history];
-                    updated[lastEntryIndex] = {
-                        ...lastEntryForSpeaker,
-                        text: transcript,
-                        speakerName: speakerName || lastEntryForSpeaker.speakerName || 'Hablante 1',
-                        timestamp: Date.now(),
-                    };
-                    useIntegrationStore.getState().batchLoadHistory(updated);
-                    speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: updated[lastEntryIndex] });
-                    return;
-                }
-
                 if (!replaceLastRawLog && lastEntryForSpeaker) {
-                    // Duplicado exacto de la última fila: descartar (re-entrada idéntica).
+                    // Duplicado exacto de la fila del hablante: descartar (re-entrada idéntica).
                     if (cleanForSpeech(lastEntryForSpeaker.text || '') === normalizedTranscript) {
                         return;
                     }
@@ -1649,14 +1779,17 @@ function App() {
 
                 // Agregar entrada raw al historial (OS2: optimisticRow)
                 // Obligación #6: UUIDv4
+                const rawEntryId = uuidv4();
                 useIntegrationStore.getState().addConversationEntry({
-                    id: uuidv4(),
+                    id: rawEntryId,
                     role: 'user',
                     text: transcript,
                     speakerName: speakerName || undefined,
                     timestamp: Date.now(),
                     sentiment: 'neutral',
                 });
+                // La emisión cruda en curso pasa a ser esta fila (identidad para el reemplazo).
+                lastRawEntryIdRef.current = rawEntryId;
 
                 // Update cache: new entry appended at the end
                 const newHistory = useIntegrationStore.getState().conversationHistory;
@@ -1728,6 +1861,7 @@ function App() {
                     const wakeWords: string[] =
                         ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
                     const arbiterOptions = buildArbiterOptions();
+                    lastActionFailed = false;
                     for (const accion of acciones) {
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
@@ -1747,21 +1881,42 @@ function App() {
                         }
                         const commandText = normalizeCommandForDeterministic(texto, wakeWords);
                         const arbiterResult: any = resolveDeterministicCommand(commandText, arbiterOptions);
-                        if (arbiterResult?.matched) {
+                        // El cerebro LLM ya clasificó el dominio (`accion.dominio`).
+                        // Si el re-parseo del texto libre no matchea, se resuelve la
+                        // estructura con el MISMO parser de dominio sin exigir trigger
+                        // (evita "respondió bien pero no hizo nada").
+                        const effectiveResult: any = arbiterResult?.matched
+                            ? arbiterResult
+                            : resolveDomainScopedIntent(accion?.dominio, commandText, {
+                                defaultOffsetMs: (arbiterOptions as any)?.defaultOffsetMs,
+                                now: (arbiterOptions as any)?.now,
+                                language: (languageRef.current as 'es' | 'en') || 'es',
+                            });
+                        if (effectiveResult?.matched) {
                             relayLog(
                                 'LOG',
                                 'App',
-                                `onContractResolved: acción LLM → dominio "${arbiterResult.domain}" (${JSON.stringify(
-                                    arbiterResult.action?.action ?? arbiterResult.action,
-                                )})`,
+                                `onContractResolved: acción LLM → dominio "${effectiveResult.domain}" (${JSON.stringify(
+                                    effectiveResult.action?.action ?? effectiveResult.action,
+                                )})${arbiterResult?.matched ? '' : ' [vía dominio LLM]'}`,
                             );
-                            const reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
+                            const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
                             if (reply) localHandledReply = reply;
                         }
                     }
                 } catch (err) {
                     console.warn('[App] acciones dispatch threw (non-critical):', err);
                     relayLog('WARN', 'App', `acciones dispatch threw: ${err}`);
+                }
+                // §1 (sin éxito falso): si la acción se despachó pero la ESCRITURA
+                // falló, la respuesta de fallo del manejador reemplaza la del LLM.
+                if (lastActionFailed && localHandledReply) {
+                    respuestaVoz = localHandledReply;
+                    relayLog(
+                        'WARN',
+                        'App',
+                        `onContractResolved: acción falló → respuesta de fallo reemplaza la del LLM → "${localHandledReply}"`,
+                    );
                 }
             }
 
@@ -2082,32 +2237,33 @@ function App() {
                     });
                     setHorarioModo(modo);
                 } else if (tipo === 'doc' || tipo === 'video') {
-                    // Generación de documento/video desde el contrato de workspace de
-                    // Gemini. Se crea el artifact (para que buildGenerationTopic tome
-                    // el tema/contenido) y se dispara el evento FLU que el useEffect
-                    // de generación ya escucha y resuelve en documentGeneration.
+                    // RUTA ÚNICA de medios: se crea el artifact (fuente de
+                    // buildGenerationTopic) y se genera por `requestMediaRef`
+                    // (idempotente por comando). NO se despacha evento: el bus
+                    // era la segunda ruta y permitía re-generar (fuga de crédito).
                     const isVideo = tipo === 'video';
-                    integrationStore.setWorkspaceArtifact({
-                        id: uuidv4(),
-                        respuesta: contenido || titulo || respuestaVoz,
-                        titulo: titulo || (isVideo ? 'Video' : 'Documento'),
-                        tipo: isVideo ? 'video' : 'doc',
-                        contenido: contenido || '',
-                        prompt_visual: promptVisual || '',
-                        puntos_clave,
-                        origen: 'ia',
-                        timestamp: Date.now(),
+                    const ran = requestMediaRef.current(isVideo ? 'video' : 'doc', transcript, () => {
+                        integrationStore.setWorkspaceArtifact({
+                            id: uuidv4(),
+                            respuesta: contenido || titulo || respuestaVoz,
+                            titulo: titulo || (isVideo ? 'Video' : 'Documento'),
+                            tipo: isVideo ? 'video' : 'doc',
+                            contenido: contenido || '',
+                            prompt_visual: promptVisual || '',
+                            puntos_clave,
+                            origen: 'ia',
+                            timestamp: Date.now(),
+                        });
                     });
-                    relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → dispatch ${isVideo ? 'GENERATE_VIDEO' : 'GENERATE_DOCUMENT'}`);
-                    dispatchFluEvent(isVideo ? FLU_EVENTS.GENERATE_VIDEO : FLU_EVENTS.GENERATE_DOCUMENT);
-                    // Bug #5: para un video, además del guion/ensamblado se genera
-                    // una ESCENA visual del asunto (imagen real en el Pizarrón), de
-                    // modo que el usuario vea un artefacto aunque ffmpeg no esté
-                    // disponible para producir el mp4.
-                    if (isVideo) {
-                        const scenePrompt = cleanForSpeech(promptVisual || contenido || titulo || '');
-                        if (scenePrompt.length >= 5) {
-                            workspaceImage.generateFromContract(scenePrompt, 'image_prompt');
+                    if (ran) {
+                        relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → generación ÚNICA (ruta idempotente)`);
+                        // Bug #5: para un video, además del guion/ensamblado se genera
+                        // una ESCENA visual del asunto (imagen real en el Pizarrón).
+                        if (isVideo) {
+                            const scenePrompt = cleanForSpeech(promptVisual || contenido || titulo || '');
+                            if (scenePrompt.length >= 5) {
+                                workspaceImage.generateFromContract(scenePrompt, 'image_prompt');
+                            }
                         }
                     }
                 } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
@@ -2161,13 +2317,33 @@ function App() {
             const environmentWillChange =
                 environmentTargetId !== null &&
                 environmentTargetId !== useEnvironmentStore.getState().activeAmbienteId;
+            // Idempotencia por turno: la MISMA respuesta para el mismo texto en una
+            // ventana corta es una re-captura/eco → se omite (no repite el habla).
+            const responseKey = buildResponseKey(String(transcript || ''), String(respuestaVoz || ''));
+            const responseWindowMs = Number((FLU_CONFIG as any)?.timing?.responseDedupWindowMs) || 8000;
+            const nowMs = Date.now();
+            const dupResponse = isDuplicateResponse(
+                lastResponseRef.current,
+                responseKey,
+                nowMs,
+                responseWindowMs,
+            );
+            if (dupResponse) {
+                relayLog(
+                    'WARN',
+                    'App',
+                    'respuesta duplicada del mismo turno → se omite (evita repetir el habla)',
+                );
+            }
             if (
                 respuestaVoz &&
+                !dupResponse &&
                 !juegoAction?.action &&
                 !environmentWillChange &&
                 !(resolved as any)?.fastPathGame &&
                 !(resolved as any)?.fastPathEnvironment
             ) {
+                lastResponseRef.current = { key: responseKey, at: nowMs };
                 integrationStore.setLastResponse(respuestaVoz);
                 integrationStore.addFluMessage(respuestaVoz);
 
@@ -2400,6 +2576,7 @@ function App() {
                     auditLog,
                     fluParticipant,
                     os2ResetVoiceDisplay,
+                    requestMedia: (tipo, text) => requestMediaRef.current(tipo, text),
                 });
             }
 
@@ -2972,6 +3149,7 @@ function App() {
                         personName: data.personName || opts?.personName,
                         personId: opts?.personId,
                     });
+                    lastActionFailed = !result.ok;
                     if (!result.ok) {
                         return lang === 'en'
                             ? `I couldn't create the reminder${result.reason ? ` (${result.reason})` : ''}.`
@@ -3156,6 +3334,12 @@ function App() {
                         ? `Timers: ${lines.join(' | ')}`
                         : `Tus temporizadores: ${lines.join(' | ')}`;
                 }
+                case 'alarm.stop':
+                case 'timer.stop': {
+                    // Silencia el tono en curso (no cancela el ítem pendiente).
+                    temporals.stopRinging();
+                    return intent.reply;
+                }
                 case 'alarm.cancel': {
                     const target = data.cancelTarget as string | undefined;
                     const matches = temporals.alarms.filter(
@@ -3318,7 +3502,13 @@ function App() {
                 const head = existing[0];
                 if (head && item && head.id !== undefined) {
                     const merged = `${String(head.label).trim().replace(/[,;]\s*$/, '')}, ${item}`;
-                    await notes.rename(head.id, merged);
+                    const renamed = await notes.rename(head.id, merged);
+                    lastActionFailed = !renamed;
+                    if (!renamed) {
+                        return lang === 'en'
+                            ? "I couldn't update the note."
+                            : 'No pude actualizar la nota.';
+                    }
                     return addedMsg;
                 }
             }
@@ -3327,6 +3517,7 @@ function App() {
                 personId: opts?.personId,
                 personName: opts?.personName,
             });
+            lastActionFailed = !result.ok;
             if (!result.ok) {
                 return lang === 'en'
                     ? "I couldn't create the note."
@@ -3649,15 +3840,14 @@ function App() {
                     }
                 }
 
-                // ── Digitalización → horario (HOY): si el texto OCR parece un
-                //    horario (días + horas), se estructura de forma genérica y se
-                //    ofrece al usuario confirmarlo antes de escribir en fluDb.horario.
-                //    Sin hardcode: el parseo usa structureHorarioText (días/horas
-                //    configurables) y el guardado respeta el visto bueno del usuario.
+                // ── Adaptador de dominio (horario): SOLO propone si el texto
+                //    parece un horario real (≥ minEntries). Documentos genéricos
+                //    NO disparan importación (evita falsos positivos). La
+                //    escritura requiere confirmación del usuario.
                 if (result.texto_extraido) {
-                    const estructuradas = structureHorarioText(result.texto_extraido);
-                    if (estructuradas.length > 0) {
-                        setPendingHorarioImport(estructuradas);
+                    const proposal = scheduleAdapter.propose(result.texto_extraido);
+                    if (proposal) {
+                        setPendingHorarioImport(proposal.items);
                         // Muestra el horario en modo "Hoy" para que el usuario vea
                         // la confirmación del parseo junto a sus entradas del día.
                         setHorarioModo('dia');
@@ -3770,6 +3960,71 @@ function App() {
     const appAnalysis = useAppAnalysis(language);
     const documentGeneration = useDocumentGeneration(language);
 
+    // RUTA ÚNICA de generación de medios (video/documento), idempotente por
+    // comando. Es la única puerta: el contrato (workspace) y el comando de
+    // navegación llaman acá; ya NO hay despacho de eventos GENERATE_*.
+    requestMediaRef.current = (tipo, commandText, prepare) => {
+        if (!mediaGateRef.current.shouldRun(tipo, commandText)) {
+            relayLog(
+                'WARN',
+                'App',
+                `requestMedia: ${tipo} repetido (mismo comando en ventana) → se omite generación (evita re-cobrar)`,
+            );
+            return false;
+        }
+        prepare?.();
+        const state = useIntegrationStore.getState() as unknown as GenerationConversationSlice;
+        const { tema, contenido } = buildGenerationTopic(state);
+        const formato = tipo === 'doc' ? 'pdf' : 'video';
+        // `doc` se genera como PDF (mismo comportamiento previo del bridge).
+        // El historial se escribe al RESOLVER la generación para guardar el
+        // CONTENIDO REAL (la carta/documento), no solo el tema de entrada.
+        // Antes se guardaba `contenido` = insumo (≤1200 chars) y el texto de la
+        // carta se perdía al limpiar/reiniciar: la carta no tenía hogar durable.
+        void documentGeneration
+            .generate(formato, {
+                parametros: tema ? { tema } : {},
+                contenido: contenido || undefined,
+            })
+            .then((generated) => {
+                void documentHistory.add({
+                    kind: 'generated',
+                    formato,
+                    titulo: tema || (formato === 'video' ? 'Video' : 'Documento'),
+                    nombre: tema || formato,
+                    contenido: generated?.content || contenido || '',
+                    ref: generated?.url || undefined,
+                });
+            });
+        return true;
+    };
+
+    // Documento soportado → análisis F1 → INSUMO para la conversación.
+    // Simétrico al flujo de imagen: el contexto del documento entra al historial
+    // (única fuente de verdad) para que las respuestas siguientes lo usen.
+    const processDocumentFile = useCallback(async (file: File) => {
+        if (!file) return;
+        const contract = await documentAnalysis.analyzeFile(file, language);
+        // Historial: registrar el archivo CARGADO por el usuario.
+        void documentHistory.add({
+            kind: 'uploaded',
+            formato: (file.name.split('.').pop() || 'file').toLowerCase(),
+            titulo: file.name,
+            nombre: file.name,
+            mime: file.type,
+            tamaño: file.size,
+        });
+        const insumo = buildDocumentInsumo(contract, language);
+        if (!insumo) return;
+        integrationStore.addConversationEntry({
+            id: uuidv4(),
+            role: 'system' as const,
+            text: insumo,
+            timestamp: Date.now(),
+            speakerName: 'system',
+        });
+    }, [documentAnalysis, language, integrationStore, documentHistory]);
+
     // Ruta genérica de archivo: imagen → OCR (processImageFile); documento → análisis F1.
     const processAnyFile = useCallback(async (file: File) => {
         if (!file) return;
@@ -3778,11 +4033,11 @@ function App() {
             return;
         }
         if (isSupportedDocument(file)) {
-            await documentAnalysis.analyzeFile(file, language);
+            await processDocumentFile(file);
         } else {
             console.warn('[App] Tipo de archivo no soportado:', file.name, file.type);
         }
-    }, [processImageFile, documentAnalysis, language]);
+    }, [processImageFile, processDocumentFile]);
 
     const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -3799,9 +4054,9 @@ function App() {
 
     const handleDocumentFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) documentAnalysis.analyzeFile(file, language);
+        if (file) processDocumentFile(file);
         e.target.value = '';
-    }, [documentAnalysis, language]);
+    }, [processDocumentFile]);
 
     const handleProjectFolderSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -3877,21 +4132,24 @@ function App() {
         auditLog.logChange('config', 'flu-participant', prev, newConfig, 'Participant config updated').catch(console.error);
     }, [participantConfig, auditLog]);
 
-    const handleSearchConfigChange = useCallback((overrides: SearchConfigOverrides) => {
-        const prev = searchOverrides;
-        setSearchOverrides(overrides);
-        saveSearchConfigOverrides(overrides);
+    const handleSearchConfigChange = useCallback((next: SearchConfigOverrides | ((prev: SearchConfigOverrides) => SearchConfigOverrides)) => {
+        const prev = searchOverridesRef.current;
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        searchOverridesRef.current = resolved;
+        setSearchOverrides(resolved);
+        saveSearchConfigOverrides(resolved);
         // Audit log
-        auditLog.logChange('config', 'search', prev, overrides, 'Search config updated').catch(console.error);
-    }, [searchOverrides, auditLog]);
+        auditLog.logChange('config', 'search', prev, resolved, 'Search config updated').catch(console.error);
+    }, [auditLog]);
 
     const handleSearchConfigReset = useCallback(() => {
-        const prev = searchOverrides;
+        const prev = searchOverridesRef.current;
+        searchOverridesRef.current = {};
         clearSearchConfigOverrides();
         setSearchOverrides({});
         // Audit log
         auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch(console.error);
-    }, [searchOverrides, auditLog]);
+    }, [auditLog]);
 
     const handleParticipantReset = useCallback(() => {
         const prev = participantConfig;
@@ -3945,6 +4203,39 @@ const {
     handleSaveConversationSummary,
     handleSelectMinuteHistory,
 } = minuteHandlers;
+
+    // ============================================================
+    // §2 Corte por día: si al iniciar quedó conversación de un día anterior sin
+    // cerrar, se genera su minuta (queda archivada) y se marca el día nuevo para
+    // que arranque limpio y no se mezcle con el anterior.
+    // ============================================================
+    const dayRolloverDoneRef = useRef(false);
+    useEffect(() => {
+        if (dayRolloverDoneRef.current) return;
+        const history = integrationStore.conversationHistory;
+        if (!history.length) return; // aún no cargó: se reevalúa al hidratar
+        const lastAt = Number(history[history.length - 1]?.timestamp) || 0;
+        let lastSessionDay = '';
+        try {
+            lastSessionDay = window.localStorage.getItem(STORAGE_KEYS.LAST_SESSION_DAY) || '';
+        } catch {
+            lastSessionDay = '';
+        }
+        dayRolloverDoneRef.current = true;
+        if (shouldRolloverDay(lastAt, Date.now(), lastSessionDay)) {
+            relayLog(
+                'WARN',
+                'App',
+                `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)})`,
+            );
+            void handleGenerateSummary({ announce: false });
+        }
+        try {
+            window.localStorage.setItem(STORAGE_KEYS.LAST_SESSION_DAY, dayKey(Date.now()));
+        } catch {
+            /* ignorar */
+        }
+    }, [integrationStore.conversationHistory, handleGenerateSummary]);
 
     // ============================================================
     // Paso 6: guardar el resumen de conversación UNA vez al cerrar
@@ -4522,6 +4813,21 @@ const {
                                 onStateChange: setCurrentState,
                                 onGeminiError: (error: string | null) => {
                                     if (error) {
+                                        // Errores de reconocimiento RECUPERABLES (network/
+                                        // no-speech/aborted): se reintentan solos. NO ocupan
+                                        // la barra (solo consola) para no robar espacio.
+                                        const code = String(error).split(':').pop()?.trim() || '';
+                                        if (
+                                            /^Error de reconocimiento:/i.test(String(error)) &&
+                                            isRecoverableRecognitionError(code, true)
+                                        ) {
+                                            console.warn(
+                                                '[App] error de reconocimiento recuperable (no se muestra):',
+                                                error,
+                                            );
+                                            setGeminiError({ show: false, message: '', hint: '', detail: '' });
+                                            return;
+                                        }
                                         setGeminiError({ show: true, message: error, hint: '', detail: '' });
                                     } else {
                                         setGeminiError({ show: false, message: '', hint: '', detail: '' });
@@ -4616,6 +4922,9 @@ const {
                                                 onRemove: async (id) => {
                                                     await horario.remove(id);
                                                 },
+                                                onEdit: async (id, materia) => {
+                                                    await horario.update(id, { materia });
+                                                },
                                             },
                                             diary: {
                                                 entries: diary.entries,
@@ -4626,12 +4935,16 @@ const {
                                                 loading: notes.loading,
                                                 onToggle: async (id) => notes.toggle(id),
                                                 onRemove: async (id) => notes.remove(id),
+                                                onRename: async (id, label) => notes.rename(id, label),
                                             },
                                             reminders: {
                                                 items: reminders.reminders,
                                                 loading: reminders.loading,
                                                 onRemove: async (id) => {
                                                     await reminders.remove(id);
+                                                },
+                                                onEdit: async (id, text) => {
+                                                    await reminders.update(id, { text });
                                                 },
                                             },
                                             temporals: {
@@ -4641,6 +4954,11 @@ const {
                                                 onCancel: async (id) => {
                                                     await temporals.cancel(id);
                                                 },
+                                                onEdit: async (id, patch) => {
+                                                    await temporals.update(id, patch);
+                                                },
+                                                ringing: temporals.ringing,
+                                                onStopRinging: () => temporals.stopRinging(),
                                             },
                                             language,
                                         },
@@ -4693,6 +5011,8 @@ const {
                                     imageModel,
                                     imageApiKey,
                                     imageApiUrl,
+                                    falApiKey,
+                                    falVideoModel,
                                     ocrApiKey,
                                     ocrModel,
                                     ocrApiUrl,
@@ -4704,6 +5024,8 @@ const {
                                     handleImageModelCommit,
                                     handleImageApiKeyCommit,
                                     handleImageApiUrlCommit,
+                                    handleFalApiKeyCommit,
+                                    handleFalVideoModelCommit,
                                     handleOcrApiKeyCommit,
                                     handleOcrModelCommit,
                                     handleOcrApiUrlCommit,
@@ -4713,6 +5035,8 @@ const {
                                     debugLogsEnabled,
                                     setDebugLogsEnabled,
                                     handleParticipantConfigChange,
+                                    searchOverrides,
+                                    onSearchOverridesChange: handleSearchConfigChange,
                                     brandingMode: branding.config.mode,
                                     brandingSeason: branding.config.activeSeason,
                                     brandingBirthday: branding.config.birthday,
@@ -4815,6 +5139,9 @@ const {
                                     onRemove: async (id) => {
                                         await reminders.remove(id);
                                     },
+                                    onEdit: async (id, text) => {
+                                        await reminders.update(id, { text });
+                                    },
                                 }}
                                 temporals={{
                                     alarms: temporals.alarms,
@@ -4828,6 +5155,9 @@ const {
                                     },
                                     onRemove: async (id) => {
                                         await temporals.remove(id);
+                                    },
+                                    onEdit: async (id, patch) => {
+                                        await temporals.update(id, patch);
                                     },
                                 }}
                                 shopping={{
@@ -4860,6 +5190,14 @@ const {
                                     onAward: async (input) => {
                                         await materiaGris.awardPoints(input);
                                     },
+                                }}
+                                documents={{
+                                    documents: documentHistory.documents,
+                                    loading: documentHistory.loading,
+                                    onRemove: (id) => {
+                                        void documentHistory.remove(id);
+                                    },
+                                    language,
                                 }}
                             />
 

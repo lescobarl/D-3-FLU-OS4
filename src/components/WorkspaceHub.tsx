@@ -40,7 +40,7 @@ import type { VideoAssemblyResult } from '../services/videoAssembler';
 import type { HorarioClaseEstructurada } from '../core/horario/horarioService';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import type { SearchResult } from '../core/search/searchSession';
-import { onFluResetSearch, onFluSearch } from '../core/events/fluEvents';
+import { dispatchFluSearchReady, onFluResetSearch, onFluSearch } from '../core/events/fluEvents';
 
 // ------------------------------------------------------------
 // Props — todo el estado llega desde App.tsx
@@ -290,7 +290,10 @@ export function WorkspaceHub({
     // hook a WorkspaceHub, el listener se registra aquí.
     useEffect(() => {
         const offSearch = onFluSearch((payload) => {
-            void handleRunSearch({ query: payload.query, lang: payload.lang });
+            void handleRunSearch({ query: payload.query, lang: payload.lang }).then(() => {
+                // §4: los resultados ya están pintados → FLU lo anuncia por voz.
+                dispatchFluSearchReady({ query: payload.query, lang: payload.lang });
+            });
         });
         // Cuando comienza un turno NO relacionado con búsqueda (conversación,
         // generación de imagen, etc.), App emite RESET_SEARCH para limpiar los
@@ -422,6 +425,7 @@ export function WorkspaceHub({
                 id: 'ia-generacion',
                 origin: 'ia',
                 kind: generation.videoResult ? 'video' : 'doc',
+                onlyInKind: true,
                 title: pickLabel(ws.generationTitle, language, 'Generación de documento / video'),
                 body: (
                     <GenerationProgressPanel
@@ -470,18 +474,34 @@ export function WorkspaceHub({
             });
         }
 
-        // Imágenes → UNA sola cuadrícula bajo el filtro Imágenes.
-        // - SOLO imagen IA generada (sin búsqueda web): tarjeta de ORIGEN IA,
-        //   título "Imagen generada" y `onlyInKind` → aparece únicamente al
-        //   activar "Imágenes", NO intercalada bajo la Respuesta de Flu en "Todo".
+        // Diagnóstico visible de la cadena de búsqueda: si un proveedor falló
+        // (clave inválida, sin crédito, modelo inexistente…), se muestra aquí.
+        if (searchState.error) {
+            items.push({
+                id: 'web-error',
+                origin: 'web',
+                kind: 'text',
+                title: pickLabel(undefined, language, 'Búsqueda'),
+                body: (
+                    <p className="flu-error-box" role="alert" data-testid="search-error">
+                        {searchState.error}
+                    </p>
+                ),
+            });
+        }
+
+        // Imágenes → UNA sola cuadrícula SOLO bajo el filtro "Imágenes".
+        // - Imagen IA generada (sin búsqueda web): tarjeta de ORIGEN IA.
         // - Con imágenes web: tarjeta web mixta (IA encabeza + grid web).
+        // `onlyInKind: true` en ambos casos → la cuadrícula NO se intercala en
+        // "Todo" (ni bajo la respuesta de Flu ni bajo los resultados web).
         const soloIa = generatedCell !== null && searchState.images.length === 0;
         if (generatedCell !== null || searchState.images.length > 0) {
             items.push({
                 id: soloIa ? 'ia-imagen' : 'web-imagenes',
                 origin: soloIa ? 'ia' : 'web',
                 kind: 'image',
-                onlyInKind: soloIa,
+                onlyInKind: true,
                 title: soloIa
                     ? pickLabel(ws.imageTitle, language, 'Imagen generada')
                     : pickLabel(undefined, language, 'Imágenes'),
@@ -504,6 +524,7 @@ export function WorkspaceHub({
                 id: 'web-video',
                 origin: 'web',
                 kind: 'video',
+                onlyInKind: true,
                 title: pickLabel(undefined, language, 'Vídeos'),
                 body: <VideoGrid results={searchState.video} loading={searchState.loading} />,
             });
@@ -617,6 +638,7 @@ export function WorkspaceHub({
                                             type="file"
                                             accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
                                             hidden
+                                            data-testid="doc-input"
                                             onChange={upload.onDocumentFileSelected}
                                         />
                                     </div>

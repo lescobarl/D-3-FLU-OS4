@@ -159,6 +159,16 @@ export function clasificarDia(value: string): number | null {
   return null;
 }
 
+/** true si TODO el texto son nombres de días (p. ej. "Lunes" o "Lunes martes"). */
+export function esNombreDeDia(value: string): boolean {
+  const norm = stripDiacriticsHorario(value).trim();
+  if (!norm) return false;
+  return norm
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => DIA_MAP[word] != null);
+}
+
 const HORA_RANGE_RE = /(?:^|[^\d])(\d{1,2})[:.](\d{2})\s*(?:-|–|—|a|to)\s*(\d{1,2})[:.](\d{2})/i;
 
 /**
@@ -231,8 +241,14 @@ export function structureHorarioText(text = ''): HorarioClaseEstructurada[] {
     if (!match) continue;
     const before = line.slice(0, match.index).trim();
     const after = line.slice(match.index + match[0].length).trim();
-    const materia = cleanMateria(before);
-    const aula = extractAula(after);
+    let materia = cleanMateria(before);
+    let aula = extractAula(after);
+    // Orden inline "Lunes 08:00-09:00 Matemáticas": si lo previo al rango es solo
+    // un día (o está vacío), la materia real viene DESPUÉS del rango.
+    if (!materia || esNombreDeDia(before)) {
+      const afterSinAula = cleanMateria(after.replace(AULA_RE, ''));
+      if (afterSinAula) materia = afterSinAula;
+    }
     if (!materia) continue;
 
     const clase: HorarioClaseEstructurada = {
@@ -307,6 +323,7 @@ export function createHorarioService({
       aula: cleanAula(input.aula),
       color: config.colores.includes(String(input.color || '')) ? String(input.color).trim() : config.defaultColor,
       reminders: [],
+      personId: (input as any).personId,
       createdAt: t,
       updatedAt: t,
       sync: buildSync(),

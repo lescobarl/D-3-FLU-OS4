@@ -60,6 +60,8 @@ export interface TemporalItemRecord {
   nextAt: number;
   status: TemporalItemStatus;
   message?: string;
+  /** Usuario dueño del ítem (aislamiento por usuario). */
+  personId?: string;
   createdAt: number;
   updatedAt: number;
   sync: SyncTuple; // Obligación #7

@@ -123,8 +123,16 @@ export function speakLocal(text: string, options: LocalTtsOptions = {}): SpeakRe
     }
 
     const matched = synth.getVoices().find((v) => v.voiceURI === voice.voiceURI);
-    if (matched) utterance.voice = matched;
-    utterance.lang = voice.lang;
+    // No forzar una voz de OTRO idioma (leería el texto en inglés): si la voz
+    // elegida no comparte idioma con el solicitado, se deja sin voz para que el
+    // motor use el `lang` pedido (evita "narración en inglés").
+    const requested = (options.lang || 'es').trim().toLowerCase();
+    const requestedFamily = requested.split('-')[0];
+    const voiceLang = String(voice.lang || '').toLowerCase();
+    const sameLanguage =
+        voiceLang === requested || (!!requestedFamily && voiceLang.startsWith(requestedFamily));
+    if (matched && sameLanguage) utterance.voice = matched;
+    utterance.lang = sameLanguage ? voice.lang : (options.lang || 'es');
     if (typeof options.rate === 'number') utterance.rate = options.rate;
     if (typeof options.pitch === 'number') utterance.pitch = options.pitch;
 
@@ -154,6 +162,27 @@ export function stopLocalSpeech(): void {
 }
 
 /**
+ * Limpia markdown/símbolos para NARRAR: evita leer "slash slash", viñetas,
+ * almohadillas o separadores de tabla. Fuente única de la narración (el TTS
+ * nunca habla marcas).
+ */
+export function sanitizeForNarration(text = ''): string {
+    return String(text || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/`([^`]*)`/g, '$1')
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/^#{1,6}\s*/gm, '')
+        .replace(/^\s*[-+*]\s+/gm, '')
+        .replace(/^\s*\d+[.)]\s+/gm, '')
+        .replace(/[*_~>|;]/g, ' ')
+        .replace(/\//g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+/**
  * Divide el contenido generado en segmentos narrables por sección.
  * Cada encabezado de Markdown (#..######) abre una nueva sección; el
  * texto previo al primer encabezado se agrupa como "Introducción".
@@ -168,7 +197,7 @@ export function buildLocalNarrationSegments(content: string, _language = 'es'): 
     let index = 0;
 
     const flush = () => {
-        const text = buffer.join('\n').trim();
+        const text = sanitizeForNarration(buffer.join('\n'));
         if (text) {
             segments.push({ index: index, title, text });
             index += 1;
@@ -180,7 +209,7 @@ export function buildLocalNarrationSegments(content: string, _language = 'es'): 
         const match = heading.exec(line.trim());
         if (match) {
             flush();
-            title = match[1].replace(/[*_`#]/g, '').trim() || 'Sección';
+            title = sanitizeForNarration(match[1]) || 'Sección';
         } else {
             buffer.push(line);
         }
@@ -188,7 +217,7 @@ export function buildLocalNarrationSegments(content: string, _language = 'es'): 
     flush();
 
     if (segments.length === 0 && content.trim()) {
-        segments.push({ index: 0, title: 'Introducción', text: content.trim() });
+        segments.push({ index: 0, title: 'Introducción', text: sanitizeForNarration(content) });
     }
     return segments;
 }

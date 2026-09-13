@@ -35,12 +35,28 @@ export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Pro
     });
     await page.goto(BASE_URL, { waitUntil: 'load', timeout: 30000 });
     await page.waitForSelector('.flu-shell', { timeout: 15000 });
-    await page.evaluate(() => localStorage.clear());
+    // Limpia el estado volátil pero CONSERVA el onboarding completado: si se
+    // borra, el backdrop de onboarding reaparece e intercepta los clics.
+    await page.evaluate(() => {
+        const preserved: Record<string, string> = {
+            'flu-onboarding-completed': 'true',
+            'flu-onboarding-step': JSON.stringify({ stepIndex: 0, captured: {} }),
+        };
+        localStorage.clear();
+        Object.entries(preserved).forEach(([key, value]) => localStorage.setItem(key, value));
+    });
+    // El onboarding puede aparecer async (estado per-user en IndexedDB): su
+    // backdrop bloquea la interacción, así que se omite dentro del bucle.
+    const skipBtn = page.locator('[data-testid="onboarding-skip"]');
     const tablistSelectors = ['nav[role="tablist"]', '[role="tablist"]', '.flu-shell-tabs'];
     const timeout = 15000;
     const start = Date.now();
     let lastError: any;
     while (Date.now() - start < timeout) {
+        if (await skipBtn.isVisible().catch(() => false)) {
+            await skipBtn.click().catch(() => undefined);
+            await page.waitForTimeout(300);
+        }
         for (const sel of tablistSelectors) {
             const loc = page.locator(sel).first();
             const count = await loc.count().catch(() => 0);
@@ -60,6 +76,23 @@ export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Pro
         await page.waitForTimeout(200);
     }
     throw lastError || new Error(`gotoClean: timeout waiting for tablist after ${timeout}ms`);
+}
+
+/**
+ * Auto-omite el onboarding mientras esté visible, sin bloquear la UI.
+ * Pensado para specs que NO validan el onboarding: su estado per-user (Dexie)
+ * puede reabrirlo async y su backdrop intercepta clics.
+ *
+ * Debe llamarse ANTES de gotoClean para que el init script aplique en esa
+ * navegación. Los specs de onboarding NO deben usarlo.
+ */
+export async function autoSkipOnboarding(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+        window.setInterval(() => {
+            const btn = document.querySelector('[data-testid="onboarding-skip"]');
+            if (btn instanceof HTMLElement) btn.click();
+        }, 150);
+    });
 }
 
 /**

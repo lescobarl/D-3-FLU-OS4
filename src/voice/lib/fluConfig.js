@@ -267,6 +267,11 @@ export const FLU_CONFIG = {
     transcriptSettleMaxMs: 200,
     /** Agrupa refrescos de «última frase» (menos re-renders React). */
     liveTranscriptDebounceMs: 32,
+    /**
+     * Ventana de idempotencia de la RESPUESTA: la misma respuesta para el mismo
+     * turno dentro de este margen se considera re-captura/eco y NO se repite.
+     */
+    responseDedupWindowMs: 8000,
     /** @deprecated Interinos ya no escriben al log; solo aplica a rutas legacy. */
     streamLogThrottleMs: 0,
     wakeWordCommandDelayMs: 3000,
@@ -512,6 +517,19 @@ export const FLU_CONFIG = {
     },
   },
   /**
+   * Historial de documentos/imágenes generados o cargados (por usuario).
+   * El Pizarrón (Doc/Vídeo) es el resultado vivo del turno; este panel es el
+   * listado persistente. Regla #1: etiquetas aquí (sin hardcode).
+   */
+  documents: {
+    ui: {
+      title: { es: 'Historial', en: 'History' },
+      empty: { es: 'Sin documentos todavía.', en: 'No documents yet.' },
+      removeTitle: { es: 'Eliminar', en: 'Delete' },
+      downloadTitle: { es: 'Descargar', en: 'Download' },
+    },
+  },
+  /**
    * Horario de clases — Pizarrón (Fase 1C): clases semanales por voz/OCR.
    * Regla #1: sin hardcode — días, modos, colores y textos config-driven.
    * - grid: rango de horas y altura por hora de la vista semanal (mockup).
@@ -528,6 +546,9 @@ export const FLU_CONFIG = {
     diaMin: 1,
     diaMax: 7,
     defaultColor: 'm1',
+    // Adaptador OCR→horario: mínimo de entradas para PROPONER una importación.
+    // Evita que un documento genérico (carta/reunión con una hora) dispare horario.
+    ocrAdapter: { minEntries: 2 },
     // Duración por defecto (minutos) cuando se dicta una entrada sin hora de fin.
     defaultDurationMinutes: 60,
     // Etiquetas sugeridas para el campo libre "tipo" (NO son obligatorias).
@@ -676,11 +697,14 @@ export const FLU_CONFIG = {
     enabled: true,
     ui: {
       panelTitle: 'Hoy',
-      hoyTitle: { es: '📅 Hoy', en: '📅 Today' },
+      // Punto 8: el bloque usa solo su ícono (sin la palabra "Hoy"); "Próxima"
+      // lleva su ícono a la izquierda.
+      hoyTitle: { es: '📅', en: '📅' },
       diarioTitle: { es: '📓 Diario', en: '📓 Diary' },
       notasTitle: { es: '📝 Notas', en: '📝 Notes' },
       verHorarioCompleto: { es: 'Ver horario completo', en: 'View full schedule' },
-      proximaClaseLabel: { es: 'Próxima', en: 'Next' },
+      proximaClaseLabel: { es: '🕐 Próxima', en: '🕐 Next' },
+      stopAlarmLabel: { es: 'Detener', en: 'Stop' },
       agendaTitle: { es: 'Recordatorios y citas', en: 'Reminders and appointments' },
       sinAgenda: { es: 'Sin recordatorios próximos', en: 'No upcoming reminders' },
       alarmasTitle: { es: '⏰ Alarmas', en: '⏰ Alarms' },
@@ -788,6 +812,7 @@ export const FLU_CONFIG = {
       doneLabel: 'Hechas',
       addHint: 'Escribe una nota y presiona Enter',
       removeTitle: 'Quitar nota',
+      editTitle: 'Editar nota',
       clearDoneLabel: 'Vaciar hechas',
     },
     voice: {
@@ -1005,7 +1030,7 @@ export const FLU_CONFIG = {
       levelLabel: 'Nivel de lectura',
       approvedLabel: 'Aprobado',
       createLabel: 'Nuevo sitio',
-      saveLabel: 'Guardar cambios',
+      saveLabel: 'Guardar sitio',
       cancelLabel: 'Cancelar',
       editLabel: 'Editar',
       removeLabel: 'Eliminar',
@@ -1036,11 +1061,43 @@ export const FLU_CONFIG = {
       },
       timeoutMs: 8000,
       providers: {
-        // Proveedores web sin clave (Wikipedia + DuckDuckGo IA).
-        // Los placeholders {q} y {lang} los rellena buildProviderRequest
-        // (searchSession.ts). "{lang}" también fija el subdominio de
-        // Wikipedia (es/en) según el idioma pedido (F1).
+        // Proveedores web. El ORDEN es la cadena de respaldo: se agrupa por
+        // `priority` (menor primero); dentro de un escalón se consulta en
+        // paralelo, y si un escalón no trae resultados se pasa al siguiente.
+        //   Tavily (1) → OpenRouter web (2) → Wikipedia (3, keyless).
+        // `method`, `headers`, `body` y `model` son config-driven: el proxy
+        // rellena {q}/{lang}/{key}/{model}/{n}. La `key` y el `model` de
+        // OpenRouter se editan en el configurador (NUNCA en .env).
         web: [
+          {
+            id: 'tavily',
+            label: 'Tavily',
+            enabled: true,
+            method: 'POST',
+            endpoint: 'https://api.tavily.com/search',
+            headers: { Authorization: 'Bearer {key}', 'Content-Type': 'application/json' },
+            body: { query: '{q}', max_results: '{n}', search_depth: 'basic', safe_search: true },
+            key: null,
+            priority: 1,
+            maxResults: 5,
+            timeoutMs: 5000,
+            externalConfig: true,
+          },
+          {
+            id: 'openrouter',
+            label: 'OpenRouter (web)',
+            enabled: true,
+            method: 'POST',
+            endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+            headers: { Authorization: 'Bearer {key}', 'Content-Type': 'application/json' },
+            body: { model: '{model}', messages: [{ role: 'user', content: '{q}' }] },
+            key: null,
+            model: 'google/gemini-2.5-flash-lite:online',
+            priority: 2,
+            maxResults: 5,
+            timeoutMs: 8000,
+            externalConfig: true,
+          },
           {
             id: 'wikipedia',
             label: 'Wikipedia',
@@ -1048,15 +1105,7 @@ export const FLU_CONFIG = {
             endpoint: 'https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={q}&format=json',
             articleUrlTemplate: 'https://{lang}.wikipedia.org/wiki/{title}',
             key: null,
-            maxResults: 5,
-            timeoutMs: 8000,
-          },
-          {
-            id: 'duckduckgo',
-            label: 'DuckDuckGo',
-            enabled: true,
-            endpoint: 'https://api.duckduckgo.com/?q={q}&format=json&no_html=1&kl={lang}',
-            key: null,
+            priority: 3,
             maxResults: 5,
             timeoutMs: 8000,
           },
@@ -1199,6 +1248,7 @@ export const FLU_CONFIG = {
         providerKeyPlaceholder: 'Dejalo vacío para usar la config',
         providerMaxResults: 'Máx. resultados',
         providerTimeout: 'Timeout (ms)',
+        providerModel: 'Modelo',
         safeSearchLabel: 'Búsqueda segura (solo dominios permitidos)',
         safeSearchHint: 'Filtra los resultados para conservar únicamente los sitios curados.',
         supervisedLabel: 'Modo supervisado',
@@ -1439,10 +1489,21 @@ export const FLU_CONFIG = {
    * y vínculo opcional con participantes. Regla #1: sin hardcode — tope
    * diario, escala y etiquetas viven aquí (config-driven).
    */
+  // Medios (video/documento): ventana de idempotencia por comando. Evita
+  // regenerar (y re-cobrar) cuando el ASR re-captura el mismo pedido.
+  media: { dedupWindowMs: 120000 },
+  // Personalidad proactiva: se inyecta junto al `startupPrompt` del perfil para
+  // que FLU ACTÚE su personaje (proponga juegos, cuente un chiste, sugiera un
+  // baile) y no solo lo describa.
+  personality: {
+    proactiveDirective:
+      'Sé proactivo: haz viva la personalidad del perfil proponiendo un juego, contando un chiste breve o sugiriendo un baile/actividad cuando encaje, sin que te lo pidan. Ofrece ideas concretas y breves.',
+    proactiveDirectiveEn:
+      'Be proactive: bring the profile personality to life by proposing a game, telling a short joke or suggesting a dance/activity when it fits, without being asked. Offer concrete, brief ideas.',
+  },
   diary: {
-    // PAUSADO: el diario se reimplementará después. Hasta entonces no se
-    // reconoce por voz ni se muestra en el panel.
-    enabled: false,
+    // Activo: reconocido por voz (parseDiaryIntent) y visible en el panel Hoy.
+    enabled: true,
     maxEntriesPerDay: 50,
     moodMax: 5,
     ui: {
@@ -1720,7 +1781,7 @@ export const FLU_CONFIG = {
       cloneNameSuffix: ' (copia)',
       editLabel: 'Editar',
       removeLabel: 'Eliminar',
-      saveLabel: 'Guardar cambios',
+      saveLabel: 'Guardar ambiente',
       cancelLabel: 'Cancelar',
       nombreLabel: 'Nombre',
       nombrePlaceholder: 'Ej: Modo Selva',
@@ -2422,6 +2483,23 @@ export const FLU_CONFIG = {
       'google search',
       'search for',
       'look up',
+    ],
+    // A2 — "cabezas" genéricas que NO son el tema de búsqueda. Si el resto de la
+    // frase tras el gatillo es SOLO una de estas, el turno queda incompleto y
+    // espera el tema en el siguiente fragmento ("... en la web información" +
+    // "lenguaje de programación clipper"). Fuente única; sin hardcode disperso.
+    searchPlaceholderHeads: [
+      'informacion',
+      'información',
+      'info',
+      'datos',
+      'algo',
+      'eso',
+      'esto',
+      'una informacion',
+      'una información',
+      'algo de informacion',
+      'algo de información',
     ],
     // P1-C (§1.3.2) — autoconocimiento (CONOCER_FLU): frases que disparan la
     // respuesta local de FLU sobre sus capacidades (fast-path sin IA, §1.3.3-1.3.4).

@@ -445,18 +445,90 @@ export async function generateOpenRouterImage({
   }
 }
 
+/** Intenta parsear; tolera comas finales. Devuelve `undefined` si no parsea. */
+function tryParseJsonCandidate(candidate) {
+  const text = String(candidate || '').trim()
+  if (!text) return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    // ignore
+  }
+  try {
+    return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'))
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Extrae el primer objeto/array JSON **balanceado** del texto, ignorando texto
+ * alrededor y respetando strings/escapes. Devuelve '' si no hay.
+ */
+function extractBalancedJson(text) {
+  const source = String(text || '')
+  const start = source.search(/[[{]/)
+  if (start < 0) return ''
+  const open = source[start]
+  const close = open === '{' ? '}' : ']'
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === open) depth += 1
+    else if (char === close) {
+      depth -= 1
+      if (depth === 0) return source.slice(start, index + 1)
+    }
+  }
+  return ''
+}
+
 export function extractJson(text) {
   const raw = String(text || '').trim()
   if (!raw) return null
 
+  const candidates = []
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fenced ? fenced[1].trim() : raw
+  if (fenced) candidates.push(fenced[1])
+  candidates.push(raw)
+  // JSON envuelto con texto/ruido alrededor (causa real de "respuesta inválida").
+  const balanced = extractBalancedJson(raw)
+  if (balanced) candidates.push(balanced)
 
-  try {
-    return JSON.parse(candidate)
-  } catch {
-    return null
+  for (const candidate of candidates) {
+    const parsed = tryParseJsonCandidate(candidate)
+    if (parsed !== undefined) return parsed
   }
+  return null
+}
+
+/**
+ * Coerciona el texto del modelo al contrato de voz sin lanzar nunca.
+ * Un JSON válido con `respuesta_voz` vacía NO es un JSON inválido: se devuelve
+ * `{ parsed, voice: '' }` para que el llamador decida reintentar. Confundir
+ * ambos casos es la causa de "Gemini: respuesta inválida".
+ */
+export function coerceFluContractPayload(text) {
+  const parsed = extractJson(text)
+  if (!parsed || typeof parsed !== 'object') {
+    return { parsed: null, voice: '' }
+  }
+  const voice = sanitizeVoiceText(
+    parsed.respuesta_voz || parsed.response_voz || parsed.text || '',
+  )
+  return { parsed, voice }
 }
 
 export function sanitizeVoiceText(text, maxWords = Number.POSITIVE_INFINITY) {
@@ -575,10 +647,18 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
   return [
     // Startup prompt: profile-level personality definition injected at the top of the system prompt
     ...(startupPrompt
-      ? [isEnglish
-        ? `PROFILE PERSONALITY — You must embody the following character definition at all times: ${startupPrompt}`
-        : `PERSONALIDAD DEL PERFIL — Debes encarnar la siguiente definición de personaje en todo momento: ${startupPrompt}`
-      ]
+      ? [
+          isEnglish
+            ? `PROFILE PERSONALITY — You must embody the following character definition at all times: ${startupPrompt}`
+            : `PERSONALIDAD DEL PERFIL — Debes encarnar la siguiente definición de personaje en todo momento: ${startupPrompt}`,
+          // Proactividad del perfil (config): que ACTÚE su personalidad (chistes,
+          // juegos, baile, propuestas), no solo que la describa.
+          isEnglish
+            ? (FLU_CONFIG.personality?.proactiveDirectiveEn ||
+              'Be proactive: bring the profile personality to life by proposing a game, telling a short joke or suggesting a dance/activity when it fits, without being asked. Offer concrete, brief ideas.')
+            : (FLU_CONFIG.personality?.proactiveDirective ||
+              'Sé proactivo: haz viva la personalidad del perfil proponiendo un juego, contando un chiste breve o sugiriendo un baile/actividad cuando encaje, sin que te lo pidan. Ofrece ideas concretas y breves.'),
+        ]
       : []),
     isEnglish
       ? 'Respond ONLY in valid JSON, without markdown, bullet points or any extra text.'
@@ -1406,47 +1486,51 @@ export async function generateFluContract({
     }),
   ])
 
+  // El modelo puede devolver JSON envuelto en texto, truncado o con campos
+  // incompletos (p. ej. solo `acciones` sin `respuesta_voz`). Eso NO es un fallo
+  // definitivo: se reintenta UNA vez con una instrucción correctiva antes de
+  // rendirse. Es la defensa de fondo contra "Gemini: respuesta inválida".
+  const formatCorrection = {
+    role: 'user',
+    content:
+      language === 'en'
+        ? 'INVALID FORMAT. Reply with ONLY a JSON object that includes a non-empty "respuesta_voz" string. No text outside the JSON.'
+        : 'FORMATO INVÁLIDO. Responde SOLO con un objeto JSON que incluya el campo "respuesta_voz" (texto no vacío). Sin texto fuera del JSON.',
+  }
+
   let text = ''
   let parsed = null
   let rawResponseText = ''
 
-  try {
-    text = await postChatCompletion({
-      apiKey: resolvedKey.apiKey,
-      model,
-      messages,
-      temperature,
-      topP: profile?.topP,
-      maxTokens: profile?.maxOutputTokens || 2048,
-      jsonMode: true,
-      timeoutMs: requestTimeout,
-    })
-  } catch (error) {
-    error.apiKeySource = resolvedKey.apiKeySource
-    error.code = error.status === 429 ? 'gemini_quota_429' : error.status === 403 ? 'gemini_403' : `gemini_http_${error.status || 'unknown'}`
-    throw error
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const attemptMessages = attempt === 0 ? messages : [...messages, formatCorrection]
+    try {
+      text = await postChatCompletion({
+        apiKey: resolvedKey.apiKey,
+        model,
+        messages: attemptMessages,
+        temperature,
+        topP: profile?.topP,
+        maxTokens: profile?.maxOutputTokens || 2048,
+        jsonMode: true,
+        timeoutMs: requestTimeout,
+      })
+    } catch (error) {
+      error.apiKeySource = resolvedKey.apiKeySource
+      error.code = error.status === 429 ? 'gemini_quota_429' : error.status === 403 ? 'gemini_403' : `gemini_http_${error.status || 'unknown'}`
+      throw error
+    }
+
+    const coerced = coerceFluContractPayload(text)
+    parsed = coerced.parsed
+    rawResponseText = coerced.voice
+    if (parsed && typeof parsed === 'object' && rawResponseText) break
   }
 
-  const attemptParsed = extractJson(text)
-  parsed = attemptParsed
-  rawResponseText =
-    attemptParsed && typeof attemptParsed === 'object'
-      ? sanitizeVoiceText(attemptParsed.respuesta_voz || attemptParsed.response_voz || attemptParsed.text || '')
-      : ''
-
-  if (!parsed || typeof parsed !== 'object') {
+  if (!parsed || typeof parsed !== 'object' || !rawResponseText) {
     const error = new Error('invalid_json')
     error.code = 'invalid_json'
-    error.bodyPreview = text.slice(0, 200)
-    error.model = model
-    error.apiKeySource = resolvedKey.apiKeySource
-    throw error
-  }
-
-  if (!rawResponseText) {
-    const error = new Error('invalid_json')
-    error.code = 'invalid_json'
-    error.bodyPreview = text.slice(0, 200)
+    error.bodyPreview = String(text || '').slice(0, 200)
     error.model = model
     error.apiKeySource = resolvedKey.apiKeySource
     throw error
@@ -1687,9 +1771,11 @@ export async function generateVideoViaFal({
   prompt = '',
   language = 'es',
   aspectRatio = '',
+  model: modelOverride = '',
 } = {}) {
   const base = String(FALAI_CONFIG.VIDEO_ENDPOINT || '').replace(/\/$/, '')
-  const model = FALAI_CONFIG.VIDEO_MODEL
+  // Modelo configurable (Ajustes → Video); default barato de FALAI_CONFIG.
+  const model = String(modelOverride || '').trim() || FALAI_CONFIG.VIDEO_MODEL
   if (!prompt || !apiKey || !base) {
     return {
       videoUrl: '',

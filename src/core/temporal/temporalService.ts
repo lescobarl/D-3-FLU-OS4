@@ -175,6 +175,7 @@ export function createTemporalService({
       nextAt,
       status: 'pending',
       message: input.message,
+      personId: (input as any).personId,
       createdAt: t,
       updatedAt: t,
       sync: buildSync(),
@@ -268,6 +269,55 @@ export function createTemporalService({
   const cancel = (id: string): Promise<TemporalItemRecord | null> =>
     transition(id, 'cancelled', 'temporalItem.cancel');
 
+  /** Edita etiqueta y/o hora (timeOfDay) de un ítem; recalcula `nextAt`. */
+  const update = async (
+    id: string,
+    patch: { label?: string; timeOfDay?: string },
+  ): Promise<TemporalItemRecord | null> => {
+    const row = await db.get(id);
+    if (!row) return null;
+
+    const nextLabel = typeof patch.label === 'string' && patch.label.trim() ? patch.label.trim() : row.label;
+
+    let trigger = row.trigger;
+    let changed = nextLabel !== row.label;
+    if (
+      typeof patch.timeOfDay === 'string' &&
+      patch.timeOfDay.trim() &&
+      row.trigger?.kind === 'daily'
+    ) {
+      const tod = patch.timeOfDay.trim();
+      if (parseTimeOfDayToMs(tod) !== null && tod !== row.trigger.timeOfDay) {
+        trigger = { ...row.trigger, timeOfDay: tod };
+        changed = true;
+      }
+    }
+
+    if (!changed) return toRecord(row);
+
+    const nextAt = firstDueAt(trigger, row.recurrence, timestamp());
+    if (nextAt === null) return toRecord(row);
+
+    const updated: TemporalItemRecord = {
+      ...row,
+      label: nextLabel,
+      trigger,
+      nextAt,
+      updatedAt: timestamp(),
+      sync: buildSync(row.sync),
+    };
+    await db.put(updated);
+    await addAuditLog(
+      'temporalItem.update',
+      'temporalItem',
+      id,
+      { label: row.label, timeOfDay: row.trigger?.timeOfDay ?? null },
+      { label: updated.label, timeOfDay: updated.trigger?.timeOfDay ?? null },
+      'temporalService',
+    );
+    return toRecord(updated);
+  };
+
   const remove = async (id: string): Promise<boolean> => {
     const row = await db.get(id);
     if (!row) return false;
@@ -287,6 +337,7 @@ export function createTemporalService({
     complete,
     cancel,
     rearm,
+    update,
     remove,
   };
 }

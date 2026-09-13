@@ -35,7 +35,7 @@ export const FORMAT_INFO: Record<GenerationFormato, FormatInfo> = {
   video: { ext: 'md', mime: 'text/markdown' },
 };
 
-function safeFileName(nombre: string, ext: string): string {
+export function safeFileName(nombre: string, ext: string): string {
   const base = (nombre || 'flu-documento').replace(/[^\w\-\u00C0-\uFFFF. ]+/g, '').trim() || 'flu-documento';
   const clean = base.replace(/\.(pdf|docx|xlsx|pptx|md|html|csv|json|ics)$/i, '');
   return `${clean}.${ext}`;

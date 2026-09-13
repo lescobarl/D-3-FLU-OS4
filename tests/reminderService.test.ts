@@ -288,3 +288,31 @@ describe('reminderService — filtro por autor (B11)', () => {
     expect(await service.listPendingByAuthor('')).toHaveLength(0);
   });
 });
+
+describe('reminderService — update (editar recordatorio)', () => {
+  it('edita texto y vencimiento e incrementa la revisión', async () => {
+    const db = createMapDb();
+    const service = createService(db);
+    const created = (await service.add({ text: 'tomar agua', dueAt: NOW + DAY_MS })).record!;
+    const updated = await service.update(created.id, {
+      text: 'tomar agua mineral',
+      dueAt: NOW + 2 * DAY_MS,
+    });
+    expect(updated?.text).toBe('tomar agua mineral');
+    expect(updated?.dueAt).toBe(NOW + 2 * DAY_MS);
+    expect(updated?.sync.revision).toBe(created.sync.revision + 1);
+  });
+
+  it('texto vacío no cambia el registro', async () => {
+    const db = createMapDb();
+    const service = createService(db);
+    const created = (await service.add({ text: 'x', dueAt: NOW })).record!;
+    const same = await service.update(created.id, { text: '   ' });
+    expect(same?.text).toBe('x');
+  });
+
+  it('id inexistente → null', async () => {
+    const service = createService(createMapDb());
+    expect(await service.update('no-existe', { text: 'y' })).toBeNull();
+  });
+});

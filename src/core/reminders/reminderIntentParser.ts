@@ -53,6 +53,16 @@ export interface ReminderIntentParserOptions {
   now?: () => number;
   /** Si no se indica cuándo, programa con este desfase (ms). */
   defaultOffsetMs?: number;
+  /**
+   * Dominio ya clasificado por el cerebro conversacional (`accion.dominio`).
+   * Cuando es 'reminder', el texto se interpreta como el objeto del
+   * recordatorio AUNQUE no traiga el trigger verbal ("recuérdame ..."). Evita
+   * que una acción ya clasificada por el LLM se pierda al re-parsear texto que
+   * perdió el trigger. El parser sigue siendo la única fuente de estructura.
+   */
+  assumedDomain?: 'reminder';
+  /** Idioma para las respuestas deterministas (por defecto: 'es'). */
+  language?: 'es' | 'en';
 }
 
 // ------------------------------------------------------------
@@ -262,6 +272,70 @@ function askTextReply(lang: 'es' | 'en'): string {
 // ------------------------------------------------------------
 
 /**
+ * Construye una intención `reminder.add` a partir del TEXTO del recordatorio
+ * (ya sin trigger, o con el texto completo cuando el dominio fue asumido).
+ * Fuente única de la extracción persona + cuándo + objeto, compartida por la
+ * ruta con trigger verbal y la ruta con dominio asumido por el LLM.
+ */
+function buildReminderFromRest(
+  rest: string,
+  lang: 'es' | 'en',
+  now: number,
+  options: ReminderIntentParserOptions,
+): ReminderIntent {
+  let remaining = rest;
+
+  // Persona (opcional): 'a María', 'remind Mary ...'.
+  let person: string | undefined;
+  const prefixed = PERSON_PREFIX.exec(remaining);
+  if (prefixed && !PERSON_STOP_WORDS.includes(prefixed[1].toLowerCase())) {
+    person = prefixed[1];
+    remaining = remaining.slice(prefixed[0].length).trim();
+  } else {
+    const direct = PERSON_DIRECT.exec(remaining);
+    if (direct && !PERSON_STOP_WORDS.includes(direct[1].toLowerCase())) {
+      person = direct[1];
+      remaining = remaining.slice(direct[0].length).trim();
+    }
+  }
+
+  // Cláusula 'cuándo' (opcional).
+  const { textPart, whenClause } = splitWhen(remaining);
+  if (!textPart) {
+    return { handled: true, action: null, reply: askTextReply(lang) };
+  }
+
+  let dueAt: number | undefined;
+  let whenLabel: string | undefined;
+  if (whenClause) {
+    const resolved = resolveWhen(whenClause, now);
+    if (resolved) {
+      dueAt = resolved.dueAt;
+      whenLabel = resolved.label;
+    }
+  }
+  if (dueAt === undefined && options.defaultOffsetMs !== undefined) {
+    dueAt = now + options.defaultOffsetMs;
+  }
+
+  const data: ReminderIntentData = { text: textPart };
+  if (dueAt !== undefined) data.dueAt = dueAt;
+  if (person) data.personName = person;
+
+  const whenPhrase = whenLabel
+    ? lang === 'es'
+      ? `, ${whenLabel}`
+      : `, at ${whenLabel}`
+    : '';
+  const reply =
+    lang === 'es'
+      ? `Listo, te lo recuerdo${person ? ` y se lo haré saber a ${person}` : ''}: "${textPart}"${whenPhrase}.`
+      : `Okay, I will remind you${person ? ` and let ${person} know` : ''}: "${textPart}"${whenPhrase}.`;
+
+  return { handled: true, action: 'reminder.add', reply, data };
+}
+
+/**
  * Interpreta un texto de voz/texto como comando de recordatorios o compras.
  * Devuelve `handled: false` si no reconoce ninguna intención.
  */
@@ -336,56 +410,15 @@ export function parseReminderIntent(
   const trigger = triggerEs || triggerEn;
   if (trigger) {
     const lang = triggerEs ? 'es' : 'en';
-    let rest = text.slice(trigger[0].length).trim();
+    return buildReminderFromRest(text.slice(trigger[0].length).trim(), lang, now, options);
+  }
 
-    // Persona (opcional): 'a María', 'remind Mary ...'.
-    let person: string | undefined;
-    const prefixed = PERSON_PREFIX.exec(rest);
-    if (prefixed && !PERSON_STOP_WORDS.includes(prefixed[1].toLowerCase())) {
-      person = prefixed[1];
-      rest = rest.slice(prefixed[0].length).trim();
-    } else {
-      const direct = PERSON_DIRECT.exec(rest);
-      if (direct && !PERSON_STOP_WORDS.includes(direct[1].toLowerCase())) {
-        person = direct[1];
-        rest = rest.slice(direct[0].length).trim();
-      }
-    }
-
-    // Cláusula 'cuándo' (opcional).
-    const { textPart, whenClause } = splitWhen(rest);
-    if (!textPart) {
-      return { handled: true, action: null, reply: askTextReply(lang) };
-    }
-
-    let dueAt: number | undefined;
-    let whenLabel: string | undefined;
-    if (whenClause) {
-      const resolved = resolveWhen(whenClause, now);
-      if (resolved) {
-        dueAt = resolved.dueAt;
-        whenLabel = resolved.label;
-      }
-    }
-    if (dueAt === undefined && options.defaultOffsetMs !== undefined) {
-      dueAt = now + options.defaultOffsetMs;
-    }
-
-    const data: ReminderIntentData = { text: textPart };
-    if (dueAt !== undefined) data.dueAt = dueAt;
-    if (person) data.personName = person;
-
-    const whenPhrase = whenLabel
-      ? lang === 'es'
-        ? `, ${whenLabel}`
-        : `, at ${whenLabel}`
-      : '';
-    const reply =
-      lang === 'es'
-        ? `Listo, te lo recuerdo${person ? ` y se lo haré saber a ${person}` : ''}: "${textPart}"${whenPhrase}.`
-        : `Okay, I will remind you${person ? ` and let ${person} know` : ''}: "${textPart}"${whenPhrase}.`;
-
-    return { handled: true, action: 'reminder.add', reply, data };
+  // Dominio asumido por el cerebro conversacional: el LLM ya clasificó el texto
+  // como recordatorio (accion.dominio='reminder') aunque el fragmento no traiga
+  // el trigger verbal. Se parsea la estructura con el MISMO parser.
+  if (options.assumedDomain === 'reminder') {
+    const lang: 'es' | 'en' = options.language === 'en' ? 'en' : 'es';
+    return buildReminderFromRest(text, lang, now, options);
   }
 
   // --- Citas (agenda) -------------------------------------------

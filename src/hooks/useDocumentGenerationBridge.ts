@@ -9,8 +9,6 @@
 // ============================================================
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { FLU_EVENTS, onFluEvent } from '../core/events/fluEvents';
-import { useIntegrationStore } from '../store/integrationStore';
-import { buildGenerationTopic, type GenerationConversationSlice } from '../lib/generationTopic';
 import type { DocumentGenerationState } from './useDocumentGeneration';
 
 export interface DocumentGenerationBridgeOptions {
@@ -45,27 +43,12 @@ export function useDocumentGenerationBridge({
         const onAnalyzeApp = () => {
             projectInputRef.current?.click();
         };
-        const onGenerateDocument = () => {
-            const state = useIntegrationStore.getState() as unknown as GenerationConversationSlice;
-            const { tema, contenido } = buildGenerationTopic(state);
-            generation.generate('pdf', {
-                parametros: tema ? { tema } : {},
-                contenido: contenido || undefined,
-            });
-        };
-        const onGenerateVideo = () => {
-            const state = useIntegrationStore.getState() as unknown as GenerationConversationSlice;
-            const { tema, contenido } = buildGenerationTopic(state);
-            generation.generate('video', {
-                parametros: tema ? { tema } : {},
-                contenido: contenido || undefined,
-            });
-        };
+        // NOTA: GENERATE_DOCUMENT / GENERATE_VIDEO se eliminaron de este bus.
+        // La generación de medios ahora tiene RUTA ÚNICA e idempotente en App
+        // (requestMediaRef): el bus era la segunda ruta y permitía re-generar.
         const offs = [
             onFluEvent(FLU_EVENTS.ANALYZE_DOCUMENT, onAnalyzeDocument),
             onFluEvent(FLU_EVENTS.ANALYZE_APP, onAnalyzeApp),
-            onFluEvent(FLU_EVENTS.GENERATE_DOCUMENT, onGenerateDocument),
-            onFluEvent(FLU_EVENTS.GENERATE_VIDEO, onGenerateVideo),
         ];
         return () => offs.forEach((off) => off());
         // eslint-disable-next-line react-hooks/exhaustive-deps

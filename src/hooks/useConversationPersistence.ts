@@ -39,7 +39,7 @@ function rowToEntry(row: any): ConversationEntry {
 /**
  * Convert a ConversationEntry to a DB row format.
  */
-function entryToRow(entry: ConversationEntry) {
+function entryToRow(entry: ConversationEntry, participantId: string) {
     return {
         id: entry.id,
         role: entry.role,
@@ -53,6 +53,7 @@ function entryToRow(entry: ConversationEntry) {
         signature: entry.signature || null,
         phase: entry.phase || '',
         navigation: entry.navigation || null,
+        participantId,
         sync: newSyncTuple(),
     };
 }
@@ -62,26 +63,34 @@ function entryToRow(entry: ConversationEntry) {
  * history on mount. Works with integrationStore.addUserMessage
  * and addFluMessage.
  */
-export function useConversationPersistence() {
+export function useConversationPersistence(participantId?: string) {
     const integrationStore = useIntegrationStore();
+    // Alcance por usuario: cada participante sólo ve SU conversación.
+    const scope = participantId || 'global';
     const loadedRef = useRef(false);
+    const loadedScopeRef = useRef<string>('');
 
-    // ---- Load persisted history on mount ----
+    // ---- Load persisted history on mount / al cambiar de usuario ----
     useEffect(() => {
-        if (loadedRef.current) return;
+        if (loadedRef.current && loadedScopeRef.current === scope) return;
         loadedRef.current = true;
+        loadedScopeRef.current = scope;
 
         (async () => {
             try {
-                const rows = await fluDb.conversations
-                    .orderBy('timestamp')
-                    .reverse()
-                    .limit(MAX_LOADED_ROWS)
-                    .toArray();
+                // Al cambiar de usuario, vaciar el historial en memoria para no
+                // mostrar el del usuario anterior.
+                if (useIntegrationStore.getState().conversationHistory.length > 0) {
+                    useIntegrationStore.getState().batchLoadHistory([]);
+                }
+                const rows = (await fluDb.conversations.toArray())
+                    .filter((row: any) => (row.participantId || 'global') === scope)
+                    .sort((a: any, b: any) => a.timestamp - b.timestamp)
+                    .slice(-MAX_LOADED_ROWS);
 
                 if (rows.length > 0) {
-                    // Reverse back to chronological order
-                    const allEntries = rows.reverse().map(rowToEntry);
+                    // Ya vienen en orden cronológico (ascendente).
+                    const allEntries = rows.map(rowToEntry);
 
                     // Filter out system events (participant_ignored, etc.) so they
                     // don't reappear in the UI after a page reload. These are ephemeral
@@ -134,7 +143,7 @@ export function useConversationPersistence() {
                 console.error('[ConversationPersistence] Error loading history:', err);
             }
         })();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ---- Save each new entry to DB ----
     // Subscribe to conversationHistory.length only (not the full array) to avoid
@@ -151,7 +160,7 @@ export function useConversationPersistence() {
             // Access the full history directly from the store to avoid stale closures
             const fullHistory = useIntegrationStore.getState().conversationHistory;
             const newEntries = fullHistory.slice(savedLengthRef.current);
-            const rows = newEntries.map(entryToRow);
+            const rows = newEntries.map((entry) => entryToRow(entry, scope));
             fluDb.conversations.bulkPut(rows).catch((err) => {
                 console.error('[ConversationPersistence] Error saving entries:', err);
             });
@@ -160,11 +169,19 @@ export function useConversationPersistence() {
         }
         if (historyLength === 0 && savedLengthRef.current > 0) {
             // El historial se vació en memoria ("iniciar conversación"/limpiar):
-            // borrar también lo persistido para que NO reaparezca al recargar.
+            // borrar SOLO lo persistido de ESTE usuario (aislamiento por usuario).
             savedLengthRef.current = 0;
-            fluDb.conversations.clear().catch((err) => {
-                console.error('[ConversationPersistence] Error clearing persisted history:', err);
-            });
+            fluDb.conversations
+                .toArray()
+                .then((all) =>
+                    all
+                        .filter((row: any) => (row.participantId || 'global') === scope)
+                        .map((row: any) => row.id),
+                )
+                .then((ids) => (ids.length ? fluDb.conversations.bulkDelete(ids) : undefined))
+                .catch((err) => {
+                    console.error('[ConversationPersistence] Error clearing persisted history:', err);
+                });
         }
-    }, [historyLength]);
+    }, [historyLength, scope]);
 }

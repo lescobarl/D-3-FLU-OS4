@@ -21,6 +21,7 @@
 import { resolveConfigCommandFromText } from './configCommands.js'
 import { resolveGameCommandFromText } from './gameCommands.js'
 import { parseNoteIntentText } from './noteIntentParser.js'
+import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
 import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
@@ -182,7 +183,12 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   }
 
   // 6. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
-  // Diario PAUSADO (se reimplementará): no se reconoce por voz.
+  //    ("... en el diario ...") es MÁS específico que el "apunta {texto}" de
+  //    nota: así "anota X en el diario" gana diario.
+  const diary = parseDiaryIntent(transcript, { language })
+  if (diary?.handled && diary?.action) {
+    return { matched: true, domain: 'diary', action: diary, channel: 'flu' }
+  }
 
   // 7. Nota (función-adición): "nota ...", "apunta/anota {texto}", etc.
   const note = recognizeNoteIntent(transcript)
@@ -253,6 +259,26 @@ export function resolveStatefulDomains(text = '', options = {}) {
  * 'ambient' | 'command' | 'flu'. Regla #1: las wake words vienen por opciones
  * (nunca hardcodeadas aquí).
  */
+/**
+ * §9/F (defecto "wake heredada"): un comando (acción) se autoriza SOLO si su
+ * PROPIO enunciado trae la wake word. No se hereda de un turno anterior
+ * (`conversationActive`), ni del wake de otra frase.
+ *
+ * `allowWithoutWake` cubre la única excepción legítima: comandos de CONTROL de
+ * escucha (abrir/cerrar) que deben poder detener la escucha por voz.
+ *
+ * @param {string} phrase
+ * @param {{ wakeWords?: string[], allowWithoutWake?: boolean }} [options]
+ * @returns {boolean}
+ */
+export function isCommandAuthorized(
+  phrase = '',
+  { wakeWords = [], allowWithoutWake = false } = {},
+) {
+  if (allowWithoutWake) return true
+  return Boolean(splitTranscriptAtWakeWord(phrase, wakeWords).wakeWordMatched)
+}
+
 export function resolveVoiceCommand(text = '', options = {}) {
   const {
     requireWake = false,

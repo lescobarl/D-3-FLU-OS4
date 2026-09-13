@@ -17,6 +17,8 @@ import type { SearchProviderConfig, SearchResultType } from './searchSession';
 export interface SearchProviderOverride {
   enabled?: boolean;
   key?: string | null;
+  /** Modelo del proveedor (OpenRouter web), editable desde el configurador. */
+  model?: string;
   maxResults?: number;
   timeoutMs?: number;
 }
@@ -65,6 +67,81 @@ export interface MergedSearchConfig extends SearchRuntimeConfig {
 
 const SEARCH_TYPES: SearchResultType[] = ['web', 'images', 'video'];
 
+/** Parsea un entero positivo; undefined si no es válido (para commit). */
+export function parsePositiveInt(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return undefined;
+}
+
+/**
+ * Fusiona los overrides de proveedores del borrador (Centro de Control)
+ * sobre los vigentes, SIN borrar lo que administra otro panel.
+ *
+ * Reglas:
+ * - Nunca reemplaza el grupo completo: parte de `prevProviders` y aplica
+ *   campo por campo. Así, si el borrador no trae un tipo/proveedor, se
+ *   conserva lo existente (p. ej. la clave/modelo que escribió "Búsqueda web").
+ * - Los proveedores con `externalConfig` conservan su `key`/`model` vigentes
+ *   (los edita "Búsqueda web", no el Centro de Control).
+ * - `enabled`/`maxResults`/`timeoutMs` se normalizan contra la config base.
+ */
+export function applyProviderOverrides(
+  prevProviders: SearchConfigOverrides['providers'],
+  baseProviders: Record<SearchResultType, SearchProviderConfig[]>,
+  draftProviders: SearchConfigOverrides['providers'],
+): SearchConfigOverrides['providers'] {
+  const result: NonNullable<SearchConfigOverrides['providers']> = {};
+  for (const type of SEARCH_TYPES) {
+    const prevGroup = prevProviders?.[type] || {};
+    const group: Record<string, SearchProviderOverride> = { ...prevGroup };
+    const draftGroup = draftProviders?.[type];
+    if (!draftGroup) {
+      // El borrador no toca este tipo: conserva lo vigente.
+      if (Object.keys(group).length > 0) result[type] = group;
+      continue;
+    }
+    for (const provider of baseProviders[type] || []) {
+      const id = provider.id || '';
+      const ov = draftGroup[id];
+      if (!ov) continue;
+      const out: SearchProviderOverride = { ...(group[id] || {}) };
+      if (ov.enabled !== undefined) {
+        if (ov.enabled !== (provider.enabled !== false)) out.enabled = ov.enabled;
+        else delete out.enabled;
+      }
+      if (provider.externalConfig !== true) {
+        if (typeof ov.key === 'string' && ov.key.trim() !== '') out.key = ov.key.trim();
+        else delete out.key;
+        if (
+          typeof ov.model === 'string' &&
+          ov.model.trim() !== '' &&
+          ov.model.trim() !== provider.model
+        ) {
+          out.model = ov.model.trim();
+        } else {
+          delete out.model;
+        }
+      }
+      const maxResults = parsePositiveInt(ov.maxResults);
+      if (maxResults !== undefined && maxResults !== provider.maxResults) out.maxResults = maxResults;
+      else delete out.maxResults;
+      const timeoutMs = parsePositiveInt(ov.timeoutMs);
+      if (timeoutMs !== undefined && timeoutMs !== provider.timeoutMs) out.timeoutMs = timeoutMs;
+      else delete out.timeoutMs;
+      if (Object.keys(out).length > 0) group[id] = out;
+      else delete group[id];
+    }
+    if (Object.keys(group).length > 0) result[type] = group;
+  }
+  return result;
+}
+
 /**
  * Aplica los overrides sobre la config base (sin mutarla). Los proveedores
  * conservan su flag `enabled` (aunque esté en false) para que el consumidor
@@ -101,6 +178,7 @@ export function mergeSearchConfig(
         ...provider,
         enabled: override.enabled ?? provider.enabled,
         key: override.key !== undefined ? override.key : provider.key,
+        model: override.model ?? provider.model,
         maxResults: override.maxResults ?? provider.maxResults,
         timeoutMs: override.timeoutMs ?? provider.timeoutMs,
       };
@@ -145,16 +223,76 @@ export function evalDailyUsage(
   return { locked: false, next: { day: today, count: current.count + 1 } };
 }
 
-function storageAvailable(): boolean {
-  return typeof window !== 'undefined' && !!window.localStorage;
+const OVERRIDES_STORAGE_KEY = STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES;
+
+/** Último error de almacenamiento (para diagnóstico visible). */
+let lastStorageError = '';
+export function getLastStorageError(): string {
+  return lastStorageError;
+}
+
+function safeGet(store: Storage | null | undefined, key: string): string | null {
+  try {
+    return store ? store.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lee los overrides con respaldo: localStorage → sessionStorage.
+ * Si localStorage está lleno/bloqueado, la config sigue disponible en la
+ * sesión (sessionStorage). No se usa cookie: contiene la API key y una cookie
+ * viajaría al servidor en cada request (exposición innecesaria).
+ */
+function readRawOverrides(): string | null {
+  if (typeof window === 'undefined') return null;
+  const ls = safeGet(window.localStorage, OVERRIDES_STORAGE_KEY);
+  if (ls) return ls;
+  return safeGet(window.sessionStorage, OVERRIDES_STORAGE_KEY);
+}
+
+/** Escribe con respaldo. Devuelve true si algo persistió. */
+function writeRawOverrides(value: string): boolean {
+  if (typeof window === 'undefined') return false;
+  let ok = false;
+  try {
+    window.localStorage.setItem(OVERRIDES_STORAGE_KEY, value);
+    lastStorageError = '';
+    ok = true;
+  } catch (error) {
+    lastStorageError = (error as Error)?.name || 'localStorage error';
+    console.warn(
+      `[searchConfig] localStorage no disponible (${lastStorageError}); se usa respaldo en sessionStorage.`,
+    );
+    // Cuota llena/bloqueada: quitar el valor VIEJO para que no opaque al nuevo
+    // (removeItem no consume cuota), así la lectura cae a sessionStorage.
+    try {
+      window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
+    } catch {
+      /* si tampoco se puede, la lectura usa sessionStorage */
+    }
+  }
+  try {
+    window.sessionStorage.setItem(OVERRIDES_STORAGE_KEY, value);
+    ok = true;
+  } catch (error) {
+    lastStorageError = `${lastStorageError}/${(error as Error)?.name || 'sessionStorage error'}`;
+  }
+  if (!ok) {
+    console.error(
+      '[searchConfig] No se pudo persistir la configuración del buscador (localStorage y sessionStorage llenos o bloqueados).',
+      lastStorageError,
+    );
+  }
+  return ok;
 }
 
 /** Carga los overrides persistidos ({} si no hay o hay error). */
 export function loadSearchConfigOverrides(): SearchConfigOverrides {
-  if (!storageAvailable()) return {};
+  const raw = readRawOverrides();
+  if (!raw) return {};
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES);
-    if (!raw) return {};
     const parsed = JSON.parse(raw) as SearchConfigOverrides;
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
@@ -162,32 +300,31 @@ export function loadSearchConfigOverrides(): SearchConfigOverrides {
   }
 }
 
-/** Persiste los overrides (ignora errores de almacenamiento). */
-export function saveSearchConfigOverrides(overrides: SearchConfigOverrides): void {
-  if (!storageAvailable()) return;
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES,
-      JSON.stringify(overrides),
-    );
-  } catch {
-    // sin hardcode ni ruido: el patrón ignora errores de storage
-  }
+/**
+ * Persiste los overrides en la primera fuente disponible
+ * (localStorage → sessionStorage). Devuelve true si se guardó.
+ */
+export function saveSearchConfigOverrides(overrides: SearchConfigOverrides): boolean {
+  return writeRawOverrides(JSON.stringify(overrides));
 }
 
-/** Borra los overrides persistidos. */
+/** Borra los overrides persistidos de todas las fuentes. */
 export function clearSearchConfigOverrides(): void {
-  if (!storageAvailable()) return;
+  if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES);
+    window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
   } catch {
-    // ignorar
+    /* ignorar */
+  }
+  try {
+    window.sessionStorage.removeItem(OVERRIDES_STORAGE_KEY);
+  } catch {
+    /* ignorar */
   }
 }
 
 /** Carga el registro de uso diario persistido (null si no hay). */
 export function loadDailyUsage(): DailyUsageRecord | null {
-  if (!storageAvailable()) return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.SEARCH_DAILY_USAGE);
     if (!raw) return null;
@@ -203,7 +340,6 @@ export function loadDailyUsage(): DailyUsageRecord | null {
 
 /** Persiste el registro de uso diario (ignora errores de almacenamiento). */
 export function saveDailyUsage(record: DailyUsageRecord): void {
-  if (!storageAvailable()) return;
   try {
     window.localStorage.setItem(STORAGE_KEYS.SEARCH_DAILY_USAGE, JSON.stringify(record));
   } catch {

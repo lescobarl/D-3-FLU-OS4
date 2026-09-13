@@ -44,6 +44,14 @@ export interface SearchProviderConfig {
     label?: string;
     enabled?: boolean;
     endpoint?: string;
+    /** Método HTTP del proveedor (default GET). Tavily/OpenRouter usan POST. */
+    method?: 'GET' | 'POST';
+    /** Cabeceras fijas del proveedor; admiten tokens {key},{q},{lang},{model},{n}. */
+    headers?: Record<string, string>;
+    /** Cuerpo JSON del POST; admite tokens {q},{lang},{model},{key},{n}. */
+    body?: unknown;
+    /** Modelo del proveedor (OpenRouter web). Editable desde el configurador. */
+    model?: string;
     articleUrlTemplate?: string;
     /** Plantilla de URL embed (F4 vídeo): rellena {id}. */
     embedUrlTemplate?: string;
@@ -52,6 +60,17 @@ export interface SearchProviderConfig {
     key?: string | null;
     maxResults?: number;
     timeoutMs?: number;
+    /**
+     * Posición en la cadena de respaldo (menor = antes). Los proveedores con la
+     * misma prioridad se consultan en paralelo y se fusionan; si un escalón no
+     * devuelve resultados, se pasa al siguiente. Ausente = 0.
+     */
+    priority?: number;
+    /**
+     * La clave/modelo se editan en "Configuración de Servicios Externos"
+     * (no en la tarjeta del Centro de Control, para no tener dos rutas de edición).
+     */
+    externalConfig?: boolean;
 }
 
 /** Etiquetas de la UI del buscador (config-driven, sin hardcode). */
@@ -103,6 +122,9 @@ export interface SearchConfig {
 /** Petición construida para un proveedor (lista para el proxy). */
 export interface ProviderRequest {
     url: string;
+    method: 'GET' | 'POST';
+    headers: Record<string, string>;
+    body?: unknown;
     lang: ResolvedLanguage;
     providerId: string;
     maxResults: number;
@@ -135,12 +157,43 @@ export function resolveSearchProviders(
 }
 
 /**
- * Construye la URL de petición reemplazando los placeholders del endpoint:
- * - {q}    → consulta URL-encoded (encodeURIComponent).
- * - {lang} → idioma efectivo (es/en), sin codificar (vale para el
- *            subdominio de Wikipedia y para el parámetro kl de DDG).
- * - {key}  → API key del proveedor (F4: YouTube), URL-encoded.
- * - {n}    → maxResults del proveedor (F4: YouTube).
+ * Reemplaza tokens `{nombre}` por su valor (usado en cabeceras y cuerpos).
+ * Los tokens desconocidos se dejan intactos. El valor llega en crudo (los
+ * cuerpos JSON no se URL-encodan; las URLs se tratan aparte).
+ */
+function fillTokens(template: string, tokens: Record<string, string>): string {
+    return String(template).replace(/\{(\w+)\}/g, (match, name: string) =>
+        Object.prototype.hasOwnProperty.call(tokens, name) ? tokens[name] : match,
+    );
+}
+
+/**
+ * Sustituye tokens en un cuerpo JSON de forma recursiva. `{n}` (número)
+ * se emite como número cuando es el valor completo y como texto embebido.
+ */
+function fillBodyTokens(value: unknown, tokens: Record<string, string>, maxResults: number): unknown {
+    if (typeof value === 'string') {
+        if (value === '{n}') return maxResults;
+        return fillTokens(value, tokens);
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => fillBodyTokens(item, tokens, maxResults));
+    }
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+            out[key] = fillBodyTokens(item, tokens, maxResults);
+        }
+        return out;
+    }
+    return value;
+}
+
+/**
+ * Construye la petición de un proveedor reemplazando los placeholders:
+ * - En la URL:   {q} (encoded), {lang}, {key} (encoded), {n}, {model} (encoded).
+ * - En headers:  {key}, {q}, {lang}, {model}, {n} (crudo, sin URL-encode).
+ * - En el body:  los mismos tokens en cualquier profundidad del objeto.
  */
 export function buildProviderRequest(
     provider: SearchProviderConfig,
@@ -149,13 +202,34 @@ export function buildProviderRequest(
 ): ProviderRequest {
     const q = String(query || '').trim();
     const maxResults = typeof provider.maxResults === 'number' ? provider.maxResults : 5;
+    const model = String(provider.model || '');
+    const key = String(provider.key || '');
     const url = String(provider.endpoint || '')
         .replace(/\{q\}/g, encodeURIComponent(q))
         .replace(/\{lang\}/g, lang)
-        .replace(/\{key\}/g, encodeURIComponent(String(provider.key || '')))
-        .replace(/\{n\}/g, String(maxResults));
+        .replace(/\{key\}/g, encodeURIComponent(key))
+        .replace(/\{n\}/g, String(maxResults))
+        .replace(/\{model\}/g, encodeURIComponent(model));
+
+    const tokens: Record<string, string> = {
+        q,
+        lang,
+        model,
+        key,
+        n: String(maxResults),
+    };
+    const headers: Record<string, string> = {};
+    for (const [name, value] of Object.entries(provider.headers || {})) {
+        headers[name] = fillTokens(String(value), tokens);
+    }
+    const method: 'GET' | 'POST' = provider.method === 'POST' ? 'POST' : 'GET';
+    const body = provider.body !== undefined ? fillBodyTokens(provider.body, tokens, maxResults) : undefined;
+
     return {
         url,
+        method,
+        headers,
+        body,
         lang,
         providerId: String(provider.id || ''),
         maxResults,
@@ -457,10 +531,71 @@ function normalizeDuckDuckGo(raw: unknown): SearchResult[] {
 }
 
 /**
+ * Normaliza la respuesta de Tavily Search (results[]: title/url/content).
+ * El contenido ya viene en texto; se limpia por si trae HTML residual.
+ */
+function normalizeTavily(raw: unknown): SearchResult[] {
+    const list = (raw as { results?: unknown[] })?.results;
+    if (!Array.isArray(list)) return [];
+    const results: SearchResult[] = [];
+    for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const record = item as { title?: string; url?: string; content?: string };
+        const url = String(record.url || '').trim();
+        if (!url) continue;
+        const title = String(record.title || '').trim() || url;
+        results.push({
+            title,
+            snippet: stripHtml(String(record.content || '')),
+            url,
+            host: extractHost(url),
+            source: 'tavily',
+            allowed: true,
+        });
+    }
+    return results;
+}
+
+/**
+ * Normaliza la respuesta de OpenRouter (chat completions + plugin web).
+ * Los resultados viven en `choices[0].message.annotations[]` como citas
+ * `url_citation` (url/title/content); el resto de tipos se descarta.
+ */
+function normalizeOpenRouter(raw: unknown): SearchResult[] {
+    const choices = (raw as { choices?: unknown[] })?.choices;
+    if (!Array.isArray(choices)) return [];
+    const message = (choices[0] as { message?: { annotations?: unknown[] } })?.message;
+    const annotations = message?.annotations;
+    if (!Array.isArray(annotations)) return [];
+    const results: SearchResult[] = [];
+    for (const item of annotations) {
+        if (!item || typeof item !== 'object') continue;
+        const annotation = item as {
+            type?: string;
+            url_citation?: { url?: string; title?: string; content?: string };
+        };
+        if (annotation.type !== 'url_citation') continue;
+        const url = String(annotation.url_citation?.url || '').trim();
+        if (!url) continue;
+        const title = String(annotation.url_citation?.title || '').trim() || url;
+        results.push({
+            title,
+            snippet: stripHtml(String(annotation.url_citation?.content || '')),
+            url,
+            host: extractHost(url),
+            source: 'openrouter',
+            allowed: true,
+        });
+    }
+    return results;
+}
+
+/**
  * Normaliza la respuesta cruda de un proveedor a SearchResult[] unificados.
- * Soporta los proveedores sin clave de F3 (wikipedia + duckduckgo) y los de
- * F4 (Wikimedia Commons imágenes/vídeo, YouTube, Invidious). El proveedor
- * (opcional) aporta plantillas de URL de artículo/embed/watch (config-driven).
+ * Soporta los proveedores sin clave de F3 (wikipedia + duckduckgo), los de
+ * F4 (Wikimedia Commons imágenes/vídeo, YouTube, Invidious) y la cadena web
+ * con clave (Tavily, OpenRouter). El proveedor (opcional) aporta plantillas
+ * de URL de artículo/embed/watch (config-driven).
  */
 export function normalizeResults(
     raw: unknown,
@@ -470,6 +605,8 @@ export function normalizeResults(
 ): SearchResult[] {
     if (providerId === 'wikipedia') return normalizeWikipedia(raw, lang, provider);
     if (providerId === 'duckduckgo') return normalizeDuckDuckGo(raw);
+    if (providerId === 'tavily') return normalizeTavily(raw);
+    if (providerId === 'openrouter') return normalizeOpenRouter(raw);
     if (providerId === 'commons') return normalizeCommonsMedia(raw, 'images', provider);
     if (providerId === 'commons-video') return normalizeCommonsMedia(raw, 'video', provider);
     if (providerId === 'youtube') return normalizeYouTube(raw, provider);

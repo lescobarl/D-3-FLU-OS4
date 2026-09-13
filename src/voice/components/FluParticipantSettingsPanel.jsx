@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useIntegrationStore } from '../../store/integrationStore'
+import { useSettingsSaveRegistration } from '../../components/SettingsSaveContext'
 import { resolveAppLanguage } from '../lib/audioMath.js'
 import { resolveFluParticipantLabel } from '../lib/participantFloor.js'
 import { speakResponse } from '../lib/fluSpeech.js'
@@ -47,27 +48,26 @@ export default function FluParticipantSettingsPanel({
   voices,
 }) {
   const lang = resolveAppLanguage(language, '')
-  const [savedFlash, setSavedFlash] = useState(false)
   const [draft, setDraft] = useState(() => buildDraftFromConfig(getFluParticipantConfig()))
 
   const updateField = useCallback((key, value) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
-    setSavedFlash(false)
   }, [])
 
   const handleSave = useCallback(() => {
     const next = setFluParticipantOverrides(serializeDraftForSave(draft))
     setDraft(buildDraftFromConfig(next))
-    setSavedFlash(true)
     onConfigChange?.(next)
   }, [draft, onConfigChange])
 
   const handleReset = useCallback(() => {
     const next = resetFluParticipantOverrides()
     setDraft(buildDraftFromConfig(next))
-    setSavedFlash(true)
     onConfigChange?.(next)
   }, [onConfigChange])
+
+  // Guardar/Restablecer GLOBAL del configurador (barra al pie de Configuración).
+  useSettingsSaveRegistration('flu-participant', { commit: handleSave, reset: handleReset })
 
   const integrationStore = useIntegrationStore?.() ?? null
   const safeVoices = Array.isArray(voices) ? voices : []
@@ -167,21 +167,6 @@ export default function FluParticipantSettingsPanel({
                 </label>
               )
             })}
-          </div>
-        </div>
-
-        {/* ---- Botones de acción ---- */}
-        <div className="flu-settings-image-config__group" style={{ marginTop: 12 }}>
-          <div className="flu-settings-row" style={{ gap: 8 }}>
-            <button type="button" className="flu-btn flu-btn--primary" onClick={handleSave}>
-              {resolveFluParticipantLabel('saveButton', lang)}
-            </button>
-            <button type="button" className="flu-btn" onClick={handleReset}>
-              {resolveFluParticipantLabel('resetButton', lang)}
-            </button>
-            {savedFlash ? (
-              <span className="flu-settings-hint" style={{ marginLeft: 8 }}>{resolveFluParticipantLabel('savedHint', lang)}</span>
-            ) : null}
           </div>
         </div>
       </div>

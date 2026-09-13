@@ -49,7 +49,7 @@ export default function DocumentResultPanel({
 
     if (isAnalyzing) {
         return (
-            <div className="frame-content__document-analysis">
+            <div className="frame-content__document-analysis" data-testid="document-analysis" data-state="analyzing">
                 <p className="flu-upload-zone__analyzing">
                     {isEn ? '🔍 Analyzing document with AI...' : '🔍 Analizando documento con IA...'}
                 </p>
@@ -59,7 +59,11 @@ export default function DocumentResultPanel({
 
     if (error) {
         return (
-            <div className="frame-content__document-analysis frame-content__document-analysis--error">
+            <div
+                className="frame-content__document-analysis frame-content__document-analysis--error"
+                data-testid="document-analysis"
+                data-state="error"
+            >
                 <p className="frame-content__document-error">{error}</p>
                 {onClear && (
                     <button type="button" className="flu-btn flu-btn--small" onClick={onClear}>
@@ -80,7 +84,7 @@ export default function DocumentResultPanel({
     const hasEscenarios = Array.isArray(document.escenarios) && document.escenarios.length > 0;
 
     return (
-        <div className="frame-content__document-analysis">
+        <div className="frame-content__document-analysis" data-testid="document-analysis" data-state="done">
             {!hideHeader && (
                 <div className="document-analysis__header">
                     <h4 className="document-analysis__title">

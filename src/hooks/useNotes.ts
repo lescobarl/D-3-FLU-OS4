@@ -21,7 +21,7 @@ import {
   type NewNoteInput,
   type NotesService,
 } from '../core/notes/notesService';
-import { notesRemaining } from '../core/notes/notesList';
+import { filterNotesByScope, notesRemaining } from '../core/notes/notesList';
 
 // ------------------------------------------------------------
 // Tipos
@@ -30,6 +30,8 @@ import { notesRemaining } from '../core/notes/notesList';
 export interface UseNotesOptions {
   /** Referencia de reloj (por defecto: Date.now()). */
   now?: () => number;
+  /** Usuario activo: aísla las notas (cada usuario ve solo las suyas). */
+  participantId?: string;
 }
 
 export interface NotesState {
@@ -58,7 +60,8 @@ export interface UseNotesResult extends NotesState, NotesActions {
 // Hook
 // ------------------------------------------------------------
 
-export function useNotes({ now }: UseNotesOptions = {}): UseNotesResult {
+export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotesResult {
+  const scope = participantId || 'global';
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
@@ -80,7 +83,9 @@ export function useNotes({ now }: UseNotesOptions = {}): UseNotesResult {
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const all = await service.list();
-      const sorted = all.slice().sort((a, b) => {
+      // Aislamiento por usuario: solo las notas de ESTE usuario.
+      const scoped = filterNotesByScope(all, scope);
+      const sorted = scoped.slice().sort((a, b) => {
         if (a.done !== b.done) return a.done ? 1 : -1;
         return (a.createdAt ?? 0) - (b.createdAt ?? 0);
       });
@@ -91,7 +96,7 @@ export function useNotes({ now }: UseNotesOptions = {}): UseNotesResult {
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, [service, scope]);
 
   // Carga inicial.
   useEffect(() => {
@@ -101,11 +106,14 @@ export function useNotes({ now }: UseNotesOptions = {}): UseNotesResult {
   /** Agrega una nota y refresca la lista. */
   const add = useCallback(
     async (input: NewNoteInput): Promise<AddNoteResult> => {
-      const result = await service.add(input);
+      const result = await service.add({
+        ...input,
+        personId: input.personId || (scope !== 'global' ? scope : undefined),
+      });
       if (result.ok) await refresh();
       return result;
     },
-    [service, refresh],
+    [service, refresh, scope],
   );
 
   /** Agrega varias etiquetas de una vez (multi-add del parser de intención). */

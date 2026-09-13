@@ -1,0 +1,89 @@
+// ============================================================
+// documentsService — Historial de documentos/imágenes generados o cargados
+// ------------------------------------------------------------
+// Persiste un registro por documento (generado o subido) para tener historial
+// por usuario. Aislamiento: cada fila lleva `personId`; `list` filtra por el
+// alcance del usuario activo (`personId || 'global'`).
+// ============================================================
+import { newSyncTuple, type DocumentRecord } from '../db/fluDatabase';
+
+export interface NewDocumentInput {
+  kind: DocumentRecord['kind'];
+  formato: string;
+  titulo: string;
+  nombre?: string;
+  mime?: string;
+  tamaño?: number;
+  ref?: string;
+  contenido?: string;
+  personId?: string;
+}
+
+interface DocumentsTable {
+  add(record: DocumentRecord): Promise<unknown>;
+  toArray(): Promise<DocumentRecord[]>;
+  delete(id: string): Promise<unknown>;
+}
+
+export interface DocumentsService {
+  add(input: NewDocumentInput): Promise<DocumentRecord | null>;
+  list(participantId?: string): Promise<DocumentRecord[]>;
+  remove(id: string): Promise<boolean>;
+}
+
+function newId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* fallback */
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function createDocumentsService({
+  db,
+  now,
+}: {
+  db: DocumentsTable;
+  now?: () => number;
+}): DocumentsService {
+  const ts = now || (() => Date.now());
+  return {
+    async add(input: NewDocumentInput): Promise<DocumentRecord | null> {
+      const titulo = String(input.titulo || '').trim();
+      if (!titulo || !input.formato) return null;
+      const t = ts();
+      const record: DocumentRecord = {
+        id: newId(),
+        kind: input.kind,
+        formato: String(input.formato).trim(),
+        titulo,
+        nombre: String(input.nombre || titulo).trim(),
+        mime: input.mime,
+        tamaño: input.tamaño,
+        ref: input.ref,
+        contenido: input.contenido,
+        personId: input.personId,
+        createdAt: t,
+        updatedAt: t,
+        sync: newSyncTuple(),
+      };
+      await db.add(record);
+      return record;
+    },
+    async list(participantId?: string): Promise<DocumentRecord[]> {
+      const scope = participantId || 'global';
+      const all = await db.toArray();
+      return all
+        .filter((row) => (row.personId || 'global') === scope && !row.sync?.deleted)
+        .sort((a, b) => b.createdAt - a.createdAt);
+    },
+    async remove(id: string): Promise<boolean> {
+      if (!id) return false;
+      await db.delete(id);
+      return true;
+    },
+  };
+}

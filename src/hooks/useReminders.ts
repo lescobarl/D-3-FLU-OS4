@@ -47,6 +47,8 @@ export interface UseRemindersOptions {
   language?: string;
   /** Referencia de reloj (por defecto: Date.now()). */
   now?: () => number;
+  /** Usuario activo: aísla los recordatorios (cada usuario ve solo los suyos). */
+  participantId?: string;
 }
 
 export interface RemindersState {
@@ -60,6 +62,7 @@ export interface RemindersActions {
   add: (input: NewReminderInput) => Promise<AddReminderResult>;
   complete: (id: string) => Promise<ReminderRecord | null>;
   dismiss: (id: string) => Promise<ReminderRecord | null>;
+  update: (id: string, patch: { text?: string; dueAt?: number }) => Promise<ReminderRecord | null>;
   remove: (id: string) => Promise<boolean>;
 }
 
@@ -76,7 +79,9 @@ export function useReminders({
   notify,
   language = 'es',
   now,
+  participantId,
 }: UseRemindersOptions = {}): UseRemindersResult {
+  const scope = participantId || 'global';
   const config = (FLU_CONFIG as any).reminders || {};
   const maxPerDay = Number(config.maxPerDay) || 20;
   const defaultCategory = config.defaultCategory || 'reminder';
@@ -123,7 +128,9 @@ export function useReminders({
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const all = await service.list();
-      const sorted = all.slice().sort((a, b) => a.dueAt - b.dueAt);
+      // Aislamiento por usuario: solo los recordatorios de ESTE usuario.
+      const scoped = all.filter((r) => (r.personId || 'global') === scope);
+      const sorted = scoped.slice().sort((a, b) => a.dueAt - b.dueAt);
       setReminders(sorted);
       setPendingCount(sorted.filter((r) => r.status === 'pending').length);
     } catch (err) {
@@ -131,7 +138,7 @@ export function useReminders({
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, [service, scope]);
 
   /** Un tick del scheduler: marca los vencidos y notifica. */
   const runTick = useCallback(async (): Promise<void> => {
@@ -186,11 +193,14 @@ export function useReminders({
   /** Agrega un recordatorio y refresca la lista. */
   const add = useCallback(
     async (input: NewReminderInput): Promise<AddReminderResult> => {
-      const result = await service.add(input);
+      const result = await service.add({
+        ...input,
+        personId: input.personId || (scope !== 'global' ? scope : undefined),
+      });
       if (result.ok) await refresh();
       return result;
     },
-    [service, refresh],
+    [service, refresh, scope],
   );
 
   /** Marca como completado y refresca. */
@@ -207,6 +217,16 @@ export function useReminders({
   const dismiss = useCallback(
     async (id: string): Promise<ReminderRecord | null> => {
       const updated = await service.dismiss(id);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Edita texto y/o vencimiento del recordatorio y refresca. */
+  const update = useCallback(
+    async (id: string, patch: { text?: string; dueAt?: number }): Promise<ReminderRecord | null> => {
+      const updated = await service.update(id, patch);
       if (updated) await refresh();
       return updated;
     },
@@ -232,6 +252,7 @@ export function useReminders({
     add,
     complete,
     dismiss,
+    update,
     remove,
   };
 }

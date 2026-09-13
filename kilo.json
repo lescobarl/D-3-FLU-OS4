@@ -1,0 +1,12 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "permission": {
+    "external_directory": "deny",
+    "edit": {
+      ".git/**": "deny",
+      "**/node_modules/**": "deny",
+      "*.lock": "deny",
+      "*": "allow"
+    }
+  }
+}

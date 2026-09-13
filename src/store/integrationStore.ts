@@ -260,6 +260,15 @@ function nextId(): string {
 }
 
 /**
+ * Recorta el historial de conversación al tope configurado (§ UI_DEFAULTS).
+ * Sin esto el historial crecía sin límite y cada backup lo duplicaba.
+ */
+function capConversationHistory(entries: ConversationEntry[]): ConversationEntry[] {
+    const limit = UI_DEFAULTS.CONVERSATION_HISTORY_LIMIT;
+    return entries.length > limit ? entries.slice(-limit) : entries;
+}
+
+/**
  * Detección simple de sentimiento basada en palabras clave.
  */
 export function detectSentiment(text: string): ConversationEntry['sentiment'] {
@@ -422,12 +431,12 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             addConversationEntry: (entry: ConversationEntry) => {
                 set((current) => ({
-                    conversationHistory: [...current.conversationHistory, entry],
+                    conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                 }));
             },
 
             batchLoadHistory: (entries: ConversationEntry[]) => {
-                set({ conversationHistory: entries });
+                set({ conversationHistory: capConversationHistory(entries) });
             },
 
             removeConversationEntriesBySpeaker: (label: string) => {
@@ -464,7 +473,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     const emoKey = sentiment || 'neutral';
                     emoDist[emoKey] = (emoDist[emoKey] || 0) + 1;
                     return {
-                        conversationHistory: [...current.conversationHistory, entry],
+                        conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                         emotionalState: emotion,
                         sessionStats: {
                             ...stats,
@@ -485,7 +494,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     speakerName: '⚙️ Sistema',
                 };
                 set((current) => ({
-                    conversationHistory: [...current.conversationHistory, entry],
+                    conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                 }));
             },
 
@@ -774,7 +783,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                         speakerName: '⚙️ Sistema',
                     };
                     set((current) => ({
-                        conversationHistory: [...current.conversationHistory, entry],
+                        conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                     }));
                 }
             },

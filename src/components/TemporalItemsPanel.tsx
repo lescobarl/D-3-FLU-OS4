@@ -33,6 +33,8 @@ export interface TemporalItemsPanelProps {
   onCancel: (id: string) => Promise<void>;
   /** Elimina el ítem de forma definitiva. */
   onRemove: (id: string) => Promise<void>;
+  /** Edita etiqueta y/o hora de una alarma desde la lista. */
+  onEdit?: (id: string, patch: { label?: string; timeOfDay?: string }) => Promise<unknown>;
   /** Referencia de reloj (por defecto: Date.now()) para pruebas. */
   now?: () => number;
 }
@@ -46,6 +48,7 @@ export function TemporalItemsPanel({
   onAdd,
   onCancel,
   onRemove,
+  onEdit,
   now = () => Date.now(),
 }: TemporalItemsPanelProps) {
   const config = (FLU_CONFIG as any).temporal || {};
@@ -58,6 +61,18 @@ export function TemporalItemsPanel({
   const [timerMinutes, setTimerMinutes] = useState(String(defaultTimerMinutes));
   const [timerLabel, setTimerLabel] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [editTime, setEditTime] = useState('');
+
+  const commitEdit = (id: string): void => {
+    const label = editValue.trim();
+    setEditingId(null);
+    const patch: { label?: string; timeOfDay?: string } = {};
+    if (label) patch.label = label;
+    if (editTime) patch.timeOfDay = editTime;
+    if (patch.label || patch.timeOfDay) void onEdit?.(id, patch);
+  };
 
   const sortedAlarms = alarms.slice().sort((a, b) => a.nextAt - b.nextAt);
   const sortedTimers = timers.slice().sort((a, b) => a.nextAt - b.nextAt);
@@ -160,12 +175,59 @@ export function TemporalItemsPanel({
                 {sortedAlarms.map((item) => (
                   <li key={item.id} className="flu-reminders-item">
                     <div className="flu-reminders-item__info">
-                      <span className="flu-reminders-item__text">{item.label}</span>
+                      {editingId === item.id ? (
+                        <>
+                          <input
+                            className="flu-reminders-item__edit"
+                            type="text"
+                            value={editValue}
+                            autoFocus
+                            data-testid={`temporal-edit-input-${item.id}`}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={() => commitEdit(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                commitEdit(item.id);
+                              } else if (e.key === 'Escape') {
+                                setEditingId(null);
+                              }
+                            }}
+                          />
+                          {item.trigger?.kind === 'daily' && (
+                            <input
+                              className="flu-reminders-item__edit"
+                              type="time"
+                              value={editTime}
+                              data-testid={`temporal-edit-time-${item.id}`}
+                              onChange={(e) => setEditTime(e.target.value)}
+                              onBlur={() => commitEdit(item.id)}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <span className="flu-reminders-item__text">{item.label}</span>
+                      )}
                       <span className="flu-reminders-item__when">
                         {ui.nextAtLabel || 'Próximo disparo'}: {formatTimeOfDay(item.nextAt)}
                       </span>
                     </div>
                     <div className="flu-reminders-item__actions">
+                      {onEdit && (
+                        <button
+                          type="button"
+                          title={ui.editTitle || 'Editar'}
+                          aria-label={ui.editTitle || 'Editar'}
+                          data-testid={`temporal-edit-${item.id}`}
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditValue(item.label);
+                            setEditTime((item.trigger?.kind === 'daily' && item.trigger.timeOfDay) || '');
+                          }}
+                        >
+                          ✎
+                        </button>
+                      )}
                       <button
                         type="button"
                         title={ui.cancelTitle || 'Cancelar'}

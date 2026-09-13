@@ -21,6 +21,8 @@ import { useBunnyStore } from '../avatar/store/bunnyStore';
 import type { BunnyComponent } from '../avatar/types/bunny';
 import type { VoiceConfig } from '../types/bridge';
 import { useAuditLog } from '../hooks/useAuditLog';
+import { loadSearchConfigOverrides, saveSearchConfigOverrides, getLastStorageError, type SearchConfigOverrides } from '../core/search/searchConfigOverrides';
+import { useSettingsSaveRegistration } from './SettingsSaveContext';
 
 export interface FluSettingsPanelProps {
     // External Services Config props
@@ -43,6 +45,11 @@ export interface FluSettingsPanelProps {
     imageModel: string;
     imageApiKey: string;
     imageApiUrl: string;
+    // Video (fal.ai) — key para video real text-to-video
+    falApiKey?: string;
+    handleFalApiKeyCommit?: (val: string) => void;
+    falVideoModel?: string;
+    handleFalVideoModelCommit?: (val: string) => void;
     voices: any[];
     handleTextModelCommit: (val: string) => void;
     handleTextApiKeyCommit: (val: string) => void;
@@ -57,6 +64,13 @@ export interface FluSettingsPanelProps {
     debugLogsEnabled: boolean;
     setDebugLogsEnabled: (enabled: boolean) => void;
     handleParticipantConfigChange: (overrides: Record<string, any>) => void;
+    /** Overrides del buscador (comparte fuente con el Centro de Control). */
+    searchOverrides?: SearchConfigOverrides;
+    /** Persiste overrides del buscador (mismo handler que el Centro de Control).
+     *  Acepta un updater `(prev) => next` para componer con otros commits globales. */
+    onSearchOverridesChange?: (
+        next: SearchConfigOverrides | ((prev: SearchConfigOverrides) => SearchConfigOverrides),
+    ) => void;
     // Branding props
     brandingMode?: BrandingMode;
     brandingSeason?: string;
@@ -77,6 +91,10 @@ export function FluSettingsPanel({
     imageModel,
     imageApiKey,
     imageApiUrl,
+    falApiKey,
+    handleFalApiKeyCommit,
+    falVideoModel,
+    handleFalVideoModelCommit,
     voices,
     handleTextModelCommit,
     handleTextApiKeyCommit,
@@ -111,10 +129,92 @@ export function FluSettingsPanel({
     handleOcrApiUrlCommit,
     aiProvider,
     setAiProvider,
+    searchOverrides,
+    onSearchOverridesChange,
 }: FluSettingsPanelProps) {
     const integrationStore = useIntegrationStore();
     const { componentColors, setComponentColor, resetComponentColors } = useBunnyStore();
     const audit = useAuditLog();
+
+    // ── Búsqueda web: la clave/modelo se escriben DIRECTAMENTE en la fuente de
+    // verdad (localStorage) en cada cambio. No depende del wiring de App, de
+    // blur ni de un botón "Guardar".
+    const readWebDraft = React.useCallback(() => {
+        const stored = loadSearchConfigOverrides();
+        const web = stored?.providers?.web || searchOverrides?.providers?.web;
+        return {
+            tavilyKey: String(web?.tavily?.key || ''),
+            openrouterKey: String(web?.openrouter?.key || ''),
+            openrouterModel: String(web?.openrouter?.model || ''),
+        };
+    }, [searchOverrides]);
+
+    const [webDraft, setWebDraft] = React.useState(readWebDraft);
+    const webDraftRef = React.useRef(webDraft);
+    webDraftRef.current = webDraft;
+    // Revelado controlado (el re-render no debe re-ocultar).
+    const [revealWeb, setRevealWeb] = React.useState({ tavily: false, openrouter: false });
+    const [revealFalKey, setRevealFalKey] = React.useState(false);
+    // Resultado de la verificación de guardado (lectura real desde localStorage).
+    const [webSave, setWebSave] = React.useState<{ chars: number; failed: boolean; error: string }>({
+        chars: readWebDraft().openrouterKey.length,
+        failed: false,
+        error: '',
+    });
+
+    /**
+     * Escribe la clave/modelo DIRECTAMENTE en localStorage (fuente de verdad),
+     * sin depender de App, blur ni botón, y luego sincroniza el estado de App
+     * para que la búsqueda use esta config.
+     */
+    const persistWeb = React.useCallback(
+        (draft: { tavilyKey: string; openrouterKey: string; openrouterModel: string }): void => {
+            const stored = loadSearchConfigOverrides();
+            const providers = { ...(stored.providers || {}) };
+            const web = { ...(providers.web || {}) };
+            const tavily = { ...(web.tavily || {}) };
+            const openrouter = { ...(web.openrouter || {}) };
+            const tavilyKey = draft.tavilyKey.trim();
+            const openrouterKey = draft.openrouterKey.trim();
+            const openrouterModel = draft.openrouterModel.trim();
+            if (tavilyKey) tavily.key = tavilyKey; else delete tavily.key;
+            if (openrouterKey) openrouter.key = openrouterKey; else delete openrouter.key;
+            if (openrouterModel) openrouter.model = openrouterModel; else delete openrouter.model;
+            web.tavily = tavily;
+            web.openrouter = openrouter;
+            providers.web = web;
+            const merged = { ...stored, providers };
+            saveSearchConfigOverrides(merged);
+            // Verificación: releer lo realmente persistido (no confiar en el borrador).
+            const persistedKey = String(loadSearchConfigOverrides()?.providers?.web?.openrouter?.key || '');
+            const failed = openrouterKey.length > 0 && persistedKey !== openrouterKey;
+            setWebSave({
+                chars: persistedKey.length,
+                failed,
+                error: failed ? getLastStorageError() : '',
+            });
+            onSearchOverridesChange?.(merged);
+        },
+        [onSearchOverridesChange],
+    );
+
+    const setWebField = (field: keyof typeof webDraft, value: string): void => {
+        const next = { ...webDraftRef.current, [field]: value };
+        webDraftRef.current = next;
+        setWebDraft(next);
+        // Guardado inmediato al escribir.
+        persistWeb(next);
+    };
+
+    // Commit global + Restablecer (el Restablecer del buscador limpia la clave).
+    useSettingsSaveRegistration('search-web', {
+        commit: () => persistWeb(webDraftRef.current),
+        reset: () => {
+            const empty = { tavilyKey: '', openrouterKey: '', openrouterModel: '' };
+            webDraftRef.current = empty;
+            setWebDraft(empty);
+        },
+    });
 
     return (
         <section className="flu-settings-panel">
@@ -335,6 +435,146 @@ export function FluSettingsPanel({
                                         onChange={(e) => handleOcrApiUrlCommit?.(e.target.value)}
                                     />
                                 </label>
+                            </div>
+                        </div>
+
+                        {/* ---- 🎬 Video ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🎬 Video</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span>{language === 'en' ? 'fal.ai API key' : 'Clave API de fal.ai'}</span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type={revealFalKey ? 'text' : 'password'}
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder="key-id:key-secret"
+                                            defaultValue={falApiKey || ''}
+                                            data-testid="video-falai-key"
+                                            onChange={(e) => handleFalApiKeyCommit?.(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={() => setRevealFalKey((prev) => !prev)}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
+                                    {language === 'en'
+                                        ? 'Without a key, video generation produces only script/storyboard.'
+                                        : 'Sin clave, la generación de video produce solo guion/storyboard (no video real).'}
+                                </p>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span>{language === 'en' ? 'Video model (fal.ai)' : 'Modelo de video (fal.ai)'}</span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input flu-settings-input-mono"
+                                        placeholder="fal-ai/wan-25-preview/text-to-video"
+                                        defaultValue={falVideoModel || ''}
+                                        data-testid="video-falai-model"
+                                        onChange={(e) => handleFalVideoModelCommit?.(e.target.value)}
+                                    />
+                                </label>
+                                <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
+                                    {language === 'en'
+                                        ? 'Cheap: fal-ai/wan-25-preview/text-to-video ($0.05/s). Veo3 costs $0.40/s.'
+                                        : 'Barato: fal-ai/wan-25-preview/text-to-video ($0.05/s). Veo3 cuesta $0.40/s.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* ---- 🔎 Búsqueda web (Tavily + OpenRouter) ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🔎 Búsqueda web</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span className="flu-settings-image-config__section-label">
+                                        Clave API de Tavily
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type={revealWeb.tavily ? 'text' : 'password'}
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder="tvly-…"
+                                            value={webDraft.tavilyKey}
+                                            data-testid="search-web-tavily-key"
+                                            onChange={(e) => setWebField('tavilyKey', e.target.value)}
+                                            onBlur={() => persistWeb(webDraftRef.current)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={() => setRevealWeb((prev) => ({ ...prev, tavily: !prev.tavily }))}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en'
+                                            ? 'OpenRouter API key (web search)'
+                                            : 'Clave API de OpenRouter (búsqueda web)'}
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type={revealWeb.openrouter ? 'text' : 'password'}
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder="sk-or-…"
+                                            value={webDraft.openrouterKey}
+                                            data-testid="search-web-openrouter-key"
+                                            onChange={(e) => setWebField('openrouterKey', e.target.value)}
+                                            onBlur={() => persistWeb(webDraftRef.current)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={() => setRevealWeb((prev) => ({ ...prev, openrouter: !prev.openrouter }))}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                    {webSave.failed ? (
+                                        <span
+                                            className="flu-settings-api-badge"
+                                            style={{ color: 'var(--accent-red, #e5484d)', borderColor: 'var(--accent-red, #e5484d)' }}
+                                            data-testid="search-web-save-error"
+                                        >
+                                            ⚠️{' '}
+                                            {language === 'en'
+                                                ? `Key NOT saved (${webSave.error || 'storage error'})`
+                                                : `La clave NO se guardó (${webSave.error || 'error de almacenamiento'})`}
+                                        </span>
+                                    ) : null}
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en'
+                                            ? 'OpenRouter model (web search)'
+                                            : 'Modelo de OpenRouter (búsqueda web)'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
+                                        style={{ fontFamily: 'monospace' }}
+                                        placeholder="google/gemini-2.5-flash-lite:online"
+                                        value={webDraft.openrouterModel}
+                                        data-testid="search-web-openrouter-model"
+                                        onChange={(e) => setWebField('openrouterModel', e.target.value)}
+                                        onBlur={() => persistWeb(webDraftRef.current)}
+                                    />
+                                </label>
+                                <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                                    {language === 'en'
+                                        ? 'Web search chain: Tavily → OpenRouter → Wikipedia. Keys are stored in the search settings (same source as the Search Control Center).'
+                                        : 'Cadena de búsqueda web: Tavily → OpenRouter → Wikipedia. Las claves se guardan en la configuración del buscador (misma fuente que el Centro de Control).'}
+                                </p>
                             </div>
                         </div>
 

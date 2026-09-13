@@ -330,7 +330,47 @@ function isIncompleteContentTurn(afterWake = '', voiceCommands = {}) {
   const searchVerb = /(?:busca|buscar|buscame|busquedame|navega|navegar|busqueda|search|find|browse|navigate|look\s+up)\b/i.test(norm)
   const endsOnWebTarget = /(?:\bweb\b|\binternet\b|\bweb\s*)$/i.test(norm)
   if (searchVerb && endsOnWebTarget) return true
+
+  // 4) Resto de la búsqueda compuesto SOLO por cabezas genéricas ("información",
+  //    "datos", "algo"): el tema aún no llegó y el ASR lo manda en el fragmento
+  //    siguiente. Las cabezas vienen de config (sin hardcode).
+  if (searchVerb && Array.isArray(voiceCommands.searchPlaceholderHeads)) {
+    const { matched, rest } = queryAfterTrigger(norm, voiceCommands)
+    if (matched && rest && !stripSearchQueryLeadFillers(rest, voiceCommands)) {
+      return true
+    }
+  }
   return false
+}
+
+/**
+ * Quita del inicio de una query las "cabezas" genéricas de config
+ * ("información", "datos"…) y un conector de enlace ("sobre", "de"…). Con esto
+ * "... en la web información lenguaje de programación clipper" queda como
+ * "lenguaje de programación clipper".
+ */
+function stripSearchQueryLeadFillers(rest = '', voiceCommands = {}) {
+  const heads = new Set(
+    (voiceCommands.searchPlaceholderHeads || [])
+      .map((head) => normalizeVoiceCommandText(head).toLowerCase().trim())
+      .filter(Boolean),
+  )
+  if (heads.size === 0) return String(rest || '').trim()
+
+  const words = String(rest || '').trim().split(/\s+/).filter(Boolean)
+  while (words.length) {
+    const head = normalizeVoiceCommandText(words[0]).toLowerCase()
+    if (heads.has(head)) {
+      words.shift()
+      continue
+    }
+    break
+  }
+  const connectors = new Set(['sobre', 'de', 'del', 'acerca', 'respecto'])
+  while (words.length && connectors.has(normalizeVoiceCommandText(words[0]).toLowerCase())) {
+    words.shift()
+  }
+  return words.join(' ').trim()
 }
 
 /**
@@ -380,6 +420,16 @@ export function extractQueryFromWebSearchPhrase(phrase = '', voiceCommands = {})
   const split = splitTranscriptAtWakeWord(snapshot, voiceCommands.wakeWords || [])
   const body = cleanForSpeech(split.afterWake || split.commandText || snapshot)
   if (!body) return snapshot
+  const { matched, rest } = queryAfterTrigger(body, voiceCommands)
+  return matched ? stripSearchQueryLeadFillers(rest, voiceCommands) : body
+}
+
+/**
+ * Resto CRUDO (sin limpiar) tras el gatillo de búsqueda. Necesario para
+ * distinguir "el usuario aún no dijo el tema" (resto = partícula genérica) de
+ * "el tema es X". Fuente única del recorte del gatillo.
+ */
+function queryAfterTrigger(body = '', voiceCommands = {}) {
   const buscar = (voiceCommands.buscar || [])
     .slice()
     .sort((a, b) => normalizeVoiceCommandText(b).length - normalizeVoiceCommandText(a).length)
@@ -390,9 +440,9 @@ export function extractQueryFromWebSearchPhrase(phrase = '', voiceCommands = {})
     if (!norm.startsWith(target)) continue
     const triggerWords = target.split(/\s+/).filter(Boolean).length
     const restWords = body.split(/\s+/).filter(Boolean).slice(triggerWords)
-    return restWords.join(' ')
+    return { matched: true, rest: restWords.join(' ') }
   }
-  return body
+  return { matched: false, rest: body }
 }
 
 /**

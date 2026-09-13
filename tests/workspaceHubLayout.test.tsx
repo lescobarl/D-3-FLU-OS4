@@ -20,11 +20,10 @@
 // integración del feed y del panel lateral.
 // ============================================================
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord } from '../src/core/db/fluDatabase';
 import type { HoyPanelProps } from '../src/components/HoyPanel';
 import type { WorkspaceHubProps } from '../src/components/WorkspaceHub';
-import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 
 // ---- Mocks de los hijos pesados (stubs ligeros) ----
 vi.mock('../src/components/WorkspaceSearch', () => ({
@@ -252,6 +251,10 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         const feed = container.querySelector('[data-testid="result-feed"]');
         expect(feed).not.toBeNull();
 
+        // El feed puede abrir en la pestaña de su artefacto (imagen/video); para
+        // ver la consolidación completa se selecciona "Todo".
+        fireEvent.click(feed!.querySelector('[data-filter="all"]')!);
+
         // Tarjeta IA (texto) y tarjeta OCR (documento) presentes.
         expect(feed!.querySelector('[data-testid="result-feed-card-ia-texto"]')).not.toBeNull();
         expect(feed!.querySelector('[data-testid="result-feed-card-ocr-documento"]')).not.toBeNull();
@@ -267,10 +270,10 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         const filters = Array.from(feed!.querySelectorAll('.result-feed__filter')).map((b) =>
             b.getAttribute('data-filter')
         );
-        expect(filters).toEqual(['all', 'image', 'doc']);
+        expect(filters).toEqual(['all', 'image', 'video', 'doc']);
     });
 
-    it('la columna lateral conserva el HoyPanel (HOY/NOTAS; DIARIO si está habilitado)', () => {
+    it('la columna lateral conserva el HoyPanel (HOY/NOTAS; SIN DIARIO)', () => {
         const { container } = render(
             <WorkspaceHub {...baseProps({ hoy: hoyProps() })} />
         );
@@ -281,14 +284,8 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         const hoyPanel = side!.querySelector('[data-testid="hoy-panel"]');
         expect(hoyPanel).not.toBeNull();
         expect(hoyPanel!.querySelector('[data-testid="hoy-block"]')).not.toBeNull();
-        // DIARIO está PAUSADO (FLU_CONFIG.diary.enabled=false) y HoyPanel lo oculta
-        // hasta su reimplementación; el test respeta esa config en vez de hardcodear.
-        const diarioEnabled = Boolean((FLU_CONFIG as any)?.diary?.enabled);
-        if (diarioEnabled) {
-            expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).not.toBeNull();
-        } else {
-            expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).toBeNull();
-        }
+        // El bloque DIARIO se quitó del panel por decisión de producto.
+        expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).toBeNull();
         expect(hoyPanel!.querySelector('[data-testid="notas-block"]')).not.toBeNull();
     });
 });

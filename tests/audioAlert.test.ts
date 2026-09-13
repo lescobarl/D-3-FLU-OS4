@@ -143,6 +143,20 @@ describe('audioAlert — createWebAudioDriver', () => {
     await expect(driver.play()).resolves.toBeUndefined();
     driver.stop();
   });
+
+  it('stop() detiene los osciladores (alarma sonando)', async () => {
+    const fake = createFakeContext();
+    const driver = createWebAudioDriver(() => fake.ctx);
+    await driver.play({ beeps: 3 });
+
+    for (const osc of fake.oscillators) osc.stop.mockClear();
+    driver.stop();
+
+    expect(fake.oscillators.length).toBe(3);
+    for (const osc of fake.oscillators) {
+      expect(osc.stop).toHaveBeenCalledWith(0);
+    }
+  });
 });
 
 describe('audioAlert — createNoopDriver', () => {

@@ -112,7 +112,9 @@ export const DEFAULT_BACKUP_CONFIG: BackupSystemConfig = {
     autoBackupInterval: 3600000, // 1 hora
     defaultStrategy: 'incremental',
     maxStoredBackups: 30,
-    maxTotalSizeMB: 100,
+    // localStorage ronda los 5 MB por origen; los backups deben dejar aire para
+    // el resto de ajustes. Un tope de 100 MB era inalcanzable y llenaba la cuota.
+    maxTotalSizeMB: 2,
     defaultComponents: [
         'conversation_state',
         'ai_configuration',
@@ -711,30 +713,53 @@ class BackupManager {
         }
     }
     
-    cleanupOldBackups(): number {
-        const deletedCount = 0;
-        
-        try {
-            // Ordenar por antigüedad (más antiguos primero)
-            const sorted = [...this.backups].sort((a, b) => a.timestamp - b.timestamp);
-            
-            // Eliminar según límite de cantidad
-            if (sorted.length > DEFAULT_BACKUP_CONFIG.maxStoredBackups) {
-                const toDelete = sorted.slice(0, sorted.length - DEFAULT_BACKUP_CONFIG.maxStoredBackups);
-                
-                for (const backup of toDelete) {
-                    this.deleteBackup(backup.id);
-                }
-                
-                return toDelete.length;
+    /** Bytes (aprox) que ocupan los backups persistidos en localStorage. */
+    private getStoredBackupsSizeBytes(): number {
+        let total = 0;
+        for (const backup of this.backups) {
+            try {
+                const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
+                if (raw) total += raw.length * 2; // UTF-16
+            } catch {
+                /* ignorar entradas ilegibles */
             }
-            
-            // Eliminar según límite de tamaño (implementación simplificada)
-            // En una implementación real, se calcularía el tamaño total
+        }
+        return total;
+    }
+
+    cleanupOldBackups(): number {
+        let deletedCount = 0;
+
+        try {
+            // 1) Límite por cantidad (más antiguos primero).
+            const sorted = [...this.backups].sort((a, b) => a.timestamp - b.timestamp);
+            if (sorted.length > DEFAULT_BACKUP_CONFIG.maxStoredBackups) {
+                const excess = sorted.splice(0, sorted.length - DEFAULT_BACKUP_CONFIG.maxStoredBackups);
+                for (const backup of excess) {
+                    this.deleteBackup(backup.id);
+                    deletedCount++;
+                }
+            }
+
+            // 2) Límite por TAMAÑO total (maxTotalSizeMB). Antes no se aplicaba.
+            const maxBytes = DEFAULT_BACKUP_CONFIG.maxTotalSizeMB * 1024 * 1024;
+            let total = this.getStoredBackupsSizeBytes();
+            const oldestFirst = [...this.backups].sort((a, b) => a.timestamp - b.timestamp);
+            for (const backup of oldestFirst) {
+                if (total <= maxBytes) break;
+                try {
+                    const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
+                    if (raw) total -= raw.length * 2;
+                } catch {
+                    /* ignorar */
+                }
+                this.deleteBackup(backup.id);
+                deletedCount++;
+            }
         } catch (error) {
             console.error('Error limpiando backups antiguos:', error);
         }
-        
+
         return deletedCount;
     }
     
@@ -754,17 +779,41 @@ class BackupManager {
         }
     }
     
-    private saveBackup(backup: BackupData): void {
+    /** Escribe un backup. `false` si no entró (cuota), distinguiendo otros errores. */
+    private writeBackupRaw(key: string, payload: string): boolean {
         try {
-            const key = `${STORAGE_KEYS.BACKUP_PREFIX}${backup.metadata.id}`;
-            const compressed = DEFAULT_BACKUP_CONFIG.compressionEnabled
-                ? this.compressBackup(backup)
-                : JSON.stringify(backup);
-            
-            localStorage.setItem(key, compressed);
+            localStorage.setItem(key, payload);
+            return true;
         } catch (error) {
-            console.error('Error guardando backup:', error);
+            if ((error as DOMException)?.name !== 'QuotaExceededError') {
+                console.error('Error guardando backup:', error);
+            }
+            return false;
         }
+    }
+
+    private saveBackup(backup: BackupData): void {
+        const key = `${STORAGE_KEYS.BACKUP_PREFIX}${backup.metadata.id}`;
+        const payload = DEFAULT_BACKUP_CONFIG.compressionEnabled
+            ? this.compressBackup(backup)
+            : JSON.stringify(backup);
+
+        if (this.writeBackupRaw(key, payload)) return;
+
+        // Cuota llena: podar los más antiguos hasta que entre el nuevo.
+        console.warn(
+            '[backupSystem] localStorage lleno; podando backups antiguos para guardar el nuevo.',
+        );
+        const oldestFirst = [...this.backups].sort((a, b) => a.timestamp - b.timestamp);
+        for (const old of oldestFirst) {
+            this.deleteBackup(old.id);
+            if (this.writeBackupRaw(key, payload)) return;
+        }
+
+        console.error(
+            '[backupSystem] No se pudo guardar el backup: almacenamiento lleno.',
+            backup.metadata.id,
+        );
     }
     
     private loadBackup(backupId: string): BackupData | null {

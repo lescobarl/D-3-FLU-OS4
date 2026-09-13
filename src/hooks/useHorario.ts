@@ -30,6 +30,8 @@ import {
 export interface UseHorarioOptions {
   /** Referencia de reloj (por defecto: Date.now()). */
   now?: () => number;
+  /** Usuario activo: aísla el horario por usuario. */
+  participantId?: string;
 }
 
 export interface HorarioState {
@@ -56,7 +58,8 @@ export interface UseHorarioResult extends HorarioState, HorarioActions {
 // Hook
 // ------------------------------------------------------------
 
-export function useHorario({ now }: UseHorarioOptions = {}): UseHorarioResult {
+export function useHorario({ now, participantId }: UseHorarioOptions = {}): UseHorarioResult {
+  const scope = participantId || 'global';
   const config = (FLU_CONFIG as any).horario || {};
   const maxClasesPorDia = Number(config.maxClasesPorDia) || 16;
   const diaMin = Number(config.diaMin) || 1;
@@ -87,7 +90,9 @@ export function useHorario({ now }: UseHorarioOptions = {}): UseHorarioResult {
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const all = await service.list();
-      const sorted = all
+      // Aislamiento por usuario: solo el horario de ESTE usuario.
+      const scoped = all.filter((r) => (r.personId || 'global') === scope);
+      const sorted = scoped
         .slice()
         .sort((a, b) => a.dia - b.dia || toMin(a.inicio) - toMin(b.inicio));
       setHorario(sorted);
@@ -96,7 +101,7 @@ export function useHorario({ now }: UseHorarioOptions = {}): UseHorarioResult {
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, [service, scope]);
 
   // Carga inicial.
   useEffect(() => {
@@ -106,11 +111,14 @@ export function useHorario({ now }: UseHorarioOptions = {}): UseHorarioResult {
   /** Registra una clase y refresca la lista. */
   const add = useCallback(
     async (input: NewHorarioInput): Promise<AddHorarioResult> => {
-      const result = await service.add(input);
+      const result = await service.add({
+        ...input,
+        personId: (input as any).personId || (scope !== 'global' ? scope : undefined),
+      } as NewHorarioInput);
       if (result.ok) await refresh();
       return result;
     },
-    [service, refresh],
+    [service, refresh, scope],
   );
 
   /** Actualiza una clase y refresca la lista. */

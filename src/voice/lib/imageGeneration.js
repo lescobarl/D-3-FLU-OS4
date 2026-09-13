@@ -344,7 +344,7 @@ export async function fetchOpenRouterImageFallback({
  * POST /api/fal-video → { videoUrl (url del clip), trace }.
  * Devuelve { video_url, trace }; video_url vacío si no hay key o falla.
  */
-export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '' } = {}) {
+export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '', model = '' } = {}) {
   if (!prompt.trim()) {
     return {
       video_url: '',
@@ -358,7 +358,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '' 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
-      body: JSON.stringify({ prompt, language, ...(apiKey ? { apiKey } : {}) }),
+      body: JSON.stringify({ prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) }),
     })
     if (!response.ok) {
       const detail = await response.text().catch(() => '')

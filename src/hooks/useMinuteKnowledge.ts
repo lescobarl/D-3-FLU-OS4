@@ -174,7 +174,8 @@ export function formatMinuteHistoryLabel(entry: MinuteUIEntry): string {
  * Hook para gestionar minutas con persistencia en IndexedDB.
  * Sigue la nomenclatura exacta de OS2 normalizeMinuteKnowledgeRecord.
  */
-export function useMinuteKnowledge() {
+export function useMinuteKnowledge(participantId?: string) {
+    const scope = participantId || 'global';
     const [minutes, setMinutes] = useState<MinuteUIEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -188,7 +189,8 @@ export function useMinuteKnowledge() {
                 .toArray();
             setMinutes(
                 records
-                    .filter((r) => !r.sync.deleted)
+                    // Aislamiento por usuario: solo las minutas de ESTE usuario.
+                    .filter((r) => !r.sync.deleted && (r.userId || 'global') === scope)
                     .sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode))
                     .map(toUI),
             );
@@ -197,7 +199,7 @@ export function useMinuteKnowledge() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [scope]);
 
     useEffect(() => {
         refresh().catch(console.error);
@@ -223,7 +225,7 @@ export function useMinuteKnowledge() {
             const record: MinuteRecord = {
                 id: existingIndex >= 0 ? records[existingIndex].id : newId(),
                 profileId: options?.profileId || '',
-                userId: options?.userId || '',
+                userId: options?.userId || (scope !== 'global' ? scope : ''),
                 minuteKey,
                 historyCode:
                     existingIndex >= 0

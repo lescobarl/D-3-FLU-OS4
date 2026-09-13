@@ -383,7 +383,7 @@ export function SearchCatalogPanel({
                 submitLabel={
                   editor.mode === 'create'
                     ? labels.createLabel || 'Nuevo sitio'
-                    : labels.saveLabel || 'Guardar cambios'
+                    : labels.saveLabel || 'Guardar sitio'
                 }
                 cancelLabel={labels.cancelLabel || 'Cancelar'}
                 onSubmit={handleEditorSubmit}

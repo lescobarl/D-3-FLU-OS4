@@ -14,7 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG, isSessionResetCommand } from '../voice/lib/fluConfig';
 import { userRequestedNavigationCommand } from '../voice/lib/voiceCommands';
-import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch } from '../core/events/fluEvents';
+import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch, onFluSearchReady } from '../core/events/fluEvents';
 import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
 import { extractReadableContent, truncateContent } from '../core/browser/browserReadability';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
@@ -50,6 +50,8 @@ export interface NavigationCommands {
         auditLog: { logEvent: (type: string, category: string, id: string, data: any, description: string) => Promise<any> };
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
+        /** Puerta única e idempotente de generación de medios (video/doc). */
+        requestMedia?: (tipo: 'video' | 'doc', commandText: string) => boolean;
     }) => Promise<void>;
 }
 
@@ -187,6 +189,7 @@ export function useNavigationCommands(
         auditLog,
         fluParticipant,
         os2ResetVoiceDisplay,
+        requestMedia,
     }: {
         navegacion: { comando: string | null; destino?: string | null; parametros?: Record<string, unknown> };
         transcript: string;
@@ -199,6 +202,8 @@ export function useNavigationCommands(
         auditLog: { logEvent: (type: string, category: string, id: string, data: any, description: string) => Promise<any> };
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
+        /** Puerta única e idempotente de generación de medios (video/doc). */
+        requestMedia?: (tipo: 'video' | 'doc', commandText: string) => boolean;
     }) => {
         if (!navegacion.comando) return;
 
@@ -255,7 +260,8 @@ export function useNavigationCommands(
                 break;
             }
             case 'GENERAR_DOCUMENTO': {
-                dispatchFluEvent(FLU_EVENTS.GENERATE_DOCUMENT);
+                // RUTA ÚNICA: la puerta idempotente que provee App.
+                requestMedia?.('doc', transcript);
                 if (transcript) {
                     auditLog.logEvent('command:generar_documento', 'navigation', uuidv4(), {
                         speaker: speakerName || undefined,
@@ -276,7 +282,8 @@ export function useNavigationCommands(
                 break;
             }
             case 'GENERAR_VIDEO': {
-                dispatchFluEvent(FLU_EVENTS.GENERATE_VIDEO);
+                // RUTA ÚNICA: la puerta idempotente que provee App.
+                requestMedia?.('video', transcript);
                 if (transcript) {
                     auditLog.logEvent('command:generar_video', 'navigation', uuidv4(), {
                         speaker: speakerName || undefined,
@@ -529,6 +536,17 @@ export function useNavigationCommands(
                 // veces por los reinicios del reconocedor (parcial â†’ completo).
                 scheduleNavSettle(query, () => {
                     dispatchFluSearch({ query, lang: requestLang });
+                    // §4: cuando los resultados ya están pintados, FLU lo dice de
+                    // forma natural (no solo el acuse al buscar).
+                    const offReady = onFluSearchReady(() => {
+                        offReady();
+                        const readyMsg =
+                            searchUi.resultsReady ||
+                            (resolvedLanguage === 'en'
+                                ? 'Done, I already have the results. They are in the Search tab.'
+                                : 'Listo, ya tengo los resultados. Los tenés en la pestaña Buscar.');
+                        speakFlu(readyMsg, resolvedLanguage).catch(console.error);
+                    });
                     if (transcript) {
                         auditLog.logEvent('command:buscar', 'navigation', uuidv4(), {
                             speaker: speakerName || undefined,

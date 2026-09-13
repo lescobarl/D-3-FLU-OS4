@@ -19,6 +19,7 @@ function item(overrides: Partial<ResultFeedItem> = {}): ResultFeedItem {
         kind: overrides.kind ?? 'text',
         title: overrides.title ?? 'Resultado web',
         body: overrides.body ?? <p>Contenido del resultado</p>,
+        onlyInKind: overrides.onlyInKind,
     };
 }
 
@@ -31,9 +32,10 @@ describe('ResultFeed — render del feed de resultados', () => {
         expect(section!.textContent).toContain('Resultados');
 
         const filters = section!.querySelectorAll('[data-filter]');
-        expect(filters.length).toBe(3);
+        expect(filters.length).toBe(4);
         expect(section!.querySelector('[data-filter="all"]')).not.toBeNull();
         expect(section!.querySelector('[data-filter="image"]')).not.toBeNull();
+        expect(section!.querySelector('[data-filter="video"]')).not.toBeNull();
         expect(section!.querySelector('[data-filter="doc"]')).not.toBeNull();
     });
 
@@ -94,7 +96,7 @@ describe('ResultFeed — render del feed de resultados', () => {
         expect(container.querySelector('[data-testid="result-feed-card-res-ocr"]')).toBeNull();
     });
 
-    it('filtra por doc/video al pulsar el botón Doc/Video', () => {
+    it('filtra por Documentos y por Vídeos por separado', () => {
         const { container } = render(
             <ResultFeed
                 items={[
@@ -106,13 +108,51 @@ describe('ResultFeed — render del feed de resultados', () => {
             />
         );
 
-        const docFilter = container.querySelector('[data-filter="doc"]');
-        fireEvent.click(docFilter!);
-
+        fireEvent.click(container.querySelector('[data-filter="doc"]')!);
         expect(container.querySelector('[data-testid="result-feed-card-res-web"]')).toBeNull();
         expect(container.querySelector('[data-testid="result-feed-card-res-ia"]')).toBeNull();
         expect(container.querySelector('[data-testid="result-feed-card-res-doc"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).toBeNull();
+
+        fireEvent.click(container.querySelector('[data-filter="video"]')!);
         expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="result-feed-card-res-doc"]')).toBeNull();
+    });
+
+    it('abre en la pestaña Vídeos si hay un video generado (filtro inicial)', () => {
+        const { container } = render(
+            <ResultFeed
+                items={[
+                    item({ id: 'res-text', origin: 'web', kind: 'text', title: 'Texto' }),
+                    item({
+                        id: 'res-video',
+                        origin: 'ia',
+                        kind: 'video',
+                        onlyInKind: true,
+                        title: 'IA video',
+                    }),
+                ]}
+            />
+        );
+        // El filtro inicial es 'video' → solo se ve el video.
+        const active = container.querySelector('.result-feed__filter--active');
+        expect(active?.getAttribute('data-filter')).toBe('video');
+        expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="result-feed-card-res-text"]')).toBeNull();
+    });
+
+    it('un video onlyInKind NUNCA aparece en "Todo"', () => {
+        const { container } = render(
+            <ResultFeed
+                items={[
+                    item({ id: 'res-text', origin: 'web', kind: 'text', title: 'Texto' }),
+                    item({ id: 'res-video', origin: 'ia', kind: 'video', onlyInKind: true, title: 'V' }),
+                ]}
+            />
+        );
+        fireEvent.click(container.querySelector('[data-filter="all"]')!);
+        expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).toBeNull();
+        expect(container.querySelector('[data-testid="result-feed-card-res-text"]')).not.toBeNull();
     });
 
     it('no muestra mensaje de estado vacío cuando el filtro no tiene coincidencias', () => {

@@ -29,6 +29,7 @@ import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js
 import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
 import {
+  isCommandAuthorized,
   resolveDeterministicCommand,
   resolveDeterministicSkipGeminiContract,
   resolveStatefulDomains,
@@ -277,37 +278,40 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
       : [0, 0, 0, 0]
 
   let bestMatch = null
-  let bestDistance = Number.POSITIVE_INFINITY
+  let bestSimilarity = -1
 
   profiles.forEach((profile) => {
     if (!Array.isArray(profile.signature)) return
-    const distance = compareAudioSignatures(signatureVector, profile.signature)
-    if (distance < bestDistance) {
-      bestDistance = distance
+    const similarity = compareAudioSignatures(signatureVector, profile.signature)
+    if (similarity > bestSimilarity) {
+      bestSimilarity = similarity
       bestMatch = profile
     }
   })
 
-  if (bestMatch && bestDistance < getProfileMatchCfg().registeredProfileMaxDistance && isPlausiblePersonName(bestMatch.label || '')) {
+  const profileMatch = getProfileMatchCfg()
+  // compareAudioSignatures devuelve SIMILITUD (1 = misma voz); la config la
+  // expresa como "máxima distancia" → umbral de similitud = 1 - distancia.
+  const registeredMinSimilarity = 1 - Number(profileMatch.registeredProfileMaxDistance ?? 0.12)
+  if (bestMatch && bestSimilarity >= registeredMinSimilarity && isPlausiblePersonName(bestMatch.label || '')) {
     return bestMatch.label || 'Hablante 1'
   }
 
   let clusterMatch = null
-  let clusterDistance = Number.POSITIVE_INFINITY
+  let clusterSimilarity = -1
   speakerClusters.forEach((cluster) => {
     if (!Array.isArray(cluster?.signature)) return
-    const distance = compareAudioSignatures(signatureVector, cluster.signature)
-    if (distance < clusterDistance) {
-      clusterDistance = distance
+    const similarity = compareAudioSignatures(signatureVector, cluster.signature)
+    if (similarity > clusterSimilarity) {
+      clusterSimilarity = similarity
       clusterMatch = cluster
     }
   })
 
-  const profileMatch = getProfileMatchCfg()
-  const MATCH_THRESHOLD = profileMatch.clusterMatchMaxDistance
+  const MATCH_THRESHOLD = 1 - Number(profileMatch.clusterMatchMaxDistance ?? 0.09)
   const blendWeight = profileMatch.clusterSignatureBlendWeight
 
-  if (clusterMatch && clusterDistance < MATCH_THRESHOLD) {
+  if (clusterMatch && clusterSimilarity >= MATCH_THRESHOLD) {
     const label = clusterMatch.label || 'Hablante 1'
     if (isPlausiblePersonName(label) || /^Hablante\s+\d+$/i.test(label)) {
       clusterMatch.signature = clusterMatch.signature.map((value, index) => {
@@ -834,14 +838,10 @@ export function useFluVoiceAssistant({
 
   const flushLiveTranscript = useCallback(() => {
     if (conversationActiveRef?.current) {
-      const capture = readStreamDisplay(listenStateRef.current)
-      // Monótono: nunca mostrar menos texto que el ya visible (evita el
-      // "escribió y luego lo borró" cuando un parcial sale más corto).
-      const stable = capture ? monotonicDisplay(publishedLiveRef.current, capture) : ''
-      if (stable && stable !== publishedLiveRef.current) {
-        publishedLiveRef.current = stable
-        setLiveTranscript(stable)
-      }
+      // §9 — UN SOLO ESCRITOR: en conversación activa la frase viva la escribe
+      // únicamente `handleConversationStreamSync` (vía syncConversationStream,
+      // preview y commit). Aquí NO se escribe: antes había dos escritores
+      // (este + el stream sync) con reglas distintas → alternancia/ciclo.
       return
     }
 
@@ -1357,8 +1357,16 @@ export function useFluVoiceAssistant({
     ) => {
       const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
       const canDiarize = conversationActiveRef?.current === true && captureCfg.conversationAutoDiarize === true
+      // §3 Regla dura: sin EVIDENCIA de audio NO se estampa un nombre propio
+      // (respeta requireWakeWordForSpeakerName). Se usa etiqueta genérica.
+      const GENERIC_SPEAKER = 'Hablante 1'
+      const isProperName = (value) => {
+        const s = String(value || '').trim()
+        return Boolean(s) && s !== 'FLU' && !/^Hablante\s+\d+$/i.test(s)
+      }
       if (!audioSnapshot?.length) {
-        return lastSpeakerRef.current || fallbackSpeaker
+        const sticky = lastSpeakerRef.current || fallbackSpeaker
+        return isProperName(sticky) ? GENERIC_SPEAKER : sticky || GENERIC_SPEAKER
       }
       // Embeddings async (worker): el preflight ya resolvió identidad por audio
       // (assignSpeakerStrictCosine, signatureVector 512-D). Se consulta el slot del
@@ -1370,10 +1378,14 @@ export function useFluVoiceAssistant({
           return preflight.speakerName
         }
         if (lastLoggedSpeakerRef.current) {
-          return lastLoggedSpeakerRef.current
+          // Sin preflight listo NO se estampa el nombre propio (evita "FLU/otro = tu nombre").
+          return isProperName(lastLoggedSpeakerRef.current)
+            ? GENERIC_SPEAKER
+            : lastLoggedSpeakerRef.current
         }
       }
-      return fallbackSpeaker || lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
+      const fallback = fallbackSpeaker || lastLoggedSpeakerRef.current || lastSpeakerRef.current || GENERIC_SPEAKER
+      return isProperName(fallback) ? GENERIC_SPEAKER : fallback
     },
     [conversationActiveRef],
   )
@@ -2102,12 +2114,17 @@ export function useFluVoiceAssistant({
         recognitionRetryCountRef.current = 0
         consecutiveEndsWithoutResultRef.current = 0
         let interim = ''
+        let finalText = ''
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index]
           const transcript = cleanForSpeech(result?.[0]?.transcript || '')
           if (!transcript) continue
 
           if (conversationActiveRef?.current) {
+            // Captura del micrófono para el PREVIEW. La publica el stream sync
+            // (ÚNICO escritor), no este handler.
+            if (result.isFinal) finalText = transcript
+            else interim = transcript
             continue
           }
 
@@ -2140,10 +2157,17 @@ export function useFluVoiceAssistant({
               fluDebugHot('history-error', { detail: String(error?.message || error) })
             }
           }
-          // §9: publicar la frase viva también en conversación. Antes solo se
-          // publicaba al iniciar la escucha, así que los parciales NO se veían
-          // hasta el commit ("aparecía de golpe").
-          publishLiveFromTurn()
+          // §9 — ÚNICO escritor: el preview lo publica `handleConversationStreamSync`
+          // (vía syncConversationStream, turnCommit:false). Este handler NO escribe
+          // la frase viva: antes había dos escritores → alternancia/ciclo.
+          const liveText = cleanForSpeech(finalText || interim)
+          if (liveText) {
+            syncConversationStream({
+              capture: liveText,
+              utterance: liveText,
+              turnCommit: false,
+            })
+          }
           return
         }
 
@@ -3413,6 +3437,19 @@ export function useFluVoiceAssistant({
       }
 
       if (plan.action.kind === 'command') {
+        // §9/F: un comando requiere la wake en SU propio enunciado; no se hereda
+        // del wake de un turno anterior. Excepción: control de escucha.
+        const listeningControl = detectListeningControl(text, FLU_CONFIG.voiceCommands)
+        const authorized = isCommandAuthorized(text, {
+          wakeWords: resolvedWakeWords,
+          allowWithoutWake: Boolean(listeningControl),
+        })
+        if (!authorized) {
+          relayLog('LOG', 'useFluVoiceAssistant', '[WAKE] comando sin wake en su enunciado: no se despacha', {
+            phrase: phrase.slice(0, 60),
+          })
+          return false
+        }
         await invoke(() => dispatchPassiveVoiceCommand(plan.action.command, plan.phrase))
         return true
       }

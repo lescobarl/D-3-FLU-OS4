@@ -62,19 +62,35 @@ export interface UseTemporalItemsOptions {
   now?: () => number;
   /** Driver de audio para el tono (por defecto: createWebAudioDriver()). */
   audio?: AudioDriver;
+  /** Usuario activo: aísla alarmas/temporizadores por usuario. */
+  participantId?: string;
 }
 
 export interface TemporalItemsState {
   alarms: TemporalItemRecord[];
   timers: TemporalItemRecord[];
   loading: boolean;
+  /** Ítem que está sonando ahora (para ofrecer "Detener"). */
+  ringing: TemporalRinging | null;
+}
+
+/** Estado de un ítem que acaba de vencer y está sonando. */
+export interface TemporalRinging {
+  id: string;
+  kind: string;
+  label: string;
+  at: number;
 }
 
 export interface TemporalItemsActions {
   refresh: () => Promise<void>;
   add: (input: NewTemporalItemInput) => Promise<AddTemporalResult>;
   cancel: (id: string) => Promise<TemporalItemRecord | null>;
+  /** Edita etiqueta y/o hora de un ítem. */
+  update: (id: string, patch: { label?: string; timeOfDay?: string }) => Promise<TemporalItemRecord | null>;
   remove: (id: string) => Promise<boolean>;
+  /** Silencia la alarma/temporizador que está sonando (no cancela el ítem). */
+  stopRinging: () => void;
 }
 
 export interface UseTemporalItemsResult extends TemporalItemsState, TemporalItemsActions {
@@ -91,7 +107,9 @@ export function useTemporalItems({
   language = 'es',
   now,
   audio,
+  participantId,
 }: UseTemporalItemsOptions = {}): UseTemporalItemsResult {
+  const scope = participantId || 'global';
   const config = (FLU_CONFIG as any).temporal || {};
   const maxActive = Number(config.maxActive) || 12;
   const tickMs = Number(config.tickMs) || 30000;
@@ -143,6 +161,9 @@ export function useTemporalItems({
   const [alarms, setAlarms] = useState<TemporalItemRecord[]>([]);
   const [timers, setTimers] = useState<TemporalItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ringing, setRinging] = useState<TemporalRinging | null>(null);
+  const ringingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoStopMs = Number(config.autoStopMs) || 30000;
 
   // Ref de guardia para no solapar ticks asíncronos del scheduler.
   const runningRef = useRef(false);
@@ -154,7 +175,9 @@ export function useTemporalItems({
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const all = await service.list();
-      const sorted = all.slice().sort((a, b) => a.nextAt - b.nextAt);
+      // Aislamiento por usuario: solo alarmas/temporizadores de ESTE usuario.
+      const scoped = all.filter((r) => (r.personId || 'global') === scope);
+      const sorted = scoped.slice().sort((a, b) => a.nextAt - b.nextAt);
       setAlarms(sorted.filter((r) => r.kind === 'alarm' && r.status === 'pending'));
       setTimers(sorted.filter((r) => r.kind === 'timer' && r.status === 'pending'));
     } catch (err) {
@@ -162,14 +185,16 @@ export function useTemporalItems({
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, [service, scope]);
 
   /** Un tick del scheduler: re-arranca/completa los vencidos y notifica. */
   const runTick = useCallback(async (): Promise<void> => {
     if (runningRef.current) return;
     runningRef.current = true;
     try {
-      const active = await service.listActive();
+      const activeAll = await service.listActive();
+      // Aislamiento por usuario: no disparar alarmas de otros usuarios.
+      const active = activeAll.filter((r) => (r.personId || 'global') === scope);
       const current = nowRef.current();
       const due = collectDueOrdered(active, current, ['pending'], limit, graceMs);
       for (const item of due) {
@@ -200,8 +225,16 @@ export function useTemporalItems({
           speakRef.current(dueBody, lang).catch(() => undefined);
         }
         audioDriver.play(sound).catch(() => undefined);
+        setRinging({ id: item.id, kind: item.kind, label: item.label, at: current });
       }
       if (due.length > 0) {
+        // Auto-stop configurable: si nadie pulsa "Detener", se silencia solo.
+        if (ringingTimerRef.current) clearTimeout(ringingTimerRef.current);
+        ringingTimerRef.current = setTimeout(() => {
+          audioDriver.stop();
+          setRinging(null);
+          ringingTimerRef.current = null;
+        }, autoStopMs);
         await refresh();
       }
     } catch (err) {
@@ -221,6 +254,7 @@ export function useTemporalItems({
     audioDriver,
     sound,
     limit,
+    autoStopMs,
   ]);
 
   // Carga inicial.
@@ -240,7 +274,10 @@ export function useTemporalItems({
   /** Agrega una alarma o temporizador y refresca las listas. */
   const add = useCallback(
     async (input: NewTemporalItemInput): Promise<AddTemporalResult> => {
-      const result = await service.add(input);
+      const result = await service.add({
+        ...input,
+        personId: (input as any).personId || (scope !== 'global' ? scope : undefined),
+      } as NewTemporalItemInput);
       if (result.ok) await refresh();
       return result;
     },
@@ -257,6 +294,19 @@ export function useTemporalItems({
     [service, refresh],
   );
 
+  /** Edita etiqueta/hora de un ítem y refresca. */
+  const update = useCallback(
+    async (
+      id: string,
+      patch: { label?: string; timeOfDay?: string },
+    ): Promise<TemporalItemRecord | null> => {
+      const updated = await service.update(id, patch);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
   /** Elimina el ítem y refresca. */
   const remove = useCallback(
     async (id: string): Promise<boolean> => {
@@ -267,14 +317,35 @@ export function useTemporalItems({
     [service, refresh],
   );
 
+  /** Silencia lo que está sonando (no cancela el ítem pendiente). */
+  const stopRinging = useCallback((): void => {
+    if (ringingTimerRef.current) {
+      clearTimeout(ringingTimerRef.current);
+      ringingTimerRef.current = null;
+    }
+    audioDriver.stop();
+    setRinging(null);
+  }, [audioDriver]);
+
+  // Limpieza del auto-stop al desmontar.
+  useEffect(
+    () => () => {
+      if (ringingTimerRef.current) clearTimeout(ringingTimerRef.current);
+    },
+    [],
+  );
+
   return {
     service,
     alarms,
     timers,
     loading,
+    ringing,
     refresh,
     add,
     cancel,
+    update,
     remove,
+    stopRinging,
   };
 }

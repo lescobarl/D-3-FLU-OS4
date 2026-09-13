@@ -23,7 +23,21 @@ if (
 ) {
   navigator.serviceWorker
     .register('/sw.js')
+    .then((registration) => {
+      // Fuerza la comprobación de una versión nueva del SW en cada arranque.
+      registration.update().catch(() => undefined);
+    })
     .catch((err) => console.error('Error al registrar el Service Worker de la PWA:', err));
+
+  // Auto-actualización: cuando un SW nuevo toma el control, recargar UNA vez
+  // para servir el bundle nuevo. Sin esto, un cliente con la shell cacheada
+  // vieja seguía ejecutando código antiguo tras "recargar".
+  let swRefreshed = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefreshed) return;
+    swRefreshed = true;
+    window.location.reload();
+  });
 }
 
 // Arnés de comparación ASR: SOLO en desarrollo y solo en /asr-lab.

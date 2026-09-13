@@ -29,6 +29,11 @@ export const STORAGE_KEYS = {
     IMAGE_API_URL: 'flu-image-api-url',
     IMAGE_MODEL: 'flu-image-model',
     IMAGE_API_KEY: 'flu-image-api-key',
+    // Video (fal.ai) — key configurable desde Ajustes (video real text-to-video)
+    FALAI_API_KEY: 'flu-falai-api-key',
+    FALAI_VIDEO_MODEL: 'flu-falai-video-model',
+    /** Último día cerrado (rollover de sesión): evita mezclar días. */
+    LAST_SESSION_DAY: 'flu-last-session-day',
     // OCR configuration (local Tesseract default + remote endpoint opcional)
     OCR_API_KEY: 'flu-ocr-api-key',
     OCR_MODEL: 'flu-ocr-model',
@@ -169,8 +174,8 @@ export const OPENROUTER_CONFIG = {
 export const FALAI_CONFIG = {
     /** Endpoint del servicio de video (queue de fal.ai). */
     VIDEO_ENDPOINT: (import.meta as any)?.env?.VITE_FALAI_VIDEO_ENDPOINT || 'https://queue.fal.run',
-    /** Modelo text-to-video (p. ej. 'fal-ai/veo3', 'fal-ai/kling-video/v1.6'). */
-    VIDEO_MODEL: (import.meta as any)?.env?.VITE_FALAI_VIDEO_MODEL || 'fal-ai/veo3/fast',
+    /** Modelo text-to-video. Default BARATO: Wan 2.5 ($0.05/s en 480p). */
+    VIDEO_MODEL: (import.meta as any)?.env?.VITE_FALAI_VIDEO_MODEL || 'fal-ai/wan-25-preview/text-to-video',
     /** Clave de fal.ai (nunca se expone al browser: se resuelve en servidor). */
     API_KEY: (import.meta as any)?.env?.VITE_FALAI_API_KEY || '',
     ASPECT_RATIO: '16:9',
@@ -892,4 +897,30 @@ export function resolveGeminiApiKey(): string {
     const dedicated = readStorage(STORAGE_KEYS.GEMINI_API_KEY, '').trim();
     if (dedicated) return dedicated;
     return resolveTextApiKey();
+}
+
+/**
+ * Resolve the fal.ai API key (video real text-to-video).
+ * Priority: localStorage (flu-falai-api-key — configurable en Ajustes) >
+ *           env VITE_FALAI_API_KEY. Sin key, no hay video real (solo guion).
+ */
+export function resolveFalApiKey(): string {
+    const override = readStorage(STORAGE_KEYS.FALAI_API_KEY, '').trim();
+    if (override) return override;
+    try {
+        return String((import.meta as any)?.env?.VITE_FALAI_API_KEY ?? '').trim();
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Resolve el modelo text-to-video de fal.ai.
+ * Priority: localStorage (flu-falai-video-model — Ajustes) >
+ *           env VITE_FALAI_VIDEO_MODEL > default barato (Wan 2.5, $0.05/s).
+ */
+export function resolveFalVideoModel(): string {
+    const override = readStorage(STORAGE_KEYS.FALAI_VIDEO_MODEL, '').trim();
+    if (override) return override;
+    return FALAI_CONFIG.VIDEO_MODEL;
 }

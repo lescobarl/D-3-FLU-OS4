@@ -225,4 +225,50 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         expect(reply).toContain('Agregué matemáticas el lunes a las 8 al horario');
         await captureScreenshot(page, SHOTS_DIR, '7-horario.png');
     });
+
+    test('8. Acción reminder SIN trigger (dominio LLM) persiste (reminders)', async ({ page }) => {
+        stubLocalSpeech(page);
+        await gotoClean(page);
+        await clearStore(page, 'reminders');
+
+        await driveAcciones(
+            page,
+            [{ dominio: 'reminder', texto: 'tomar el medicamento a las 12:00' }],
+            'tomar el medicamento a las 12:00',
+            'Listo, te lo recuerdo a las 12:00.',
+        );
+
+        const records = await readStore(page, 'reminders');
+        expect(records.length, 'debe existir 1 recordatorio persistido').toBeGreaterThan(0);
+        const rec = records[records.length - 1];
+        expect(rec.text).toContain('tomar el medicamento');
+        expect(rec.status).toBe('pending');
+        expect(typeof rec.dueAt).toBe('number');
+        await captureScreenshot(page, SHOTS_DIR, '8-reminder-sin-trigger.png');
+    });
+
+    test('9. Acción note "incluye en la nota del súper ..." agrega a la nota Super', async ({ page }) => {
+        stubLocalSpeech(page);
+        await gotoClean(page);
+        await clearStore(page, 'notes');
+
+        await driveAcciones(
+            page,
+            [
+                {
+                    dominio: 'note',
+                    texto: 'incluye en la nota del súper que también traiga una computadora',
+                },
+            ],
+            'incluye en la nota del súper que también traiga una computadora',
+            'Listo, lo agregué a la nota del súper.',
+        );
+
+        const records = await readStore(page, 'notes');
+        expect(records.length).toBeGreaterThan(0);
+        const note = records[records.length - 1];
+        expect(note.label).toContain('Super:');
+        expect(String(note.label).toLowerCase()).toContain('computadora');
+        await captureScreenshot(page, SHOTS_DIR, '9-note-super.png');
+    });
 });

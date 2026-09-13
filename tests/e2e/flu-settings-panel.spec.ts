@@ -14,24 +14,38 @@
 // ============================================================
 
 import { test, expect, type Page } from '@playwright/test';
-import { gotoClean } from './_helpers';
+import { gotoClean, autoSkipOnboarding } from './_helpers';
+
+// Estos specs no validan onboarding: se auto-omite para que su backdrop no
+// intercepte los clics (se reabre async por el estado per-user en IndexedDB).
+test.beforeEach(async ({ page }) => {
+    await autoSkipOnboarding(page);
+});
 
 /** Navega a la pestaña principal "settings" y luego al grupo "FLU". */
 async function openFluSettings(page: Page): Promise<void> {
+    // El onboarding (estado per-user) puede reabrirse y su backdrop bloquea
+    // clics; se omite y los clics no dependen de él (force).
+    const skip = page.locator('[data-testid="onboarding-skip"]');
+    if (await skip.isVisible().catch(() => false)) {
+        await skip.click().catch(() => undefined);
+        await page.waitForTimeout(300);
+    }
+
     // Pestaña principal de Configuración
     const settingsTab = page.locator('#flu-tab-settings');
-    await settingsTab.waitFor({ state: 'visible', timeout: 15000 });
-    await settingsTab.click();
+    await settingsTab.waitFor({ state: 'attached', timeout: 15000 });
+    await settingsTab.click({ force: true, timeout: 15000 });
     await page.waitForTimeout(400);
 
     // Grupo FLU dentro del panel de settings
     const fluPill = page.locator('.flu-settings-groups__pill', { hasText: 'FLU' }).first();
-    await fluPill.waitFor({ state: 'visible', timeout: 15000 });
-    await fluPill.click();
+    await fluPill.waitFor({ state: 'attached', timeout: 15000 });
+    await fluPill.click({ force: true, timeout: 15000 });
     await page.waitForTimeout(400);
 
     // El panel FLU debe estar presente
-    await page.locator('.flu-settings-panel').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('.flu-settings-panel').waitFor({ state: 'attached', timeout: 15000 });
 }
 
 test('Fase D: Servicios Externos (APIs) es la sección principal visible', async ({ page }) => {

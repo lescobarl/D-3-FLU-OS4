@@ -22,6 +22,9 @@ export const FLU_EVENTS = {
     // Los resultados web viven SOLO en la pestaña Buscar (requisito del
     // usuario), nunca en la pestaña "Respuesta de Flu".
     RUN_SEARCH: 'flu:run-search',
+    // Resultados web ya disponibles en la pestaña Buscar → FLU lo anuncia por voz
+    // (respuesta natural "ya están los resultados"), no solo el acuse al buscar.
+    SEARCH_READY: 'flu:search-ready',
     // Limpieza del estado de búsqueda del Pizarrón cuando comienza un turno
     // NO relacionado con búsqueda (conversación, generación de imagen, etc.).
     // Evita que los resultados web/consulta de un turno anterior queden
@@ -51,6 +54,31 @@ export interface FluSearchPayload {
 export function dispatchFluSearch(payload: FluSearchPayload): void {
     if (typeof window === 'undefined') return;
     window.dispatchEvent(new CustomEvent<FluSearchPayload>(FLU_EVENTS.RUN_SEARCH, { detail: payload }));
+}
+
+/**
+ * Dispara `SEARCH_READY` cuando los resultados web ya están pintados en la
+ * pestaña Buscar, para que FLU lo anuncie de forma natural.
+ * @param payload — Consulta cuyos resultados quedaron disponibles.
+ */
+export function dispatchFluSearchReady(payload: FluSearchPayload): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent<FluSearchPayload>(FLU_EVENTS.SEARCH_READY, { detail: payload }));
+}
+
+/**
+ * Registra un listener tipado para el evento `SEARCH_READY` (una ejecución).
+ * @param handler — Callback que recibe el payload al terminar la búsqueda.
+ * @returns Función que remueve el listener.
+ */
+export function onFluSearchReady(handler: (payload: FluSearchPayload) => void): () => void {
+    if (typeof window === 'undefined') return () => undefined;
+    const listener = (event: Event) => {
+        const detail = (event as CustomEvent<FluSearchPayload>).detail;
+        if (detail && typeof detail.query === 'string') handler(detail);
+    };
+    window.addEventListener(FLU_EVENTS.SEARCH_READY, listener);
+    return () => window.removeEventListener(FLU_EVENTS.SEARCH_READY, listener);
 }
 
 /**

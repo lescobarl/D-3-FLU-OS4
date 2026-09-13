@@ -312,4 +312,20 @@ describe('parseTemporalIntent — listar, cancelar y no reconocido', () => {
     expect(r.handled).toBe(false);
     expect(r.action).toBeNull();
   });
+
+  it('"detén la alarma" → alarm.stop (silenciar, sin cancelar el ítem)', () => {
+    const r = parse('detén la alarma');
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('alarm.stop');
+  });
+
+  it('"silencia el temporizador" → timer.stop', () => {
+    const r = parse('silencia el temporizador');
+    expect(r.action).toBe('timer.stop');
+  });
+
+  it('regresión: "cancela la alarma" sigue siendo alarm.cancel', () => {
+    const r = parse('cancela la alarma');
+    expect(r.action).toBe('alarm.cancel');
+  });
 });

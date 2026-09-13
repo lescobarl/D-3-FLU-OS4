@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveGeminiApiKey } from '../core/config/appConfig';
+import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useAuditLog } from './useAuditLog';
 
@@ -33,6 +33,9 @@ export interface ConfigPersistence {
     imageApiKey: string;
     imageModel: string;
     imageApiUrl: string;
+    // Video (fal.ai) — key para video real text-to-video
+    falApiKey: string;
+    falVideoModel: string;
     // OCR Config (local Tesseract default + endpoint remoto opcional)
     ocrApiKey: string;
     ocrModel: string;
@@ -53,6 +56,8 @@ export interface ConfigPersistence {
     handleImageApiKeyCommit: (key: string) => void;
     handleImageModelCommit: (model: string) => void;
     handleImageApiUrlCommit: (url: string) => void;
+    handleFalApiKeyCommit: (key: string) => void;
+    handleFalVideoModelCommit: (model: string) => void;
     handleOcrApiKeyCommit: (key: string) => void;
     handleOcrModelCommit: (model: string) => void;
     handleOcrApiUrlCommit: (url: string) => void;
@@ -119,6 +124,9 @@ export function useConfigPersistence(): ConfigPersistence {
     const [imageApiKey, setImageApiKey] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_KEY));
     const [imageModel, setImageModel] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_MODEL));
     const [imageApiUrl, setImageApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_URL));
+    // ---- Video (fal.ai) ----
+    const [falApiKey, setFalApiKey] = useState<string>(() => loadString(STORAGE_KEYS.FALAI_API_KEY));
+    const [falVideoModel, setFalVideoModel] = useState<string>(() => resolveFalVideoModel());
 
     // ---- OCR Config (local Tesseract default + endpoint remoto opcional) ----
     const [ocrApiKey, setOcrApiKey] = useState<string>(() => loadString(STORAGE_KEYS.OCR_API_KEY));
@@ -241,6 +249,20 @@ export function useConfigPersistence(): ConfigPersistence {
         auditLog.logChange('config', 'image-api-key', prev, key, 'Image API Key updated').catch(console.error);
     }, [imageApiKey, auditLog]);
 
+    const handleFalApiKeyCommit = useCallback((key: string) => {
+        const prev = falApiKey;
+        setFalApiKey(key);
+        saveString(STORAGE_KEYS.FALAI_API_KEY, key);
+        auditLog.logChange('config', 'falai-api-key', prev, key, 'Fal.ai Video API Key updated').catch(console.error);
+    }, [falApiKey, auditLog]);
+
+    const handleFalVideoModelCommit = useCallback((model: string) => {
+        const prev = falVideoModel;
+        setFalVideoModel(model);
+        saveString(STORAGE_KEYS.FALAI_VIDEO_MODEL, model);
+        auditLog.logChange('config', 'falai-video-model', prev, model, 'Fal.ai Video model updated').catch(console.error);
+    }, [falVideoModel, auditLog]);
+
     const handleImageModelCommit = useCallback((model: string) => {
         const prev = imageModel;
         setImageModel(model);
@@ -309,6 +331,9 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.SESSION_ROLE,
             STORAGE_KEYS.WAKE_WORDS,
             STORAGE_KEYS.DEBUG_LOGS_ENABLED,
+            // Config del buscador (llaves/modelo de proveedores web). Sin esto,
+            // "Limpiar caché" borraba la key de OpenRouter/Tavily.
+            STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES,
         ]);
         try {
             const toRemove: string[] = [];
@@ -331,6 +356,8 @@ export function useConfigPersistence(): ConfigPersistence {
         imageApiKey,
         imageModel,
         imageApiUrl,
+        falApiKey,
+        falVideoModel,
         ocrApiKey,
         ocrModel,
         ocrApiUrl,
@@ -346,6 +373,8 @@ export function useConfigPersistence(): ConfigPersistence {
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,
+        handleFalApiKeyCommit,
+        handleFalVideoModelCommit,
         handleOcrApiKeyCommit,
         handleOcrModelCommit,
         handleOcrApiUrlCommit,

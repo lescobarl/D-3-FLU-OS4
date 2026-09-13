@@ -118,3 +118,22 @@ describe('extractQueryFromWebSearchPhrase — consulta real sin el gatillo', () 
     expect(wakeWords.length).toBeGreaterThan(0);
   });
 });
+
+describe('A2 — partícula genérica: espera el tema y se limpia de la consulta', () => {
+  it('"ok flu busca en la web información" queda en espera (el tema llega después)', () => {
+    const parcial = decideVoiceTurnDispatch('ok flu busca en la web información', voiceCommands, {
+      requireWake: true,
+    });
+    expect(parcial.ready).toBe(false);
+    expect(parcial.reason).toBe('incomplete-content-command');
+  });
+
+  it('la consulta final descarta la partícula genérica inicial', () => {
+    expect(
+      extractQueryFromWebSearchPhrase(
+        'busca en la web información lenguaje de programación clipper',
+        voiceCommands,
+      ),
+    ).toBe('lenguaje de programación clipper');
+  });
+});

@@ -1,0 +1,15 @@
+{
+  "id": "T-VOICE-LIVE-SINGLE-WRITER",
+  "objective": "La frase viva (liveTranscript) tiene UN solo escritor y UNA sola fuente; no alterna ni cicla.",
+  "base": "HEAD",
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "kilo.json", ".github/**"],
+  "allow": [
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "tests/voiceLiveSingleWriter.test.ts"
+  ],
+  "maxFiles": 5,
+  "maxLines": 400,
+  "dod": "npx vitest run tests/voiceLiveSingleWriter.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/voiceLiveSingleWriter.test.ts --reporter=dot",
+  "guardExpect": "green"
+}

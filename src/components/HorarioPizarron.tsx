@@ -220,16 +220,27 @@ export function HorarioPizarron({
   for (let d = diaMin; d <= diaMax; d += 1) days.push(d);
   const hours: number[] = [];
   for (let h = startHour; h < endHour; h += 1) hours.push(h);
-  const startMin = startHour * 60;
-  const hourRows = Math.max(1, endHour - startHour);
   const gridCols = `56px repeat(${days.length}, minmax(110px, 1fr))`;
+
+  // Punto 7: compactar horas SIN agenda. Solo se renderizan las franjas que
+  // contienen al menos una entrada; los huecos se omiten y las horas se
+  // reposicionan. Sin agenda en una franja, deja de ocupar alto.
+  const overlapsHour = (item: HorarioRecord, h: number): boolean => {
+    const s = toMin(item.inicio);
+    const e = toMin(item.fin);
+    return s < (h + 1) * 60 && e > h * 60;
+  };
+  const occupiedHours = hours.filter((h) => items.some((it) => overlapsHour(it, h)));
+  const visibleHours = occupiedHours.length > 0 ? occupiedHours : hours;
+  const hourPosition = new Map<number, number>(visibleHours.map((h, i) => [h, i]));
+  const visibleHourRows = Math.max(1, visibleHours.length);
 
   const renderSemana = () => (
     <div
       className="flu-horario__week"
       style={{
         gridTemplateColumns: gridCols,
-        gridTemplateRows: `auto repeat(${hourRows}, ${hourPx}px)`,
+        gridTemplateRows: `auto repeat(${visibleHourRows}, ${hourPx}px)`,
       }}
       data-testid="horario-week"
     >
@@ -245,7 +256,7 @@ export function HorarioPizarron({
           {dayLabelsShort[d] || dayLabels[d] || `Día ${d}`}
         </div>
       ))}
-      {hours.map((h, idx) => (
+      {visibleHours.map((h, idx) => (
         <div
           key={`time-${h}`}
           className="flu-horario__timelabel"
@@ -258,13 +269,13 @@ export function HorarioPizarron({
         <div
           key={`daycol-${d}`}
           className="flu-horario__daycol"
-          style={{ gridRow: `2 / span ${hourRows}`, gridColumn: d - diaMin + 2 }}
+          style={{ gridRow: `2 / span ${visibleHourRows}`, gridColumn: d - diaMin + 2 }}
         >
-          {hours.map((h) => (
+          {visibleHours.map((h) => (
             <div
               key={`hl-${d}-${h}`}
               className="flu-horario__hourline"
-              style={{ top: (h - startHour) * hourPx }}
+              style={{ top: (hourPosition.get(h) ?? 0) * hourPx }}
             />
           ))}
           {items
@@ -272,7 +283,9 @@ export function HorarioPizarron({
             .map((clase) => {
               const cStart = toMin(clase.inicio);
               const cEnd = toMin(clase.fin);
-              const top = ((cStart - startMin) / 60) * hourPx;
+              const startHourOfClase = Math.floor(cStart / 60);
+              const top =
+                ((hourPosition.get(startHourOfClase) ?? 0) * 60 + (cStart - startHourOfClase * 60)) / 60 * hourPx;
               const height = ((cEnd - cStart) / 60) * hourPx - 4;
               const token = colores.includes(clase.color || '') ? clase.color : defaultColor;
               return (
@@ -364,6 +377,17 @@ export function HorarioPizarron({
           {proxima.inicio}–{proxima.fin}
           {proxima.aula ? ` · ${proxima.aula}` : ''}
         </span>
+        {/* §5: borrado también en "Próxima" (faltaba; las otras vistas ya lo tenían). */}
+        <button
+          type="button"
+          className="flu-horario__row-remove"
+          title={ui.removeTitle || 'Quitar entrada'}
+          aria-label={`${ui.removeTitle || 'Quitar entrada'}: ${proxima.materia}`}
+          data-testid={`horario-remove-${proxima.id}`}
+          onClick={() => onRemove(proxima.id)}
+        >
+          ×
+        </button>
       </div>
     );
 
@@ -417,16 +441,8 @@ export function HorarioPizarron({
 
   const modoKeys = Object.keys(modos);
 
-  return (
-    <details className="flu-settings-image-config" open>
-      {!hideHeader && (
-        <summary className="flu-settings-image-config__summary">
-          <span className="flu-horario__summary-title">
-            {ui.panelTitle || 'Horario'}
-            {badgeCount && <span className="flu-badge">{badgeCount}</span>}
-          </span>
-        </summary>
-      )}
+  const panelBody = (
+    <>
       {toast && (
         <div className="flu-toast" role="status">
           {toast}
@@ -459,7 +475,9 @@ export function HorarioPizarron({
             </div>
             {modo === 'semana' && (
               <>
-                <h4 className="flu-reminders__heading">{ui.semanaTitle || 'Horario de la semana'}</h4>
+                {!hideHeader && (
+                  <h4 className="flu-reminders__heading">{ui.semanaTitle || 'Horario de la semana'}</h4>
+                )}
                 {loading ? (
                   <p className="flu-horario__empty">…</p>
                 ) : items.length === 0 ? (
@@ -599,6 +617,24 @@ export function HorarioPizarron({
           </div>
         </form>
       </div>
+    </>
+  );
+
+  // Embebido (hideHeader): envoltorio neutro SIN <details>, para que el
+  // navegador no pinte su etiqueta por defecto "Detalles" (punto 9).
+  if (hideHeader) {
+    return <div className="flu-horario__embedded">{panelBody}</div>;
+  }
+
+  return (
+    <details className="flu-settings-image-config" open>
+      <summary className="flu-settings-image-config__summary">
+        <span className="flu-horario__summary-title">
+          {ui.panelTitle || 'Horario'}
+          {badgeCount && <span className="flu-badge">{badgeCount}</span>}
+        </span>
+      </summary>
+      {panelBody}
     </details>
   );
 }

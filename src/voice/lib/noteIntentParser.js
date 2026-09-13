@@ -18,6 +18,12 @@ const NOTE_SUPER_LIST =
   /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
 const NOTE_SUPER_APPEND =
   /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(.+?)\s+(?:en\s+la\s+lista\s+del\s+|a\s+la\s+lista\s+del\s+|en\s+la\s+lista\s+de\s+la\s+|a\s+la\s+lista\s+de\s+la\s+|al\s+|a\s+la\s+|en\s+el\s+)(super|supermercado|mercado)\s*$/i
+// "incluye/agrega [en] la NOTA del súper [que también traiga] {ítem}" → "Super: {ítem}".
+// Cubre el destino "nota del súper" (no solo "lista") y el verbo "incluye",
+// con el ítem ANTES ("incluye X en la nota del super") o DESPUÉS
+// ("incluye en la nota del super que también traiga X").
+const NOTE_SUPER_NOTA =
+  /^(?:incluye|incluir|inclu[ií]|agrega|agregar|a[ñn]ade|anade|suma|sumar|pon|poner)\s+(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:en\s+la\s+|a\s+la\s+|en\s+el\s+|al\s+)?nota\s+(?:de\s+|del\s+|para\s+el\s+|para\s+la\s+|para\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
 const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
@@ -31,6 +37,23 @@ function stripAccentsEs(text = '') {
     .replace(/[óòöô]/g, 'o')
     .replace(/[úùüû]/g, 'u')
     .replace(/[ñ]/g, 'n')
+}
+
+// Verbos/conectores de relleno que pueden preceder al ítem cuando se enuncia
+// después del destino: "… la nota del súper QUE TAMBIÉN TRAIGA una computadora".
+const SUPER_ITEM_LEAD =
+  /^(?:que\s+)?(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:traiga|trae|traer|lleva|llevar|compra|comprar|agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|suma|sumar|pon|poner)\s+/i
+
+/** Limpia el ítem de una nota "Super": quita solo verbos/conectores líderes. */
+function cleanSuperItem(rest = '') {
+  let item = String(rest || '').trim()
+  let prev = ''
+  while (item !== prev) {
+    prev = item
+    const m = SUPER_ITEM_LEAD.exec(item)
+    if (m) item = item.slice(m[0].length).trim()
+  }
+  return item
 }
 
 /**
@@ -72,6 +95,14 @@ export function parseNoteIntentText(rawText = '') {
   if (superAppend) {
     const rest = superAppend[1] ? superAppend[1].trim() : ''
     return { label: rest ? `Super: ${rest}` : 'Super' }
+  }
+
+  // 1d) "incluye/agrega [en] la NOTA del súper [que también traiga] {ítem}"
+  // (destino "nota", no solo "lista"; verbos como "incluye").
+  const superNota = NOTE_SUPER_NOTA.exec(norm)
+  if (superNota) {
+    const item = cleanSuperItem(superNota[2] ? superNota[2].trim() : '')
+    return { label: item ? `Super: ${item}` : 'Super' }
   }
 
   // 2) "nota para recordar/acordarme {X}" → "Recordar: {X}".

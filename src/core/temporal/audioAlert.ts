@@ -53,6 +53,11 @@ function defaultGetContext(): AudioContextLike | null {
 /** Crea un driver WebAudio real con la factoría de contexto inyectable. */
 export function createWebAudioDriver(getContext: AudioContextFactory = defaultGetContext): AudioDriver {
   let ctx: AudioContextLike | null = null;
+  // Nodos activos para poder DETENER el tono (alarma sonando → stop).
+  const activeNodes: Array<{
+    osc: { stop: (t: number) => void; disconnect?: () => void };
+    gain?: { disconnect?: () => void };
+  }> = [];
 
   const isSupported = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -82,10 +87,12 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
           connect: (node: unknown) => void;
           start: (t: number) => void;
           stop: (t: number) => void;
+          disconnect?: () => void;
         };
         const gain = ctx.createGain() as {
           gain: { value: number };
           connect: (node: unknown) => void;
+          disconnect?: () => void;
         };
         osc.type = 'sine';
         osc.frequency.value = frequency;
@@ -95,6 +102,7 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
         const startAt = ctx.currentTime + i * stepSec;
         osc.start(startAt);
         osc.stop(startAt + durationMs / 1000);
+        activeNodes.push({ osc, gain });
       }
     } catch {
       // Degradación elegante: el hook avisa con toast + voz.
@@ -102,7 +110,25 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
   };
 
   const stop = (): void => {
-    // Los osciladores se autodetenen; no hay estado que limpiar.
+    // Detiene y libera los osciladores programados/activos (alarma sonando).
+    while (activeNodes.length) {
+      const node = activeNodes.pop();
+      try {
+        node?.osc?.stop(0);
+      } catch {
+        /* ya detenido */
+      }
+      try {
+        node?.osc?.disconnect?.();
+      } catch {
+        /* ignorar */
+      }
+      try {
+        node?.gain?.disconnect?.();
+      } catch {
+        /* ignorar */
+      }
+    }
   };
 
   return { isSupported, play, stop };

@@ -14,7 +14,7 @@ import { aiService } from '../services/aiServiceFactory';
 import { useIntegrationStore } from '../store/integrationStore';
 import { assembleVideo, type VideoAssemblyResult } from '../services/videoAssembler';
 import { fetchFalVideo } from '../voice/lib/imageGeneration';
-import { FALAI_CONFIG } from '../core/config/appConfig';
+import { resolveFalApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import type {
     GenerationFormato,
     GenerationParams,
@@ -22,6 +22,7 @@ import type {
     GenerationJob,
 } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
+import { safeFileName } from '../lib/formatAdapters';
 
 export interface DocumentGenerationState {
     isGenerating: boolean;
@@ -148,6 +149,17 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                 );
                 setJob('escribiendo', formato, { progreso: 60 });
 
+                // Nombre de descarga legible: el TEMA pedido, no el contenido
+                // (antes el archivo se llamaba con el texto de la carta).
+                const temaNombre = String((parametros as GenerationInputParams).tema || '').trim();
+                const nombreTema = temaNombre
+                    ? safeFileName(temaNombre, docResult.ext || 'txt')
+                    : '';
+                const namedResult =
+                    nombreTema && nombreTema.length > 4
+                        ? { ...docResult, nombre: nombreTema }
+                        : docResult;
+
                 if (formato === 'video') {
                     setJob('ensamblando', formato, { progreso: 85 });
                     // 1) Video REAL con fal.ai (text-to-video). El prompt es el tema
@@ -155,11 +167,28 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                     //    se usa el contenido del guion (truncado).
                     const temaPrompt = String((parametros as GenerationInputParams).tema || '').trim();
                     const falPrompt = temaPrompt || (docResult.content || '').trim().slice(0, 500);
-                    const fal = await fetchFalVideo({
-                        prompt: falPrompt,
-                        language,
-                        apiKey: FALAI_CONFIG.API_KEY,
-                    });
+                    const falApiKey = resolveFalApiKey();
+                    if (!falApiKey) {
+                        console.warn(
+                            '[useDocumentGeneration] Falta la API key de fal.ai (Ajustes → Video): se genera solo guion/storyboard.',
+                        );
+                    }
+                    const fal = falApiKey
+                        ? await fetchFalVideo({
+                              prompt: falPrompt,
+                              language,
+                              apiKey: falApiKey,
+                              model: resolveFalVideoModel(),
+                          })
+                        : {
+                              video_url: '',
+                              trace: {
+                                  provider: 'falai',
+                                  source: 'missing_api_key',
+                                  hasVideo: false,
+                                  prompt: falPrompt,
+                              },
+                          };
                     if (fal.video_url) {
                         const realVideo: VideoAssemblyResult = {
                             url: fal.video_url,
@@ -171,7 +200,7 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                         };
                         setVideoResult(realVideo);
                         setJob('listo', formato, { progreso: 100 });
-                        return docResult;
+                        return namedResult;
                     }
                     // 2) Fallback: ensamblado offline (ffmpeg.wasm walkthrough).
                     const video = await assembleVideo(docResult.content || '', {
@@ -180,17 +209,23 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                         orientacion: parametros.orientacion,
                         tema: parametros.tema,
                     }, language);
+                    if (!falApiKey) {
+                        video.warnings = [
+                            ...(video.warnings || []),
+                            'Falta la API key de fal.ai (Ajustes → Video). Sin ella no hay video real; se generó guion/storyboard.',
+                        ];
+                    }
                     setVideoResult(video);
                     setJob('listo', formato, { progreso: 100 });
-                    return docResult;
+                    return namedResult;
                 }
 
                 setJob('listo', formato, {
                     progreso: 100,
                     url_resultado: docResult.url,
                 });
-                setResult(docResult);
-                return docResult;
+                setResult(namedResult);
+                return namedResult;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.warn('[useDocumentGeneration] Generación falló:', err);

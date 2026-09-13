@@ -17,7 +17,9 @@ import {
   filterNavigable,
   normalizeResults,
   resolveSearchProviders,
+  type ProviderRequest,
   type SearchConfig,
+  type SearchProviderConfig,
   type SearchResult,
   type SearchResultType,
 } from '../core/search/searchSession';
@@ -82,25 +84,44 @@ interface FetchError {
 }
 
 async function fetchProviderJson(
-  url: string,
+  request: ProviderRequest,
   timeoutMs: number,
   lang: string,
 ): Promise<FetchOk | FetchError> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
+    const headers: Record<string, string> = {
+      'User-Agent': USER_AGENT,
+      // F1 — Idioma: el proveedor recibe el idioma en el header para que
+      // devuelva resultados en el idioma pedido (Wikipedia la usa).
+      'Accept-Language': acceptLanguageHeader(lang),
+      ...(request.headers || {}),
+    };
+    const init: RequestInit = {
       redirect: 'follow',
       signal: controller.signal,
-      headers: {
-        'User-Agent': USER_AGENT,
-        // F1 — Idioma: el proveedor recibe el idioma en el header para que
-        // devuelva resultados en el idioma pedido (Wikipedia la usa).
-        'Accept-Language': acceptLanguageHeader(lang),
-      },
-    });
+      method: request.method,
+      headers,
+    };
+    if (request.method === 'POST' && request.body !== undefined) {
+      const hasContentType = Object.keys(headers).some(
+        (name) => name.toLowerCase() === 'content-type',
+      );
+      if (!hasContentType) headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(request.body);
+    }
+    const response = await fetch(request.url, init);
     if (!response.ok) {
-      return { ok: false, reason: 'fetch_error', status: response.status };
+      // Motivo real del fallo (401 clave inválida, 402 sin crédito, 404 modelo,
+      // 429 límite…). Se registra y se devuelve para no fallar en silencio.
+      let detail = '';
+      try {
+        detail = (await response.text()).slice(0, 300);
+      } catch {
+        detail = '';
+      }
+      return { ok: false, reason: 'fetch_error', status: response.status, detail };
     }
     const json = await response.json();
     return { ok: true, json };
@@ -148,35 +169,77 @@ async function handleSearch(
   };
   const providers = resolveSearchProviders(config, type);
   if (!providers.length) {
-    sendJson(res, 200, { ok: true, query, lang, results: [] });
+    sendJson(res, 200, { ok: true, query, lang, results: [], errors: [] });
     return;
   }
 
-  const requests = providers.map((provider) =>
-    buildProviderRequest(provider, query, lang as ResolvedLanguage),
-  );
+  // Cadena de respaldo por prioridad: los proveedores con la MISMA prioridad
+  // se consultan en paralelo y se fusionan; si un escalón no devuelve
+  // resultados, se pasa al siguiente. Sin `priority` todos comparten el 0
+  // (comportamiento de fusión paralela previo).
+  const entries: Array<{ provider: SearchProviderConfig; request: ProviderRequest }> =
+    providers.map((provider) => ({
+      provider,
+      request: buildProviderRequest(provider, query, lang as ResolvedLanguage),
+    }));
 
-  const settled = await Promise.all(
-    requests.map(async (item) => {
-      const fetched = await fetchProviderJson(
-        item.url,
-        item.timeoutMs ?? timeoutMs,
-        lang,
-      );
-      if (!fetched.ok) {
-        return { providerId: item.providerId, ok: false as const, reason: fetched.reason };
+  const byPriority = new Map<number, typeof entries>();
+  for (const entry of entries) {
+    const priority = typeof entry.provider.priority === 'number' ? entry.provider.priority : 0;
+    const group = byPriority.get(priority);
+    if (group) {
+      group.push(entry);
+    } else {
+      byPriority.set(priority, [entry]);
+    }
+  }
+
+  let results: SearchResult[] = [];
+  const providerErrors: Array<{ provider: string; reason: string; status?: number; detail?: string }> = [];
+  const ordered = [...byPriority.entries()].sort((a, b) => a[0] - b[0]);
+  for (const [, group] of ordered) {
+    const settled = await Promise.all(
+      group.map(async (entry) => {
+        const fetched = await fetchProviderJson(
+          entry.request,
+          entry.request.timeoutMs ?? timeoutMs,
+          lang,
+        );
+        if (!fetched.ok) {
+          return { providerId: entry.request.providerId, ok: false as const, fetched };
+        }
+        return { providerId: entry.request.providerId, ok: true as const, json: fetched.json };
+      }),
+    );
+
+    const groupResults: SearchResult[] = [];
+    for (const item of settled) {
+      if (!item.ok) {
+        providerErrors.push({
+          provider: item.providerId,
+          reason: item.fetched.reason,
+          status: item.fetched.status,
+          detail: item.fetched.detail,
+        });
+        console.warn(
+          `[searchProxy] proveedor "${item.providerId}" falló: ${item.fetched.reason}` +
+            `${item.fetched.status ? ` ${item.fetched.status}` : ''}` +
+            `${item.fetched.detail ? ` :: ${item.fetched.detail}` : ''}`,
+        );
+        continue;
       }
-      return { providerId: item.providerId, ok: true as const, json: fetched.json };
-    }),
-  );
+      const provider = group.find((entry) => entry.request.providerId === item.providerId)?.provider;
+      const normalized = normalizeResults(item.json, item.providerId, lang as ResolvedLanguage, provider);
+      const perMax = provider?.maxResults;
+      groupResults.push(...(perMax && perMax > 0 ? normalized.slice(0, perMax) : normalized));
+    }
 
-  const results: SearchResult[] = [];
-  for (const item of settled) {
-    if (!item.ok) continue;
-    const provider = providers.find((p) => p.id === item.providerId);
-    const normalized = normalizeResults(item.json, item.providerId, lang as ResolvedLanguage, provider);
-    const perMax = provider?.maxResults;
-    results.push(...(perMax && perMax > 0 ? normalized.slice(0, perMax) : normalized));
+    if (groupResults.length > 0) {
+      results = groupResults;
+      const used = [...new Set(group.map((entry) => entry.request.providerId))];
+      console.log(`[searchProxy] ${type} "${query}" servido por: ${used.join(', ')}`);
+      break;
+    }
   }
 
   // F4 — La allowlist curada solo restringe la navegación web; las
@@ -189,7 +252,7 @@ async function handleSearch(
     : navigable;
   const capped = capResults(safeFiltered, maxResults);
 
-  sendJson(res, 200, { ok: true, query, lang, results: capped });
+  sendJson(res, 200, { ok: true, query, lang, results: capped, errors: providerErrors });
 }
 
 export function createSearchProxy({ env = {} }: { env?: Record<string, string> } = {}) {

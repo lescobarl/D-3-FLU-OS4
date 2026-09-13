@@ -80,13 +80,16 @@ function props(overrides: Partial<HoyPanelProps> = {}): HoyPanelProps {
 }
 
 describe('HoyPanel — render del panel lateral', () => {
-    it('renderiza el aside y los tres bloques HOY/DIARIO/NOTAS', () => {
+    it('renderiza HOY y NOTAS, y NO el bloque DIARIO (pedido quitar)', () => {
         const { container } = render(<HoyPanel {...props()} />);
 
         expect(container.querySelector('[data-testid="hoy-panel"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="hoy-block"]')).not.toBeNull();
-        expect(container.querySelector('[data-testid="diario-block"]')).not.toBeNull();
-        expect(container.querySelector('[data-testid="notas-block"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="diario-block"]')).toBeNull();
+        // NOTAS se muestra expandido por defecto (details open), como el resto.
+        const notas = container.querySelector('[data-testid="notas-block"]');
+        expect(notas).not.toBeNull();
+        expect(notas!.hasAttribute('open')).toBe(true);
     });
 
     it('muestra la próxima clase y las clases del día en el bloque HOY', () => {
@@ -143,7 +146,7 @@ describe('HoyPanel — render del panel lateral', () => {
         expect(hoyBlock!.textContent).toContain('Sin próxima entrada');
     });
 
-    it('muestra la última entrada del diario con su ánimo', () => {
+    it('no renderiza el bloque DIARIO (pedido quitar del panel)', () => {
         const { container } = render(
             <HoyPanel
                 {...props({
@@ -155,25 +158,9 @@ describe('HoyPanel — render del panel lateral', () => {
             />
         );
 
-        const ultima = container.querySelector('[data-testid="diario-ultima"]');
-        expect(ultima).not.toBeNull();
-        expect(ultima!.textContent).toContain('Mi día');
-        expect(ultima!.textContent).toContain('Hoy fue un buen día.');
-        expect(container.querySelector('[data-testid="diario-mood"]')).not.toBeNull();
-    });
-
-    it('muestra mensaje vacío cuando el diario no tiene entradas', () => {
-        const { container } = render(
-            <HoyPanel
-                {...props({
-                    diary: { entries: [], loading: false },
-                })}
-            />
-        );
-
+        expect(container.querySelector('[data-testid="diario-block"]')).toBeNull();
         expect(container.querySelector('[data-testid="diario-ultima"]')).toBeNull();
-        const diarioBlock = container.querySelector('[data-testid="diario-block"]');
-        expect(diarioBlock!.textContent).toContain('Aún no hay entradas en el diario.');
+        expect(container.querySelector('[data-testid="diario-mood"]')).toBeNull();
     });
 
     it('separa notas pendientes y hechas en listas distintas', () => {
@@ -230,5 +217,135 @@ describe('HoyPanel — render del panel lateral', () => {
         expect(verHorario).not.toBeNull();
         fireEvent.click(verHorario!);
         expect(container.querySelector('[data-testid="hoy-horario-completo"]')).not.toBeNull();
+    });
+
+    it('notas: sin checkbox, con expandir (clic) y editar (✎ → onRename)', () => {
+        const onRename = vi.fn(async () => null);
+        const { container } = render(
+            <HoyPanel
+                {...props({
+                    notes: {
+                        notes: [nota({ id: 'nota-1', label: 'Comprar leche', done: false })],
+                        loading: false,
+                        onToggle: async () => null,
+                        onRemove: async () => true,
+                        onRename,
+                    },
+                })}
+            />
+        );
+
+        const pendientes = container.querySelector('[data-testid="notas-pendientes"]');
+        expect(pendientes).not.toBeNull();
+        // Sin checkbox: la nota no se marca hecha.
+        expect(pendientes!.querySelector('input[type="checkbox"]')).toBeNull();
+
+        // Expandir el texto de la nota al hacer clic.
+        const expand = container.querySelector('[data-testid="nota-expand-nota-1"]') as HTMLElement;
+        expect(expand).not.toBeNull();
+        fireEvent.click(expand);
+        expect(expand.className).toContain('card-title--expanded');
+
+        // Editar en línea: ✎ → input → blur persiste vía onRename.
+        const editBtn = container.querySelector('[data-testid="nota-edit-btn-nota-1"]') as HTMLElement;
+        expect(editBtn).not.toBeNull();
+        fireEvent.click(editBtn);
+        const input = container.querySelector('[data-testid="nota-edit-nota-1"]') as HTMLInputElement;
+        expect(input).not.toBeNull();
+        fireEvent.change(input, { target: { value: 'Comprar pan' } });
+        fireEvent.blur(input);
+        expect(onRename).toHaveBeenCalledWith('nota-1', 'Comprar pan');
+    });
+
+    it('muestra "Detener" cuando una alarma está sonando y llama a onStopRinging', () => {
+        const onStop = vi.fn();
+        const { container } = render(
+            <HoyPanel
+                {...props({
+                    temporals: {
+                        alarms: [],
+                        timers: [],
+                        loading: false,
+                        ringing: { id: 'a1', kind: 'alarm', label: 'Despertar' },
+                        onStopRinging: onStop,
+                    },
+                })}
+            />
+        );
+
+        const stopBtn = container.querySelector('[data-testid="temporal-stop"]');
+        expect(stopBtn).not.toBeNull();
+        expect(container.querySelector('[data-testid="temporal-ringing"]')!.textContent).toContain(
+            'Despertar',
+        );
+        fireEvent.click(stopBtn!);
+        expect(onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('citas y alarmas: ✎ edita en línea (onEdit) como las notas', () => {
+        const onRemEdit = vi.fn(async () => null);
+        const onTempEdit = vi.fn(async () => null);
+        const sync = { revision: 1, updated_at: SYNCHRONIZED_AT, deleted: false };
+        const { container } = render(
+            <HoyPanel
+                {...props({
+                    reminders: {
+                        items: [
+                            {
+                                id: 'r1',
+                                text: 'Cita con Ana',
+                                dueAt: NOW + 3600000,
+                                status: 'pending',
+                                createdAt: NOW,
+                                updatedAt: NOW,
+                                sync,
+                            } as any,
+                        ],
+                        loading: false,
+                        onRemove: async () => {},
+                        onEdit: onRemEdit,
+                    },
+                    temporals: {
+                        alarms: [
+                            {
+                                id: 'a1',
+                                kind: 'alarm',
+                                label: 'Despertar',
+                                trigger: { kind: 'countdown', at: NOW, durationMs: 1000 },
+                                recurrence: { kind: 'once' },
+                                nextAt: NOW + 3600000,
+                                status: 'pending',
+                                createdAt: NOW,
+                                updatedAt: NOW,
+                                sync,
+                            } as any,
+                        ],
+                        timers: [],
+                        loading: false,
+                        onCancel: async () => {},
+                        onEdit: onTempEdit,
+                    },
+                })}
+            />
+        );
+
+        // Cita (agenda)
+        const remBtn = container.querySelector('[data-testid="reminder-edit-btn-r1"]');
+        expect(remBtn).not.toBeNull();
+        fireEvent.click(remBtn!);
+        const remInput = container.querySelector('[data-testid="reminder-edit-r1"]') as HTMLInputElement;
+        expect(remInput).not.toBeNull();
+        fireEvent.change(remInput, { target: { value: 'Cita con Ana y Luis' } });
+        fireEvent.blur(remInput);
+        expect(onRemEdit).toHaveBeenCalledWith('r1', 'Cita con Ana y Luis');
+
+        // Alarma
+        const tempBtn = container.querySelector('[data-testid="temporal-edit-btn-a1"]');
+        expect(tempBtn).not.toBeNull();
+        fireEvent.click(tempBtn!);
+        const tempInput = container.querySelector('[data-testid="temporal-edit-a1"]') as HTMLInputElement;
+        fireEvent.change(tempInput, { target: { value: 'Despertar 6am' } });
+        fireEvent.blur(tempInput);
+        expect(onTempEdit).toHaveBeenCalledWith('a1', { label: 'Despertar 6am' });
     });
 });

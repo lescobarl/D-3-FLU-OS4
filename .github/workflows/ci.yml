@@ -32,6 +32,9 @@ jobs:
       - name: Puerta de tipos
         run: npm run typecheck
 
+      - name: Gate (ruta única + hash congelado) — OBLIGATORIO
+        run: npm run gate
+
       - name: Suite completa de unit
         run: npm run test:full
 

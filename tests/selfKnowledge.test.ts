@@ -83,8 +83,9 @@ describe('buildSelfKnowledgeSnapshot — compilación desde FLU_CONFIG real (sin
 
     test('proveedores de búsqueda: solo los habilitados (config-driven)', () => {
         expect(snapshot.proveedoresBusqueda).toEqual(
-            expect.arrayContaining(['wikipedia', 'duckduckgo', 'commons', 'commons-video']),
+            expect.arrayContaining(['tavily', 'openrouter', 'wikipedia', 'commons', 'commons-video']),
         );
+        expect(snapshot.proveedoresBusqueda).not.toContain('duckduckgo');
         expect(snapshot.proveedoresBusqueda).not.toContain('youtube');
         expect(snapshot.proveedoresBusqueda).not.toContain('invidious');
     });

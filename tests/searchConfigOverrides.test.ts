@@ -10,8 +10,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { STORAGE_KEYS } from '../src/core/config/appConfig';
-import type { SearchProviderConfig } from '../src/core/search/searchSession';
+import type { SearchProviderConfig, SearchResultType } from '../src/core/search/searchSession';
 import {
+    applyProviderOverrides,
     clearSearchConfigOverrides,
     evalDailyUsage,
     loadDailyUsage,
@@ -19,8 +20,10 @@ import {
     mergeSearchConfig,
     saveDailyUsage,
     saveSearchConfigOverrides,
+    type SearchConfigOverrides,
     type SearchRuntimeConfig,
 } from '../src/core/search/searchConfigOverrides';
+import { resolveMergedSearchConfig } from '../src/hooks/useWorkspaceSearch';
 
 const WIKI: SearchProviderConfig = {
     id: 'wikipedia',
@@ -161,6 +164,103 @@ describe('mergeSearchConfig', () => {
         expect(mergeSearchConfig(baseRuntime(), { dailyLimit: 20 }).dailyLimit).toBe(20);
         expect(mergeSearchConfig(baseRuntime(), { dailyLimit: -3 }).dailyLimit).toBe(0);
         expect(mergeSearchConfig(baseRuntime(), {}).dailyLimit).toBe(0);
+    });
+});
+
+describe('applyProviderOverrides — composición sin pisar a Búsqueda web', () => {
+    const OR: SearchProviderConfig = {
+        id: 'openrouter',
+        enabled: true,
+        method: 'POST',
+        endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+        externalConfig: true,
+        key: null,
+        model: 'google/gemini-2.5-flash-lite:online',
+        maxResults: 5,
+    };
+    const baseWithOr = (): Record<SearchResultType, SearchProviderConfig[]> => ({
+        web: [WIKI, OR],
+        images: [COMMONS],
+        video: [YOUTUBE],
+    });
+
+    it('borrador vacío NO borra la clave/modelo que escribió Búsqueda web', () => {
+        const prev: SearchConfigOverrides['providers'] = {
+            web: { openrouter: { key: 'sk-or-x', model: 'google/gemini-2.5-flash-lite:online' } },
+        };
+        const merged = applyProviderOverrides(prev, baseWithOr(), {});
+        expect(merged?.web?.openrouter).toEqual({
+            key: 'sk-or-x',
+            model: 'google/gemini-2.5-flash-lite:online',
+        });
+    });
+
+    it('regresión: Búsqueda web + Centro de Control (borrador vacío) no pierde la clave', () => {
+        const overrides: SearchConfigOverrides = {
+            providers: { web: { openrouter: { key: 'sk-or-x', model: 'google/gemini-2.5-flash-lite:online' } } },
+        };
+        const providers = applyProviderOverrides(overrides.providers, baseWithOr(), {});
+        const merged = mergeSearchConfig(
+            { ...baseRuntime(), providers: baseWithOr() },
+            { ...overrides, providers },
+        );
+        expect(merged.providers.web.find((p) => p.id === 'openrouter')?.key).toBe('sk-or-x');
+        expect(merged.providers.web.find((p) => p.id === 'openrouter')?.model).toBe(
+            'google/gemini-2.5-flash-lite:online',
+        );
+    });
+
+    it('el Centro de Control sí aplica enabled/maxResults/timeout al mismo grupo', () => {
+        const prev: SearchConfigOverrides['providers'] = { web: { openrouter: { key: 'k', model: 'm' } } };
+        const merged = applyProviderOverrides(prev, baseWithOr(), {
+            web: { openrouter: { enabled: false, maxResults: 3 } },
+        });
+        expect(merged?.web?.openrouter).toMatchObject({ key: 'k', model: 'm', enabled: false, maxResults: 3 });
+    });
+
+    it('no toca key/model de externalConfig aunque el borrador los traiga', () => {
+        const prev: SearchConfigOverrides['providers'] = { web: { openrouter: { key: 'k1' } } };
+        const merged = applyProviderOverrides(prev, baseWithOr(), {
+            web: { openrouter: { key: 'otra', model: 'otro' } },
+        });
+        expect(merged?.web?.openrouter?.key).toBe('k1');
+    });
+
+    it('aplica key/model/estado de proveedores NO externalConfig desde el borrador', () => {
+        const merged = applyProviderOverrides({}, baseWithOr(), {
+            web: { wikipedia: { key: 'wiki-key', enabled: false } },
+        });
+        expect(merged?.web?.wikipedia).toMatchObject({ key: 'wiki-key', enabled: false });
+    });
+});
+
+describe('resolución cliente (FLU_CONFIG real + overrides)', () => {
+    it('cadena web por prioridad: tavily → openrouter → wikipedia', () => {
+        const merged = resolveMergedSearchConfig();
+        expect(merged.providers.web.map((p) => p.id)).toEqual(['tavily', 'openrouter', 'wikipedia']);
+    });
+
+    it('el modelo base de OpenRouter no es un slug :free:online discontinuado', () => {
+        const merged = resolveMergedSearchConfig();
+        const or = merged.providers.web.find((p) => p.id === 'openrouter');
+        expect(or?.model).toBe('google/gemini-2.5-flash-lite:online');
+        expect(String(or?.model)).not.toContain(':free:online');
+    });
+
+    it('aplica key/model del override de Búsqueda web al proveedor OpenRouter', () => {
+        const merged = resolveMergedSearchConfig({
+            providers: {
+                web: {
+                    openrouter: { key: 'sk-or-x', model: 'google/gemini-2.5-flash-lite:online' },
+                },
+            },
+        });
+        const or = merged.providers.web.find((p) => p.id === 'openrouter');
+        expect(or?.method).toBe('POST');
+        expect(or?.endpoint).toContain('openrouter.ai');
+        expect(or?.externalConfig).toBe(true);
+        expect(or?.key).toBe('sk-or-x');
+        expect(or?.model).toBe('google/gemini-2.5-flash-lite:online');
     });
 });
 
