@@ -1722,6 +1722,30 @@ function App() {
         // puedan disparar un contrato play_music de forma determinista. Se asigna
         // en CREACIÓN (expresión de asignación), disponible desde el montaje.
         onContractResolved: ((window as any).__fluOnContractResolved = useCallback(async (resolved: any) => {
+            // §9 — Fila del USUARIO inmediata: el motor la pide al terminar de
+            // capturar (antes de la IA). Aquí SOLO se agrega la fila y se sale;
+            // la resolución posterior deduplica y agrega la respuesta de FLU.
+            if (resolved?.userCommitOnly) {
+                const early = cleanForSpeech(String(resolved?.transcript || ''));
+                if (early) {
+                    const hist0 = useIntegrationStore.getState().conversationHistory;
+                    const last0 = hist0[hist0.length - 1];
+                    const already0 =
+                        last0?.role === 'user' &&
+                        cleanForSpeech(last0.text || '').toLowerCase() === early.toLowerCase();
+                    if (!already0) {
+                        useIntegrationStore.getState().addConversationEntry({
+                            id: uuidv4(),
+                            role: 'user',
+                            text: early,
+                            speakerName: String(resolved?.speakerName || '') || undefined,
+                            timestamp: Date.now(),
+                            sentiment: 'neutral',
+                        });
+                    }
+                }
+                return;
+            }
             const contract: any = resolved?.contract || {};
             const transcript: string = resolved?.transcript || '';
             const rawOnly: boolean = resolved?.rawOnly === true;

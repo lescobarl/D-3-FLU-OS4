@@ -393,6 +393,10 @@ export function useFluVoiceAssistant({
     if (canonical) commitVisibleTranscript(canonical)
     return canonical
   }, [commitVisibleTranscript])
+  // Limpieza del estado del turno tras resolver (se asigna cuando
+  // `clearTurnBuffers` existe). Evita que la locución ya ejecutada quede en el
+  // buffer/spill y se vuelva a procesar (ciclo de comandos repetidos).
+  const clearTurnAfterResolveRef = useRef(() => {})
   /**
    * §9: par ÚNICO `commit + resolución` del turno. TODAS las ramas cierran por
    * aquí, de modo que el display (commit) y la fila (`transcript`) no puedan
@@ -402,11 +406,24 @@ export function useFluVoiceAssistant({
   const commitAndResolveTurn = useCallback(
     async ({ capture, contract, commitOnly = false, ...payload } = {}) => {
       const canonicalPhrase = commitTurnPhrase(capture)
-      // `commitOnly`: commit temprano para que la transcripción se vea en cuanto
-      // se captura (sin esperar a la IA). La resolución posterior re-commitea el
-      // MISMO valor (idempotente), así no hay doble fuente.
-      if (commitOnly) return canonicalPhrase
-      return onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase })
+      // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
+      // la IA). La resolución posterior re-commitea el MISMO valor (idempotente)
+      // y deduplica la fila, así no hay doble fuente.
+      if (commitOnly) {
+        await onContractResolved?.({
+          contract: null,
+          userCommitOnly: true,
+          transcript: canonicalPhrase,
+          speakerName: payload.speakerName,
+          phase: payload.phase,
+        })
+        return canonicalPhrase
+      }
+      const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase })
+      // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no
+      // se reprocese (ciclo de comandos/ambient que repetían la misma orden).
+      clearTurnAfterResolveRef.current?.()
+      return result
     },
     [commitTurnPhrase, onContractResolved],
   )
@@ -932,6 +949,12 @@ export function useFluVoiceAssistant({
     resetTurnState(turnRef.current)
     finalizeGraceUsedRef.current = false
   }, [])
+
+  // Asignación del limpiador que usa `commitAndResolveTurn` al cerrar el turno.
+  clearTurnAfterResolveRef.current = () => {
+    clearTurnBuffers()
+    pendingSpillRef.current = ''
+  }
 
   const clearCaptureState = useCallback(() => {
     clearTurnBuffers()
