@@ -164,6 +164,7 @@ import {
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
+import { resolveNoteRescue } from './voice/lib/noteRescue';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import {
@@ -1934,6 +1935,11 @@ function App() {
                         ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
                     const arbiterOptions = buildArbiterOptions();
                     lastActionFailed = false;
+                    // Paso 1 — RESOLVER: cada acción del turno se re-resuelve con el
+                    // árbitro determinista (fuente única del parseo preciso). No se
+                    // despacha todavía para poder garantizar antes que una nota del
+                    // turno no se pierda si el LLM la omitió.
+                    const resolvedActions: Array<{ result: any; viaDomain: boolean }> = [];
                     for (const accion of acciones) {
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
@@ -1965,26 +1971,45 @@ function App() {
                                 language: (languageRef.current as 'es' | 'en') || 'es',
                             });
                         if (effectiveResult?.matched) {
-                            relayLog(
-                                'LOG',
-                                'App',
-                                `onContractResolved: acción LLM → dominio "${effectiveResult.domain}" (${JSON.stringify(
-                                    effectiveResult.action?.action ?? effectiveResult.action,
-                                )})${arbiterResult?.matched ? '' : ' [vía dominio LLM]'}`,
+                            resolvedActions.push({
+                                result: effectiveResult,
+                                viaDomain: !arbiterResult?.matched,
+                            });
+                        }
+                    }
+                    // Garantía de nota: el LLM puede omitir la acción de nota aunque
+                    // el turno sea una nota determinista. Se agrega UNA sola por el
+                    // MISMO pipeline; `resolveNoteRescue` devuelve null si ya había
+                    // nota o si el turno resuelve otro dominio (sin ruta doble).
+                    const noteRescue = resolveNoteRescue({
+                        transcript,
+                        resolvedDomains: resolvedActions.map((entry) => entry.result?.domain),
+                        wakeWords,
+                        arbiterOptions,
+                    });
+                    if (noteRescue) resolvedActions.push({ result: noteRescue, viaDomain: false });
+
+                    // Paso 2 — DESPACHAR: punto único, en orden, por el helper único.
+                    for (const { result: effectiveResult, viaDomain } of resolvedActions) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: acción LLM → dominio "${effectiveResult.domain}" (${JSON.stringify(
+                                effectiveResult.action?.action ?? effectiveResult.action,
+                            )})${viaDomain ? ' [vía dominio LLM]' : ''}`,
+                        );
+                        const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
+                        if (reply) {
+                            localHandledReply = reply;
+                            // Para acciones de ESTADO (alarma/timer) el manejador es
+                            // la fuente de verdad: su reply describe lo que REALMENTE
+                            // se creó (p. ej. "todos los días"). Se habla ese texto en
+                            // vez del del LLM, que puede omitir la recurrencia.
+                            const actionName = String(
+                                effectiveResult.action?.action ?? effectiveResult.action ?? '',
                             );
-                            const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
-                            if (reply) {
-                                localHandledReply = reply;
-                                // Para acciones de ESTADO (alarma/timer) el manejador es
-                                // la fuente de verdad: su reply describe lo que REALMENTE
-                                // se creó (p. ej. "todos los días"). Se habla ese texto en
-                                // vez del del LLM, que puede omitir la recurrencia.
-                                const actionName = String(
-                                    effectiveResult.action?.action ?? effectiveResult.action ?? '',
-                                );
-                                if (actionName === 'alarm.add' || actionName === 'timer.start') {
-                                    respuestaVoz = reply;
-                                }
+                            if (actionName === 'alarm.add' || actionName === 'timer.start') {
+                                respuestaVoz = reply;
                             }
                         }
                     }
