@@ -6,6 +6,13 @@
       ".git/**": "deny",
       "**/node_modules/**": "deny",
       "*.lock": "deny",
+      ".task/**": "deny",
+      "scripts/task-gate*.mjs": "deny",
+      "tests/*Guard*.test.ts": "deny",
+      "tests/*guard*.test.ts": "deny",
+      "tests/taskGateInvariant.test.ts": "deny",
+      "tests/voiceTurnCommitDerivation.test.ts": "deny",
+      "tests/voiceTurnSingleWriter.test.ts": "deny",
       "*": "allow"
     }
   }

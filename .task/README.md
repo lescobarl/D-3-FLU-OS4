@@ -53,6 +53,37 @@ el trabajo se sale del alcance, no cumple el DoD o el guard está mal.
 - **maxFiles / maxLines**: fuerzan a trocear tareas grandes.
 - **ignore**: archivos de infraestructura que no cuentan como alcance.
 
+## Verificación de invariantes (anti-proxy)
+
+Para tareas de unificación/eliminación de duplicados, `guard` + `guardExpect` no bastan:
+un guard de conteo puede ser verde sin que la propiedad se cumpla. Añade el bloque
+`invariant` y la puerta **recomputa** todo (no confía en la palabra del agente):
+
+```json
+"invariant": {
+  "statement": "la fila usa el mismo valor commiteado (display === fila)",
+  "metric": { "command": "rg -c \"<patron>\" <archivo>", "target": 0 },
+  "base": "<commit ANTERIOR a la tarea>",
+  "guardFiles": ["tests/<guard>.test.ts"]
+}
+```
+
+La puerta exige, en este orden:
+
+1. `metric.command` medido en `base` → ANTES, y en el árbol actual → DESPUÉS.
+2. `DESPUÉS === target` (si no, el invariante no se cumplió).
+3. `ANTES !== DESPUÉS` (si la métrica no cambió, fue cosmético).
+4. El `guard` corrido **sobre `base`** DEBE FALLAR. Si pasa en base, no distingue el
+   defecto ⇒ la tarea no está definida (§B11). Monta un `git worktree` de `base`, copia
+   `guardFiles` (pueden ser nuevos) y enlaza `node_modules`.
+5. El `guard` en el árbol actual DEBE PASAR.
+
+- **base**: usa el commit ANTERIOR al trabajo. Si el arreglo ya está commiteado, `HEAD`
+  ya no sirve como base (el guard pasaría en base y la puerta lo rechaza, correctamente).
+- **guardFiles**: rutas de test que la puerta copia dentro del worktree base.
+- El criterio `scripts/task-gate-invariant.mjs` se congela por hash:
+  `node scripts/task-gate-freeze.mjs scripts/task-gate-invariant.mjs tests/taskGateInvariant.test.ts`.
+
 ## Prompt de ejecución (pegar en el chat)
 
 ```text

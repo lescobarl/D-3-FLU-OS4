@@ -14,9 +14,20 @@
  *
  * Sale con código != 0 y mensaje claro si algo no cumple. No hay cierre sin puerta verde.
  */
-import { readFileSync, existsSync } from 'node:fs'
+import {
+  readFileSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  symlinkSync,
+  cpSync,
+  rmSync,
+} from 'node:fs'
+import { join, dirname } from 'node:path'
+import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { evaluateInvariant, parseMetricValue } from './task-gate-invariant.mjs'
 
 const CONTRACT = process.env.TASK_CONTRACT || '.task/contract.json'
 const BASELINE = process.env.TASK_BASELINE || '.task/baseline.json'
@@ -35,6 +46,66 @@ function must(cmd) {
   const r = sh(cmd)
   if (r.code !== 0) fail(`Comando falló: ${cmd}\n${r.err || r.out}`)
   return r.out
+}
+
+/** Ejecuta un comando en un directorio concreto (para el worktree base). */
+function shIn(cmd, cwd) {
+  const r = spawnSync(cmd, { shell: true, encoding: 'utf8', cwd })
+  return {
+    code: r.status === null ? 1 : r.status,
+    out: (r.stdout || '').trim(),
+    err: (r.stderr || '').trim(),
+  }
+}
+
+/**
+ * Corre `fn(dir)` dentro de un worktree de `base`, con los guardFiles copiados
+ * (pueden ser nuevos y no existir en base) y `node_modules` enlazado. Limpia
+ * SIEMPRE (no llama a fail() por dentro para no saltarse el cleanup). Si el
+ * montaje falla, devuelve `{ setupError }`.
+ */
+function runInBaseWorktree(base, guardFiles, fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'flu-os4-base-'))
+  const add = sh(`git worktree add --detach "${dir}" ${base}`)
+  if (add.code !== 0) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+    return { setupError: `No se pudo crear el worktree base (${base}):\n${add.err || add.out}` }
+  }
+
+  let result
+  let setupError = null
+  try {
+    const nm = join(dir, 'node_modules')
+    if (!existsSync(nm)) {
+      try {
+        symlinkSync(join(process.cwd(), 'node_modules'), nm, 'junction')
+      } catch (e) {
+        setupError = `No se pudo enlazar node_modules en el worktree base: ${e.message}`
+      }
+    }
+    if (!setupError) {
+      for (const f of guardFiles) {
+        const dest = join(dir, f)
+        mkdirSync(dirname(dest), { recursive: true })
+        cpSync(f, dest)
+      }
+      result = fn(dir)
+    }
+  } catch (e) {
+    setupError = e.message
+  } finally {
+    sh(`git worktree remove --force "${dir}"`)
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+  }
+  return setupError ? { setupError } : result
 }
 
 function globToRe(glob) {
@@ -144,6 +215,41 @@ if (c.guard) {
   }
   if (expect === 'red' && g.code === 0) {
     fail('El GUARD debía nacer ROJO (N>1) y pasó: la tarea no está definida o la duplicación ya no existe.')
+  }
+}
+
+// 4b) INVARIANTE: métrica recomputada + falsación del guard en `base` ------
+// Mata el proxy genérico ("usé el helper") midiendo la PROPIEDAD: la métrica
+// bajó al target Y el guard distingue base de actual. No se confía en el
+// agente; la puerta recomputa todo. Ver scripts/task-gate-invariant.mjs.
+if (c.invariant) {
+  const inv = c.invariant
+  if (!c.guard) fail('invariant requiere el comando "guard" (test del invariante).')
+  if (!inv.metric || !inv.metric.command) fail('invariant.metric.command es obligatorio.')
+  const target = Number(inv.metric.target)
+  if (!Number.isFinite(target)) fail('invariant.metric.target debe ser un número.')
+
+  const variantBase = inv.base || c.base || 'HEAD'
+  const guardFiles = Array.isArray(inv.guardFiles) ? inv.guardFiles : []
+  console.log(`[task-gate] Invariante: ${inv.statement || '(sin enunciado)'}`)
+  console.log(`[task-gate]   métrica: ${inv.metric.command} → target ${target} (base ${variantBase})`)
+
+  const baseRun = runInBaseWorktree(variantBase, guardFiles, (dir) => ({
+    metric: parseMetricValue(shIn(inv.metric.command, dir).out),
+    guard: shIn(c.guard, dir),
+  }))
+  if (baseRun.setupError) fail(baseRun.setupError)
+
+  const verdict = evaluateInvariant({
+    metricBase: () => baseRun.metric,
+    metricNow: () => parseMetricValue(sh(inv.metric.command).out),
+    guardBase: () => baseRun.guard,
+    guardNow: () => sh(c.guard),
+    target,
+  })
+  console.log(`[task-gate]   ${verdict.summary}`)
+  if (!verdict.ok) {
+    fail(`Invariante NO cumplido:\n  - ${verdict.failures.join('\n  - ')}`)
   }
 }
 
