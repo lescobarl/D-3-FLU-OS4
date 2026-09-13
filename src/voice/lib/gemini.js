@@ -1239,7 +1239,7 @@ export async function requestConversationSummary(params) {
   try {
     savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
     savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
-  } catch {}
+  } catch (err) { console.debug('[flu] fallo de teardown ignorado:', err) }
   const body = {
     ...(params ?? {}),
     model: savedModel || undefined,
