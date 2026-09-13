@@ -252,12 +252,19 @@ export function createWhisperRecognitionEngine({
         if (!active || !text) return
         if (typeof engine.onresult === 'function') engine.onresult(buildResultEvent(text, isFinal))
       } catch (error) {
-        // Reintento del worker: se recrea en la próxima petición; avisamos.
+        // Falla del worker/WASM (p. ej. el modelo no cargó) o de red real al
+        // descargar el modelo. Se reintenta al recrear el worker; NO se etiqueta
+        // todo como 'network' (eso confundía con el error del motor Chrome y
+        // ocultaba la causa real).
+        const name = String(error?.name || '')
+        const message = String(error?.message || error)
+        const isRealNetwork =
+          name === 'TypeError' || /network|failed to fetch|fetch failed/i.test(message)
         if (typeof engine.onerror === 'function') {
           engine.onerror({
-            error: 'network',
-            name: String(error?.name || ''),
-            message: String(error?.message || error),
+            error: isRealNetwork ? 'network' : 'engine-error',
+            name,
+            message,
           })
         }
       } finally {

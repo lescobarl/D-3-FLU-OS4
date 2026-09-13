@@ -1820,6 +1820,8 @@ export const FLU_CONFIG = {
       'audio-capture': 'El microfono no esta disponible. Cierra otras pestanas o apps que lo usen e intenta de nuevo.',
       'not-allowed': 'Permiso de microfono denegado.',
       'service-not-allowed': 'El reconocimiento de voz no esta permitido en este navegador.',
+      network: 'El reconocimiento de voz de Chrome necesita conexion a internet y no pudo alcanzar el servicio. Revisa tu red/VPN y reintenta.',
+      'engine-error': 'El motor de voz local fallo al transcribir. Reintentando…',
     },
     transcriptPlaceholder: '',
     transcriptLabel: '',

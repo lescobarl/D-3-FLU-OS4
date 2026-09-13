@@ -13,6 +13,7 @@ import {
   extractFluVoiceCommand,
   compareAudioSignatures,
   getRecognitionRetryDelay,
+  getRecognitionErrorMessage,
   isRecoverableRecognitionError,
   isMinuteGenerationRequest,
   isMinuteSaveRequest,
@@ -2284,6 +2285,15 @@ export function useFluVoiceAssistant({
           return
         }
 
+        // Errores del motor local de transcripción (worker/WASM): se reintentan
+        // solos; no son fallo del micrófono ni del usuario.
+        if (errorCode === 'engine-error') {
+          setError('')
+          isProcessingRef.current = false
+          requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+          return
+        }
+
         const recoverableError = isRecoverableRecognitionError(errorCode, false)
         if (recoverableError) {
           setError('')
@@ -2293,7 +2303,9 @@ export function useFluVoiceAssistant({
         }
 
         if (errorCode !== 'not-allowed' && errorCode !== 'service-not-allowed') {
-          setError(`Error de reconocimiento: ${errorCode}`)
+          setError(
+            getRecognitionErrorMessage(errorCode, FLU_CONFIG.ui?.recognitionErrors || {}),
+          )
         }
         setStatus('idle')
         isProcessingRef.current = false
