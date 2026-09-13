@@ -3636,6 +3636,14 @@ export function useFluVoiceAssistant({
         capturedTranscript = await waitForCaptureSettle(readTurnCaptureSnapshot, FLU_CONFIG.timing)
       }
 
+      // §9 — Visibilidad INMEDIATA: commit temprano de la frase capturada para
+      // que la transcripción se vea en cuanto el usuario termina de hablar, SIN
+      // esperar a la IA ni al comando. La resolución posterior re-commitea el
+      // MISMO valor (idempotente), así no hay doble fuente.
+      if (capturedTranscript) {
+        await commitAndResolveTurn({ capture: capturedTranscript, commitOnly: true })
+      }
+
       const sampleRate = sampleRateRef.current || 48000
       const streamSamples = flattenChunks(chunksRef.current)
       const currentClock = formatClock()
