@@ -4141,6 +4141,7 @@ export function useFluVoiceAssistant({
     apiKey,
     cleanupAudio,
     clearAutoProcessTimer,
+    commitAndResolveTurn,
     commitConversationTurn,
     conversationActiveRef,
     dispatchFastConfigCommand,
