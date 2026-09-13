@@ -3,5 +3,7 @@
   "tests/voiceTurnCommitDerivation.test.ts": "e760dbaa8403d0be8fe748f4e77fa3654ea52fa76e66b41e9ee6a90fcb7020db",
   "scripts/task-gate-invariant.mjs": "f58e25bfaa7ceddccac15712fed92e6b716a447802d6fcad3d454ce31f488184",
   "tests/taskGateInvariant.test.ts": "9269281e7c3d38a2e405e01ecb7c8f043ba595299abc34dbd6a8b8e4b1934d04",
-  "tests/voiceTurnClosingSingleRoute.test.ts": "4cc83557999b1b5a536529f4986552afad4d6c704b21e1e56bf4110f8d5ff9e0"
+  "tests/voiceTurnClosingSingleRoute.test.ts": "4cc83557999b1b5a536529f4986552afad4d6c704b21e1e56bf4110f8d5ff9e0",
+  "tests/schedulerSingleDefinition.test.ts": "16a793d68c19e0a24baeb69fa20e2533c8913acc31db9fac2ad27b8799a1eb70",
+  "scripts/hito.mjs": "b616834298d471ff271104c2fe236643f0022c5af4a2731daa4db8f1931c3890"
 }
