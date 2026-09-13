@@ -381,6 +381,17 @@ export function useFluVoiceAssistant({
   const commitVisibleTranscript = useCallback((text) => {
     useIntegrationStore.getState().setLastCommittedTranscript(typeof text === 'string' ? text : '')
   }, [])
+  /**
+   * §9: ÚNICO punto de commit de la locución del turno. Limpia UNA vez y
+   * devuelve la frase canónica para que la fila de conversación use EXACTAMENTE
+   * el mismo texto (display === fila). Ninguna rama llama ya
+   * `commitVisibleTranscript` directo (salvo el reset).
+   */
+  const commitTurnPhrase = useCallback((text) => {
+    const canonical = cleanForSpeech(typeof text === 'string' ? text : '')
+    if (canonical) commitVisibleTranscript(canonical)
+    return canonical
+  }, [commitVisibleTranscript])
   const [lastContract, setLastContract] = useState(null)
   const [lastDiagnostics, setLastDiagnostics] = useState(null)
   const [lastErrorEvent, setLastErrorEvent] = useState(null)
@@ -1664,10 +1675,10 @@ export function useFluVoiceAssistant({
       lastLoggedSpeakerRef.current = speakerName
       lastSpeakerRef.current = speakerName
       if (conversationActiveRef?.current) {
-        commitVisibleTranscript(capture)
+        commitTurnPhrase(capture)
       }
       if (!conversationActiveRef?.current) {
-        commitVisibleTranscript(capture)
+        commitTurnPhrase(capture)
         lastEmittedTranscriptRef.current = capture
       }
 
@@ -2723,7 +2734,7 @@ export function useFluVoiceAssistant({
 
       if (command === 'FLU_ESPERA') {
         fluParticipantRef.current?.dismissRaisedHand?.()
-        commitVisibleTranscript(cleaned)
+        commitTurnPhrase(cleaned)
         await onContractResolved?.({
           contract: {
             respuesta_voz: getCommandSpeech('FLU_ESPERA', language),
@@ -2747,7 +2758,7 @@ export function useFluVoiceAssistant({
           lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
         const participant = fluParticipantRef.current
         const respondParticipantFloor = async (speechText, { floor = false } = {}) => {
-          commitVisibleTranscript(cleaned)
+          commitTurnPhrase(cleaned)
           await onContractResolved?.({
             contract: {
               respuesta_voz: speechText,
@@ -2814,7 +2825,7 @@ export function useFluVoiceAssistant({
         return
       }
 
-      commitVisibleTranscript(cleaned)
+      commitTurnPhrase(cleaned)
       await onContractResolved?.({
         contract: {
           respuesta_voz: getCommandSpeech(command, language),
@@ -3106,8 +3117,10 @@ export function useFluVoiceAssistant({
       openPreviewTurnRef.current = false
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
-      const displayPhrase = cleanForSpeech(fullTranscript || question)
-      commitVisibleTranscript(displayPhrase)
+      // §9: UNA sola frase canónica para el turno. Display y fila de
+      // conversación salen de ESTE mismo valor (con wake word), no de dos
+      // derivaciones distintas.
+      const canonicalPhrase = commitTurnPhrase(fullTranscript || question)
       // §9: la query se deriva de la fila canónica LEÍDA DEL STORE
       // (`lastCommittedTranscript`), no del texto suelto de la captura.
       // El commit de arriba deja la fila en el store; la query sale de ahí.
@@ -3167,7 +3180,6 @@ export function useFluVoiceAssistant({
         if (skipGemini) {
           const { domain: statefulDomain, contract: deterministicContract } = skipGemini
           const courtesy = deterministicContract.respuesta_voz || ''
-          commitVisibleTranscript(fullTranscript)
           setLastContract(deterministicContract)
           setLastDiagnostics({ route: 'deterministic-arbiter', provider: 'local', skipGemini: true })
           setError('')
@@ -3181,7 +3193,7 @@ export function useFluVoiceAssistant({
           await onContractResolved?.({
             contract: deterministicContract,
             diagnostics: { route: 'deterministic-arbiter', provider: 'local', skipGemini: true },
-            transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
+            transcript: canonicalPhrase,
             conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
             speakerName: resolvedSpeakerName,
             speakerAlias,
@@ -3308,7 +3320,6 @@ export function useFluVoiceAssistant({
               : contract?.contract?.ambiente ?? null,
         }
 
-        commitVisibleTranscript(fullTranscript)
         setLastContract(resolvedContract)
         setLastDiagnostics(contract.diagnostics || null)
         setError('')
@@ -3323,7 +3334,7 @@ export function useFluVoiceAssistant({
         await onContractResolved?.({
           contract: resolvedContract,
           diagnostics: contract.diagnostics || null,
-          transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
+          transcript: canonicalPhrase,
           conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
           speakerName: resolvedSpeakerName,
           speakerAlias,
@@ -3611,7 +3622,7 @@ export function useFluVoiceAssistant({
         ) {
           finishTurn()
           restartRecognition()
-          commitVisibleTranscript(cleanForSpeech(capturedTranscript))
+          commitTurnPhrase(cleanForSpeech(capturedTranscript))
           return
         }
 
@@ -3715,7 +3726,7 @@ export function useFluVoiceAssistant({
         setStatus('idle')
         isListeningRef.current = false
         setActiveKnowledgeBase('general')
-        commitVisibleTranscript(capturedTranscript)
+        commitTurnPhrase(capturedTranscript)
         relayLog('LOG', 'useFluVoiceAssistant', `processCapture DIRECT COMMAND: calling onContractResolved with command="${directCommand}"`)
         await onContractResolved?.({
           contract: {
@@ -3831,7 +3842,7 @@ export function useFluVoiceAssistant({
             transcript: bufferedTranscript,
             error: errorMessage,
           })
-          commitVisibleTranscript(capturedTranscript)
+          commitTurnPhrase(capturedTranscript)
           setLastContract(null)
           if (bufferedTranscript) {
             commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
@@ -3897,7 +3908,7 @@ export function useFluVoiceAssistant({
               : contract?.contract?.ambiente ?? null,
         }
 
-        commitVisibleTranscript(capturedTranscript)
+        commitTurnPhrase(capturedTranscript)
         setLastContract(finalContract)
         setLastDiagnostics(contract.diagnostics || null)
         setLastErrorEvent(null)
@@ -3989,7 +4000,7 @@ export function useFluVoiceAssistant({
           transcript: bufferedTranscript,
           error: errorMessage,
         })
-        commitVisibleTranscript(capturedTranscript)
+        commitTurnPhrase(capturedTranscript)
         setLastContract(null)
         if (bufferedTranscript) {
           commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
@@ -4063,7 +4074,7 @@ export function useFluVoiceAssistant({
             : contract?.contract?.ambiente ?? null,
       }
 
-      commitVisibleTranscript(capturedTranscript)
+      commitTurnPhrase(capturedTranscript)
       setLastContract(resolvedContract)
       setLastDiagnostics(contract.diagnostics || null)
       setLastErrorEvent(null)
