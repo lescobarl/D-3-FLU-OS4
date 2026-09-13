@@ -13,6 +13,11 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
   const listRef = useRef(null)
   const entryCountRef = useRef(0)
   const displayRows = useMemo(() => {
+    // Los eventos narrativos internos de FLU (`meta.systemEvent`, p. ej.
+    // "[FLU recuerda] ...") viven en el historial porque Gemini los usa como
+    // contexto, pero NO son filas de conversación: se excluyen de la bitácora
+    // (presentación). La fuente única (el store) queda intacta.
+    const visibleEntries = entries.filter((entry) => !entry?.meta?.systemEvent)
     // FIX duplicación: addFluMessage (integrationStore.ts) escribe la respuesta de FLU
     // DOS veces: la adjunta al último turno del usuario (campo .response / meta.response)
     // y ADEMÁS agrega una entrada independiente role='flu' con el mismo texto. Aquí
@@ -20,14 +25,14 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
     // la respuesta adjunta cuando ya se muestra como fila propia (elimina el duplicado
     // visible en el log SIN tocar el store, que Gemini/persistencia/exportación necesitan).
     const fluTexts = new Set()
-    for (const entry of entries) {
+    for (const entry of visibleEntries) {
       if (entry.role === 'flu') {
         fluTexts.add(formatCompactLogText(entry?.text ?? entry?.transcript))
       }
     }
     const rows = []
-    for (let index = entries.length - 1; index >= 0; index -= 1) {
-      const entry = entries[index]
+    for (let index = visibleEntries.length - 1; index >= 0; index -= 1) {
+      const entry = visibleEntries[index]
       const isSystem = entry.role === 'system'
       const compactResponse = formatCompactLogText(
         entry.meta?.response ? entry.meta.response : entry.response || '',
@@ -58,7 +63,7 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
     }
   }, [entries])
 
-  if (!entries.length) {
+  if (!displayRows.length) {
     return <p className="panel__hint">{emptyLabel}</p>
   }
 

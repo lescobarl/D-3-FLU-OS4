@@ -4,6 +4,11 @@ import { fileURLToPath } from 'url';
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+    // JSX automático también para `.jsx` (componentes OS2 de src/voice): sin esto
+    // esbuild transforma `.jsx` con el runtime clásico y exige `React` en ámbito,
+    // a diferencia del app (vite.config.ts usa @vitejs/plugin-react). Alinea el
+    // transform de tests con el de producción.
+    esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
     test: {
         globals: true,
         // RENDIMIENTO (Constraint #5): el arranque de jsdom domina el tiempo
