@@ -3127,16 +3127,12 @@ export function useFluVoiceAssistant({
       listenStateRef.current.pendingInterim = ''
       // §9: UNA sola frase canónica para el turno. Display y fila de
       // conversación salen de ESTE mismo valor (con wake word), no de dos
-      // derivaciones distintas.
-      const canonicalPhrase = commitTurnPhrase(fullTranscript || question)
-      // §9: la query se deriva de la fila canónica LEÍDA DEL STORE
-      // (`lastCommittedTranscript`), no del texto suelto de la captura.
-      // El commit de arriba deja la fila en el store; la query sale de ahí.
+      // derivaciones distintas. El commit lo hace `commitAndResolveTurn` al
+      // cerrar; aquí solo se calcula el valor para derivar la query.
+      const canonicalPhrase = cleanForSpeech(fullTranscript || question)
+      // §9: la query se deriva de la MISMA fila canónica por el derivador único.
       question =
-        deriveQueryFromRow(
-          useIntegrationStore.getState().lastCommittedTranscript,
-          FLU_CONFIG.voiceCommands,
-        ).question || question
+        deriveQueryFromRow(canonicalPhrase, FLU_CONFIG.voiceCommands).question || question
       publishedLiveRef.current = ''
       setLiveTranscript('')
 
@@ -3198,10 +3194,10 @@ export function useFluVoiceAssistant({
             history: getConversationContext(),
           })
           relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery §2B deterministic (skip Gemini): domain="${statefulDomain}", respuesta_voz="${courtesy.slice(0, 80)}"`)
-          await onContractResolved?.({
+          await commitAndResolveTurn({
+            capture: canonicalPhrase,
             contract: deterministicContract,
             diagnostics: { route: 'deterministic-arbiter', provider: 'local', skipGemini: true },
-            transcript: canonicalPhrase,
             conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
             speakerName: resolvedSpeakerName,
             speakerAlias,
@@ -3338,11 +3334,11 @@ export function useFluVoiceAssistant({
           history: getConversationContext(),
         })
 
-        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery calling onContractResolved with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
-        await onContractResolved?.({
+        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery calling commitAndResolveTurn with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
+        await commitAndResolveTurn({
+          capture: canonicalPhrase,
           contract: resolvedContract,
           diagnostics: contract.diagnostics || null,
-          transcript: canonicalPhrase,
           conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
           speakerName: resolvedSpeakerName,
           speakerAlias,
@@ -3361,8 +3357,9 @@ export function useFluVoiceAssistant({
         reportGeminiFailure(error, { phase: 'SESION_ACTIVA', transcript: fullTranscript })
         // Also notify the UI (FluShell) so FLU speaks the error to the user
         const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery catch calling onContractResolved with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
-        await onContractResolved?.({
+        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery catch calling commitAndResolveTurn with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
+        await commitAndResolveTurn({
+          capture: canonicalPhrase,
           contract: {
             respuesta_voz: errorMessage,
             navegacion: { comando: null, destino: null, parametros: {} },
@@ -3370,7 +3367,6 @@ export function useFluVoiceAssistant({
             metadata: { provider: 'error', transcript: fullTranscript, rawText: '' },
           },
           diagnostics: buildGeminiDiagnosticsFromError(error),
-          transcript: canonicalPhrase,
           conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
           speakerName: resolvedSpeakerName || 'FLU',
           speakerAlias: null,
@@ -3394,8 +3390,8 @@ export function useFluVoiceAssistant({
     },
     [
       conversationActiveRef,
+      commitAndResolveTurn,
       getConversationContext,
-      onContractResolved,
       requestFluContractForTranscript,
       requestRecognitionRestart,
       reportGeminiFailure,
@@ -3816,10 +3812,16 @@ export function useFluVoiceAssistant({
         // despachó (para que la resolución determinista gane sobre la del modelo).
         const lateStateful = resolveStatefulDomains(capturedTranscript, { language: detectedLanguage })
 
+        // §9: la IA recibe la query DERIVADA por el derivador único a partir de la
+        // frase canónica del turno; nunca el texto propio de la captura.
+        const turnQuery =
+          deriveQueryFromRow(capturedTranscript, FLU_CONFIG.voiceCommands).question ||
+          capturedTranscript
+
         let contract
         try {
           contract = await requestFluContractForTranscript({
-            transcript: bufferedTranscript,
+            transcript: turnQuery,
             knowledgeMode,
             intent,
             speaker: fastSpeakerName,
@@ -3848,18 +3850,18 @@ export function useFluVoiceAssistant({
             transcript: bufferedTranscript,
             error: errorMessage,
           })
-          const canonicalConfigError = commitTurnPhrase(capturedTranscript)
           setLastContract(null)
           if (bufferedTranscript) {
-            commitSessionTurn(canonicalConfigError, resolvedSpeakerName)
+            commitSessionTurn(capturedTranscript, resolvedSpeakerName)
             await saveSessionState({
               phase: 'SESION_ACTIVA',
               ...nextSession,
               history: getConversationContext(),
             })
             // Speak the error to the user so FLU explains what went wrong
-            relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION ERROR: calling onContractResolved with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
-            await onContractResolved?.({
+            relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION ERROR: calling commitAndResolveTurn with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
+            await commitAndResolveTurn({
+              capture: capturedTranscript,
               contract: {
                 respuesta_voz: errorMessage,
                 navegacion: { comando: null, destino: null, parametros: {} },
@@ -3867,7 +3869,6 @@ export function useFluVoiceAssistant({
                 metadata: { provider: 'error', transcript: bufferedTranscript, rawText: '' },
               },
               diagnostics: buildGeminiDiagnosticsFromError(error),
-              transcript: canonicalConfigError,
               speakerName: resolvedSpeakerName,
               speakerAlias,
               phase: 'CONFIGURACION',
@@ -3914,7 +3915,6 @@ export function useFluVoiceAssistant({
               : contract?.contract?.ambiente ?? null,
         }
 
-        const canonicalConfigOk = commitTurnPhrase(capturedTranscript)
         setLastContract(finalContract)
         setLastDiagnostics(contract.diagnostics || null)
         setLastErrorEvent(null)
@@ -3929,14 +3929,14 @@ export function useFluVoiceAssistant({
         await cleanupAudio()
         setStatus('idle')
         isListeningRef.current = false
-        relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION SUCCESS: calling onContractResolved with respuesta_voz="${(finalContract.respuesta_voz || '').slice(0, 80)}"`)
+        relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION SUCCESS: calling commitAndResolveTurn with respuesta_voz="${(finalContract.respuesta_voz || '').slice(0, 80)}"`)
         // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración,
         // el arranque de juego y el ambiente se aplican ANTES de hablar la confirmación.
         await fastPathDispatch
-        await onContractResolved?.({
+        await commitAndResolveTurn({
+          capture: capturedTranscript,
           contract: finalContract,
           diagnostics: contract.diagnostics || null,
-          transcript: canonicalConfigOk,
           speakerName: resolvedSpeakerName,
           speakerAlias,
           phase: 'CONFIGURACION',
@@ -3975,10 +3975,16 @@ export function useFluVoiceAssistant({
       // despachó (para que la resolución determinista gane sobre la del modelo).
       const lateStateful = resolveStatefulDomains(capturedTranscript, { language: detectedLanguage })
 
+      // §9: la IA recibe la query DERIVADA por el derivador único a partir de la
+      // frase canónica del turno; nunca el texto propio de la captura.
+      const turnQuery =
+        deriveQueryFromRow(capturedTranscript, FLU_CONFIG.voiceCommands).question ||
+        capturedTranscript
+
       let contract
       try {
         contract = await requestFluContractForTranscript({
-          transcript: bufferedTranscript,
+          transcript: turnQuery,
           knowledgeMode,
           intent,
           speaker: fastSpeakerName,
@@ -4006,18 +4012,18 @@ export function useFluVoiceAssistant({
           transcript: bufferedTranscript,
           error: errorMessage,
         })
-        const canonicalSessionError = commitTurnPhrase(capturedTranscript)
         setLastContract(null)
         if (bufferedTranscript) {
-          commitSessionTurn(canonicalSessionError, resolvedSpeakerName)
+          commitSessionTurn(capturedTranscript, resolvedSpeakerName)
           await saveSessionState({
             phase: 'SESION_ACTIVA',
             ...session,
             history: getConversationContext(),
           })
           // Speak the error to the user so FLU explains what went wrong
-          relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA ERROR: calling onContractResolved with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
-          await onContractResolved?.({
+          relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA ERROR: calling commitAndResolveTurn with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
+          await commitAndResolveTurn({
+            capture: capturedTranscript,
             contract: {
               respuesta_voz: errorMessage,
               navegacion: { comando: null, destino: null, parametros: {} },
@@ -4025,7 +4031,6 @@ export function useFluVoiceAssistant({
               metadata: { provider: 'error', transcript: bufferedTranscript, rawText: '' },
             },
             diagnostics: buildGeminiDiagnosticsFromError(error),
-            transcript: canonicalSessionError,
             speakerName: resolvedSpeakerName,
             speakerAlias,
             phase: 'SESION_ACTIVA',
@@ -4080,7 +4085,6 @@ export function useFluVoiceAssistant({
             : contract?.contract?.ambiente ?? null,
       }
 
-      const canonicalSessionOk = commitTurnPhrase(capturedTranscript)
       setLastContract(resolvedContract)
       setLastDiagnostics(contract.diagnostics || null)
       setLastErrorEvent(null)
@@ -4094,14 +4098,14 @@ export function useFluVoiceAssistant({
       await cleanupAudio()
       setStatus('idle')
       isListeningRef.current = false
-      relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA SUCCESS: calling onContractResolved with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
+      relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA SUCCESS: calling commitAndResolveTurn with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
       // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración,
       // el turno de juego y el ambiente se aplican ANTES de hablar la confirmación.
       await fastPathDispatch
-      await onContractResolved?.({
+      await commitAndResolveTurn({
+        capture: capturedTranscript,
         contract: resolvedContract,
         diagnostics: contract.diagnostics || null,
-        transcript: canonicalSessionOk,
         speakerName: resolvedSpeakerName,
         speakerAlias,
         phase: 'SESION_ACTIVA',
@@ -4154,7 +4158,6 @@ export function useFluVoiceAssistant({
     finalizeRecognition,
     getConversationContext,
     language,
-    onContractResolved,
     phase,
     processConversationFluQuery,
     readCaptureSnapshot,
