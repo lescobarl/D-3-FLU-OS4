@@ -178,6 +178,22 @@ describe('ResultFeed — render del feed de resultados', () => {
         ).toBe('media');
     });
 
+    it('una respuesta de texto devuelve el foco a "Todo" (focusSeq por turno)', () => {
+        const base = [item({ id: 'res-text', origin: 'web', kind: 'text', title: 'Texto' })];
+        const { container, rerender } = render(
+            <ResultFeed items={base} focusKind="image" focusSeq={1} />
+        );
+        expect(
+            container.querySelector('.result-feed__filter--active')?.getAttribute('data-filter')
+        ).toBe('image');
+
+        // Turno de texto: nuevo seq + kind text → vuelve a "Todo".
+        rerender(<ResultFeed items={base} focusKind="text" focusSeq={2} />);
+        expect(
+            container.querySelector('.result-feed__filter--active')?.getAttribute('data-filter')
+        ).toBe('all');
+    });
+
     it('un video onlyInKind NUNCA aparece en "Todo"', () => {
         const { container } = render(
             <ResultFeed

@@ -123,6 +123,13 @@ export interface WorkspaceHubProps {
      */
     documents?: DocumentsHistoryPanelProps;
 
+    /**
+     * Foco del turno (señal por turno desde App): `seq` monotónico + `kind` del
+     * resultado. `text` → vuelve a "Todo"; video/doc → "Video/Docs"; image →
+     * "Imágenes". Tiene prioridad sobre el foco derivado.
+     */
+    turnFocus?: { kind: 'video' | 'doc' | 'image' | 'text'; seq: number } | null;
+
     // Confirmación del parseo de una imagen de horario (digitalización → HOY).
     // Genérico: entradas estructuradas pendientes del visto bueno del usuario.
     horarioImport?: {
@@ -258,6 +265,7 @@ export function WorkspaceHub({
     app,
     generation,
     documents,
+    turnFocus,
     horarioImport,
     upload,
     language,
@@ -353,9 +361,16 @@ export function WorkspaceHub({
                 : null;
 
         // IA texto: respuesta de Flu + contenido + puntos clave + tarea.
+        // Los artefactos GENERADOS (documento/carta/pdf, video) NO se pintan aquí:
+        // su contenido va en su tarjeta de generación (ia-generacion). Antes la
+        // carta completa aparecía como "Respuesta de Flu" además de generarse.
+        const artifactTipo = String(workspaceArtifact?.tipo || '');
+        const artifactEsGenerado = artifactTipo === 'doc' || artifactTipo === 'video';
         const iaTextParts: string[] = [];
         if (latestResponse) iaTextParts.push(latestResponse);
-        if (workspaceArtifact?.contenido) iaTextParts.push(workspaceArtifact.contenido);
+        if (workspaceArtifact?.contenido && !artifactEsGenerado) {
+            iaTextParts.push(workspaceArtifact.contenido);
+        }
         if (Array.isArray(workspaceArtifact?.puntos_clave) && workspaceArtifact.puntos_clave.length > 0) {
             iaTextParts.push(workspaceArtifact.puntos_clave.join('\n'));
         }
@@ -631,7 +646,7 @@ export function WorkspaceHub({
                     <div className="workspace-hub__columns" data-testid="workspace-hub-columns">
                         <div className="workspace-hub__main" data-testid="workspace-hub-main">
                             {/* Feed de resultados consolidado (columna principal) */}
-                            <ResultFeed items={feedItems} language={language} focusKind={focusKind} />
+                            <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} />
 
                             {/* Sección 3 — cargas (región permanente) */}
                             <div className="frame-content__upload-zone">
@@ -727,7 +742,7 @@ export function WorkspaceHub({
                     </div>
                 ) : (
                     <div className="workspace-hub__main" data-testid="workspace-hub-main">
-                        <ResultFeed items={feedItems} language={language} focusKind={focusKind} />
+                        <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} />
                         <div className="frame-content__upload-zone">
                             {upload.error && (
                                 <div className="flu-error-box" role="alert">{upload.error}</div>

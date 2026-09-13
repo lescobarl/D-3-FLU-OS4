@@ -1008,6 +1008,45 @@ function resolveDomainScopedIntent(
         }
         return null;
     }
+    if (domain === 'horario') {
+        const intent = parseHorarioIntent(String(text || '').trim());
+        if (intent?.handled && intent?.action) {
+            return { matched: true, domain: 'horario', action: intent, channel: 'flu' };
+        }
+        return null;
+    }
+    if (domain === 'temporal') {
+        const temporalCfg = (FLU_CONFIG as any).temporal || {};
+        const intent = parseTemporalIntent(String(text || ''), {
+            now: opts.now ?? Date.now(),
+            defaultAlarmTimeOfDay: temporalCfg.defaultAlarmTimeOfDay,
+            defaultTimerMinutes: Number(temporalCfg.defaultTimerMinutes) || 5,
+        });
+        if (intent?.handled && intent?.action) {
+            return { matched: true, domain: 'temporal', action: intent, channel: 'flu' };
+        }
+        return null;
+    }
+    if (domain === 'diary') {
+        // Mismo punto de parseo que __fluHandleDiaryText (texto crudo).
+        const clean = String(text || '').trim();
+        const enDiario =
+            /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(
+                clean,
+            );
+        const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
+        const match = enDiario || diarioPrefijo;
+        const content = match?.[1]?.trim();
+        if (content) {
+            return {
+                matched: true,
+                domain: 'diary',
+                action: { handled: true, action: 'diary.add', data: { content } },
+                channel: 'flu',
+            };
+        }
+        return null;
+    }
     return null;
 }
 
@@ -1072,6 +1111,14 @@ async function dispatchArbiterIntent(
 
 function App() {
     const [currentState, setCurrentState] = useState<ConversationState>('IDLE');
+    // Foco del Pizarrón por turno (señal monotónica): garantiza que el feed
+    // salte al tipo del resultado del turno, incluso si el tipo se repite, y
+    // que una respuesta de texto regrese a "Todo".
+    const turnFocusSeqRef = useRef(0);
+    const [turnFocus, setTurnFocus] = useState<{
+        kind: 'video' | 'doc' | 'image' | 'text';
+        seq: number;
+    } | null>(null);
     const integrationStore = useIntegrationStore();
     // Ambiente activo (rebranding por oficio): pestañas visibles derivadas del catálogo
     const activeAmbienteId = useEnvironmentStore((s) => s.activeAmbienteId);
@@ -2135,19 +2182,21 @@ function App() {
             }
 
             // ============================================================
-            // LIMPIAR IMAGEN ANTERIOR AL INICIO DE CADA CONTRATO
-            // Regla: las imágenes solo se muestran si la IA lo indica
-            // explícitamente en este turno (workspace.tipo visual). Si la IA
-            // no pide imagen (texto, sin workspace, o respuesta corta), la
-            // zona de imagen debe quedar limpia — NUNCA persistir la imagen
-            // del turno anterior.
+            // RETENCIÓN DEL ÚLTIMO ARTEFACTO VISUAL/MEDIA
+            // Pedido explícito: la última imagen/video/documento NO se borra al
+            // iniciar un turno nuevo; se conserva hasta que un turno nuevo lo
+            // reemplace (una generación nueva invalida las peticiones viejas por
+            // su requestId, así que no hay mezcla). Solo se limpia el artifact
+            // TEXTUAL previo para que texto viejo no se mezcle con la respuesta.
             // ============================================================
-            // Invalidar cualquier request de imagen pendiente (OS2 parity: requestId guard)
-            try {
-                workspaceImage.clear();
-            } catch (err) {
-                console.warn('[App] workspaceImage.clear() threw (non-critical):', err);
-                relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
+            {
+                const prevTipo = String(integrationStore.workspaceArtifact?.tipo || '');
+                const prevEsMedia = ['image_prompt', 'diagram', '3d', 'doc', 'video'].includes(
+                    prevTipo,
+                );
+                if (!prevEsMedia) {
+                    integrationStore.setWorkspaceArtifact(null);
+                }
             }
 
             // ============================================================
@@ -2158,12 +2207,7 @@ function App() {
             // (workspaceImage.generateFromContract) se dispare EN EL MOMENTO en que
             // la IA responde, en paralelo con (incluso antes de) que FLU hable.
             // generateFromContract es async fire-and-forget: no bloquea el habla.
-            //
-            // "contenido viejo arreglalo": SIEMPRE limpiar el artifact previo al
-            // inicio de cada turno real (no rawOnly), de modo que el contenido
-            // visual/textual del turno anterior NUNCA se mezcle con la respuesta
-            // nueva. Solo se re-puebla si el nuevo contrato trae contenido real.
-            integrationStore.setWorkspaceArtifact(null);
+            // El artifact anterior se conserva salvo que sea textual (ver arriba).
 
             // Limpiar también el estado de búsqueda del Pizarrón al iniciar un
             // turno real: si el turno anterior fue una búsqueda web (BUSCAR/
@@ -2179,6 +2223,22 @@ function App() {
             const comandoNavegacion = String((navegacion as any)?.comando || '').toUpperCase();
             const isSearchFillTurn = comandoNavegacion === 'BUSCAR' || comandoNavegacion === 'NAVEGAR';
             if (!isSearchFillTurn) dispatchFluResetSearch();
+            // Foco del turno: el feed del Pizarrón salta al tipo del resultado.
+            // `text` (respuesta conversacional) → vuelve a "Todo".
+            {
+                const wsTipoFocus = String((workspace as any)?.tipo || '').trim().toLowerCase();
+                const navFocus = String((navegacion as any)?.comando || '').toUpperCase();
+                const focusKindNow: 'video' | 'doc' | 'image' | 'text' =
+                    wsTipoFocus === 'video' || navFocus === 'GENERAR_VIDEO'
+                        ? 'video'
+                        : wsTipoFocus === 'doc' || navFocus === 'GENERAR_DOCUMENTO'
+                            ? 'doc'
+                            : ['image_prompt', 'diagram', '3d'].includes(wsTipoFocus)
+                                ? 'image'
+                                : 'text';
+                turnFocusSeqRef.current += 1;
+                setTurnFocus({ kind: focusKindNow, seq: turnFocusSeqRef.current });
+            }
             if (workspace) {
                 const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
                 const titulo = workspace.titulo || '';
@@ -4925,6 +4985,7 @@ const {
                                             },
                                             language,
                                         },
+                                        turnFocus,
                                         horarioImport: {
                                             pending: pendingHorarioImport,
                                             busy: horarioImportBusy,

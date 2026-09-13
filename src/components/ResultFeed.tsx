@@ -31,10 +31,12 @@ export type ResultKind = 'text' | 'image' | 'doc' | 'video' | 'history';
 /** Filtro por tipo visible en la cabecera del feed. */
 export type ResultFeedFilter = 'all' | 'image' | 'media' | 'history';
 
-/** Foco solicitado por el padre (artefacto recién creado). */
-export type ResultFeedFocusKind = 'video' | 'doc' | 'image' | null;
+/** Foco solicitado por el padre (artefacto del turno). `text` = respuesta
+ *  conversacional → vuelve a "Todo". */
+export type ResultFeedFocusKind = 'video' | 'doc' | 'image' | 'text' | null;
 
-/** Traduce el tipo de artefacto a la pestaña que debe abrirse. */
+/** Traduce el tipo de artefacto del turno a la pestaña que debe abrirse.
+ *  `text` (respuesta sin artefacto) → "Todo". */
 function filterForKind(kind: ResultFeedFocusKind): ResultFeedFilter {
   if (kind === 'image') return 'image';
   if (kind === 'video' || kind === 'doc') return 'media';
@@ -75,11 +77,17 @@ export interface ResultFeedProps {
   /** Idioma actual para etiquetas bilingües (es/en). */
   language?: string;
   /**
-   * Artefacto recién creado por el turno (video/doc/imagen). Cuando CAMBIA,
-   * el feed salta a la pestaña correspondiente sin pisar la elección manual
-   * si no hay artefacto nuevo. `null` = sin foco.
+   * Artefacto del turno (video/doc/imagen/text). Cuando CAMBIA, el feed salta
+   * a la pestaña correspondiente sin pisar la elección manual si no hay
+   * artefacto nuevo. `null` = sin foco.
    */
   focusKind?: ResultFeedFocusKind;
+  /**
+   * Señal por turno (contador monotónico). Si se entrega, fuerza el foco en
+   * CADA turno aunque el tipo se repita (`text` → "Todo"). Es lo que hace que
+   * una respuesta de texto regrese el foco a "Todo".
+   */
+  focusSeq?: number;
 }
 
 // ------------------------------------------------------------
@@ -91,14 +99,22 @@ export function ResultFeed({
   title,
   language = 'es',
   focusKind = null,
+  focusSeq,
 }: ResultFeedProps) {
   const [filter, setFilter] = useState<ResultFeedFilter>(() => pickInitialFilter(items));
 
-  // Foco en caliente: cuando llega un artefacto NUEVO (focusKind cambia de
-  // null a su tipo), el feed salta a su pestaña. No pisa la elección manual
-  // porque solo actúa cuando el tipo enfocado cambia.
+  // Foco por turno. Con `focusSeq` se aplica en CADA turno (aunque el tipo se
+  // repita) y `text` vuelve a "Todo"; sin él, se conserva el comportamiento por
+  // cambio de tipo (compat).
   const lastFocusRef = useRef<ResultFeedFocusKind>(null);
+  const lastFocusSeqRef = useRef<number | null>(null);
   useEffect(() => {
+    if (typeof focusSeq === 'number') {
+      if (lastFocusSeqRef.current === focusSeq) return;
+      lastFocusSeqRef.current = focusSeq;
+      setFilter(filterForKind(focusKind));
+      return;
+    }
     if (!focusKind) {
       lastFocusRef.current = null;
       return;
@@ -107,7 +123,7 @@ export function ResultFeed({
       setFilter(filterForKind(focusKind));
       lastFocusRef.current = focusKind;
     }
-  }, [focusKind]);
+  }, [focusSeq, focusKind]);
 
   // Etiquetas de la UI (Regla #1: sin hardcode).
   const ui = FLU_CONFIG.ui?.workspace || {};
