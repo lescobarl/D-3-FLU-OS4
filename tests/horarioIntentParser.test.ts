@@ -209,3 +209,11 @@ describe('parseHorarioIntent — dictado natural (niños)', () => {
     expect(r.data?.inicio).toBe('10:00');
   });
 });
+
+describe('parseHorarioIntent — hora con meridiem (alineada al selector único)', () => {
+  it('"a las 2:00 con 10 p.m" → inicio 22:00 (gana el meridiem)', () => {
+    const r = parseHorarioIntent('agrega natación el lunes a las 2:00 con 10 p.m');
+    expect(r.action).toBe('horario.add');
+    expect((r.data as any)?.inicio).toBe('22:00');
+  });
+});

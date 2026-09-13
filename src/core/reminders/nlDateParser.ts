@@ -11,6 +11,8 @@
 // Determinista y puro: `now` es inyectable.
 // ============================================================
 
+import { pickTimeOfDay } from '../temporal/timeOfDay';
+
 export interface NlDateTimeResult {
   /** Cómo se interpretó la expresión (para trazas/mensajes). */
   type:
@@ -169,55 +171,22 @@ function extractTime(text: string): ParsedTime | null {
   // se normaliza a "2 :13 p.m" para que las ramas de reloj/meridiano apliquen.
   const src = text.replace(/\bcon\s+(\d{1,2})\s+minutos?\b/gi, ' :$1');
 
-  // mediodía / medianoche / noon / midnight
-  const noon = /(mediodia|medio\s+dia|noon)/i.exec(src);
-  if (noon) return { hour: 12, minute: 0 };
-  const midnight = /(medianoche|midnight)/i.exec(src);
-  if (midnight) return { hour: 0, minute: 0 };
-
-  // 'a las 3 de la tarde', 'a la(s) N', 'at N', '3 de la tarde'
-  // El ASR (Chrome) suele transcribir "5:00 p.m" como "5 00 p m": el reloj
-  // acepta minutos separados por espacio y el meridiano con puntos/espacios.
-  const withQualifier = /a\s+las?\s+(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s+(de\s+la\s+(manana|tarde|noche)|in\s+the\s+(morning|afternoon|evening|night))/i.exec(
-    src,
-  );
-  if (withQualifier) {
-    const hour = parseInt(withQualifier[1], 10);
-    const minRaw = withQualifier[2] || withQualifier[3];
-    const period = withQualifier[4] || withQualifier[5];
-    const periodLower = String(period || '').toLowerCase();
-    let base = hour;
-    if (/tarde|noche|afternoon|evening|night/.test(periodLower) && hour < 12) base += 12;
-    if (/manana|morning/.test(periodLower) && hour === 12) base = 0;
-    return { hour: base, minute: minRaw ? parseInt(minRaw, 10) : 0 };
+  // 1) Selector ÚNICO compartido (misma regla que temporal/horario): si hay
+  //    varias horas gana la de meridiem explícito —incluida la corrección
+  //    posterior—; cubre mediodía/medianoche, 'a las N', 'at N' y 'N am/pm'.
+  const picked = pickTimeOfDay(src);
+  if (picked.timeOfDay) {
+    const [hour, minute] = picked.timeOfDay.split(':').map((n) => parseInt(n, 10));
+    return { hour, minute };
   }
 
-  // '3pm', '3 pm', '9am', '3:30 pm', '5 00 p m' (p.m./a.m. con puntos y espacios)
-  const meridiem = /(\d{1,2})(?:\s*[.:]\s*(\d{2})|\s+(\d{2}))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)\b/i.exec(src);
-  if (meridiem) {
-    let hour = parseInt(meridiem[1], 10);
-    const minRaw = meridiem[2] || meridiem[3];
-    const suffix = meridiem[4].toLowerCase().replace(/\./g, '').replace(/\s+/g, '');
-    if (suffix === 'pm' && hour < 12) hour += 12;
-    if (suffix === 'am' && hour === 12) hour = 0;
-    return { hour, minute: minRaw ? parseInt(minRaw, 10) : 0 };
-  }
-
-  // 'HH:mm' literal, 'a las 14:30', o '14 30' (ASR con espacio entre hora y minutos)
+  // 2) Formas LITERALES que el selector no cubre: 'HH:mm' y 'HH mm' (ASR).
   const clock = /(?:a\s+las?\s+)?(\d{1,2})[.:](\d{2})\b|(?:a\s+las?\s+)?(\d{1,2})\s+(\d{2})\b/i.exec(src);
   if (clock) {
     const hour = parseInt(clock[1] || clock[3], 10);
     if (hour > 23) return null;
     const minRaw = clock[2] || clock[4];
     return { hour, minute: minRaw ? parseInt(minRaw, 10) : 0 };
-  }
-
-  // 'a las 3' / 'at 3' (hora simple, 24h literal)
-  const bare = /a\s+las?\s+(\d{1,2})\b|at\s+(\d{1,2})\b/i.exec(src);
-  if (bare) {
-    const hour = parseInt(bare[1] || bare[2], 10);
-    if (hour > 23) return null;
-    return { hour, minute: 0 };
   }
 
   return null;

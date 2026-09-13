@@ -15,6 +15,7 @@
 // ============================================================
 
 import { clasificarDia, extractHorarioHoras, diaDeFecha, toHHMM } from './horarioService';
+import { pickTimeOfDay } from '../temporal/timeOfDay';
 
 // ------------------------------------------------------------
 // Tipos
@@ -153,31 +154,9 @@ function detectWhen(text: string): 'hoy' | 'manana' | 'proximo' | 'dia' | null {
   return null;
 }
 
-/** Extrae la hora de inicio 'HH:MM' de frases como 'a las 8', 'a las 8:30', '8 am'. */
+/** Extrae la hora de inicio 'HH:MM' con el selector ÚNICO compartido. */
 function extractStartTime(text: string): string | null {
-  const norm = stripDiacritics(text);
-  // 'a las 8' / 'a las 8:30' / 'at 8' / 'at 8:30' — con meridiano opcional
-  // ('a las 2 pm') para no devolver 02:00 cuando en realidad son las 14:00.
-  let m = /\b(?:a\s+las?|at|para\s+las?)\s+(\d{1,2})(?:\s*[:.]\s*(\d{2}))?(?:\s*(am|pm))?\b/.exec(norm);
-  if (m) {
-    let h = Number(m[1]);
-    const min = m[2] ? Number(m[2]) : 0;
-    const meridiem = m[3];
-    if (meridiem === 'pm' && h < 12) h += 12;
-    if (meridiem === 'am' && h === 12) h = 0;
-    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return toHHMM(h * 60 + min);
-  }
-  // '8 am' / '8 pm' / '8:30 am'
-  m = /\b(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(am|pm)\b/.exec(norm);
-  if (m) {
-    let h = Number(m[1]);
-    const min = m[2] ? Number(m[2]) : 0;
-    const meridiem = m[3];
-    if (meridiem === 'pm' && h < 12) h += 12;
-    if (meridiem === 'am' && h === 12) h = 0;
-    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return toHHMM(h * 60 + min);
-  }
-  return null;
+  return pickTimeOfDay(stripDiacritics(text)).timeOfDay;
 }
 
 /** Extrae la hora de fin 'HH:MM' de frases como 'hasta las 9:30', 'until 9:30'. */
