@@ -25,7 +25,6 @@ import { RemindersPanel, type RemindersPanelProps } from './RemindersPanel';
 import { TemporalItemsPanel, type TemporalItemsPanelProps } from './TemporalItemsPanel';
 import { ShoppingPanel, type ShoppingPanelProps } from './ShoppingPanel';
 import { MateriaGrisPanel, type MateriaGrisPanelProps } from './MateriaGrisPanel';
-import { DocumentsHistoryPanel, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 
 // Sub-secciones del panel de Ajustes (Fase A2): FLU / Mis datos / Gestión.
 export type SettingsGroupId = 'flu' | 'data' | 'management';
@@ -77,8 +76,6 @@ export interface FluSettingsTabViewProps {
     shopping: ShoppingPanelProps;
     /** Tabla de reconocimiento (materia gris). */
     materiaGris: MateriaGrisPanelProps;
-    /** Historial de documentos/imágenes generados o cargados (por usuario). */
-    documents?: DocumentsHistoryPanelProps;
 }
 
 /**
@@ -104,7 +101,6 @@ export function FluSettingsTabView({
     temporals,
     shopping,
     materiaGris,
-    documents,
 }: FluSettingsTabViewProps) {
     return (
         <FluTabPanel tabId="settings" activeTab={activeTab} className="flu-tab-panel--settings">
@@ -174,7 +170,6 @@ export function FluSettingsTabView({
                     <TemporalItemsPanel {...temporals} />
                     <ShoppingPanel {...shopping} />
                     <MateriaGrisPanel {...materiaGris} />
-                    {documents ? <DocumentsHistoryPanel {...documents} /> : null}
                 </div>
 
                 {/* Acción GLOBAL: un solo Guardar/Restablecer para todo el configurador */}

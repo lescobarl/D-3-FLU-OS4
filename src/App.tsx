@@ -4893,6 +4893,16 @@ const {
                                             videoResult: documentGeneration.videoResult,
                                             clear: documentGeneration.clear,
                                         },
+                                        // Historial por usuario (punteros a artefactos
+                                        // generados/cargados) → pestaña "Historial" del Pizarrón.
+                                        documents: {
+                                            documents: documentHistory.documents,
+                                            loading: documentHistory.loading,
+                                            onRemove: (id) => {
+                                                void documentHistory.remove(id);
+                                            },
+                                            language,
+                                        },
                                         horarioImport: {
                                             pending: pendingHorarioImport,
                                             busy: horarioImportBusy,
@@ -5190,14 +5200,6 @@ const {
                                     onAward: async (input) => {
                                         await materiaGris.awardPoints(input);
                                     },
-                                }}
-                                documents={{
-                                    documents: documentHistory.documents,
-                                    loading: documentHistory.loading,
-                                    onRemove: (id) => {
-                                        void documentHistory.remove(id);
-                                    },
-                                    language,
                                 }}
                             />
 

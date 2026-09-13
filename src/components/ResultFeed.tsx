@@ -14,7 +14,7 @@
 // NO hace fetching propio. Las etiquetas vienen de FLU_CONFIG
 // con pickLabel (Regla #1: sin hardcode).
 // ============================================================
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
@@ -26,16 +26,29 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 export type ResultOrigin = 'web' | 'ia' | 'ocr';
 
 /** Tipo de contenido (filtro superior del feed). */
-export type ResultKind = 'text' | 'image' | 'doc' | 'video';
+export type ResultKind = 'text' | 'image' | 'doc' | 'video' | 'history';
 
 /** Filtro por tipo visible en la cabecera del feed. */
-export type ResultFeedFilter = 'all' | 'image' | 'video' | 'doc';
+export type ResultFeedFilter = 'all' | 'image' | 'media' | 'history';
 
-/** Filtro inicial derivado del contenido: si hay video → Vídeos, si hay
- *  imagen → Imágenes, si no → Todo. */
+/** Foco solicitado por el padre (artefacto recién creado). */
+export type ResultFeedFocusKind = 'video' | 'doc' | 'image' | null;
+
+/** Traduce el tipo de artefacto a la pestaña que debe abrirse. */
+function filterForKind(kind: ResultFeedFocusKind): ResultFeedFilter {
+  if (kind === 'image') return 'image';
+  if (kind === 'video' || kind === 'doc') return 'media';
+  return 'all';
+}
+
+/** Filtro inicial derivado del contenido: video o documento → "Video/Docs",
+ *  imagen → "Imágenes", historial → "Historial", si no → Todo. Prioridad
+ *  video > imagen > doc > historial. */
 function pickInitialFilter(list: ResultFeedItem[]): ResultFeedFilter {
-  if (list.some((item) => item.onlyInKind && item.kind === 'video')) return 'video';
+  if (list.some((item) => item.onlyInKind && item.kind === 'video')) return 'media';
   if (list.some((item) => item.onlyInKind && item.kind === 'image')) return 'image';
+  if (list.some((item) => item.onlyInKind && item.kind === 'doc')) return 'media';
+  if (list.some((item) => item.onlyInKind && item.kind === 'history')) return 'history';
   return 'all';
 }
 
@@ -61,6 +74,12 @@ export interface ResultFeedProps {
   title?: string;
   /** Idioma actual para etiquetas bilingües (es/en). */
   language?: string;
+  /**
+   * Artefacto recién creado por el turno (video/doc/imagen). Cuando CAMBIA,
+   * el feed salta a la pestaña correspondiente sin pisar la elección manual
+   * si no hay artefacto nuevo. `null` = sin foco.
+   */
+  focusKind?: ResultFeedFocusKind;
 }
 
 // ------------------------------------------------------------
@@ -71,8 +90,24 @@ export function ResultFeed({
   items,
   title,
   language = 'es',
+  focusKind = null,
 }: ResultFeedProps) {
   const [filter, setFilter] = useState<ResultFeedFilter>(() => pickInitialFilter(items));
+
+  // Foco en caliente: cuando llega un artefacto NUEVO (focusKind cambia de
+  // null a su tipo), el feed salta a su pestaña. No pisa la elección manual
+  // porque solo actúa cuando el tipo enfocado cambia.
+  const lastFocusRef = useRef<ResultFeedFocusKind>(null);
+  useEffect(() => {
+    if (!focusKind) {
+      lastFocusRef.current = null;
+      return;
+    }
+    if (lastFocusRef.current !== focusKind) {
+      setFilter(filterForKind(focusKind));
+      lastFocusRef.current = focusKind;
+    }
+  }, [focusKind]);
 
   // Etiquetas de la UI (Regla #1: sin hardcode).
   const ui = FLU_CONFIG.ui?.workspace || {};
@@ -89,10 +124,10 @@ export function ResultFeed({
     pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterAll, language, 'Todo');
   const filterImages =
     pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterImages, language, 'Imágenes');
-  const filterVideo =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterVideo, language, 'Vídeos');
-  const filterDoc =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterDoc, language, 'Documentos');
+  const filterMedia =
+    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterMedia, language, 'Video/Docs');
+  const filterHistory =
+    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterHistory, language, 'Historial');
 
   // Etiquetas de origen (insignias).
   const originWeb = pickLabel(ui.origenWebLabel, language, 'Web');
@@ -103,15 +138,15 @@ export function ResultFeed({
     'OCR'
   );
 
-  // Un ítem entra en el filtro "doc" si es documento o video.
-  // Un ítem marcado `onlyInKind` SOLO se muestra con su filtro de tipo
-  // activo (nunca en "Todo"): evita que contenido de imagen generada se
-  // intercale bajo la Respuesta de Flu en la vista general del pizarrón.
+  // Un ítem entra en "Video/Docs" si es documento o video. Un ítem marcado
+  // `onlyInKind` SOLO se muestra con su filtro de tipo activo (nunca en
+  // "Todo"): evita que contenido generado se intercale bajo la Respuesta de
+  // Flu en la vista general del pizarrón.
   const matchesFilter = (item: ResultFeedItem): boolean => {
     if (filter === 'all') return !item.onlyInKind;
     if (filter === 'image') return item.kind === 'image';
-    if (filter === 'video') return item.kind === 'video';
-    return item.kind === 'doc';
+    if (filter === 'media') return item.kind === 'doc' || item.kind === 'video';
+    return item.kind === 'history';
   };
 
   const visible = useMemo(
@@ -155,8 +190,8 @@ export function ResultFeed({
         <div className="result-feed__filters" role="group" aria-label="Filtrar por tipo">
           {filterBtn('all', filterAll)}
           {filterBtn('image', filterImages)}
-          {filterBtn('video', filterVideo)}
-          {filterBtn('doc', filterDoc)}
+          {filterBtn('media', filterMedia)}
+          {filterBtn('history', filterHistory)}
         </div>
       </header>
 

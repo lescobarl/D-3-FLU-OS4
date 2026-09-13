@@ -24,6 +24,7 @@ import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
 import { HoyPanel, type HoyPanelProps } from './HoyPanel';
 import DocumentResultPanel from './DocumentResultPanel';
+import { DocumentsHistoryPanel, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 import AppAnalysisPanel from './AppAnalysisPanel';
 import GenerationProgressPanel from './GenerationProgressPanel';
 import { ImageGrid, type GeneratedGridCell } from './ImageGrid';
@@ -114,6 +115,13 @@ export interface WorkspaceHubProps {
         videoResult: VideoAssemblyResult | null;
         clear: () => void;
     };
+
+    /**
+     * Historial por usuario (punteros a los artefactos generados/cargados).
+     * Única fuente: `useDocuments` (App). Se pinta en la pestaña "Historial"
+     * del Pizarrón. Opcional para no romper tests previos.
+     */
+    documents?: DocumentsHistoryPanelProps;
 
     // Confirmación del parseo de una imagen de horario (digitalización → HOY).
     // Genérico: entradas estructuradas pendientes del visto bueno del usuario.
@@ -249,6 +257,7 @@ export function WorkspaceHub({
     document,
     app,
     generation,
+    documents,
     horarioImport,
     upload,
     language,
@@ -442,6 +451,20 @@ export function WorkspaceHub({
             });
         }
 
+        // Historial por usuario: punteros a los artefactos generados/cargados
+        // (video, documento/carta, imagen). Vive SOLO bajo la pestaña
+        // "Historial"; nunca se intercala en "Todo".
+        if (documents && (documents.documents.length > 0 || documents.loading)) {
+            items.push({
+                id: 'documents-history',
+                origin: 'ia',
+                kind: 'history',
+                onlyInKind: true,
+                title: pickLabel((FLU_CONFIG as any).documents?.ui?.title, language, 'Historial'),
+                body: <DocumentsHistoryPanel {...documents} />,
+            });
+        }
+
         // WEB búsqueda: resultados de texto (web) → tarjeta tipo 'text'.
         if (searchState.results.length > 0) {
             items.push({
@@ -557,10 +580,22 @@ export function WorkspaceHub({
         generation.job,
         generation.error,
         generation.clear,
+        documents,
         language,
         ws,
         searchState,
     ]);
+
+    // Foco por artefacto del turno: video o documento → "Video/Docs";
+    // imagen generada → "Imágenes". ResultFeed salta a esa pestaña cuando
+    // el artefacto es NUEVO (ver efecto en ResultFeed).
+    const focusKind: 'video' | 'doc' | 'image' | null = generation.videoResult
+        ? 'video'
+        : generation.result
+            ? 'doc'
+            : image.imageUrl
+                ? 'image'
+                : null;
 
     const hasPendingImport = Boolean(
         horarioImport?.pending && horarioImport.pending.length > 0
@@ -596,7 +631,7 @@ export function WorkspaceHub({
                     <div className="workspace-hub__columns" data-testid="workspace-hub-columns">
                         <div className="workspace-hub__main" data-testid="workspace-hub-main">
                             {/* Feed de resultados consolidado (columna principal) */}
-                            <ResultFeed items={feedItems} language={language} />
+                            <ResultFeed items={feedItems} language={language} focusKind={focusKind} />
 
                             {/* Sección 3 — cargas (región permanente) */}
                             <div className="frame-content__upload-zone">
@@ -692,7 +727,7 @@ export function WorkspaceHub({
                     </div>
                 ) : (
                     <div className="workspace-hub__main" data-testid="workspace-hub-main">
-                        <ResultFeed items={feedItems} language={language} />
+                        <ResultFeed items={feedItems} language={language} focusKind={focusKind} />
                         <div className="frame-content__upload-zone">
                             {upload.error && (
                                 <div className="flu-error-box" role="alert">{upload.error}</div>

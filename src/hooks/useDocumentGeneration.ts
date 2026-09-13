@@ -199,7 +199,7 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                             warnings: [],
                         };
                         setVideoResult(realVideo);
-                        setJob('listo', formato, { progreso: 100 });
+                        setJob('listo', formato, { progreso: 100, url_resultado: realVideo.url });
                         return namedResult;
                     }
                     // 2) Fallback: ensamblado offline (ffmpeg.wasm walkthrough).

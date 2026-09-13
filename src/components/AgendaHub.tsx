@@ -19,7 +19,6 @@ import { RemindersPanel, type RemindersPanelProps } from './RemindersPanel';
 import { TemporalItemsPanel, type TemporalItemsPanelProps } from './TemporalItemsPanel';
 import { ShoppingPanel, type ShoppingPanelProps } from './ShoppingPanel';
 import { MateriaGrisPanel, type MateriaGrisPanelProps } from './MateriaGrisPanel';
-import { DocumentsHistoryPanel, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 
 export interface AgendaHubProps {
   contacts: ContactsPanelProps;
@@ -30,8 +29,6 @@ export interface AgendaHubProps {
   temporals: TemporalItemsPanelProps;
   shopping: ShoppingPanelProps;
   materiaGris: MateriaGrisPanelProps;
-  /** Historial de documentos/imágenes generados o cargados (por usuario). */
-  documents?: DocumentsHistoryPanelProps;
 }
 
 export function AgendaHub({
@@ -43,7 +40,6 @@ export function AgendaHub({
   temporals,
   shopping,
   materiaGris,
-  documents,
 }: AgendaHubProps) {
   return (
     <div className="agenda-hub">
@@ -66,13 +62,6 @@ export function AgendaHub({
         <ShoppingPanel {...shopping} />
         <MateriaGrisPanel {...materiaGris} />
       </section>
-
-      {/* Historial de documentos/imágenes generados/cargados (por usuario) */}
-      {documents ? (
-        <section className="agenda-hub__group" aria-label="Historial">
-          <DocumentsHistoryPanel {...documents} />
-        </section>
-      ) : null}
     </div>
   );
 }

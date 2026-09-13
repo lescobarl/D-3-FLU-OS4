@@ -1894,6 +1894,11 @@ export const FLU_CONFIG = {
         es: 'Genera documentos o videos desde aquí.',
         en: 'Generate documents or videos from here.',
       },
+      // Filtros del feed del Pizarrón (Todo · Imágenes · Video/Docs · Historial).
+      feedFilterAll: { es: 'Todo', en: 'All' },
+      feedFilterImages: { es: 'Imágenes', en: 'Images' },
+      feedFilterMedia: { es: 'Video/Docs', en: 'Media/Docs' },
+      feedFilterHistory: { es: 'Historial', en: 'History' },
       uploadTitle: { es: 'Subir archivo', en: 'Upload file' },
       uploadDropHint: { es: 'Arrastra tu documento aquí', en: 'Drag your document here' },
       uploadDropOr: { es: '— o —', en: '— or —' },
