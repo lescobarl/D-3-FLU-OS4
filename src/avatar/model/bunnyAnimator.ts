@@ -100,7 +100,6 @@ function shiftClipToZero(clip: THREE.AnimationClip): void {
 
     clip.duration -= minTime;
 
-    console.log(`[Animator] Shifted clip "${clip.name}" by ${minTime.toFixed(4)}s → new duration: ${clip.duration.toFixed(4)}s`);
 }
 
 // ============================================================
@@ -360,10 +359,8 @@ export class BunnyAnimator {
                                         );
                                         if (name === 'Idle_2') {
                                             this.mouthClosedPose = { jawQuat: quat };
-                                            console.log(`[Animator] Mouth CLOSED pose (Idle_2): [${quat.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                         } else {
                                             this.mouthOpenPose = { jawQuat: quat };
-                                            console.log(`[Animator] Mouth OPEN pose (Emo_blink): [${quat.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                         }
                                     }
                                 }
@@ -397,7 +394,6 @@ export class BunnyAnimator {
                                         lowerarm_r: armQuats.lowerarm_r!,
                                         hand_r: armQuats.hand_r!,
                                     };
-                                    console.log(`[Animator] Arm REST pose (Idle_2): clavicle_r=[${armQuats.clavicle_r!.toArray().map(v => v.toFixed(4)).join(', ')}], upperarm_r=[${armQuats.upperarm_r!.toArray().map(v => v.toFixed(4)).join(', ')}], lowerarm_r=[${armQuats.lowerarm_r!.toArray().map(v => v.toFixed(4)).join(', ')}], hand_r=[${armQuats.hand_r!.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                 }
                             }
                         }

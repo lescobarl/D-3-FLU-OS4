@@ -333,7 +333,6 @@ class ParameterOptimizer {
     }
     
     private rollbackOptimization(result: OptimizationResult): void {
-        console.log(`Rollback automático para parámetro ${result.parameter}`);
         
         // Revertir al valor anterior
         OPTIMIZABLE_PARAMETERS[result.parameter].current = result.oldValue;
@@ -587,7 +586,6 @@ class ParameterOptimizer {
     
     applyToSystemConfig(parameter: OptimizableParameter, value: number): void {
         // En una implementación real, esto actualizaría la configuración del sistema
-        console.log(`Aplicando ${parameter} = ${value}`);
         
         // Guardar en localStorage para persistencia
         localStorage.setItem(`flu-param-${parameter}`, value.toString());
@@ -751,7 +749,6 @@ export class AutoOptimizationSystem {
         }, this.config.evaluationInterval);
         
         if (this.config.verboseLogging) {
-            console.log('AutoOptimization iniciado con intervalo:', this.config.evaluationInterval, 'ms');
         }
     }
     
@@ -762,7 +759,6 @@ export class AutoOptimizationSystem {
         }
         
         if (this.config.verboseLogging) {
-            console.log('AutoOptimization detenido');
         }
     }
     
@@ -789,15 +785,6 @@ export class AutoOptimizationSystem {
                 
                 if (result && result.expectedImprovement >= this.config.minConfidenceThreshold) {
                     this.optimizer.applyOptimization(result);
-                    
-                    if (this.config.verboseLogging) {
-                        console.log('Optimización aplicada:', {
-                            parameter: result.parameter,
-                            oldValue: result.oldValue,
-                            newValue: result.newValue,
-                            expectedImprovement: result.expectedImprovement,
-                        });
-                    }
                 }
             } catch (error) {
                 console.error(`Error evaluando parámetro ${parameter}:`, error);
@@ -853,7 +840,6 @@ export class AutoOptimizationSystem {
         // Aplicar al sistema
         this.optimizer.applyToSystemConfig(parameter, defaultValue);
         
-        console.log(`Parámetro ${parameter} restaurado a valor por defecto: ${defaultValue}`);
     }
     
     private getDefaultParameterValue(parameter: OptimizableParameter): number {

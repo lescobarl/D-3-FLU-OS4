@@ -397,7 +397,6 @@ export function ensureAvatarPantsVisible(): void {
     try {
         const state = useBunnyStore.getState();
         if (state.components && state.components.Bunny_pants === false) {
-            console.log('[Avatar Init] Making pants visible...');
             state.setComponentVisibility('Bunny_pants', true);
         }
         const pantsColor = state.componentColors?.Bunny_pants;
@@ -405,7 +404,6 @@ export function ensureAvatarPantsVisible(): void {
             const colorLower = pantsColor.toLowerCase();
             if (colorLower === '#ffffff' || colorLower === 'white' || colorLower === '#fff' ||
                 colorLower === 'transparent' || colorLower === 'rgba(255,255,255,0)') {
-                console.log('[Avatar Init] Setting visible pants color...');
                 state.setComponentColor('Bunny_pants', '#8B4513');
             }
         }

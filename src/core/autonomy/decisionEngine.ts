@@ -608,7 +608,6 @@ export class DecisionEngine {
         }, this.config.evaluationInterval);
         
         if (this.config.verboseLogging) {
-            console.log('DecisionEngine iniciado con intervalo:', this.config.evaluationInterval, 'ms');
         }
     }
     
@@ -619,7 +618,6 @@ export class DecisionEngine {
         }
         
         if (this.config.verboseLogging) {
-            console.log('DecisionEngine detenido');
         }
     }
     
@@ -648,16 +646,6 @@ export class DecisionEngine {
             // Limitar historial
             if (this.decisionHistory.length > 50) {
                 this.decisionHistory = this.decisionHistory.slice(-50);
-            }
-            
-            // Loggear si está habilitado
-            if (this.config.verboseLogging) {
-                console.log('Decisión autónoma ejecutada:', {
-                    type: decision.type,
-                    selectedOption: decision.selectedOption,
-                    confidence: decision.confidence,
-                    justification: decision.justification,
-                });
             }
         }
         

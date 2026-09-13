@@ -220,7 +220,6 @@ export function useAvatarVoiceSync() {
             // fuerza currentExpression=null para que el restore SIEMPRE se ejecute.
             bunny.clearExpression();
             bunny.setExpression(restoreExpression);
-            console.log(`[AvatarVoiceSync] 7s emoción terminada → restore setExpression(${restoreExpression})`);
         }, 7000);
     }, [clearEmotionReset]);
 
@@ -293,7 +292,6 @@ export function useAvatarVoiceSync() {
             store.clearExpression();
             store.setExpression(alt.expression);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DATA-DRIVEN: ${alt.expression}, anims: [${alt.anims.join(', ')}])`);
             }
             return;
         }
@@ -337,7 +335,6 @@ export function useAvatarVoiceSync() {
                 emotionRestoreRef.current = alt?.expression ?? 'hablando';
                 relayLog('LOG', 'AvatarVoiceSync', `SPEAKING EMOTION → blendAnimation([${blended.join(', ')}])`);
                 if (options.debug) {
-                    console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (EMOTION: blendAnimation([${blended.join(', ')}]))`);
                 }
                 return;
             }
@@ -365,14 +362,12 @@ export function useAvatarVoiceSync() {
                 const altAnimsStr = alt.anims.join(', ');
                 relayLog('LOG', 'AvatarVoiceSync', `SPEAKING → setExpression(${alt.expression}) → anims=[${altAnimsStr}]`);
                 if (options.debug) {
-                    console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DATA-DRIVEN: setExpression(${alt.expression}) → EXPRESSION_MAP[${altAnimsStr}])`);
                 }
             } else {
                 // Fallback defensivo: setExpression ya resuelve 'hablando' → ['Idle_2','MouthMove']
                 store.setExpression('hablando');
                 relayLog('WARN', 'AvatarVoiceSync', `SPEAKING FALLBACK → setExpression(hablando) — alt era null`);
                 if (options.debug) {
-                    console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (FALLBACK: setExpression(hablando))`);
                 }
             }
             return;
@@ -382,7 +377,6 @@ export function useAvatarVoiceSync() {
             // DIRECT: bypass reactivity engine
             store.setExpression('Pensando');
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DIRECT: Pensando)`);
             }
             return;
         }
@@ -399,7 +393,6 @@ export function useAvatarVoiceSync() {
         }
 
         if (options.debug) {
-            console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (avatar: ${resolved.avatarState}, expr: ${resolved.expression}, anims: [${resolved.anims.join(', ')}])`);
         }
     }, [getEngineOptions]);
 
@@ -437,7 +430,6 @@ export function useAvatarVoiceSync() {
                 const overCap = Date.now() - startedAt >= SONG_SUSTAIN_MAX_MS;
                 if (overCap) {
                     sustainedActionRef.current = null;
-                    console.log(`[AvatarVoiceSync] Acción sostenida terminada (tope de ${SONG_SUSTAIN_MAX_MS / 60000} min) → restaura blend del estado actual`);
                     const currentState = useIntegrationStore.getState().conversationState;
                     if (currentState === 'LISTENING') {
                         // FIX 2026-08-16: clearExpression() fuerza currentExpression=null
@@ -459,7 +451,6 @@ export function useAvatarVoiceSync() {
                 const withinStartupGrace = Date.now() - startedAt < SONG_START_GRACE_MS;
                 if (songOver && !withinStartupGrace) {
                     sustainedActionRef.current = null;
-                    console.log(`[AvatarVoiceSync] Acción sostenida terminada (canción terminó) → restaura blend del estado actual`);
                     const currentState = useIntegrationStore.getState().conversationState;
                     if (currentState === 'LISTENING') {
                         bunnyActionsRef.current.clearExpression();
@@ -478,7 +469,6 @@ export function useAvatarVoiceSync() {
         sustainedActionTimerRef.current = window.setTimeout(() => {
             sustainedActionTimerRef.current = null;
             sustainedActionRef.current = null;
-            console.log(`[AvatarVoiceSync] Acción sostenida terminada (${SUSTAINED_ACTION_MS / 1000}s) → restaura blend del estado actual`);
             const currentState = useIntegrationStore.getState().conversationState;
             if (currentState === 'LISTENING') {
                 // FIX 2026-08-16: igual que en modo 'song', clearExpression() antes
@@ -507,7 +497,6 @@ export function useAvatarVoiceSync() {
         if (resolved.expression) {
             applyResolved(resolved);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] Emoción aplicada: ${emotion} → ${resolved.expression}, anims: [${resolved.anims.join(', ')}]`);
             }
         }
     }, [conversationState, getEngineOptions, applyResolved]);
@@ -527,7 +516,6 @@ export function useAvatarVoiceSync() {
         if (resolved.expression) {
             applyResolved(resolved);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] Contextual: sentiment=${sentiment} → ${resolved.expression}`);
             }
         }
     }, [conversationState, getEngineOptions, applyResolved]);
@@ -548,7 +536,6 @@ export function useAvatarVoiceSync() {
             const alt = PARTICIPANT_ALTERNATIVES[toggleIndex];
             store.setExpression(alt.expression);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] Participante mano levantada → DATA-DRIVEN: ${alt.expression}`);
             }
             return;
         }
@@ -562,7 +549,6 @@ export function useAvatarVoiceSync() {
             // del usuario, no "no le hicieron caso").
             store.setExpression('atencion');
             if (options.debug) {
-                console.log('[AvatarVoiceSync] Participante mano bajada (dismiss) → expresión neutral atencion');
             }
             return;
         }
@@ -613,7 +599,6 @@ export function useAvatarVoiceSync() {
         }
 
         if (options.debug) {
-            console.log(`[AvatarVoiceSync] Participante evento=${event} → expresión=${resolved.expression}, anims=[${resolved.anims.join(', ')}] (canal ÚNICO pendingEmotionAnims)`);
         }
     }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction, scheduleEmotionReset]);
 
@@ -628,7 +613,6 @@ export function useAvatarVoiceSync() {
         applyResolved(resolved);
 
         if (options.debug) {
-            console.log(`[AvatarVoiceSync] Micro-expresión idle → ${resolved.expression}${forceVisible ? ' (visible)' : ''}`);
         }
     }, [getEngineOptions, applyResolved]);
 
@@ -840,7 +824,6 @@ export function useAvatarVoiceSync() {
         store.setComponentVisibility('Bunny_bangs' as BunnyComponent, hairVisible);
 
         if (debugMode) {
-            console.log(`[AvatarVoiceSync] Imagen aplicada: cap=${capVisible}, hair=${hairVisible}`);
         }
     }, [imageConfig.capVisible, imageConfig.hairVisible, debugMode]);
 
@@ -852,7 +835,6 @@ export function useAvatarVoiceSync() {
         store.setAnimationSpeed(animationSpeed);
 
         if (debugMode) {
-            console.log(`[AvatarVoiceSync] Animation speed aplicada: ${animationSpeed.toFixed(2)}`);
         }
     }, [animationSpeed, debugMode]);
 

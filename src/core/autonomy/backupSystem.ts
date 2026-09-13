@@ -602,16 +602,6 @@ class BackupManager {
             // Actualizar estadísticas
             this.updateBackupStats(metadata);
             
-            if (DEFAULT_BACKUP_CONFIG.verboseLogging) {
-                console.log('Backup creado:', {
-                    id: backupId,
-                    strategy,
-                    components: components.length,
-                    size: `${Math.round(totalSize / 1024)}KB`,
-                    duration: Date.now() - startTime,
-                });
-            }
-            
             return metadata;
         } catch (error) {
             console.error('Error creando backup:', error);
@@ -934,7 +924,6 @@ export class BackupSystem {
         }, this.config.autoBackupInterval);
         
         if (this.config.verboseLogging) {
-            console.log('BackupSystem iniciado con intervalo:', this.config.autoBackupInterval, 'ms');
         }
     }
     
@@ -945,7 +934,6 @@ export class BackupSystem {
         }
         
         if (this.config.verboseLogging) {
-            console.log('BackupSystem detenido');
         }
     }
     
@@ -965,7 +953,6 @@ export class BackupSystem {
         );
         
         if (backup && this.config.verboseLogging) {
-            console.log('Backup automático completado:', backup.id);
         }
         
         return backup;

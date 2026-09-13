@@ -311,7 +311,6 @@ class RecoveryActionExecutor {
             setPreferredAIProvider(nextProvider);
             
             // Forzar recarga del servicio
-            console.log(`Cambiando proveedor de IA de ${currentProvider} a ${nextProvider}`);
             
             this.recordExecution(incident.id, 'switch_ai_provider');
             
@@ -341,7 +340,6 @@ class RecoveryActionExecutor {
                 case 'application':
                     if (method === 'soft-restart') {
                         // Reinicio suave: recargar estado sin recargar página
-                        console.log('Ejecutando reinicio suave de la aplicación');
                         // En una implementación real, esto resetearía stores y estados
                         // Notificar el reinicio vía bus central de autonomía
                         emitAutonomyEvent({
@@ -354,17 +352,14 @@ class RecoveryActionExecutor {
                     
                 case 'speech-recognition':
                     // Reiniciar reconocimiento de voz
-                    console.log('Reiniciando componente de reconocimiento de voz');
                     break;
                     
                 case 'speech-synthesis':
                     // NOTA: No reiniciamos speech-synthesis porque interfiere con el habla en curso
                     // y detiene la animación de boca. Este componente es manejado por useFluVoiceAssistant.
-                    console.log('Componente speech-synthesis excluido de reinicio automático');
                     break;
                     
                 default:
-                    console.log(`Reiniciando componente: ${component}`);
             }
             
             this.recordExecution(incident.id, 'restart_component');
@@ -426,7 +421,6 @@ class RecoveryActionExecutor {
         const { backupSource = 'localStorage', maxAgeHours = 24 } = params;
         
         try {
-            console.log(`Restaurando desde backup: ${backupSource}`);
             
             // En una implementación real, esto restauraría datos desde backup
             switch (backupSource) {
@@ -436,15 +430,12 @@ class RecoveryActionExecutor {
                     const backupData = localStorage.getItem(backupKey);
                     
                     if (backupData) {
-                        console.log('Backup encontrado, restaurando...');
                         // Aquí se restaurarían los datos
                     } else {
-                        console.log('No se encontró backup, creando uno nuevo');
                     }
                     break;
                     
                 default:
-                    console.log(`Fuente de backup no soportada: ${backupSource}`);
             }
             
             this.recordExecution(incident.id, 'restore_from_backup');
@@ -706,7 +697,6 @@ export class AutoRecoverySystem {
         const executionCount = this.getRuleExecutionCount(incidentId, selectedRule.action);
         
         if (executionCount >= selectedRule.maxExecutions) {
-            console.log(`Regla ${selectedRule.action} alcanzó máximo de ejecuciones (${selectedRule.maxExecutions})`);
             return null;
         }
         
@@ -725,16 +715,6 @@ export class AutoRecoverySystem {
         
         // Actualizar estado del incidente
         this.updateIncidentStatus(incidentId, componentHealth, selectedRule.action, result.success);
-        
-        // Loggear resultado
-        if (this.config.verboseLogging) {
-            console.log('AutoRecovery ejecutado:', {
-                component: componentHealth.name,
-                rule: selectedRule.action,
-                success: result.success,
-                message: result.message,
-            });
-        }
         
         return result;
     }

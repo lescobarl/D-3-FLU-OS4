@@ -83,7 +83,6 @@ export function applyComponentVisibility(
         // Bunny_ears son parte de la malla del cuerpo — no se pueden
         // ocultar de forma independiente.
         if (compKey === 'Bunny_ears') {
-            console.log('[BunnyViewer] Ears are part of body mesh, cannot toggle independently');
             continue;
         }
 

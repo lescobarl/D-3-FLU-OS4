@@ -157,7 +157,6 @@ function WebGLContextManager() {
         };
 
         const handleContextRestored = () => {
-            console.log('[BunnyViewer] WebGL context restored');
             invalidate();
         };
 
@@ -252,7 +251,6 @@ export default function BunnyViewer({ orientation = BUNNY_SCENE.orientationDefau
                         console.warn('[BunnyViewer] WebGL context lost');
                     });
                     gl.domElement.addEventListener('webglcontextrestored', () => {
-                        console.log('[BunnyViewer] WebGL context restored');
                         state.invalidate();
                     });
                 }}

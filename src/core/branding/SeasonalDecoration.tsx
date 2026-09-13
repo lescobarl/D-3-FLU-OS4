@@ -214,7 +214,6 @@ export function SeasonalDecoration({
 
             // Log opcional
             if (celebrandoA) {
-                console.log(`[SeasonalDecoration] 🎂 Celebrando cumpleaños de ${celebrandoA}`);
             }
         }
 

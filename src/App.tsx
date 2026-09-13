@@ -494,7 +494,6 @@ async function applyConfigAction(
             if (!Number.isNaN(speed) && speed >= 0.1 && speed <= 10.0) {
                 const clamped = Math.min(2.0, Math.max(0.5, speed));
                 ctx.setVoiceConfig?.({ rate: clamped });
-                console.log('[applyConfigAction] Voice speed set:', clamped);
             }
             break;
         }
@@ -502,7 +501,6 @@ async function applyConfigAction(
             const ok = applyNumberConfig(entry, valor, (n) => {
                 ctx.setVoiceConfig?.({ [entry.clave]: n } as Partial<VoiceConfig>);
             });
-            if (ok) console.log(`[applyConfigAction] ${entry.clave} set:`, valor);
             break;
         }
         case 'voice': {
@@ -521,7 +519,6 @@ async function applyConfigAction(
             const selected = exact ?? partial;
             if (selected) {
                 ctx.setVoiceConfig?.({ voiceURI: selected.voiceURI, voiceName: selected.name });
-                console.log('[applyConfigAction] Voice set:', selected.name);
             } else {
                 console.warn('[applyConfigAction] Voz no encontrada (¿voces aún cargándose?):', target);
             }
@@ -564,7 +561,6 @@ async function applyConfigAction(
             const ok = applyNumberConfig(entry, valor, (n) => {
                 ctx.setPersonality?.({ [entry.clave]: n } as Partial<PersonalityConfig>);
             });
-            if (ok) console.log(`[applyConfigAction] ${entry.clave} set:`, valor);
             break;
         }
 
@@ -576,7 +572,6 @@ async function applyConfigAction(
             const ok = applyNumberConfig(entry, valor, (n) => {
                 ctx.setAdvancedConfig?.({ [entry.clave]: n } as Partial<AdvancedConfig>);
             });
-            if (ok) console.log(`[applyConfigAction] ${entry.clave} set:`, valor);
             break;
         }
 
@@ -2530,7 +2525,6 @@ function App() {
                         geminiAnimacion = detectedAnim;
                         geminiEmocion = undefined;
                         if (integrationStore.config.debug) {
-                            console.log(`[App] Post-processing: "${speechSource}" → forzando animacion="${detectedAnim}", emocion=undefined`);
                         }
                     }
 
@@ -2553,7 +2547,6 @@ function App() {
                                 geminiAnimacion = undefined;
                             }
                             if (integrationStore.config.debug) {
-                                console.log(`[App] Post-processing: "${speechSource}" → forzando emocion="${detectedEmotion}"${musica?.accion !== 'play_music' ? ', animacion=undefined (la emoción definida gana)' : ' (modo canción: se conserva Dance)'}`);
                             }
                         }
                     }
@@ -3998,7 +3991,6 @@ function App() {
                         const ocr = await extractTextFromImage(dataUrl);
                         if (ocr.text) {
                             result.texto_extraido = ocr.text;
-                            console.log('[App] OCR local extrajo texto (visión vacía):', ocr.engine);
                         }
                     } catch (ocrErr) {
                         console.warn('[App] OCR fallback failed:', ocrErr);

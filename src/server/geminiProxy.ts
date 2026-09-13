@@ -617,9 +617,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 if (req.method !== 'POST') return next();
                 try {
                     const body = await parseBody(req);
-                    console.log('[geminiProxy] /__flu_agent_trace received:', JSON.stringify(body).slice(0, 500));
                 } catch {
-                    console.log('[geminiProxy] /__flu_agent_trace received (unparseable body)');
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'trace logged but not persisted' }));
@@ -629,9 +627,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 if (req.method !== 'POST') return next();
                 try {
                     const body = await parseBody(req);
-                    console.log('[geminiProxy] /__flu_listen_log received:', JSON.stringify(body).slice(0, 500));
                 } catch {
-                    console.log('[geminiProxy] /__flu_listen_log received (unparseable body)');
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'listen log logged but not persisted' }));
@@ -649,13 +645,10 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                         const ts = new Date().toISOString().slice(11, 23);
                         const safeMessage = message ?? '';
                         if (data) {
-                            console.log(`[CLIENT-LOG][${ts}][${level || 'LOG'}][${tag || ''}] ${safeMessage}`, JSON.stringify(data).slice(0, 300));
                         } else {
-                            console.log(`[CLIENT-LOG][${ts}][${level || 'LOG'}][${tag || ''}] ${safeMessage}`);
                         }
                     }
                 } catch {
-                    console.log('[geminiProxy] /__flu_client_log received (unparseable body)');
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true }));

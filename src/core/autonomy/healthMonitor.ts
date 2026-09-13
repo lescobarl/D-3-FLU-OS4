@@ -755,7 +755,6 @@ export class HealthMonitor {
             }, this.config.monitoringInterval);
 
             if (this.config.verboseLogging) {
-                console.log('HealthMonitor iniciado con intervalo:', this.config.monitoringInterval, 'ms');
             }
         })().finally(() => {
             this.startPromise = null;
@@ -771,7 +770,6 @@ export class HealthMonitor {
         }
         
         if (this.config.verboseLogging) {
-            console.log('HealthMonitor detenido');
         }
     }
 
@@ -867,16 +865,6 @@ export class HealthMonitor {
 
         // Notificar listeners
         this.listeners.forEach(listener => listener(systemHealth));
-
-        // Log si está habilitado
-        if (this.config.verboseLogging) {
-            console.log('Health check completado:', {
-                duration: Date.now() - checkStartTime,
-                status: overallStatus,
-                components: components.length,
-                recommendations: recommendations.length,
-            });
-        }
 
         return systemHealth;
     }

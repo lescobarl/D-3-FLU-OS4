@@ -86,7 +86,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 // 1. Unify skeletons
                 const result = unifySkeletons(object);
                 if (logsEnabledRef.current) {
-                    console.log(`[BunnyViewer] Skeleton unification: ${result.success ? 'OK' : 'FAIL'}`);
                 }
 
                 // 2. Repair materials with textures
@@ -105,7 +104,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
 
                 // 4. Create animator (creates mixer internally)
                 const animator = new BunnyAnimator(object, (msg) => {
-                    if (logsEnabledRef.current) console.log(msg);
                 });
                 animatorRef.current = animator;
 
@@ -130,7 +128,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 });
 
                 animator.preloadAll().then(() => {
-                    if (logsEnabledRef.current) console.log('[BunnyViewer] All animations preloaded');
                     setLoading(false);
                     setPreloaded(true); // habilita la reproducción: el efecto re-ejecuta con el estado actual del store
                     try {
@@ -141,7 +138,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 });
 
                 if (logsEnabledRef.current) {
-                    console.log('[BunnyViewer] Modelo listo');
                 }
             })
             .catch((err) => {
@@ -225,7 +221,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 prevBlendRef.current = blendKey;
                 prevPlayingRef.current = true;
                 if (logsEnabledRef.current) {
-                    console.log(`[BunnyViewer] Cross-fade blend: ${blendQueue.join(' + ')}`);
                 }
             }
             return;
@@ -242,7 +237,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 prevBlendRef.current = '';
                 prevPlayingRef.current = true;
                 if (logsEnabledRef.current) {
-                    console.log(`[BunnyViewer] Cross-fade to: ${currentAnimation}`);
                 }
             }
         } else if (!isPlaying && prevPlayingRef.current) {
@@ -262,7 +256,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
         if (!animator) return;
         animator.setTimeScale(animationSpeed);
         if (logsEnabledRef.current) {
-            console.log(`[BunnyViewer] Animation speed: ${animationSpeed.toFixed(2)}`);
         }
     }, [animationSpeed]);
 

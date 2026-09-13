@@ -117,7 +117,6 @@ export function useConversationPersistence(participantId?: string) {
 
                     const filteredCount = allEntries.length - entries.length;
                     if (filteredCount > 0) {
-                        console.log(`[ConversationPersistence] Filtered out ${filteredCount} system event entries from loaded history`);
                         // Clean up the DB by removing these entries so they don't
                         // accumulate on future reloads
                         const idsToRemove = allEntries
@@ -136,7 +135,6 @@ export function useConversationPersistence(participantId?: string) {
                         // Use batchLoadHistory to set all entries at once
                         // without triggering side effects (TTS, state changes)
                         integrationStore.batchLoadHistory(entries);
-                        console.log(`[ConversationPersistence] Loaded ${entries.length} entries from DB`);
                     }
                 }
             } catch (err) {

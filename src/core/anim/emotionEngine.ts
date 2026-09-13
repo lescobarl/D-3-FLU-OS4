@@ -87,7 +87,6 @@ export function resolveStateExpression(
     if (candidates.length === 0) {
         // Fallback: no expression defined for this state
         if (debug) {
-            console.log(`[EmotionEngine] No registry entries for state=${state}, using fallback`);
         }
         return {
             expression: null,
@@ -111,13 +110,6 @@ export function resolveStateExpression(
 
     // Apply reactivity scaling to animations
     const scaledAnims = applyReactivityToAnims(best.anims, reactivity, best.intensity ?? 0.5);
-
-    if (debug) {
-        console.log(
-            `[EmotionEngine] State=${state} → expression=${best.expression}, ` +
-            `anims=[${scaledAnims.join(', ')}], traits=[${traits.join(', ')}]`
-        );
-    }
 
     return {
         expression: best.expression as AvatarExpression,
@@ -150,7 +142,6 @@ export function resolveEmotionExpression(
 
     if (candidates.length === 0) {
         if (debug) {
-            console.log(`[EmotionEngine] No registry entries for emotion=${emotion}, using fallback`);
         }
         return {
             expression: null,
@@ -174,13 +165,6 @@ export function resolveEmotionExpression(
 
     // Apply reactivity scaling to animations
     const scaledAnims = applyReactivityToAnims(best.anims, reactivity, best.intensity ?? 0.5);
-
-    if (debug) {
-        console.log(
-            `[EmotionEngine] Emotion=${emotion} → expression=${best.expression}, ` +
-            `anims=[${scaledAnims.join(', ')}], reactivity=${reactivity.toFixed(2)}`
-        );
-    }
 
     return {
         expression: best.expression as AvatarExpression,
@@ -214,7 +198,6 @@ export function resolveToggleExpression(
 
     if (groupExpressions.length === 0) {
         if (debug) {
-            console.log(`[EmotionEngine] No registry entries for group=${group}`);
         }
         return {
             expression: null,
@@ -244,13 +227,6 @@ export function resolveToggleExpression(
     // Apply reactivity scaling
     const scaledAnims = applyReactivityToAnims(def.anims, reactivity, def.intensity ?? 0.5);
 
-    if (debug) {
-        console.log(
-            `[EmotionEngine] Toggle group=${group} → expression=${def.expression}, ` +
-            `anims=[${scaledAnims.join(', ')}], index=${index}`
-        );
-    }
-
     return {
         expression: def.expression as AvatarExpression,
         anims: scaledAnims,
@@ -279,7 +255,6 @@ export function resolveTriggerExpression(
 
     if (candidates.length === 0) {
         if (debug) {
-            console.log(`[EmotionEngine] No registry entries for trigger=${trigger}`);
         }
         return null;
     }
@@ -289,13 +264,6 @@ export function resolveTriggerExpression(
     if (!best) return null;
 
     const scaledAnims = applyReactivityToAnims(best.anims, reactivity, best.intensity ?? 0.5);
-
-    if (debug) {
-        console.log(
-            `[EmotionEngine] Trigger=${trigger} → expression=${best.expression}, ` +
-            `anims=[${scaledAnims.join(', ')}]`
-        );
-    }
 
     return {
         expression: best.expression as AvatarExpression,
@@ -385,13 +353,6 @@ export function resolveIdleMicroExpression(
     // sigue en movimiento (respiración) y el gesto (parpadeo/cap) se superpone.
     // Dedupe por seguridad: si alguna micro alguna vez usara Idle_2 como primer anim.
     const subtleAnims = [...new Set(['Idle_2' as BunnyAnimation, ...best.anims.slice(0, 1)])] as BunnyAnimation[];
-
-    if (debug) {
-        console.log(
-            `[EmotionEngine] Micro-expression → ${best.expression}, ` +
-            `anims=[${subtleAnims.join(', ')}]`
-        );
-    }
 
     return {
         expression: best.expression as AvatarExpression,
