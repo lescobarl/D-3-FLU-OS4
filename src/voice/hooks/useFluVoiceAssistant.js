@@ -1674,12 +1674,10 @@ export function useFluVoiceAssistant({
       lastLoggedCaptureRef.current = capture
       lastLoggedSpeakerRef.current = speakerName
       lastSpeakerRef.current = speakerName
-      if (conversationActiveRef?.current) {
-        commitTurnPhrase(capture)
-      }
+      // §9: el MISMO valor commiteado es el de la fila (display === fila).
+      const canonicalPhrase = commitTurnPhrase(capture)
       if (!conversationActiveRef?.current) {
-        commitTurnPhrase(capture)
-        lastEmittedTranscriptRef.current = capture
+        lastEmittedTranscriptRef.current = canonicalPhrase
       }
 
       lastLogEmitAtRef.current = Date.now()
@@ -1689,7 +1687,7 @@ export function useFluVoiceAssistant({
         rawOnly: true,
         replaceLastRawLog,
         streamUpdate,
-        transcript: capture,
+        transcript: canonicalPhrase,
         speakerName,
         speakerAlias: null,
         phase,
@@ -2734,14 +2732,14 @@ export function useFluVoiceAssistant({
 
       if (command === 'FLU_ESPERA') {
         fluParticipantRef.current?.dismissRaisedHand?.()
-        commitTurnPhrase(cleaned)
+        const canonicalEspera = commitTurnPhrase(cleaned)
         await onContractResolved?.({
           contract: {
             respuesta_voz: getCommandSpeech('FLU_ESPERA', language),
             navegacion: { comando: null, destino: null, parametros: {} },
           },
           diagnostics: null,
-          transcript: cleaned,
+          transcript: canonicalEspera,
           speakerName: commandSpeaker,
           speakerAlias: null,
           phase,
@@ -2758,14 +2756,14 @@ export function useFluVoiceAssistant({
           lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
         const participant = fluParticipantRef.current
         const respondParticipantFloor = async (speechText, { floor = false } = {}) => {
-          commitTurnPhrase(cleaned)
+          const canonicalFloor = commitTurnPhrase(cleaned)
           await onContractResolved?.({
             contract: {
               respuesta_voz: speechText,
               navegacion: { comando: null, destino: null, parametros: {} },
             },
             diagnostics: null,
-            transcript: cleaned,
+            transcript: canonicalFloor,
             speakerName: commandSpeaker,
             speakerAlias: null,
             phase,
@@ -2825,7 +2823,7 @@ export function useFluVoiceAssistant({
         return
       }
 
-      commitTurnPhrase(cleaned)
+      const canonicalCommand = commitTurnPhrase(cleaned)
       await onContractResolved?.({
         contract: {
           respuesta_voz: getCommandSpeech(command, language),
@@ -2836,7 +2834,7 @@ export function useFluVoiceAssistant({
           },
         },
         diagnostics: null,
-        transcript,
+        transcript: canonicalCommand,
         speakerName: commandSpeaker,
         speakerAlias: null,
         phase,
@@ -3362,7 +3360,7 @@ export function useFluVoiceAssistant({
             metadata: { provider: 'error', transcript: fullTranscript, rawText: '' },
           },
           diagnostics: buildGeminiDiagnosticsFromError(error),
-          transcript: cleanForSpeech(fullTranscript),
+          transcript: canonicalPhrase,
           conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
           speakerName: resolvedSpeakerName || 'FLU',
           speakerAlias: null,
@@ -3622,7 +3620,6 @@ export function useFluVoiceAssistant({
         ) {
           finishTurn()
           restartRecognition()
-          commitTurnPhrase(cleanForSpeech(capturedTranscript))
           return
         }
 
@@ -3726,7 +3723,7 @@ export function useFluVoiceAssistant({
         setStatus('idle')
         isListeningRef.current = false
         setActiveKnowledgeBase('general')
-        commitTurnPhrase(capturedTranscript)
+        const canonicalDirect = commitTurnPhrase(capturedTranscript)
         relayLog('LOG', 'useFluVoiceAssistant', `processCapture DIRECT COMMAND: calling onContractResolved with command="${directCommand}"`)
         await onContractResolved?.({
           contract: {
@@ -3738,7 +3735,7 @@ export function useFluVoiceAssistant({
             },
           },
           diagnostics: null,
-          transcript: capturedTranscript,
+          transcript: canonicalDirect,
           speakerName: resolvedSpeakerName,
           speakerAlias,
           phase,
@@ -3842,10 +3839,10 @@ export function useFluVoiceAssistant({
             transcript: bufferedTranscript,
             error: errorMessage,
           })
-          commitTurnPhrase(capturedTranscript)
+          const canonicalConfigError = commitTurnPhrase(capturedTranscript)
           setLastContract(null)
           if (bufferedTranscript) {
-            commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
+            commitSessionTurn(canonicalConfigError, resolvedSpeakerName)
             await saveSessionState({
               phase: 'SESION_ACTIVA',
               ...nextSession,
@@ -3861,7 +3858,7 @@ export function useFluVoiceAssistant({
                 metadata: { provider: 'error', transcript: bufferedTranscript, rawText: '' },
               },
               diagnostics: buildGeminiDiagnosticsFromError(error),
-              transcript: bufferedTranscript,
+              transcript: canonicalConfigError,
               speakerName: resolvedSpeakerName,
               speakerAlias,
               phase: 'CONFIGURACION',
@@ -3908,7 +3905,7 @@ export function useFluVoiceAssistant({
               : contract?.contract?.ambiente ?? null,
         }
 
-        commitTurnPhrase(capturedTranscript)
+        const canonicalConfigOk = commitTurnPhrase(capturedTranscript)
         setLastContract(finalContract)
         setLastDiagnostics(contract.diagnostics || null)
         setLastErrorEvent(null)
@@ -3930,7 +3927,7 @@ export function useFluVoiceAssistant({
         await onContractResolved?.({
           contract: finalContract,
           diagnostics: contract.diagnostics || null,
-          transcript: capturedTranscript,
+          transcript: canonicalConfigOk,
           speakerName: resolvedSpeakerName,
           speakerAlias,
           phase: 'CONFIGURACION',
@@ -4000,10 +3997,10 @@ export function useFluVoiceAssistant({
           transcript: bufferedTranscript,
           error: errorMessage,
         })
-        commitTurnPhrase(capturedTranscript)
+        const canonicalSessionError = commitTurnPhrase(capturedTranscript)
         setLastContract(null)
         if (bufferedTranscript) {
-          commitSessionTurn(bufferedTranscript, resolvedSpeakerName)
+          commitSessionTurn(canonicalSessionError, resolvedSpeakerName)
           await saveSessionState({
             phase: 'SESION_ACTIVA',
             ...session,
@@ -4019,7 +4016,7 @@ export function useFluVoiceAssistant({
               metadata: { provider: 'error', transcript: bufferedTranscript, rawText: '' },
             },
             diagnostics: buildGeminiDiagnosticsFromError(error),
-            transcript: capturedTranscript,
+            transcript: canonicalSessionError,
             speakerName: resolvedSpeakerName,
             speakerAlias,
             phase: 'SESION_ACTIVA',
@@ -4074,7 +4071,7 @@ export function useFluVoiceAssistant({
             : contract?.contract?.ambiente ?? null,
       }
 
-      commitTurnPhrase(capturedTranscript)
+      const canonicalSessionOk = commitTurnPhrase(capturedTranscript)
       setLastContract(resolvedContract)
       setLastDiagnostics(contract.diagnostics || null)
       setLastErrorEvent(null)
@@ -4095,7 +4092,7 @@ export function useFluVoiceAssistant({
       await onContractResolved?.({
         contract: resolvedContract,
         diagnostics: contract.diagnostics || null,
-        transcript: capturedTranscript,
+        transcript: canonicalSessionOk,
         speakerName: resolvedSpeakerName,
         speakerAlias,
         phase: 'SESION_ACTIVA',

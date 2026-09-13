@@ -1,1 +1,4 @@
-{"tests/voiceLiveSingleWriter.test.ts":"ccd757d0ba202213ea18cbf3d6b96ea7dd836fe85d4533e8059c9f33a7e82e63"}
+{
+  "tests/voiceLiveSingleWriter.test.ts": "ccd757d0ba202213ea18cbf3d6b96ea7dd836fe85d4533e8059c9f33a7e82e63",
+  "tests/voiceTurnCommitDerivation.test.ts": "e760dbaa8403d0be8fe748f4e77fa3654ea52fa76e66b41e9ee6a90fcb7020db"
+}
