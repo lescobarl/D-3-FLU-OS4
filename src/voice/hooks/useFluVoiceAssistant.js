@@ -3539,11 +3539,22 @@ export function useFluVoiceAssistant({
     if (snapshotKeyDedup) {
       const nowMsDedup = Date.now()
       const prevCap = lastProcessedCaptureRef.current
-      if (prevCap.text === snapshotKeyDedup && nowMsDedup - prevCap.at < 10000) {
+      const sameCapture =
+        prevCap.text && snapshotKeyDedup === prevCap.text && nowMsDedup - prevCap.at < 10000
+      // Acumulación: si la nueva captura EMPIEZA con la anterior ya procesada
+      // (misma locución + audio pegado, p. ej. "…a las 12:30 alarma a las 12:30"),
+      // no se vuelve a procesar. Exige que la previa sea lo bastante larga para
+      // no bloquear el wake corto ("okay") seguido del comando real.
+      const supersetCapture =
+        prevCap.text.length >= 20 &&
+        snapshotKeyDedup.length > prevCap.text.length &&
+        snapshotKeyDedup.startsWith(prevCap.text) &&
+        nowMsDedup - prevCap.at < 25000
+      if (sameCapture || supersetCapture) {
         relayLog(
           'WARN',
           'useFluVoiceAssistant',
-          `processCapture SKIP: captura duplicada (mismo texto hace ${nowMsDedup - prevCap.at}ms)`,
+          `processCapture SKIP: captura ${sameCapture ? 'duplicada' : 'acumulada'} (${nowMsDedup - prevCap.at}ms)`,
         )
         return
       }

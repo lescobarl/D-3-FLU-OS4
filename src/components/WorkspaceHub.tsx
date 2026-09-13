@@ -500,6 +500,8 @@ export function WorkspaceHub({
             restored.forEach(({ rec, kind, live }) => {
                 if (!rec || live) return;
                 const label = String(rec.titulo || rec.nombre || '');
+                const pointer = String(rec.ref || '');
+                const docSource = String(rec.ref || rec.contenido || '');
                 items.push({
                     id: `restored-${kind}-${rec.id}`,
                     origin: 'ia',
@@ -509,7 +511,32 @@ export function WorkspaceHub({
                     body: (
                         <div className="frame-content__response">
                             <div className="frame-content__response-scroll">
-                                <span>{label}</span>
+                                {kind === 'image' && pointer ? (
+                                    <img
+                                        src={pointer}
+                                        alt={label}
+                                        data-testid={`restored-media-${rec.id}`}
+                                        style={{ maxWidth: '100%', borderRadius: '8px' }}
+                                    />
+                                ) : kind === 'video' && pointer ? (
+                                    <video
+                                        src={pointer}
+                                        controls
+                                        data-testid={`restored-media-${rec.id}`}
+                                        style={{ maxWidth: '100%', borderRadius: '8px' }}
+                                    />
+                                ) : kind === 'doc' && docSource ? (
+                                    <a
+                                        href={docSource}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        data-testid={`restored-media-${rec.id}`}
+                                    >
+                                        📄 {label}
+                                    </a>
+                                ) : (
+                                    <span>{label}</span>
+                                )}
                             </div>
                             <div className="flu-reminders-item__actions">
                                 <button
