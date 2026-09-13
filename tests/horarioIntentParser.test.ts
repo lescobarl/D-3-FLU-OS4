@@ -175,3 +175,37 @@ describe('parseHorarioIntent — no dispara en conversación casual', () => {
     expect(parseHorarioIntent(undefined as unknown as string).handled).toBe(false);
   });
 });
+
+// ============================================================
+// Dictado natural (niños): frases coloquiales que NO empiezan con
+// el verbo canónico ('agrega'/'pon'). Deben reconocerse igual.
+// Nace ROJO: 'ponen'/'agenda una clase' no están en los triggers.
+// ============================================================
+describe('parseHorarioIntent — dictado natural (niños)', () => {
+  it('"ponen en la agenda una entrada para mañana natación a las 10 de la mañana"', () => {
+    const r = parseHorarioIntent(
+      'ponen en la agenda una entrada para mañana natación a las 10 de la mañana',
+    );
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('horario.add');
+    expect(String(r.data?.materia || '').toLowerCase()).toContain('nataci');
+    expect(r.data?.inicio).toBe('10:00');
+    expect(typeof r.data?.dia).toBe('number');
+  });
+
+  it('"pon en la agenda natación mañana a las 10"', () => {
+    const r = parseHorarioIntent('pon en la agenda natación mañana a las 10');
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('horario.add');
+    expect(String(r.data?.materia || '').toLowerCase()).toContain('nataci');
+    expect(r.data?.inicio).toBe('10:00');
+  });
+
+  it('"agenda una clase de natación para mañana a las 10"', () => {
+    const r = parseHorarioIntent('agenda una clase de natación para mañana a las 10');
+    expect(r.handled).toBe(true);
+    expect(r.action).toBe('horario.add');
+    expect(String(r.data?.materia || '').toLowerCase()).toContain('nataci');
+    expect(r.data?.inicio).toBe('10:00');
+  });
+});

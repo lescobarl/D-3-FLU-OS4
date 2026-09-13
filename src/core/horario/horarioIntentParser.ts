@@ -60,7 +60,7 @@ export interface HorarioIntentParserOptions {
 // ------------------------------------------------------------
 
 const ADD_TRIGGERS_ES =
-  /^(?:agrega|agregar|agregame|añade|anade|pon|pone|ponme|apunta|registra|registrar|registrame|anota|crea|crear)\b/i;
+  /^(?:agrega|agregar|agregame|añade|anade|agenda|agendame|apunta|apuntame|anota|anotame|pon|pone|ponen|poner|pones|ponme|programa|programar|registra|registrar|registrame|crea|crear)\b/i;
 const ADD_TRIGGERS_EN =
   /^(?:add|put|schedule|set|create|register)\b/i;
 
@@ -77,8 +77,11 @@ const QUERY_TRIGGERS_EN =
 /** Palabras que se descartan al extraer el nombre de la materia. */
 const MATERIA_STOP_WORDS: ReadonlyArray<string> = Object.freeze([
   'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'al',
+  'en', 'a', 'para', 'por', 'favor',
   'clase', 'clases', 'materia', 'materias', 'entrada', 'entradas', 'actividad',
-  'actividades', 'curso', 'cursos', 'horario', 'the', 'a', 'an', 'of', 'on',
+  'actividades', 'curso', 'cursos', 'horario', 'agenda',
+  'hoy', 'mañana', 'manana', 'tarde', 'noche',
+  'the', 'a', 'an', 'of', 'on',
   'at', 'from', 'until', 'to', 'in', 'for', 'class', 'classes', 'subject',
   'subjects', 'entry', 'entries', 'activity', 'activities', 'schedule',
 ]);
@@ -224,6 +227,11 @@ function cleanMateriaName(raw: string): string {
   value = value
     .replace(new RegExp(`\\b(?:el|los|las|on|from)\\s+${dayNames}\\b`, 'gi'), ' ')
     .replace(new RegExp(`\\b${dayNames}\\b`, 'gi'), ' ')
+    // Día relativo ('mañana', 'hoy') y franja del día ('de la mañana'): no son
+    // parte del nombre de la materia. Dictado natural: 'natación para mañana a
+    // las 10 de la mañana' → materia 'natación'.
+    .replace(/\b(?:para\s+)?(?:mañana|manana|hoy|today|tomorrow)\b/gi, ' ')
+    .replace(/\bde\s+la\s+(?:mañana|manana|tarde|noche)\b/gi, ' ')
     // Cláusula de hora con meridiano como una sola unidad: 'a las 2 pm', 'at 8 am',
     // 'hasta las 9:30', 'until 9:30', 'de 8 a 9', 'from 8 to 9'.
     .replace(

@@ -13,7 +13,7 @@ const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i
 const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i
 const NOTE_PARA_SUPER =
-  /^nota\s+(?:para|de)\s+(?:(?:ir\s+)?(?:al|a\s+el|a\s+la|a\s+lo)\s+|el\s+|la\s+|lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
+  /^nota\s+(?:de\s+)?(?:la\s+)?(?:lista\s+)?(?:del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|para\s+el\s+|para\s+la\s+|para\s+|al\s+|a\s+el\s+|a\s+la\s+|a\s+lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_SUPER_LIST =
   /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
 const NOTE_SUPER_APPEND =
@@ -42,14 +42,20 @@ function stripAccentsEs(text = '') {
 // Verbos/conectores de relleno que pueden preceder al ítem cuando se enuncia
 // después del destino: "… la nota del súper QUE TAMBIÉN TRAIGA una computadora".
 const SUPER_ITEM_LEAD =
-  /^(?:que\s+)?(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:traiga|trae|traer|lleva|llevar|compra|comprar|agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|suma|sumar|pon|poner)\s+/i
+  /^(?:que\s+)?(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:traiga|trae|traer|lleva|llevar|compra|comprar|integra|integrar|mete|meter|agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|suma|sumar|pon|poner)\s+/i
 
-/** Limpia el ítem de una nota "Super": quita solo verbos/conectores líderes. */
+// Fecha relativa que precede al ítem ("para mañana y …", "de hoy …"): no es
+// parte del contenido de la nota. Dictado natural de niños.
+const SUPER_DATE_LEAD =
+  /^(?:para\s+|de\s+|el\s+)?(?:hoy|ma[ñn]ana|pasado\s+ma[ñn]ana|esta\s+(?:tarde|noche)|lunes|martes|mi[eé]rcoles|jueves|viernes|s[áa]bado|domingo)\s*(?:y\s+)?/i
+
+/** Limpia el ítem de una nota "Super": quita fecha relativa y verbos líderes. */
 function cleanSuperItem(rest = '') {
   let item = String(rest || '').trim()
   let prev = ''
   while (item !== prev) {
     prev = item
+    item = item.replace(SUPER_DATE_LEAD, '').trim()
     const m = SUPER_ITEM_LEAD.exec(item)
     if (m) item = item.slice(m[0].length).trim()
   }
@@ -77,7 +83,7 @@ export function parseNoteIntentText(rawText = '') {
   // 1) "nota para el super/supermercado/compras/mercado" → "Super: {resto}".
   const paraSuper = NOTE_PARA_SUPER.exec(norm)
   if (paraSuper) {
-    const rest = paraSuper[2] ? paraSuper[2].trim() : ''
+    const rest = cleanSuperItem(paraSuper[2] ? paraSuper[2].trim() : '')
     return { label: rest ? `Super: ${rest}` : 'Super' }
   }
 
