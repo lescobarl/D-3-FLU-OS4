@@ -24,7 +24,7 @@ import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
 import { HoyPanel, type HoyPanelProps } from './HoyPanel';
 import DocumentResultPanel from './DocumentResultPanel';
-import { DocumentsHistoryPanel, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
+import { DocumentsHistoryPanel, downloadDocumentContent, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 import AppAnalysisPanel from './AppAnalysisPanel';
 import GenerationProgressPanel from './GenerationProgressPanel';
 import { ImageGrid, type GeneratedGridCell } from './ImageGrid';
@@ -38,6 +38,7 @@ import type {
 } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { VideoAssemblyResult } from '../services/videoAssembler';
+import type { DocumentRecord } from '../core/db/fluDatabase';
 import type { HorarioClaseEstructurada } from '../core/horario/horarioService';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import type { SearchResult } from '../core/search/searchSession';
@@ -480,6 +481,52 @@ export function WorkspaceHub({
             });
         }
 
+        // Restauración al iniciar sesión: último artefacto PERSISTIDO por tipo
+        // (prioridad video > imagen > documento). ÚNICA fuente: `documents`
+        // (Dexie, por usuario). UN solo builder. Si el tipo ya está vivo en
+        // pantalla se omite, para no duplicar el render. El foco inicial lo
+        // decide `pickInitialFilter` (una sola vez) al remontar el feed cuando
+        // termina de cargar el historial.
+        if (documents && !documents.loading) {
+            const latestByFormato = (formato: string): DocumentRecord | undefined =>
+                documents.documents.find(
+                    (d) => String(d.formato || '').toLowerCase() === formato,
+                );
+            const restored: Array<{ rec?: DocumentRecord; kind: 'video' | 'image' | 'doc'; live: boolean }> = [
+                { rec: latestByFormato('video'), kind: 'video', live: Boolean(generation.videoResult) },
+                { rec: latestByFormato('image'), kind: 'image', live: Boolean(image.imageUrl) },
+                { rec: latestByFormato('pdf'), kind: 'doc', live: Boolean(generation.result) },
+            ];
+            restored.forEach(({ rec, kind, live }) => {
+                if (!rec || live) return;
+                const label = String(rec.titulo || rec.nombre || '');
+                items.push({
+                    id: `restored-${kind}-${rec.id}`,
+                    origin: 'ia',
+                    kind,
+                    onlyInKind: true,
+                    title: label,
+                    body: (
+                        <div className="frame-content__response">
+                            <div className="frame-content__response-scroll">
+                                <span>{label}</span>
+                            </div>
+                            <div className="flu-reminders-item__actions">
+                                <button
+                                    type="button"
+                                    data-testid={`restored-open-${rec.id}`}
+                                    title={pickLabel((FLU_CONFIG as any).documents?.ui?.downloadTitle, language, 'Abrir')}
+                                    onClick={() => downloadDocumentContent(rec)}
+                                >
+                                    ⬇️
+                                </button>
+                            </div>
+                        </div>
+                    ),
+                });
+            });
+        }
+
         // WEB búsqueda: resultados de texto (web) → tarjeta tipo 'text'.
         if (searchState.results.length > 0) {
             items.push({
@@ -595,6 +642,7 @@ export function WorkspaceHub({
         generation.job,
         generation.error,
         generation.clear,
+        image.imageUrl,
         documents,
         language,
         ws,
@@ -646,7 +694,7 @@ export function WorkspaceHub({
                     <div className="workspace-hub__columns" data-testid="workspace-hub-columns">
                         <div className="workspace-hub__main" data-testid="workspace-hub-main">
                             {/* Feed de resultados consolidado (columna principal) */}
-                            <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} />
+                            <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} key={documents?.loading ? 'feed-loading' : 'feed-ready'} />
 
                             {/* Sección 3 — cargas (región permanente) */}
                             <div className="frame-content__upload-zone">
@@ -742,7 +790,7 @@ export function WorkspaceHub({
                     </div>
                 ) : (
                     <div className="workspace-hub__main" data-testid="workspace-hub-main">
-                        <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} />
+                        <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} key={documents?.loading ? 'feed-loading' : 'feed-ready'} />
                         <div className="frame-content__upload-zone">
                             {upload.error && (
                                 <div className="flu-error-box" role="alert">{upload.error}</div>

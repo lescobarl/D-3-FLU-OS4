@@ -21,7 +21,7 @@
 // ============================================================
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
-import type { HorarioRecord, DiaryEntryRecord, NoteRecord } from '../src/core/db/fluDatabase';
+import type { HorarioRecord, DiaryEntryRecord, NoteRecord, DocumentRecord } from '../src/core/db/fluDatabase';
 import type { HoyPanelProps } from '../src/components/HoyPanel';
 import type { WorkspaceHubProps } from '../src/components/WorkspaceHub';
 
@@ -287,5 +287,89 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         // El bloque DIARIO se quitó del panel por decisión de producto.
         expect(hoyPanel!.querySelector('[data-testid="diario-block"]')).toBeNull();
         expect(hoyPanel!.querySelector('[data-testid="notas-block"]')).not.toBeNull();
+    });
+
+    // ========================================================
+    // Restauración al iniciar: abre la pestaña por prioridad
+    // video > imagen > documento, desde el historial persistido.
+    // ========================================================
+    it('al iniciar sin estado vivo, abre "Video/Docs" si hay un video persistido', () => {
+        const video: DocumentRecord = {
+            id: 'vid-1',
+            kind: 'generated',
+            formato: 'video',
+            titulo: 'Video de prueba',
+            nombre: 'video.mp4',
+            ref: 'https://example.test/video.mp4',
+            createdAt: NOW,
+            updatedAt: NOW,
+            sync: { revision: 1, updated_at: SYNCHRONIZED_AT, deleted: false },
+        };
+        const image: DocumentRecord = {
+            id: 'img-1',
+            kind: 'generated',
+            formato: 'image',
+            titulo: 'Imagen de prueba',
+            nombre: 'imagen.png',
+            ref: 'https://example.test/imagen.png',
+            createdAt: NOW - 1,
+            updatedAt: NOW - 1,
+            sync: { revision: 1, updated_at: SYNCHRONIZED_AT, deleted: false },
+        };
+        const { container } = render(
+            <WorkspaceHub
+                {...baseProps({
+                    documents: {
+                        documents: [image, video],
+                        loading: false,
+                        onRemove: () => {},
+                        language: 'es',
+                    },
+                })}
+            />
+        );
+        const active = container.querySelector('.result-feed__filter--active');
+        expect(active?.getAttribute('data-filter')).toBe('media');
+        expect(container.querySelector('[data-testid="restored-open-vid-1"]')).not.toBeNull();
+    });
+
+    it('al iniciar sin video, abre "Imágenes" si hay imagen persistida', () => {
+        const image: DocumentRecord = {
+            id: 'img-2',
+            kind: 'generated',
+            formato: 'image',
+            titulo: 'Solo imagen',
+            nombre: 'imagen.png',
+            ref: 'https://example.test/imagen.png',
+            createdAt: NOW,
+            updatedAt: NOW,
+            sync: { revision: 1, updated_at: SYNCHRONIZED_AT, deleted: false },
+        };
+        const { container } = render(
+            <WorkspaceHub
+                {...baseProps({
+                    documents: {
+                        documents: [image],
+                        loading: false,
+                        onRemove: () => {},
+                        language: 'es',
+                    },
+                })}
+            />
+        );
+        const active = container.querySelector('.result-feed__filter--active');
+        expect(active?.getAttribute('data-filter')).toBe('image');
+    });
+
+    it('sin historial persistido, abre en "Todo"', () => {
+        const { container } = render(
+            <WorkspaceHub
+                {...baseProps({
+                    documents: { documents: [], loading: false, onRemove: () => {}, language: 'es' },
+                })}
+            />
+        );
+        const active = container.querySelector('.result-feed__filter--active');
+        expect(active?.getAttribute('data-filter')).toBe('all');
     });
 });

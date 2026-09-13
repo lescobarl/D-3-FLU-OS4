@@ -22,7 +22,7 @@ export interface DocumentsHistoryPanelProps {
  * no corromper la descarga. Así la carta/video/imagen es recuperable aunque se
  * limpie el panel o se recargue la app.
  */
-function downloadDocumentContent(doc: DocumentRecord): void {
+export function downloadDocumentContent(doc: DocumentRecord): void {
   const pointer = String(doc.ref || '').trim();
   const content = String(doc.contenido || '');
   const source = pointer || content;
