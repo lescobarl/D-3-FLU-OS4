@@ -91,7 +91,7 @@ export interface TemporalIntentParserOptions {
 // ------------------------------------------------------------
 
 const ALARM_ADD_ES =
-  /^(?:pon(?:me)?|configura|crea|activa|establece|enciende)\s+(?:una\s+|la\s+|el\s+)?(?:alarma|despertador)|^(?:despi[eé]rtame|despiertame|alarma|despertador)\b/i;
+  /^(?:pon(?:me)?|configura|crea|genera|generar|programa|activa|establece|enciende)\s+(?:una\s+|la\s+|el\s+)?(?:alarma|despertador)|^(?:despi[eé]rtame|despiertame|alarma|despertador)\b/i;
 const ALARM_ADD_EN =
   /^(?:set|create|make|turn\s+on|put)\s+(?:an?\s+|the\s+)?alarm\b|^(?:alarm|wake\s+me\s+up)\b/i;
 
@@ -681,9 +681,13 @@ export function parseTemporalIntent(
       trigger = { kind: 'absolute', at };
       recurrence = onceRecurrence();
     } else {
-      // Solo hora → despertador diario.
-      trigger = { kind: 'daily', timeOfDay };
-      recurrence = dailyRecurrence();
+      // Solo hora → alarma de UNA SOLA VEZ en la próxima ocurrencia de esa hora
+      // (hoy si aún no pasó; si no, mañana). Lo recurrente se crea SOLO si se
+      // pide explícitamente ("todos los días", "los lunes", "cada día"…).
+      let at = absoluteAt(now, 0, timeOfDay);
+      if (at <= now) at += MS_DAY;
+      trigger = { kind: 'absolute', at };
+      recurrence = onceRecurrence();
     }
 
     const label = userLabel || (lang === 'es' ? `Alarma a las ${timeOfDay}` : `Alarm at ${timeOfDay}`);

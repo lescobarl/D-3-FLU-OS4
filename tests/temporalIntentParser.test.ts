@@ -28,32 +28,32 @@ function parse(text: string, opts: { now?: number; defaultAlarmTimeOfDay?: strin
   return parseTemporalIntent(text, { now: NOW, ...opts });
 }
 
-describe('parseTemporalIntent — despertador diario (solo hora)', () => {
-  it('una alarma a las 7 de la mañana → daily 07:00, recurrencia daily, etiqueta por defecto', () => {
+describe('parseTemporalIntent — alarma de UNA SOLA VEZ (solo hora)', () => {
+  it('una alarma a las 7 de la mañana → absolute de una vez (hoy ya pasó), etiqueta por defecto', () => {
     const r = parse('pon una alarma a las 7 de la mañana');
     expect(r.handled).toBe(true);
     expect(r.action).toBe('alarm.add');
     expect(r.data?.kind).toBe('alarm');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '07:00' });
-    expect(r.data?.recurrence).toEqual({ kind: 'daily' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 16, 7, 0) });
+    expect(r.data?.recurrence).toEqual({ kind: 'once' });
     expect(r.data?.label).toBe('Alarma a las 07:00');
     expect(r.reply).toContain('07:00');
   });
 
-  it('a las 7 de la noche → daily 19:00 (ajuste PM)', () => {
+  it('a las 7 de la noche → absolute hoy 19:00 (ajuste PM), una sola vez', () => {
     const r = parse('pon una alarma a las 7 de la noche');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '19:00' });
-    expect(r.data?.recurrence).toEqual({ kind: 'daily' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 19, 0) });
+    expect(r.data?.recurrence).toEqual({ kind: 'once' });
   });
 
-  it('al mediodía → daily 12:00', () => {
+  it('al mediodía → absolute hoy 12:00 (una sola vez)', () => {
     const r = parse('pon una alarma al mediodía');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:00' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 0) });
   });
 
-  it('a la medianoche → daily 00:00', () => {
+  it('a la medianoche → absolute mañana 00:00 (una sola vez)', () => {
     const r = parse('pon una alarma a la medianoche');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '00:00' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 16, 0, 0) });
   });
 
   it('con etiqueta propia → la etiqueta se usa en data y en reply (no la genérica)', () => {
@@ -70,10 +70,11 @@ describe('parseTemporalIntent — despertador diario (solo hora)', () => {
     expect(r.reply).toContain('hora');
   });
 
-  it('sin hora con default 07:00 → usa el default', () => {
+  it('sin hora con default 07:00 → usa el default (una sola vez)', () => {
     const r = parse('pon una alarma', { defaultAlarmTimeOfDay: '07:00' });
     expect(r.action).toBe('alarm.add');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '07:00' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 16, 7, 0) });
+    expect(r.data?.recurrence).toEqual({ kind: 'once' });
   });
 });
 
@@ -125,25 +126,32 @@ describe('parseTemporalIntent — formato ASR (Chrome: "12 13 p m")', () => {
     expect(r.reply).toContain('12:13');
   });
 
-  it('"12 13 p m" sin día → daily 12:13 (minutos separados por espacio)', () => {
+  it('"12 13 p m" sin día → absolute hoy 12:13 (minutos separados por espacio)', () => {
     const r = parse('pon una alarma a las 12 13 p m');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:13' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 13) });
     expect(r.reply).toContain('12:13');
   });
 
-  it('"5 00 p m" → daily 17:00 (meridiano p.m. con espacios)', () => {
+  it('"5 00 p m" → absolute hoy 17:00 (meridiano p.m. con espacios)', () => {
     const r = parse('pon una alarma a las 5 00 p m');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '17:00' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 17, 0) });
   });
 
-  it('"12 13" literal con dos puntos → daily 12:13', () => {
+  it('"12 13" literal con dos puntos → absolute hoy 12:13', () => {
     const r = parse('pon una alarma a las 12:13');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:13' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 13) });
   });
 
-  it('"12 13 p.m." con puntos en el meridiano → daily 12:13', () => {
+  it('"12 13 p.m." con puntos en el meridiano → absolute hoy 12:13', () => {
     const r = parse('pon una alarma a las 12:13 p.m.');
-    expect(r.data?.trigger).toEqual({ kind: 'daily', timeOfDay: '12:13' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 13) });
+  });
+
+  it('"genera una alarma a las 12:30" (caso real) → UNA sola vez, no diaria', () => {
+    const r = parse('genera una alarma a las 12:30 del mediodía');
+    expect(r.action).toBe('alarm.add');
+    expect(r.data?.recurrence).toEqual({ kind: 'once' });
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 30) });
   });
 
   it('la etiqueta NO queda con residuos de hora ("13 p m")', () => {

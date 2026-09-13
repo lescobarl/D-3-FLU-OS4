@@ -329,7 +329,11 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
     expect((r.action as { action?: string }).action).toBe('alarm.add');
     expect(data.kind).toBe('alarm');
     expect(data.trigger).toBeTruthy();
-    expect((data.trigger as { timeOfDay?: string }).timeOfDay).toBeTruthy();
+    // Alarma de UNA sola vez: trigger absolute con timestamp (no daily/timeOfDay);
+    // lo recurrente requiere pedirlo explícito ("todos los días").
+    expect((data.trigger as { kind?: string }).kind).toBe('absolute');
+    expect(typeof (data.trigger as { at?: number }).at).toBe('number');
+    expect((data.recurrence as { kind?: string })?.kind).toBe('once');
   });
 
   it('timer.start: el intent del árbitro trae data.kind/trigger con duración', () => {
