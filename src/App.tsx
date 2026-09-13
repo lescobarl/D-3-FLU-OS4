@@ -420,7 +420,7 @@ async function applyConfigAction(
                     console.warn('[applyConfigAction] Festividad personalizada inválida (esperaba "nombre|MM-DD|paleta"):', valor);
                     break;
                 }
-                const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                const id = `custom-${uuidv4()}`;
                 await ctx.branding.seasonalActions.addCustomEvent({ id, name, month: Number(m[1]), day: Number(m[2]), palette });
             } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
                 const targetName = parts[0] || '';

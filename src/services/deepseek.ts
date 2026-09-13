@@ -19,6 +19,7 @@
 import { DEEPSEEK_CONFIG, GENERATION_TIMEOUT_MS, OPENROUTER_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, WORKSPACE_TIPOS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
 import { fetchTextEngine } from '../core/ai/httpClient';
+import { v4 as uuidv4 } from 'uuid';
 import { buildCapabilitiesPrompt } from './capabilities';
 import type {
     IAIService,
@@ -751,7 +752,7 @@ Formato de respuesta (JSON):
                 proyecto: payload.proyecto || 'Proyecto',
                 framework: payload.framework || 'other',
                 pantallas: screens.map((s: any) => ({
-                    id: String(s?.id || `screen-${Math.random().toString(36).slice(2, 8)}`),
+                    id: String(s?.id || `screen-${uuidv4()}`),
                     nombre: String(s?.nombre || 'Pantalla'),
                     proposito: String(s?.proposito || ''),
                     entradas: Array.isArray(s?.entradas) ? s.entradas.map(String) : [],

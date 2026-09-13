@@ -22,6 +22,7 @@
 // Importar servicios de IA para cambio automático de proveedor
 import { getPreferredAIProvider, setPreferredAIProvider } from '../../services/aiServiceFactory';
 import { emitAutonomyEvent } from './autonomyEvents';
+import { v4 as uuidv4 } from 'uuid';
 
 // -----------------------------------------------------------
 // Tipos
@@ -791,7 +792,7 @@ export class AutoRecoverySystem {
     }
     
     private createIncident(componentHealth: any, id?: string): RecoveryIncident {
-        const incidentId = id || `incident-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const incidentId = id || `incident-${uuidv4()}`;
         
         const incident: RecoveryIncident = {
             id: incidentId,

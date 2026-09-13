@@ -20,6 +20,7 @@
 
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
 import { useIntegrationStore } from '../../store/integrationStore';
+import { v4 as uuidv4 } from 'uuid';
 
 // -----------------------------------------------------------
 // Tipos
@@ -556,7 +557,7 @@ class BackupManager {
     ): BackupMetadata | null {
         try {
             const startTime = Date.now();
-            const backupId = `backup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const backupId = `backup-${uuidv4()}`;
             
             // Extraer datos de componentes
             const extractedData: Record<BackupComponent, any> = {} as Record<BackupComponent, any>;

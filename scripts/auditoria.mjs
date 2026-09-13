@@ -53,6 +53,23 @@ function grep(files, re) {
 }
 const notDev = (f) => !rel(f).startsWith('src/dev/')
 
+const isCommentLine = (line) => /^\s*(\/\/|\*|\/\*)/.test(line)
+/** grep que IGNORA comentarios (documentación no es hardcode). */
+function grepCode(files, re) {
+  const out = []
+  for (const f of files) {
+    readLines(f).forEach((line, i) => {
+      if (isCommentLine(line)) return
+      if (re.test(line)) out.push(`${rel(f)}:${i + 1}:${line.trim().slice(0, 90)}`)
+    })
+  }
+  return out
+}
+const isConfigPath = (p) =>
+  p.includes('/config/') || /(appConfig|fluConfig|visualConfig|musicCatalog)\.(ts|js)$/.test(p)
+// Código que NO es config (el hardcode en config es legítimo, §2.2).
+const srcCodeFiles = srcFiles.filter((f) => !isConfigPath(rel(f)))
+
 /** Cuenta definiciones `export [async] function|const|class <name>` de una lista, en todo src. */
 function countExportFns(files, names) {
   const re = new RegExp(`export\\s+(?:async\\s+)?(?:function|const|class)\\s+(${names.join('|')})\\b`)
@@ -171,8 +188,10 @@ const FINDINGS = [
   // -------- vicios contra AGENTS.md --------
   {
     id: 'V1', sev: 'alta', title: 'IDs con Date.now()+Math.random() (regla §3.6 UUIDv4)',
-    target: 0, detect: () => grep(srcFiles, /Math\.random\(\)/).filter((l) => /(id|Id|ID)/.test(l)),
-    note: 'Debe ser uuidv4().',
+    target: 0,
+    detect: () =>
+      grep(srcFiles, /Math\.random\(\)/).filter((l) => /[A-Za-z_$]*[Ii][Dd]\b/.test(l)),
+    note: 'Debe ser crypto.randomUUID() (conservando prefijos de id).',
   },
   {
     id: 'V2', sev: 'media', title: 'Catch vacío que silencia errores (§2.6)',
@@ -190,9 +209,9 @@ const FINDINGS = [
     note: 'Algunos gateados por debug; los sueltos se quitan.',
   },
   {
-    id: 'V5', sev: 'media', title: 'Contenido quemado (URLs archive.org en musicPlayer)',
-    target: 0, detect: () => grep(srcFiles, /archive\.org|SOUNDHELIX_BASE_URL/),
-    note: 'Debe venir de config.',
+    id: 'V5', sev: 'media', title: 'Contenido quemado fuera de config (archive.org / SoundHelix)',
+    target: 0, detect: () => grepCode(srcCodeFiles, /archive\.org|SOUNDHELIX_BASE_URL/),
+    note: 'Debe venir de config (src/core/config). Config y comentarios no cuentan.',
   },
   {
     id: 'V6', sev: 'media', title: 'Monkey-patch global (THREE.PropertyBinding)',
@@ -205,9 +224,10 @@ const FINDINGS = [
     note: 'Re-habilitar o borrar.',
   },
   {
-    id: 'V8', sev: 'baja', title: 'URLs de ejemplo hardcodeadas (appConfig)',
-    target: 0, detect: () => grep(srcFiles, /https:\/\/example\.com|one\.one\.one\.one/),
-    note: 'Lista de conectividad; debe ser config.',
+    id: 'V8', sev: 'baja', title: 'URLs de ejemplo hardcodeadas fuera de config',
+    target: 0,
+    detect: () => grepCode(srcCodeFiles, /https:\/\/example\.com|one\.one\.one\.one/),
+    note: 'Si están en config y son env-overridable (VITE_*), cumplen §2.2. Config/comentarios no cuentan.',
   },
   {
     id: 'V9', sev: 'baja', title: 'Residuo de debug/dev (lab, trazas) fuera de la suite',

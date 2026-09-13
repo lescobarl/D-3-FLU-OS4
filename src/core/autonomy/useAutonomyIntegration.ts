@@ -19,6 +19,7 @@
 // ============================================================
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { 
     HealthMonitor, 
     getHealthMonitor, 
@@ -303,7 +304,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     const addNotification = useCallback((notification: Omit<AutonomyNotification, 'id' | 'timestamp' | 'read'>) => {
         const newNotification: AutonomyNotification = {
             ...notification,
-            id: `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `notification-${uuidv4()}`,
             timestamp: Date.now(),
             read: false,
         };

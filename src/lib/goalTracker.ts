@@ -14,6 +14,8 @@
 // Types
 // -----------------------------------------------------------
 
+import { v4 as uuidv4 } from 'uuid';
+
 export interface Goal {
     /** Unique goal ID */
     id: string;
@@ -113,7 +115,7 @@ export function createSessionProgress(sessionStart: number = Date.now()): Sessio
  */
 export function addGoal(progress: SessionProgress, description: string, category: GoalCategory = 'other', priority: number = 0.5): SessionProgress {
     const goal: Goal = {
-        id: `goal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: `goal_${uuidv4()}`,
         description,
         createdAt: Date.now(),
         status: 'active',
