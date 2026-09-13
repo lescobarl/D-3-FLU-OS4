@@ -3356,6 +3356,35 @@ function App() {
                         data.kind === 'alarm'
                             ? (data.trigger as any)?.timeOfDay || ''
                             : formatDurationMs((data.trigger as any)?.durationMs || 0, lang);
+                    // Idempotencia (anti pile-up): no crear una alarma IDÉNTICA
+                    // (misma hora + recurrencia + etiqueta) si ya hay una pendiente.
+                    // Evita que repetir el comando cree varias alarmas que suenan juntas.
+                    if ((data.kind || 'alarm') === 'alarm') {
+                        const hhmmOf = (ts?: number): string => {
+                            if (!ts) return '';
+                            const d = new Date(ts);
+                            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                        };
+                        const trig = (data.trigger as any) || {};
+                        const wantedTime =
+                            trig.timeOfDay || (trig.kind === 'absolute' && trig.at ? hhmmOf(trig.at) : '');
+                        const wantedRec = String((data.recurrence as any)?.kind || 'once');
+                        const wantedLabel = String(data.label || fallbackLabel);
+                        const duplicate = temporals.alarms.find((a) => {
+                            if (a.status !== 'pending') return false;
+                            const at = (a.trigger as any) || {};
+                            const aTime =
+                                at.timeOfDay || (at.kind === 'absolute' && at.at ? hhmmOf(at.at) : '');
+                            const aRec = String(
+                                (a.recurrence as any)?.kind ||
+                                    (at.kind === 'daily' ? 'daily' : 'once'),
+                            );
+                            return aTime === wantedTime && aRec === wantedRec && String(a.label) === wantedLabel;
+                        });
+                        if (duplicate) {
+                            return lang === 'en' ? 'That alarm already exists.' : 'Esa alarma ya existe.';
+                        }
+                    }
                     const result = await temporals.add({
                         kind: data.kind || 'alarm',
                         label: data.label || fallbackLabel,

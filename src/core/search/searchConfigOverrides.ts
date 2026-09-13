@@ -147,11 +147,26 @@ export function applyProviderOverrides(
  * conservan su flag `enabled` (aunque esté en false) para que el consumidor
  * pueda filtrarlos después; así deshabilitar un proveedor es efectivo.
  */
+/**
+ * Clave de OpenRouter tomada del `.env` (VITE_) como RESPALDO cuando la UI no
+ * tiene una guardada. Es la misma variable que ya viaja en el bundle para el
+ * chat/imagen, así que no agrega exposición. Se lee en cada llamada para que
+ * los tests puedan stubbear el entorno.
+ */
+function envOpenRouterKey(): string {
+  try {
+    return String((import.meta as any)?.env?.VITE_OPENROUTER_API_KEY || '');
+  } catch {
+    return '';
+  }
+}
+
 export function mergeSearchConfig(
   base: SearchRuntimeConfig,
   overrides?: SearchConfigOverrides,
 ): MergedSearchConfig {
   const ov = overrides || {};
+  const envKey = envOpenRouterKey();
   const safeSearch = Boolean(ov.safeSearch);
   const supervised = Boolean(ov.supervised);
   const dailyLimit =
@@ -167,20 +182,18 @@ export function mergeSearchConfig(
   for (const type of SEARCH_TYPES) {
     const group = base.providers[type] || [];
     const typeOverrides = ov.providers?.[type];
-    if (!typeOverrides) {
-      providers[type] = group.slice();
-      continue;
-    }
     providers[type] = group.map((provider) => {
-      const override = typeOverrides[provider.id || ''];
-      if (!override) return provider;
+      const override = typeOverrides?.[provider.id || ''];
+      // Respaldo: si no hay clave en la UI, el proveedor openrouter usa la del .env.
+      const fallbackKey =
+        provider.id === 'openrouter' && envKey ? envKey : provider.key;
       return {
         ...provider,
-        enabled: override.enabled ?? provider.enabled,
-        key: override.key !== undefined ? override.key : provider.key,
-        model: override.model ?? provider.model,
-        maxResults: override.maxResults ?? provider.maxResults,
-        timeoutMs: override.timeoutMs ?? provider.timeoutMs,
+        enabled: override?.enabled ?? provider.enabled,
+        key: override?.key !== undefined ? override.key : fallbackKey,
+        model: override?.model ?? provider.model,
+        maxResults: override?.maxResults ?? provider.maxResults,
+        timeoutMs: override?.timeoutMs ?? provider.timeoutMs,
       };
     });
   }

@@ -1159,7 +1159,8 @@ export function useFluVoiceAssistant({
       useIntegrationStore.getState?.().setThinking?.(true)
 
       try {
-        return await requestFluContract({
+        const iaStartMs = Date.now()
+        const iaResult = await requestFluContract({
           apiKey,
           transcript,
           intent,
@@ -1183,6 +1184,14 @@ export function useFluVoiceAssistant({
           horarioContext,
           resultadosContext,
         })
+        // Instrumentación de latencia (diagnóstico): permite medir el tiempo real
+        // de la intervención con IA sin adivinar.
+        relayLog(
+          'LOG',
+          'useFluVoiceAssistant',
+          `latencia IA: ${Date.now() - iaStartMs}ms (phase=${contractPhase}, model=${iaResult?.diagnostics?.model || iaResult?.diagnostics?.provider || 'n/d'})`,
+        )
+        return iaResult
       } finally {
         useIntegrationStore.getState?.().setThinking?.(false)
       }

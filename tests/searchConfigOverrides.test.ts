@@ -94,6 +94,49 @@ describe('mergeSearchConfig', () => {
         expect(merged.providers.video[0].enabled).toBe(false);
     });
 
+    it('openrouter: usa la clave del .env como respaldo si la UI no tiene una', () => {
+        vi.stubEnv('VITE_OPENROUTER_API_KEY', 'env-or-key');
+        const base = baseRuntime();
+        base.providers.web = [
+            ...base.providers.web,
+            {
+                id: 'openrouter',
+                label: 'OpenRouter',
+                enabled: true,
+                endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+                key: null,
+                model: 'google/gemini-2.5-flash-lite:online',
+                maxResults: 5,
+                timeoutMs: 8000,
+            } as SearchProviderConfig,
+        ];
+        const merged = mergeSearchConfig(base);
+        expect(merged.providers.web.find((p) => p.id === 'openrouter')?.key).toBe('env-or-key');
+        vi.unstubAllEnvs();
+    });
+
+    it('openrouter: la clave de la UI gana sobre la del .env', () => {
+        vi.stubEnv('VITE_OPENROUTER_API_KEY', 'env-or-key');
+        const base = baseRuntime();
+        base.providers.web = [
+            ...base.providers.web,
+            {
+                id: 'openrouter',
+                label: 'OpenRouter',
+                enabled: true,
+                endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+                key: null,
+                maxResults: 5,
+                timeoutMs: 8000,
+            } as SearchProviderConfig,
+        ];
+        const merged = mergeSearchConfig(base, {
+            providers: { web: { openrouter: { key: 'ui-key' } } },
+        });
+        expect(merged.providers.web.find((p) => p.id === 'openrouter')?.key).toBe('ui-key');
+        vi.unstubAllEnvs();
+    });
+
     it('no muta la config base ni el objeto de overrides', () => {
         const base = baseRuntime();
         const ov = { providers: { web: { wikipedia: { enabled: false } } }, safeSearch: true };
