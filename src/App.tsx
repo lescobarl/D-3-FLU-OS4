@@ -1948,7 +1948,19 @@ function App() {
                                 )})${arbiterResult?.matched ? '' : ' [vía dominio LLM]'}`,
                             );
                             const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
-                            if (reply) localHandledReply = reply;
+                            if (reply) {
+                                localHandledReply = reply;
+                                // Para acciones de ESTADO (alarma/timer) el manejador es
+                                // la fuente de verdad: su reply describe lo que REALMENTE
+                                // se creó (p. ej. "todos los días"). Se habla ese texto en
+                                // vez del del LLM, que puede omitir la recurrencia.
+                                const actionName = String(
+                                    effectiveResult.action?.action ?? effectiveResult.action ?? '',
+                                );
+                                if (actionName === 'alarm.add' || actionName === 'timer.start') {
+                                    respuestaVoz = reply;
+                                }
+                            }
                         }
                     }
                 } catch (err) {

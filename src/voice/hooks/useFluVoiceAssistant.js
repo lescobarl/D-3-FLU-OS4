@@ -399,8 +399,12 @@ export function useFluVoiceAssistant({
    * Las ramas solo aportan su `contract` y los campos del payload.
    */
   const commitAndResolveTurn = useCallback(
-    async ({ capture, contract, ...payload } = {}) => {
+    async ({ capture, contract, commitOnly = false, ...payload } = {}) => {
       const canonicalPhrase = commitTurnPhrase(capture)
+      // `commitOnly`: commit temprano para que la transcripción se vea en cuanto
+      // se captura (sin esperar a la IA). La resolución posterior re-commitea el
+      // MISMO valor (idempotente), así no hay doble fuente.
+      if (commitOnly) return canonicalPhrase
       return onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase })
     },
     [commitTurnPhrase, onContractResolved],
@@ -460,6 +464,9 @@ export function useFluVoiceAssistant({
   const isListeningRef = useRef(false)
   const recentMemoryRef = useRef('')
   const isProcessingRef = useRef(false)
+  // Última captura procesada (dedup anti-repetición): evita que la MISMA frase
+  // se procese dos veces (p. ej. cierre + auto-proceso) y cree la acción doble.
+  const lastProcessedCaptureRef = useRef({ text: '', at: 0 })
   const autoProcessTimerRef = useRef(null)
   const recognitionRetryTimerRef = useRef(null)
   const recognitionRetryCountRef = useRef(0)
@@ -3127,9 +3134,13 @@ export function useFluVoiceAssistant({
       listenStateRef.current.pendingInterim = ''
       // §9: UNA sola frase canónica para el turno. Display y fila de
       // conversación salen de ESTE mismo valor (con wake word), no de dos
-      // derivaciones distintas. El commit lo hace `commitAndResolveTurn` al
-      // cerrar; aquí solo se calcula el valor para derivar la query.
-      const canonicalPhrase = cleanForSpeech(fullTranscript || question)
+      // derivaciones distintas. Se commitea AQUÍ (commitOnly) para que la
+      // transcripción sea visible de inmediato, sin esperar a la IA; la
+      // resolución posterior re-commitea el mismo valor.
+      const canonicalPhrase = await commitAndResolveTurn({
+        capture: fullTranscript || question,
+        commitOnly: true,
+      })
       // §9: la query se deriva de la MISMA fila canónica por el derivador único.
       question =
         deriveQueryFromRow(canonicalPhrase, FLU_CONFIG.voiceCommands).question || question
@@ -3512,6 +3523,23 @@ export function useFluVoiceAssistant({
   const processCapture = useCallback(async ({ closing = false } = {}) => {
     const snapshot = readCommandSnapshot(turnRef.current, pendingSpillRef.current)
     relayLog('LOG', 'useFluVoiceAssistant', `processCapture ENTER: snapshot="${(snapshot || '').slice(0, 60)}", closing=${closing}, conversationActiveRef.current=${conversationActiveRef?.current}`)
+    // Dedup: la MISMA captura no se procesa dos veces seguidas (evita doble
+    // acción cuando el cierre y el auto-proceso coinciden, como en el ciclo de
+    // alarmas repetidas). Ventana corta: solo bloquea repeticiones inmediatas.
+    const snapshotKeyDedup = cleanForSpeech(snapshot || '')
+    if (snapshotKeyDedup) {
+      const nowMsDedup = Date.now()
+      const prevCap = lastProcessedCaptureRef.current
+      if (prevCap.text === snapshotKeyDedup && nowMsDedup - prevCap.at < 10000) {
+        relayLog(
+          'WARN',
+          'useFluVoiceAssistant',
+          `processCapture SKIP: captura duplicada (mismo texto hace ${nowMsDedup - prevCap.at}ms)`,
+        )
+        return
+      }
+      lastProcessedCaptureRef.current = { text: snapshotKeyDedup, at: nowMsDedup }
+    }
     if (!snapshot && !closing) return
 
     const requireWake = !conversationActiveRef?.current
