@@ -289,6 +289,12 @@ describe('parseTemporalIntent — listar, cancelar y no reconocido', () => {
     expect(r.data?.all).toBe(true);
   });
 
+  it('borra las alarmas diarias generadas (sin hora) → all=true (borra todas)', () => {
+    const r = parse('borra las alarmas');
+    expect(r.action).toBe('alarm.cancel');
+    expect(r.data?.all).toBe(true);
+  });
+
   it('cancela la alarma de las 7 → alarm.cancel con cancelTarget 07:00', () => {
     const r = parse('cancela la alarma de las 7');
     expect(r.action).toBe('alarm.cancel');

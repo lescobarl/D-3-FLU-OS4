@@ -3414,10 +3414,20 @@ function App() {
                 }
                 case 'alarm.cancel': {
                     const target = data.cancelTarget as string | undefined;
+                    // Hora local HH:MM de la próxima ocurrencia: permite cancelar
+                    // por hora también las alarmas de UNA sola vez (trigger
+                    // 'absolute', que no trae timeOfDay).
+                    const hhmmOf = (ts?: number): string => {
+                        if (!ts) return '';
+                        const d = new Date(ts);
+                        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                    };
                     const matches = temporals.alarms.filter(
                         (a) =>
                             a.status === 'pending' &&
-                            (data.all || (target && a.trigger.timeOfDay === target)),
+                            (data.all ||
+                                (target &&
+                                    (a.trigger?.timeOfDay === target || hhmmOf(a.nextAt) === target))),
                     );
                     for (const a of matches) await temporals.cancel(a.id);
                     return intent.reply;

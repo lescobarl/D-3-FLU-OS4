@@ -595,7 +595,9 @@ export function parseTemporalIntent(
     const lang = ALARM_CANCEL_ES.test(text) ? 'es' : 'en';
     const rest = text.slice(alarmCancel[0].length).trim();
     const { timeOfDay } = extractTimeOfDay(rest);
-    const all = /\b(todas|todos|all)\b/i.test(text);
+    // Sin hora concreta ("borra las alarmas") → se cancelan TODAS las pendientes;
+    // con hora ("borra la alarma de las 12:30") → solo la de esa hora.
+    const all = /\b(todas|todos|all)\b/i.test(text) || !timeOfDay;
     const cancelTarget = timeOfDay ?? undefined;
     const data: TemporalIntentData = { kind: 'alarm', all };
     if (cancelTarget) data.cancelTarget = cancelTarget;
