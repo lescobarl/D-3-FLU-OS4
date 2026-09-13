@@ -159,6 +159,7 @@ import {
     normalizeCommandForDeterministic,
     actionBelongsToTranscript,
     isRecoverableRecognitionError,
+    isMinuteGenerationRequest,
 } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
@@ -2194,22 +2195,19 @@ function App() {
             }
 
             // ============================================================
-            // RETENCIÓN DEL ÚLTIMO ARTEFACTO VISUAL/MEDIA
-            // Pedido explícito: la última imagen/video/documento NO se borra al
-            // iniciar un turno nuevo; se conserva hasta que un turno nuevo lo
-            // reemplace (una generación nueva invalida las peticiones viejas por
-            // su requestId, así que no hay mezcla). Solo se limpia el artifact
-            // TEXTUAL previo para que texto viejo no se mezcle con la respuesta.
+            // LIMPIEZA POR TURNO del estado VIVO (imagen/artifact)
+            // Al iniciar un turno real se limpia la imagen generada y el artifact
+            // vivos para que NO queden "pegados" los resultados del turno anterior
+            // (p. ej. imágenes de una consulta previa). Lo persistido (Historial
+            // por usuario en `documents`) y la restauración por prioridad NO viven
+            // aquí: siguen intactos.
             // ============================================================
-            {
-                const prevTipo = String(integrationStore.workspaceArtifact?.tipo || '');
-                const prevEsMedia = ['image_prompt', 'diagram', '3d', 'doc', 'video'].includes(
-                    prevTipo,
-                );
-                if (!prevEsMedia) {
-                    integrationStore.setWorkspaceArtifact(null);
-                }
+            try {
+                workspaceImage.clear();
+            } catch (err) {
+                relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
             }
+            integrationStore.setWorkspaceArtifact(null);
 
             // ============================================================
             // PROCESAR WORKSPACE ARTIFACT — INMEDIATAMENTE (en paralelo con la voz)
@@ -2219,7 +2217,7 @@ function App() {
             // (workspaceImage.generateFromContract) se dispare EN EL MOMENTO en que
             // la IA responde, en paralelo con (incluso antes de) que FLU hable.
             // generateFromContract es async fire-and-forget: no bloquea el habla.
-            // El artifact anterior se conserva salvo que sea textual (ver arriba).
+            // El artifact/imagen vivos se limpian al iniciar el turno (arriba).
 
             // Limpiar también el estado de búsqueda del Pizarrón al iniciar un
             // turno real: si el turno anterior fue una búsqueda web (BUSCAR/
@@ -2309,6 +2307,12 @@ function App() {
                     });
                     setHorarioModo(modo);
                 } else if (tipo === 'doc' || tipo === 'video') {
+                    // Una petición de MINUTA no es un documento: se genera la minuta
+                    // (comando determinista GENERAR_RESUMEN) y se OMITE el PDF/video.
+                    if (isMinuteGenerationRequest(transcript)) {
+                        relayLog('LOG', 'App', 'onContractResolved: petición de minuta → GENERATE_SUMMARY (se omite documento)');
+                        dispatchFluEvent(FLU_EVENTS.GENERATE_SUMMARY);
+                    } else {
                     // RUTA ÚNICA de medios: se crea el artifact (fuente de
                     // buildGenerationTopic) y se genera por `requestMediaRef`
                     // (idempotente por comando). NO se despacha evento: el bus
@@ -2337,6 +2341,7 @@ function App() {
                                 workspaceImage.generateFromContract(scenePrompt, 'image_prompt');
                             }
                         }
+                    }
                     }
                 } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
                     // Guard anti-duplicado: si el workspace de tipo 'text' es una

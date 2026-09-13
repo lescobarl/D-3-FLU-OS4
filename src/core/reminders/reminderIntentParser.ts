@@ -162,7 +162,7 @@ const TRAILING_FILLER_EN =
  * de una cita y la enrutan a `reminder.add`.
  */
 const CITA_TRIGGER_ES =
-  /^(?:crea|crear|genera|generar|genérame|generame|agenda|agendar|programa|programar|pon|ponme|poner|hazme|hacer|tengo|quiero|quiero\s+(?:crear|agendar|programar|generar))\s+(?:una\s+|un\s+)?cita\b\s*/i;
+  /^(?:crea|crear|genera|generar|genérame|generame|agenda|agendar|programa|programar|pon|ponme|poner|hazme|hacer|tengo|quiero|quiero\s+(?:crear|agendar|programar|generar))\s+(?:una\s+|un\s+)?(?:cita|junta|reuni[oó]n)\b\s*/i;
 const CITA_TRIGGER_EN =
   /^(?:create|schedule|book|set|make|add|i\s+have|i\s+want)\s+(?:an?\s+)?appointment\b\s*/i;
 /** Persona de la cita: 'con el doctor', 'con la doctora', 'with the doctor'. */
@@ -187,7 +187,25 @@ function normalizeInput(raw: string): string {
     if (m) t = t.slice(m[0].length).trim();
   }
   t = t.replace(TRAILING_FILLER_ES, '').replace(TRAILING_FILLER_EN, '').trim();
+  // ASR: gatillo de tiempo duplicado ("a las a las 10") → "a las 10".
+  t = t.replace(/\ba\s+las\s+a\s+las\b/gi, 'a las');
   return t;
+}
+
+/**
+ * Limpia el ASUNTO de una cita quitando toda la cláusula de tiempo (día, hora,
+ * franja, conectores y dígitos) para que el contexto sobreviva aunque el
+ * usuario lo diga después de la hora ("…cita para mañana a las 12:30 para
+ * revisar Data brix" → "revisar Data brix").
+ */
+const CITA_TIME_NOISE =
+  /\b(?:hoy|mañana|manana|pasado\s+mañana|pasado\s+manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[áa]bado|domingo|today|tomorrow|tonight|morning|afternoon|evening|night|monday|tuesday|wednesday|thursday|friday|saturday|sunday|a\s+las?|las?|de\s+la\s+(?:mañana|manana|tarde|noche|madrugada)|p\.?\s*m\.?|a\.?\s*m\.?|horas?|minutos?|hours?|minutes?|para|que|del|de|el|la|los|las|un|una|al|the|at|for|to|of|on|y|and|\d{1,2}(?::\d{2})?)\b/gi;
+
+function cleanCitaSubject(text: string): string {
+  return String(text || '')
+    .replace(CITA_TIME_NOISE, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 /** Separa el texto del recordatorio de su cláusula 'cuándo'. */
@@ -447,16 +465,11 @@ export function parseReminderIntent(
       : lang === 'es'
         ? 'cita'
         : 'appointment';
-    // El asunto de la cita es el texto entre el trigger/persona y la cláusula
-    // "cuándo". Cuando ese tramo es SOLO un conector que introduce el tiempo
-    // ("crea una cita para mañana a las 10" → textPart "para"), se descarta
-    // para que el recordatorio quede con el nombre limpio ("cita", "cita con
-    // el doctor") y no "cita para". Los conectores con contenido real ("para
-    // una revisión dental…") se conservan.
-    const connectorsOnly = /^(?:para|a|de|por|que|el|la|los|las|una|un|del|al|con|mi|mis|tu|tus|su|sus|nuestro|nuestra)\s*$/i;
-    const subject = textPart && !connectorsOnly.test(textPart.trim())
-      ? `${base} ${textPart}`
-      : base;
+    // El asunto conserva el contexto aunque el usuario lo diga DESPUÉS de la
+    // hora: se limpia la cláusula de tiempo de todo el resto (textPart +
+    // whenClause) con un único limpiador.
+    const subjectText = cleanCitaSubject(`${textPart} ${whenClause || ''}`);
+    const subject = subjectText ? `${base} ${subjectText}` : base;
     if (!subject.trim()) {
       return { handled: true, action: null, reply: askTextReply(lang) };
     }

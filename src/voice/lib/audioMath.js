@@ -783,6 +783,7 @@ export function detectUiVoiceCommand(text = '', commands = {}) {
   }
 
   if (
+    isMinuteGenerationRequest(text) ||
     matchesCommandPhrase(text, commands.generateMinute || []) ||
     matchesCommandPhrase(text, commands.generateSummary || [])
   ) {

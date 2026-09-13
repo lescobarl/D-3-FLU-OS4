@@ -372,3 +372,24 @@ describe('reminderIntentParser — frases realistas con ruido (Point G)', () => 
     expect(result.action).toBeNull();
   });
 });
+
+describe('parseReminderIntent — citas: contexto y "junta" (dictado real)', () => {
+  it('conserva el contexto que va DESPUÉS de la hora', () => {
+    const r = parseReminderIntent('Crea una cita para mañana a las 12:30 para revisar Data brix', { now });
+    expect(r.action).toBe('reminder.add');
+    expect(String(r.data?.text || '')).toContain('Data brix');
+  });
+
+  it('reconoce "junta" y conserva su contexto', () => {
+    const r = parseReminderIntent('Crea una junta Data brix para mañana a las 1 de la tarde', { now });
+    expect(r.action).toBe('reminder.add');
+    expect(String(r.data?.text || '')).toContain('Data brix');
+  });
+
+  it('normaliza "a las a las" y agenda con día + hora', () => {
+    const r = parseReminderIntent('Crea una junta de transcripción de datos a las a las 10 de la mañana mañana', { now });
+    expect(r.action).toBe('reminder.add');
+    expect(String(r.data?.text || '')).toContain('transcripción');
+    expect(typeof r.data?.dueAt).toBe('number');
+  });
+});

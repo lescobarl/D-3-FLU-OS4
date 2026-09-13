@@ -622,3 +622,18 @@ describe('deterministicArbiter — resolveDeterministicCourtesySpeech (§2B)', (
     );
   });
 });
+
+describe('resolveDeterministicCommand — minuta (precedencia sobre documento)', () => {
+  it('"generar minuta" → navigation GENERAR_RESUMEN', () => {
+    const r: any = resolveDeterministicCommand('generar minuta', { language: 'es' });
+    expect(r?.matched).toBe(true);
+    expect(r?.domain).toBe('navigation');
+    expect(r?.action).toBe('GENERAR_RESUMEN');
+  });
+
+  it('"genera una minuta" → navigation GENERAR_RESUMEN', () => {
+    const r: any = resolveDeterministicCommand('genera una minuta', { language: 'es' });
+    expect(r?.matched).toBe(true);
+    expect(r?.action).toBe('GENERAR_RESUMEN');
+  });
+});

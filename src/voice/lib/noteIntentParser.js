@@ -11,7 +11,7 @@
 
 const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i
 const NOTE_CREATION_PREFIX =
-  /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?nota\b\s*(.*)$/i
+  /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?(?:nota|lista)\b\s*(.*)$/i
 const NOTE_PARA_SUPER =
   /^nota\s+(?:de\s+)?(?:la\s+)?(?:lista\s+)?(?:del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|para\s+el\s+|para\s+la\s+|para\s+|al\s+|a\s+el\s+|a\s+la\s+|a\s+lo\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_SUPER_LIST =
@@ -49,6 +49,10 @@ const SUPER_ITEM_LEAD =
 const SUPER_DATE_LEAD =
   /^(?:para\s+|de\s+|el\s+)?(?:hoy|ma[ñn]ana|pasado\s+ma[ñn]ana|esta\s+(?:tarde|noche)|lunes|martes|mi[eé]rcoles|jueves|viernes|s[áa]bado|domingo)\s*(?:y\s+)?/i
 
+// Destino redundante dentro de la nota ("en las notas que traiga X"): no es
+// parte del contenido.
+const SUPER_NOTE_DEST_LEAD = /^(?:en\s+las?\s+|a\s+las?\s+)?(?:notas?|listas?)\s*/i
+
 /** Limpia el ítem de una nota "Super": quita fecha relativa y verbos líderes. */
 function cleanSuperItem(rest = '') {
   let item = String(rest || '').trim()
@@ -56,6 +60,7 @@ function cleanSuperItem(rest = '') {
   while (item !== prev) {
     prev = item
     item = item.replace(SUPER_DATE_LEAD, '').trim()
+    item = item.replace(SUPER_NOTE_DEST_LEAD, '').trim()
     const m = SUPER_ITEM_LEAD.exec(item)
     if (m) item = item.slice(m[0].length).trim()
   }

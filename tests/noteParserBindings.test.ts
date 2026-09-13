@@ -35,6 +35,17 @@ describe('🧪 Bindings JS (notas) — sin import rotos', () => {
 // "de el/de la", no "del", y el limpiador no quita "integra/mañana".
 // ============================================================
 describe('parseNoteIntentText — dictado natural (niños)', () => {
+    it('"crea una lista para el súper en las notas que traiga …" → nota Super', () => {
+        const parsed = parseNoteIntentText(
+            'crea una lista para el súper en las notas que traiga jabón pan huevo y queso',
+        );
+        expect(parsed).not.toBeNull();
+        const label = String(parsed?.label || '').toLowerCase();
+        expect(label).toContain('jabon');
+        expect(label).toContain('queso');
+        expect(label).not.toContain('notas');
+    });
+
     it('"genera una nota del súper para mañana y integra jabón cloro croquetas"', () => {
         const parsed = parseNoteIntentText(
             'genera una nota del súper para mañana y integra jabón cloro croquetas avión televisión',

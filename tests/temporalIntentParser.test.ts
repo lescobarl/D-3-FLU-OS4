@@ -154,6 +154,12 @@ describe('parseTemporalIntent — formato ASR (Chrome: "12 13 p m")', () => {
     expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 12, 30) });
   });
 
+  it('"2:00 con 10 p.m" → gana el meridiem (22:00) y no se cuela en la etiqueta', () => {
+    const r = parse('pon una alarma hoy a las 2:00 con 10 p.m');
+    expect(r.data?.trigger).toEqual({ kind: 'absolute', at: at(2026, 1, 15, 22, 0) });
+    expect(String(r.data?.label || '')).toBe('Alarma a las 22:00');
+  });
+
   it('la etiqueta NO queda con residuos de hora ("13 p m")', () => {
     const r = parse('pon una alarma a las 12 13 p m');
     expect(r.data?.label).toBe('Alarma a las 12:13');
