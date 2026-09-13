@@ -392,6 +392,19 @@ export function useFluVoiceAssistant({
     if (canonical) commitVisibleTranscript(canonical)
     return canonical
   }, [commitVisibleTranscript])
+  /**
+   * §9: par ÚNICO `commit + resolución` del turno. TODAS las ramas cierran por
+   * aquí, de modo que el display (commit) y la fila (`transcript`) no puedan
+   * divergir por construcción: la fila es SIEMPRE el valor commiteado.
+   * Las ramas solo aportan su `contract` y los campos del payload.
+   */
+  const commitAndResolveTurn = useCallback(
+    async ({ capture, contract, ...payload } = {}) => {
+      const canonicalPhrase = commitTurnPhrase(capture)
+      return onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase })
+    },
+    [commitTurnPhrase, onContractResolved],
+  )
   const [lastContract, setLastContract] = useState(null)
   const [lastDiagnostics, setLastDiagnostics] = useState(null)
   const [lastErrorEvent, setLastErrorEvent] = useState(null)
@@ -2732,14 +2745,13 @@ export function useFluVoiceAssistant({
 
       if (command === 'FLU_ESPERA') {
         fluParticipantRef.current?.dismissRaisedHand?.()
-        const canonicalEspera = commitTurnPhrase(cleaned)
-        await onContractResolved?.({
+        await commitAndResolveTurn({
+          capture: cleaned,
           contract: {
             respuesta_voz: getCommandSpeech('FLU_ESPERA', language),
             navegacion: { comando: null, destino: null, parametros: {} },
           },
           diagnostics: null,
-          transcript: canonicalEspera,
           speakerName: commandSpeaker,
           speakerAlias: null,
           phase,
@@ -2756,14 +2768,13 @@ export function useFluVoiceAssistant({
           lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
         const participant = fluParticipantRef.current
         const respondParticipantFloor = async (speechText, { floor = false } = {}) => {
-          const canonicalFloor = commitTurnPhrase(cleaned)
-          await onContractResolved?.({
+          await commitAndResolveTurn({
+            capture: cleaned,
             contract: {
               respuesta_voz: speechText,
               navegacion: { comando: null, destino: null, parametros: {} },
             },
             diagnostics: null,
-            transcript: canonicalFloor,
             speakerName: commandSpeaker,
             speakerAlias: null,
             phase,
@@ -2823,8 +2834,8 @@ export function useFluVoiceAssistant({
         return
       }
 
-      const canonicalCommand = commitTurnPhrase(cleaned)
-      await onContractResolved?.({
+      await commitAndResolveTurn({
+        capture: cleaned,
         contract: {
           respuesta_voz: getCommandSpeech(command, language),
           navegacion: {
@@ -2834,7 +2845,6 @@ export function useFluVoiceAssistant({
           },
         },
         diagnostics: null,
-        transcript: canonicalCommand,
         speakerName: commandSpeaker,
         speakerAlias: null,
         phase,
@@ -2844,7 +2854,7 @@ export function useFluVoiceAssistant({
         conversationCommandPreLogged,
       })
     },
-    [commitSessionTurn, language, onContractResolved, persistDialogueSession, phase, releaseTurnAfterLog],
+    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog],
   )
 
   const dispatchPassiveVoiceCommand = useCallback(
@@ -3723,9 +3733,9 @@ export function useFluVoiceAssistant({
         setStatus('idle')
         isListeningRef.current = false
         setActiveKnowledgeBase('general')
-        const canonicalDirect = commitTurnPhrase(capturedTranscript)
-        relayLog('LOG', 'useFluVoiceAssistant', `processCapture DIRECT COMMAND: calling onContractResolved with command="${directCommand}"`)
-        await onContractResolved?.({
+        relayLog('LOG', 'useFluVoiceAssistant', `processCapture DIRECT COMMAND: calling commitAndResolveTurn with command="${directCommand}"`)
+        await commitAndResolveTurn({
+          capture: capturedTranscript,
           contract: {
             respuesta_voz: getCommandSpeech(directCommand, detectedLanguage || language),
             navegacion: {
@@ -3735,7 +3745,6 @@ export function useFluVoiceAssistant({
             },
           },
           diagnostics: null,
-          transcript: canonicalDirect,
           speakerName: resolvedSpeakerName,
           speakerAlias,
           phase,
