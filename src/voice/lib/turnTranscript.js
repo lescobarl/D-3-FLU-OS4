@@ -219,9 +219,8 @@ export function getTurnCommitText(state, pendingSpill = '') {
   return mergeTranscriptText(spill, confirmed)
 }
 
-export function getTranscriptDelta(previous = '', next = '') {
-  return getTranscriptDeltaFromBoundary(previous, next)
-}
+// Dueño canónico: transcriptDelta.js. Se re-exporta para no duplicar.
+export { getTranscriptDelta } from './transcriptDelta.js'
 
 /** @deprecated Usar getTurnCommitText / appendSpillText. Conservado por compatibilidad temporal. */
 export function mergeCaptureText(...parts) {

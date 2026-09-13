@@ -105,9 +105,8 @@ function speechWords(text = '') {
   return cleanForSpeech(text).split(/\s+/).filter(Boolean)
 }
 
-export function countSpeechWords(text = '') {
-  return countWordsFromPauseCfg(text)
-}
+// Dueño canónico: fluTranscriptPause.js. Se re-exporta para no duplicar.
+export { countSpeechWords } from './fluTranscriptPause.js'
 
 /** Cola ASR suelta tras pausa: heurística de relación + umbrales en fluConfig. */
 export function isTailOnlyInterimCapture(capture = '', turnLive = '', lastCommitted = '') {

@@ -3,6 +3,7 @@ import {
   normalizeEmbeddingVector,
   normalizeSpaces,
   stripDiacritics,
+  compareAudioSignatures,
 } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { getPassiveBufferMs } from './micCapture.js'
@@ -196,31 +197,9 @@ export function trimAudioChunkBuffer(
   if (totalSamplesRef) totalSamplesRef.current = total
 }
 
-/**
- * Similitud coseno L2 explícita entre embeddings (512-D u otra dimensión).
- * dot / (sqrt(norm1) * sqrt(norm2)); norm2 acumula sig2[i]² (nunca sig1*sig2).
- */
-export function compareAudioSignatures(sig1 = [], sig2 = []) {
-  if (!Array.isArray(sig1) || !Array.isArray(sig2) || !sig1.length || !sig2.length) {
-    return 0
-  }
-  const dim = Math.min(sig1.length, sig2.length)
-  let dot = 0
-  let norm1 = 0
-  let norm2 = 0
-  for (let i = 0; i < dim; i += 1) {
-    const a = Number(sig1[i] || 0)
-    const b = Number(sig2[i] || 0)
-    dot += a * b
-    norm1 += a * a
-    norm2 += b * b
-  }
-  const denom = Math.sqrt(norm1) * Math.sqrt(norm2)
-  if (!denom || !Number.isFinite(denom)) return 0
-  const similarity = dot / denom
-  if (!Number.isFinite(similarity)) return 0
-  return Math.max(0, Math.min(1, similarity))
-}
+// Dueño canónico de la similitud coseno: audioMath.js (OS2). Se re-exporta
+// aquí (misma fórmula) para no duplicar la definición.
+export { compareAudioSignatures };
 
 function cosineThreshold(thresholds = {}, key, fallback) {
   const value = Number(thresholds?.[key])
