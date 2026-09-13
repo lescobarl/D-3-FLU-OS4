@@ -266,11 +266,11 @@ describe('WorkspaceHub — layout consolidado (Pizarrón unificado)', () => {
         expect(badges).toContain('IA');
         expect(badges).toContain('OCR');
 
-        // Los tres filtros de tipo existen.
+        // Los cuatro filtros de tipo existen.
         const filters = Array.from(feed!.querySelectorAll('.result-feed__filter')).map((b) =>
             b.getAttribute('data-filter')
         );
-        expect(filters).toEqual(['all', 'image', 'video', 'doc']);
+        expect(filters).toEqual(['all', 'image', 'media', 'history']);
     });
 
     it('la columna lateral conserva el HoyPanel (HOY/NOTAS; SIN DIARIO)', () => {

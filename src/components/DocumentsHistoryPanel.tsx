@@ -16,19 +16,31 @@ export interface DocumentsHistoryPanelProps {
 }
 
 /**
- * Descarga el artefacto REAL guardado de un documento/carta generado.
- * Los serializadores binarios (PDF/DOCX/XLSX/PPTX) devuelven el archivo como
- * data URL base64 en `contenido`; los de texto plano devuelven el texto con un
- * `blob:` URL. Aquí se respetan ambos casos para no corromper la descarga.
- * Así la carta es recuperable aunque se limpie el panel o se recargue la app.
+ * Descarga/abre el artefacto apuntado por la entrada del Historial.
+ * Prioridad: `ref` (puntero a URL remota del video/imagen, o data URL) y, si
+ * no hay, `contenido` (data URL del PDF o texto). Respeta data URLs base64 para
+ * no corromper la descarga. Así la carta/video/imagen es recuperable aunque se
+ * limpie el panel o se recargue la app.
  */
 function downloadDocumentContent(doc: DocumentRecord): void {
+  const pointer = String(doc.ref || '').trim();
   const content = String(doc.contenido || '');
-  if (!content) return;
-  const isDataUrl = /^data:/i.test(content);
+  const source = pointer || content;
+  if (!source) return;
+  // URL remota (video/imagen): se abre/descarga directo.
+  if (/^https?:/i.test(source)) {
+    const anchor = document.createElement('a');
+    anchor.href = source;
+    anchor.download = doc.nombre || doc.titulo || 'documento';
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.click();
+    return;
+  }
+  const isDataUrl = /^data:/i.test(source);
   const href = isDataUrl
-    ? content
-    : URL.createObjectURL(new Blob([content], { type: doc.mime || 'text/plain;charset=utf-8' }));
+    ? source
+    : URL.createObjectURL(new Blob([source], { type: doc.mime || 'text/plain;charset=utf-8' }));
   const anchor = document.createElement('a');
   anchor.href = href;
   anchor.download = doc.nombre || doc.titulo || 'documento';
@@ -70,12 +82,12 @@ export function DocumentsHistoryPanel({
                   </span>
                   <span className="flu-reminders-item__when">
                     {doc.formato}
-                    {doc.ref ? ` · ${doc.ref}` : ''}
+                    {doc.ref && /^https?:/i.test(doc.ref) ? ` · ${doc.ref.slice(0, 40)}` : ''}
                   </span>
                 </div>
-                {onRemove || doc.contenido ? (
+                {onRemove || doc.contenido || doc.ref ? (
                   <div className="flu-reminders-item__actions">
-                    {doc.contenido ? (
+                    {doc.contenido || doc.ref ? (
                       <button
                         type="button"
                         title={pickLabel(ui.downloadTitle, language, 'Descargar')}

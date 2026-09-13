@@ -216,7 +216,7 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                         ];
                     }
                     setVideoResult(video);
-                    setJob('listo', formato, { progreso: 100 });
+                    setJob('listo', formato, { progreso: 100, url_resultado: video.url });
                     return namedResult;
                 }
 

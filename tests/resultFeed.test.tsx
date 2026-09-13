@@ -24,7 +24,7 @@ function item(overrides: Partial<ResultFeedItem> = {}): ResultFeedItem {
 }
 
 describe('ResultFeed — render del feed de resultados', () => {
-    it('renderiza la cabecera con título y los tres filtros', () => {
+    it('renderiza la cabecera con título y los cuatro filtros', () => {
         const { container } = render(<ResultFeed items={[]} title="Resultados" />);
 
         const section = container.querySelector('[data-testid="result-feed"]');
@@ -35,8 +35,8 @@ describe('ResultFeed — render del feed de resultados', () => {
         expect(filters.length).toBe(4);
         expect(section!.querySelector('[data-filter="all"]')).not.toBeNull();
         expect(section!.querySelector('[data-filter="image"]')).not.toBeNull();
-        expect(section!.querySelector('[data-filter="video"]')).not.toBeNull();
-        expect(section!.querySelector('[data-filter="doc"]')).not.toBeNull();
+        expect(section!.querySelector('[data-filter="media"]')).not.toBeNull();
+        expect(section!.querySelector('[data-filter="history"]')).not.toBeNull();
     });
 
     it('no muestra ningún mensaje de estado vacío cuando no hay ítems', () => {
@@ -96,7 +96,7 @@ describe('ResultFeed — render del feed de resultados', () => {
         expect(container.querySelector('[data-testid="result-feed-card-res-ocr"]')).toBeNull();
     });
 
-    it('filtra por Documentos y por Vídeos por separado', () => {
+    it('"Video/Docs" combina documentos y vídeos; "Historial" solo el historial', () => {
         const { container } = render(
             <ResultFeed
                 items={[
@@ -104,22 +104,31 @@ describe('ResultFeed — render del feed de resultados', () => {
                     item({ id: 'res-ia', origin: 'ia', kind: 'image', title: 'IA image' }),
                     item({ id: 'res-doc', origin: 'ocr', kind: 'doc', title: 'OCR doc' }),
                     item({ id: 'res-video', origin: 'ia', kind: 'video', title: 'IA video' }),
+                    item({
+                        id: 'res-hist',
+                        origin: 'ia',
+                        kind: 'history',
+                        onlyInKind: true,
+                        title: 'Historial',
+                    }),
                 ]}
             />
         );
 
-        fireEvent.click(container.querySelector('[data-filter="doc"]')!);
+        fireEvent.click(container.querySelector('[data-filter="media"]')!);
         expect(container.querySelector('[data-testid="result-feed-card-res-web"]')).toBeNull();
         expect(container.querySelector('[data-testid="result-feed-card-res-ia"]')).toBeNull();
         expect(container.querySelector('[data-testid="result-feed-card-res-doc"]')).not.toBeNull();
-        expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).toBeNull();
-
-        fireEvent.click(container.querySelector('[data-filter="video"]')!);
         expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="result-feed-card-res-hist"]')).toBeNull();
+
+        fireEvent.click(container.querySelector('[data-filter="history"]')!);
+        expect(container.querySelector('[data-testid="result-feed-card-res-hist"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="result-feed-card-res-doc"]')).toBeNull();
+        expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).toBeNull();
     });
 
-    it('abre en la pestaña Vídeos si hay un video generado (filtro inicial)', () => {
+    it('abre en "Video/Docs" si hay un video generado (filtro inicial)', () => {
         const { container } = render(
             <ResultFeed
                 items={[
@@ -134,11 +143,39 @@ describe('ResultFeed — render del feed de resultados', () => {
                 ]}
             />
         );
-        // El filtro inicial es 'video' → solo se ve el video.
+        // El filtro inicial es 'media' → solo se ve el video.
         const active = container.querySelector('.result-feed__filter--active');
-        expect(active?.getAttribute('data-filter')).toBe('video');
+        expect(active?.getAttribute('data-filter')).toBe('media');
         expect(container.querySelector('[data-testid="result-feed-card-res-video"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="result-feed-card-res-text"]')).toBeNull();
+    });
+
+    it('foco en caliente: un artefacto nuevo salta a su pestaña', () => {
+        const base = [item({ id: 'res-text', origin: 'web', kind: 'text', title: 'Texto' })];
+        const { container, rerender } = render(<ResultFeed items={base} focusKind={null} />);
+        expect(
+            container.querySelector('.result-feed__filter--active')?.getAttribute('data-filter')
+        ).toBe('all');
+
+        // Llega un documento nuevo → salta a "Video/Docs".
+        rerender(
+            <ResultFeed
+                items={[
+                    ...base,
+                    item({
+                        id: 'res-doc',
+                        origin: 'ia',
+                        kind: 'doc',
+                        onlyInKind: true,
+                        title: 'Doc',
+                    }),
+                ]}
+                focusKind="doc"
+            />
+        );
+        expect(
+            container.querySelector('.result-feed__filter--active')?.getAttribute('data-filter')
+        ).toBe('media');
     });
 
     it('un video onlyInKind NUNCA aparece en "Todo"', () => {

@@ -3955,6 +3955,23 @@ function App() {
     // ---- Workspace image (extraído a hook) ----
     const workspaceImage = useWorkspaceImage(language);
 
+    // Historial: registrar la IMAGEN generada como PUNTERO (su URL o data URL).
+    // Se dispara cuando aparece una URL nueva; la misma URL no se re-registra.
+    const lastHistoryImageRef = useRef<string>('');
+    useEffect(() => {
+        const url = workspaceImage.imageUrl;
+        if (!url || lastHistoryImageRef.current === url) return;
+        lastHistoryImageRef.current = url;
+        const prompt = String(integrationStore.workspaceArtifact?.prompt_visual || '').trim();
+        void documentHistory.add({
+            kind: 'generated',
+            formato: 'image',
+            titulo: prompt.slice(0, 80) || 'Imagen',
+            nombre: prompt.slice(0, 60) || 'imagen',
+            ref: url,
+        });
+    }, [workspaceImage.imageUrl, integrationStore.workspaceArtifact, documentHistory]);
+
     // ---- Análisis de documentos (F1) / análisis de app (F2) / generación (F3/F4) ----
     const documentAnalysis = useDocumentAnalysis(language);
     const appAnalysis = useAppAnalysis(language);
@@ -3987,13 +4004,18 @@ function App() {
                 contenido: contenido || undefined,
             })
             .then((generated) => {
+                // Puntero al artefacto (lo que va al Historial): para video es la
+                // URL real del mp4 (fal.ai/ffmpeg) expuesta en generationJob;
+                // para documento/PDF es el data URL (va en `contenido`).
+                const pointerUrl =
+                    useIntegrationStore.getState().generationJob?.url_resultado || '';
                 void documentHistory.add({
                     kind: 'generated',
                     formato,
                     titulo: tema || (formato === 'video' ? 'Video' : 'Documento'),
                     nombre: tema || formato,
                     contenido: generated?.content || contenido || '',
-                    ref: generated?.url || undefined,
+                    ref: pointerUrl || generated?.url || undefined,
                 });
             });
         return true;
