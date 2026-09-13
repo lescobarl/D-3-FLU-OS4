@@ -19,6 +19,7 @@ import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
 import { extractReadableContent, truncateContent } from '../core/browser/browserReadability';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
 import { deriveSearchQuery } from '../voice/lib/audioMath';
+import { setNavSettlePending } from '../voice/lib/navSettleFlag';
 import {
     applyLanguageToHost,
     resolveSearchLanguage,
@@ -137,6 +138,7 @@ export function useNavigationCommands(
         }
         const pending = pendingNavRef.current;
         pendingNavRef.current = null;
+        setNavSettlePending(false);
         if (pending) pending.run();
     }, []);
 
@@ -157,11 +159,15 @@ export function useNavigationCommands(
             window.clearTimeout(navSettleTimerRef.current);
             navSettleTimerRef.current = null;
         }
+        // Marca global: hay corrección parcial→completo en vuelo. El dedup de
+        // capturas no debe descartar el superconjunto entrante.
+        setNavSettlePending(true);
         const settleMs = Number((FLU_CONFIG as any)?.timing?.searchCommandSettleMs) || 2800;
         navSettleTimerRef.current = window.setTimeout(() => {
             navSettleTimerRef.current = null;
             const pending = pendingNavRef.current;
             pendingNavRef.current = null;
+            setNavSettlePending(false);
             if (pending) pending.run();
         }, settleMs);
     }, [flushNavSettle]);

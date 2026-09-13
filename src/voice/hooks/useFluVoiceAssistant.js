@@ -24,6 +24,7 @@ import {
   deriveQueryFromRow,
   stripDiacritics,
 } from '../lib/audioMath'
+import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
 import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
 import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js'
@@ -3539,26 +3540,33 @@ export function useFluVoiceAssistant({
     if (snapshotKeyDedup) {
       const nowMsDedup = Date.now()
       const prevCap = lastProcessedCaptureRef.current
-      const sameCapture =
-        prevCap.text && snapshotKeyDedup === prevCap.text && nowMsDedup - prevCap.at < 10000
-      // Acumulación: si la nueva captura EMPIEZA con la anterior ya procesada
-      // (misma locución + audio pegado, p. ej. "…a las 12:30 alarma a las 12:30"),
-      // no se vuelve a procesar. Exige que la previa sea lo bastante larga para
-      // no bloquear el wake corto ("okay") seguido del comando real.
-      const supersetCapture =
-        prevCap.text.length >= 20 &&
-        snapshotKeyDedup.length > prevCap.text.length &&
-        snapshotKeyDedup.startsWith(prevCap.text) &&
-        nowMsDedup - prevCap.at < 25000
-      if (sameCapture || supersetCapture) {
-        relayLog(
-          'WARN',
-          'useFluVoiceAssistant',
-          `processCapture SKIP: captura ${sameCapture ? 'duplicada' : 'acumulada'} (${nowMsDedup - prevCap.at}ms)`,
-        )
-        return
+      // CORRECCIÓN EN VUELO: si hay un settle de navegación pendiente
+      // (parcial→completo) o un turno procesándose, la captura entrante puede ser
+      // la versión COMPLETA de la misma locución. NO se descarta: `scheduleNavSettle`
+      // reemplaza el parcial. El dedup por superconjunto solo aplica a turnos ya
+      // cerrados (re-emisión), nunca a una corrección viva.
+      const correctionInFlight = isNavSettlePending() || isProcessingRef.current
+      if (!correctionInFlight) {
+        const sameCapture =
+          prevCap.text && snapshotKeyDedup === prevCap.text && nowMsDedup - prevCap.at < 10000
+        // Acumulación (turno ya cerrado): la nueva captura EMPIEZA con la anterior
+        // (misma locución + audio pegado) → no se reprocesa. Exige previa larga
+        // para no bloquear el wake corto ("okay") seguido del comando real.
+        const supersetCapture =
+          prevCap.text.length >= 20 &&
+          snapshotKeyDedup.length > prevCap.text.length &&
+          snapshotKeyDedup.startsWith(prevCap.text) &&
+          nowMsDedup - prevCap.at < 25000
+        if (sameCapture || supersetCapture) {
+          relayLog(
+            'WARN',
+            'useFluVoiceAssistant',
+            `processCapture SKIP: captura ${sameCapture ? 'duplicada' : 'acumulada'} (${nowMsDedup - prevCap.at}ms)`,
+          )
+          return
+        }
+        lastProcessedCaptureRef.current = { text: snapshotKeyDedup, at: nowMsDedup }
       }
-      lastProcessedCaptureRef.current = { text: snapshotKeyDedup, at: nowMsDedup }
     }
     if (!snapshot && !closing) return
 
