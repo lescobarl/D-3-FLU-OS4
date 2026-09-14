@@ -111,6 +111,7 @@ import { parseReminderIntent, type ReminderIntent, type ReminderIntentData } fro
 // ---- Motor temporal genérico — alarmas y temporizadores (despertador + temporizador) ----
 import { useTemporalItems } from './hooks/useTemporalItems';
 import { parseTemporalIntent, formatDurationMs, type TemporalIntent, type TemporalIntentData } from './core/temporal/temporalIntentParser';
+import { isDuplicateTemporalItem } from './core/temporal/temporalDedup';
 // ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
 import { useDeviceActions } from './hooks/useDeviceActions';
 import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
@@ -3491,30 +3492,20 @@ function App() {
                             ? (data.trigger)?.timeOfDay || ''
                             : formatDurationMs((data.trigger)?.durationMs || 0, lang);
                     // Idempotencia (anti pile-up): no crear una alarma IDÉNTICA
-                    // (misma hora + recurrencia + etiqueta) si ya hay una pendiente.
-                    // Evita que repetir el comando cree varias alarmas que suenan juntas.
+                    // (mismo datetime completo + recurrencia + etiqueta) si ya hay
+                    // una pendiente. Un criterio por hora bloqueaba "alarma mañana
+                    // 11:25" cuando ya existía la de hoy 11:25.
                     if ((data.kind || 'alarm') === 'alarm') {
-                        const hhmmOf = (ts?: number): string => {
-                            if (!ts) return '';
-                            const d = new Date(ts);
-                            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                        };
-                        const trig = data.trigger;
-                        const wantedTime =
-                            trig?.timeOfDay || (trig?.kind === 'absolute' && trig.at ? hhmmOf(trig.at) : '');
-                        const wantedRec = String((data.recurrence)?.kind || 'once');
                         const wantedLabel = String(data.label || fallbackLabel);
-                        const duplicate = temporals.alarms.find((a) => {
-                            if (a.status !== 'pending') return false;
-                            const at = a.trigger;
-                            const aTime =
-                                at?.timeOfDay || (at?.kind === 'absolute' && at.at ? hhmmOf(at.at) : '');
-                            const aRec = String(
-                                (a.recurrence)?.kind ||
-                                    (at?.kind === 'daily' ? 'daily' : 'once'),
-                            );
-                            return aTime === wantedTime && aRec === wantedRec && String(a.label) === wantedLabel;
-                        });
+                        const duplicate = temporals.alarms.some(
+                            (a) =>
+                                a.status === 'pending' &&
+                                isDuplicateTemporalItem(a, {
+                                    trigger: data.trigger,
+                                    recurrence: data.recurrence,
+                                    label: wantedLabel,
+                                }),
+                        );
                         if (duplicate) {
                             return lang === 'en' ? 'That alarm already exists.' : 'Esa alarma ya existe.';
                         }
