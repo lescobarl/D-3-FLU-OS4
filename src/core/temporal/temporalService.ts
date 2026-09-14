@@ -175,7 +175,7 @@ export function createTemporalService({
       nextAt,
       status: 'pending',
       message: input.message,
-      personId: (input as any).personId,
+      personId: (input as { personId?: string }).personId,
       createdAt: t,
       updatedAt: t,
       sync: buildSync(),

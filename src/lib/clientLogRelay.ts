@@ -84,7 +84,7 @@ export function flushLogs(): void {
 
 // Exponer control en window para调试 desde consola del navegador (solo DEV)
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__fluClientLog = {
+    window.__fluClientLog = {
         enable: (on: boolean) => setRelayEnabled(on),
         flush: flushLogs,
         status: () => ({ enabled, relayToServer: syncEnabled() }),

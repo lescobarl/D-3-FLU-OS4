@@ -832,5 +832,5 @@ export const useIntegrationStore = create<IntegrationStore>()(
 // Exposición global para tests E2E (Playwright)
 // -----------------------------------------------------------
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__fluStore = useIntegrationStore;
+    window.__fluStore = useIntegrationStore;
 }

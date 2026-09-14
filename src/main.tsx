@@ -19,7 +19,7 @@ window.FLU_CONFIG = FLU_CONFIG;
 // Regla #1: habilitado por FLU_CONFIG.notifications.enabled (sin hardcode).
 if (
   'serviceWorker' in navigator &&
-  (FLU_CONFIG as any).notifications?.enabled !== false
+  (FLU_CONFIG).notifications?.enabled !== false
 ) {
   navigator.serviceWorker
     .register('/sw.js')

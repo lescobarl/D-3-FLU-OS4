@@ -155,7 +155,7 @@ export function applyProviderOverrides(
  */
 function envOpenRouterKey(): string {
   try {
-    return String((import.meta as any)?.env?.VITE_OPENROUTER_API_KEY || '');
+    return String(import.meta.env.VITE_OPENROUTER_API_KEY || '');
   } catch {
     return '';
   }

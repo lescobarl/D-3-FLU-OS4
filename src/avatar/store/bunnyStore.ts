@@ -414,5 +414,5 @@ export function ensureAvatarPantsVisible(): void {
 
 // Exponer bunnyStore globalmente para E2E tests
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__bunnyStore = useBunnyStore;
+    window.__bunnyStore = useBunnyStore;
 }

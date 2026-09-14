@@ -41,14 +41,7 @@ export interface SearchSiteTile {
     category: string;
 }
 
-const browserConfig = ((FLU_CONFIG as any).browser || {}) as {
-    readingLevels?: string[];
-    languages?: string[];
-    categories?: Record<string, string>;
-    panel?: {
-        tiles?: Array<{ id?: string; label?: string; domain?: string; category?: string }>;
-    };
-};
+const browserConfig = FLU_CONFIG.browser || {};
 
 /** Niveles de lectura válidos (config-driven, con fallback seguro). */
 export const SEARCH_SITE_LEVELS: readonly SearchSiteLevel[] = (browserConfig.readingLevels ??

@@ -115,5 +115,5 @@ export function readPersistedActiveAmbienteId(): string | null {
 // Exposición global para tests E2E (Playwright)
 // -----------------------------------------------------------
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__fluEnvironmentStore = useEnvironmentStore;
+    window.__fluEnvironmentStore = useEnvironmentStore;
 }

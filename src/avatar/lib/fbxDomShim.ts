@@ -15,7 +15,7 @@
  * @returns true si instaló el shim; false si `document` ya existía.
  */
 export function installDomShim(): boolean {
-  if ((globalThis as any).document) return false;
+  if ((globalThis as { document?: unknown }).document) return false;
 
   const fakeImage = () => {
     const el: any = {
@@ -57,7 +57,7 @@ export function installDomShim(): boolean {
     return el;
   };
 
-  (globalThis as any).document = {
+  (globalThis as { document?: unknown }).document = {
     createElement() {
       return fakeImage();
     },

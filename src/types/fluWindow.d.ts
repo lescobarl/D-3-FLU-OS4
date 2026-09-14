@@ -10,8 +10,23 @@
 
 export {};
 
+/** Reconocedor de voz webkit/SpeechRecognition (no está en lib.dom). */
+export interface SpeechRecognitionLike {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    onresult: ((event: SpeechRecognitionEvent) => void) | null;
+    onerror: ((event: Event) => void) | null;
+    start(): void;
+    stop(): void;
+}
+
 declare global {
     interface Window {
+        /** Variantes webkit de APIs de audio/reconocimiento (Safari/Chrome). */
+        webkitAudioContext?: typeof AudioContext;
+        webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+        SpeechRecognition?: new () => SpeechRecognitionLike;
         /** Callback REAL de resolución de contrato (hook E2E). */
         __fluOnContractResolved?(resolved: any): Promise<void>;
 
@@ -32,5 +47,18 @@ declare global {
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
         __fluHandleHorarioText?(input: any): Promise<string>;
+
+        /** Stores y flags expuestos en window (debug/E2E). */
+        __fluStore?: unknown;
+        __fluEnvironmentStore?: unknown;
+        __bunnyStore?: unknown;
+        __bunnyPreloadDone?: boolean;
+        __fluClientLog?: unknown;
+        __FLU_CONSOLE_ERRORS?: string[];
+    }
+
+    interface ImportMetaEnv {
+        /** Modelo de audio de OpenRouter usado por el laboratorio ASR (dev). */
+        readonly VITE_OPENROUTER_AUDIO_MODEL?: string;
     }
 }

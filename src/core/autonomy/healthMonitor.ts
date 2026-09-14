@@ -557,6 +557,13 @@ async function checkNetwork(): Promise<ComponentHealth> {
     };
 }
 
+/** performance.memory no está en el lib DOM (solo Chrome): tipo mínimo. */
+interface PerformanceMemory {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+}
+
 async function checkMemory(): Promise<ComponentHealth> {
     const startTime = Date.now();
     let hasError = false;
@@ -565,13 +572,13 @@ async function checkMemory(): Promise<ComponentHealth> {
 
     try {
         // Verificar uso de memoria (si está disponible)
-        if ('memory' in (performance as any)) {
-            const memory = (performance as any).memory;
-            metrics.usedJSHeapSize = memory.usedJSHeapSize;
-            metrics.totalJSHeapSize = memory.totalJSHeapSize;
-            metrics.jsHeapSizeLimit = memory.jsHeapSizeLimit;
+        const perfMemory = (performance as Performance & { memory?: PerformanceMemory }).memory;
+        if (perfMemory) {
+            metrics.usedJSHeapSize = perfMemory.usedJSHeapSize;
+            metrics.totalJSHeapSize = perfMemory.totalJSHeapSize;
+            metrics.jsHeapSizeLimit = perfMemory.jsHeapSizeLimit;
             
-            const usageRatio = memory.usedJSHeapSize / memory.jsHeapSizeLimit;
+            const usageRatio = perfMemory.usedJSHeapSize / perfMemory.jsHeapSizeLimit;
             metrics.usageRatio = usageRatio;
             
             if (usageRatio > 0.9) {
@@ -624,7 +631,7 @@ async function checkReactComponents(): Promise<ComponentHealth> {
         
         // Verificar si hay errores recientes en la consola
         // (esto es una simulación - en producción se usaría un servicio de logging)
-        const consoleErrors = (window as any).__FLU_CONSOLE_ERRORS || [];
+        const consoleErrors = window.__FLU_CONSOLE_ERRORS || [];
         metrics.recentConsoleErrors = consoleErrors.length;
         
         if (consoleErrors.length > 10) {

@@ -323,7 +323,7 @@ export function createHorarioService({
       aula: cleanAula(input.aula),
       color: config.colores.includes(String(input.color || '')) ? String(input.color).trim() : config.defaultColor,
       reminders: [],
-      personId: (input as any).personId,
+      personId: (input as { personId?: string }).personId,
       createdAt: t,
       updatedAt: t,
       sync: buildSync(),

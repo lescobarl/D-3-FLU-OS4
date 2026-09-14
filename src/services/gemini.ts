@@ -442,7 +442,14 @@ Genera la minuta en formato JSON.`;
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
-            const error = new Error(errorData.error || `Proxy returned ${response.status}`) as any;
+            const error = new Error(errorData.error || `Proxy returned ${response.status}`) as Error & {
+                code?: string;
+                status?: number;
+                detail?: string;
+                model?: string;
+                apiKeySource?: string;
+                bodyPreview?: string;
+            };
             error.code = errorData.code || `proxy_${response.status}`;
             error.status = response.status;
             error.detail = errorData.detail || '';
@@ -460,7 +467,7 @@ Genera la minuta en formato JSON.`;
 
         const respuesta_voz = String(contract.respuesta_voz || '').trim();
         if (!respuesta_voz) {
-            const error = new Error('empty_response') as any;
+            const error = new Error('empty_response') as Error & { code?: string };
             error.code = 'empty_response';
             throw error;
         }

@@ -199,13 +199,28 @@ function buildHeuristicResumen(payload: ParsedPayload, rawText: string): string 
 // ------------------------------------------------------------
 // Parsers por tipo
 // ------------------------------------------------------------
+/** Forma mínima de la biblioteca SheetJS que consume el parser. */
+interface XlsxCell { v?: unknown; f?: string }
+interface XlsxSheet { '!ref'?: string; [cell: string]: unknown }
+interface XlsxRange { s: { r: number; c: number }; e: { r: number; c: number } }
+interface XlsxModule {
+  utils: {
+    decode_range(ref: string): XlsxRange;
+    encode_cell(cell: { r: number; c: number }): string;
+  };
+  read(data: Uint8Array, opts: { type: 'array' }): {
+    SheetNames: string[];
+    Sheets: Record<string, unknown>;
+  };
+}
+
 function inspectSheet(ws: unknown, name: string, XLSX: unknown, limits: DocumentAnalysisLimits): {
   sheet: DocumentSheetInfo;
   errors: string[];
   sampleText: string;
 } {
-  const x = XLSX as any;
-  const anyWs = ws as any;
+  const x = XLSX as XlsxModule;
+  const anyWs = ws as XlsxSheet;
   const ref = anyWs && anyWs['!ref'];
   if (!ref) {
     return {
@@ -225,7 +240,7 @@ function inspectSheet(ws: unknown, name: string, XLSX: unknown, limits: Document
     for (let c = range.s.c; c <= range.e.c; c += 1) {
       if (visited >= limits.maxCellsPerSheet) break outer;
       const addr = x.utils.encode_cell({ r, c });
-      const cell = anyWs[addr];
+      const cell = anyWs[addr] as XlsxCell | undefined;
       if (!cell) continue;
       visited += 1;
       const val = cell.v;
@@ -267,7 +282,7 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
     };
   }
   try {
-    const wb = (XLSX as any).read(new Uint8Array(data), { type: 'array' });
+    const wb = (XLSX as XlsxModule).read(new Uint8Array(data), { type: 'array' });
     const sheets: DocumentSheetInfo[] = [];
     const allErrors: string[] = [];
     const lines: string[] = [];

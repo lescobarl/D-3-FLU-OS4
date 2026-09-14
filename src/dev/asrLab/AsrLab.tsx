@@ -51,7 +51,7 @@ function downsample(input: Float32Array, fromRate: number, toRate: number): Floa
 
 async function capturePcm(ms: number): Promise<Float32Array> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext
+  const AudioCtx = (window.AudioContext || window.webkitAudioContext) as typeof AudioContext
   const ctx = new AudioCtx()
   const src = ctx.createMediaStreamSource(stream)
   const processor = ctx.createScriptProcessor(4096, 1, 1)
@@ -70,7 +70,7 @@ async function capturePcm(ms: number): Promise<Float32Array> {
 }
 
 async function runChrome(ms: number): Promise<ProbeResult> {
-  const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
   if (!Recognition) return { id: 'chrome', text: '', ms: 0, error: 'no soportado' }
   return new Promise((resolve) => {
     const rec = new Recognition()
@@ -126,7 +126,7 @@ async function runWhisper(modelId: string, pcm: Float32Array): Promise<ProbeResu
     transcriber.dispose()
     return { id, text, ms }
   } catch (error) {
-    return { id, text: '', ms: 0, error: String((error as any)?.message || error) }
+    return { id, text: '', ms: 0, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -170,10 +170,10 @@ function encodeWav16(samples: Float32Array, sampleRate: number): string {
 /** Google/Gemini vía OpenRouter (online) transcribiendo el audio grabado. */
 async function runGemini(pcm: Float32Array): Promise<ProbeResult> {
   try {
-    const apiKey = (import.meta as any)?.env?.VITE_OPENROUTER_API_KEY || ''
+    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY || ''
     if (!apiKey) return { id: 'gemini', text: '', ms: 0, error: 'sin VITE_OPENROUTER_API_KEY' }
     const model =
-      (import.meta as any)?.env?.VITE_OPENROUTER_AUDIO_MODEL || 'google/gemini-2.5-flash'
+      import.meta.env.VITE_OPENROUTER_AUDIO_MODEL || 'google/gemini-2.5-flash'
     const data = encodeWav16(pcm, RATE)
     const started = Date.now()
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -200,7 +200,7 @@ async function runGemini(pcm: Float32Array): Promise<ProbeResult> {
     if (!res.ok) return { id: 'gemini', text: '', ms, error: String(json?.error?.message || res.status) }
     return { id: 'gemini', text: String(json?.choices?.[0]?.message?.content || '').trim(), ms }
   } catch (error) {
-    return { id: 'gemini', text: '', ms: 0, error: String((error as any)?.message || error) }
+    return { id: 'gemini', text: '', ms: 0, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -281,7 +281,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
     setLiveText('')
     setLiveOn(true)
     if (liveEngine === 'chrome') {
-      const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
       if (!Recognition) {
         setLiveText('Chrome SR no soportado')
         setLiveOn(false)
@@ -308,7 +308,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
     }
     // Whisper "en vivo" (bloques): motor real + micrófono continuo.
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext
+    const AudioCtx = (window.AudioContext || window.webkitAudioContext) as typeof AudioContext
     const ctx = new AudioCtx()
     const modelId = liveEngine === 'whisper-tiny' ? 'Xenova/whisper-tiny' : 'Xenova/whisper-base'
     const tMod: any = await import('../../voice/lib/asr/whisperWasmTranscriber')
