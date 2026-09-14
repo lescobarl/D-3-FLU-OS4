@@ -300,6 +300,30 @@ const FINDINGS = [
     detect: () => grep(srcFiles, /new (DecisionEngine|BackupManager)\(/),
     note: 'Inyectar por interfaz; no instanciar dentro de la logica.',
   },
+  {
+    id: 'V12', sev: 'baja', title: 'setTimeout con delay numerico >=1000 (politica quemada)',
+    target: 0,
+    detect: () => grepCode(srcCodeFiles, /setTimeout\([^,]+,\s*[0-9]{4,}/),
+    note: 'Mover delays de politica a config (constantes nombradas).',
+  },
+  {
+    id: 'V13', sev: 'media', title: '@ts-ignore (usar @ts-expect-error con motivo)',
+    target: 0,
+    detect: () => grep(srcFiles, /\/\/\s*@ts-ignore/),
+    note: 'Reemplazar por @ts-expect-error (falla si no hay error) o tipar el import.',
+  },
+  {
+    id: 'V14', sev: 'baja', title: 'const toRecord local repetido (copias triviales)',
+    target: 1,
+    detect: () => grep(srcFiles, /const toRecord =/),
+    note: 'Un helper compartido; si alguno no es identico, dejarlo y reportarlo.',
+  },
+  {
+    id: 'V15', sev: 'baja', title: 'const timestamp local repetido (copias triviales)',
+    target: 1,
+    detect: () => grep(srcFiles, /const timestamp = \(\): number => now\(\)/),
+    note: 'Un helper compartido; si alguno difiere, dejarlo y reportarlo.',
+  },
 
   // -------- nombres repetidos NO duplicados (no tocar) --------
   {
