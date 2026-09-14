@@ -9,6 +9,7 @@
 // contenido/tema limpiado del verbo de mando.
 // ============================================================
 import { cleanForSpeech } from './textUtils';
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
 export interface GenerationConversationSlice {
     conversationHistory?: Array<{
@@ -41,6 +42,71 @@ export function cleanTopicFromCommand(text = ''): string {
     value = value.replace(GENERATION_LEAD, ' ').trim();
     value = cleanForSpeech(value);
     return value;
+}
+
+/** Campos título/contenido de un artefacto de documento del workspace. */
+export interface WorkspaceDocumentFields {
+    titulo: string;
+    contenido: string;
+}
+
+/** Umbrales de normalización (inyectables; por defecto desde FLU_CONFIG). */
+export interface WorkspaceDocumentNormalizeOptions {
+    /** Longitud a partir de la cual un `titulo` se considera cuerpo. */
+    bodyMinChars?: number;
+    /** Longitud máxima del rótulo derivado del cuerpo. */
+    titleMaxChars?: number;
+}
+
+/** Resuelve los umbrales desde las opciones o FLU_CONFIG (Regla #1: sin hardcode). */
+function resolveNormalizeOptions(
+    options: WorkspaceDocumentNormalizeOptions,
+): Required<WorkspaceDocumentNormalizeOptions> {
+    const config = (FLU_CONFIG as {
+        documents?: { normalize?: WorkspaceDocumentNormalizeOptions };
+    }).documents?.normalize || {};
+    return {
+        bodyMinChars: Number(options.bodyMinChars ?? config.bodyMinChars ?? Number.POSITIVE_INFINITY),
+        titleMaxChars: Number(options.titleMaxChars ?? config.titleMaxChars ?? Number.POSITIVE_INFINITY),
+    };
+}
+
+/** true si el texto parece un cuerpo (multilínea o largo), no un rótulo. */
+function looksLikeBody(text: string, bodyMinChars: number): boolean {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    if (/\r?\n/.test(value)) return true;
+    return value.length >= bodyMinChars;
+}
+
+/** Deriva un rótulo corto del cuerpo: primera línea/frase significativa. */
+function shortTitleFromBody(body: string, titleMaxChars: number): string {
+    const firstLine = String(body || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean) || '';
+    const firstSentence = firstLine.split(/(?<=[.!?])\s+/)[0] || firstLine;
+    const label = (firstSentence || firstLine).trim();
+    return label.length > titleMaxChars ? label.slice(0, titleMaxChars).trim() : label;
+}
+
+/**
+ * Normaliza el par título/contenido de un artefacto de documento. Si el cuerpo
+ * llega en `titulo` y `contenido` viene vacío, devuelve el cuerpo en `contenido`
+ * y un título corto. Si ya hay contenido, no lo toca.
+ */
+export function normalizeWorkspaceDocumentFields(
+    fields: WorkspaceDocumentFields,
+    options: WorkspaceDocumentNormalizeOptions = {},
+): WorkspaceDocumentFields {
+    const titulo = String(fields?.titulo || '').trim();
+    const contenido = String(fields?.contenido || '').trim();
+    if (contenido) return { titulo, contenido };
+    const { bodyMinChars, titleMaxChars } = resolveNormalizeOptions(options);
+    if (looksLikeBody(titulo, bodyMinChars)) {
+        return { titulo: shortTitleFromBody(titulo, titleMaxChars), contenido: titulo };
+    }
+    return { titulo, contenido };
 }
 
 /**

@@ -62,7 +62,7 @@ import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
-import { buildGenerationTopic, type GenerationConversationSlice } from './lib/generationTopic';
+import { buildGenerationTopic, normalizeWorkspaceDocumentFields, type GenerationConversationSlice } from './lib/generationTopic';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
 import {
@@ -2379,8 +2379,13 @@ function App() {
             }
             if (workspace) {
                 const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
-                const titulo = workspace.titulo || '';
-                const contenido = workspace.contenido || '';
+                // Fuente única de normalización: si el cuerpo (carta/documento)
+                // llega en `titulo` y `contenido` viene vacío, se reasigna aquí
+                // para que todo el pipeline reciba body no vacío y título corto.
+                const { titulo, contenido } = normalizeWorkspaceDocumentFields({
+                    titulo: workspace.titulo || '',
+                    contenido: workspace.contenido || '',
+                });
                 const promptVisual = workspace.prompt_visual || '';
                 const puntos_clave = Array.isArray(workspace.puntos_clave)
                     ? workspace.puntos_clave.map((item: string) => String(item || '').trim()).filter(Boolean)

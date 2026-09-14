@@ -528,6 +528,18 @@ export const FLU_CONFIG = {
       removeTitle: { es: 'Eliminar', en: 'Delete' },
       downloadTitle: { es: 'Descargar', en: 'Download' },
     },
+    /**
+     * Normalización del par título/contenido del artefacto generado: si el
+     * cuerpo (carta/documento) llega en `titulo` y `contenido` viene vacío, se
+     * reasigna el cuerpo a `contenido` y se deriva un rótulo corto. Regla #1:
+     * los umbrales viven aquí, no en la lógica.
+     * - bodyMinChars: longitud a partir de la cual un título se juzga cuerpo.
+     * - titleMaxChars: longitud máxima del rótulo derivado del cuerpo.
+     */
+    normalize: {
+      bodyMinChars: 80,
+      titleMaxChars: 60,
+    },
   },
   /**
    * Horario de clases — Pizarrón (Fase 1C): clases semanales por voz/OCR.
