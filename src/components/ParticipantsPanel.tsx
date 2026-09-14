@@ -55,10 +55,10 @@ export function ParticipantsPanel({
   onSetManual,
   onResetPerson,
 }: ParticipantsPanelProps) {
-  const config = (FLU_CONFIG as any).multiuser || {};
+  const config = FLU_CONFIG.multiuser || {};
   const ui = config.ui || {};
   const roles = Array.isArray(config.roles) ? (config.roles as readonly string[]) : [];
-  const pui = ((FLU_CONFIG as any).personalization || {}).ui || {};
+  const pui = (FLU_CONFIG.personalization || {}).ui || {};
   // Perfil anónimo por defecto (config-driven vía multiuser.skipDefaults):
   // siempre existe como semilla y NO se puede eliminar.
   const anonymousName = String((config.skipDefaults || {}).anonymousName || 'Anónimo');

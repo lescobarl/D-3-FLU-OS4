@@ -35,7 +35,7 @@ interface VideoGridUi {
 /** Etiquetas de la cuadrícula desde FLU_CONFIG.browser.search.ui. */
 function useVideoGridUi(): VideoGridUi {
     return useMemo(() => {
-        const cfg = (FLU_CONFIG as any).browser?.search?.ui || {};
+        const cfg = FLU_CONFIG.browser?.search?.ui || {};
         return {
             openVideoLabel: cfg.openVideoLabel || 'Abrir vídeo',
             playLabel: cfg.playLabel || 'Reproducir',

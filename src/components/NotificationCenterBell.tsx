@@ -8,6 +8,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { asConfigNode, configText } from './configText';
 import type { NotificationCenterItem } from '../hooks/useNotificationCenter';
 import './NotificationCenterBell.css';
 
@@ -52,7 +53,8 @@ export function NotificationCenterBell({
     onClear,
     language = 'es',
 }: NotificationCenterBellProps) {
-    const ui = ((FLU_CONFIG as any)?.notifications?.ui as Record<string, string>) || {};
+    const notifNode = asConfigNode(FLU_CONFIG?.notifications);
+    const uiText = (key: string, fallback: string) => configText(notifNode, key, fallback);
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
@@ -90,7 +92,7 @@ export function NotificationCenterBell({
             <button
                 type="button"
                 className="notif-bell__trigger"
-                aria-label={ui.bellLabel || 'Centro de notificaciones'}
+                aria-label={uiText('bellLabel', 'Centro de notificaciones')}
                 aria-expanded={open}
                 data-testid="notif-bell-trigger"
                 onClick={() => setOpen((v) => !v)}
@@ -106,7 +108,7 @@ export function NotificationCenterBell({
             {open && (
                 <div className="notif-bell__panel" data-testid="notif-bell-panel">
                     <header className="notif-bell__panel-header">
-                        <strong>{ui.title || 'Notificaciones'}</strong>
+                        <strong>{uiText('title', 'Notificaciones')}</strong>
                         <div className="notif-bell__panel-actions">
                             <button
                                 type="button"
@@ -114,24 +116,24 @@ export function NotificationCenterBell({
                                 disabled={unread === 0}
                                 data-testid="notif-mark-read"
                             >
-                                {ui.markAllRead || 'Marcar leído'}
+                                {uiText('markAllRead', 'Marcar leído')}
                             </button>
                             <button type="button" onClick={onClear} disabled={items.length === 0} data-testid="notif-clear">
-                                {ui.clear || 'Limpiar'}
+                                {uiText('clear', 'Limpiar')}
                             </button>
                         </div>
                     </header>
                     <div className="notif-bell__list" data-testid="notif-bell-list">
                         {groups.length === 0 ? (
-                            <p className="notif-bell__empty">{ui.empty || 'Sin notificaciones'}</p>
+                            <p className="notif-bell__empty">{uiText('empty', 'Sin notificaciones')}</p>
                         ) : (
                             groups.map((group) => (
                                 <section key={group.label} className="notif-bell__group">
                                     <h4 className="notif-bell__group-title">
                                         {group.label === 'hoy'
-                                            ? ui.today || 'Hoy'
+                                            ? uiText('today', 'Hoy')
                                             : group.label === 'ayer'
-                                              ? ui.yesterday || 'Ayer'
+                                              ? uiText('yesterday', 'Ayer')
                                               : group.label}
                                     </h4>
                                     {group.rows.map((row) => (
@@ -157,7 +159,7 @@ export function NotificationCenterBell({
                         )}
                     </div>
                     <footer className="notif-bell__footer">
-                        <span className="notif-bell__hint">{language === 'en' ? ui.channelHintEn || '' : ui.channelHint || ''}</span>
+                        <span className="notif-bell__hint">{language === 'en' ? uiText('channelHintEn', '') : uiText('channelHint', '')}</span>
                     </footer>
                 </div>
             )}

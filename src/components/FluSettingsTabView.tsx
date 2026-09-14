@@ -112,7 +112,7 @@ export function FluSettingsTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
                 <SettingsSaveProvider>
                 {/* Sub-menú de secciones (Fase A2): mismas pestañas, mismo estado, agrupación visual */}

@@ -54,7 +54,7 @@ export function DocumentsHistoryPanel({
   onRemove,
   language = 'es',
 }: DocumentsHistoryPanelProps) {
-  const ui = (FLU_CONFIG as any).documents?.ui || {};
+  const ui = FLU_CONFIG.documents?.ui || {};
   const title = pickLabel(ui.title, language, 'Historial');
 
   return (

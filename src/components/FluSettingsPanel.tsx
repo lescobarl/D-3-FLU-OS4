@@ -667,8 +667,10 @@ export function FluSettingsPanel({
                                 <select
                                     value={integrationStore.config.personality.tone}
                                     onChange={(e) => {
+                                        const tone = AVAILABLE_TONES.find((t) => t === e.target.value);
+                                        if (!tone) return;
                                         integrationStore.setConfig({
-                                            personality: { ...integrationStore.config.personality, tone: e.target.value as any },
+                                            personality: { ...integrationStore.config.personality, tone },
                                         });
                                     }}
                                     className="flu-settings-image-config__input"

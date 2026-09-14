@@ -299,7 +299,7 @@ export function SearchCatalogPanel({
   onUpdate,
   onRemove,
 }: SearchCatalogPanelProps) {
-  const browser = ((FLU_CONFIG as any).browser || {}) as {
+  const browser = (FLU_CONFIG.browser || {}) as {
     catalog?: Record<string, string>;
     categories?: Record<string, string>;
     readingLevels?: string[];

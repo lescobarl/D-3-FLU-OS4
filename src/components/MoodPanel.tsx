@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configText } from './configText';
 import type { MoodRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { LogMoodInput, MoodSummary } from '../core/mood/moodService';
 
@@ -36,7 +37,7 @@ export function MoodPanel({
   onLog,
   onRemove,
 }: MoodPanelProps) {
-  const config = (FLU_CONFIG as any).mood || {};
+  const config = FLU_CONFIG.mood || {};
   const ui = config.ui || {};
   const scaleMin = typeof config.scaleMin === 'number' ? config.scaleMin : 1;
   const scaleMax = typeof config.scaleMax === 'number' ? config.scaleMax : 5;
@@ -52,7 +53,8 @@ export function MoodPanel({
     scaleValues.push(value);
   }
 
-  const moodLabel = (value: number): string => ui[`mood_${value}`] || String(value);
+  const moodLabel = (value: number): string =>
+    configText(ui, `mood_${value}`, String(value));
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

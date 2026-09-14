@@ -28,6 +28,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { asConfigNode, configTextMap } from './configText';
 import {
   buildRuntimeConfig,
   fetchAiOverview,
@@ -103,23 +104,33 @@ export function SearchControlCenter({
 }: SearchControlCenterProps) {
   // Labels config-driven (Regla #1: sin hardcode).
   const ui = useMemo<Record<string, string>>(
-    () => ((FLU_CONFIG as any).browser?.search?.ui || {}) as Record<string, string>,
+    () => configTextMap(FLU_CONFIG.browser?.search?.ui),
     [],
   );
   const browserUi = useMemo<Record<string, string>>(
-    () => ((FLU_CONFIG as any).browser?.ui || {}) as Record<string, string>,
+    () => configTextMap(FLU_CONFIG.browser?.ui),
     [],
   );
   const browserCatalog = useMemo<Record<string, string>>(
-    () => ((FLU_CONFIG as any).browser?.catalog || {}) as Record<string, string>,
+    () => configTextMap(FLU_CONFIG.browser?.catalog),
     [],
   );
   const categories = useMemo<Record<string, string>>(
-    () => ((FLU_CONFIG as any).browser?.categories || {}) as Record<string, string>,
+    () => configTextMap(FLU_CONFIG.browser?.categories),
     [],
   );
   const defaultsByRole = useMemo<Record<string, Record<string, unknown>>>(
-    () => ((FLU_CONFIG as any).browser?.defaultsByRole || {}) as Record<string, Record<string, unknown>>,
+    () => {
+      const out: Record<string, Record<string, unknown>> = {};
+      const src = asConfigNode(FLU_CONFIG.browser?.defaultsByRole);
+      if (src) {
+        for (const [role, value] of Object.entries(src)) {
+          const node = asConfigNode(value);
+          if (node) out[role] = { ...node };
+        }
+      }
+      return out;
+    },
     [],
   );
 

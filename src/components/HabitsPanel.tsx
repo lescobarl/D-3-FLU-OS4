@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configText } from './configText';
 import type { GoalStatus, ParticipantRecord } from '../core/db/fluDatabase';
 import type { GoalStats, NewGoalInput } from '../core/habits/habitService';
 
@@ -40,7 +41,7 @@ export function HabitsPanel({
   onStatus,
   onRemove,
 }: HabitsPanelProps) {
-  const config = (FLU_CONFIG as any).habits || {};
+  const config = FLU_CONFIG.habits || {};
   const ui = config.ui || {};
   const categories =
     Array.isArray(config.categories) && config.categories.length > 0
@@ -179,7 +180,7 @@ export function HabitsPanel({
               >
                 {categories.map((c) => (
                   <option key={c} value={c}>
-                    {ui[`category_${c}`] || c}
+                    {configText(ui, `category_${c}`, c)}
                   </option>
                 ))}
               </select>

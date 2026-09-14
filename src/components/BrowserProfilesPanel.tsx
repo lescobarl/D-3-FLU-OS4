@@ -223,7 +223,7 @@ export function BrowserProfilesPanel({
   onUpdate,
   onReset,
 }: BrowserProfilesPanelProps) {
-  const config = ((FLU_CONFIG as any).browser || {}) as BrowserProfileConfig;
+  const config = (FLU_CONFIG.browser || {}) as BrowserProfileConfig;
   const ui = config.ui || {};
 
   const profileFor = (participantId: string): BrowserProfileRecord | undefined =>

@@ -69,7 +69,7 @@ export function FluConversationTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
                 {/* OS3 parity: live phrase display above conversation log — sin label para ahorrar espacio */}
                 <div className="conversation-live-phrase frame-content__response">
@@ -91,15 +91,14 @@ export function FluConversationTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 <VoiceProfilesPanel {...({
                     participants: voiceParticipants,
                     onRenameProfile,
                     onRenameSessionSpeaker: onRenameProfile,
                     onRemoveParticipant,
-                } as any)} />
+                })} />
             </PanelFrame>
         </FluTabPanel>
     );

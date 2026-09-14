@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configText } from './configText';
 import type { DiaryEntryRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { DiaryEntryInput } from '../core/diary/diaryService';
 
@@ -33,7 +34,7 @@ export function DiaryPanel({
   onAdd,
   onRemove,
 }: DiaryPanelProps) {
-  const config = (FLU_CONFIG as any).diary || {};
+  const config = FLU_CONFIG.diary || {};
   const ui = config.ui || {};
   const moodMax = typeof config.moodMax === 'number' ? config.moodMax : 5;
 
@@ -58,7 +59,8 @@ export function DiaryPanel({
     moodValues.push(value);
   }
 
-  const moodLabel = (value: number): string => ui[`mood_${value}`] || String(value);
+  const moodLabel = (value: number): string =>
+    configText(ui, `mood_${value}`, String(value));
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

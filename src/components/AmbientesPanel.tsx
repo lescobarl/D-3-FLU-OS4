@@ -88,7 +88,7 @@ type EditorState =
 
 /** Etiqueta legible de una pestaña desde FLU_CONFIG.ui.tabs.items. */
 function tabLabel(tabId: string): string {
-    const items = (FLU_CONFIG as any).ui?.tabs?.items as TabItem[] | undefined;
+    const items = FLU_CONFIG.ui?.tabs?.items as TabItem[] | undefined;
     const match = Array.isArray(items)
         ? items.find((item) => item?.id === tabId)
         : undefined;
@@ -119,7 +119,7 @@ export function AmbientesPanel({
     onUpdate,
     onRemove,
 }: AmbientesPanelProps) {
-    const ui = (FLU_CONFIG as any).ui?.ambientes ?? {};
+    const ui = FLU_CONFIG.ui?.ambientes ?? {};
     const [editor, setEditor] = useState<EditorState>(null);
 
     const tabLabels = useMemo(() => {

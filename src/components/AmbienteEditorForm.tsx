@@ -50,7 +50,7 @@ export function AmbienteEditorForm({
     onCancel,
     onSubmit,
 }: AmbienteEditorFormProps) {
-    const ui = (FLU_CONFIG as any).ui?.ambientes ?? {};
+    const ui = FLU_CONFIG.ui?.ambientes ?? {};
 
     const [fields, setFields] = useState<EditableAmbienteFields>(() => ({
         ...seed,

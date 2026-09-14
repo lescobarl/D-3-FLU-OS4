@@ -14,6 +14,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configChild, configTextMap } from './configText';
 import {
     PALETTE_COLOR_KEYS,
     type PaletteDefinition,
@@ -45,7 +46,7 @@ export function PaletaEditorForm({
     onCancel,
     onSubmit,
 }: PaletaEditorFormProps) {
-    const ui = (FLU_CONFIG as any).ui?.paletas ?? {};
+    const ui = configTextMap(configChild(FLU_CONFIG.ui, 'paletas'));
 
     const [fields, setFields] = useState<EditablePaletteFields>(() => ({
         ...seed,

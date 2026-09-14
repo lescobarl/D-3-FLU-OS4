@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configText } from './configText';
 import type { MateriaGrisRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { AwardInput, LeaderboardRow } from '../core/multiuser/materiaGrisService';
 
@@ -33,7 +34,7 @@ export function MateriaGrisPanel({
   loading,
   onAward,
 }: MateriaGrisPanelProps) {
-  const config = (FLU_CONFIG as any).materiaGris || {};
+  const config = FLU_CONFIG.materiaGris || {};
   const ui = config.ui || {};
   const actions =
     config.actions && typeof config.actions === 'object'
@@ -100,7 +101,7 @@ export function MateriaGrisPanel({
                 <option value="">{ui.actionEmpty || '— Elegir acción —'}</option>
                 {actionEntries.map(([key, points]) => (
                   <option key={key} value={key}>
-                    {ui[`action_${key}`] || key} ({points} pts)
+                    {configText(ui, `action_${key}`, key)} ({points} pts)
                   </option>
                 ))}
               </select>

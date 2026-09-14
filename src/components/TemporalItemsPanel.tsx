@@ -51,8 +51,8 @@ export function TemporalItemsPanel({
   onEdit,
   now = () => Date.now(),
 }: TemporalItemsPanelProps) {
-  const config = (FLU_CONFIG as any).temporal || {};
-  const ui = config.ui || {};
+  const config = FLU_CONFIG.temporal || {};
+  const ui: Record<string, string> = config.ui || {};
   const defaultAlarmTime = config.defaultAlarmTimeOfDay || '07:00';
   const defaultTimerMinutes = Number(config.defaultTimerMinutes) || 5;
 

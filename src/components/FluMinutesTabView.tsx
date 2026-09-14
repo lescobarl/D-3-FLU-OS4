@@ -77,7 +77,7 @@ export function FluMinutesTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
                 <div className="minute-actions-row" style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
                     <button
@@ -115,10 +115,10 @@ export function FluMinutesTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
                 <MinuteHistoryPanel
-                    entries={history as any}
+                    entries={history}
                     selectedId={selectedId || undefined}
                     onSelect={onSelect}
                     emptyLabel={ws.minuteHistoryEmpty || 'Sin minutas guardadas'}

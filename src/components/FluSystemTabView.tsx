@@ -44,7 +44,7 @@ export function FluSystemTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
                 <AutonomyStatusPanel state={state} actions={actions} />
             </PanelFrame>

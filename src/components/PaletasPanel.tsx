@@ -25,6 +25,7 @@
 // ============================================================
 import { useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configChild, configTextMap } from './configText';
 import type {
     RegisterResult,
     UpdateResult,
@@ -85,7 +86,7 @@ export function PaletasPanel({
     onUpdate,
     onRemove,
 }: PaletasPanelProps) {
-    const ui = (FLU_CONFIG as any).ui?.paletas ?? {};
+    const ui = configTextMap(configChild(FLU_CONFIG.ui, 'paletas'));
     const [editor, setEditor] = useState<EditorState>(null);
 
     const mapReason = (

@@ -37,7 +37,7 @@ export function ContactsPanel({
   onAdd,
   onRemove,
 }: ContactsPanelProps) {
-  const config = (FLU_CONFIG as any).contacts || {};
+  const config = FLU_CONFIG.contacts || {};
   const ui = config.ui || {};
   const birthdayWindowDays =
     typeof config.birthdayWindowDays === 'number' ? config.birthdayWindowDays : 7;

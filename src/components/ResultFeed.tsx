@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configChild, configLabel } from './configText';
 
 // ------------------------------------------------------------
 // Tipos
@@ -127,29 +128,30 @@ export function ResultFeed({
 
   // Etiquetas de la UI (Regla #1: sin hardcode).
   const ui = FLU_CONFIG.ui?.workspace || {};
+  const wsUi = configChild(FLU_CONFIG.ui, 'workspace');
   const feedTitle =
     title ||
     pickLabel(
-      (FLU_CONFIG as any).ui?.workspace?.feedTitle,
+      configLabel(wsUi, 'feedTitle'),
       language,
       'Resultados'
     );
   // El usuario pidió quitar el texto de estado vacío del Pizarrón:
   // cuando no hay resultados no se muestra ningún mensaje.
   const filterAll =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterAll, language, 'Todo');
+    pickLabel(FLU_CONFIG.ui?.workspace?.feedFilterAll, language, 'Todo');
   const filterImages =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterImages, language, 'Imágenes');
+    pickLabel(FLU_CONFIG.ui?.workspace?.feedFilterImages, language, 'Imágenes');
   const filterMedia =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterMedia, language, 'Video/Docs');
+    pickLabel(FLU_CONFIG.ui?.workspace?.feedFilterMedia, language, 'Video/Docs');
   const filterHistory =
-    pickLabel((FLU_CONFIG as any).ui?.workspace?.feedFilterHistory, language, 'Historial');
+    pickLabel(FLU_CONFIG.ui?.workspace?.feedFilterHistory, language, 'Historial');
 
   // Etiquetas de origen (insignias).
   const originWeb = pickLabel(ui.origenWebLabel, language, 'Web');
   const originIa = pickLabel(ui.origenIaLabel, language, 'IA');
   const originOcr = pickLabel(
-    (FLU_CONFIG as any).ui?.workspace?.origenOcrLabel,
+    configLabel(wsUi, 'origenOcrLabel'),
     language,
     'OCR'
   );

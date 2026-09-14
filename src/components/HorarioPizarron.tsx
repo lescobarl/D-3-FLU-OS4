@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configText } from './configText';
 import type { HorarioRecord } from '../core/db/fluDatabase';
 import {
   diaDeFecha,
@@ -115,7 +116,7 @@ export function HorarioPizarron({
   now = () => Date.now(),
   language = 'es',
 }: HorarioPizarronProps) {
-  const config = (FLU_CONFIG as any).horario || {};
+  const config = FLU_CONFIG.horario || {};
   const ui = config.ui || {};
   const isEn = language === 'en';
   const modos = config.modos || {};
@@ -287,7 +288,7 @@ export function HorarioPizarron({
               const top =
                 ((hourPosition.get(startHourOfClase) ?? 0) * 60 + (cStart - startHourOfClase * 60)) / 60 * hourPx;
               const height = ((cEnd - cStart) / 60) * hourPx - 4;
-              const token = colores.includes(clase.color || '') ? clase.color : defaultColor;
+          const token = clase.color && colores.includes(clase.color) ? clase.color : defaultColor;
               return (
                 <article
                   key={clase.id}
@@ -333,7 +334,7 @@ export function HorarioPizarron({
     ) : (
       <ul className="flu-horario__list" data-testid="horario-dia-list">
         {clasesHoy.map((clase) => {
-          const token = colores.includes(clase.color || '') ? clase.color : defaultColor;
+                const token = clase.color && colores.includes(clase.color) ? clase.color : defaultColor;
           return (
             <li key={clase.id} className="flu-horario__row">
               <span
@@ -407,7 +408,7 @@ export function HorarioPizarron({
             <h4 className="flu-horario__grupo-dia">{dayLabels[grupo.dia] || `Día ${grupo.dia}`}</h4>
             <ul className="flu-horario__list">
               {grupo.clases.map((clase) => {
-                const token = colores.includes(clase.color || '') ? clase.color : defaultColor;
+              const token = clase.color && colores.includes(clase.color) ? clase.color : defaultColor;
                 return (
                   <li key={clase.id} className="flu-horario__row">
                     <span
@@ -467,7 +468,7 @@ export function HorarioPizarron({
                 >
                   {modoKeys.map((key) => (
                     <option key={key} value={key}>
-                      {(modos[key] && modos[key].label) || key}
+                      {configText(modos, key, key)}
                     </option>
                   ))}
                 </select>
@@ -515,12 +516,12 @@ export function HorarioPizarron({
           <div className="flu-settings-section__body">
             <div className="flu-horario__form">
               <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                <span>{ui.tituloLabel || ui.materiaLabel || 'Título'}</span>
+                <span>{ui.tituloLabel || configText(ui, 'materiaLabel', 'Título')}</span>
                 <input
                   type="text"
                   value={materia}
                   onChange={(event) => setMateria(event.target.value)}
-                  placeholder={ui.tituloLabel || ui.materiaLabel || 'Título'}
+                  placeholder={ui.tituloLabel || configText(ui, 'materiaLabel', 'Título')}
                   data-testid="horario-add-materia"
                   disabled={busy}
                 />
@@ -580,12 +581,12 @@ export function HorarioPizarron({
                 />
               </label>
               <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                <span>{ui.lugarLabel || ui.aulaLabel || 'Lugar (opcional)'}</span>
+                <span>{ui.lugarLabel || configText(ui, 'aulaLabel', 'Lugar (opcional)')}</span>
                 <input
                   type="text"
                   value={aula}
                   onChange={(event) => setAula(event.target.value)}
-                  placeholder={ui.lugarLabel || ui.aulaLabel || 'Lugar (opcional)'}
+                  placeholder={ui.lugarLabel || configText(ui, 'aulaLabel', 'Lugar (opcional)')}
                   data-testid="horario-add-aula"
                   disabled={busy}
                 />

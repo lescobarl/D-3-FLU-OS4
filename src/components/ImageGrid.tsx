@@ -14,6 +14,7 @@
 
 import { useMemo } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configLabel } from './configText';
 import { pickLabel } from '../lib/textUtils';
 import type { SearchResult } from '../core/search/searchSession';
 
@@ -57,12 +58,12 @@ interface ImageGridUi {
 /** Etiquetas de la cuadrícula desde FLU_CONFIG.browser.search.ui. */
 function useImageGridUi(language: string): ImageGridUi {
     return useMemo(() => {
-        const cfg = (FLU_CONFIG as any).browser?.search?.ui || {};
-        const wsUi = (FLU_CONFIG as any).ui?.workspace || {};
+        const cfg = FLU_CONFIG.browser?.search?.ui || {};
+        const wsUi = FLU_CONFIG.ui?.workspace || {};
         return {
-            openImageLabel: pickLabel(cfg.openImageLabel, language, 'Abrir imagen'),
-            emptyImages: pickLabel(cfg.emptyImages, language, 'No encontré imágenes para esta búsqueda.'),
-            sourceCommons: pickLabel(cfg.sourceCommons, language, 'Wikimedia Commons'),
+            openImageLabel: pickLabel(configLabel(cfg, 'openImageLabel'), language, 'Abrir imagen'),
+            emptyImages: pickLabel(configLabel(cfg, 'emptyImages'), language, 'No encontré imágenes para esta búsqueda.'),
+            sourceCommons: pickLabel(configLabel(cfg, 'sourceCommons'), language, 'Wikimedia Commons'),
             // imageRetryLabel/imageExpandLabel son {es,en}: resolver SIEMPRE con pickLabel.
             retryLabel: pickLabel(wsUi.imageRetryLabel, language, 'Reintentar'),
             expandGeneratedLabel: pickLabel(wsUi.imageExpandLabel, language, 'Ampliar imagen generada'),

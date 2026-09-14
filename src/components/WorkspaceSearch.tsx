@@ -25,10 +25,10 @@ import {
     type FormEvent,
 } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configTextMap } from './configText';
 import { splitTranscriptAtWakeWord } from '../voice/lib/audioMath';
 import type { SearchLevel } from '../hooks/useWorkspaceSearch';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
-import type { SearchConfig } from '../core/search/searchSession';
 
 export interface WorkspaceSearchProps {
     /** Allowlist curada del participante (filtra navegabilidad). */
@@ -65,15 +65,10 @@ export function WorkspaceSearch({
     livePhrase,
     isListening,
 }: WorkspaceSearchProps) {
-    const searchCfg = useMemo<SearchConfig>(
-        () => (FLU_CONFIG as any).browser?.search || {},
-        [],
-    );
-
     // Etiquetas de la UI (Regla #1: sin hardcode).
     const ui = useMemo(
         () => {
-            const cfg = searchCfg.ui || {};
+            const cfg = configTextMap(FLU_CONFIG.browser?.search?.ui);
             return {
                 searchLabel: cfg.searchLabel || 'Buscar',
                 // Placeholder vacío (el usuario pidió quitar "Busca algo").
@@ -87,7 +82,7 @@ export function WorkspaceSearch({
                 level_avanzado: cfg.level_avanzado || 'Avanzado',
             };
         },
-        [searchCfg],
+        [],
     );
 
     const inputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +111,7 @@ export function WorkspaceSearch({
     // word (ruido de fondo / conversación ajena), no se muestra nada en la barra.
     const rawLive = String(livePhrase || '').trim();
     const wakeWords: string[] =
-        (FLU_CONFIG as any)?.voiceCommands?.wakeWords || [];
+        FLU_CONFIG?.voiceCommands?.wakeWords || [];
     const split = splitTranscriptAtWakeWord(rawLive, wakeWords);
     // §9.5/§9.6: conserva el texto original (acentos/mayúsculas) tras la wake word;
     // la barra muestra lo mismo que la transcripción, solo sin la wake word.

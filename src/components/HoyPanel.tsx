@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { configChild, configText } from './configText';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord, ReminderRecord } from '../core/db/fluDatabase';
 import { describeNlDateTime } from '../core/reminders/nlDateParser';
 import type { TemporalItemRecord } from '../core/temporal/temporalService';
@@ -270,8 +271,12 @@ export function HoyPanel({
 
   // Etiquetas de acción desde config (strings directos, sin hardcode).
   const removeLabel = String(notesUi.removeTitle || 'Quitar');
+  const temporalsUi = configChild(configChild(FLU_CONFIG, 'temporals'), 'ui');
+  const hoyUiNode = configChild(configChild(FLU_CONFIG, 'hoy'), 'ui');
   const cancelLabel = String(
-    (FLU_CONFIG as any)?.temporals?.ui?.cancelTitle ?? (FLU_CONFIG as any)?.hoy?.ui?.cancelTitle ?? 'Cancelar',
+    configText(temporalsUi, 'cancelTitle', '') ||
+      configText(hoyUiNode, 'cancelTitle', '') ||
+      'Cancelar',
   );
 
   return (
@@ -369,7 +374,7 @@ export function HoyPanel({
                           `reminder-edit-btn-${item.id}`,
                           `reminder-edit-${item.id}`,
                           reminders.onEdit ? (id, value) => reminders.onEdit!(id, value) : undefined,
-                          (hoyUi as any).editLabel || 'Editar',
+                          configText(hoyUi, 'editLabel', 'Editar'),
                         )}
                         {reminders.onRemove && (
                           <button
@@ -459,7 +464,7 @@ export function HoyPanel({
                                           : { label: value },
                                   )
                             : undefined,
-                          (hoyUi as any).editLabel || 'Editar',
+                          configText(hoyUi, 'editLabel', 'Editar'),
                           () =>
                             setEditTime(
                               (alarma.trigger?.kind === 'daily' && alarma.trigger.timeOfDay) || '',
@@ -500,7 +505,7 @@ export function HoyPanel({
                             `temporal-edit-btn-${temporizador.id}`,
                             `temporal-edit-${temporizador.id}`,
                             temporals.onEdit ? (id, value) => temporals.onEdit!(id, { label: value }) : undefined,
-                            (hoyUi as any).editLabel || 'Editar',
+                            configText(hoyUi, 'editLabel', 'Editar'),
                           )}
                           {temporals.onCancel && (
                             <button

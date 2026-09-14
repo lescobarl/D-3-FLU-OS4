@@ -55,8 +55,8 @@ export function RemindersPanel({
   authorPending,
   onAuthorFilterChange,
 }: RemindersPanelProps) {
-  const config = (FLU_CONFIG as any).reminders || {};
-  const ui = config.ui || {};
+  const config = FLU_CONFIG.reminders || {};
+  const ui: Record<string, string> = config.ui || {};
   const defaultOffsetMin = Number(config.defaultReminderOffsetMinutes) || 10;
 
   const [text, setText] = useState('');

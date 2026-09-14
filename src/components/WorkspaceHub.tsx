@@ -88,6 +88,8 @@ export interface WorkspaceHubProps {
         /** Reintentar la carga de la MISMA URL (Pollinations es stateless). */
         retryLoad: () => void;
         fallbackToOpenRouter: () => Promise<void>;
+        /** Limpiar todo el estado de imagen. */
+        clear?: () => void;
     };
 
     // Análisis de documento
@@ -296,7 +298,7 @@ export function WorkspaceHub({
     // IA generada se muestra dentro de la zona de imágenes (ver feedItems).
     const handleRunSearch = useCallback(
         (opts?: Parameters<typeof runSearch>[0]) => {
-            (image as any).clear?.();
+            image.clear?.();
             return runSearch(opts);
         },
         [image, runSearch],
@@ -476,7 +478,7 @@ export function WorkspaceHub({
                 origin: 'ia',
                 kind: 'history',
                 onlyInKind: true,
-                title: pickLabel((FLU_CONFIG as any).documents?.ui?.title, language, 'Historial'),
+                title: pickLabel(FLU_CONFIG.documents?.ui?.title, language, 'Historial'),
                 body: <DocumentsHistoryPanel {...documents} />,
             });
         }
@@ -542,7 +544,7 @@ export function WorkspaceHub({
                                 <button
                                     type="button"
                                     data-testid={`restored-open-${rec.id}`}
-                                    title={pickLabel((FLU_CONFIG as any).documents?.ui?.downloadTitle, language, 'Abrir')}
+                                    title={pickLabel(FLU_CONFIG.documents?.ui?.downloadTitle, language, 'Abrir')}
                                     onClick={() => downloadDocumentContent(rec)}
                                 >
                                     ⬇️

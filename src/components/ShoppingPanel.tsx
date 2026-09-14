@@ -35,7 +35,7 @@ export function ShoppingPanel({
   onRemove,
   onClearChecked,
 }: ShoppingPanelProps) {
-  const config = (FLU_CONFIG as any).shopping || {};
+  const config = FLU_CONFIG.shopping || {};
   const ui = config.ui || {};
 
   const [label, setLabel] = useState('');

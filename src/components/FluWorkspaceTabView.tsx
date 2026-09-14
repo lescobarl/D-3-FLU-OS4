@@ -43,7 +43,7 @@ export function FluWorkspaceTabView({
                 {...{
                     expandedFrameId,
                     onToggleExpand,
-                } as any}
+                }}
             >
                 <div className="frame-content frame-content--workspace">
                     <WorkspaceHub {...hub} />
