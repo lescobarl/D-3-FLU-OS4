@@ -11,6 +11,37 @@
 // ============================================================
 
 // -----------------------------------------------------------
+// Variables de entorno (Vite) — tipado real
+// -----------------------------------------------------------
+// Declara las VITE_* usadas con su tipo real (`string | undefined`) para
+// acceder a `import.meta.env` sin casts. El acceso debe ser estático
+// (`import.meta.env.VITE_X`): así Vite/Vitest puede inlinearlo en transform.
+declare global {
+    interface ImportMetaEnv {
+        readonly VITE_APP_NAME?: string;
+        readonly VITE_APP_VERSION?: string;
+        readonly VITE_GEMINI_MODEL?: string;
+        readonly VITE_GEMINI_API_URL?: string;
+        readonly VITE_GEMINI_PREDICT_URL?: string;
+        readonly VITE_GEMINI_API_KEY?: string;
+        readonly VITE_DEEPSEEK_MODEL?: string;
+        readonly VITE_DEEPSEEK_VISION_MODEL?: string;
+        readonly VITE_DEEPSEEK_URL?: string;
+        readonly VITE_DEEPSEEK_API_KEY?: string;
+        readonly VITE_OPENROUTER_MODEL?: string;
+        readonly VITE_OPENROUTER_URL?: string;
+        readonly VITE_OPENROUTER_API_KEY?: string;
+        readonly VITE_OPENROUTER_IMAGE_MODEL?: string;
+        readonly VITE_FALAI_VIDEO_ENDPOINT?: string;
+        readonly VITE_FALAI_VIDEO_MODEL?: string;
+        readonly VITE_FALAI_API_KEY?: string;
+        readonly VITE_WHATSAPP_WEB_BASE?: string;
+        readonly VITE_POLLINATIONS_URL?: string;
+        readonly VITE_NETWORK_PROBE_URLS?: string;
+    }
+}
+
+// -----------------------------------------------------------
 // Storage Keys
 // -----------------------------------------------------------
 export const STORAGE_KEYS = {
@@ -110,8 +141,8 @@ export const STORAGE_KEYS = {
 // Application Branding
 // -----------------------------------------------------------
 export const APP_BRANDING = {
-    NAME: (import.meta as any)?.env?.VITE_APP_NAME || 'FLU OS4',
-    VERSION: (import.meta as any)?.env?.VITE_APP_VERSION || 'v4.0',
+    NAME: import.meta.env.VITE_APP_NAME || 'FLU OS4',
+    VERSION: import.meta.env.VITE_APP_VERSION || 'v4.0',
     ICON: '🐰',
 } as const;
 
@@ -119,9 +150,9 @@ export const APP_BRANDING = {
 // Gemini Configuration
 // -----------------------------------------------------------
 export const GEMINI_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite',
-    API_URL: (import.meta as any)?.env?.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-    PREDICT_API_URL: (import.meta as any)?.env?.VITE_GEMINI_PREDICT_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:predict',
+    MODEL: import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite',
+    API_URL: import.meta.env.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+    PREDICT_API_URL: import.meta.env.VITE_GEMINI_PREDICT_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:predict',
     DEFAULT_TEMPERATURE: 0.7,
     DEFAULT_TOP_K: 40,
     DEFAULT_TOP_P: 0.95,
@@ -132,10 +163,10 @@ export const GEMINI_CONFIG = {
 // DeepSeek Configuration (legacy — only used as fallback/backup)
 // -----------------------------------------------------------
 export const DEEPSEEK_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_DEEPSEEK_MODEL || 'deepseek-chat',
-    VISION_MODEL: (import.meta as any)?.env?.VITE_DEEPSEEK_VISION_MODEL || 'deepseek-vl',
-    API_URL: (import.meta as any)?.env?.VITE_DEEPSEEK_URL || 'https://api.deepseek.com/v1',
-    API_KEY: (import.meta as any)?.env?.VITE_DEEPSEEK_API_KEY || '',
+    MODEL: import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat',
+    VISION_MODEL: import.meta.env.VITE_DEEPSEEK_VISION_MODEL || 'deepseek-vl',
+    API_URL: import.meta.env.VITE_DEEPSEEK_URL || 'https://api.deepseek.com/v1',
+    API_KEY: import.meta.env.VITE_DEEPSEEK_API_KEY || '',
     CREATIVITY: 0.7,
     DEFAULT_MAX_TOKENS: 1000,
 } as const;
@@ -153,13 +184,13 @@ export const DEEPSEEK_CONFIG = {
 // (TEXT_API_URL / TEXT_MODEL / TEXT_API_KEY).
 // -----------------------------------------------------------
 export const OPENROUTER_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite',
-    API_URL: (import.meta as any)?.env?.VITE_OPENROUTER_URL || 'https://openrouter.ai/api/v1',
-    API_KEY: (import.meta as any)?.env?.VITE_OPENROUTER_API_KEY || '',
+    MODEL: import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite',
+    API_URL: import.meta.env.VITE_OPENROUTER_URL || 'https://openrouter.ai/api/v1',
+    API_KEY: import.meta.env.VITE_OPENROUTER_API_KEY || '',
     DEFAULT_TEMPERATURE: 0.7,
     DEFAULT_MAX_TOKENS: 1200,
     /** Modelo de la Image API de OpenRouter (respaldo real cuando Pollinations falla). */
-    IMAGE_MODEL: (import.meta as any)?.env?.VITE_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
+    IMAGE_MODEL: import.meta.env.VITE_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
     /** Endpoint relativo de la Image API de OpenRouter (relativo a API_URL). */
     IMAGE_ENDPOINT: '/images',
     IMAGE_ASPECT_RATIO: '16:9',
@@ -173,11 +204,11 @@ export const OPENROUTER_CONFIG = {
 // El endpoint/modelo/key salen de env (VITE_*) con defaults seguros.
 export const FALAI_CONFIG = {
     /** Endpoint del servicio de video (queue de fal.ai). */
-    VIDEO_ENDPOINT: (import.meta as any)?.env?.VITE_FALAI_VIDEO_ENDPOINT || 'https://queue.fal.run',
+    VIDEO_ENDPOINT: import.meta.env.VITE_FALAI_VIDEO_ENDPOINT || 'https://queue.fal.run',
     /** Modelo text-to-video. Default BARATO: Wan 2.5 ($0.05/s en 480p). */
-    VIDEO_MODEL: (import.meta as any)?.env?.VITE_FALAI_VIDEO_MODEL || 'fal-ai/wan-25-preview/text-to-video',
+    VIDEO_MODEL: import.meta.env.VITE_FALAI_VIDEO_MODEL || 'fal-ai/wan-25-preview/text-to-video',
     /** Clave de fal.ai (nunca se expone al browser: se resuelve en servidor). */
-    API_KEY: (import.meta as any)?.env?.VITE_FALAI_API_KEY || '',
+    API_KEY: import.meta.env.VITE_FALAI_API_KEY || '',
     ASPECT_RATIO: '16:9',
     /** Tiempo máximo de espera del job (ms). */
     POLL_TIMEOUT_MS: 180_000,
@@ -222,14 +253,14 @@ export const VALID_VISUAL_TIPOS: readonly string[] = ['image_prompt', 'diagram',
 // Configurable vía VITE_WHATSAPP_WEB_BASE.
 // -----------------------------------------------------------
 export const DEVICE_ACTIONS_CONFIG = {
-    WHATSAPP_WEB_BASE: (import.meta as any)?.env?.VITE_WHATSAPP_WEB_BASE || 'https://wa.me',
+    WHATSAPP_WEB_BASE: import.meta.env.VITE_WHATSAPP_WEB_BASE || 'https://wa.me',
 } as const;
 
 // -----------------------------------------------------------
 // Pollinations.ai Image Generation
 // -----------------------------------------------------------
 export const POLLINATIONS_CONFIG = {
-    BASE_URL: (import.meta as any)?.env?.VITE_POLLINATIONS_URL || 'https://image.pollinations.ai/prompt',
+    BASE_URL: import.meta.env.VITE_POLLINATIONS_URL || 'https://image.pollinations.ai/prompt',
     DEFAULT_WIDTH: 1024,
     DEFAULT_HEIGHT: 768,
     DEFAULT_PARAMS: 'nologo=true',
@@ -252,8 +283,8 @@ const DEFAULT_NETWORK_PROBE_URLS: readonly string[] = [
 ];
 
 export const NETWORK_PROBE_URLS: readonly string[] = (
-    (import.meta as any)?.env?.VITE_NETWORK_PROBE_URLS
-        ? (import.meta as any)?.env?.VITE_NETWORK_PROBE_URLS.split(',').map((s: string) => s.trim()).filter(Boolean)
+    import.meta.env.VITE_NETWORK_PROBE_URLS
+        ? String(import.meta.env.VITE_NETWORK_PROBE_URLS).split(',').map((s: string) => s.trim()).filter(Boolean)
         : DEFAULT_NETWORK_PROBE_URLS
 );
 
@@ -875,11 +906,11 @@ export function resolveTextApiKey(): string {
     if (key) return key;
     // Fallback: check env vars
     try {
-        const envKey = String((import.meta as any)?.env?.VITE_GEMINI_API_KEY ?? '').trim();
+        const envKey = String(import.meta.env.VITE_GEMINI_API_KEY ?? '').trim();
         if (envKey) return envKey;
-        const orKey = String((import.meta as any)?.env?.VITE_OPENROUTER_API_KEY ?? '').trim();
+        const orKey = String(import.meta.env.VITE_OPENROUTER_API_KEY ?? '').trim();
         if (orKey) return orKey;
-        const dsKey = String((import.meta as any)?.env?.VITE_DEEPSEEK_API_KEY ?? '').trim();
+        const dsKey = String(import.meta.env.VITE_DEEPSEEK_API_KEY ?? '').trim();
         if (dsKey) return dsKey;
     } catch { /* ignore */ }
     return '';
@@ -908,7 +939,7 @@ export function resolveFalApiKey(): string {
     const override = readStorage(STORAGE_KEYS.FALAI_API_KEY, '').trim();
     if (override) return override;
     try {
-        return String((import.meta as any)?.env?.VITE_FALAI_API_KEY ?? '').trim();
+        return String(import.meta.env.VITE_FALAI_API_KEY ?? '').trim();
     } catch {
         return '';
     }
