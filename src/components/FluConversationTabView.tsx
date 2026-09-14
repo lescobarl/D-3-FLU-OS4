@@ -7,15 +7,12 @@
 // declara hooks propios ni muta estado global. Etiquetas y títulos
 // salen de FLU_CONFIG (Rule #1: NO HARDCODE).
 // ============================================================
-import type { ComponentType } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { FluTabPanel } from '../voice/components/FluShellTabs';
 import { PanelFrame } from '../voice/components/PanelFrame';
 import { ConversationLog } from '../voice/components/ConversationLog';
-import { VoiceProfilesPanel } from '../voice/components/VoiceProfilesPanel';
-
-// Componentes OS2 en JS (sin declaraciones TS): cast para compatibilidad.
-const ConversationLogAny = ConversationLog as ComponentType<any>;
+import { VoiceProfilesPanel, type VoiceProfileRow } from '../voice/components/VoiceProfilesPanel';
+import type { ConversationEntry } from '../types/bridge';
 
 export interface FluConversationTabViewProps {
     /** Tab activa del pizarrón (para FluTabPanel). */
@@ -30,13 +27,13 @@ export interface FluConversationTabViewProps {
      */
     visiblePhrase: string;
     /** Historial de conversación (entradas de FLU + usuarios). */
-    conversationHistory: readonly any[];
+    conversationHistory: readonly ConversationEntry[];
     /** Participantes de voz: label + profileId (unión historial + perfiles). */
     voiceParticipants: readonly { label: string; profileId: string | undefined }[];
     /** Renombra un perfil de voz / speaker de sesión. */
     onRenameProfile: (profileId: string, label: string) => Promise<void>;
     /** Elimina un participante de voz (perfil + historial + auditoría). */
-    onRemoveParticipant: (row: any) => Promise<void>;
+    onRemoveParticipant: (row: VoiceProfileRow) => Promise<void>;
 }
 
 /**
@@ -77,7 +74,7 @@ export function FluConversationTabView({
                         <span>{livePhrase || '\u00a0'}</span>
                     </div>
                 </div>
-                <ConversationLogAny
+                <ConversationLog
                     entries={conversationHistory}
                     emptyLabel={ws.conversationEmpty || 'Sin conversación'}
                 />

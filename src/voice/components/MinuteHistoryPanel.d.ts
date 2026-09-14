@@ -6,16 +6,14 @@
 // ============================================================
 
 import type { ReactElement } from 'react';
+import type { MinuteUIEntry } from '../../hooks/useMinuteKnowledge';
 
-export interface MinuteHistoryEntry {
-    id: string;
-    [key: string]: unknown;
-}
+export type MinuteHistoryEntry = MinuteUIEntry;
 
 export interface MinuteHistoryPanelProps {
-    entries?: readonly MinuteHistoryEntry[];
+    entries?: readonly MinuteUIEntry[];
     selectedId?: string;
-    onSelect?: (entry: MinuteHistoryEntry) => void;
+    onSelect?: (entry: MinuteUIEntry) => void;
     emptyLabel?: string;
 }
 

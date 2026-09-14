@@ -7,15 +7,14 @@
 // hooks propios ni muta estado global. Etiquetas y títulos salen
 // de FLU_CONFIG (Rule #1: NO HARDCODE).
 // ============================================================
-import type { ForwardRefExoticComponent, RefObject } from 'react';
+import type { RefObject } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { FluTabPanel } from '../voice/components/FluShellTabs';
 import { PanelFrame } from '../voice/components/PanelFrame';
 import { MinuteDraftPanel } from '../voice/components/MinuteDraftPanel';
 import { MinuteHistoryPanel } from '../voice/components/MinuteHistoryPanel';
-
-// Componentes OS2 en JS (sin declaraciones TS): cast para compatibilidad.
-const MinuteDraftPanelAny = MinuteDraftPanel as ForwardRefExoticComponent<any>;
+import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
+import type { MinuteDraft } from '../hooks/useMinuteHandlers';
 
 export interface FluMinutesTabViewProps {
     /** Tab activa del pizarrón (para FluTabPanel). */
@@ -31,19 +30,19 @@ export interface FluMinutesTabViewProps {
     /** Genera/resume la minuta desde la conversación (con anuncio de voz). */
     onGenerateSummary: (opts?: { announce?: boolean }) => Promise<void>;
     /** Borrador de minuta en edición. */
-    draft: any;
+    draft: MinuteDraft | null;
     /** Actualiza el borrador de minuta en edición. */
-    onDraftChange: (draft: any) => void;
+    onDraftChange: (draft: MinuteDraft | null) => void;
     /** Guarda la minuta (draft) en IndexedDB. */
-    onSaveMinute: (draftOverride?: any, opts?: { announce?: boolean }) => Promise<void>;
+    onSaveMinute: (draftOverride?: MinuteDraft | null, opts?: { announce?: boolean }) => Promise<void>;
     /** Ref expuesta por MinuteDraftPanel para disparar su .save() interno. */
     minutePanelRef: RefObject<{ save: () => void } | null>;
     /** Historial de minutas persistidas. */
-    history: readonly any[];
+    history: readonly MinuteUIEntry[];
     /** Minuta seleccionada del historial (id). */
     selectedId: string | null;
     /** Carga una minuta del historial al editar. */
-    onSelect: (entry: any) => void;
+    onSelect: (entry: MinuteUIEntry) => void;
 }
 
 /**
@@ -98,7 +97,7 @@ export function FluMinutesTabView({
                         {FLU_CONFIG.ui?.buttons?.saveMinute || 'Guardar Minuta'}
                     </button>
                 </div>
-                <MinuteDraftPanelAny
+                <MinuteDraftPanel
                     ref={minutePanelRef}
                     draft={draft}
                     onChange={onDraftChange}

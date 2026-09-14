@@ -49,7 +49,7 @@ export interface FluSettingsPanelProps {
     handleFalApiKeyCommit?: (val: string) => void;
     falVideoModel?: string;
     handleFalVideoModelCommit?: (val: string) => void;
-    voices: any[];
+    voices: SpeechSynthesisVoice[];
     handleTextModelCommit: (val: string) => void;
     handleTextApiKeyCommit: (val: string) => void;
     handleTextApiUrlCommit: (val: string) => void;
@@ -62,7 +62,7 @@ export interface FluSettingsPanelProps {
     setWakeWords: (value: string) => void;
     debugLogsEnabled: boolean;
     setDebugLogsEnabled: (enabled: boolean) => void;
-    handleParticipantConfigChange: (overrides: Record<string, any>) => void;
+    handleParticipantConfigChange: (overrides: Record<string, unknown>) => void;
     /** Overrides del buscador (comparte fuente con el Centro de Control). */
     searchOverrides?: SearchConfigOverrides;
     /** Persiste overrides del buscador (mismo handler que el Centro de Control).
