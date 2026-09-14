@@ -260,7 +260,7 @@ export function defaultRecord(
     source: 'default',
     createdAt: now,
     updatedAt: now,
-    sync: { revision: 1, updated_at: new Date(now).toISOString(), deleted: false },
+    sync: buildSyncTuple(undefined, now),
   };
 }
 

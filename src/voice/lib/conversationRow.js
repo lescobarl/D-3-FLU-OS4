@@ -5,6 +5,7 @@
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { isAutoSpeakerLabel, normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
+import { buildSyncTuple } from '../../core/db/syncTuple'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
 export const SPEAKER_ID_FLU = 'flu'
@@ -102,9 +103,7 @@ export function createConversationRow({
     speakerName: sname,
     timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
     isFinal: final,
-    deleted: false,
-    revision: 1,
-    updated_at: new Date().toISOString(),
+    ...buildSyncTuple(undefined, Date.now()),
     ...(final ? { speakerLocked: true } : {}),
   }
   const normalizedSignature = normalizeRowSignature(signature)
