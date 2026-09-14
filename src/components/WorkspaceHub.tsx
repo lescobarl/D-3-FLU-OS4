@@ -494,10 +494,18 @@ export function WorkspaceHub({
                 documents.documents.find(
                     (d) => String(d.formato || '').toLowerCase() === formato,
                 );
+            // Un artefacto está "vivo" si ya llegó o si se está generando/cargando:
+            // mientras hay una petición en curso NO se restaura el anterior, para
+            // que sólo se pinte el nuevo al llegar (no el de la vez pasada).
+            const liveMedia = {
+                video: Boolean(generation.videoResult) || generation.isGenerating,
+                image: Boolean(image.imageUrl) || image.isLoading,
+                doc: Boolean(generation.result) || generation.isGenerating,
+            };
             const restored: Array<{ rec?: DocumentRecord; kind: 'video' | 'image' | 'doc'; live: boolean }> = [
-                { rec: latestByFormato('video'), kind: 'video', live: Boolean(generation.videoResult) },
-                { rec: latestByFormato('image'), kind: 'image', live: Boolean(image.imageUrl) },
-                { rec: latestByFormato('pdf'), kind: 'doc', live: Boolean(generation.result) },
+                { rec: latestByFormato('video'), kind: 'video', live: liveMedia.video },
+                { rec: latestByFormato('image'), kind: 'image', live: liveMedia.image },
+                { rec: latestByFormato('pdf'), kind: 'doc', live: liveMedia.doc },
             ];
             restored.forEach(({ rec, kind, live }) => {
                 if (!rec || live) return;
