@@ -50,6 +50,7 @@ declare global {
             input: unknown,
             opts?: { personId?: string },
         ): Promise<string>;
+        __fluHandleAgendaText?(input: unknown): Promise<string>;
 
         /** Stores y flags expuestos en window (debug/E2E). */
         __fluStore?: unknown;

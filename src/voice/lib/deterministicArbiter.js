@@ -23,6 +23,7 @@ import { resolveGameCommandFromText } from './gameCommands.js'
 import { parseNoteIntentText, parseNoteRemoveIntentText } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
+import { parseAgendaIntent } from '../../core/agenda/agendaIntentParser'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
 import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
 import { parseTemporalIntent } from '../../core/temporal/temporalIntentParser'
@@ -210,6 +211,15 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   const note = recognizeNoteIntent(transcript)
   if (note) {
     return { matched: true, domain: 'note', action: note, channel: 'flu' }
+  }
+
+  // 7.b Agenda del día ("¿qué hay para hoy?"). Se evalúa ANTES que el horario
+  // para que la consulta general de agenda no se trague en horario.query
+  // (que solo lista el horario de clases). La compilación determinista vive
+  // en src/core/agenda/todayAgenda.ts y la despacha __fluHandleAgendaText.
+  const agenda = parseAgendaIntent(transcript)
+  if (agenda?.handled && agenda?.action) {
+    return { matched: true, domain: 'agenda', action: agenda, channel: 'flu' }
   }
 
   // 8. Horario por dictado (horarioIntentParser): agregar/consultar/quitar

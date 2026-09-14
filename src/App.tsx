@@ -122,6 +122,8 @@ import { diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
 import { parseHorarioIntent, type HorarioIntent, type HorarioIntentData } from './core/horario/horarioIntentParser';
+import { buildTodayAgenda, DEFAULT_TODAY_AGENDA_LABELS, type TodayAgendaLabels } from './core/agenda/todayAgenda';
+import { parseAgendaIntent, type AgendaIntent } from './core/agenda/agendaIntentParser';
 import type { NotificationService } from './core/notifications/notificationService';
 import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
 import {
@@ -1051,6 +1053,29 @@ function readStringProp(value: unknown, key: string): string | undefined {
     return typeof prop === 'string' ? prop : undefined;
 }
 
+/** Convierte FLU_CONFIG.agenda.voice en etiquetas de sección (es/en) tipadas. */
+function buildAgendaLabels(voice: Record<string, unknown>): TodayAgendaLabels {
+    const read = (key: string): { es: string; en: string } => {
+        const raw = voice?.[key];
+        if (raw && typeof raw === 'object') {
+            const es = Reflect.get(raw, 'es');
+            const en = Reflect.get(raw, 'en');
+            return {
+                es: typeof es === 'string' ? es : DEFAULT_TODAY_AGENDA_LABELS[key as keyof TodayAgendaLabels].es,
+                en: typeof en === 'string' ? en : DEFAULT_TODAY_AGENDA_LABELS[key as keyof TodayAgendaLabels].en,
+            };
+        }
+        return DEFAULT_TODAY_AGENDA_LABELS[key as keyof TodayAgendaLabels];
+    };
+    return {
+        horario: read('horario'),
+        reminders: read('reminders'),
+        alarms: read('alarms'),
+        notes: read('notes'),
+        empty: read('empty'),
+    };
+}
+
 /**
  * Resuelve una intención ESTRUCTURADA a partir del `dominio` que el cerebro
  * conversacional ya clasificó (`accion.dominio`), cuando el re-parseo del texto
@@ -1178,6 +1203,9 @@ async function dispatchArbiterIntent(
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
+        } else if (domain === 'agenda' && typeof w.__fluHandleAgendaText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaText (agenda)');
+            reply = (await w.__fluHandleAgendaText(intent)) || '';
         } else if (domain === 'horario' && typeof w.__fluHandleHorarioText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleHorarioText (horario)');
             reply =
@@ -3844,6 +3872,39 @@ function App() {
             return addedMsg;
         },
         [diary, languageRef],
+    );
+
+    // Agenda del día por voz ("¿qué hay para hoy?"). Determinista: el árbitro
+    // ya reconoció agenda.today; aquí se compila la lista desde las fuentes
+    // reales (horario/recordatorios/alarmas/notas) SIN depender del LLM.
+    window.__fluHandleAgendaText = useCallback(
+        async (input: AgendaIntent | string) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const intent = (
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false
+            )
+                ? input
+                : parseAgendaIntent(String(input || '').trim());
+            if (!intent || !intent.handled || intent.action !== 'agenda.today') return '';
+
+            const agendaCfg = FLU_CONFIG.agenda || {};
+            const voice = (agendaCfg.voice || {}) as Record<string, unknown>;
+            const labels = buildAgendaLabels(voice);
+            const text = buildTodayAgenda({
+                horario: horario.horario || [],
+                reminders: reminders.reminders || [],
+                alarms: temporals.alarms || [],
+                notes: (notes.notes || []).map((n) => ({ label: n.label, done: n.done })),
+                now: Date.now(),
+                language: lang,
+                labels,
+            });
+            return text;
+        },
+        [horario, reminders, temporals, notes, languageRef],
     );
 
     // Horario por dictado de voz (agregar / consultar / quitar). Motor

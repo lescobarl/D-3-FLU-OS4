@@ -434,6 +434,15 @@ export const FLU_CONFIG = {
     proactiveReminder: true,
     // Fase 2 — B5: cuántos recordatorios pendientes se fusionan a la agenda.
     maxReminders: 5,
+    // Etiquetas de sección del listado DETERMINISTA "¿qué hay para hoy?"
+    // (src/core/agenda/todayAgenda.ts). Sin hardcode: texto editable aquí.
+    voice: {
+      horario: { es: 'Agenda de hoy', en: "Today's agenda" },
+      reminders: { es: 'Recordatorios y citas', en: 'Reminders and appointments' },
+      alarms: { es: 'Alarmas', en: 'Alarms' },
+      notes: { es: 'Notas pendientes', en: 'Pending notes' },
+      empty: { es: 'No tienes nada programado para hoy.', en: "You have nothing scheduled for today." },
+    },
   },
   vision: {
     temperature: 0.2,
