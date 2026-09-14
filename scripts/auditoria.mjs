@@ -80,7 +80,7 @@ function countExportFns(files, names) {
 // REAL_DUP: misma lógica implementada en 2 archivos, ambos vivos.
 const SCHEDULER = ['isDue', 'collectDue', 'collectDueOrdered']
 const PARTICIPANT = [
-  'recordParticipantIntervention', 'FLU_PARTICIPANT_PHASES', 'resolveFluParticipantLabel',
+  'FLU_PARTICIPANT_PHASES',
   'createFluParticipantState', 'buildParticipantLogWindow', 'formatParticipantLogForPrompt',
   'shouldEvaluateParticipantOnTurn', 'advanceParticipantTurnCounter', 'normalizeParticipantEvaluation',
   'applyParticipantEvaluation', 'dismissRaisedHand', 'consumeRaisedDraft', 'shouldAutoDismissRaisedHand',
@@ -88,17 +88,12 @@ const PARTICIPANT = [
   'canScheduleParticipantEvaluation',
 ]
 const MINUTE = [
-  'formatMinuteHistoryLabel', 'parseMinuteHistoryCode', 'parseMinuteSequenceFromQuery',
-  'findMinuteRecordBySequence', 'resolveMinuteThemeForSpeech', 'createMinuteDraftFromSummary',
-  'formatMinuteDraftText', 'buildMinuteKnowledgeBase2',
+  'parseMinuteHistoryCode', 'parseMinuteSequenceFromQuery',
 ]
-const STORAGE = ['addAuditLog', 'clearAuditLogs', 'saveSessionState', 'loadSessionState']
+const STORAGE = ['addAuditLog', 'clearAuditLogs']
 
-// Utils duplicados con MISMA lógica (triage D0) — candidatos a unificar (hito 2).
-const UTILS_INTERNAL = [
-  'normalizeForMatch', 'hasToken', 'normalizeSpaces', 'cleanForSpeech', 'dayKey',
-  'compareAudioSignatures', 'countSpeechWords', 'getTranscriptDelta', 'wouldShrinkLog',
-]
+// Utils verificados como IDENTICOS (unifica solo estos).
+const UTILS_INTERNAL = ['compareAudioSignatures', 'countSpeechWords', 'getTranscriptDelta']
 
 // Debug/dev INTENCIONAL y CABLEADO (gated por env/DEV). Verificado import vivo:
 // no es basura. Si se quiere eliminar, es un hito aparte (quitar el wiring).
@@ -122,6 +117,24 @@ const ALLOW_COLLISION = new Set([
   'formatSpeakerLabel',      // activeListen (index,cfg) vs voiceIdentity (label,confidence)
   'resolveConversationSpeaker', // activeListen (strings) vs voiceIdentity (objeto con firma)
   'getAsrSegmentationCfg',   // fluTranscriptMotor (throw si falta) vs asrTurnSegmentation (default {})
+  // Pares verificados como MISMO NOMBRE pero DISTINTA logica (no unificar; seria regresion):
+  'normalizeForMatch',       // 3 impls (lower/collapse difieren)
+  'normalizeSpaces',         // textUtils String(s||'') vs audioMath String(x): difiere en null/undefined
+  'cleanForSpeech',          // idem normalizeSpaces
+  'hasToken',                // regex/flag distintos
+  'dayKey',                  // number (dayRollover) vs Date (browserSession)
+  'wouldShrinkLog',          // activeListen (2 args) vs speechMerge (3 args + checks extra)
+  // Verificados como mismo nombre pero distinta logica (D2/D3, 2026-09-14):
+  'resolveFluParticipantLabel',      // fluParticipant.ts usa mapa hardcodeado; participantFloor.js lee config
+  'recordParticipantIntervention',   // fluParticipant.ts (state,now) vs theoryOfMind.ts (ToMState,name,text)
+  'findMinuteRecordBySequence',      // helpers ordena lexicografico; js usa compareMinuteHistoryCodeDesc
+  'resolveMinuteThemeForSpeech',     // helpers stub isGenericMinuteSessionTheme (siempre false); js config-based
+  'createMinuteDraftFromSummary',    // helpers tema_sesion=normalizeSpaces(theme); js usa summary?.tema_sesion||theme
+  'formatMinuteDraftText',           // helpers MINUTE_FIELDS hardcodeado; js FLU_CONFIG.ui.minuteFields
+  'buildMinuteKnowledgeBase2',       // helpers acepta options.diary; js no
+  'formatMinuteHistoryLabel',        // useMinuteKnowledge .trim() sin fallback; js normalizeSpaces+fallback titulo
+  'saveSessionState',                // useSessionPersistence (localStorage, SessionState UI) vs fluStorage (IDB voz: phase/history)
+  'loadSessionState',                // idem saveSessionState
 ])
 
 /** TODOS los símbolos exportados definidos en >1 archivo (catch-all). */
@@ -164,25 +177,25 @@ const FINDINGS = [
     id: 'D2', sev: 'alta', title: 'Participantes duplicados (lib vs voice/lib)',
     hito: 3, target: PARTICIPANT.length,
     detect: () => countExportFns(srcFiles, PARTICIPANT),
-    note: 'FluParticipantSettingsPanel.jsx importa ambos árboles.',
+    note: 'CANDIDATO: verificar par a par (JS vs TS/config). Solo unificar identicos; el resto a ALLOW_COLLISION.',
   },
   {
     id: 'D3', sev: 'alta', title: 'Minutos duplicados (helpers vs minuteKnowledge)',
     hito: 4, target: MINUTE.length,
     detect: () => countExportFns(srcFiles, MINUTE),
-    note: 'minuteKnowledgeHelpers.ts importa minuteKnowledge.js (anidado).',
+    note: 'CANDIDATO: verificar par a par antes de tocar. Duplicacion anidada (helpers importa minuteKnowledge).',
   },
   {
     id: 'D4', sev: 'muy alta', title: 'Persistencia duplicada (fluDatabase vs fluStorage)',
     hito: 5, target: STORAGE.length,
     detect: () => countExportFns(srcFiles, STORAGE),
-    note: 'Riesgo de datos. Requiere migración explícita. ÚLTIMO.',
+    note: 'NO es re-export: fluDatabase (Dexie) vs fluStorage (IndexedDB) = backend distinto. Consolidacion + MIGRACION. Decision de arquitectura, no unificacion.',
   },
   {
-    id: 'D5', sev: 'media', title: 'Utils/voice duplicados con misma lógica (triage D0)',
+    id: 'D5', sev: 'media', title: 'Utils identicos confirmados (un dueno por util)',
     hito: 2, target: UTILS_INTERNAL.length,
     detect: () => countExportFns(srcFiles, UTILS_INTERNAL),
-    note: 'Misma lógica en dos archivos (textUtils/audioMath, voice/lib interno). Un dueño por util.',
+    note: 'Solo verificados como IDENTICOS. Los parecidos-pero-distintos van a ALLOW_COLLISION (no se tocan).',
   },
 
   // -------- vicios contra AGENTS.md --------
@@ -199,9 +212,42 @@ const FINDINGS = [
     note: 'Teardown de audio podría ir a allowlist justificada.',
   },
   {
-    id: 'V3', sev: 'media', title: '`as any` (erosión del tipado estricto)',
-    target: 0, detect: () => grep(srcFiles, /\bas any\b/),
-    note: 'Reducir por dominio, no de golpe.',
+    id: 'V3a', sev: 'media', title: '`as any` en core/config/appConfig.ts',
+    target: 0, detect: () => grep(srcFiles.filter((f) => rel(f) === 'src/core/config/appConfig.ts'), /\bas any\b/),
+    note: 'Dominio pequeño; META 0.',
+  },
+  {
+    id: 'V3b', sev: 'media', title: '`as any` en src/App.tsx',
+    target: 0, detect: () => grep(srcFiles.filter((f) => rel(f) === 'src/App.tsx'), /\bas any\b/),
+    note: '75 casos; por bloques.',
+  },
+  {
+    id: 'V3c', sev: 'media', title: '`as any` en src/components/**',
+    target: 0, detect: () => grep(srcFiles.filter((f) => rel(f).startsWith('src/components/')), /\bas any\b/),
+    note: '53 casos.',
+  },
+  {
+    id: 'V3d', sev: 'media', title: '`as any` en src/hooks/**',
+    target: 0, detect: () => grep(srcFiles.filter((f) => rel(f).startsWith('src/hooks/')), /\bas any\b/),
+    note: '29 casos.',
+  },
+  {
+    id: 'V3e', sev: 'media', title: '`as any` resto de src (avatar/core/dev/lib/services/store/otros)',
+    target: 0,
+    detect: () =>
+      grep(
+        srcFiles.filter((f) => {
+          const p = rel(f)
+          return (
+            p !== 'src/App.tsx' &&
+            p !== 'src/core/config/appConfig.ts' &&
+            !p.startsWith('src/components/') &&
+            !p.startsWith('src/hooks/')
+          )
+        }),
+        /\bas any\b/,
+      ),
+    note: '~29 casos; subdividir si hace falta.',
   },
   {
     id: 'V4', sev: 'baja', title: 'console.log residual en src',

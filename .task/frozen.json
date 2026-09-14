@@ -6,6 +6,6 @@
   "tests/voiceTurnClosingSingleRoute.test.ts": "4cc83557999b1b5a536529f4986552afad4d6c704b21e1e56bf4110f8d5ff9e0",
   "tests/schedulerSingleDefinition.test.ts": "16a793d68c19e0a24baeb69fa20e2533c8913acc31db9fac2ad27b8799a1eb70",
   "scripts/hito.mjs": "b616834298d471ff271104c2fe236643f0022c5af4a2731daa4db8f1931c3890",
-  "scripts/auditoria.mjs": "a63fbeba623f8011389cae553fd5c406d8cc77cce883772f0e0b90c9edc30dce",
-  "scripts/corregir.mjs": "1fe7e43ac289f45f89f23230b284f20d49785a47a3e39be9fd90235fe9d94a19"
+  "scripts/auditoria.mjs": "8b375e9bc91b0d1b837d162ba600299cd3bed4a1441a0d8303332f28f22590f3",
+  "scripts/corregir.mjs": "fda60aca735e1b611d84116562dacfa08d532bd49075b2606f5f0862b48c5df5"
 }

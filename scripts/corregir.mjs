@@ -14,7 +14,7 @@
 import { spawnSync } from 'node:child_process'
 
 // Orden recomendado: simple/seguro primero, riesgoso al final.
-const ORDER = ['V9', 'V7', 'V5', 'V8', 'V1', 'V4', 'V2', 'V6', 'D5', 'D2', 'D3', 'D4', 'V3']
+const ORDER = ['V9', 'V7', 'V5', 'V8', 'V1', 'V4', 'V2', 'V6', 'D5', 'D2', 'D3', 'D4', 'V3a', 'V3b', 'V3c', 'V3d', 'V3e']
 
 const ORDERS = {
   V9: {
@@ -80,29 +80,42 @@ const ORDERS = {
     stop: 'NO reescribas lógica: delega/re-exporta. Si un par difiere de verdad, repórtalo.',
   },
   D2: {
-    title: 'Participantes duplicados (lib vs voice/lib)',
-    allow: ['src/lib/fluParticipant.ts', 'src/voice/lib/participantFloor.js'],
-    steps: ['Dueño src/lib/fluParticipant.ts; participantFloor.js delega/re-exporta. OJO: un componente importa ambos.'],
-    stop: 'No cambies el comportamiento del floor/evaluación. Tests existentes intactos.',
+    title: 'Participantes duplicados (lib vs voice/lib) — CANDIDATO',
+    allow: ['src/lib/fluParticipant.ts', 'src/voice/lib/participantFloor.js', 'scripts/auditoria.mjs'],
+    steps: [
+      'PASO 1 (verificar, NO fusionar): compara par a par cada simbolo (JS vs TS/config).',
+      'PASO 2: unifica SOLO los identicos (un dueno, el otro delega).',
+      'PASO 3: los que difieran de verdad -> reportalos para ALLOW_COLLISION (los aplica el AUTOR).',
+    ],
+    stop: 'Prohibido re-exportar un par que no sea identico: seria regresion (leccion D5).',
   },
   D3: {
-    title: 'Minutos duplicados (helpers vs minuteKnowledge)',
+    title: 'Minutos: 2 idénticos (re-export)',
     allow: ['src/lib/minuteKnowledgeHelpers.ts', 'src/voice/lib/minuteKnowledge.js'],
-    steps: ['Elige dueño (uno de los dos) y haz que el otro re-exporte. Rompe la duplicación anidada.'],
-    stop: 'No toques tests existentes.',
+    steps: [
+      'Idénticos confirmados: parseMinuteHistoryCode y parseMinuteSequenceFromQuery.',
+      'Dueño canónico: src/lib/minuteKnowledgeHelpers.ts (TS).',
+      'src/voice/lib/minuteKnowledge.js RE-EXPORTA esos 2 desde el dueño. NO redefinir ni reescribir.',
+      'Los otros 6 ya están en ALLOW_COLLISION (autor): no tocarlos.',
+    ],
+    stop: 'Solo re-export de los 2. No tocar los 6 allowlisted ni tests.',
   },
   D4: {
-    title: 'Persistencia duplicada (RIESGO ALTO)',
+    title: 'Persistencia: consolidacion + migracion (AUTORIZADO con condiciones)',
     allow: ['src/core/db/fluDatabase.ts', 'src/voice/lib/fluStorage.js', 'src/hooks/useSessionPersistence.ts'],
-    steps: ['Define UN dueño de persistencia. Requiere migración explícita y test de comportamiento.'],
-    stop: 'PROHIBIDO tocar datos sin migración aprobada. Si hay duda, DETENTE.',
+    steps: [
+      'AUTORIZADO: audit logs -> Dexie (fluDatabase); session -> localStorage (useSessionPersistence).',
+      'Migracion one-shot IDEMPOTENTE desde raw IDB. NO borrar datos hasta verificar lectura.',
+      'fluStorage DELEGA en el dueño (no redeclara).',
+      'Test de comportamiento: escribir por API nueva, leer lo migrado, clearAuditLogs idempotente.',
+    ],
+    stop: 'Sin migracion idempotente + test de comportamiento verde, NO cerrar. Si dudas, DETENTE.',
   },
-  V3: {
-    title: '`as any` masivo (214)',
-    allow: ['src/**'],
-    steps: ['Reduce por dominio (empezando por App.tsx y appConfig), tipando de verdad.'],
-    stop: 'Incremental: no es un hito único; baja de a poco sin romper tipos.',
-  },
+  V3a: { title: '`as any` appConfig -> 0', allow: ['src/core/config/appConfig.ts'], steps: ['Tipar de verdad; quitar los 24 `as any`.'], stop: 'Sin romper typecheck.' },
+  V3b: { title: '`as any` App.tsx -> 0', allow: ['src/App.tsx'], steps: ['Reducir por bloques, tipando de verdad.'], stop: 'Incremental; no romper typecheck.' },
+  V3c: { title: '`as any` src/components/** -> 0', allow: ['src/components/**'], steps: ['Tipar de verdad, componente por componente.'], stop: 'Incremental.' },
+  V3d: { title: '`as any` src/hooks/** -> 0', allow: ['src/hooks/**'], steps: ['Tipar de verdad.'], stop: 'Incremental.' },
+  V3e: { title: '`as any` resto de src -> 0', allow: ['src/**'], steps: ['Tipar de verdad (avatar/core/dev/lib/services/store).'], stop: 'Incremental; subdividir si hace falta.' },
 }
 
 const argv = process.argv.slice(2)
@@ -129,6 +142,9 @@ function orderText(id) {
 }
 
 if (PROMPT) {
+  const status = ORDER.map((id) => ({ id, pending: gateFails(id) }))
+  const pending = status.filter((s) => s.pending).map((s) => s.id)
+  const done = status.filter((s) => !s.pending).map((s) => s.id)
   console.log(`PROMPT PARA LA SESIÓN EJECUTORA (un hallazgo por vez, en este orden):
 
 Reglas duras:
@@ -139,9 +155,10 @@ Reglas duras:
 - Hallazgo fuera de alcance: anótalo y sigue.
 - Cierra con la salida cruda del gate (antes roja / después verde). Sin "listo/hecho".
 
-Orden y órdenes:
+Ya en META (OMITIDOS, no tocar): ${done.join(', ') || '(ninguno)'}
+Pendientes (${pending.length}):
 `)
-  for (const id of ORDER) console.log(orderText(id))
+  for (const id of pending) console.log(orderText(id))
   console.log(`\nEmpieza por la primera pendiente:  node scripts/corregir.mjs --next`)
 } else if (ID) {
   console.log(orderText(ID))

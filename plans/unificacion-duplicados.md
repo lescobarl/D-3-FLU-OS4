@@ -77,6 +77,11 @@ Duplicación estructural (requieren guard + diseño propio, uno por hito):
   (duplicación anidada: helpers importa minuteKnowledge.js).
 - H5 Persistencia: `src/core/db/fluDatabase.ts` (Dexie) vs `src/voice/lib/fluStorage.js`
   (IndexedDB crudo). RIESGO ALTO: toca datos; requiere migración explícita. ÚLTIMO.
+  RESUELTO (2026-09-14): `addAuditLog`/`clearAuditLogs` de fluStorage eran código muerto
+  (0 imports) → eliminados. `saveSessionState`/`loadSessionState` NO son duplicado
+  (localStorage UI vs IDB voz con `phase`/`history`) → ALLOW_COLLISION.
+  BACKLOG (no en esta secuencia): unificar el MODELO de sesión (dónde vive `history`,
+  si la voz migra a `useSessionPersistence`) = tarea de diseño + cambio de comportamiento + test.
 
 Vicios contra reglas propias (cada uno merece su guard):
 - IDs con `Date.now()+Math.random()` en vez de UUIDv4 (§3.6):
