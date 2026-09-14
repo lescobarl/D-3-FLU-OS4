@@ -53,6 +53,10 @@ function defaultGetContext(): AudioContextLike | null {
 /** Crea un driver WebAudio real con la factoría de contexto inyectable. */
 export function createWebAudioDriver(getContext: AudioContextFactory = defaultGetContext): AudioDriver {
   let ctx: AudioContextLike | null = null;
+  // Generación de reproducción: `stop()` la incrementa para invalidar cualquier
+  // `play()` en vuelo (p. ej. mientras el AudioContext se reanuda) y evitar que
+  // programe beeps DESPUÉS de "Detener".
+  let generation = 0;
   // Nodos activos para poder DETENER el tono (alarma sonando → stop).
   const activeNodes: Array<{
     osc: { stop: (t: number) => void; disconnect?: () => void };
@@ -70,6 +74,7 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
 
   const play = async (opts: SoundOptions = {}): Promise<void> => {
     if (typeof window === 'undefined') return;
+    const myGeneration = generation;
     try {
       ctx = getContext();
       if (!ctx) return;
@@ -79,6 +84,8 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
       const gapMs = opts.gapMs ?? 150;
       const volume = opts.volume ?? 0.4;
       if (ctx.state === 'suspended' && ctx.resume) await ctx.resume();
+      // stop() durante el resume invalida esta reproducción.
+      if (myGeneration !== generation) return;
       const stepSec = (durationMs + gapMs) / 1000;
       for (let i = 0; i < beeps; i += 1) {
         const osc = ctx.createOscillator() as {
@@ -110,7 +117,9 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
   };
 
   const stop = (): void => {
-    // Detiene y libera los osciladores programados/activos (alarma sonando).
+    // Invalida cualquier play() en vuelo y detiene/libera los osciladores
+    // programados o activos (alarma sonando).
+    generation += 1;
     while (activeNodes.length) {
       const node = activeNodes.pop();
       try {

@@ -168,6 +168,9 @@ export function useTemporalItems({
 
   // Ref de guardia para no solapar ticks asíncronos del scheduler.
   const runningRef = useRef(false);
+  // Época de timbre: `stopRinging()` la incrementa para que un tick en vuelo
+  // deje de sonar (no vuelva a llamar a play() para vencidos pendientes).
+  const stopEpochRef = useRef(0);
 
   /** Recarga las listas desde IndexedDB (ordenadas por próximo disparo).
    *  Solo expone ítems activos (status 'pending'): un ítem cancelado o
@@ -192,6 +195,7 @@ export function useTemporalItems({
   const runTick = useCallback(async (): Promise<void> => {
     if (runningRef.current) return;
     runningRef.current = true;
+    const epoch = stopEpochRef.current;
     try {
       const activeAll = await service.listActive();
       // Aislamiento por usuario: no disparar alarmas de otros usuarios.
@@ -199,12 +203,15 @@ export function useTemporalItems({
       const current = nowRef.current();
       const due = collectDueOrdered(active, current, ['pending'], limit, graceMs);
       for (const item of due) {
+        // "Detener" durante el tick: no seguir sonando otros vencidos.
+        if (stopEpochRef.current !== epoch) break;
         const next = nextOccurrence(item.trigger, item.recurrence, current);
         if (next !== null) {
           await service.rearm(item.id, current);
         } else {
           await service.complete(item.id);
         }
+        if (stopEpochRef.current !== epoch) break;
         const isAlarm = item.kind === 'alarm';
         const dueText = isAlarm ? voiceAlarmDue : voiceTimerDue;
         const dueTitle = isAlarm ? alarmsLabel : timersLabel;
@@ -225,10 +232,12 @@ export function useTemporalItems({
         if (!deliveredByVoice && typeof speakRef.current === 'function') {
           speakRef.current(dueBody, lang).catch(() => undefined);
         }
+        // "Detener" pudo ocurrir durante notify/speak: no sonar después.
+        if (stopEpochRef.current !== epoch) break;
         audioDriver.play(sound).catch(() => undefined);
         setRinging({ id: item.id, kind: item.kind, label: item.label, at: current });
       }
-      if (due.length > 0) {
+      if (due.length > 0 && stopEpochRef.current === epoch) {
         // Auto-stop configurable: si nadie pulsa "Detener", se silencia solo.
         if (ringingTimerRef.current) clearTimeout(ringingTimerRef.current);
         ringingTimerRef.current = setTimeout(() => {
@@ -321,6 +330,8 @@ export function useTemporalItems({
 
   /** Silencia lo que está sonando (no cancela el ítem pendiente). */
   const stopRinging = useCallback((): void => {
+    // Invalida el tick en vuelo: no debe sonar ningún otro vencido.
+    stopEpochRef.current += 1;
     if (ringingTimerRef.current) {
       clearTimeout(ringingTimerRef.current);
       ringingTimerRef.current = null;
