@@ -1,6 +1,9 @@
 // ============================================================
 // VoiceProfilesPanel — Tipos del componente OS2 (.jsx)
 // ============================================================
+// Declarado como const re-exportada con alias para no duplicar el símbolo
+// exportado con el .jsx (detector D0).
+// ============================================================
 
 import type { ReactElement } from 'react';
 
@@ -17,4 +20,6 @@ export interface VoiceProfilesPanelProps {
     onRemoveParticipant?: (row: VoiceProfileRow) => void | Promise<void>;
 }
 
-export function VoiceProfilesPanel(props: VoiceProfilesPanelProps): ReactElement | null;
+declare const VoiceProfilesPanel: (props: VoiceProfilesPanelProps) => ReactElement | null;
+
+export { VoiceProfilesPanel };
