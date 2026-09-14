@@ -15,6 +15,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type NoteRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 import { filterNotes, notesRemaining, type NotesFilter } from './notesList';
 
 // ------------------------------------------------------------
@@ -64,8 +65,6 @@ export function createNotesService({
 }: NotesServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: NoteRecord): NoteRecord => ({ ...row });
-
   const add = async (input: NewNoteInput): Promise<AddNoteResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
     if (!label) return { ok: false, reason: 'invalid-input' };
@@ -88,17 +87,17 @@ export function createNotesService({
   const get = async (id: string): Promise<NoteRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<NoteRecord[]> => {
     const all = await db.toArray();
-    return all.map(toRecord);
+    return all.map(copyRecord);
   };
 
   const listFiltered = async (filter: NotesFilter = 'all'): Promise<NoteRecord[]> => {
     const all = await db.toArray();
-    return filterNotes(all, filter).map(toRecord);
+    return filterNotes(all, filter).map(copyRecord);
   };
 
   const toggle = async (id: string): Promise<NoteRecord | null> => {
@@ -112,7 +111,7 @@ export function createNotesService({
     };
     await db.put(updated);
     await addAuditLog('notes.toggle', 'note', id, row.done, updated.done, 'notesService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const rename = async (id: string, label: string): Promise<NoteRecord | null> => {
@@ -128,7 +127,7 @@ export function createNotesService({
     };
     await db.put(updated);
     await addAuditLog('notes.rename', 'note', id, row.label, clean, 'notesService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const remove = async (id: string): Promise<boolean> => {

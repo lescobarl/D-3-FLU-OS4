@@ -17,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -150,8 +151,6 @@ export function createContactService({
 }: ContactServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: ContactRecord): ContactRecord => ({ ...row });
-
   const addContact = async (input: ContactInput): Promise<AddContactResult> => {
     if (!input || !input.name || !input.name.trim()) {
       return { ok: false, reason: 'invalid-input' };
@@ -192,7 +191,7 @@ export function createContactService({
       { name: record.name, birthday: record.birthday },
       'contactService',
     );
-    return { ok: true, record: toRecord(record) };
+    return { ok: true, record: copyRecord(record) };
   };
 
   const updateContact = async (id: string, patch: ContactPatch): Promise<UpdateContactResult> => {
@@ -230,13 +229,13 @@ export function createContactService({
       { name: updated.name, birthday: updated.birthday },
       'contactService',
     );
-    return { ok: true, record: toRecord(updated) };
+    return { ok: true, record: copyRecord(updated) };
   };
 
   const getContact = async (id: string): Promise<ContactRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.contacts.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const listContacts = async (): Promise<ContactRecord[]> => {
@@ -244,7 +243,7 @@ export function createContactService({
     return all
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   const removeContact = async (id: string): Promise<RemoveContactResult> => {
@@ -274,7 +273,7 @@ export function createContactService({
       .map((c) => {
         const nextBirthday = nextBirthdayKey(c.birthday!, ref);
         return {
-          record: toRecord(c),
+          record: copyRecord(c),
           nextBirthday,
           daysUntil: daysBetween(refKey, nextBirthday),
         };

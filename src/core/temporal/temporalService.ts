@@ -15,6 +15,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 import type {
   TemporalItemKind,
   TemporalItemRecord,
@@ -127,8 +128,6 @@ export function createTemporalService({
 }: TemporalServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: TemporalItemRecord): TemporalItemRecord => ({ ...row });
-
   const countActive = async (): Promise<number> => {
     const all = await db.toArray();
     return all.filter((r) => r.status === 'pending').length;
@@ -187,22 +186,22 @@ export function createTemporalService({
   const get = async (id: string): Promise<TemporalItemRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<TemporalItemRecord[]> => {
     const all = await db.toArray();
-    return all.map(toRecord);
+    return all.map(copyRecord);
   };
 
   const listActive = async (): Promise<TemporalItemRecord[]> => {
     const all = await db.toArray();
-    return all.filter((r) => r.status === 'pending').map(toRecord);
+    return all.filter((r) => r.status === 'pending').map(copyRecord);
   };
 
   const listByKind = async (kind: TemporalItemKind): Promise<TemporalItemRecord[]> => {
     const all = await db.toArray();
-    return all.filter((r) => r.kind === kind).map(toRecord);
+    return all.filter((r) => r.kind === kind).map(copyRecord);
   };
 
   const listDue = async (at?: number): Promise<TemporalItemRecord[]> => {
@@ -210,7 +209,7 @@ export function createTemporalService({
     const all = await db.toArray();
     return all
       .filter((r) => r.status === 'pending' && r.nextAt <= reference)
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   const transition = async (
@@ -220,7 +219,7 @@ export function createTemporalService({
   ): Promise<TemporalItemRecord | null> => {
     const row = await db.get(id);
     if (!row) return null;
-    if (row.status === nextStatus) return toRecord(row);
+    if (row.status === nextStatus) return copyRecord(row);
     const updated: TemporalItemRecord = {
       ...row,
       status: nextStatus,
@@ -229,7 +228,7 @@ export function createTemporalService({
     };
     await db.put(updated);
     await addAuditLog(action, 'temporalItem', id, row.status, nextStatus, 'temporalService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   /**
@@ -240,7 +239,7 @@ export function createTemporalService({
   const rearm = async (id: string, at?: number): Promise<TemporalItemRecord | null> => {
     const row = await db.get(id);
     if (!row) return null;
-    if (row.status !== 'pending') return toRecord(row);
+    if (row.status !== 'pending') return copyRecord(row);
     const reference = at ?? timestamp();
     const nextAt = nextOccurrence(row.trigger, row.recurrence, reference);
     if (nextAt === null) return null;
@@ -252,7 +251,7 @@ export function createTemporalService({
     };
     await db.put(updated);
     await addAuditLog('temporalItem.rearm', 'temporalItem', id, row.nextAt, nextAt, 'temporalService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const complete = (id: string): Promise<TemporalItemRecord | null> =>
@@ -285,10 +284,10 @@ export function createTemporalService({
       }
     }
 
-    if (!changed) return toRecord(row);
+    if (!changed) return copyRecord(row);
 
     const nextAt = firstDueAt(trigger, row.recurrence, timestamp());
-    if (nextAt === null) return toRecord(row);
+    if (nextAt === null) return copyRecord(row);
 
     const updated: TemporalItemRecord = {
       ...row,
@@ -307,7 +306,7 @@ export function createTemporalService({
       { label: updated.label, timeOfDay: updated.trigger?.timeOfDay ?? null },
       'temporalService',
     );
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const remove = async (id: string): Promise<boolean> => {

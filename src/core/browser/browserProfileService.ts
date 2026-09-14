@@ -16,6 +16,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type BrowserProfileRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -115,8 +116,6 @@ export function createBrowserProfileService({
 }: BrowserProfileServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: BrowserProfileRecord): BrowserProfileRecord => ({ ...row });
-
   const roleDefaults = (role?: string): RoleBrowserDefaults => {
     if (role && config.defaultsByRole[role]) return { ...config.defaultsByRole[role] };
     return { ...config.defaultProfile };
@@ -170,7 +169,7 @@ export function createBrowserProfileService({
       { ...updated },
       'browserProfileService',
     );
-    return { ok: true, record: toRecord(updated) };
+    return { ok: true, record: copyRecord(updated) };
   };
 
   const update = async (participantId: string, patch: BrowserProfilePatch): Promise<SaveResult> => {
@@ -197,7 +196,7 @@ export function createBrowserProfileService({
       { ...updated },
       'browserProfileService',
     );
-    return { ok: true, record: toRecord(updated) };
+    return { ok: true, record: copyRecord(updated) };
   };
 
   const reset = async (participantId: string): Promise<boolean> => {
@@ -211,7 +210,7 @@ export function createBrowserProfileService({
   const getForParticipant = async (participantId: string): Promise<BrowserProfileRecord | undefined> => {
     if (!participantId) return undefined;
     const row = await db.get(participantId);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<BrowserProfileRecord[]> => {
@@ -219,7 +218,7 @@ export function createBrowserProfileService({
     return all
       .slice()
       .sort((a, b) => (a.participantName ?? a.id).localeCompare(b.participantName ?? b.id, 'es'))
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   const resolveForSession = async (

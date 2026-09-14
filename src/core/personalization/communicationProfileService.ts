@@ -20,6 +20,7 @@ import {
   type ExplanationLevel,
 } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 import type { PersonalityTone } from '../../lib/discourseMarkers';
 
 // ------------------------------------------------------------
@@ -307,12 +308,10 @@ export function createCommunicationProfileService({
 }: CommunicationProfileServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: CommunicationProfileRecord): CommunicationProfileRecord => ({ ...row });
-
   const getForPerson = async (participantId: string): Promise<CommunicationProfileRecord | undefined> => {
     if (!participantId) return undefined;
     const row = await db.getByParticipant(participantId);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const ensure = async (
@@ -323,7 +322,7 @@ export function createCommunicationProfileService({
     if (existing) return existing;
     const record = defaultRecord(participantId, participantName, config, timestamp(), newId());
     await db.add(record);
-    return toRecord(record);
+    return copyRecord(record);
   };
 
   /**
@@ -342,7 +341,7 @@ export function createCommunicationProfileService({
       : defaultRecord(participantId, participantName, config, timestamp(), newId());
 
     if (patch.explanationLevel === undefined && patch.tone === undefined) {
-      return toRecord(base);
+      return copyRecord(base);
     }
 
     const previous = existing ? { ...existing } : undefined;
@@ -376,7 +375,7 @@ export function createCommunicationProfileService({
       updated,
       'communicationProfileService',
     );
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   /**
@@ -443,7 +442,7 @@ export function createCommunicationProfileService({
       merged,
       'communicationProfileService',
     );
-    return toRecord(merged);
+    return copyRecord(merged);
   };
 
   /**
@@ -478,7 +477,7 @@ export function createCommunicationProfileService({
     return all
       .slice()
       .sort((a, b) => (a.participantName || '').localeCompare(b.participantName || '', 'es'))
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   return {

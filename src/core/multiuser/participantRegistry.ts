@@ -17,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -175,8 +176,6 @@ export function createParticipantRegistry({
 }: ParticipantRegistryOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: ParticipantRecord): ParticipantRecord => ({ ...row });
-
   const normalizeName = (name: string): string =>
     (name || '').trim().replace(/\s+/g, ' ');
 
@@ -234,7 +233,7 @@ export function createParticipantRegistry({
     const needle = anon.name.toLowerCase();
     const all = await db.toArray();
     const found = all.find((p) => p.name.toLowerCase() === needle);
-    return found ? toRecord(found) : undefined;
+    return found ? copyRecord(found) : undefined;
   };
 
   // Reconciliación: si por una carrera anterior (StrictMode) o una versión
@@ -302,7 +301,7 @@ export function createParticipantRegistry({
         };
         await db.add(record);
         await addAuditLog('participant.seed-anonymous', 'participant', id, null, { name: record.name }, 'participantRegistry');
-        return toRecord(record);
+        return copyRecord(record);
       } finally {
         anonymousSeedInFlight = undefined;
       }
@@ -337,13 +336,13 @@ export function createParticipantRegistry({
     };
     await db.put(updated);
     await addAuditLog('participant.update', 'participant', id, previous, { name: updated.name }, 'participantRegistry');
-    return { ok: true, record: toRecord(updated) };
+    return { ok: true, record: copyRecord(updated) };
   };
 
   const get = async (id: string): Promise<ParticipantRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<ParticipantRecord[]> => {
@@ -351,7 +350,7 @@ export function createParticipantRegistry({
     return all
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   const remove = async (id: string): Promise<boolean> => {
@@ -376,7 +375,7 @@ export function createParticipantRegistry({
     const found = all.find(
       (p) => p.speakerLabel && p.speakerLabel.trim().toLowerCase() === needle,
     );
-    return found ? toRecord(found) : undefined;
+    return found ? copyRecord(found) : undefined;
   };
 
   // B9: participantes cuyo cumpleaños cae en la fecha indicada (MM-DD).
@@ -386,7 +385,7 @@ export function createParticipantRegistry({
     const all = await db.toArray();
     return all
       .filter((p) => p.birthday && p.birthday.slice(5) === key)
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   // B9: próxima ocurrencia del cumpleaños respecto a una referencia.
@@ -417,7 +416,7 @@ export function createParticipantRegistry({
     const results: ParticipantRecord[] = [];
     for (const p of all) {
       const next = nextBirthday(p.birthday, reference);
-      if (next && next.daysUntil <= config.birthdayAdvanceDays) results.push(toRecord(p));
+      if (next && next.daysUntil <= config.birthdayAdvanceDays) results.push(copyRecord(p));
     }
     return results;
   };

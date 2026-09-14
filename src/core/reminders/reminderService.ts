@@ -12,6 +12,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ReminderRecord, type ReminderStatus } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -80,8 +81,6 @@ export function createReminderService({
 }: ReminderServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: ReminderRecord): ReminderRecord => ({ ...row });
-
   const startOfDay = (value: number): number => {
     const d = new Date(value);
     d.setHours(0, 0, 0, 0);
@@ -126,17 +125,17 @@ export function createReminderService({
   const get = async (id: string): Promise<ReminderRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<ReminderRecord[]> => {
     const all = await db.toArray();
-    return all.map(toRecord);
+    return all.map(copyRecord);
   };
 
   const listPending = async (): Promise<ReminderRecord[]> => {
     const all = await db.toArray();
-    return all.filter((r) => r.status === 'pending').map(toRecord);
+    return all.filter((r) => r.status === 'pending').map(copyRecord);
   };
 
   const listDue = async (at?: number): Promise<ReminderRecord[]> => {
@@ -144,7 +143,7 @@ export function createReminderService({
     const all = await db.toArray();
     return all
       .filter((r) => r.status === 'pending' && r.dueAt <= reference)
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   // B11: un recordatorio pertenece a un autor si coincide su personId o su
@@ -166,13 +165,13 @@ export function createReminderService({
   // B11: recordatorios de un autor (pendientes o en cualquier estado).
   const listByAuthor = async (author: ReminderAuthor): Promise<ReminderRecord[]> => {
     const all = await db.toArray();
-    return all.filter((r) => matchesAuthor(r, author)).map(toRecord);
+    return all.filter((r) => matchesAuthor(r, author)).map(copyRecord);
   };
 
   // B11: solo pendientes de un autor.
   const listPendingByAuthor = async (author: ReminderAuthor): Promise<ReminderRecord[]> => {
     const all = await db.toArray();
-    return all.filter((r) => r.status === 'pending' && matchesAuthor(r, author)).map(toRecord);
+    return all.filter((r) => r.status === 'pending' && matchesAuthor(r, author)).map(copyRecord);
   };
 
   const transition = async (
@@ -182,7 +181,7 @@ export function createReminderService({
   ): Promise<ReminderRecord | null> => {
     const row = await db.get(id);
     if (!row) return null;
-    if (row.status === nextStatus) return toRecord(row);
+    if (row.status === nextStatus) return copyRecord(row);
     const updated: ReminderRecord = {
       ...row,
       status: nextStatus,
@@ -191,7 +190,7 @@ export function createReminderService({
     };
     await db.put(updated);
     await addAuditLog(action, 'reminder', id, row.status, nextStatus, 'reminderService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const complete = (id: string): Promise<ReminderRecord | null> =>
@@ -208,10 +207,10 @@ export function createReminderService({
     const row = await db.get(id);
     if (!row) return null;
     const nextText = typeof patch.text === 'string' ? patch.text.trim() : row.text;
-    if (!nextText) return toRecord(row);
+    if (!nextText) return copyRecord(row);
     const nextDueAt =
       typeof patch.dueAt === 'number' && !Number.isNaN(patch.dueAt) ? patch.dueAt : row.dueAt;
-    if (nextText === row.text && nextDueAt === row.dueAt) return toRecord(row);
+    if (nextText === row.text && nextDueAt === row.dueAt) return copyRecord(row);
     const updated: ReminderRecord = {
       ...row,
       text: nextText,
@@ -228,7 +227,7 @@ export function createReminderService({
       { text: updated.text, dueAt: updated.dueAt },
       'reminderService',
     );
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const remove = async (id: string): Promise<boolean> => {

@@ -17,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type MoodRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -124,8 +125,6 @@ export function createMoodService({
   const scaleMin = typeof config.scaleMin === 'number' ? config.scaleMin : 1;
   const scaleMax = typeof config.scaleMax === 'number' ? config.scaleMax : 5;
 
-  const toRecord = (row: MoodRecord): MoodRecord => ({ ...row });
-
   const inScale = (value: number): boolean =>
     Number.isFinite(value) && value >= scaleMin && value <= scaleMax;
 
@@ -164,7 +163,7 @@ export function createMoodService({
         { participantId: updated.participantId, date: updated.date, mood: updated.mood },
         'moodService',
       );
-      return { ok: true, record: toRecord(updated), updated: true };
+      return { ok: true, record: copyRecord(updated), updated: true };
     }
 
     if (config.maxLogsPerParticipant !== undefined) {
@@ -196,7 +195,7 @@ export function createMoodService({
       { participantId: record.participantId, date: record.date, mood: record.mood },
       'moodService',
     );
-    return { ok: true, record: toRecord(record), updated: false };
+    return { ok: true, record: copyRecord(record), updated: false };
   };
 
   const listMoods = async (participantId?: string): Promise<MoodRecord[]> => {
@@ -205,7 +204,7 @@ export function createMoodService({
     return filtered
       .slice()
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt))
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   const getMoodOn = async (
@@ -215,7 +214,7 @@ export function createMoodService({
     if (!participantId || !date || !DATE_KEY_RE.test(date)) return undefined;
     const all = await db.moodCheckIns.toArray();
     const row = all.find((m) => m.participantId === participantId && m.date === date);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const getHistory = async (participantId?: string, limit?: number): Promise<MoodRecord[]> => {

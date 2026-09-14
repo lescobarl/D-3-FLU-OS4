@@ -13,6 +13,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 import { filterItems, itemsRemaining, type ShoppingListFilter } from './shoppingList';
 
 // ------------------------------------------------------------
@@ -62,8 +63,6 @@ export function createShoppingService({
 }: ShoppingServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: ShoppingItemRecord): ShoppingItemRecord => ({ ...row });
-
   const add = async (input: NewShoppingItemInput): Promise<AddShoppingItemResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
     if (!label) return { ok: false, reason: 'invalid-input' };
@@ -86,17 +85,17 @@ export function createShoppingService({
   const get = async (id: string): Promise<ShoppingItemRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<ShoppingItemRecord[]> => {
     const all = await db.toArray();
-    return all.map(toRecord);
+    return all.map(copyRecord);
   };
 
   const listFiltered = async (filter: ShoppingListFilter = 'all'): Promise<ShoppingItemRecord[]> => {
     const all = await db.toArray();
-    return filterItems(all, filter).map(toRecord);
+    return filterItems(all, filter).map(copyRecord);
   };
 
   const toggle = async (id: string): Promise<ShoppingItemRecord | null> => {
@@ -110,7 +109,7 @@ export function createShoppingService({
     };
     await db.put(updated);
     await addAuditLog('shopping.toggle', 'shoppingItem', id, row.checked, updated.checked, 'shoppingService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const rename = async (id: string, label: string): Promise<ShoppingItemRecord | null> => {
@@ -126,7 +125,7 @@ export function createShoppingService({
     };
     await db.put(updated);
     await addAuditLog('shopping.rename', 'shoppingItem', id, row.label, clean, 'shoppingService');
-    return toRecord(updated);
+    return copyRecord(updated);
   };
 
   const remove = async (id: string): Promise<boolean> => {

@@ -17,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type HorarioRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -277,8 +278,6 @@ export function createHorarioService({
 }: HorarioServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: HorarioRecord): HorarioRecord => ({ ...row });
-
   const clampDia = (dia: number): number => {
     const n = Number(dia);
     if (!Number.isInteger(n)) return config.diaMin;
@@ -331,19 +330,19 @@ export function createHorarioService({
   const get = async (id: string): Promise<HorarioRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<HorarioRecord[]> => {
     const all = await db.toArray();
-    return all.map(toRecord);
+    return all.map(copyRecord);
   };
 
   const listByDia = async (dia: number): Promise<HorarioRecord[]> => {
     const all = await db.toArray();
     return all
       .filter((r) => clampDia(r.dia) === dia)
-      .map(toRecord)
+      .map(copyRecord)
       .sort((a, b) => toMin(a.inicio) - toMin(b.inicio));
   };
 
@@ -351,7 +350,7 @@ export function createHorarioService({
     const needle = String(materia || '').trim().toLowerCase();
     if (!needle) return [];
     const all = await db.toArray();
-    return all.filter((r) => r.materia.trim().toLowerCase().includes(needle)).map(toRecord);
+    return all.filter((r) => r.materia.trim().toLowerCase().includes(needle)).map(copyRecord);
   };
 
   const update = async (
@@ -391,7 +390,7 @@ export function createHorarioService({
     }
     await db.put(next);
     await addAuditLog('horario.update', 'horario', id, row, next, 'horarioService');
-    return toRecord(next);
+    return copyRecord(next);
   };
 
   const remove = async (id: string): Promise<boolean> => {
@@ -424,7 +423,7 @@ export function createHorarioService({
         best = r;
       }
     }
-    if (best) return toRecord(best);
+    if (best) return copyRecord(best);
 
     // Vuelta a la semana: la clase más temprana del ciclo.
     let wrapKey = Infinity;
@@ -437,7 +436,7 @@ export function createHorarioService({
         best = r;
       }
     }
-    return best ? toRecord(best) : null;
+    return best ? copyRecord(best) : null;
   };
 
   /** Clases del día (1-7) ordenadas por hora de inicio. */
@@ -447,7 +446,7 @@ export function createHorarioService({
     const all = await db.toArray();
     return all
       .filter((r) => clampDia(r.dia) === dia)
-      .map(toRecord)
+      .map(copyRecord)
       .sort((a, b) => toMin(a.inicio) - toMin(b.inicio));
   };
 

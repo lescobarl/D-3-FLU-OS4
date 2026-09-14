@@ -17,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type DiaryEntryRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
 // Tipos
@@ -107,8 +108,6 @@ export function createDiaryService({
 }: DiaryServiceOptions) {
   const timestamp = (): number => now();
 
-  const toRecord = (row: DiaryEntryRecord): DiaryEntryRecord => ({ ...row });
-
   const addEntry = async (input: DiaryEntryInput): Promise<AddDiaryResult> => {
     if (
       !input ||
@@ -150,7 +149,7 @@ export function createDiaryService({
       { date: record.date, title: record.title },
       'diaryService',
     );
-    return { ok: true, record: toRecord(record) };
+    return { ok: true, record: copyRecord(record) };
   };
 
   const updateEntry = async (id: string, patch: DiaryEntryPatch): Promise<UpdateDiaryResult> => {
@@ -185,13 +184,13 @@ export function createDiaryService({
       { date: updated.date, title: updated.title },
       'diaryService',
     );
-    return { ok: true, record: toRecord(updated) };
+    return { ok: true, record: copyRecord(updated) };
   };
 
   const getEntry = async (id: string): Promise<DiaryEntryRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.diaryEntries.get(id);
-    return row ? toRecord(row) : undefined;
+    return row ? copyRecord(row) : undefined;
   };
 
   const listEntries = async (date?: string): Promise<DiaryEntryRecord[]> => {
@@ -200,7 +199,7 @@ export function createDiaryService({
     return filtered
       .slice()
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt))
-      .map(toRecord);
+      .map(copyRecord);
   };
 
   const getHistory = async (limit?: number): Promise<DiaryEntryRecord[]> => {
