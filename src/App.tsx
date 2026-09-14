@@ -941,15 +941,22 @@ function isRedundantTextWorkspace(opts: {
  * devuelto sea COMPLETO (con defaultOffsetMs, defaultAlarmTimeOfDay y
  * defaultTimerMinutes aplicados) y el despacho no tenga que re-parcear.
  */
-function buildArbiterOptions(): Record<string, unknown> {
-    const arbiterRemindersConfig = (FLU_CONFIG as any)?.reminders || {};
+interface ArbiterOptions {
+    defaultOffsetMs: number;
+    now: number;
+    defaultAlarmTimeOfDay: string | undefined;
+    defaultTimerMinutes: number;
+}
+
+function buildArbiterOptions(): ArbiterOptions {
+    const arbiterRemindersConfig = FLU_CONFIG?.reminders || {};
     const arbiterOffsetMinutes = Number(
         arbiterRemindersConfig.defaultReminderOffsetMinutes,
     );
     const arbiterDefaultOffsetMs = (Number.isFinite(arbiterOffsetMinutes)
         ? arbiterOffsetMinutes
         : 10) * 60 * 1000;
-    const arbiterTemporalConfig = (FLU_CONFIG as any)?.temporal || {};
+    const arbiterTemporalConfig = FLU_CONFIG?.temporal || {};
     return {
         defaultOffsetMs: arbiterDefaultOffsetMs,
         now: Date.now(),
@@ -966,7 +973,7 @@ let lastActionFailed = false;
  * horario real; con documentos genéricos devuelve null (evita falsos positivos).
  */
 const scheduleAdapter = createScheduleAdapter({
-    minEntries: Number((FLU_CONFIG as any)?.horario?.ocrAdapter?.minEntries) || 2,
+    minEntries: Number(FLU_CONFIG?.horario?.ocrAdapter?.minEntries) || 2,
 });
 
 /**
@@ -1013,7 +1020,7 @@ function resolveDomainScopedIntent(
         return null;
     }
     if (domain === 'temporal') {
-        const temporalCfg = (FLU_CONFIG as any).temporal || {};
+        const temporalCfg = FLU_CONFIG.temporal || {};
         const intent = parseTemporalIntent(String(text || ''), {
             now: opts.now ?? Date.now(),
             defaultAlarmTimeOfDay: temporalCfg.defaultAlarmTimeOfDay,
@@ -1078,7 +1085,7 @@ async function dispatchArbiterIntent(
         } else if (domain === 'temporal' && typeof w.__fluHandleTemporalText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleTemporalText (temporal)');
             reply = (await w.__fluHandleTemporalText(intent)) || '';
-        } else if (domain === 'diary' && (FLU_CONFIG as any).diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
+        } else if (domain === 'diary' && FLU_CONFIG.diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleDiaryText (diary)');
             reply =
                 (await w.__fluHandleDiaryText(intent, {
@@ -1205,7 +1212,7 @@ function App() {
     // dispararía una generación PAGA nueva. `mediaGateRef` es la fuente única
     // del criterio y `requestMediaRef` la única puerta de generación.
     const mediaGateRef = useRef(
-        createMediaRequestGate(Number((FLU_CONFIG as any)?.media?.dedupWindowMs) || 120000),
+        createMediaRequestGate(Number(FLU_CONFIG?.media?.dedupWindowMs) || 120000),
     );
     const requestMediaRef = useRef<
         (tipo: 'video' | 'doc', commandText: string, prepare?: () => void) => boolean
@@ -1597,7 +1604,7 @@ function App() {
         if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
         const profile = participants.participants.find((p) => p.id === activeParticipantId);
         if (!profile?.name) return undefined;
-        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+        const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
         const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase();
         if (profile.name.trim().toLowerCase() === anonymousName) return undefined;
         return profile.name;
@@ -1927,7 +1934,7 @@ function App() {
                 const w: any = window as any;
                 try {
                     const wakeWords: string[] =
-                        ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
+                        (FLU_CONFIG?.voiceCommands?.wakeWords as string[]) || [];
                     const arbiterOptions = buildArbiterOptions();
                     lastActionFailed = false;
                     // Paso 1 — RESOLVER: cada acción del turno se re-resuelve con el
@@ -1961,8 +1968,8 @@ function App() {
                         const effectiveResult: any = arbiterResult?.matched
                             ? arbiterResult
                             : resolveDomainScopedIntent(accion?.dominio, commandText, {
-                                defaultOffsetMs: (arbiterOptions as any)?.defaultOffsetMs,
-                                now: (arbiterOptions as any)?.now,
+                                defaultOffsetMs: (arbiterOptions)?.defaultOffsetMs,
+                                now: (arbiterOptions)?.now,
                                 language: (languageRef.current as 'es' | 'en') || 'es',
                             });
                         if (effectiveResult?.matched) {
@@ -2044,7 +2051,7 @@ function App() {
                     // despachar. Este es EL ÚNICO punto donde se separa la wake word
                     // del mandato para la resolución determinista de intención.
                     const wakeWords: string[] =
-                        ((FLU_CONFIG as any)?.voiceCommands?.wakeWords as string[]) || [];
+                        (FLU_CONFIG?.voiceCommands?.wakeWords as string[]) || [];
                     // PUNTO ÚNICO DE NORMALIZACIÓN: delega en la función pura
                     // normalizeCommandForDeterministic (audioMath.js) que quita la
                     // wake word y colapsa el eco ASR para TODOS los manejadores.
@@ -2123,7 +2130,7 @@ function App() {
                         // despacha por dispatchArbiterIntent (que no tiene rama navigation):
                         // se marca el comando en `navegacion` y lo ejecuta handleNavigationCommand
                         // más abajo, por el MISMO camino que el contrato navegacion del LLM.
-                        (navegacion as any).comando = arbiterResult.action;
+                        (navegacion).comando = arbiterResult.action;
                         relayLog('LOG', 'App', `onContractResolved: navigation → comando="${arbiterResult.action}" (handleNavigationCommand)`);
                     } else {
                         reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
@@ -2274,14 +2281,14 @@ function App() {
             // FILL (`dispatchFluSearch`) es el ÚNICO escritor del estado de Buscar.
             // Limpiar aquí borraba los resultados recién pintados cuando el ASR
             // emitía más revisiones del mismo comando (barra con query, grilla vacía).
-            const comandoNavegacion = String((navegacion as any)?.comando || '').toUpperCase();
+            const comandoNavegacion = String((navegacion)?.comando || '').toUpperCase();
             const isSearchFillTurn = comandoNavegacion === 'BUSCAR' || comandoNavegacion === 'NAVEGAR';
             if (!isSearchFillTurn) dispatchFluResetSearch();
             // Foco del turno: el feed del Pizarrón salta al tipo del resultado.
             // `text` (respuesta conversacional) → vuelve a "Todo".
             {
-                const wsTipoFocus = String((workspace as any)?.tipo || '').trim().toLowerCase();
-                const navFocus = String((navegacion as any)?.comando || '').toUpperCase();
+                const wsTipoFocus = String((workspace)?.tipo || '').trim().toLowerCase();
+                const navFocus = String((navegacion)?.comando || '').toUpperCase();
                 const focusKindNow: 'video' | 'doc' | 'image' | 'text' =
                     wsTipoFocus === 'video' || navFocus === 'GENERAR_VIDEO'
                         ? 'video'
@@ -2332,7 +2339,7 @@ function App() {
                     // Horario de clases en el Pizarrón: preservar tipo + modo
                     // (semana/dia/proxima/recordatorios). Los modos válidos vienen de
                     // FLU_CONFIG.horario.modos — nada hardcodeado.
-                    const horarioConfig = (FLU_CONFIG as any).horario || {};
+                    const horarioConfig = FLU_CONFIG.horario || {};
                     const modoValido = horarioConfig.modos ? Object.keys(horarioConfig.modos) : ['semana', 'dia', 'proxima', 'recordatorios'];
                     const rawModo = String(workspace.modo || '').trim().toLowerCase();
                     const modo: HorarioModo = modoValido.includes(rawModo) ? (rawModo as HorarioModo) : 'semana';
@@ -2441,7 +2448,7 @@ function App() {
             // Idempotencia por turno: la MISMA respuesta para el mismo texto en una
             // ventana corta es una re-captura/eco → se omite (no repite el habla).
             const responseKey = buildResponseKey(String(transcript || ''), String(respuestaVoz || ''));
-            const responseWindowMs = Number((FLU_CONFIG as any)?.timing?.responseDedupWindowMs) || 8000;
+            const responseWindowMs = Number(FLU_CONFIG?.timing?.responseDedupWindowMs) || 8000;
             const nowMs = Date.now();
             const dupResponse = isDuplicateResponse(
                 lastResponseRef.current,
@@ -2461,8 +2468,8 @@ function App() {
                 !dupResponse &&
                 !juegoAction?.action &&
                 !environmentWillChange &&
-                !(resolved as any)?.fastPathGame &&
-                !(resolved as any)?.fastPathEnvironment
+                !(resolved)?.fastPathGame &&
+                !(resolved)?.fastPathEnvironment
             ) {
                 lastResponseRef.current = { key: responseKey, at: nowMs };
                 integrationStore.setLastResponse(respuestaVoz);
@@ -3106,7 +3113,7 @@ function App() {
                 const currentLang = (languageRef.current as 'es' | 'en') || 'es';
                 if (onboardingAckSpokenForRef.current !== id) {
                     onboardingAckSpokenForRef.current = id;
-                    const steps = ((FLU_CONFIG as any)?.onboarding?.steps || []) as any[];
+                    const steps = (FLU_CONFIG?.onboarding?.steps || []) as any[];
                     const completeStep = steps.find((s: any) => s.id === 'complete');
                     const name = participants.participants.find((p) => p.id === id)?.name as string;
                     const ackText = completeStep
@@ -3191,9 +3198,9 @@ function App() {
                 // El rol se deriva de la respuesta "¿Niño o adulto?"
                 // (config-driven vía multiuser.kindToRole).
                 const kind = completed.captured['kind'];
-                const kindToRole = (FLU_CONFIG as any).multiuser?.kindToRole || {};
+                const kindToRole = FLU_CONFIG.multiuser?.kindToRole || {};
                 const role = resolveKindRole(kind, kindToRole);
-                const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+                const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
                 const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
                 const normalized = name.trim().toLowerCase();
                 // Nombre = perfil anónimo por defecto: NO se registra un
@@ -3246,7 +3253,7 @@ function App() {
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
             // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
-            const remindersConfig = (FLU_CONFIG as any).reminders || {};
+            const remindersConfig = FLU_CONFIG.reminders || {};
             const offsetMinutes = Number(remindersConfig.defaultReminderOffsetMinutes);
             const defaultOffsetMs = (Number.isFinite(offsetMinutes) ? offsetMinutes : 10) * 60 * 1000;
             const isIntent =
@@ -3255,7 +3262,7 @@ function App() {
                 typeof input.action === 'string' &&
                 input.handled !== false;
             const intent = isIntent
-                ? (input as any)
+                ? (input)
                 : parseReminderIntent(String(input || ''), { defaultOffsetMs });
             if (!intent || !intent.handled) return '';
             const data = intent.data || {};
@@ -3380,14 +3387,14 @@ function App() {
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
             // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
-            const temporalConfig = (FLU_CONFIG as any).temporal || {};
+            const temporalConfig = FLU_CONFIG.temporal || {};
             const isIntent =
                 input &&
                 typeof input === 'object' &&
                 typeof input.action === 'string' &&
                 input.handled !== false;
             const intent = isIntent
-                ? (input as any)
+                ? (input)
                 : parseTemporalIntent(String(input || ''), {
                       now: Date.now(),
                       defaultAlarmTimeOfDay: temporalConfig.defaultAlarmTimeOfDay,
@@ -3401,8 +3408,8 @@ function App() {
                 case 'timer.start': {
                     const fallbackLabel =
                         data.kind === 'alarm'
-                            ? (data.trigger as any)?.timeOfDay || ''
-                            : formatDurationMs((data.trigger as any)?.durationMs || 0, lang);
+                            ? (data.trigger)?.timeOfDay || ''
+                            : formatDurationMs((data.trigger)?.durationMs || 0, lang);
                     // Idempotencia (anti pile-up): no crear una alarma IDÉNTICA
                     // (misma hora + recurrencia + etiqueta) si ya hay una pendiente.
                     // Evita que repetir el comando cree varias alarmas que suenan juntas.
@@ -3412,18 +3419,18 @@ function App() {
                             const d = new Date(ts);
                             return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                         };
-                        const trig = (data.trigger as any) || {};
+                        const trig = (data.trigger) || {};
                         const wantedTime =
                             trig.timeOfDay || (trig.kind === 'absolute' && trig.at ? hhmmOf(trig.at) : '');
-                        const wantedRec = String((data.recurrence as any)?.kind || 'once');
+                        const wantedRec = String((data.recurrence)?.kind || 'once');
                         const wantedLabel = String(data.label || fallbackLabel);
                         const duplicate = temporals.alarms.find((a) => {
                             if (a.status !== 'pending') return false;
-                            const at = (a.trigger as any) || {};
+                            const at = (a.trigger) || {};
                             const aTime =
                                 at.timeOfDay || (at.kind === 'absolute' && at.at ? hhmmOf(at.at) : '');
                             const aRec = String(
-                                (a.recurrence as any)?.kind ||
+                                (a.recurrence)?.kind ||
                                     (at.kind === 'daily' ? 'daily' : 'once'),
                             );
                             return aTime === wantedTime && aRec === wantedRec && String(a.label) === wantedLabel;
@@ -3435,8 +3442,8 @@ function App() {
                     const result = await temporals.add({
                         kind: data.kind || 'alarm',
                         label: data.label || fallbackLabel,
-                        trigger: data.trigger as any,
-                        recurrence: data.recurrence as any,
+                        trigger: data.trigger,
+                        recurrence: data.recurrence,
                     });
                     if (!result.ok) {
                         if (result.reason === 'max-active') {
@@ -3582,7 +3589,7 @@ function App() {
             });
             if (result.ok) return intent.reply;
             const voice =
-                (((FLU_CONFIG as any).deviceActions?.voice || {}) as any)[lang] || {};
+                ((FLU_CONFIG.deviceActions?.voice || {}) as any)[lang] || {};
             const fill = (tpl?: string) => String(tpl || '').replace('{name}', name);
             if (result.reason === 'missing-phone') {
                 return (
@@ -3617,7 +3624,7 @@ function App() {
     (window as any).__fluHandleNoteText = useCallback(
         async (input: any, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const notesVoice = ((FLU_CONFIG as any).notes?.voice || {}) as any;
+            const notesVoice = (FLU_CONFIG.notes?.voice || {}) as any;
             const addedMsg =
                 notesVoice.added ||
                 (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
@@ -3634,7 +3641,7 @@ function App() {
 
             let label: string | null = null;
             if (isIntent) {
-                const data = (input as any).data || {};
+                const data = (input).data || {};
                 label = data.label ? String(data.label).trim() : null;
             } else {
                 // Ruta cruda (E2E/integración/uso autónomo): parser ÚNICO de notas
@@ -3693,9 +3700,9 @@ function App() {
     (window as any).__fluHandleDiaryText = useCallback(
         async (input: any, opts?: { personId?: string; personName?: string }) => {
             // DIARIO PAUSADO: no se crean entradas hasta su reimplementación.
-            if (!(FLU_CONFIG as any).diary?.enabled) return '';
+            if (!FLU_CONFIG.diary?.enabled) return '';
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const diaryVoice = ((FLU_CONFIG as any).diary?.voice || {}) as any;
+            const diaryVoice = (FLU_CONFIG.diary?.voice || {}) as any;
             const addedMsg =
                 diaryVoice.entryAdded ||
                 (lang === 'en'
@@ -3714,7 +3721,7 @@ function App() {
 
             let content: string | null = null;
             if (isIntent) {
-                const data = (input as any).data || {};
+                const data = (input).data || {};
                 content = data.content ? String(data.content).trim() : null;
             } else {
                 const clean = String(input || '').trim();
@@ -3762,12 +3769,12 @@ function App() {
                 typeof input.action === 'string' &&
                 input.handled !== false;
             const intent = isIntent
-                ? (input as any)
+                ? (input)
                 : parseHorarioIntent(String(input || '').trim());
             if (!intent || !intent.handled) return '';
             const data = intent.data || {};
-            const voice = ((FLU_CONFIG as any).horario?.voice || {}) as any;
-            const dayLabels = ((FLU_CONFIG as any).horario?.dayLabels as string[]) || [];
+            const voice = (FLU_CONFIG.horario?.voice || {}) as any;
+            const dayLabels = (FLU_CONFIG.horario?.dayLabels as string[]) || [];
             const dayLabel = (dia?: number) =>
                 dia && dia >= 1 && dia <= 7 ? dayLabels[dia] || String(dia) : '';
 
@@ -3788,7 +3795,7 @@ function App() {
                     let fin = data.fin;
                     if (!fin) {
                         const durMin = Number(
-                            ((FLU_CONFIG as any).horario?.defaultDurationMinutes) ?? 60,
+                            (FLU_CONFIG.horario?.defaultDurationMinutes) ?? 60,
                         );
                         const startMin = toMin(inicio);
                         fin = toHHMM(startMin >= 0 ? startMin + (Number.isFinite(durMin) ? durMin : 60) : 0);
@@ -3867,7 +3874,7 @@ function App() {
         [horario, languageRef],
     );
 
-    const onboardingOverlayLabels = (FLU_CONFIG as any).onboarding?.overlay || {};
+    const onboardingOverlayLabels = FLU_CONFIG.onboarding?.overlay || {};
     const onboardingPrompt = onboarding.currentStep
         ? promptForStep(
               onboarding.currentStep,
@@ -3879,7 +3886,7 @@ function App() {
     // Selector de usuario del encabezado (dropdown persistente): perfil activo
     // + participantes registrados. No es la minipantalla "¿Quién eres?" (que se
     // eliminó); es el control de sesión del header.
-    const userPickerConfig = ((FLU_CONFIG as any).onboarding?.userPicker) || {};
+    const userPickerConfig = (FLU_CONFIG.onboarding?.userPicker) || {};
     const activeParticipantName = useMemo(() => {
         if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
         return participants.participants.find((p) => p.id === activeParticipantId)?.name;
@@ -3898,9 +3905,9 @@ function App() {
     //    adulta y variantes),
     //  - se deduplican nombres repetidos (case-insensitive).
     const onboardingUserSuggestions = useMemo(() => {
-        const skipDefaults = ((FLU_CONFIG as any).multiuser?.skipDefaults) || {};
+        const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
         const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').toLowerCase();
-        const kindStep = ((FLU_CONFIG as any).onboarding?.steps || []).find(
+        const kindStep = (FLU_CONFIG.onboarding?.steps || []).find(
             (s: any) => s.key === 'kind',
         );
         const kindTokens = new Set<string>();
@@ -3929,11 +3936,13 @@ function App() {
     const resolvedBrowserAllowlist = useMemo<string[]>(() => {
         const manual = browserProfiles.profiles.find((p) => p.id === activeParticipantId)?.allowlist;
         if (Array.isArray(manual) && manual.length) return manual;
+        const defaultsByRole: Record<string, { allowlist?: string[] }> =
+            FLU_CONFIG.browser?.defaultsByRole ?? {};
         const roleAllowlist = activeParticipant?.role
-            ? (FLU_CONFIG as any).browser?.defaultsByRole?.[activeParticipant.role]?.allowlist
+            ? defaultsByRole[activeParticipant.role]?.allowlist
             : undefined;
         if (Array.isArray(roleAllowlist) && roleAllowlist.length) return roleAllowlist;
-        const defaultAllowlist = (FLU_CONFIG as any).browser?.defaultProfile?.allowlist;
+        const defaultAllowlist = FLU_CONFIG.browser?.defaultProfile?.allowlist;
         if (Array.isArray(defaultAllowlist) && defaultAllowlist.length) return defaultAllowlist;
         return ['wikipedia.org', 'educ.ar'];
     }, [browserProfiles.profiles, activeParticipantId, activeParticipant]);
