@@ -28,6 +28,18 @@ const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
 const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
 
+// Borrado de nota por voz: "borra la nota del súper", "elimina la nota X",
+// "quita la nota de compras". El destino se normaliza (súper → 'Super').
+const NOTE_REMOVE =
+  /^(?:borra|borrar|elimina|eliminar|quita|quitar|remueve|remover|saca|sacar|delete|remove|clear)\s+(?:todas?\s+las?\s+|la\s+|el\s+|las\s+|los\s+|esa\s+|esta\s+|mi\s+)?(?:notas?|listas?)\s*(?:de\s+|del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|para\s+el\s+|para\s+la\s+|con\s+)?(.*)$/i
+
+/** Normaliza el destino: los destinos de compras se llaman 'Super' en las notas. */
+function normalizeRemoveTarget(raw = '') {
+  const norm = stripAccentsEs(raw).trim()
+  if (/^(?:super|supermercado|compras|mercado)\b/.test(norm)) return 'Super'
+  return String(raw || '').trim()
+}
+
 function stripAccentsEs(text = '') {
   return String(text || '')
     .toLowerCase()
@@ -138,4 +150,19 @@ export function parseNoteIntentText(rawText = '') {
   }
 
   return null
+}
+
+/**
+ * Parsea una frase de BORRADO de nota y devuelve { target } o null.
+ * Fuente única del reconocimiento de "borra/elimina/quita la nota X".
+ */
+export function parseNoteRemoveIntentText(rawText = '') {
+  let clean = String(rawText || '').trim()
+  clean = clean.replace(WAKE_LEAD, ' ').trim()
+  if (!clean) return null
+  const m = NOTE_REMOVE.exec(clean)
+  if (!m) return null
+  const target = normalizeRemoveTarget(m[1] ? m[1].trim() : '')
+  if (!target) return null
+  return { target }
 }

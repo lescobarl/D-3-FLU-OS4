@@ -1034,7 +1034,7 @@ interface ContractResolution {
 interface NoteVoiceIntent {
     action?: string;
     handled?: boolean;
-    data?: { label?: unknown };
+    data?: { label?: unknown; target?: unknown };
 }
 
 /** Intención estructurada de diario aceptada por el manejador de voz. */
@@ -3701,6 +3701,9 @@ function App() {
             const addedMsg =
                 notesVoice.added ||
                 (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
+            const removedMsg =
+                notesVoice.removed ||
+                (lang === 'en' ? 'Done, I removed it from your notes.' : 'Listo, lo quité de las notas.');
 
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro, que ya extrajo data.label), se ejecuta DIRECTAMENTE sin
@@ -3711,6 +3714,23 @@ function App() {
                 typeof input === 'object' &&
                 typeof input.action === 'string' &&
                 input.handled !== false;
+
+            // Borrado lógico por voz ("borra/elimina/quita la nota X"): el árbitro
+            // ya entregó data.target; se localiza y marca la nota pendiente viva
+            // (0 llamadas a IA). Fuente única del match: notesService.removeByTarget.
+            if (isIntent && input.action === 'notes.remove') {
+                const data = input.data || {};
+                const target = data.target ? String(data.target).trim() : '';
+                if (!target) return '';
+                const removedCount = await notes.removeByTarget(target);
+                lastActionFailed = removedCount === 0;
+                if (removedCount === 0) {
+                    return lang === 'en'
+                        ? "I couldn't find that note."
+                        : 'No encontré esa nota.';
+                }
+                return removedMsg;
+            }
 
             let label: string | null = null;
             if (isIntent) {

@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type NoteRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
-import { filterNotes, notesRemaining, type NotesFilter } from './notesList';
+import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter } from './notesList';
 
 // ------------------------------------------------------------
 // Tipos
@@ -65,6 +65,9 @@ export function createNotesService({
 }: NotesServiceOptions) {
   const timestamp = makeTupleTimestamp(now);
 
+  /** Fila viva: no marcada como borrada lógica (§2.9). */
+  const isLive = (row: NoteRecord): boolean => !row.sync?.deleted;
+
   const add = async (input: NewNoteInput): Promise<AddNoteResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
     if (!label) return { ok: false, reason: 'invalid-input' };
@@ -92,12 +95,12 @@ export function createNotesService({
 
   const list = async (): Promise<NoteRecord[]> => {
     const all = await db.toArray();
-    return all.map(copyRecord);
+    return all.filter(isLive).map(copyRecord);
   };
 
   const listFiltered = async (filter: NotesFilter = 'all'): Promise<NoteRecord[]> => {
     const all = await db.toArray();
-    return filterNotes(all, filter).map(copyRecord);
+    return filterNotes(all.filter(isLive), filter).map(copyRecord);
   };
 
   const toggle = async (id: string): Promise<NoteRecord | null> => {
@@ -138,6 +141,38 @@ export function createNotesService({
     return true;
   };
 
+  /** Borrado LÓGICO (§2.9): marca `sync.deleted` sin borrar la fila. */
+  const softRemove = async (id: string): Promise<NoteRecord | null> => {
+    const row = await db.get(id);
+    if (!row) return null;
+    const updated: NoteRecord = {
+      ...row,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
+    };
+    await db.put(updated);
+    await addAuditLog('notes.remove', 'note', id, row, updated, 'notesService');
+    return copyRecord(updated);
+  };
+
+  /**
+   * Borrado lógico por destino (voz "borra la nota X"): localiza las notas
+   * pendientes vivas cuyo label coincide con `target` (fuente única del match:
+   * matchNotesByTarget) y las marca borradas. Devuelve cuántas se marcaron.
+   */
+  const removeByTarget = async (target: string): Promise<number> => {
+    const clean = typeof target === 'string' ? target.trim() : '';
+    if (!clean) return 0;
+    const all = await db.toArray();
+    const matches = matchNotesByTarget(all.filter(isLive), clean);
+    let count = 0;
+    for (const match of matches) {
+      const updated = await softRemove(match.id);
+      if (updated) count += 1;
+    }
+    return count;
+  };
+
   /** Marca todas las notas como pendientes (no hechas). */
   const uncheckAll = async (): Promise<number> => {
     const all = await db.toArray();
@@ -173,7 +208,7 @@ export function createNotesService({
 
   const remaining = async (): Promise<number> => {
     const all = await db.toArray();
-    return notesRemaining(all);
+    return notesRemaining(all.filter(isLive));
   };
 
   return {
@@ -184,6 +219,8 @@ export function createNotesService({
     toggle,
     rename,
     remove,
+    softRemove,
+    removeByTarget,
     uncheckAll,
     clearDone,
     remaining,

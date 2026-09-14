@@ -48,6 +48,10 @@ export interface NotesActions {
   toggle: (id: string) => Promise<NoteRecord | null>;
   rename: (id: string, label: string) => Promise<NoteRecord | null>;
   remove: (id: string) => Promise<boolean>;
+  /** Borrado lógico (§2.9): marca `sync.deleted` sin borrar la fila. */
+  softRemove: (id: string) => Promise<NoteRecord | null>;
+  /** Borrado lógico por destino (voz "borra la nota X"); devuelve cuántas marcó. */
+  removeByTarget: (target: string) => Promise<number>;
   uncheckAll: () => Promise<number>;
   clearDone: () => Promise<number>;
 }
@@ -162,6 +166,26 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     [service, refresh],
   );
 
+  /** Borrado lógico por id y refresca. */
+  const softRemove = useCallback(
+    async (id: string): Promise<NoteRecord | null> => {
+      const updated = await service.softRemove(id);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
+  /** Borrado lógico por destino (voz) y refresca. */
+  const removeByTarget = useCallback(
+    async (target: string): Promise<number> => {
+      const count = await service.removeByTarget(target);
+      if (count > 0) await refresh();
+      return count;
+    },
+    [service, refresh],
+  );
+
   /** Desmarca todas las notas pendientes y refresca. */
   const uncheckAll = useCallback(async (): Promise<number> => {
     const count = await service.uncheckAll();
@@ -187,6 +211,8 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     toggle,
     rename,
     remove,
+    softRemove,
+    removeByTarget,
     uncheckAll,
     clearDone,
   };

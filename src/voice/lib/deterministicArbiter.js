@@ -20,7 +20,7 @@
 
 import { resolveConfigCommandFromText } from './configCommands.js'
 import { resolveGameCommandFromText } from './gameCommands.js'
-import { parseNoteIntentText } from './noteIntentParser.js'
+import { parseNoteIntentText, parseNoteRemoveIntentText } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
@@ -89,6 +89,10 @@ function resolveChannelForNavigation(commandId = '') {
 // específico que el apunta genérico de nota ("anota {texto}"), así que el diario
 // se evalúa ANTES que la nota para que "anota X en el diario" se enrute bien.
 function recognizeNoteIntent(text = '') {
+  const removal = parseNoteRemoveIntentText(text)
+  if (removal && removal.target) {
+    return { handled: true, action: 'notes.remove', data: { target: removal.target } }
+  }
   const parsed = parseNoteIntentText(text)
   if (!parsed || !parsed.label) return null
   return { handled: true, action: 'notes.add', data: { label: parsed.label } }

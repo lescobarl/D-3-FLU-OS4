@@ -100,6 +100,25 @@ export function notesForPerson(items: readonly Note[], personId?: string): Note[
 }
 
 /**
+ * Notas PENDIENTES cuyo label coincide con `target` (sin acentos, substring).
+ * Fuente única del match para el borrado de nota por voz ("borra la nota X").
+ */
+export function matchNotesByTarget<T extends { label: string; done: boolean }>(
+  items: readonly T[],
+  target: string,
+): T[] {
+  const normalize = (value: string): string =>
+    String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  const needle = normalize(target);
+  if (!needle) return [];
+  return items.filter((note) => !note.done && normalize(note.label).includes(needle));
+}
+
+/**
  * Aísla notas por usuario: `scope = participantId || 'global'`; una nota sin
  * `personId` se considera del alcance 'global' (legacy). A no ve B.
  */
