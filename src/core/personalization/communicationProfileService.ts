@@ -18,8 +18,8 @@ import {
   addAuditLog,
   type CommunicationProfileRecord,
   type ExplanationLevel,
-  type SyncTuple,
 } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 import type { PersonalityTone } from '../../lib/discourseMarkers';
 
 // ------------------------------------------------------------
@@ -309,17 +309,6 @@ export function createCommunicationProfileService({
 
   const toRecord = (row: CommunicationProfileRecord): CommunicationProfileRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) {
-      return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    }
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const getForPerson = async (participantId: string): Promise<CommunicationProfileRecord | undefined> => {
     if (!participantId) return undefined;
     const row = await db.getByParticipant(participantId);
@@ -374,7 +363,7 @@ export function createCommunicationProfileService({
       confidence: computeProfileConfidence(Math.max(1, base.observationCount), 'manual'),
       updatedAt: timestamp(),
       // Creación nueva inicia en revisión 1 (igual que ensure); actualización sube.
-      sync: existing ? buildSync(base.sync) : buildSync(),
+      sync: existing ? buildSyncTuple(base.sync, timestamp()) : buildSyncTuple(undefined, timestamp()),
     };
 
     if (existing) await db.put(updated);
@@ -406,7 +395,7 @@ export function createCommunicationProfileService({
       source: hasAuto ? 'auto' : 'default',
       confidence: computeProfileConfidence(row.observationCount, hasAuto ? 'auto' : 'default'),
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     // Resolución sobre el registro YA sin manual (no sobre el original con manual).
     updated.explanationLevel = resolveExplanationLevel(updated, config.defaultExplanationLevel);

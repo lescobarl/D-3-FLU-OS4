@@ -19,8 +19,8 @@ import {
   type GoalCheckInRecord,
   type GoalRecord,
   type GoalStatus,
-  type SyncTuple,
 } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -159,15 +159,6 @@ export function createHabitsService({
   const toGoal = (row: GoalRecord): GoalRecord => ({ ...row });
   const toCheckIn = (row: GoalCheckInRecord): GoalCheckInRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const defaultTargetDays =
     typeof config.defaultTargetDays === 'number' ? config.defaultTargetDays : undefined;
 
@@ -205,7 +196,7 @@ export function createHabitsService({
       unit: input.unit,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.goals.add(record);
     await addAuditLog(
@@ -309,7 +300,7 @@ export function createHabitsService({
         done: input.done,
         note: input.note,
         updatedAt: timestamp(),
-        sync: buildSync(existing.sync),
+        sync: buildSyncTuple(existing.sync, timestamp()),
       };
       await db.checkIns.put(updated);
       await addAuditLog(
@@ -335,7 +326,7 @@ export function createHabitsService({
       note: input.note,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.checkIns.add(record);
     await addAuditLog(
@@ -362,7 +353,7 @@ export function createHabitsService({
       ...goal,
       status,
       updatedAt: timestamp(),
-      sync: buildSync(goal.sync),
+      sync: buildSyncTuple(goal.sync, timestamp()),
     };
     await db.goals.put(updated);
     await addAuditLog(

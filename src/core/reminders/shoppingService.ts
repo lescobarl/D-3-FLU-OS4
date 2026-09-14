@@ -11,7 +11,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type ShoppingItemRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 import { filterItems, itemsRemaining, type ShoppingListFilter } from './shoppingList';
 
 // ------------------------------------------------------------
@@ -63,15 +64,6 @@ export function createShoppingService({
 
   const toRecord = (row: ShoppingItemRecord): ShoppingItemRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const add = async (input: NewShoppingItemInput): Promise<AddShoppingItemResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
     if (!label) return { ok: false, reason: 'invalid-input' };
@@ -84,7 +76,7 @@ export function createShoppingService({
       personName: input.personName,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.add(record);
     await addAuditLog('shopping.add', 'shoppingItem', record.id, null, { label: record.label }, 'shoppingService');
@@ -114,7 +106,7 @@ export function createShoppingService({
       ...row,
       checked: !row.checked,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog('shopping.toggle', 'shoppingItem', id, row.checked, updated.checked, 'shoppingService');
@@ -130,7 +122,7 @@ export function createShoppingService({
       ...row,
       label: clean,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog('shopping.rename', 'shoppingItem', id, row.label, clean, 'shoppingService');
@@ -155,7 +147,7 @@ export function createShoppingService({
         ...item,
         checked: false,
         updatedAt: t,
-        sync: buildSync(item.sync),
+        sync: buildSyncTuple(item.sync, timestamp()),
       };
       await db.put(updated);
     }

@@ -15,7 +15,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type ParticipantRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -176,15 +177,6 @@ export function createParticipantRegistry({
 
   const toRecord = (row: ParticipantRecord): ParticipantRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const normalizeName = (name: string): string =>
     (name || '').trim().replace(/\s+/g, ' ');
 
@@ -226,7 +218,7 @@ export function createParticipantRegistry({
       participationStyle: input.participationStyle,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.add(record);
     await addAuditLog('participant.register', 'participant', id, null, { name: record.name }, 'participantRegistry');
@@ -306,7 +298,7 @@ export function createParticipantRegistry({
           role: anon.role,
           createdAt: t,
           updatedAt: t,
-          sync: buildSync(),
+          sync: buildSyncTuple(undefined, timestamp()),
         };
         await db.add(record);
         await addAuditLog('participant.seed-anonymous', 'participant', id, null, { name: record.name }, 'participantRegistry');
@@ -341,7 +333,7 @@ export function createParticipantRegistry({
       ttsPitch: patch.ttsPitch === undefined ? row.ttsPitch : patch.ttsPitch,
       participationStyle: patch.participationStyle === undefined ? row.participationStyle : patch.participationStyle,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog('participant.update', 'participant', id, previous, { name: updated.name }, 'participantRegistry');

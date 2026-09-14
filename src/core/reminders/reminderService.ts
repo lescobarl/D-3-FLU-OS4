@@ -10,7 +10,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type ReminderRecord, type ReminderStatus, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type ReminderRecord, type ReminderStatus } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -81,15 +82,6 @@ export function createReminderService({
 
   const toRecord = (row: ReminderRecord): ReminderRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const startOfDay = (value: number): number => {
     const d = new Date(value);
     d.setHours(0, 0, 0, 0);
@@ -124,7 +116,7 @@ export function createReminderService({
       status: 'pending',
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.add(record);
     await addAuditLog('reminder.create', 'reminder', id, null, { text: record.text, dueAt: record.dueAt }, 'reminderService');
@@ -195,7 +187,7 @@ export function createReminderService({
       ...row,
       status: nextStatus,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog(action, 'reminder', id, row.status, nextStatus, 'reminderService');
@@ -225,7 +217,7 @@ export function createReminderService({
       text: nextText,
       dueAt: nextDueAt,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog(

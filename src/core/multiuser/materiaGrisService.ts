@@ -10,7 +10,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type MateriaGrisRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type MateriaGrisRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -80,15 +81,6 @@ export function createMateriaGrisService({
 
   const toRecord = (row: MateriaGrisRecord): MateriaGrisRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const awardPoints = async (input: AwardInput): Promise<AwardResult> => {
     if (!input || !input.participantId || !input.action) {
       return { ok: false, reason: 'invalid-input' };
@@ -115,7 +107,7 @@ export function createMateriaGrisService({
       points,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.add(record);
     await addAuditLog(

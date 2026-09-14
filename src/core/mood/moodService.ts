@@ -15,7 +15,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type MoodRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type MoodRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -125,15 +126,6 @@ export function createMoodService({
 
   const toRecord = (row: MoodRecord): MoodRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const inScale = (value: number): boolean =>
     Number.isFinite(value) && value >= scaleMin && value <= scaleMax;
 
@@ -161,7 +153,7 @@ export function createMoodService({
         mood: input.mood,
         note: input.note,
         updatedAt: timestamp(),
-        sync: buildSync(existing.sync),
+        sync: buildSyncTuple(existing.sync, timestamp()),
       };
       await db.moodCheckIns.put(updated);
       await addAuditLog(
@@ -193,7 +185,7 @@ export function createMoodService({
       note: input.note,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.moodCheckIns.add(record);
     await addAuditLog(

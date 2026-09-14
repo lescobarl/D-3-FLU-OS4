@@ -13,7 +13,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type NoteRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type NoteRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 import { filterNotes, notesRemaining, type NotesFilter } from './notesList';
 
 // ------------------------------------------------------------
@@ -65,15 +66,6 @@ export function createNotesService({
 
   const toRecord = (row: NoteRecord): NoteRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const add = async (input: NewNoteInput): Promise<AddNoteResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
     if (!label) return { ok: false, reason: 'invalid-input' };
@@ -86,7 +78,7 @@ export function createNotesService({
       personName: input.personName,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.add(record);
     await addAuditLog('notes.add', 'note', record.id, null, { label: record.label }, 'notesService');
@@ -116,7 +108,7 @@ export function createNotesService({
       ...row,
       done: !row.done,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog('notes.toggle', 'note', id, row.done, updated.done, 'notesService');
@@ -132,7 +124,7 @@ export function createNotesService({
       ...row,
       label: clean,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog('notes.rename', 'note', id, row.label, clean, 'notesService');
@@ -157,7 +149,7 @@ export function createNotesService({
         ...note,
         done: false,
         updatedAt: t,
-        sync: buildSync(note.sync),
+        sync: buildSyncTuple(note.sync, timestamp()),
       };
       await db.put(updated);
     }

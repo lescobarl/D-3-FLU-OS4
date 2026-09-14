@@ -14,7 +14,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type BrowserProfileRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type BrowserProfileRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -116,15 +117,6 @@ export function createBrowserProfileService({
 
   const toRecord = (row: BrowserProfileRecord): BrowserProfileRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const roleDefaults = (role?: string): RoleBrowserDefaults => {
     if (role && config.defaultsByRole[role]) return { ...config.defaultsByRole[role] };
     return { ...config.defaultProfile };
@@ -156,7 +148,7 @@ export function createBrowserProfileService({
       homeTiles: [],
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     const updated: BrowserProfileRecord = {
       ...record,
@@ -167,7 +159,7 @@ export function createBrowserProfileService({
       language: overrides.language ?? record.language,
       homeTiles: overrides.homeTiles ?? record.homeTiles,
       updatedAt: t,
-      sync: buildSync(existing?.sync),
+      sync: buildSyncTuple(existing?.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog(
@@ -194,7 +186,7 @@ export function createBrowserProfileService({
       language: patch.language ?? row.language,
       homeTiles: patch.homeTiles ?? row.homeTiles,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog(

@@ -13,6 +13,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type SyncTuple } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -78,17 +79,6 @@ export function createCatalogRegistry<T>({
 
     const cloneData = (data: T): T => structuredClone(data);
 
-    const buildSync = (previous?: SyncTuple): SyncTuple => {
-        if (!previous) {
-            return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-        }
-        return {
-            revision: previous.revision + 1,
-            updated_at: new Date(timestamp()).toISOString(),
-            deleted: previous.deleted,
-        };
-    };
-
     const toRecord = (row: CatalogRecord<T>): CatalogRecord<T> => ({
         ...row,
         data: cloneData(row.data),
@@ -116,7 +106,7 @@ export function createCatalogRegistry<T>({
             data: cloneData(data),
             createdAt: t,
             updatedAt: t,
-            sync: buildSync(),
+            sync: buildSyncTuple(undefined, timestamp()),
         };
         await db.add(record);
         await addAuditLog(`${entity}.register`, entity, canonicalId, null, { data: record.data }, 'catalogRegistry');
@@ -145,7 +135,7 @@ export function createCatalogRegistry<T>({
             ...existing,
             data: cloneData(data),
             updatedAt: timestamp(),
-            sync: buildSync(existing.sync),
+            sync: buildSyncTuple(existing.sync, timestamp()),
         };
         await db.put(updated);
         await addAuditLog(`${entity}.update`, entity, targetId, previous.data, { data: updated.data }, 'catalogRegistry');

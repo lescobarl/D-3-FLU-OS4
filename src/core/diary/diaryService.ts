@@ -15,7 +15,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type DiaryEntryRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type DiaryEntryRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -108,15 +109,6 @@ export function createDiaryService({
 
   const toRecord = (row: DiaryEntryRecord): DiaryEntryRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const addEntry = async (input: DiaryEntryInput): Promise<AddDiaryResult> => {
     if (
       !input ||
@@ -147,7 +139,7 @@ export function createDiaryService({
       participantName: input.participantName,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.diaryEntries.add(record);
     await addAuditLog(
@@ -182,7 +174,7 @@ export function createDiaryService({
       participantId: patch.participantId !== undefined ? patch.participantId : existing.participantId,
       participantName: patch.participantName !== undefined ? patch.participantName : existing.participantName,
       updatedAt: timestamp(),
-      sync: buildSync(existing.sync),
+      sync: buildSyncTuple(existing.sync, timestamp()),
     };
     await db.diaryEntries.put(updated);
     await addAuditLog(

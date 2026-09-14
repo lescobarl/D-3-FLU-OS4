@@ -15,7 +15,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type HorarioRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type HorarioRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -278,15 +279,6 @@ export function createHorarioService({
 
   const toRecord = (row: HorarioRecord): HorarioRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const clampDia = (dia: number): number => {
     const n = Number(dia);
     if (!Number.isInteger(n)) return config.diaMin;
@@ -326,7 +318,7 @@ export function createHorarioService({
       personId: (input as { personId?: string }).personId,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     if (tipo) record.tipo = tipo;
     await db.add(record);
@@ -390,7 +382,7 @@ export function createHorarioService({
         ? config.colores.includes(String(patch.color || '')) ? String(patch.color).trim() : row.color
         : row.color,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     if (patch.tipo !== undefined) {
       const tipo = String(patch.tipo).trim();

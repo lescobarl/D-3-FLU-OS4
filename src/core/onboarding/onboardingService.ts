@@ -15,6 +15,7 @@
 // ============================================================
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type OnboardingStateRecord, type SyncTuple } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { createInitialState, type OnboardingState } from './onboardingFlow';
 
@@ -139,17 +140,6 @@ export function createOnboardingService({
   now = () => Date.now(),
   newId = uuidv4,
 }: OnboardingServiceOptions): OnboardingService {
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) {
-      return { revision: 1, updated_at: new Date(now()).toISOString(), deleted: false };
-    }
-    return {
-      ...previous,
-      revision: previous.revision + 1,
-      updated_at: new Date(now()).toISOString(),
-    };
-  };
-
   const load = async (id: string): Promise<OnboardingState> => {
     const record = await db.get(id);
     return onboardingStateFromRecord(record);
@@ -157,7 +147,7 @@ export function createOnboardingService({
 
   const save = async (id: string, state: OnboardingState): Promise<void> => {
     const previous = await db.get(id);
-    const record = createOnboardingRecord(id, state, now(), buildSync(previous?.sync));
+    const record = createOnboardingRecord(id, state, now(), buildSyncTuple(previous?.sync, now()));
     await db.put(record);
     await addAuditLog(
       'onboarding.save',

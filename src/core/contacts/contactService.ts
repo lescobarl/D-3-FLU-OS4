@@ -15,7 +15,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type ContactRecord, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -151,15 +152,6 @@ export function createContactService({
 
   const toRecord = (row: ContactRecord): ContactRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const addContact = async (input: ContactInput): Promise<AddContactResult> => {
     if (!input || !input.name || !input.name.trim()) {
       return { ok: false, reason: 'invalid-input' };
@@ -189,7 +181,7 @@ export function createContactService({
       favorite: input.favorite,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.contacts.add(record);
     await addAuditLog(
@@ -227,7 +219,7 @@ export function createContactService({
       notes: patch.notes !== undefined ? patch.notes : existing.notes,
       favorite: patch.favorite !== undefined ? patch.favorite : existing.favorite,
       updatedAt: timestamp(),
-      sync: buildSync(existing.sync),
+      sync: buildSyncTuple(existing.sync, timestamp()),
     };
     await db.contacts.put(updated);
     await addAuditLog(

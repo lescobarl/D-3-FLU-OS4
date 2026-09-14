@@ -13,7 +13,8 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type SyncTuple } from '../db/fluDatabase';
+import { addAuditLog } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 import type {
   TemporalItemKind,
   TemporalItemRecord,
@@ -128,15 +129,6 @@ export function createTemporalService({
 
   const toRecord = (row: TemporalItemRecord): TemporalItemRecord => ({ ...row });
 
-  const buildSync = (previous?: SyncTuple): SyncTuple => {
-    if (!previous) return { revision: 1, updated_at: new Date(timestamp()).toISOString(), deleted: false };
-    return {
-      revision: previous.revision + 1,
-      updated_at: new Date(timestamp()).toISOString(),
-      deleted: previous.deleted,
-    };
-  };
-
   const countActive = async (): Promise<number> => {
     const all = await db.toArray();
     return all.filter((r) => r.status === 'pending').length;
@@ -178,7 +170,7 @@ export function createTemporalService({
       personId: (input as { personId?: string }).personId,
       createdAt: t,
       updatedAt: t,
-      sync: buildSync(),
+      sync: buildSyncTuple(undefined, timestamp()),
     };
     await db.add(record);
     await addAuditLog(
@@ -233,7 +225,7 @@ export function createTemporalService({
       ...row,
       status: nextStatus,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog(action, 'temporalItem', id, row.status, nextStatus, 'temporalService');
@@ -256,7 +248,7 @@ export function createTemporalService({
       ...row,
       nextAt,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog('temporalItem.rearm', 'temporalItem', id, row.nextAt, nextAt, 'temporalService');
@@ -304,7 +296,7 @@ export function createTemporalService({
       trigger,
       nextAt,
       updatedAt: timestamp(),
-      sync: buildSync(row.sync),
+      sync: buildSyncTuple(row.sync, timestamp()),
     };
     await db.put(updated);
     await addAuditLog(

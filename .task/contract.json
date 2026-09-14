@@ -1,15 +1,30 @@
 {
-  "id": "T-VOICE-LIVE-SINGLE-WRITER",
-  "objective": "La frase viva (liveTranscript) tiene UN solo escritor y UNA sola fuente; no alterna ni cicla.",
+  "id": "T-SYNC-TUPLE-SINGLE-SOURCE",
+  "objective": "buildSyncTuple en un solo lugar (tupla de sync §3.7); los 15 servicios dejan de copiar buildSync.",
   "base": "HEAD",
   "ignore": [".task/**", "scripts/task-gate*.mjs", "kilo.json", ".github/**"],
   "allow": [
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "tests/voiceLiveSingleWriter.test.ts"
+    "src/core/db/syncTuple.ts",
+    "tests/syncTupleSingleSource.test.ts",
+    "src/core/browser/browserProfileService.ts",
+    "src/core/catalogs/catalogRegistry.ts",
+    "src/core/contacts/contactService.ts",
+    "src/core/diary/diaryService.ts",
+    "src/core/habits/habitService.ts",
+    "src/core/horario/horarioService.ts",
+    "src/core/mood/moodService.ts",
+    "src/core/multiuser/materiaGrisService.ts",
+    "src/core/multiuser/participantRegistry.ts",
+    "src/core/notes/notesService.ts",
+    "src/core/onboarding/onboardingService.ts",
+    "src/core/personalization/communicationProfileService.ts",
+    "src/core/reminders/reminderService.ts",
+    "src/core/reminders/shoppingService.ts",
+    "src/core/temporal/temporalService.ts"
   ],
-  "maxFiles": 5,
-  "maxLines": 400,
-  "dod": "npx vitest run tests/voiceLiveSingleWriter.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/voiceLiveSingleWriter.test.ts --reporter=dot",
+  "maxFiles": 20,
+  "maxLines": 500,
+  "dod": "npx vitest run tests/syncTupleSingleSource.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/syncTupleSingleSource.test.ts --reporter=dot",
   "guardExpect": "green"
 }
