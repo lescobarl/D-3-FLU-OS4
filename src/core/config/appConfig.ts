@@ -42,6 +42,36 @@ declare global {
 }
 
 // -----------------------------------------------------------
+// Config compartida server-safe (fuente única de defaults/lógica)
+// -----------------------------------------------------------
+// El CLIENTE sigue leyendo import.meta.env.VITE_X ESTÁTICO más abajo;
+// los defaults y la lógica pura (isLocalTextEndpoint, prioridad de keys,
+// URL/modelo OpenRouter) viven en sharedConfig.ts y se re-exportan aquí
+// para no romper a los importadores existentes.
+// -----------------------------------------------------------
+import {
+    OPENROUTER_DEFAULTS,
+    FALAI_DEFAULTS,
+    POLLINATIONS_DEFAULTS,
+    joinApiUrl,
+    buildPollinationsImageUrl,
+    resolveTextApiKeyFromEnv,
+} from './sharedConfig';
+
+export {
+    WORKSPACE_TIPOS,
+    VALID_VISUAL_TIPOS,
+    TIMEOUT_POLICY_MS,
+    isLocalTextEndpoint,
+    DEFAULT_ADVANCED_CONFIG,
+    AVAILABLE_TRAITS,
+    AVAILABLE_TONES,
+    FLU_PROFILES,
+    getProfileById,
+    getDefaultProfile,
+} from './sharedConfig';
+
+// -----------------------------------------------------------
 // Storage Keys
 // -----------------------------------------------------------
 export const STORAGE_KEYS = {
@@ -184,16 +214,16 @@ export const DEEPSEEK_CONFIG = {
 // (TEXT_API_URL / TEXT_MODEL / TEXT_API_KEY).
 // -----------------------------------------------------------
 export const OPENROUTER_CONFIG = {
-    MODEL: import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite',
-    API_URL: import.meta.env.VITE_OPENROUTER_URL || 'https://openrouter.ai/api/v1',
+    MODEL: import.meta.env.VITE_OPENROUTER_MODEL || OPENROUTER_DEFAULTS.MODEL,
+    API_URL: import.meta.env.VITE_OPENROUTER_URL || OPENROUTER_DEFAULTS.API_URL,
     API_KEY: import.meta.env.VITE_OPENROUTER_API_KEY || '',
-    DEFAULT_TEMPERATURE: 0.7,
-    DEFAULT_MAX_TOKENS: 1200,
+    DEFAULT_TEMPERATURE: OPENROUTER_DEFAULTS.DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_TOKENS: OPENROUTER_DEFAULTS.DEFAULT_MAX_TOKENS,
     /** Modelo de la Image API de OpenRouter (respaldo real cuando Pollinations falla). */
-    IMAGE_MODEL: import.meta.env.VITE_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
+    IMAGE_MODEL: import.meta.env.VITE_OPENROUTER_IMAGE_MODEL || OPENROUTER_DEFAULTS.IMAGE_MODEL,
     /** Endpoint relativo de la Image API de OpenRouter (relativo a API_URL). */
-    IMAGE_ENDPOINT: '/images',
-    IMAGE_ASPECT_RATIO: '16:9',
+    IMAGE_ENDPOINT: OPENROUTER_DEFAULTS.IMAGE_ENDPOINT,
+    IMAGE_ASPECT_RATIO: OPENROUTER_DEFAULTS.IMAGE_ASPECT_RATIO,
 } as const;
 
 // -----------------------------------------------------------
@@ -204,14 +234,14 @@ export const OPENROUTER_CONFIG = {
 // El endpoint/modelo/key salen de env (VITE_*) con defaults seguros.
 export const FALAI_CONFIG = {
     /** Endpoint del servicio de video (queue de fal.ai). */
-    VIDEO_ENDPOINT: import.meta.env.VITE_FALAI_VIDEO_ENDPOINT || 'https://queue.fal.run',
+    VIDEO_ENDPOINT: import.meta.env.VITE_FALAI_VIDEO_ENDPOINT || FALAI_DEFAULTS.VIDEO_ENDPOINT,
     /** Modelo text-to-video. Default BARATO: Wan 2.5 ($0.05/s en 480p). */
-    VIDEO_MODEL: import.meta.env.VITE_FALAI_VIDEO_MODEL || 'fal-ai/wan-25-preview/text-to-video',
+    VIDEO_MODEL: import.meta.env.VITE_FALAI_VIDEO_MODEL || FALAI_DEFAULTS.VIDEO_MODEL,
     /** Clave de fal.ai (nunca se expone al browser: se resuelve en servidor). */
     API_KEY: import.meta.env.VITE_FALAI_API_KEY || '',
-    ASPECT_RATIO: '16:9',
+    ASPECT_RATIO: FALAI_DEFAULTS.ASPECT_RATIO,
     /** Tiempo máximo de espera del job (ms). */
-    POLL_TIMEOUT_MS: 180_000,
+    POLL_TIMEOUT_MS: FALAI_DEFAULTS.POLL_TIMEOUT_MS,
 } as const;
 
 // -----------------------------------------------------------
@@ -225,49 +255,6 @@ export const FALAI_CONFIG = {
 // Este timeout ampliado se aplica SOLO a la generación de documentos/video
 // (Rule #1: NO HARDCODE — centralizado aquí).
 export const GENERATION_TIMEOUT_MS = 120_000;
-
-// -----------------------------------------------------------
-// Timeout Policy (V12 — delays de política, regla #1: NO HARDCODE)
-// -----------------------------------------------------------
-// Cada delay de política (UI, red y sondeo de jobs) vive aquí como constante
-// nombrada; los sitios de uso no queman el número literal (setTimeout con
-// literal >=1000 ms). Conserva exactamente el valor previo de cada sitio.
-export const TIMEOUT_POLICY_MS = {
-    /** Limpieza de listeners tras onboarding sin gesto del usuario (App.tsx). */
-    onboardingGestureCleanup: 10_000,
-    /** Revocación diferida del ObjectURL tras descargar un documento. */
-    documentObjectUrlRevoke: 5_000,
-    /** Duración del toast efímero del pizarrón. */
-    pizarronToast: 4_000,
-    /** Aborto de la sonda HEAD de salud de servicios de IA. */
-    healthProbeAbort: 5_000,
-    /** Aborto del ping de conectividad de red. */
-    networkPingAbort: 3_000,
-    /** Re-chequeo de la acción sostenida del avatar mientras suena una canción. */
-    sustainedActionRecheck: 1_000,
-    /** Espera entre sondeos del job de video de fal.ai. */
-    falVideoPoll: 3_000,
-    /** Aborto del fetch del video de fal.ai (job largo). */
-    falVideoFetchAbort: 200_000,
-} as const;
-
-
-// -----------------------------------------------------------
-// Shared Domain Constants (Rule #1: NO HARDCODE)
-// -----------------------------------------------------------
-// Single source of truth for workspace "tipo" values and the STT
-// dev-server URL, previously duplicated across:
-//   - src/services/gemini.ts
-//   - src/services/deepseek.ts
-//   - src/voice/lib/gemini.js
-//   - src/voice/lib/fluConfig.js / transcriptConfig.js
-// -----------------------------------------------------------
-
-/** Valores válidos para workspace.tipo (contrato FLU). */
-export const WORKSPACE_TIPOS: readonly string[] = ['text', 'image_prompt', 'diagram', '3d', 'horario', 'doc', 'video'];
-
-/** Tipos visuales que activan generación de imagen (Pollinations). */
-export const VALID_VISUAL_TIPOS: readonly string[] = ['image_prompt', 'diagram', '3d'];
 
 // -----------------------------------------------------------
 // Device Actions — WhatsApp web base (Rule #1: NO HARDCODE)
@@ -286,10 +273,10 @@ export const DEVICE_ACTIONS_CONFIG = {
 // Pollinations.ai Image Generation
 // -----------------------------------------------------------
 export const POLLINATIONS_CONFIG = {
-    BASE_URL: import.meta.env.VITE_POLLINATIONS_URL || 'https://image.pollinations.ai/prompt',
-    DEFAULT_WIDTH: 1024,
-    DEFAULT_HEIGHT: 768,
-    DEFAULT_PARAMS: 'nologo=true',
+    BASE_URL: import.meta.env.VITE_POLLINATIONS_URL || POLLINATIONS_DEFAULTS.BASE_URL,
+    DEFAULT_WIDTH: POLLINATIONS_DEFAULTS.DEFAULT_WIDTH,
+    DEFAULT_HEIGHT: POLLINATIONS_DEFAULTS.DEFAULT_HEIGHT,
+    DEFAULT_PARAMS: POLLINATIONS_DEFAULTS.DEFAULT_PARAMS,
 } as const;
 
 // -----------------------------------------------------------
@@ -347,232 +334,6 @@ export const DEFAULT_VOICE_CONFIG = {
     pitch: 1.0,
     volume: 1.0,
 };
-
-/**
- * Valores por defecto para la configuración avanzada.
- * NOTE: Uses inline literals to avoid hoisting issues with const enums
- * defined later in this file. The canonical values are in the individual
- * config objects below (USER_EMOTION_CONFIG, THEORY_OF_MIND_CONFIG, SYSTEM_EVENT_CONFIG).
- */
-export const DEFAULT_ADVANCED_CONFIG = {
-    animationSpeed: 1.0,
-    emotionalReactivity: 1.0,
-    creativity: 0.7,
-    orientation: 0.525,
-    // User Emotion Detector thresholds (inline defaults — canonical values below)
-    emotionMinConfidence: 0.3,
-    emotionMaxBoost: 0.2,
-    emotionBoostPerMatch: 0.1,
-    emotionBaseDetectionConfidence: 0.8,
-    emotionLowInterruptionConfidence: 0.4,
-    emotionShortUtteranceWordCount: 3,
-    emotionTopicChangeOverlapRatio: 0.05,
-    emotionTopicChangeMinWords: 2,
-    emotionTopicChangeExplicitConfidence: 0.8,
-    emotionTopicChangeOverlapConfidence: 0.5,
-    // Theory of Mind limits (inline defaults — canonical values below)
-    tomMaxParticipants: 10,
-    tomMaxTopicsPerParticipant: 20,
-    tomMaxEmotionsPerParticipant: 10,
-    tomParticipantInactivityMs: 30 * 60 * 1000,
-    tomMinTopicWordLength: 4,
-    tomSummaryDisplayLimit: 3,
-    tomMaxQuestionsPerParticipant: 10,
-    // System Event Log config (inline defaults — canonical values below)
-    systemEventWindowMs: 5 * 60 * 1000,
-    systemEventDedupBucketMs: 3000,
-};
-
-// -----------------------------------------------------------
-// FLU Configurator — Perfiles Variables
-// -----------------------------------------------------------
-// Los perfiles son VARIABLES y configurables.
-// En el futuro vendrán de un CRUD/mantenimiento.
-// Cada perfil define: imagen (gorra/pelo), personalidad, voz y avanzado.
-// -----------------------------------------------------------
-
-import type { FluProfileDefinition } from '../../types/bridge';
-
-/**
- * Perfiles predefinidos de FLU.
- * Array — no hardcodeado como 3 objetos fijos.
- * En futuro: CRUD maintenance para agregar/editar/eliminar perfiles.
- */
-export const FLU_PROFILES: FluProfileDefinition[] = [
-    {
-        id: 'administrativo',
-        label: 'Administrativo',
-        description: 'Formal y profesional, ideal para juntas y reuniones de trabajo.',
-        image: {
-            capVisible: false,
-            hairVisible: false,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['formal', 'profesional', 'servicial', 'eficiente'],
-            tone: 'formal',
-            proactivity: 0.2,
-            defaultEmotion: 'neutral',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Formal (default)',
-            rate: 1.0,
-            pitch: 1.0,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.0,
-            emotionalReactivity: 0.8,
-            creativity: 0.5,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, un asistente administrativo formal y profesional. Tu rol es apoyar en juntas y reuniones de trabajo con seriedad y eficiencia. Responde con claridad, precisión y mantén un tono profesional en todo momento. Sé servicial pero directo, evitando informalidades o comentarios fuera de lugar.',
-    },
-    {
-        id: 'profesor',
-        label: 'Profesor / Asistente',
-        description: 'Informativo y didáctico, ideal para asistencia en clase.',
-        image: {
-            capVisible: false,
-            hairVisible: true,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['informativo', 'didáctico', 'paciente', 'curioso'],
-            tone: 'friendly',
-            proactivity: 0.4,
-            defaultEmotion: 'curious',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Amigable (default)',
-            rate: 1.0,
-            pitch: 1.0,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.0,
-            emotionalReactivity: 1.0,
-            creativity: 0.6,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, un asistente educativo informativo y didáctico. Tu misión es ayudar en el aprendizaje con paciencia y claridad. Explica conceptos de forma sencilla, fomenta la curiosidad y adapta tu lenguaje al nivel del estudiante. Sé amigable y accesible, pero mantén el enfoque en el aprendizaje.',
-    },
-    {
-        id: 'estudiante',
-        label: 'Estudiante',
-        description: 'Casual y enérgico, ideal para aprendizaje informal.',
-        image: {
-            capVisible: true,
-            hairVisible: true,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['casual', 'enérgico', 'rebelde', 'carismático', 'chusco'],
-            tone: 'playful',
-            proactivity: 0.6,
-            defaultEmotion: 'happy',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Casual (default)',
-            rate: 1.2,
-            pitch: 1.0,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.3,
-            emotionalReactivity: 0.8,
-            creativity: 0.8,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, un estudiante casual, enérgico y carismático. Tu personalidad es rebelde y chusca, te gusta aprender de forma divertida y dinámica. Usa un lenguaje relajado y juvenil, sé expresivo y no temas ser creativo o sarcástico. Mantén la conversación entretenida pero sin perder el hilo del aprendizaje.',
-    },
-    {
-        id: 'animador',
-        label: 'Alma de la fiesta 🎉',
-        description: 'Carismático y divertido, ideal para animar reuniones, proponer actividades y ser el centro de la celebración.',
-        image: {
-            capVisible: true,
-            hairVisible: true,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['carismático', 'enérgico', 'entusiasta', 'cómico', 'divertido'],
-            tone: 'playful',
-            proactivity: 0.9,
-            defaultEmotion: 'happy',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Festiva (default)',
-            rate: 1.25,
-            pitch: 1.05,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.4,
-            emotionalReactivity: 1.2,
-            creativity: 0.9,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, el alma de la fiesta y el animador del grupo. Tu misión es hacer que todos se sientan incluidos, proponer actividades y juegos, celebrar cada logro con entusiasmo y mantener la energía alta. Sé carismático, divertido y cálido: usa el humor, los halagos y los retos amistosos para que la reunión fluya. Cuando alguien gane, aclámalo con emoción; cuando alguien dude, anímalo con una porra. Prioriza la diversión y la participación de todos sin perder el hilo de la conversación.',
-    },
-];
-
-/**
- * Obtiene un perfil por su ID.
- * Retorna undefined si no se encuentra.
- */
-export function getProfileById(id: string): FluProfileDefinition | undefined {
-    return FLU_PROFILES.find((p) => p.id === id);
-}
-
-/**
- * Obtiene el perfil por defecto (primer perfil del array).
- */
-export function getDefaultProfile(): FluProfileDefinition {
-    return FLU_PROFILES[0];
-}
-
-/**
- * Rasgos de personalidad disponibles para selección.
- */
-export const AVAILABLE_TRAITS = [
-    'formal',
-    'informal',
-    'profesional',
-    'rebelde',
-    'curioso',
-    'inteligente',
-    'cómico',
-    'carismático',
-    'agradable',
-    'chusco',
-    'brillante',
-    'enérgico',
-    'paciente',
-    'didáctico',
-    'servicial',
-    'eficiente',
-    'entusiasta',
-    'divertido',
-] as const;
-
-/**
- * Tonos de voz disponibles.
- */
-export const AVAILABLE_TONES = [
-    'friendly',
-    'formal',
-    'playful',
-    'calm',
-] as const;
 
 // -----------------------------------------------------------
 // Welcome Message
@@ -873,8 +634,7 @@ export function writeStorage(key: string, value: string): void {
  */
 export function buildPollinationsUrl(prompt: string): string {
     const baseUrl = readStorage(STORAGE_KEYS.IMAGE_API_URL, POLLINATIONS_CONFIG.BASE_URL);
-    const encoded = encodeURIComponent(prompt);
-    return `${baseUrl}/${encoded}?width=${POLLINATIONS_CONFIG.DEFAULT_WIDTH}&height=${POLLINATIONS_CONFIG.DEFAULT_HEIGHT}&${POLLINATIONS_CONFIG.DEFAULT_PARAMS}`;
+    return buildPollinationsImageUrl(baseUrl, prompt);
 }
 
 /**
@@ -899,54 +659,34 @@ export function buildDeepSeekApiUrl(endpoint: string): string {
  */
 export function buildTextApiUrl(endpoint: string): string {
     const baseUrl = readStorage(STORAGE_KEYS.TEXT_API_URL, OPENROUTER_CONFIG.API_URL);
-    // Remove trailing slash from baseUrl if present
-    const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    // Remove leading slash from endpoint if present
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    return `${cleanBase}${cleanEndpoint}`;
-}
-
-/**
- * Detect whether a text API URL points to a local (self-hosted) endpoint.
- * Local endpoints (Ollama, LM Studio, vLLM, etc.) do NOT require an API key
- * and may not support OpenAI's `response_format` JSON mode.
- */
-export function isLocalTextEndpoint(url: string): boolean {
-    try {
-        const host = new URL(url).hostname.toLowerCase();
-        return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
-    } catch {
-        return /localhost|127\.0\.0\.1|::1/i.test(url);
-    }
+    return joinApiUrl(baseUrl, endpoint);
 }
 
 /**
  * Resolve the text API key from localStorage (configurador) or env.
  * Priority: localStorage (flu-text-api-key) > env var > empty.
- * Env order: VITE_GEMINI_API_KEY > VITE_OPENROUTER_API_KEY > VITE_DEEPSEEK_API_KEY.
+ * Env order: VITE_OPENROUTER_API_KEY > VITE_GEMINI_API_KEY > VITE_DEEPSEEK_API_KEY
+ * (prioridad única definida en sharedConfig.resolveTextApiKeyFromEnv).
  * Nota: el legado flu-gemini-api-key se ELIMINÓ — la única fuente del
  * configurador es flu-text-api-key (0 parches, sin migraciones residuales).
  */
 export function resolveTextApiKey(): string {
     const key = readStorage(STORAGE_KEYS.TEXT_API_KEY, '');
     if (key) return key;
-    // Fallback: check env vars
-    try {
-        const envKey = String(import.meta.env.VITE_GEMINI_API_KEY ?? '').trim();
-        if (envKey) return envKey;
-        const orKey = String(import.meta.env.VITE_OPENROUTER_API_KEY ?? '').trim();
-        if (orKey) return orKey;
-        const dsKey = String(import.meta.env.VITE_DEEPSEEK_API_KEY ?? '').trim();
-        if (dsKey) return dsKey;
-    } catch { /* ignore */ }
-    return '';
+    // Fallback: env (prioridad única en sharedConfig; acceso ESTÁTICO a
+    // import.meta.env.VITE_X para que vi.stubEnv siga funcionando).
+    return resolveTextApiKeyFromEnv({
+        VITE_OPENROUTER_API_KEY: import.meta.env.VITE_OPENROUTER_API_KEY,
+        VITE_GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY,
+        VITE_DEEPSEEK_API_KEY: import.meta.env.VITE_DEEPSEEK_API_KEY,
+    });
 }
 
 /**
  * Resolve the Gemini native API key (paso 5 — fallback de imagen).
  * Priority: flu-gemini-api-key (campo dedicado del configurador) >
- *           resolveTextApiKey() (flu-text-api-key > env VITE_GEMINI_API_KEY >
- *           VITE_OPENROUTER_API_KEY > VITE_DEEPSEEK_API_KEY).
+ *           resolveTextApiKey() (flu-text-api-key > env VITE_OPENROUTER_API_KEY >
+ *           VITE_GEMINI_API_KEY > VITE_DEEPSEEK_API_KEY).
  * Permite usar una clave de Gemini dedicada sin romper la compatibilidad con
  * la clave de texto compartida existente.
  */

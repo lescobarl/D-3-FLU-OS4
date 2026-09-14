@@ -21,7 +21,7 @@
 
 import { FLU_CONFIG } from '../../voice/lib/fluConfig';
 import { GAME_CATALOG } from '../games/gameCatalog';
-import { WORKSPACE_TIPOS } from '../config/appConfig';
+import { WORKSPACE_TIPOS } from '../config/sharedConfig';
 import { FLU_CAPABILITIES } from '../../services/capabilities';
 import { BUILTIN_SEARCH_SITES, type SearchSite } from '../search/searchSiteTypes';
 import { normalizeHost } from '../browser/browserSession';

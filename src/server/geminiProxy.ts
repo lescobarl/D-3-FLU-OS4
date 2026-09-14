@@ -18,11 +18,13 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { MiddlewareHost } from './httpJson';
 import {
-    OPENROUTER_CONFIG,
-    buildTextApiUrl,
+    OPENROUTER_DEFAULTS,
     isLocalTextEndpoint,
-    resolveTextApiKey,
-} from '../core/config/appConfig';
+    joinApiUrl,
+    resolveServerTextApiKey,
+    resolveServerTextApiUrl,
+    setServerEnv,
+} from '../core/config/sharedConfig';
 
 // ─── Import canonical implementations from OS2 ──────────────
 // These are the exact same functions OS2 uses in its Express server.
@@ -550,13 +552,13 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
         if (!prompt) {
             return sendJson(res, 400, { error: 'missing_prompt', detail: 'El campo "prompt" es obligatorio.' });
         }
-        const apiKey = String(body?.apiKey || '').trim() || resolveTextApiKey();
-        const url = buildTextApiUrl('/chat/completions');
+        const apiKey = String(body?.apiKey || '').trim() || resolveServerTextApiKey();
+        const url = joinApiUrl(resolveServerTextApiUrl(), '/chat/completions');
         const local = isLocalTextEndpoint(url);
         if (!apiKey && !local) {
             return sendJson(res, 503, { error: 'no_api_key', detail: 'Sin API key de texto configurada (OpenRouter/Gemini).' });
         }
-        const model = String(body?.model || '').trim() || OPENROUTER_CONFIG.MODEL;
+        const model = String(body?.model || '').trim() || OPENROUTER_DEFAULTS.MODEL;
         const system = String(body?.system || '').trim();
         const maxTokens = Number(body?.maxTokens || 2048);
         const temperatureRaw = body?.temperature;
@@ -607,10 +609,9 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
 
 export function createGeminiMiddleware({ env = {} }: { env?: Record<string, string> } = {}) {
     // Capturar la key de texto desde .env (inyectada vía loadEnv en vite.config.ts).
-    // Misma prioridad que resolveTextApiKey(): VITE_OPENROUTER > VITE_GEMINI > VITE_DEEPSEEK.
-    serverEnvApiKey = String(
-        env.VITE_OPENROUTER_API_KEY || env.VITE_GEMINI_API_KEY || env.VITE_DEEPSEEK_API_KEY || ''
-    ).trim();
+    // Prioridad única (sharedConfig): VITE_OPENROUTER > VITE_GEMINI > VITE_DEEPSEEK.
+    setServerEnv(env);
+    serverEnvApiKey = resolveServerTextApiKey();
     return {
         name: 'gemini-proxy',
         configureServer(server: MiddlewareHost) {

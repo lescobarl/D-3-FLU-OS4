@@ -41,6 +41,7 @@ const SAFE_URL_PATTERNS: RegExp[] = [
 // NOTA: las rutas son RELATIVAS a src/ (formato de relPath en el escáner).
 const ALLOWED_CONFIG_FILES = new Set([
     'core/config/appConfig.ts',  // single source of truth (Rule #1)
+    'core/config/sharedConfig.ts', // defaults/lógica compartidos server-safe (sin import.meta.env)
     'voice/lib/visualConfig.js', // módulo de config del pipeline visual
     'voice/lib/fluConfig.js',    // FLU_CONFIG centralizado (browser/search, voz, etc.)
     'services/musicPlayer.ts',   // catálogo estático de pistas demo (datos)

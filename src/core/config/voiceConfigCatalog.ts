@@ -15,7 +15,7 @@
 // ============================================================
 
 import { getPaletteKeys } from '../branding/seasonalPalettes';
-import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES } from './appConfig';
+import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES } from './sharedConfig';
 
 // ------------------------------------------------------------
 // Tipos del catálogo

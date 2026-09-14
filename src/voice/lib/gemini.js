@@ -4,15 +4,18 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
 import { buildGenerationPrompt } from './fluVisualPipeline.js'
 import {
-  buildPollinationsUrl,
-  buildTextApiUrl,
-  isLocalTextEndpoint,
-  OPENROUTER_CONFIG,
-  FALAI_CONFIG,
-  resolveTextApiKey,
+  FALAI_DEFAULTS,
+  OPENROUTER_DEFAULTS,
   WORKSPACE_TIPOS,
   TIMEOUT_POLICY_MS,
-} from '../../core/config/appConfig'
+  buildPollinationsImageUrl,
+  isLocalTextEndpoint,
+  joinApiUrl,
+  resolveServerPollinationsUrl,
+  resolveServerTextApiKey,
+  resolveServerTextApiUrl,
+  resolveServerTextModel,
+} from '../../core/config/sharedConfig'
 
 import {
   buildBareVisualFallbackWorkspace,
@@ -44,10 +47,11 @@ export {
 } from './workspaceContract.js'
 
 // NOTA (OS4): Toda la generación de texto (voz, contrato, resumen, evaluación,
-// visión/OCR) se enruta por el motor único OpenAI-compatible definido en appConfig:
-//   buildTextApiUrl('/chat/completions') → OpenRouter → Google Gemini 2.5 Flash Lite
+// visión/OCR) se enruta por el motor único OpenAI-compatible (defaults/lógica en
+// sharedConfig.ts, sin import.meta.env en scope de módulo):
+//   joinApiUrl(resolveServerTextApiUrl(), '/chat/completions') → OpenRouter → Gemini
 //   (o el endpoint local / URL configurada en Ajustes → Texto).
-// Las imágenes se generan SIEMPRE con Pollinations.ai (buildPollinationsUrl).
+// Las imágenes se generan SIEMPRE con Pollinations.ai (buildPollinationsImageUrl).
 // Ya NO se usa la API nativa de Google (generativelanguage.googleapis.com).
 
 // ── Fase 1 (optimización de latencia): timeout de red ADAPTATIVO por tipo de
@@ -83,7 +87,7 @@ function getGeminiGenerationProfile(profile = 'contract') {
 function hasUsableVoiceBackend(apiKey) {
   if (apiKey) return true
   try {
-    return isLocalTextEndpoint(buildTextApiUrl('/chat/completions'))
+    return isLocalTextEndpoint(joinApiUrl(resolveServerTextApiUrl(), '/chat/completions'))
   } catch {
     return false
   }
@@ -105,7 +109,7 @@ async function postChatCompletion({
   jsonMode = false,
   timeoutMs,
 }) {
-  const url = buildTextApiUrl('/chat/completions')
+  const url = joinApiUrl(resolveServerTextApiUrl(), '/chat/completions')
   const local = isLocalTextEndpoint(url)
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
@@ -294,7 +298,7 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
   // Pollinations.ai (stateless, sin API key): única vía de generación de imágenes.
   // Ya no se usa la generación de imágenes nativa de Gemini (predict/generateContent).
   try {
-    const imageUrl = buildPollinationsUrl(prompt)
+    const imageUrl = buildPollinationsImageUrl(resolveServerPollinationsUrl(), prompt)
     return {
       imageUrl,
       trace: {
@@ -338,7 +342,7 @@ export async function generateOpenRouterImage({
       imageUrl: '',
       trace: {
         provider: 'openrouter',
-        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'empty_prompt',
         hasImage: false,
@@ -347,13 +351,13 @@ export async function generateOpenRouterImage({
     }
   }
 
-  const url = buildTextApiUrl(OPENROUTER_CONFIG.IMAGE_ENDPOINT)
+  const url = joinApiUrl(resolveServerTextApiUrl(), OPENROUTER_DEFAULTS.IMAGE_ENDPOINT)
   if (!apiKey || isLocalTextEndpoint(url)) {
     return {
       imageUrl: '',
       trace: {
         provider: 'openrouter',
-        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'missing_api_key',
         hasImage: false,
@@ -372,10 +376,10 @@ export async function generateOpenRouterImage({
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: OPENROUTER_CONFIG.IMAGE_MODEL,
+          model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
           prompt,
           n: 1,
-          aspect_ratio: OPENROUTER_CONFIG.IMAGE_ASPECT_RATIO,
+          aspect_ratio: OPENROUTER_DEFAULTS.IMAGE_ASPECT_RATIO,
         }),
       },
       REQUEST_TIMEOUT_PRESETS.image,
@@ -388,7 +392,7 @@ export async function generateOpenRouterImage({
         imageUrl: '',
         trace: {
           provider: 'openrouter',
-          model: OPENROUTER_CONFIG.IMAGE_MODEL,
+          model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
           kind: 'images',
           source: 'openrouter_image_error',
           hasImage: false,
@@ -406,7 +410,7 @@ export async function generateOpenRouterImage({
         imageUrl: '',
         trace: {
           provider: 'openrouter',
-          model: OPENROUTER_CONFIG.IMAGE_MODEL,
+          model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
           kind: 'images',
           source: 'openrouter_image_empty',
           hasImage: false,
@@ -420,7 +424,7 @@ export async function generateOpenRouterImage({
       imageUrl: `data:${mediaType};base64,${b64}`,
       trace: {
         provider: 'openrouter',
-        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'openrouter_image_fallback',
         hasImage: true,
@@ -435,7 +439,7 @@ export async function generateOpenRouterImage({
       imageUrl: '',
       trace: {
         provider: 'openrouter',
-        model: OPENROUTER_CONFIG.IMAGE_MODEL,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'openrouter_image_error',
         hasImage: false,
@@ -1288,10 +1292,10 @@ export function resolveGeminiApiKey(apiKey = '') {
     return { apiKey: direct, apiKeySource: 'localStorage' }
   }
 
-  // Delegar a resolveTextApiKey() centralizado (appConfig): localStorage
-  // flu-text-api-key (configurador) → env (VITE_GEMINI_API_KEY >
-  // VITE_OPENROUTER_API_KEY > VITE_DEEPSEEK_API_KEY). Sin legado.
-  const textApiKey = resolveTextApiKey()
+  // Delegar a resolveServerTextApiKey() (sharedConfig): prioridad única
+  // VITE_OPENROUTER_API_KEY > VITE_GEMINI_API_KEY > VITE_DEEPSEEK_API_KEY
+  // (env inyectado/process.env). Sin legado.
+  const textApiKey = resolveServerTextApiKey()
   if (textApiKey) {
     return { apiKey: textApiKey, apiKeySource: 'textConfig' }
   }
@@ -1299,15 +1303,14 @@ export function resolveGeminiApiKey(apiKey = '') {
   return { apiKey: '', apiKeySource: 'missing' }
 }
 
-/** Modelo de texto (OpenRouter → Gemini 2.5 Flash) desde localStorage o Vite.
- *  El default final viene de OPENROUTER_CONFIG.MODEL en appConfig.ts
- *  (VITE_OPENROUTER_MODEL || 'google/gemini-2.5-flash').
- *  NO hardcodear modelo aquí — mantener alineado con OPENROUTER_CONFIG.MODEL.
+/**
+ * Modelo de texto (OpenRouter → Gemini 2.5 Flash) resuelto server-side.
+ * Prioridad: localStorage (client override) > VITE_OPENROUTER_MODEL del env
+ * server (loadEnv/process.env) > default.
+ * Default final: OPENROUTER_DEFAULTS.MODEL (sharedConfig).
+ * NO hardcodear modelo aquí — mantener alineado con OPENROUTER_DEFAULTS.MODEL.
  */
 export function resolveGeminiModel() {
-  if (typeof process !== 'undefined' && process.env?.GEMINI_MODEL) {
-    return String(process.env.GEMINI_MODEL).trim()
-  }
   try {
     // Leer modelo guardado en localStorage por el configurador UI (OS3 parity)
     const savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
@@ -1315,14 +1318,7 @@ export function resolveGeminiModel() {
   } catch {
     // Sin acceso a localStorage (SSR / Node)
   }
-  try {
-    const fromEnv = String(import.meta.env?.VITE_OPENROUTER_MODEL ?? '').trim()
-    if (fromEnv) return fromEnv
-  } catch {
-    // entorno sin import.meta
-  }
-  // Fallback: mismo default que OPENROUTER_CONFIG.MODEL en appConfig.ts
-  return OPENROUTER_CONFIG.MODEL
+  return resolveServerTextModel()
 }
 
 async function parseGeminiApiResponse(response) {
@@ -1769,9 +1765,9 @@ export async function generateVideoViaFal({
   aspectRatio = '',
   model: modelOverride = '',
 } = {}) {
-  const base = String(FALAI_CONFIG.VIDEO_ENDPOINT || '').replace(/\/$/, '')
-  // Modelo configurable (Ajustes → Video); default barato de FALAI_CONFIG.
-  const model = String(modelOverride || '').trim() || FALAI_CONFIG.VIDEO_MODEL
+  const base = String(FALAI_DEFAULTS.VIDEO_ENDPOINT || '').replace(/\/$/, '')
+  // Modelo configurable (Ajustes → Video); default barato de FALAI_DEFAULTS.
+  const model = String(modelOverride || '').trim() || FALAI_DEFAULTS.VIDEO_MODEL
   if (!prompt || !apiKey || !base) {
     return {
       videoUrl: '',
@@ -1794,7 +1790,7 @@ export async function generateVideoViaFal({
       },
       body: JSON.stringify({
         prompt,
-        aspect_ratio: aspectRatio || FALAI_CONFIG.ASPECT_RATIO,
+        aspect_ratio: aspectRatio || FALAI_DEFAULTS.ASPECT_RATIO,
       }),
     })
     if (!submit.ok) {
@@ -1812,7 +1808,7 @@ export async function generateVideoViaFal({
       return { videoUrl: '', trace: { provider: 'falai', model, source: 'no_status_url', hasVideo: false, prompt } }
     }
 
-    const deadline = Date.now() + FALAI_CONFIG.POLL_TIMEOUT_MS
+    const deadline = Date.now() + FALAI_DEFAULTS.POLL_TIMEOUT_MS
     while (Date.now() < deadline) {
       const statusRes = await fetch(statusUrl, { headers: { Authorization: `Key ${apiKey}` } })
       if (statusRes.ok) {
