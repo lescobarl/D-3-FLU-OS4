@@ -216,8 +216,9 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
         if (res.writableEnded || res.destroyed) return;
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(data));
-    } catch (err: any) {
-        console.warn('[geminiProxy] sendJson: respuesta no entregada (socket cerrado):', err?.message || err);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('[geminiProxy] sendJson: respuesta no entregada (socket cerrado):', message);
     }
 }
 

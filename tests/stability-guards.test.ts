@@ -121,7 +121,7 @@ describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', (
 
         expect(sendBlock).toContain('try {');
         expect(sendBlock).toContain('res.writableEnded || res.destroyed');
-        expect(sendBlock).toContain('catch (err: any)');
+        expect(sendBlock).toContain('catch (err: unknown)');
     });
 
     it('todos los middleware handlers de IA están envueltos en try/catch exterior', () => {
