@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
 import { configText } from './configText';
 import type { HorarioRecord } from '../core/db/fluDatabase';
 import {
@@ -189,7 +190,7 @@ export function HorarioPizarron({
           .replace('{hora}', inicio);
         setToast(message);
         window.clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = window.setTimeout(() => setToast(null), 4000);
+        toastTimerRef.current = window.setTimeout(() => setToast(null), TIMEOUT_POLICY_MS.pizarronToast);
       } else {
         setFormError(
           ui.addError?.[isEn ? 'en' : 'es'] || 'No se pudo registrar la entrada. Inténtalo de nuevo.',

@@ -1,4 +1,5 @@
 import { VISUAL_CONFIG } from './visualConfig.js'
+import { TIMEOUT_POLICY_MS } from '../../core/config/appConfig'
 import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
 import {
   buildGenerationPrompt,
@@ -352,7 +353,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
     }
   }
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 200000)
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.falVideoFetchAbort)
   try {
     const response = await fetch('/api/fal-video', {
       method: 'POST',

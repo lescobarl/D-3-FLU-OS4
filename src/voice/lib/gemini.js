@@ -11,6 +11,7 @@ import {
   FALAI_CONFIG,
   resolveTextApiKey,
   WORKSPACE_TIPOS,
+  TIMEOUT_POLICY_MS,
 } from '../../core/config/appConfig'
 
 import {
@@ -1844,7 +1845,7 @@ export async function generateVideoViaFal({
           return { videoUrl: '', trace: { provider: 'falai', model, source: 'job_failed', hasVideo: false, prompt } }
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      await new Promise((resolve) => setTimeout(resolve, TIMEOUT_POLICY_MS.falVideoPoll))
     }
     return { videoUrl: '', trace: { provider: 'falai', model, source: 'poll_timeout', hasVideo: false, prompt } }
   } catch (error) {

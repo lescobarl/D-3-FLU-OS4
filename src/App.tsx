@@ -50,7 +50,7 @@ import { useBrowserProfiles } from './hooks/useBrowserProfiles';
 import { useSearchSites } from './hooks/useSearchSites';
 import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
-import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING } from './core/config/appConfig';
+import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
 import { dayKey, shouldRolloverDay } from './core/days/dayRollover';
 import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
 import { FLU_PROFILES } from './core/config/appConfig';
@@ -3191,7 +3191,7 @@ function App() {
                         window.addEventListener('pointerdown', startOnGesture);
                         window.addEventListener('keydown', startOnGesture);
                         window.addEventListener('touchstart', startOnGesture);
-                        window.setTimeout(cleanup, 10000);
+                        window.setTimeout(cleanup, TIMEOUT_POLICY_MS.onboardingGestureCleanup);
                     } else {
                         console.warn('[App] fallo al iniciar escucha tras onboarding:', err);
                     }

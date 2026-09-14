@@ -20,7 +20,7 @@
 //   - Integración con sistema de recuperación automática
 // ============================================================
 
-import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey } from '../config/appConfig';
+import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
 
 // -----------------------------------------------------------
 // Tipos
@@ -267,7 +267,7 @@ async function checkAIService(): Promise<ComponentHealth> {
         } else {
             // Verificar conectividad real enviando la credencial (HEAD autorizado)
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.healthProbeAbort);
 
             try {
                 const response = await fetch(testUrl, {
@@ -503,7 +503,7 @@ async function checkNetwork(): Promise<ComponentHealth> {
             const pingStart = Date.now();
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.networkPingAbort);
                 
                 const response = await fetch(url, {
                     method: 'HEAD',

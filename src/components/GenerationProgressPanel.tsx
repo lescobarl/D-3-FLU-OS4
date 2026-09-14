@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
 import type { GenerationJob } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { VideoAssemblyResult } from '../services/videoAssembler';
@@ -44,7 +45,7 @@ function triggerDownload(result: GeneratedDocumentResult): void {
     a.href = url;
     a.download = result.nombre;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setTimeout(() => URL.revokeObjectURL(url), TIMEOUT_POLICY_MS.documentObjectUrlRevoke);
 }
 
 const ESTADO_LABEL: Record<string, string> = {

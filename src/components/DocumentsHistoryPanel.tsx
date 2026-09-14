@@ -5,6 +5,7 @@
 // `useDocuments`). Etiquetas vía FLU_CONFIG (sin hardcode).
 // ============================================================
 import { pickLabel } from '../lib/textUtils';
+import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { DocumentRecord } from '../core/db/fluDatabase';
 
@@ -45,7 +46,7 @@ export function downloadDocumentContent(doc: DocumentRecord): void {
   anchor.href = href;
   anchor.download = doc.nombre || doc.titulo || 'documento';
   anchor.click();
-  if (!isDataUrl) setTimeout(() => URL.revokeObjectURL(href), 5000);
+  if (!isDataUrl) setTimeout(() => URL.revokeObjectURL(href), TIMEOUT_POLICY_MS.documentObjectUrlRevoke);
 }
 
 export function DocumentsHistoryPanel({

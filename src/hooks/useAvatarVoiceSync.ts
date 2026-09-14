@@ -25,6 +25,7 @@
 // ============================================================
 
 import { useEffect, useRef, useCallback } from 'react';
+import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
 import { useBunnyStore, EXPRESSION_MAP } from '../avatar';
 import type { BunnyStore, BunnyAnimation, BunnyComponent, AvatarExpression } from '../avatar';
 import { useIntegrationStore } from '../store/integrationStore';
@@ -460,9 +461,9 @@ export function useAvatarVoiceSync() {
                 }
                 // La canción sigue sonando (o aún está arrancando) → seguir
                 // sosteniendo y re-chequear en 1s.
-                sustainedActionTimerRef.current = window.setTimeout(checkSong, 1000);
+                sustainedActionTimerRef.current = window.setTimeout(checkSong, TIMEOUT_POLICY_MS.sustainedActionRecheck);
             };
-            sustainedActionTimerRef.current = window.setTimeout(checkSong, 1000);
+            sustainedActionTimerRef.current = window.setTimeout(checkSong, TIMEOUT_POLICY_MS.sustainedActionRecheck);
             return;
         }
         sustainedActionRef.current = { anims, until: Date.now() + SUSTAINED_ACTION_MS };

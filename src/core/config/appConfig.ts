@@ -227,6 +227,32 @@ export const FALAI_CONFIG = {
 export const GENERATION_TIMEOUT_MS = 120_000;
 
 // -----------------------------------------------------------
+// Timeout Policy (V12 — delays de política, regla #1: NO HARDCODE)
+// -----------------------------------------------------------
+// Cada delay de política (UI, red y sondeo de jobs) vive aquí como constante
+// nombrada; los sitios de uso no queman el número literal (setTimeout con
+// literal >=1000 ms). Conserva exactamente el valor previo de cada sitio.
+export const TIMEOUT_POLICY_MS = {
+    /** Limpieza de listeners tras onboarding sin gesto del usuario (App.tsx). */
+    onboardingGestureCleanup: 10_000,
+    /** Revocación diferida del ObjectURL tras descargar un documento. */
+    documentObjectUrlRevoke: 5_000,
+    /** Duración del toast efímero del pizarrón. */
+    pizarronToast: 4_000,
+    /** Aborto de la sonda HEAD de salud de servicios de IA. */
+    healthProbeAbort: 5_000,
+    /** Aborto del ping de conectividad de red. */
+    networkPingAbort: 3_000,
+    /** Re-chequeo de la acción sostenida del avatar mientras suena una canción. */
+    sustainedActionRecheck: 1_000,
+    /** Espera entre sondeos del job de video de fal.ai. */
+    falVideoPoll: 3_000,
+    /** Aborto del fetch del video de fal.ai (job largo). */
+    falVideoFetchAbort: 200_000,
+} as const;
+
+
+// -----------------------------------------------------------
 // Shared Domain Constants (Rule #1: NO HARDCODE)
 // -----------------------------------------------------------
 // Single source of truth for workspace "tipo" values and the STT
