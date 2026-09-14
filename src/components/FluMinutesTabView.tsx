@@ -28,7 +28,7 @@ export interface FluMinutesTabViewProps {
     /** True mientras se resume/genera la minuta con IA. */
     isSummarizing: boolean;
     /** Genera/resume la minuta desde la conversación (con anuncio de voz). */
-    onGenerateSummary: (opts?: { announce?: boolean }) => Promise<void>;
+    onGenerateSummary: (opts?: { announce?: boolean; save?: boolean }) => Promise<boolean>;
     /** Borrador de minuta en edición. */
     draft: MinuteDraft | null;
     /** Actualiza el borrador de minuta en edición. */

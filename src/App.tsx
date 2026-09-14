@@ -4486,19 +4486,31 @@ const {
             lastSessionDay = '';
         }
         dayRolloverDoneRef.current = true;
-        if (shouldRolloverDay(lastAt, Date.now(), lastSessionDay)) {
-            relayLog(
-                'WARN',
-                'App',
-                `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)})`,
-            );
-            void handleGenerateSummary({ announce: false });
-        }
-        try {
-            window.localStorage.setItem(STORAGE_KEYS.LAST_SESSION_DAY, dayKey(Date.now()));
-        } catch {
-            /* ignorar */
-        }
+        void (async () => {
+            if (shouldRolloverDay(lastAt, Date.now(), lastSessionDay)) {
+                relayLog(
+                    'WARN',
+                    'App',
+                    `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)})`,
+                );
+                // Cierre real: se GENERA y se GUARDA la minuta. El día se marca
+                // sólo si se guardó; si no, se reintenta en el próximo arranque.
+                const saved = await handleGenerateSummary({ announce: false, save: true });
+                if (!saved) {
+                    relayLog(
+                        'WARN',
+                        'App',
+                        'rollover de día: la minuta no se guardó → no se marca el día (se reintentará)',
+                    );
+                    return;
+                }
+            }
+            try {
+                window.localStorage.setItem(STORAGE_KEYS.LAST_SESSION_DAY, dayKey(Date.now()));
+            } catch {
+                /* ignorar */
+            }
+        })();
     }, [integrationStore.conversationHistory, handleGenerateSummary]);
 
     // ============================================================

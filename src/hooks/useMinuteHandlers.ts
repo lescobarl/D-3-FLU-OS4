@@ -26,7 +26,7 @@ export interface MinuteHandlers {
     isGeneratingMinute: boolean;
     isSummarizing: boolean;
     handleGenerateMinute: () => Promise<void>;
-    handleGenerateSummary: (opts?: { announce?: boolean }) => Promise<void>;
+    handleGenerateSummary: (opts?: { announce?: boolean; save?: boolean }) => Promise<boolean>;
     handleSaveMinute: (draftOverride?: MinuteDraft | null, opts?: { announce?: boolean }) => Promise<void>;
     handleSaveConversationSummary: (opts?: { announce?: boolean }) => Promise<void>;
     handleSelectMinuteHistory: (entry: MinuteUIEntry) => void;
@@ -134,10 +134,12 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
     // ============================================================
     // handleGenerateSummary
+    // `save: true` persiste la minuta (cierre de día). Devuelve true
+    // sólo si se guardó, para que el llamante marque el día con evidencia.
     // ============================================================
-    const handleGenerateSummary = useCallback(async ({ announce = false }: { announce?: boolean } = {}) => {
+    const handleGenerateSummary = useCallback(async ({ announce = false, save = false }: { announce?: boolean; save?: boolean } = {}): Promise<boolean> => {
         const history = integrationStore.conversationHistory;
-        if (history.length === 0 || isSummarizing) return;
+        if (history.length === 0 || isSummarizing) return false;
 
         if (announce) {
             try {
@@ -162,6 +164,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             integrationStore.setConversationState('THINKING');
         }
         setIsSummarizing(true);
+        let saved = false;
         try {
             const result = await aiService.generateConversationSummary({ apiKey, language, role: sessionRole }, history);
 
@@ -169,6 +172,22 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 const draft = createMinuteDraftFromSummary(result, sessionRole);
                 setMinuteDraft(draft);
                 setSelectedMinuteId('');
+
+                if (save) {
+                    const snapshot = {
+                        titulo: String(result.titulo || 'Minuta').trim(),
+                        participantes: Array.isArray(result.participantes) ? result.participantes : [],
+                        resumen: String(result.resumen || '').trim(),
+                        acuerdos: Array.isArray(result.acuerdos) ? result.acuerdos : [],
+                        pendientes: Array.isArray(result.pendientes) ? result.pendientes : [],
+                        siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
+                        tema_sesion: String(sessionRole || '').trim(),
+                    };
+                    const persisted = await minuteKnowledge.addMinute(snapshot);
+                    integrationStore.addMinute(persisted);
+                    setSelectedMinuteId(persisted.id);
+                    saved = true;
+                }
 
                 // OS2 parity: buildSummarySpeechText + speakResponse (Gap 25)
                 const summaryParts: string[] = [];
@@ -216,7 +235,8 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 os2StartListening({ resume: true }).catch(() => { });
             }
         }
-    }, [apiKey, integrationStore, language, sessionRole, voiceStatus, os2StartListening, os2StopListening, auditLog, isSummarizing, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
+        return saved;
+    }, [apiKey, integrationStore, minuteKnowledge, language, sessionRole, voiceStatus, os2StartListening, os2StopListening, auditLog, isSummarizing, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
 
     // ============================================================
     // handleSaveMinute
