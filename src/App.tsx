@@ -56,7 +56,7 @@ import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, Person
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
 import { playSong, pauseMusic, stopMusic } from './services/musicPlayer';
-import { getPreferredAIProvider, setPreferredAIProvider } from './services/aiServiceFactory';
+import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from './services/aiServiceFactory';
 import { extractTextFromImage, extractTextFromPdf } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
@@ -265,6 +265,30 @@ const FluSystemTabView = lazy(() => import('./components/FluSystemTabView'));
 // Se ejecuta al final de onContractResolved, después de todo lo demás.
 // Si falla, no afecta el resto del contrato (try/catch en el caller).
 // ============================================================
+
+/**
+ * Miembros válidos de BunnyComponent. El Record tipado obliga a listar todos
+ * los componentes del tipo: es la fuente runtime del guard (sin lista paralela
+ * sin tipar) y mantiene el parámetro real de ctx.setComponentColor.
+ */
+const BUNNY_COMPONENTS: Record<BunnyComponent, true> = {
+    Bunny_full: true,
+    Bunny_body: true,
+    Bunny_cap: true,
+    Bunny_pants: true,
+    Bunny_face: true,
+    Bunny_eyes: true,
+    Bunny_glasses: true,
+    Bunny_ears: true,
+};
+
+function isBunnyComponent(value: string): value is BunnyComponent {
+    return Object.prototype.hasOwnProperty.call(BUNNY_COMPONENTS, value);
+}
+
+function isAIProvider(value: string): value is AIProvider {
+    return (AI_PROVIDERS as readonly string[]).includes(value);
+}
 
 interface ApplyConfigContext {
     branding: ReturnType<typeof useEnhancedBranding>;
@@ -595,22 +619,22 @@ async function applyConfigAction(
         case 'avatarColor': {
             // Formato: "component:color" (ej. "Bunny_pants:#8B4513")
             const [component, color] = valor.split(':');
-            if (component && color) {
-                ctx.setComponentColor?.(component as any, color);
+            if (component && color && isBunnyComponent(component)) {
+                ctx.setComponentColor?.(component, color);
             } else {
                 console.warn('[applyConfigAction] avatarColor requiere "componente:color":', valor);
             }
             break;
         }
         case 'avatarComponentColor': {
-            const map: Record<string, string> = {
+            const map: Record<string, BunnyComponent> = {
                 pantsColor: 'Bunny_pants',
                 bodyColor: 'Bunny_body',
                 faceColor: 'Bunny_face',
             };
             const component = map[entry.clave];
             if (component) {
-                ctx.setComponentColor?.(component as any, valor);
+                ctx.setComponentColor?.(component, valor);
             }
             break;
         }
@@ -1065,7 +1089,7 @@ async function dispatchArbiterIntent(
     arbiterResult: any,
     opts: { speakerName?: string },
 ): Promise<string> {
-    const w: any = window as any;
+    const w = window;
     const domain = arbiterResult?.matched ? arbiterResult.domain : null;
     const intent: any = arbiterResult?.action || null;
     relayLog('LOG', 'App', `dispatchArbiterIntent: domain="${domain}" action="${intent?.action ?? intent?.gameId ?? intent?.comando ?? JSON.stringify(intent ?? null)?.slice(0, 120)}"`);
@@ -1279,9 +1303,9 @@ function App() {
     const minutePanelRef = useRef<{ save: () => void }>(null);
 
     // Suscribirse a la expresión/animación actual del avatar (para mostrar en header)
-    const avatarCurrentExpression = useBunnyStore((s) => (s as any).currentExpression ?? null);
-    const avatarCurrentAnimation = useBunnyStore((s) => (s as any).currentAnimation ?? null);
-    const avatarBlendQueue = useBunnyStore((s) => (s as any).blendQueue ?? []);
+    const avatarCurrentExpression = useBunnyStore((s) => s.currentExpression ?? null);
+    const avatarCurrentAnimation = useBunnyStore((s) => s.currentAnimation ?? null);
+    const avatarBlendQueue = useBunnyStore((s) => s.blendQueue ?? []);
 
     // ---- Acciones del avatar (colores por voz — usadas en onContractResolved) ----
     const setComponentColor = useBunnyStore((s) => s.setComponentColor);
@@ -1473,7 +1497,8 @@ function App() {
     // ---- AI Provider Selection ----
     const [aiProvider, setAiProviderState] = useState<string>(() => getPreferredAIProvider());
     const handleSetAiProvider = useCallback((provider: string) => {
-        setPreferredAIProvider(provider as any);
+        if (!isAIProvider(provider)) return;
+        setPreferredAIProvider(provider);
         setAiProviderState(provider);
     }, []);
 
@@ -1708,23 +1733,23 @@ function App() {
             const parts: string[] = [];
             const lastResp = (integrationStore.lastResponse || '').trim();
             if (lastResp) parts.push(`Última respuesta: ${lastResp}`);
-            const artifact = integrationStore.workspaceArtifact as any;
+            const artifact = integrationStore.workspaceArtifact;
             if (artifact?.contenido) parts.push(`Contenido activo: ${artifact.contenido}`);
             if (parts.length === 0) return '';
             return parts.join('\n');
         },
-        resolveMinuteLookup: ((query: string, lang?: string) => {
+        resolveMinuteLookup: (query?: string, lang?: string) => {
             // OS2 parity: useMinuteKnowledge ↔ minuteKnowledgeRef.resolveMinuteQuery
             // Intenta resolver localmente (parseMinuteSequenceFromQuery +
             // findMinuteRecordBySequence + buildMinuteLookupContract).
             // Si no hay número de secuencia, retorna { mode: 'gemini' } para fallback.
-            return resolveMinuteQuery(query, minuteKnowledge.minutes, { language: lang || languageRef.current });
-        }) as any,
+            return resolveMinuteQuery(String(query ?? ''), minuteKnowledge.minutes, { language: lang || languageRef.current });
+        },
         // Test hook e2e: exponer el callback REAL onContractResolved en window
         // (window.__fluOnContractResolved) para que las pruebas de verificación
         // puedan disparar un contrato play_music de forma determinista. Se asigna
         // en CREACIÓN (expresión de asignación), disponible desde el montaje.
-        onContractResolved: ((window as any).__fluOnContractResolved = useCallback(async (resolved: any) => {
+        onContractResolved: (window.__fluOnContractResolved = useCallback(async (resolved: any) => {
             // §9 — Fila del USUARIO inmediata: el motor la pide al terminar de
             // capturar (antes de la IA). Aquí SOLO se agrega la fila y se sale;
             // la resolución posterior deduplica y agrega la respuesta de FLU.
@@ -1931,7 +1956,7 @@ function App() {
             // conversacional al manejador determinista correspondiente.
             // ============================================================
             if (hasAcciones && !rawOnly) {
-                const w: any = window as any;
+                const w = window;
                 try {
                     const wakeWords: string[] =
                         (FLU_CONFIG?.voiceCommands?.wakeWords as string[]) || [];
@@ -2036,7 +2061,7 @@ function App() {
             // Solo corre cuando el LLM NO emitió acciones (sin API key, etc.).
             // ============================================================
             if (transcript && !rawOnly && !hasAcciones) {
-                const w: any = window as any;
+                const w = window;
                 try {
                     // ============================================================
                     // PUNTO ÚNICO DE NORMALIZACIÓN DEL MANDATO (hub de integración)
@@ -2713,7 +2738,7 @@ function App() {
             if (respuestaVoz && transcript) {
                 // OS2 parity: buildFluSpeechAuditRows creates separate rows for human and FLU
                 // FluShell.jsx lines 638-647
-                const auditRows = (buildFluSpeechAuditRows as any)({
+                const auditInput = {
                     timestamp: new Date().toISOString(),
                     humanSpeaker: speakerName || 'Hablante 1',
                     humanTranscript: transcript,
@@ -2721,7 +2746,8 @@ function App() {
                     phase,
                     navigation: navegacion,
                     navigationComando: navegacion.comando || null,
-                });
+                };
+                const auditRows = buildFluSpeechAuditRows(auditInput);
 
                 // OS2 parity: addAuditLog for each row (FluShell.jsx lines 688-693)
                 // Obligación #6: UUIDv4
@@ -3113,8 +3139,8 @@ function App() {
                 const currentLang = (languageRef.current as 'es' | 'en') || 'es';
                 if (onboardingAckSpokenForRef.current !== id) {
                     onboardingAckSpokenForRef.current = id;
-                    const steps = (FLU_CONFIG?.onboarding?.steps || []) as any[];
-                    const completeStep = steps.find((s: any) => s.id === 'complete');
+                    const steps = FLU_CONFIG?.onboarding?.steps || [];
+                    const completeStep = steps.find((s) => s.id === 'complete');
                     const name = participants.participants.find((p) => p.id === id)?.name as string;
                     const ackText = completeStep
                         ? String(completeStep[currentLang === 'en' ? 'en' : 'es'] || '')
@@ -3145,7 +3171,7 @@ function App() {
                     // Sin habla activa / timeout: continuar igual.
                 }
                 os2StartListening({ resume: true }).catch((err: unknown) => {
-                    const errorName = String((err as any)?.name || '');
+                    const errorName = err instanceof Error ? err.name : '';
                     const blocked =
                         errorName === 'not-allowed' ||
                         errorName === 'aborted' ||
@@ -3247,7 +3273,7 @@ function App() {
     // Fase 2 — Exponer manejador de recordatorios por texto en window (E2E + integración).
     // Se asigna en CREACIÓN (expresión de asignación), disponible desde el montaje,
     // siguiendo el precedente de __fluOnContractResolved (línea 1105).
-    (window as any).__fluHandleReminderText = useCallback(
+    window.__fluHandleReminderText = useCallback(
         async (input: any, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
@@ -3381,7 +3407,7 @@ function App() {
 
     // Motor temporal genérico — manejador de alarmas y temporizadores por texto (E2E + integración).
     // Un único motor (trigger + recurrencia + entrega) cubre recordatorios, despertador y temporizador.
-    (window as any).__fluHandleTemporalText = useCallback(
+    window.__fluHandleTemporalText = useCallback(
         async (input: any) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
@@ -3541,7 +3567,7 @@ function App() {
     // P1-C (§1.3.4) — autoconocimiento por texto (E2E + integración).
     // Fast-path local sin Gemini: detecta CONOCER_FLU, construye el manifiesto
     // compilado desde la configuración y lo devuelve como respuesta hablada.
-    (window as any).__fluHandleConocerFluText = useCallback(
+    window.__fluHandleConocerFluText = useCallback(
         async (text: string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const clean = String(text || '').trim();
@@ -3567,7 +3593,7 @@ function App() {
     // Fase 7 — Acciones de dispositivo — manejador por texto (E2E + integración).
     // Resuelve el contacto en la agenda y abre el esquema de URL estándar
     // (tel:, wa.me, sms:, mailto:) vía el servicio inyectado en el hook.
-    (window as any).__fluHandleDeviceActionText = useCallback(
+    window.__fluHandleDeviceActionText = useCallback(
         async (text: string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const intent = parseDeviceActionIntent(String(text || ''));
@@ -3588,8 +3614,7 @@ function App() {
                 message: data.message,
             });
             if (result.ok) return intent.reply;
-            const voice =
-                ((FLU_CONFIG.deviceActions?.voice || {}) as any)[lang] || {};
+            const voice = FLU_CONFIG.deviceActions?.voice?.[lang] || {};
             const fill = (tpl?: string) => String(tpl || '').replace('{name}', name);
             if (result.reason === 'missing-phone') {
                 return (
@@ -3621,10 +3646,10 @@ function App() {
     // Detecta intenciones de nota ("nota para el super", "nota para recordar un
     // negocio", "apunta/anota {texto}", "nota: {texto}") y crea la nota vía
     // notes.add. Devuelve la confirmación hablada (o '' si no aplica).
-    (window as any).__fluHandleNoteText = useCallback(
+    window.__fluHandleNoteText = useCallback(
         async (input: any, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const notesVoice = (FLU_CONFIG.notes?.voice || {}) as any;
+            const notesVoice = FLU_CONFIG.notes?.voice || {};
             const addedMsg =
                 notesVoice.added ||
                 (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
@@ -3697,12 +3722,12 @@ function App() {
     // Detecta intenciones de diario ("escribe en el diario {contenido}",
     // "guarda en el diario {contenido}", "diario: {contenido}") y crea la
     // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
-    (window as any).__fluHandleDiaryText = useCallback(
+    window.__fluHandleDiaryText = useCallback(
         async (input: any, opts?: { personId?: string; personName?: string }) => {
             // DIARIO PAUSADO: no se crean entradas hasta su reimplementación.
             if (!FLU_CONFIG.diary?.enabled) return '';
             const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const diaryVoice = (FLU_CONFIG.diary?.voice || {}) as any;
+            const diaryVoice = FLU_CONFIG.diary?.voice || {};
             const addedMsg =
                 diaryVoice.entryAdded ||
                 (lang === 'en'
@@ -3756,7 +3781,7 @@ function App() {
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
     // determinista: parseHorarioIntent interpreta el transcript y aquí se
     // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
-    (window as any).__fluHandleHorarioText = useCallback(
+    window.__fluHandleHorarioText = useCallback(
         async (input: any) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
@@ -3773,7 +3798,7 @@ function App() {
                 : parseHorarioIntent(String(input || '').trim());
             if (!intent || !intent.handled) return '';
             const data = intent.data || {};
-            const voice = (FLU_CONFIG.horario?.voice || {}) as any;
+            const voice = FLU_CONFIG.horario?.voice || {};
             const dayLabels = (FLU_CONFIG.horario?.dayLabels as string[]) || [];
             const dayLabel = (dia?: number) =>
                 dia && dia >= 1 && dia <= 7 ? dayLabels[dia] || String(dia) : '';
@@ -4779,14 +4804,14 @@ const {
         const historyLabels = new Set<string>();
         const history = integrationStore.conversationHistory;
         for (let i = 0; i < history.length; i++) {
-            const e = history[i] as any;
+            const e = history[i];
             const label = e.speakerName || e.role || '';
             if (label) historyLabels.add(label);
         }
         const profiles = voiceProfiles.profiles;
         const profileLabels = new Set<string>();
         for (let i = 0; i < profiles.length; i++) {
-            const p = profiles[i] as any;
+            const p = profiles[i];
             if (p.label) profileLabels.add(p.label);
         }
         const allLabels = new Set([...historyLabels, ...profileLabels]);
@@ -4794,7 +4819,7 @@ const {
         for (const label of allLabels) {
             let profileId: string | undefined;
             for (let i = 0; i < profiles.length; i++) {
-                const p = profiles[i] as any;
+                const p = profiles[i];
                 if (p.label === label) {
                     profileId = p.id || undefined;
                     break;
@@ -4976,7 +5001,7 @@ const {
                             fluParticipant.endFloorDelivery();
                             fluParticipant.recordInterventionDelivered();
                         },
-                    } as any)} />
+                    })} />
                 </header>
 
                 {/* ── OS3 Browser: Avatar Column + Tabs ── */}
