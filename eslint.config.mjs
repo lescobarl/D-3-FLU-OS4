@@ -1,4 +1,5 @@
 import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
@@ -16,6 +17,7 @@ export default tseslint.config(
     },
     plugins: {
       '@typescript-eslint': tseslint.plugin,
+      'react-hooks': reactHooks,
     },
     rules: {
       'no-unused-vars': 'off',
