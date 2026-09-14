@@ -1,5 +1,13 @@
 import { cleanForSpeech, normalizeSpaces } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import {
+  parseMinuteHistoryCode,
+  parseMinuteSequenceFromQuery,
+} from '../../lib/minuteKnowledgeHelpers'
+
+// D3: dueño canónico de estos 2 parsers es src/lib/minuteKnowledgeHelpers.ts.
+// Se re-exportan (y se importan arriba para el uso interno del módulo).
+export { parseMinuteHistoryCode, parseMinuteSequenceFromQuery }
 
 export const MINUTE_DESCRIPTION_LIMIT = 10
 
@@ -94,69 +102,6 @@ export function formatMinuteHistoryCode(date = new Date(), sequence = 1) {
   const day = String(date.getDate()).padStart(2, '0')
   const seq = String(sequence).padStart(2, '0')
   return `${year}${month}${day}-${seq}`
-}
-
-export function parseMinuteHistoryCode(code = '') {
-  const normalized = normalizeSpaces(code)
-  const match = normalized.match(/^(\d{6})-(\d+)$/)
-  if (!match) {
-    return { date: normalized, sequence: 0 }
-  }
-  return {
-    date: match[1],
-    sequence: Number.parseInt(match[2], 10) || 0,
-  }
-}
-
-const MINUTE_NUMBER_WORDS = {
-  uno: 1,
-  one: 1,
-  dos: 2,
-  two: 2,
-  tres: 3,
-  three: 3,
-  cuatro: 4,
-  four: 4,
-  cinco: 5,
-  five: 5,
-  seis: 6,
-  six: 6,
-  siete: 7,
-  seven: 7,
-  ocho: 8,
-  eight: 8,
-  nueve: 9,
-  nine: 9,
-  diez: 10,
-  ten: 10,
-}
-
-const MINUTE_SEQUENCE_PATTERNS = [
-  /\b(?:la\s+)?minuta\s+(?:numero\s+)?(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/i,
-  /\bde\s+(?:la\s+)?minuta\s+(?:numero\s+)?(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/i,
-  /\bminute\s+(?:number\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i,
-]
-
-function parseMinuteSequenceToken(token = '') {
-  const normalized = normalizeSpaces(token).toLowerCase()
-  if (!normalized) return null
-  if (MINUTE_NUMBER_WORDS[normalized]) return MINUTE_NUMBER_WORDS[normalized]
-  const parsed = Number.parseInt(normalized, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
-}
-
-/** Extrae el número de minuta pedido en voz («minuta 2», «minuta dos», «minute 4»). */
-export function parseMinuteSequenceFromQuery(text = '') {
-  const normalized = cleanForSpeech(text)
-  if (!normalized) return null
-
-  for (const pattern of MINUTE_SEQUENCE_PATTERNS) {
-    const match = normalized.match(pattern)
-    const sequence = parseMinuteSequenceToken(match?.[1] || '')
-    if (sequence) return sequence
-  }
-
-  return null
 }
 
 /** Localiza la minuta cuyo historyCode termina en la secuencia pedida (p. ej. 2 → 260630-02). */
