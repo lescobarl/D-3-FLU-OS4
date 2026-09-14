@@ -16,7 +16,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type DiaryEntryRecord } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
@@ -106,7 +106,7 @@ export function createDiaryService({
   now = () => Date.now(),
   newId = uuidv4,
 }: DiaryServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const addEntry = async (input: DiaryEntryInput): Promise<AddDiaryResult> => {
     if (

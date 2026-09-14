@@ -25,3 +25,13 @@ export function buildSyncTuple(previous: SyncTuple | undefined, now: number): Sy
     deleted: previous.deleted,
   };
 }
+
+/**
+ * Fábrica del reloj de la tupla de sync (V15): envuelve el reloj inyectado
+ * por el servicio en la lambda `timestamp` que usan sus mutaciones.
+ * @param now Reloj inyectado (p. ej. `() => Date.now()`).
+ * @returns Función sin argumentos que devuelve el instante actual.
+ */
+export function makeTupleTimestamp(now: () => number): () => number {
+  return () => now();
+}

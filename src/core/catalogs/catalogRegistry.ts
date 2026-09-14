@@ -13,7 +13,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type SyncTuple } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -75,7 +75,7 @@ export function createCatalogRegistry<T>({
     now = () => Date.now(),
     newId = uuidv4,
 }: CatalogRegistryOptions<T>) {
-    const timestamp = (): number => now();
+    const timestamp = makeTupleTimestamp(now);
 
     const cloneData = (data: T): T => structuredClone(data);
 

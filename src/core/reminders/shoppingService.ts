@@ -12,7 +12,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import { filterItems, itemsRemaining, type ShoppingListFilter } from './shoppingList';
 
@@ -61,7 +61,7 @@ export function createShoppingService({
   now = () => Date.now(),
   newId = uuidv4,
 }: ShoppingServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const add = async (input: NewShoppingItemInput): Promise<AddShoppingItemResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';

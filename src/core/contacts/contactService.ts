@@ -16,7 +16,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
@@ -149,7 +149,7 @@ export function createContactService({
   now = () => Date.now(),
   newId = uuidv4,
 }: ContactServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const addContact = async (input: ContactInput): Promise<AddContactResult> => {
     if (!input || !input.name || !input.name.trim()) {

@@ -19,7 +19,7 @@ import {
   type CommunicationProfileRecord,
   type ExplanationLevel,
 } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import type { PersonalityTone } from '../../lib/discourseMarkers';
 
@@ -306,7 +306,7 @@ export function createCommunicationProfileService({
   now = () => Date.now(),
   newId = uuidv4,
 }: CommunicationProfileServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const getForPerson = async (participantId: string): Promise<CommunicationProfileRecord | undefined> => {
     if (!participantId) return undefined;

@@ -16,7 +16,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type HorarioRecord } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
@@ -276,7 +276,7 @@ export function createHorarioService({
   now = () => Date.now(),
   newId = uuidv4,
 }: HorarioServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const clampDia = (dia: number): number => {
     const n = Number(dia);

@@ -15,7 +15,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type BrowserProfileRecord } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 
 // ------------------------------------------------------------
@@ -114,7 +114,7 @@ export function createBrowserProfileService({
   now = () => Date.now(),
   newId = uuidv4,
 }: BrowserProfileServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const roleDefaults = (role?: string): RoleBrowserDefaults => {
     if (role && config.defaultsByRole[role]) return { ...config.defaultsByRole[role] };

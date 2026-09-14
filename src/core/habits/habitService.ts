@@ -20,7 +20,7 @@ import {
   type GoalRecord,
   type GoalStatus,
 } from '../db/fluDatabase';
-import { buildSyncTuple } from '../db/syncTuple';
+import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 
 // ------------------------------------------------------------
 // Tipos
@@ -154,7 +154,7 @@ export function createHabitsService({
   now = () => Date.now(),
   newId = uuidv4,
 }: HabitsServiceOptions) {
-  const timestamp = (): number => now();
+  const timestamp = makeTupleTimestamp(now);
 
   const toGoal = (row: GoalRecord): GoalRecord => ({ ...row });
   const toCheckIn = (row: GoalCheckInRecord): GoalCheckInRecord => ({ ...row });
