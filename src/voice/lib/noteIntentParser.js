@@ -24,6 +24,10 @@ const NOTE_SUPER_APPEND =
 // ("incluye en la nota del super que también traiga X").
 const NOTE_SUPER_NOTA =
   /^(?:incluye|incluir|inclu[ií]|agrega|agregar|a[ñn]ade|anade|suma|sumar|pon|poner)\s+(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:en\s+la\s+|a\s+la\s+|en\s+el\s+|al\s+)?nota\s+(?:de\s+|del\s+|para\s+el\s+|para\s+la\s+|para\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
+// Orden DESTINO PRIMERO: "en la nota del súper incluye X" (la frase real pone el
+// destino antes que el verbo). El verbo/ítem se limpia con cleanSuperItem.
+const NOTE_SUPER_NOTA_DEST_FIRST =
+  /^(?:en\s+la\s+|en\s+el\s+|a\s+la\s+|al\s+|de\s+la\s+|del\s+)?nota\s+(?:de\s+|del\s+|para\s+el\s+|para\s+la\s+|para\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
 const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
@@ -125,6 +129,14 @@ export function parseNoteIntentText(rawText = '') {
   const superNota = NOTE_SUPER_NOTA.exec(norm)
   if (superNota) {
     const item = cleanSuperItem(superNota[2] ? superNota[2].trim() : '')
+    return { label: item ? `Super: ${item}` : 'Super' }
+  }
+
+  // 1e) Orden DESTINO PRIMERO: "en la nota del súper incluye {ítem}". Mismo
+  // destino "nota", mismo canonical "Super: {ítem}" (append vía el handler).
+  const superNotaDestFirst = NOTE_SUPER_NOTA_DEST_FIRST.exec(norm)
+  if (superNotaDestFirst) {
+    const item = cleanSuperItem(superNotaDestFirst[2] ? superNotaDestFirst[2].trim() : '')
     return { label: item ? `Super: ${item}` : 'Super' }
   }
 
