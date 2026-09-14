@@ -15,7 +15,8 @@
     "package.json"
   ],
   "allow": [
-    "src/**"
+    "src/**",
+    "tests/**"
   ],
   "maxFiles": 120,
   "maxLines": 2000,

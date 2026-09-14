@@ -144,7 +144,6 @@ export function HorarioPizarron({
   const [inicio, setInicio] = useState('07:00');
   const [fin, setFin] = useState('08:00');
   const [aula, setAula] = useState('');
-  const [color, setColor] = useState(defaultColor);
   const [busy, setBusy] = useState(false);
   const tipoSuggestions: string[] = Array.isArray(config.tipoSuggestions)
     ? config.tipoSuggestions
@@ -176,7 +175,6 @@ export function HorarioPizarron({
         inicio,
         fin,
         aula: aula.trim(),
-        color,
       });
       if (result.ok) {
         setMateria('');
@@ -591,21 +589,6 @@ export function HorarioPizarron({
                   data-testid="horario-add-aula"
                   disabled={busy}
                 />
-              </label>
-              <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                <span>{ui.colorLabel || 'Color'}</span>
-                <select
-                  value={color}
-                  onChange={(event) => setColor(event.target.value)}
-                  data-testid="horario-add-color"
-                  disabled={busy}
-                >
-                  {colores.map((token) => (
-                    <option key={token} value={token}>
-                      {token}
-                    </option>
-                  ))}
-                </select>
               </label>
             </div>
             <button
