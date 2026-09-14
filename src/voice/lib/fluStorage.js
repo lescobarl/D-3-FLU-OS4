@@ -214,11 +214,6 @@ export async function addConversationRow(row) {
   })
 }
 
-/** @deprecated alias */
-export async function addAuditLog(entry) {
-  return addConversationRow(entry)
-}
-
 export async function getLatestAuditLogs(limit = null) {
   if (Number.isFinite(limit) && limit > 0) {
     const rows = await withStore('audit_logs', 'readonly', (store) =>
@@ -233,24 +228,6 @@ export async function getLatestAuditLogs(limit = null) {
     .filter(Boolean)
     .filter(isStoredRowVisible)
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-}
-
-export async function clearAuditLogs() {
-  const deletedAt = new Date().toISOString()
-  return withStore('audit_logs', 'readwrite', async (store) => {
-    const rows = await readAllFromStore(store)
-    rows.forEach((row) => {
-      const normalized = migrateStoredRow(row)
-      if (!normalized?.id || normalized.deleted) return
-      store.put({
-        ...normalized,
-        deleted: true,
-        revision: (Number(normalized.revision) || 1) + 1,
-        updated_at: deletedAt,
-      })
-    })
-    return true
-  })
 }
 
 export async function renameAuditLogSpeaker(fromSpeaker, toSpeaker, { fromSpeakerId, toSpeakerId } = {}) {
