@@ -172,6 +172,12 @@ export interface IntegrationActions {
 
     /** Añadir una entrada al historial de conversación */
     addConversationEntry: (entry: ConversationEntry) => void;
+    /**
+     * Fijar el hablante de una entrada existente (sin agregar otra fila).
+     * Lo usa el commit ÚNICO de fila de turno para completar el hablante del
+     * commit temprano en vez de duplicar la frase.
+     */
+    setConversationEntrySpeaker: (id: string, speakerName: string) => void;
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
     addFluMessage: (text: string) => void;
@@ -429,6 +435,15 @@ export const useIntegrationStore = create<IntegrationStore>()(
             addConversationEntry: (entry: ConversationEntry) => {
                 set((current) => ({
                     conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
+                }));
+            },
+
+            setConversationEntrySpeaker: (id: string, speakerName: string) => {
+                if (!id) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.map((entry) =>
+                        entry.id === id ? { ...entry, speakerName } : entry,
+                    ),
                 }));
             },
 

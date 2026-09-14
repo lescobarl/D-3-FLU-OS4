@@ -64,6 +64,7 @@ import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
 import { isDataUrl } from './lib/formatAdapters';
+import { commitUserTurnRow } from './voice/lib/conversationTurnRow';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
 import {
@@ -1209,10 +1210,9 @@ async function dispatchArbiterIntent(
             reply = (await w.__fluHandleAgendaText(intent)) || '';
         } else if (domain === 'horario' && typeof w.__fluHandleHorarioText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleHorarioText (horario)');
-            reply =
-                (await w.__fluHandleHorarioText(intent, {
-                    personId: opts.speakerName || undefined,
-                })) || '';
+            // El scope del horario es el participante ACTIVO (lo resuelve el
+            // propio manejador); nunca el nombre del hablante.
+            reply = (await w.__fluHandleHorarioText(intent)) || '';
         } else {
             relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
         }
@@ -1839,24 +1839,12 @@ function App() {
             // capturar (antes de la IA). Aquí SOLO se agrega la fila y se sale;
             // la resolución posterior deduplica y agrega la respuesta de FLU.
             if (resolved?.userCommitOnly) {
-                const early = cleanForSpeech(String(resolved?.transcript || ''));
-                if (early) {
-                    const hist0 = useIntegrationStore.getState().conversationHistory;
-                    const last0 = hist0[hist0.length - 1];
-                    const already0 =
-                        last0?.role === 'user' &&
-                        cleanForSpeech(last0.text || '').toLowerCase() === early.toLowerCase();
-                    if (!already0) {
-                        useIntegrationStore.getState().addConversationEntry({
-                            id: uuidv4(),
-                            role: 'user',
-                            text: early,
-                            speakerName: String(resolved?.speakerName || '') || undefined,
-                            timestamp: Date.now(),
-                            sentiment: 'neutral',
-                        });
-                    }
-                }
+                // Commit temprano: agrega/reutiliza la fila del turno (sin
+                // hablante todavía). El commit final la completará.
+                commitUserTurnRow({
+                    text: String(resolved?.transcript || ''),
+                    speakerName: resolved?.speakerName,
+                });
                 return;
             }
             const contract: Partial<ResolvedContract> = resolved?.contract || {};
@@ -1867,24 +1855,10 @@ function App() {
 
             // §9: la frase canónica del usuario debe verse SIEMPRE, también en
             // turnos de COMANDO (navegación/medios) que NO pasan por la ruta
-            // rawOnly. Commit único por texto (dedup contra la última fila user).
+            // rawOnly. Commit único por turno: reutiliza la fila del commit
+            // temprano y completa su hablante (una frase ⇒ una fila).
             if (!rawOnly && transcript) {
-                const norm = cleanForSpeech(transcript).toLowerCase();
-                const hist = useIntegrationStore.getState().conversationHistory;
-                const last = hist[hist.length - 1];
-                const alreadyLogged =
-                    last?.role === 'user' &&
-                    cleanForSpeech(last.text || '').toLowerCase() === norm;
-                if (!alreadyLogged) {
-                    useIntegrationStore.getState().addConversationEntry({
-                        id: uuidv4(),
-                        role: 'user',
-                        text: transcript,
-                        speakerName: speakerName || undefined,
-                        timestamp: Date.now(),
-                        sentiment: 'neutral',
-                    });
-                }
+                commitUserTurnRow({ text: transcript, speakerName });
             }
 
             // ============================================================
@@ -3912,7 +3886,7 @@ function App() {
     // determinista: parseHorarioIntent interpreta el transcript y aquí se
     // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
     window.__fluHandleHorarioText = useCallback(
-        async (input: HorarioIntent | string, opts?: { personId?: string }) => {
+        async (input: HorarioIntent | string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro, que ya ejecutó parseHorarioIntent), se ejecuta
@@ -3964,7 +3938,12 @@ function App() {
                         inicio,
                         fin,
                         aula: data.aula,
-                        personId: opts?.personId,
+                        // Aislamiento por usuario: la entrada se guarda con el
+                        // MISMO scope que lee `useHorario` (participante activo),
+                        // no con el nombre del hablante (que no es un id y hacía
+                        // que el panel la descartara). El nombre del hablante no
+                        // es el dueño del registro.
+                        personId: activeParticipantId,
                     });
                     if (!result.ok) {
                         return pick(voice, 'addError', `No pude registrar "${materia}".`)
@@ -4030,7 +4009,7 @@ function App() {
                     return '';
             }
         },
-        [horario, languageRef],
+        [horario, languageRef, activeParticipantId],
     );
 
     const onboardingOverlayLabels = FLU_CONFIG.onboarding?.overlay || {};
