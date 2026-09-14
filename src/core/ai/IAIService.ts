@@ -137,12 +137,19 @@ export interface GenerationInput {
  * Resultado de generateDocument (F3) — contenido serializado listo para descargar.
  */
 export interface GeneratedDocumentResult {
+    /** Artefacto serializado: texto plano para formatos nativos, data URL para binarios. */
     content: string;
     mime: string;
     ext: string;
     nombre: string;
     bytes?: number;
     url?: string;
+    /**
+     * Contenido textual de origen (el cuerpo que produjo el LLM), independiente
+     * del serializado. Es la fuente narrable/legible cuando `content` es un
+     * binario (p. ej. data URL de PDF); sin él, TTS y descarga no tienen texto.
+     */
+    text?: string;
 }
 
 /**

@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
+import { dataUrlToBlob, isDataUrl } from '../lib/formatAdapters';
 import type { GenerationJob } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { VideoAssemblyResult } from '../services/videoAssembler';
@@ -31,15 +32,18 @@ export interface GenerationProgressPanelProps {
 }
 
 function triggerDownload(result: GeneratedDocumentResult): void {
-    const content = result.content || '';
-    if (result.url) {
+    const text = result.text || result.content || '';
+    // URL remota/blob válida (no un data URL): se descarga tal cual.
+    if (result.url && !isDataUrl(result.url)) {
         const a = document.createElement('a');
         a.href = result.url;
         a.download = result.nombre;
         a.click();
         return;
     }
-    const blob = new Blob([content], { type: result.mime || 'text/plain' });
+    // Descarga binaria (PDF/DOCX/…): decodifica el data URL a Blob real.
+    const binaryBlob = isDataUrl(result.content) ? dataUrlToBlob(result.content) : null;
+    const blob = binaryBlob || new Blob([text], { type: result.mime || 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -79,7 +83,10 @@ export default function GenerationProgressPanel({
     }, []);
 
     const ttsSource = useMemo(() => {
-        if (result?.content) return result.content;
+        // El texto narrable es el cuerpo (`text`); si solo hay `content` y es
+        // binario serializado (data URL), NO se narra (evita leer base64).
+        if (result?.text) return result.text;
+        if (result?.content && !isDataUrl(result.content)) return result.content;
         if (videoResult?.script) return videoResult.script;
         return '';
     }, [result, videoResult]);

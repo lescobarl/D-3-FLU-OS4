@@ -91,6 +91,26 @@ function shortTitleFromBody(body: string, titleMaxChars: number): string {
 }
 
 /**
+ * Títulos genéricos que NO son un rótulo real: los inventa el propio pipeline
+ * cuando el artifact no trae título (p. ej. `App` usa 'Video'/'Documento').
+ * Un título igual al tipo no informa; en ese caso se usa el tema de generación.
+ */
+const PLACEHOLDER_DOC_TITLES = new Set(['video', 'documento']);
+
+/**
+ * Resuelve el TÍTULO visible de un documento/video sin confundirlo con el
+ * TEMA de generación (que puede ser el cuerpo). Devuelve el título del
+ * artifact si es un rótulo real; si está vacío o es un placeholder de tipo,
+ * cae al `fallback` (tema de generación). Función pura (Regla #1: sin hardcode
+ * de negocio; el placeholder es una regla de normalización declarada).
+ */
+export function resolveDocumentTitle(titulo: string | undefined, fallback: string | undefined): string {
+    const value = String(titulo || '').trim();
+    if (value && !PLACEHOLDER_DOC_TITLES.has(value.toLowerCase())) return value.slice(0, 200);
+    return String(fallback || '').trim().slice(0, 200);
+}
+
+/**
  * Normaliza el par título/contenido de un artefacto de documento. Si el cuerpo
  * llega en `titulo` y `contenido` viene vacío, devuelve el cuerpo en `contenido`
  * y un título corto. Si ya hay contenido, no lo toca.

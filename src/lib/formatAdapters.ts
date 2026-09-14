@@ -54,6 +54,37 @@ export function safeFileName(nombre: string, ext: string): string {
   return `${clean}.${ext}`;
 }
 
+/**
+ * true si el valor es un data URL (artefacto binario serializado), no contenido
+ * textual narrable/legible. Fuente única para que TTS y UI no traten un binario
+ * como texto (p. ej. narrar la base64 de un PDF).
+ */
+export function isDataUrl(value?: string): boolean {
+  return /^data:[^,]*[,;]/.test(String(value || '').trim());
+}
+
+/**
+ * Decodifica un data URL a Blob real (base64 o percent-encoded). Devuelve `null`
+ * si no es un data URL válido o la decodificación falla. Evita descargar el
+ * string del data URL como si fuera contenido (PDF ilegible).
+ */
+export function dataUrlToBlob(dataUrl: string): Blob | null {
+  const m = /^data:([^;,]*)(;base64)?,([\s\S]*)$/.exec(String(dataUrl || '').trim());
+  if (!m) return null;
+  const mime = m[1] || 'application/octet-stream';
+  try {
+    if (m[2]) {
+      const binary = atob(m[3]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+    return new Blob([decodeURIComponent(m[3])], { type: mime });
+  } catch {
+    return null;
+  }
+}
+
 function toBlobUrl(content: string, mime: string): string {
   try {
     if (typeof Blob === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
@@ -75,6 +106,7 @@ function textResult(content: string, mime: string, ext: string, nombre: string):
     nombre: safeFileName(nombre, ext),
     bytes: trimmed.length,
     url: toBlobUrl(trimmed, mime),
+    text: trimmed,
   };
 }
 
@@ -128,6 +160,7 @@ async function serializePdf(content: string, nombre: string): Promise<GeneratedD
       ext: FORMAT_INFO.pdf.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.pdf.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
     console.warn('[formatAdapters] PDF serialization unavailable, falling back to markdown:', e);
@@ -162,6 +195,7 @@ async function serializeDocx(content: string, nombre: string): Promise<Generated
       ext: FORMAT_INFO.docx.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.docx.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
     console.warn('[formatAdapters] DOCX serialization unavailable, falling back to markdown:', e);
@@ -196,6 +230,7 @@ async function serializeXlsx(content: string, nombre: string): Promise<Generated
       ext: FORMAT_INFO.xlsx.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.xlsx.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
     console.warn('[formatAdapters] XLSX serialization unavailable, falling back to markdown:', e);
@@ -233,6 +268,7 @@ async function serializePptx(content: string, nombre: string): Promise<Generated
       ext: FORMAT_INFO.pptx.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.pptx.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
     console.warn('[formatAdapters] PPTX serialization unavailable, falling back to markdown:', e);

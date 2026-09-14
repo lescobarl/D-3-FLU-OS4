@@ -62,7 +62,8 @@ import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
-import { buildGenerationTopic, normalizeWorkspaceDocumentFields, type GenerationConversationSlice } from './lib/generationTopic';
+import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
+import { isDataUrl } from './lib/formatAdapters';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
 import {
@@ -4317,6 +4318,13 @@ function App() {
         const state = useIntegrationStore.getState() as unknown as GenerationConversationSlice;
         const { tema, contenido } = buildGenerationTopic(state);
         const formato = tipo === 'doc' ? 'pdf' : 'video';
+        // TÍTULO del documento ≠ TEMA de generación: el título sale del artifact
+        // normalizado (rótulo corto). Si el artifact solo trae un placeholder de
+        // tipo, cae al tema. Evita que el CUERPO quede como título (caso 5).
+        const tituloDocumento = resolveDocumentTitle(
+            state.workspaceArtifact?.titulo,
+            tema || (formato === 'video' ? 'Video' : 'Documento'),
+        );
         // `doc` se genera como PDF (mismo comportamiento previo del bridge).
         // El historial se escribe al RESOLVER la generación para guardar el
         // CONTENIDO REAL (la carta/documento), no solo el tema de entrada.
@@ -4333,13 +4341,16 @@ function App() {
                 // para documento/PDF es el data URL (va en `contenido`).
                 const pointerUrl =
                     useIntegrationStore.getState().generationJob?.url_resultado || '';
+                // El binario serializado (data URL) va en `ref` (descarga); el
+                // TEXTO del cuerpo va en `contenido` (legible/narrable).
+                const binario = isDataUrl(generated?.content) ? generated?.content : undefined;
                 void documentHistory.add({
                     kind: 'generated',
                     formato,
-                    titulo: tema || (formato === 'video' ? 'Video' : 'Documento'),
-                    nombre: tema || formato,
-                    contenido: generated?.content || contenido || '',
-                    ref: pointerUrl || generated?.url || undefined,
+                    titulo: tituloDocumento,
+                    nombre: tituloDocumento || formato,
+                    contenido: generated?.text || contenido || '',
+                    ref: pointerUrl || generated?.url || binario,
                 });
             });
         return true;
