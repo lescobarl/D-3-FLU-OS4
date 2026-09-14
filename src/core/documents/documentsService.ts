@@ -5,6 +5,7 @@
 // por usuario. Aislamiento: cada fila lleva `personId`; `list` filtra por el
 // alcance del usuario activo (`personId || 'global'`).
 // ============================================================
+import { v4 as uuidv4 } from 'uuid';
 import { newSyncTuple, type DocumentRecord } from '../db/fluDatabase';
 
 export interface NewDocumentInput {
@@ -32,14 +33,7 @@ export interface DocumentsService {
 }
 
 function newId(): string {
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-  } catch {
-    /* fallback */
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return uuidv4();
 }
 
 export function createDocumentsService({

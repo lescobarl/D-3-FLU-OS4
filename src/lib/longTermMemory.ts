@@ -10,6 +10,8 @@
 //   - Pure functions — no React dependencies
 // ============================================================
 
+import { v4 as uuidv4 } from 'uuid';
+
 // -----------------------------------------------------------
 // Types
 // -----------------------------------------------------------
@@ -275,7 +277,7 @@ export async function cleanupExpiredMemories(): Promise<number> {
  * Generate a unique memory ID.
  */
 export function generateMemoryId(category: string): string {
-    return `${category}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return `${category}_${uuidv4()}`;
 }
 
 /**
