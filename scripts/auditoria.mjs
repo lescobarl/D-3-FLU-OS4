@@ -12,7 +12,7 @@
  * Regla: cada hallazgo tiene detector, META y severidad. Un hito es "verde" cuando
  * su(s) hallazgo(s) llegan a META sin subir ningún otro.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -32,7 +32,7 @@ function walk(dir, acc = []) {
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry)
     if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(entry)) acc.push(p)
+    else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry)) acc.push(p)
   }
   return acc
 }
@@ -69,6 +69,84 @@ const isConfigPath = (p) =>
   p.includes('/config/') || /(appConfig|fluConfig|visualConfig|musicCatalog)\.(ts|js)$/.test(p)
 // Código que NO es config (el hardcode en config es legítimo, §2.2).
 const srcCodeFiles = srcFiles.filter((f) => !isConfigPath(rel(f)))
+
+/** grep sobre el TEXTO COMPLETO del archivo (detecta patrones multilínea). */
+function grepMultiline(files, re) {
+  const out = []
+  for (const f of files) {
+    const text = readFileSync(f, 'utf8')
+    const flags = re.flags.includes('g') ? re.flags : re.flags + 'g'
+    const rex = new RegExp(re.source, flags)
+    let m
+    while ((m = rex.exec(text))) {
+      const line = text.slice(0, m.index).split(/\r?\n/).length
+      out.push(`${rel(f)}:${line}:${m[0].replace(/\s+/g, ' ').trim().slice(0, 80)}`)
+      if (m.index === rex.lastIndex) rex.lastIndex += 1
+    }
+  }
+  return out
+}
+
+/** Definiciones REALES (a nivel de línea): nombre -> [archivo:linea]. */
+function defsByName(files, names, kinds = 'function|const|class') {
+  const re = new RegExp(`export\\s+(?:async\\s+)?(?:${kinds})\\s+(${names.join('|')})\\b`)
+  const map = new Map()
+  for (const f of files) {
+    readLines(f).forEach((line, i) => {
+      const m = re.exec(line)
+      if (!m) return
+      if (!map.has(m[1])) map.set(m[1], [])
+      map.get(m[1]).push(`${rel(f)}:${i + 1}`)
+    })
+  }
+  return map
+}
+
+/** DUPLICADOS REALES: nombres definidos en >1 lugar (META 0). No es tautológico. */
+function duplicateDefs(files, names, kinds) {
+  const out = []
+  for (const [n, locs] of defsByName(files, names, kinds)) {
+    if (locs.length > 1) out.push(`${n} -> ${locs.join(', ')}`)
+  }
+  return out
+}
+
+/** Mismo CUERPO con DISTINTO nombre (heuristica). Reporte, no gate. */
+function duplicateBodies() {
+  const norm = (b) =>
+    b
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/`[^`]*`|'[^']*'|"[^"]*"/g, '""')
+      .replace(/\s+/g, ' ')
+      .trim()
+  const groups = new Map()
+  const re =
+    /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\([^)]*\)\s*\{|(?:export\s+)?const\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g
+  for (const f of srcFiles) {
+    const text = readFileSync(f, 'utf8')
+    let m
+    re.lastIndex = 0
+    while ((m = re.exec(text))) {
+      const name = m[1] || m[2]
+      const start = re.lastIndex - 1
+      let depth = 0
+      let i = start
+      for (; i < text.length; i++) {
+        if (text[i] === '{') depth++
+        else if (text[i] === '}') {
+          depth--
+          if (depth === 0) break
+        }
+      }
+      const body = norm(text.slice(start + 1, i))
+      if (body.length < 60) continue
+      if (!groups.has(body)) groups.set(body, [])
+      groups.get(body).push(`${name}@${rel(f)}:${text.slice(0, m.index).split(/\r?\n/).length}`)
+    }
+  }
+  return [...groups.values()].filter((g) => g.length > 1).map((g) => g.join(' ≡ '))
+}
 
 /** Cuenta definiciones `export [async] function|const|class <name>` de una lista, en todo src. */
 function countExportFns(files, names) {
@@ -167,34 +245,34 @@ const FINDINGS = [
   // -------- duplicación estructural real --------
   {
     id: 'D1', sev: 'alta', title: 'Scheduler: definiciones de la lógica (isDue/collectDue/collectDueOrdered)',
-    hito: 1, target: SCHEDULER.length,
+    hito: 1, target: 0,
     // Solo `export function` = definición real. Los adaptadores `export const` que
     // delegan en el dueño están PERMITIDOS (por eso este hallazgo ya está en META).
-    detect: () => grep(srcFiles, /export\s+function\s+(isDue|collectDue|collectDueOrdered)\b/),
+    detect: () => duplicateDefs(srcFiles, SCHEDULER, 'function'),
     note: 'Dueño: src/core/temporal/scheduleEngine.ts. reminderScheduler.ts adapta (export const) o re-exporta.',
   },
   {
     id: 'D2', sev: 'alta', title: 'Participantes duplicados (lib vs voice/lib)',
-    hito: 3, target: PARTICIPANT.length,
-    detect: () => countExportFns(srcFiles, PARTICIPANT),
+    hito: 3, target: 0,
+    detect: () => duplicateDefs(srcFiles, PARTICIPANT),
     note: 'CANDIDATO: verificar par a par (JS vs TS/config). Solo unificar identicos; el resto a ALLOW_COLLISION.',
   },
   {
     id: 'D3', sev: 'alta', title: 'Minutos duplicados (helpers vs minuteKnowledge)',
-    hito: 4, target: MINUTE.length,
-    detect: () => countExportFns(srcFiles, MINUTE),
+    hito: 4, target: 0,
+    detect: () => duplicateDefs(srcFiles, MINUTE),
     note: 'CANDIDATO: verificar par a par antes de tocar. Duplicacion anidada (helpers importa minuteKnowledge).',
   },
   {
     id: 'D4', sev: 'muy alta', title: 'Persistencia duplicada (fluDatabase vs fluStorage)',
-    hito: 5, target: STORAGE.length,
-    detect: () => countExportFns(srcFiles, STORAGE),
+    hito: 5, target: 0,
+    detect: () => duplicateDefs(srcFiles, STORAGE),
     note: 'NO es re-export: fluDatabase (Dexie) vs fluStorage (IndexedDB) = backend distinto. Consolidacion + MIGRACION. Decision de arquitectura, no unificacion.',
   },
   {
     id: 'D5', sev: 'media', title: 'Utils identicos confirmados (un dueno por util)',
-    hito: 2, target: UTILS_INTERNAL.length,
-    detect: () => countExportFns(srcFiles, UTILS_INTERNAL),
+    hito: 2, target: 0,
+    detect: () => duplicateDefs(srcFiles, UTILS_INTERNAL),
     note: 'Solo verificados como IDENTICOS. Los parecidos-pero-distintos van a ALLOW_COLLISION (no se tocan).',
   },
 
@@ -202,13 +280,13 @@ const FINDINGS = [
   {
     id: 'V1', sev: 'alta', title: 'IDs con Date.now()+Math.random() (regla §3.6 UUIDv4)',
     target: 0,
-    detect: () =>
-      grep(srcFiles, /Math\.random\(\)/).filter((l) => /[A-Za-z_$]*[Ii][Dd]\b/.test(l)),
+    detect: () => grepCode(srcFiles.filter(notDev), /Date\.now\(\)[^\n]*Math\.random\(\)/),
     note: 'Debe ser crypto.randomUUID() (conservando prefijos de id).',
   },
   {
     id: 'V2', sev: 'media', title: 'Catch vacío que silencia errores (§2.6)',
-    target: 0, detect: () => grep(srcFiles, /catch\s*(\([^)]*\))?\s*\{\s*\}/),
+    target: 0,
+    detect: () => grepMultiline(srcFiles.filter(notDev), /catch\s*(\([^)]*\))?\s*\{\s*\}/),
     note: 'Teardown de audio podría ir a allowlist justificada.',
   },
   {
@@ -291,8 +369,9 @@ const FINDINGS = [
   {
     id: 'V10', sev: 'media', title: 'Boilerplate fetch /api/gemini/contract (>=2 sitios)',
     target: 1,
-    detect: () => grep(srcFiles, /fetch\('\/api\/gemini\/contract'/),
-    note: 'Un helper postGeminiContract; una sola aparicion del fetch.',
+    detect: () =>
+      grepCode(srcCodeFiles.filter((f) => !rel(f).startsWith('src/server/')), /api\/gemini\/contract/),
+    note: 'Un solo cliente del endpoint (server monta la ruta; no cuenta).',
   },
   {
     id: 'V11', sev: 'baja', title: 'new de dependencias dentro de la logica (§2.4)',
@@ -323,6 +402,39 @@ const FINDINGS = [
     target: 1,
     detect: () => grep(srcFiles, /const timestamp = \(\): number => now\(\)/),
     note: 'Un helper compartido; si alguno difiere, dejarlo y reportarlo.',
+  },
+  {
+    id: 'V16', sev: 'media', title: 'Tupla de sync creada INLINE (no via buildSyncTuple)',
+    target: 0,
+    detect: () =>
+      grepCode(
+        srcCodeFiles.filter((f) => !rel(f).startsWith('src/core/db/')),
+        /updated_at:\s*new Date\(/,
+      ),
+    note: 'Fuera de la capa db: debe salir de buildSyncTuple (evita evade el guard de sync).',
+  },
+  {
+    id: 'V17', sev: 'baja', title: 'Archivo .mjs muerto/duplicado con import roto',
+    target: 0,
+    detect: () => srcFiles.map(rel).filter((p) => p === 'src/server/handlers/workspaceImageHandler.mjs'),
+    note: 'Implementacion real en src/voice/lib/imageGeneration.js; el .mjs importa ruta inexistente.',
+  },
+  {
+    id: 'V18', sev: 'media', info: true, title: 'Mismo cuerpo con DISTINTO nombre (reporte; no gate)',
+    target: 0,
+    detect: () => duplicateBodies(),
+    note: 'Candidatos a unificar. Cerrar por pares; requiere revision manual.',
+  },
+  {
+    id: 'V19', sev: 'baja', info: true, title: 'npm run lint no es lint real (sin config eslint)',
+    target: 0,
+    detect: () => {
+      const has = ['.eslintrc', '.eslintrc.json', '.eslintrc.js', 'eslint.config.js', 'eslint.config.mjs'].some(
+        (p) => existsSync(join(ROOT, p)),
+      )
+      return has ? [] : ['sin config eslint; npm run lint solo corre test-guards (estructurales)']
+    },
+    note: 'Agregar eslint real + >=1 test de comportamiento por invariante critico (§0.12).',
   },
 
   // -------- nombres repetidos NO duplicados (no tocar) --------
