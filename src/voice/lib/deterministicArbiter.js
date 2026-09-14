@@ -160,6 +160,18 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'environment', action: env, channel: 'flu' }
   }
 
+  // 3.b Reuniones (junta/reunión/meeting): son ENTRADAS de horario. Se resuelven
+  //     aquí, ANTES de reminder (que también reconoce "junta" como cita), para
+  //     que exista UNA sola ruta de ingreso por señal. Solo gana si el horario
+  //     produce una acción completa (día + hora + título).
+  const MEETING_NOUN_RE = /\b(?:junta|reuni[oó]n|reuniones|meeting)\b/i
+  if (MEETING_NOUN_RE.test(transcript)) {
+    const horarioMeeting = parseHorarioIntent(transcript)
+    if (horarioMeeting?.handled && horarioMeeting?.action) {
+      return { matched: true, domain: 'horario', action: horarioMeeting, channel: 'flu' }
+    }
+  }
+
   // 4. Recordatorios/compras/citas (reminderIntentParser): función-adición.
   //    Solo MATCH cuando el parser devuelve una intención ACCIONABLE
   //    (action truthy). Los casos de aclaración (action === null) NO se marcan

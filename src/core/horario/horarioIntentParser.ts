@@ -65,6 +65,16 @@ const ADD_TRIGGERS_ES =
 const ADD_TRIGGERS_EN =
   /^(?:add|put|schedule|set|create|register)\b/i;
 
+/**
+ * Sustantivos de reunión como ENTRADA de horario sin verbo previo
+ * ("junta de equipo hoy a las 12:00"). El dictado real puede empezar por el
+ * sustantivo; sin este trigger caía a la IA (que alucinaba éxito).
+ */
+const ADD_NOUN_ES =
+  /^(?:junta|reuni[oó]n)\b/i;
+const ADD_NOUN_EN =
+  /^(?:meeting)\b/i;
+
 const REMOVE_TRIGGERS_ES =
   /^(?:quita|quitar|quitame|quitale|quitemos|elimina|eliminar|eliminame|borra|borrar|borrame|remueve|remover|saca|sacar)\b/i;
 const REMOVE_TRIGGERS_EN =
@@ -304,9 +314,11 @@ export function parseHorarioIntent(
   // --- Agregar ---------------------------------------------
   const addEs = ADD_TRIGGERS_ES.exec(text);
   const addEn = ADD_TRIGGERS_EN.exec(text);
-  const addTrigger = addEs || addEn;
+  const addNounEs = ADD_NOUN_ES.exec(text);
+  const addNounEn = ADD_NOUN_EN.exec(text);
+  const addTrigger = addEs || addEn || addNounEs || addNounEn;
   if (addTrigger) {
-    const aLang = addEs ? 'es' : 'en';
+    const aLang = addEs || addNounEs ? 'es' : 'en';
     const rest = text.slice(addTrigger[0].length).trim();
     const dia = detectDia(rest);
     const inicio = extractStartTime(rest);

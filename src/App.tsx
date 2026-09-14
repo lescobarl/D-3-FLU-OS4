@@ -1180,7 +1180,10 @@ async function dispatchArbiterIntent(
                 })) || '';
         } else if (domain === 'horario' && typeof w.__fluHandleHorarioText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleHorarioText (horario)');
-            reply = (await w.__fluHandleHorarioText(intent)) || '';
+            reply =
+                (await w.__fluHandleHorarioText(intent, {
+                    personId: opts.speakerName || undefined,
+                })) || '';
         } else {
             relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
         }
@@ -3827,7 +3830,7 @@ function App() {
     // determinista: parseHorarioIntent interpreta el transcript y aquí se
     // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
     window.__fluHandleHorarioText = useCallback(
-        async (input: HorarioIntent | string) => {
+        async (input: HorarioIntent | string, opts?: { personId?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro, que ya ejecutó parseHorarioIntent), se ejecuta
@@ -3879,6 +3882,7 @@ function App() {
                         inicio,
                         fin,
                         aula: data.aula,
+                        personId: opts?.personId,
                     });
                     if (!result.ok) {
                         return pick(voice, 'addError', `No pude registrar "${materia}".`)

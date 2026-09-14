@@ -41,6 +41,8 @@ export interface NewHorarioInput {
   /** Lugar opcional (aula, consultorio, oficina…). */
   aula?: string;
   color?: string;
+  /** Usuario/hablante dueño de la entrada (aislamiento por hablante). */
+  personId?: string;
 }
 
 export interface HorarioConfig {
@@ -314,7 +316,7 @@ export function createHorarioService({
       aula: cleanAula(input.aula),
       color: config.colores.includes(String(input.color || '')) ? String(input.color).trim() : config.defaultColor,
       reminders: [],
-      personId: (input as { personId?: string }).personId,
+      personId: input.personId,
       createdAt: t,
       updatedAt: t,
       sync: buildSyncTuple(undefined, timestamp()),
