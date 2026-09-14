@@ -4,7 +4,7 @@
  */
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { isAutoSpeakerLabel, normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
+import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
 import { buildSyncTuple } from '../../core/db/syncTuple'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'

@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { useSettingsSaveRegistration } from '../../components/SettingsSaveContext'
 import { resolveAppLanguage } from '../lib/audioMath.js'
 import { resolveFluParticipantLabel } from '../lib/participantFloor.js'
 import { speakResponse } from '../lib/fluSpeech.js'
-import { FLU_CONFIG } from '../lib/fluConfig.js'
 import {
   FLU_PARTICIPANT_EDITABLE_FIELDS,
   getFluParticipantConfig,

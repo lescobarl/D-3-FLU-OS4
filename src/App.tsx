@@ -50,24 +50,20 @@ import { useBrowserProfiles } from './hooks/useBrowserProfiles';
 import { useSearchSites } from './hooks/useSearchSites';
 import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
-import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
+import { STORAGE_KEYS, WELCOME_MESSAGE, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
 import { dayKey, shouldRolloverDay } from './core/days/dayRollover';
-import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
+import type { ConversationState, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
 import { playSong, pauseMusic, stopMusic } from './services/musicPlayer';
 import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from './services/aiServiceFactory';
-import { extractTextFromImage, extractTextFromPdf } from './services/ocrService';
+import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import { buildGenerationTopic, type GenerationConversationSlice } from './lib/generationTopic';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
-import DocumentResultPanel from './components/DocumentResultPanel';
-import AppAnalysisPanel from './components/AppAnalysisPanel';
-import GenerationProgressPanel from './components/GenerationProgressPanel';
-import FluCollapsibleCard from './components/FluCollapsibleCard';
 import {
     loadSearchConfigOverrides,
     saveSearchConfigOverrides,
@@ -75,7 +71,6 @@ import {
     type SearchConfigOverrides,
 } from './core/search/searchConfigOverrides';
 import { isSupportedDocument } from './lib/documentParser';
-import type { GenerationFormato } from './types/documentContracts';
 import { useAutonomyIntegration } from './core/autonomy';
 import {
     detectActionInTranscript,
@@ -100,7 +95,6 @@ import './avatar/App.css';
 // ============================================================
 // OS2 Component Imports — local paths (formerly flu-voz alias)
 // ============================================================
-import FluParticipantSettingsPanel from './voice/components/FluParticipantSettingsPanel';
 import { FluShellTabs } from './voice/components/FluShellTabs';
 import { VoiceAssistantBarWrapper } from './components/VoiceAssistantBarWrapper';
 import type { SettingsGroupId } from './components/FluSettingsTabView';
@@ -121,7 +115,7 @@ import { useDeviceActions } from './hooks/useDeviceActions';
 import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
 // ---- Horario de clases (Pizarrón): hook temprano y panel presentacional ----
 import { useHorario } from './hooks/useHorario';
-import { HorarioPizarron, clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
+import { clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
 import { diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
@@ -153,7 +147,7 @@ import { fluDb } from './core/db/fluDatabase';
 // OS2 Library Imports — local paths (formerly flu-voz alias)
 // ============================================================
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
-import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
+import { speakResponse, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import {
     normalizeCommandForDeterministic,
@@ -189,9 +183,6 @@ import {
     isFluParticipantEnabled,
 } from './voice/lib/fluParticipantConfig';
 import {
-    createMinuteDraftFromSummary,
-} from './voice/lib/minuteKnowledge';
-import {
     buildMinuteKnowledgeBase2,
     resolveMinuteQuery,
     selectMinuteForLookup,
@@ -199,17 +190,14 @@ import {
 import {
     buildDailyAgenda,
     formatAgendaForPrompt,
-    countPendingItems,
     mergeRemindersIntoAgenda,
 } from './lib/dailyAgenda';
 import {
     buildSystemConversationEntry,
-    isDuplicateSystemEvent,
     type SystemEvent,
 } from './lib/systemEventLog';
 import { buildFluSpeechAuditRows, deriveUserLastText, selectVisiblePhrase } from './voice/lib/conversationDialogue';
 import { evaluateListenParity } from './voice/lib/listenParity';
-import { shouldGenerateWorkspaceImage, normalizeWorkspaceContract } from './voice/lib/workspaceContract';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
 import { planRawCommit } from './voice/lib/rawCommitPlan';
@@ -522,7 +510,7 @@ async function applyConfigAction(
             break;
         }
         case 'voiceNumber': {
-            const ok = applyNumberConfig(entry, valor, (n) => {
+            applyNumberConfig(entry, valor, (n) => {
                 ctx.setVoiceConfig?.({ [entry.clave]: n } as Partial<VoiceConfig>);
             });
             break;
@@ -582,7 +570,7 @@ async function applyConfigAction(
             break;
         }
         case 'personalityNumber': {
-            const ok = applyNumberConfig(entry, valor, (n) => {
+            applyNumberConfig(entry, valor, (n) => {
                 ctx.setPersonality?.({ [entry.clave]: n } as Partial<PersonalityConfig>);
             });
             break;
@@ -593,7 +581,7 @@ async function applyConfigAction(
         // Claves del catálogo == campos de AdvancedConfig.
         // --------------------------------------------------------
         case 'advancedNumber': {
-            const ok = applyNumberConfig(entry, valor, (n) => {
+            applyNumberConfig(entry, valor, (n) => {
                 ctx.setAdvancedConfig?.({ [entry.clave]: n } as Partial<AdvancedConfig>);
             });
             break;
@@ -1138,7 +1126,7 @@ async function dispatchArbiterIntent(
 }
 
 function App() {
-    const [currentState, setCurrentState] = useState<ConversationState>('IDLE');
+    const [_currentState, setCurrentState] = useState<ConversationState>('IDLE');
     // Foco del Pizarrón por turno (señal monotónica): garantiza que el feed
     // salte al tipo del resultado del turno, incluso si el tipo se repite, y
     // que una respuesta de texto regrese a "Todo".
@@ -1208,7 +1196,7 @@ function App() {
     const savedSession = useRef(loadSessionState());
     const conversationActiveRef = useRef(false);
     const resumeListeningTimerRef = useRef<number | null>(null);
-    const lastRawLogRef = useRef<string>('');
+    const _lastRawLogRef = useRef<string>('');
     // Indica si FLU ya produjo una respuesta sustantiva en ESTA carga de página.
     // Se usa para que latestResponse NO resucite una respuesta vieja del historial
     // persistido (IndexedDB) al recargar, antes de que FLU responda de nuevo.
@@ -1443,9 +1431,9 @@ function App() {
     // ---- Punto 2 — Catálogo de sitios: catálogo fusionado del buscador ----
     const searchSites = useSearchSites();
     // ---- Fase 4 — Módulo G: hábitos y metas por participante ----
-    const habits = useHabits({});
+    const _habits = useHabits({});
     // ---- Fase 5 — Módulo H: bienestar y ánimo por participante ----
-    const mood = useMood({});
+    const _mood = useMood({});
     // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
     const contacts = useContacts({});
     const diary = useDiary({});
@@ -1646,14 +1634,12 @@ function App() {
         // fluParticipantPresentation is no longer destructured from useFluVoiceAssistant
         startListening: os2StartListening,
         stopListening: os2StopListening,
-        toggleListening: os2ToggleListening,
         showListeningAck,
         removeSessionSpeaker: os2RemoveSessionSpeaker,
         renameSessionSpeaker: os2RenameSessionSpeaker,
         // OS2 parity: additional actions from useFluVoiceAssistant (FluShell.jsx lines 3444-3457)
         resetConversationSession: os2ResetConversationSession,
         resetVoiceDisplay: os2ResetVoiceDisplay,
-        endParticipantFloorDelivery: os2EndParticipantFloorDelivery,
         suspendRecognitionForAssistantSpeech: os2SuspendRecognition,
         /** Set recent memory text that gets injected into the system prompt on next contract request. */
         setRecentMemory,
@@ -1956,7 +1942,6 @@ function App() {
             // conversacional al manejador determinista correspondiente.
             // ============================================================
             if (hasAcciones && !rawOnly) {
-                const w = window;
                 try {
                     const wakeWords: string[] =
                         (FLU_CONFIG?.voiceCommands?.wakeWords as string[]) || [];
@@ -2061,7 +2046,6 @@ function App() {
             // Solo corre cuando el LLM NO emitió acciones (sin API key, etc.).
             // ============================================================
             if (transcript && !rawOnly && !hasAcciones) {
-                const w = window;
                 try {
                     // ============================================================
                     // PUNTO ÚNICO DE NORMALIZACIÓN DEL MANDATO (hub de integración)
@@ -2900,7 +2884,6 @@ function App() {
     );
     const {
         speakFlu,
-        clearResumeListeningTimer,
         scheduleResumeListening,
         handleNavigationCommand,
     } = navigationCommands;
@@ -2992,7 +2975,6 @@ function App() {
             return;
         }
         onboarding.completeWithName(capturedName as string);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [onboarding.visible, onboarding.currentStep, onboarding.state.captured, participants.participants, activeParticipantId]);
     // Captura dual TEXTO + VOZ: la voz alimenta el MISMO embudo `answer`
     // del teclado. Solo se activa en pasos capture/decision con
@@ -3118,7 +3100,6 @@ function App() {
             // pedir el onboarding en esta entrada.
             onboarding.reset();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [participants.loading, onboarding.ready, onboarding.visible]);
 
     // Activa a un participante tras resolver el completado del onboarding:
@@ -4317,10 +4298,6 @@ function App() {
         workspaceImageExpanded: workspaceImage.isExpanded,
     });
 
-    const stats = integrationStore.sessionStats;
-    const config = integrationStore.config;
-
-
     // ---- Sync minutes from DB to store on mount ----
     useEffect(() => {
         if (minuteKnowledge.minutes.length > 0) {
@@ -4332,7 +4309,7 @@ function App() {
                 });
             }
         }
-    }, [minuteKnowledge.minutes.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [minuteKnowledge.minutes.length]);
 
     // ---- Handlers ----
 
@@ -4364,7 +4341,7 @@ function App() {
         auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch(console.error);
     }, [auditLog]);
 
-    const handleParticipantReset = useCallback(() => {
+    const _handleParticipantReset = useCallback(() => {
         const prev = participantConfig;
         const defaults = resetFluParticipantOverrides();
         setParticipantConfig(defaults);
@@ -4372,15 +4349,15 @@ function App() {
         auditLog.logChange('config', 'flu-participant', prev, defaults, 'Participant config reset to defaults').catch(console.error);
     }, [participantConfig, auditLog]);
 
-    const handleToggleAutoCycle = useCallback(() => {
+    const _handleToggleAutoCycle = useCallback(() => {
         integrationStore.setConfig({ autoCycle: !integrationStore.config.autoCycle });
     }, [integrationStore]);
 
-    const handleTogglePushToTalk = useCallback(() => {
+    const _handleTogglePushToTalk = useCallback(() => {
         integrationStore.setConfig({ pushToTalk: !integrationStore.config.pushToTalk });
     }, [integrationStore]);
 
-    const handleReset = useCallback(() => {
+    const _handleReset = useCallback(() => {
         integrationStore.reset();
         setMinuteDraft(null);
         setSelectedMinuteId(null);
@@ -4408,9 +4385,7 @@ const minuteHandlers = useMinuteHandlers({
     getCommandSpeech,
 });
 const {
-    isGeneratingMinute,
     isSummarizing,
-    handleGenerateMinute,
     handleGenerateSummary,
     handleSaveMinute,
     handleSaveConversationSummary,

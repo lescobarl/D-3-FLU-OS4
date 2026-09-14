@@ -138,7 +138,7 @@ export function readLegacyOnboarding(storage: Storage | undefined = getLocalStor
 export function createOnboardingService({
   db,
   now = () => Date.now(),
-  newId = uuidv4,
+  newId: _newId = uuidv4,
 }: OnboardingServiceOptions): OnboardingService {
   const load = async (id: string): Promise<OnboardingState> => {
     const record = await db.get(id);

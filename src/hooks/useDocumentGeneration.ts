@@ -55,8 +55,8 @@ const STATE_PROGRESS: Record<string, number> = {
 export function useDocumentGeneration(language: string): DocumentGenerationState {
     const generationJob = useIntegrationStore((s) => s.generationJob);
     const setGenerationJob = useIntegrationStore((s) => s.setGenerationJob);
-    const documentArtifact = useIntegrationStore((s) => s.documentArtifact);
-    const appAnalysisArtifact = useIntegrationStore((s) => s.appAnalysisArtifact);
+    const _documentArtifact = useIntegrationStore((s) => s.documentArtifact);
+    const _appAnalysisArtifact = useIntegrationStore((s) => s.appAnalysisArtifact);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);

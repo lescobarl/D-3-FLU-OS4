@@ -52,16 +52,6 @@ const ANIMATION_PATHS: Record<string, string> = {
     'Dance': '/models/Animations/Bunny@Dance.fbx',
 };
 
-const ANIMATION_NAMES: BunnyAnimation[] = [
-    'Idle_1', 'Idle_2', 'Idle_3', 'Bind-pose',
-    'Walk', 'Walk_sneaky', 'Run', 'Jump_in_place', 'Jump_while_run',
-    'Emo_blink', 'Emo_neutral',
-    'Cap_back', 'Cap_front',
-    'Dance',
-    'MouthMove', // synthetic — no FBX file
-    'Palabra',  // synthetic — no FBX file
-];
-
 // ============================================================
 // shiftClipToZero — Desplaza todos los keyframes al origen
 // ============================================================

@@ -168,7 +168,6 @@ export function useOnboarding({
   useEffect(() => {
     if (!ready || !config.enabled || state.completed) return;
     speak(initialSpeech(config.steps, lang, state.captured), lang).catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
   const handleAction = useCallback(async (result: AdvanceResult) => {

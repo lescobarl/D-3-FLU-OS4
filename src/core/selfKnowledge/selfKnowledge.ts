@@ -20,9 +20,9 @@
 // ============================================================
 
 import { FLU_CONFIG } from '../../voice/lib/fluConfig';
-import { GAME_CATALOG, type GameIntentEntry } from '../games/gameCatalog';
+import { GAME_CATALOG } from '../games/gameCatalog';
 import { WORKSPACE_TIPOS } from '../config/appConfig';
-import { FLU_CAPABILITIES, type CapabilityDef } from '../../services/capabilities';
+import { FLU_CAPABILITIES } from '../../services/capabilities';
 import { BUILTIN_SEARCH_SITES, type SearchSite } from '../search/searchSiteTypes';
 import { normalizeHost } from '../browser/browserSession';
 
@@ -515,7 +515,7 @@ export function buildSelfManifestoPrompt(lang: 'es' | 'en' = 'es'): string {
  */
 export function isSelfKnowledgeRequest(
     text: string,
-    lang: 'es' | 'en' = 'es',
+    _lang: 'es' | 'en' = 'es',
     config: SelfKnowledgeConfig = FLU_CONFIG as SelfKnowledgeConfig,
 ): boolean {
     const rawPhrases =

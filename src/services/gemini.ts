@@ -289,8 +289,6 @@ Responde como ${botName}:`;
         conversationLog: string,
         maxDraftChars: number = 420,
     ): Promise<AIParticipantEvaluation> {
-        const isEnglish = options.language === 'en';
-
         // Delegate to proxy
         const response = await fetch('/api/gemini/participant-eval', {
             method: 'POST',
@@ -396,8 +394,6 @@ Genera la minuta en formato JSON.`;
         transcript: string,
         history: AIHistoryEntry[],
     ): Promise<FluContract> {
-        const isEnglish = options.language === 'en';
-
         // Build personality object from traits/tone/explanationLevel (OS2 parity + FASE P)
         // generateFluContract() in gemini.js expects a `personality` object
         // with traits, tone and explanationLevel sub-properties, not flat fields.
@@ -607,7 +603,7 @@ Genera la minuta en formato JSON.`;
                         language,
                     },
                 };
-            } catch (fallbackError: any) {
+            } catch {
                 return {
                     image_url: '',
                     trace: {

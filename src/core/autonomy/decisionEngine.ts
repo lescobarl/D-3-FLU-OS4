@@ -274,9 +274,8 @@ class FactorEvaluator {
         const alternativeFactors = this.evaluateAIProviderFactors(alternativeProvider);
         
         // Calcular mejora esperada
-        const currentScore = currentFactors.reduce((sum, f) => sum + (f.value * f.weight), 0);
+        currentFactors.reduce((sum, f) => sum + (f.value * f.weight), 0);
         const alternativeScore = alternativeFactors.reduce((sum, f) => sum + (f.value * f.weight), 0);
-        const improvement = alternativeScore - currentScore;
         
         // Ajustar por costo de cambio (penalización por cambio frecuente)
         const changePenalty = this.calculateChangePenalty(currentProvider, alternativeProvider);
@@ -323,7 +322,7 @@ class FactorEvaluator {
         return 'stable';
     }
     
-    private calculateChangePenalty(currentProvider: string, newProvider: string): number {
+    private calculateChangePenalty(_currentProvider: string, _newProvider: string): number {
         // Penalizar cambios frecuentes
         const changeHistory = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
         const recentChanges = changeHistory.filter((c: any) => 

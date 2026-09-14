@@ -1,6 +1,7 @@
 {
-  "id": "T-V18-DUP-BODIES",
-  "objective": "Cierra V18 (mismo cuerpo con distinto nombre): unifica los pares idénticos en un dueño único y deja reportados los dispares.",
+  "id": "T-LINT-WARNINGS-RATCHET",
+  "mode": "light",
+  "objective": "Cerrar warnings de ESLint (unused-vars, eqeqeq y eslint-disable inútiles) sin cambiar comportamiento y fijar el ratchet --max-warnings=263.",
   "base": "HEAD",
   "ignore": [
     ".task/**",
@@ -14,31 +15,9 @@
     "package.json"
   ],
   "allow": [
-    "src/components/panelUtils.ts",
-    "src/components/ContactsPanel.tsx",
-    "src/components/DiaryPanel.tsx",
-    "src/components/HabitsPanel.tsx",
-    "src/components/MoodPanel.tsx",
-    "src/server/httpJson.ts",
-    "src/server/browserProxy.ts",
-    "src/server/searchProxy.ts",
-    "src/services/deepseek.ts",
-    "src/services/gemini.ts",
-    "src/voice/lib/embeddingFrames.js",
-    "src/voice/lib/workerBridge.js",
-    "src/voice/lib/asrTurnSegmentation.js",
-    "src/voice/lib/audioMath.js",
-    "src/voice/lib/conversationStream.js",
-    "src/voice/lib/ingressGuards.js",
-    "src/voice/lib/speakerEmbeddingCore.js",
-    "src/voice/lib/speechMerge.js",
-    "src/voice/lib/transcriptDelta.js",
-    "src/voice/workers/voiceId.worker.js",
-    "src/voice/workers/whisperAsr.worker.js"
+    "src/**"
   ],
-  "maxFiles": 25,
-  "maxLines": 700,
-  "dod": "node scripts/auditoria.mjs --strict --only V18",
-  "guard": "node scripts/auditoria.mjs --strict --only V18",
-  "guardExpect": "green"
+  "maxFiles": 120,
+  "maxLines": 2000,
+  "dod": "npm run lint:eslint"
 }

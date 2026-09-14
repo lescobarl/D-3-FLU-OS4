@@ -45,7 +45,7 @@ export {
   utterancesRelate,
 } from './conversationStream.js'
 
-import { isSpeakerVoiceAbruptChange, shouldRelaxIngressTextGuards } from './ingressGuards.js'
+import { shouldRelaxIngressTextGuards } from './ingressGuards.js'
 
 export { isSpeakerVoiceAbruptChange, shouldRelaxIngressTextGuards } from './ingressGuards.js'
 

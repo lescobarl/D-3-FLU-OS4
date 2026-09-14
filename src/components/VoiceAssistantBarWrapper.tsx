@@ -32,7 +32,6 @@ export function VoiceAssistantBarWrapper({
     onToggle,
     onStartConversation,
     isSupported,
-    knowledgeBaseLabel,
     participantEnabled = false,
     fluParticipantPresentation = null,
     fluParticipantCanGrant = false,

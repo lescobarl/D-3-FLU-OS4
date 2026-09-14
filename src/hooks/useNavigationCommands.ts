@@ -16,7 +16,6 @@ import { FLU_CONFIG, isSessionResetCommand } from '../voice/lib/fluConfig';
 import { userRequestedNavigationCommand } from '../voice/lib/voiceCommands';
 import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch, onFluSearchReady } from '../core/events/fluEvents';
 import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
-import { extractReadableContent, truncateContent } from '../core/browser/browserReadability';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
 import { deriveSearchQuery } from '../voice/lib/audioMath';
 import { setNavSettlePending } from '../voice/lib/navSettleFlag';

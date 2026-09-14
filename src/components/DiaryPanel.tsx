@@ -47,7 +47,7 @@ export function DiaryPanel({
   const [busy, setBusy] = useState(false);
 
   // Fecha local de hoy (mismo formato 'YYYY-MM-DD' que diaryService).
-  const today = todayLocalDate();
+  todayLocalDate();
 
   const moodValues: number[] = [];
   for (let value = 1; value <= moodMax; value += 1) {

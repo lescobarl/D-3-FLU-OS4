@@ -64,7 +64,7 @@ export function getVoiceHoldMs(config = FLU_CONFIG) {
 }
 
 /** Ventanas de silencio en segmentAudio (hop ~20 ms). */
-export function getMaxSilenceWindowsForHold(sampleRate = 48000, config = FLU_CONFIG) {
+export function getMaxSilenceWindowsForHold(_sampleRate = 48000, config = FLU_CONFIG) {
   const hopMs = 20
   const voiceHoldMs = getVoiceHoldMs(config)
   return Math.max(4, Math.ceil(voiceHoldMs / hopMs))

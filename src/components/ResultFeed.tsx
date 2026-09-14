@@ -169,7 +169,6 @@ export function ResultFeed({
 
   const visible = useMemo(
     () => items.filter(matchesFilter),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, filter]
   );
 

@@ -296,7 +296,7 @@ class RecoveryActionExecutor {
     
     async executeSwitchAIProvider(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
-        const { fallbackOrder = ['openrouter', 'gemini'], maxSwitchAttempts = 3 } = params;
+        const { fallbackOrder = ['openrouter', 'gemini'] } = params;
         
         try {
             // Obtener proveedor actual usando la API oficial
@@ -418,7 +418,7 @@ class RecoveryActionExecutor {
     
     async executeRestoreFromBackup(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
-        const { backupSource = 'localStorage', maxAgeHours = 24 } = params;
+        const { backupSource = 'localStorage' } = params;
         
         try {
             

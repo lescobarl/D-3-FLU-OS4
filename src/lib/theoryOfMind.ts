@@ -12,7 +12,6 @@
 // ============================================================
 
 import {
-    THEORY_OF_MIND_CONFIG,
     THEORY_OF_MIND_STOP_WORDS,
     DEFAULT_ADVANCED_CONFIG,
 } from '../core/config/appConfig';
@@ -109,7 +108,7 @@ export function getOrCreateParticipant(
             .sort(([, a], [, b]) => a.lastInteraction - b.lastInteraction)[0];
 
         if (oldest) {
-            const { [oldest[0]]: removed, ...rest } = state.participants;
+            const { [oldest[0]]: _removed, ...rest } = state.participants;
             state = { ...state, participants: rest };
         }
     }

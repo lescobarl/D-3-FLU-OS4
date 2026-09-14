@@ -16,11 +16,10 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { DEEPSEEK_CONFIG, GENERATION_TIMEOUT_MS, OPENROUTER_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, WORKSPACE_TIPOS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
+import { DEEPSEEK_CONFIG, GENERATION_TIMEOUT_MS, OPENROUTER_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { v4 as uuidv4 } from 'uuid';
-import { buildCapabilitiesPrompt } from './capabilities';
 import type {
     IAIService,
     AIRequestOptions,
@@ -34,7 +33,6 @@ import type {
     GenerationInput,
     GeneratedDocumentResult,
 } from '../core/ai/IAIService';
-import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import type { DocumentContract, AppAnalysisContract } from '../types/documentContracts';
 import {
     buildMapPrompt,
@@ -55,18 +53,6 @@ import {
 // -----------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------
-
-/**
- * Build diagnostics metadata for a text engine response.
- */
-function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics {
-    const savedModel = readStorage<string | null>(STORAGE_KEYS.TEXT_MODEL, null);
-    return {
-        provider: 'openrouter',
-        model: model || savedModel || OPENROUTER_CONFIG.MODEL,
-        apiKeySource,
-    };
-}
 
 /**
  * Resolve the text engine API key from direct param, text-specific localStorage key, or env.

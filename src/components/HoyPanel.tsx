@@ -119,7 +119,6 @@ export function HoyPanel({
 }: HoyPanelProps) {
   const hoyUi = FLU_CONFIG.hoy?.ui ?? {};
   const notesUi = FLU_CONFIG.notes?.ui ?? {};
-  const horarioUi = FLU_CONFIG.horario?.ui ?? {};
 
   // "Ver horario completo" expande el HorarioPizarron embebido.
   const [horarioExpandido, setHorarioExpandido] = useState(false);

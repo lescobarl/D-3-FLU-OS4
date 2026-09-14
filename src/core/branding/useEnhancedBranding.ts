@@ -11,8 +11,8 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo } from 'react';
-import { useSeasonalBranding, type BrandingConfig, type SeasonalBrandingState } from './useSeasonalBranding';
-import { getPalette, applyPaletteToCSS, toggleBrandingClass, type Palette } from './seasonalPalettes';
+import { useSeasonalBranding, type SeasonalBrandingState } from './useSeasonalBranding';
+import { getPalette, applyPaletteToCSS, toggleBrandingClass } from './seasonalPalettes';
 import { getPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 
 // ============================================================

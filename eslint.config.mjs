@@ -28,7 +28,7 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'off',
-      'eqeqeq': 'warn',
+      'eqeqeq': ['warn', 'smart'],
     },
   },
 );

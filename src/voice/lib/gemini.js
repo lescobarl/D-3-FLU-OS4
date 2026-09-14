@@ -277,7 +277,7 @@ function buildSchemaFormatBlock(schema) {
   ].join('\n')
 }
 
-export async function generateWorkspaceImage({ apiKey, workspace, language = 'es' }) {
+export async function generateWorkspaceImage({ workspace, language = 'es' }) {
   const prompt = buildGenerationPrompt(workspace, language)
   if (!prompt) {
     return {

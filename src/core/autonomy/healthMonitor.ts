@@ -280,7 +280,7 @@ async function checkAIService(): Promise<ComponentHealth> {
                     hasError = true;
                     message = `Servicio de IA no responde correctamente (HTTP ${response.status})`;
                 }
-            } catch (error) {
+            } catch {
                 hasError = true;
                 message = 'Error de conexión con servicio de IA';
                 metrics.networkReachable = false;
@@ -505,7 +505,7 @@ async function checkNetwork(): Promise<ComponentHealth> {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.networkPingAbort);
                 
-                const response = await fetch(url, {
+                await fetch(url, {
                     method: 'HEAD',
                     signal: controller.signal,
                     mode: 'no-cors',
@@ -781,7 +781,7 @@ export class HealthMonitor {
     }
 
     async performHealthCheck(): Promise<SystemHealth> {
-        const checkStartTime = Date.now();
+        Date.now();
         const components: ComponentHealth[] = [];
         const recommendations: string[] = [];
 

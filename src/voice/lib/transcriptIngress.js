@@ -2,7 +2,6 @@
  * ingestFinalChunk: flush absoluto + final-only + commit async vía hook.
  */
 import { cleanForSpeech, pickBestRecognitionTranscript } from './audioMath.js'
-import { mergeTranscriptText } from './transcriptDelta.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   analyzeWakeTurn,
@@ -393,9 +392,7 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   }
 
   const {
-    openPreviewTurnRef,
     logRowsTextRef,
-    lastEmittedTranscriptRef,
     lastLoggedSpeakerRef,
     tryDispatch,
     debugHotPath,
@@ -488,11 +485,6 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   })
 
   return { handled: false, capture: published, redundant: false }
-}
-
-function flushPublishedLaneOnly(ctx) {
-  if (ctx.publishedLiveRef) ctx.publishedLiveRef.current = ''
-  if (ctx.lastStreamPreviewRef) ctx.lastStreamPreviewRef.current = ''
 }
 
 function ingestInterimChunk({ interim, ctx }) {

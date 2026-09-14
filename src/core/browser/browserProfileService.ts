@@ -112,7 +112,7 @@ export function createBrowserProfileService({
   db,
   config,
   now = () => Date.now(),
-  newId = uuidv4,
+  newId: _newId = uuidv4,
 }: BrowserProfileServiceOptions) {
   const timestamp = makeTupleTimestamp(now);
 

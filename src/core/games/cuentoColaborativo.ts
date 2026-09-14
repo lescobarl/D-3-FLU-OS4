@@ -92,7 +92,7 @@ interface CuentoColaborativoState {
     phase: 'announce' | 'done';
 }
 
-function closePrompt(state: CuentoColaborativoState, score: number): string {
+function closePrompt(state: CuentoColaborativoState, _score: number): string {
     const historia = state.cuento.join(' ');
     return `¡Nuestro cuento está completo! ${historia} ${state.cierre} Fin de nuestro cuento. ¿Te gustó cómo quedó?`;
 }

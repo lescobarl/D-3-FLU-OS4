@@ -273,12 +273,6 @@ function reminderRemoveReply(label: string, lang: 'es' | 'en'): string {
     : `Done, I removed the reminder "${label}".`;
 }
 
-function reminderRemoveNotFoundReply(lang: 'es' | 'en'): string {
-  return lang === 'es'
-    ? 'No encontré ningún recordatorio con ese texto.'
-    : "I couldn't find a reminder with that text.";
-}
-
 function askTextReply(lang: 'es' | 'en'): string {
   return lang === 'es'
     ? '¿Qué quieres que te recuerde?'

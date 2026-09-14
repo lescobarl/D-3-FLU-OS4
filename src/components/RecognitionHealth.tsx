@@ -115,7 +115,7 @@ export function RecognitionHealth({
 }: RecognitionHealthProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [liveAudioLevel, setLiveAudioLevel] = useState(0);
-    const audioContextRef = useRef<AudioContext | null>(null);
+    const _audioContextRef = useRef<AudioContext | null>(null);
     const animationRef = useRef<number>(0);
 
     // Simulate audio level animation when listening

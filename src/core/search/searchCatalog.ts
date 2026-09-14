@@ -18,7 +18,6 @@ import { mergeCatalog } from '../catalogs/mergeCatalog';
 import {
     BUILTIN_SEARCH_SITES,
     type SearchSite,
-    type SearchSiteTile,
 } from './searchSiteTypes';
 
 const toCatalogRecord = (row: SearchSiteRecord): CatalogRecord<SearchSite> => ({

@@ -129,7 +129,7 @@ interface BunnyStoreActions {
 
 export type BunnyStore = BunnyControlState & BunnyStoreActions;
 
-export const useBunnyStore = create<BunnyStore>((set, get) => ({
+export const useBunnyStore = create<BunnyStore>((set, _get) => ({
     // --- Estado ---
     ...initialState,
 

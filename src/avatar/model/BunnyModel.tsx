@@ -84,7 +84,7 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 if (disposed) return;
 
                 // 1. Unify skeletons
-                const result = unifySkeletons(object);
+                unifySkeletons(object);
                 if (logsEnabledRef.current) {
                 }
 
@@ -103,7 +103,7 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 object.position.set(-center.x, -center.y, -center.z);
 
                 // 4. Create animator (creates mixer internally)
-                const animator = new BunnyAnimator(object, (msg) => {
+                const animator = new BunnyAnimator(object, (_msg) => {
                 });
                 animatorRef.current = animator;
 
@@ -154,7 +154,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 animatorRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // ← Intencionalmente vacío: el modelo se carga UNA VEZ
 
     // ============================================================

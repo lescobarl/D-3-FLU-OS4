@@ -22,14 +22,14 @@
 // ============================================================
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { BunnyViewer, useBunnyStore } from '../avatar';
-import type { BunnyAnimation } from '../avatar';
+import { BunnyViewer } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
+// Import conservado como referencia/fallback exigido por tests/architecture.test.ts.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { WELCOME_MESSAGE } from '../core/config/appConfig';
-import type { ConversationState } from '../types/bridge';
 import { useFluBridge } from '../context/FluBridgeContext';
 import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
 import { useEnvironmentStore } from '../store/environmentStore';
@@ -51,22 +51,6 @@ interface FluAvatarVoiceBridgeProps {
     brandingSeason?: string;
     brandingIsBirthday?: boolean;
     brandingCelebrandoA?: string;
-}
-
-// -----------------------------------------------------------
-// StatusOverlay — Indicador visual mínimo sobre el avatar
-// Solo muestra emoción cuando no es neutral (el estado ya está en el header)
-// -----------------------------------------------------------
-function StatusOverlay({ state, emotion }: { state: ConversationState; emotion: string }) {
-    return (
-        <div className="flu-bridge-status-overlay">
-            {emotion && emotion !== 'neutral' && (
-                <span className="flu-bridge-status-emotion">
-                    🎭 {emotion}
-                </span>
-            )}
-        </div>
-    );
 }
 
 // -----------------------------------------------------------
@@ -201,11 +185,11 @@ export function FluAvatarVoiceBridge({
     // Keep storeRef current without triggering re-renders
     storeRef.current = integrationStore;
     const [isListening, setIsListening] = useState(false);
-    const welcomeSpokenRef = useRef(false);
+    const _welcomeSpokenRef = useRef(false);
     // Ref para detectar transiciones de voiceError (evitar re-disparar en cada re-render)
     const prevVoiceErrorRef = useRef<string | null | undefined>(null);
     // Usar el hook de sincronización avatar-voz
-    const { syncAvatarToState, applyEmotion, triggerParticipantEmotion, applyContextualEmotion, pendingEmotionAnimsRef } = useAvatarVoiceSync();
+    const { triggerParticipantEmotion, applyContextualEmotion, pendingEmotionAnimsRef } = useAvatarVoiceSync();
 
     // ---- Obtener voice props desde FluBridgeContext ----
     const bridge = useFluBridge();
@@ -215,13 +199,10 @@ export function FluAvatarVoiceBridge({
         liveTranscript,
         onStartListening,
         onStopListening,
-        onToggleListening,
         onParticipantEmotionRef,
         onContextualEmotionRef,
         onEmotionAnimsRef,
-        apiKey,
         language,
-        welcomeMessage,
         onStateChange,
         onGeminiError,
     } = bridge;
@@ -409,7 +390,7 @@ export function FluAvatarVoiceBridge({
                 speakResponse(iniciarText, language).catch(() => { });
                 break;
         }
-    }, [integrationStore.uiState.voiceCommand]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [integrationStore.uiState.voiceCommand]);
 
     // -------------------------------------------------------
     // Notificar cambios de estado

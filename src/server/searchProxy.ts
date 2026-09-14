@@ -231,7 +231,6 @@ async function handleSearch(
 
     if (groupResults.length > 0) {
       results = groupResults;
-      const used = [...new Set(group.map((entry) => entry.request.providerId))];
       break;
     }
   }

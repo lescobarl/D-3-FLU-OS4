@@ -151,31 +151,6 @@ export function actionBelongsToTranscript(actionText = '', transcript = '', wake
   return overlap.length >= Math.min(2, actionTokens.length)
 }
 
-function levenshteinDistance(left = '', right = '') {
-  const a = String(left)
-  const b = String(right)
-  if (!a.length) return b.length
-  if (!b.length) return a.length
-
-  const matrix = Array.from({ length: a.length + 1 }, (_, row) => [row])
-  for (let column = 1; column <= b.length; column += 1) {
-    matrix[0][column] = column
-  }
-
-  for (let row = 1; row <= a.length; row += 1) {
-    for (let column = 1; column <= b.length; column += 1) {
-      const substitutionCost = a[row - 1] === b[column - 1] ? 0 : 1
-      matrix[row][column] = Math.min(
-        matrix[row - 1][column] + 1,
-        matrix[row][column - 1] + 1,
-        matrix[row - 1][column - 1] + substitutionCost,
-      )
-    }
-  }
-
-  return matrix[a.length][b.length]
-}
-
 function scoreRecognitionAlternative(text = '', confidence = 0) {
   const candidate = cleanForSpeech(text)
   if (!candidate) return Number.NEGATIVE_INFINITY
@@ -666,7 +641,7 @@ export function pickRichestVoiceCommandCapture(
 }
 
 /** Segmento de comando para log (sin prefijo pasivo ya registrado; conserva wake word). */
-export function resolveCommandConversationLogText(phrase = '', split = {}, passivePrefix = '') {
+export function resolveCommandConversationLogText(phrase = '', _split = {}, passivePrefix = '') {
   const cleaned = cleanForSpeech(phrase)
   if (!cleaned) return ''
   const prefix = cleanForSpeech(passivePrefix)
@@ -1425,123 +1400,6 @@ export function cosineDistance(vectorA = [], vectorB = []) {
   if (!magA || !magB) return 1
   const cosineSimilarity = dot / (Math.sqrt(magA) * Math.sqrt(magB))
   return 1 - Math.max(-1, Math.min(1, cosineSimilarity))
-}
-
-function hannWindow(length) {
-  const window = new Float32Array(length)
-  for (let index = 0; index < length; index += 1) {
-    window[index] = 0.5 * (1 - Math.cos((2 * Math.PI * index) / (length - 1 || 1)))
-  }
-  return window
-}
-
-function estimatePitch(frame, sampleRate) {
-  const size = frame.length
-  if (!size || !sampleRate) return 0
-
-  let rms = 0
-  for (let index = 0; index < size; index += 1) {
-    rms += frame[index] * frame[index]
-  }
-  rms = Math.sqrt(rms / size)
-  if (rms < 0.01) return 0
-
-  let bestLag = 0
-  let bestCorrelation = 0
-  const minLag = Math.floor(sampleRate / 400)
-  const maxLag = Math.min(Math.floor(sampleRate / 60), size - 1)
-
-  for (let lag = minLag; lag <= maxLag; lag += 1) {
-    let correlation = 0
-    for (let index = 0; index < size - lag; index += 1) {
-      correlation += frame[index] * frame[index + lag]
-    }
-
-    if (correlation > bestCorrelation) {
-      bestCorrelation = correlation
-      bestLag = lag
-    }
-  }
-
-  return bestLag ? sampleRate / bestLag : 0
-}
-
-function analyzeSpectrum(frame, sampleRate) {
-  const size = frame.length
-  if (!size || !sampleRate) {
-    return {
-      centroid: 0,
-      dominantFrequency: 0,
-      energy: 0,
-      pitch: 0,
-    }
-  }
-
-  const window = hannWindow(size)
-  const sample = new Float32Array(size)
-  let energy = 0
-
-  for (let index = 0; index < size; index += 1) {
-    sample[index] = frame[index] * window[index]
-    energy += sample[index] * sample[index]
-  }
-
-  let dominantFrequency = 0
-  let dominantMagnitude = 0
-  let weightedFrequencySum = 0
-  let weightedMagnitudeSum = 0
-  const maxBins = Math.min(64, Math.floor(size / 2))
-
-  for (let bin = 1; bin < maxBins; bin += 1) {
-    let real = 0
-    let imaginary = 0
-
-    for (let sampleIndex = 0; sampleIndex < size; sampleIndex += 1) {
-      const angle = (-2 * Math.PI * bin * sampleIndex) / size
-      real += sample[sampleIndex] * Math.cos(angle)
-      imaginary += sample[sampleIndex] * Math.sin(angle)
-    }
-
-    const magnitude = Math.hypot(real, imaginary)
-    const frequency = (bin * sampleRate) / size
-    weightedFrequencySum += frequency * magnitude
-    weightedMagnitudeSum += magnitude
-    if (magnitude > dominantMagnitude) {
-      dominantMagnitude = magnitude
-      dominantFrequency = frequency
-    }
-  }
-
-  const centroid = weightedMagnitudeSum ? weightedFrequencySum / weightedMagnitudeSum : 0
-  const pitch = estimatePitch(frame, sampleRate)
-  let zeroCrossings = 0
-  for (let index = 1; index < size; index += 1) {
-    const prev = frame[index - 1]
-    const current = frame[index]
-    if ((prev >= 0 && current < 0) || (prev < 0 && current >= 0)) {
-      zeroCrossings += 1
-    }
-  }
-  const zeroCrossingRate = size > 1 ? zeroCrossings / (size - 1) : 0
-
-  return {
-    centroid,
-    dominantFrequency,
-    energy: energy / size,
-    pitch,
-    zeroCrossingRate,
-  }
-}
-
-function downsampleBuffer(samples, sampleRate, targetRate = 16000) {
-  if (!samples?.length || sampleRate <= targetRate) return samples
-  const ratio = sampleRate / targetRate
-  const length = Math.max(1, Math.floor(samples.length / ratio))
-  const result = new Float32Array(length)
-  for (let index = 0; index < length; index += 1) {
-    result[index] = samples[Math.min(samples.length - 1, Math.floor(index * ratio))]
-  }
-  return result
 }
 
 export function normalizeEmbeddingVector(vector = []) {

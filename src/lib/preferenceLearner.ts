@@ -10,7 +10,7 @@
 //   - Pure functions — no React dependencies
 // ============================================================
 
-import { createMemory, queryMemories, saveMemory, touchMemory, type MemoryItem } from './longTermMemory';
+import { createMemory, queryMemories, saveMemory, touchMemory } from './longTermMemory';
 
 // -----------------------------------------------------------
 // Types

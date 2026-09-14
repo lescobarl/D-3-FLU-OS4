@@ -1,7 +1,6 @@
 /**
  * Resolución de hablante desde audio: vectores 512-D en clusters y filas (campo signature).
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import {
   getConversationMinVoicedForNewSamples,
   getConversationMinVoicedSamples,

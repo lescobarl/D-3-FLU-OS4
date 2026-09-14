@@ -92,7 +92,6 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
         const vertexCount = skinIndexAttr.count;
         const numInfluences = skinIndexAttr.itemSize;
 
-        let remappedCount = 0;
         for (let v = 0; v < vertexCount; v++) {
             for (let i = 0; i < numInfluences; i++) {
                 const idx = v * numInfluences + i;
@@ -102,7 +101,6 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
                     const newBoneIdx = masterBoneIndex.get(boneName);
                     if (newBoneIdx !== undefined) {
                         position[idx] = newBoneIdx;
-                        remappedCount++;
                     } else {
                         position[idx] = 0;
                         if (skinWeightAttr) {

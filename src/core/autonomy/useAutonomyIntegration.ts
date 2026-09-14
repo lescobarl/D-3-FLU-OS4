@@ -22,30 +22,24 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
     HealthMonitor, 
-    getHealthMonitor, 
     startGlobalHealthMonitoring,
     SystemHealth 
 } from './healthMonitor';
 import { 
     AutoRecoverySystem, 
-    getAutoRecoverySystem, 
     startGlobalAutoRecovery,
-    RecoveryResult 
 } from './autoRecovery';
 import { 
     DecisionEngine, 
-    getDecisionEngine, 
     startGlobalDecisionEngine,
     AutonomousDecision 
 } from './decisionEngine';
 import { 
     AutoOptimizationSystem, 
-    getAutoOptimizationSystem, 
     startGlobalAutoOptimization 
 } from './autoOptimization';
 import {
     BackupSystem,
-    getBackupSystem,
     startGlobalBackupSystem,
     RestoreResult
 } from './backupSystem';

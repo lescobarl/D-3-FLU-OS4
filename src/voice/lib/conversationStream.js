@@ -6,16 +6,13 @@ import { FLU_CONFIG } from './fluConfig.js'
 import {
   collapseRepeatedSpeech,
   mergeSpeechText,
-  collapseEchoPhrase,
-  collapseMisorderedMicMerge,
   resolveMicFragmentMerge,
-  collapseAsrStutter,
   normalizeMicText,
   hasSpeechAnchor,
   preferNewRowForShortFinal,
   utterancesRelate,
 } from './speechMerge.js'
-import { shouldForceNewLogRowOnCommit, shouldRelaxIngressTextGuards } from './ingressGuards.js'
+import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg } from './fluTranscriptPause.js'
 
 export {
@@ -320,9 +317,8 @@ export { clearStaleCommittedEchoFromState }
  */
 export function evaluateStaleInterimFlush(
   state,
-  nowMs = Date.now(),
+  _nowMs = Date.now(),
   maxMs = getTranscriptPauseCfg().interimOpenLineFlushMs,
-  { lastCommitAtMs = 0, lastCommitted = '' } = {},
 ) {
   const turnLive = cleanForSpeech(readTurnLive(state))
   const capture = turnLive || cleanForSpeech(readOpenLine(state))
@@ -875,7 +871,7 @@ export function validateLogRowsNoAsrRevisionDup(rows = []) {
   return true
 }
 
-export function assessStreamParity(micInterim = '', published = '', session = '') {
+export function assessStreamParity(micInterim = '', published = '', _session = '') {
   const mic = micInterim ? cleanForSpeech(micInterim) : ''
   if (!mic) return { ok: true }
 

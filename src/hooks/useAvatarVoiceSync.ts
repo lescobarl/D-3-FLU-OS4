@@ -26,7 +26,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
-import { useBunnyStore, EXPRESSION_MAP } from '../avatar';
+import { useBunnyStore } from '../avatar';
 import type { BunnyStore, BunnyAnimation, BunnyComponent, AvatarExpression } from '../avatar';
 import { useIntegrationStore } from '../store/integrationStore';
 import { relayLog } from '../lib/clientLogRelay';
@@ -34,7 +34,6 @@ import { isMusicPlaying } from '../services/musicPlayer';
 import type { ConversationState, EmotionalState } from '../types/bridge';
 import {
     getGroupExpressions,
-    getTriggerExpressions,
     ACTION_ANIMS,
 } from '../core/anim/expressionRegistry';
 import {
@@ -487,7 +486,6 @@ export function useAvatarVoiceSync() {
      * NO tiene IFs de reactividad — el engine escala según intensity + reactivity.
      */
     const applyEmotion = useCallback((emotion: EmotionalState) => {
-        const store = bunnyActionsRef.current;
         const options = getEngineOptions();
 
         // Don't override expression during SPEAKING (mouth movement is critical)
@@ -809,7 +807,6 @@ export function useAvatarVoiceSync() {
             startIdleMicroExpressions();
         }
         // Intencional: solo debe ejecutarse al montar.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // -------------------------------------------------------

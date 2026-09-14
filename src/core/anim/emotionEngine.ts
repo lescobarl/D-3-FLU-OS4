@@ -23,7 +23,6 @@ import {
     getTriggerExpressions,
     getMicroExpressions,
     pickBestExpressionForPersonality,
-    type ExpressionDef,
 } from './expressionRegistry';
 
 // ── Types ──
@@ -283,10 +282,9 @@ export function resolveTriggerExpression(
  * @returns A random micro-expression, or null if none available
  */
 export function resolveIdleMicroExpression(
-    options: EmotionEngineOptions = {},
+    _options: EmotionEngineOptions = {},
     extra: { forceVisible?: boolean } = {}
 ): ResolvedExpression | null {
-    const { debug = false } = options;
     const { forceVisible = false } = extra;
 
     const microExpressions = getMicroExpressions();

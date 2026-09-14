@@ -19,7 +19,6 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type {
     SearchResult,
     SearchProviderConfig,
-    SearchResultType,
 } from '../core/search/searchSession';
 import {
     evalDailyUsage,

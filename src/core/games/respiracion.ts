@@ -53,12 +53,9 @@ function stepPrompt(step: number): string {
         : 'Exhala por la boca contando hasta 4. Suelta todo el aire poco a poco.';
 }
 
-export function createRespiracionEngine(options?: { random?: RandomSource }): GameEngine {
-    let rng: RandomSource = options?.random ?? Math.random;
-
+export function createRespiracionEngine(_options?: { random?: RandomSource }): GameEngine {
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
         if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
         }
     };
 

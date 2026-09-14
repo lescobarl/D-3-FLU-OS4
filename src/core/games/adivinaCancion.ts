@@ -19,7 +19,6 @@ import {
     normalizeForMatch,
     hasToken,
     hasAnyToken,
-    pickRandom,
     shuffleOrder,
 } from './gameUtils';
 
@@ -128,10 +127,6 @@ function buildOptions(targetIndex: number, rng: RandomSource): SongOption[] {
     }
     return [...distractors, SONG_BANK[targetIndex]]
         .sort((a, b) => SONG_BANK.findIndex((song) => song.id === a.id) - SONG_BANK.findIndex((song) => song.id === b.id));
-}
-
-function optionsPrompt(options: readonly SongOption[]): string {
-    return options.map((option) => `"${option.titulo}"`).join(', ');
 }
 
 function songPrompt(state: AdivinaCancionState): string {

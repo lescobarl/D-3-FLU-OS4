@@ -19,7 +19,7 @@
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
-    clamp, normalizeForMatch, hasAnyToken,
+    normalizeForMatch, hasAnyToken,
 } from './gameUtils';
 
 export interface KaraokeSong {

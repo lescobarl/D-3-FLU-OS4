@@ -58,10 +58,6 @@ const VISION_CACHE_TTL_MS = 300_000;        // 5 min (imagen repetida = mismo an
 const VISION_CACHE_MAX = 20;
 
 // ─── IMAGE GENERATION CACHE ───────────────────────────────────
-const IMAGE_CACHE = new Map<string, CacheEntry>();
-const IMAGE_CACHE_TTL_MS = 300_000;        // 5 min (imágenes repetidas)
-const IMAGE_CACHE_MAX = 20;
-
 function getCachedResponse(cache: Map<string, CacheEntry>, key: string, ttl: number): any | null {
     const entry = cache.get(key);
     if (!entry) return null;

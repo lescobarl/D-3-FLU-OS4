@@ -10,7 +10,6 @@
 //   - Obligación #1: Inyección de Dependencias
 // ============================================================
 
-import type { FluContract } from '../../types/bridge';
 import type {
     AppAnalysisContract,
     DocumentContract,

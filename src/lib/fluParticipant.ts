@@ -310,7 +310,7 @@ export function applyParticipantEvaluation(
 // Dismiss raised hand
 // -----------------------------------------------------------
 
-export function dismissRaisedHand(state: ParticipantState, now: number = Date.now()): ParticipantState {
+export function dismissRaisedHand(state: ParticipantState, _now: number = Date.now()): ParticipantState {
     return {
         ...state,
         phase: 'idle',

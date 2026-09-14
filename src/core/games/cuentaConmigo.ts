@@ -46,12 +46,9 @@ interface CuentaConmigoState {
     phase: 'announce' | 'done';
 }
 
-export function createCuentaConmigoEngine(options?: { random?: RandomSource }): GameEngine {
-    let rng: RandomSource = options?.random ?? Math.random;
-
+export function createCuentaConmigoEngine(_options?: { random?: RandomSource }): GameEngine {
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
         if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
         }
     };
 

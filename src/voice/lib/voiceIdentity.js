@@ -215,8 +215,6 @@ export const SHORT_UTTERANCE_IMMEDIATE_CONTINUITY = 0.72
 export function normalizeSignatureForCosine(vector = []) {
   return normalizeEmbeddingVector(vector)
 }
-const ROOM_REMATCH_FLOOR = ROOM_REMATCH_STRICT
-const ROOM_REMATCH_CEILING = ROOM_REMATCH_STRICT
 
 function countUtteranceWords(text = '') {
   return normalizeSpaces(text)

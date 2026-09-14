@@ -299,7 +299,7 @@ export interface SeasonResult {
 export function getActiveSeason(
     userBirthday?: string | null,
     customEvents?: CustomEvent[],
-    celebrateAchievements?: boolean,
+    _celebrateAchievements?: boolean,
 ): SeasonResult {
     const now = new Date();
     const todayMonth = now.getMonth() + 1; // 1-12

@@ -7,12 +7,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-    fluDb,
     addAuditLog,
     getAuditLogs,
     clearAuditLogs,
-    newId,
-    newSyncTuple,
     type AuditLogEntry,
 } from '../core/db/fluDatabase';
 

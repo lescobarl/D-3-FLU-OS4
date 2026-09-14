@@ -570,7 +570,7 @@ class BackupManager implements IBackupManager {
         notes?: string
     ): BackupMetadata | null {
         try {
-            const startTime = Date.now();
+            Date.now();
             const backupId = `backup-${uuidv4()}`;
             
             // Extraer datos de componentes

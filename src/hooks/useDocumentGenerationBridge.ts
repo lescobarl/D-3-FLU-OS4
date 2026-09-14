@@ -51,7 +51,6 @@ export function useDocumentGenerationBridge({
             onFluEvent(FLU_EVENTS.ANALYZE_APP, onAnalyzeApp),
         ];
         return () => offs.forEach((off) => off());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [generation.generate]);
 
     return { docInputRef, projectInputRef };

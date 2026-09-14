@@ -25,9 +25,6 @@ import {
     TOPIC_KEYWORDS,
     FLU_PROFILES,
     getDefaultProfile,
-    DEFAULT_IMAGE_CONFIG,
-    DEFAULT_VOICE_CONFIG,
-    DEFAULT_ADVANCED_CONFIG,
 } from '../core/config/appConfig';
 import { resolveContextualExpression } from '../core/anim/emotionEngine';
 import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';

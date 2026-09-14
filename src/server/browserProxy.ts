@@ -113,7 +113,7 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   sendJson(res, 200, { ok: true, url: fetched.url, host: validation.host, html: fetched.html });
 }
 
-export function createBrowserProxy({ env = {} }: { env?: Record<string, string> } = {}) {
+export function createBrowserProxy({ env: _env = {} }: { env?: Record<string, string> } = {}) {
   return {
     name: 'browser-proxy',
     configureServer(server: any) {

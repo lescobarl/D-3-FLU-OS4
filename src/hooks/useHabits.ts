@@ -13,7 +13,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { fluDb, type GoalCheckInRecord, type GoalRecord } from '../core/db/fluDatabase';
+import { fluDb, type GoalRecord } from '../core/db/fluDatabase';
 import {
   createHabitsService,
   type AddGoalResult,

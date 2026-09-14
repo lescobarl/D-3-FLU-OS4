@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
-import { FLU_CONFIG } from '../lib/fluConfig'
 import { formatMinuteDraftText, parseMinuteDraftText } from '../lib/minuteKnowledge'
 
 export const MinuteDraftPanel = forwardRef(function MinuteDraftPanel(

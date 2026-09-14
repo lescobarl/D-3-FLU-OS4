@@ -21,7 +21,6 @@ import {
     useEffect,
     useMemo,
     useRef,
-    useState,
     type FormEvent,
 } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
@@ -51,8 +50,6 @@ export interface WorkspaceSearchProps {
 }
 
 export function WorkspaceSearch({
-    allowlist,
-    overrides,
     query,
     lang,
     level,
@@ -63,7 +60,6 @@ export function WorkspaceSearch({
     onSubmit,
     onReset,
     livePhrase,
-    isListening,
 }: WorkspaceSearchProps) {
     // Etiquetas de la UI (Regla #1: sin hardcode).
     const ui = useMemo(

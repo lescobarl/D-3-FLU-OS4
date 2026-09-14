@@ -14,7 +14,7 @@
 // Regla de oro: motor determinista (no toca Gemini ni el DOM).
 // ============================================================
 
-import { clasificarDia, extractHorarioHoras, diaDeFecha, toHHMM } from './horarioService';
+import { extractHorarioHoras, diaDeFecha, toHHMM } from './horarioService';
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 
 // ------------------------------------------------------------
@@ -256,12 +256,6 @@ function removeReply(materia: string, dia: number | undefined, lang: 'es' | 'en'
     : `Done, I removed "${materia}"${when} from the schedule.`;
 }
 
-function removeNotFoundReply(materia: string, lang: 'es' | 'en'): string {
-  return lang === 'es'
-    ? `No encontré "${materia}" en el horario.`
-    : `I couldn't find "${materia}" in the schedule.`;
-}
-
 function askMateriaReply(lang: 'es' | 'en'): string {
   return lang === 'es'
     ? '¿Qué entrada quieres agregar al horario y en qué día?'
@@ -291,8 +285,8 @@ export function parseHorarioIntent(
   const text = input.trim();
   if (!text) return { handled: false, action: null, reply: '' };
 
-  const now = options.now ? options.now() : Date.now();
-  const lang: 'es' | 'en' = /[a-záéíóúñü]/i.test(text) && !/[¿¡áéíóú]/.test(text) && /^(add|put|schedule|set|create|register|remove|delete|drop|clear|quit|what|show)\b/i.test(text)
+  options.now ? options.now() : Date.now();
+  /[a-záéíóúñü]/i.test(text) && !/[¿¡áéíóú]/.test(text) && /^(add|put|schedule|set|create|register|remove|delete|drop|clear|quit|what|show)\b/i.test(text)
     ? 'en'
     : 'es';
 
@@ -300,7 +294,6 @@ export function parseHorarioIntent(
   const queryEs = QUERY_TRIGGERS_ES.test(text);
   const queryEn = QUERY_TRIGGERS_EN.test(text);
   if (queryEs || queryEn) {
-    const qLang = queryEs ? 'es' : 'en';
     const when = detectWhen(text);
     const dia = detectDia(text);
     const data: HorarioIntentData = { when };

@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fluDb, newId, newSyncTuple, bumpSync } from '../db/fluDatabase';
 import { addAuditLog } from '../db/fluDatabase';
-import { getActiveSeason, getMonthName, type CustomEvent, type SeasonalEvent } from './seasonalCalendar';
+import { getActiveSeason, type CustomEvent, type SeasonalEvent } from './seasonalCalendar';
 import { getPalette, applyPaletteToCSS, resetPaletteToDefault, type Palette } from './seasonalPalettes';
 
 // ============================================================
@@ -200,14 +200,10 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
         }
 
         let seasonKey: string;
-        let isBirthday = false;
-        let celebrandoA: string | undefined;
 
         if (cfg.mode === 'auto') {
             const result = getActiveSeason(cfg.birthday, cfg.customEvents, cfg.celebrateAchievements);
             seasonKey = result.event.palette;
-            isBirthday = result.isBirthday;
-            celebrandoA = result.celebrandoA;
         } else {
             // manual: usar la temporada que el usuario configuró
             seasonKey = cfg.activeSeason;

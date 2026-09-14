@@ -5,7 +5,6 @@ import {
   decideVoiceTurnDispatch,
   detectIntroducedName,
   detectListeningControl,
-  detectWakeIntroducedName,
   detectRole,
   detectTranscriptLanguage,
   extractTheme,
@@ -19,10 +18,8 @@ import {
   isMinuteSaveRequest,
   isMinuteKnowledgeRequest,
   isPlausiblePersonName,
-  normalizeSpaces,
   pickRichestVoiceCommandCapture,
   deriveQueryFromRow,
-  stripDiacritics,
 } from '../lib/audioMath'
 import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
@@ -71,9 +68,6 @@ import {
   getVoiceDetectionThreshold,
 } from '../lib/micCapture.js'
 import {
-  resolveMicCommitAction,
-} from '../lib/turnStream.js'
-import {
   computeSpillAfterLog,
   isDuplicateLogPhrase,
   listSessionSpeakers,
@@ -82,25 +76,13 @@ import {
 } from '../lib/conversationSession'
 import {
   advanceSpeaker,
-  advancePublishedDisplay,
-  confirmFinal,
   createActiveListenState,
   detectNextSpeakerPhrase,
-  isRedundantFinal,
-  matchesListeningAck,
-  pickLongestFinal,
   pickBestMicInterim,
-  mergeMicChunks,
-  processListenPacket,
-  wouldShrinkLog,
   nextSpeakerLabel,
   readCommandText,
-  readDisplayText,
   readStreamDisplay,
   archiveCommittedTurn,
-  buildPriorRowsForStrip,
-  trimCommittedRowsRef,
-  readSession,
   getSpeakerLabel,
   resetActiveListenState,
   getRecognitionLanguage,
@@ -108,15 +90,7 @@ import {
   resolveRecognitionLocale,
   resolveConversationSpeaker as resolveConversationSpeakerLabel,
   sealPendingInterim,
-  shouldRefreshStream,
   syncSpeakerIndexFromLabel,
-  resolveCommitCapture,
-  resolveLogParagraphBreak,
-  utterancesRelate,
-  utterancesSameRevision,
-  phrasesEquivalent,
-  micPublishedParityOk,
-  collapseMisorderedMicMerge,
 } from '../lib/activeListen.js'
 import {
   acquireSpeechRecognition,
@@ -131,15 +105,11 @@ import {
 } from '../lib/fluDebug'
 import {
   appendSpillText,
-  applyRecognitionResult,
   applyRecognitionResultWithBoundary,
-  collapseInlineRepeat,
   createTurnState,
   getTranscriptDelta,
-  getTurnDisplay,
   monotonicDisplay,
   normalizeTranscriptText,
-  readTurnCaptureForCommit,
   resetTurnState,
   waitForCaptureSettle,
 } from '../lib/turnTranscript'
@@ -152,21 +122,14 @@ import {
   flushTranscriptStateOnFinal,
   flushPcmStateAfterCommit,
 } from '../lib/recognitionBufferFlush.js'
-import { finalizeTurnIdentityPipeline, startContinuousIdentityPipeline, stopAllContinuousIdentityPipelines } from '../lib/turnIdentityPipeline.js'
+import { startContinuousIdentityPipeline, stopAllContinuousIdentityPipelines } from '../lib/turnIdentityPipeline.js'
 import {
   createTurnSpeakerAudioResolver,
   peekTurnSpeakerPreflight,
 } from '../lib/turnSpeakerPreflight.js'
-import { planAsrTurnSegments, segmentPlanCoversCapture } from '../lib/asrTurnSegmentation.js'
-import { resolveTurnSpeakerAtCommit, applyResolvedSpeakerToSessionRefs } from '../lib/turnSpeakerCommit.js'
 import {
-  anchorResolvedToLastLogged,
-  resolveCommitStickyFallback,
-  isWeakAsrSpeakerEvidence,
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
-import { markCommitPerfNow } from '../lib/audioSegmentClock.js'
-import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
@@ -605,11 +568,11 @@ export function useFluVoiceAssistant({
   const lastSpeakerDiarizeAtRef = useRef(0)
   const lastLogEmitAtRef = useRef(0)
   const passiveAudioDelayTimerRef = useRef(null)
-  const audioProcessSkipRef = useRef(0)
-  const lastDiarizeAtRef = useRef(0)
+  const _audioProcessSkipRef = useRef(0)
+  const _lastDiarizeAtRef = useRef(0)
   const listeningAckTimerRef = useRef(null)
-  const lastTurnHadFinalRef = useRef(false)
-  const allowStableCommitRef = useRef(false)
+  const _lastTurnHadFinalRef = useRef(false)
+  const _allowStableCommitRef = useRef(false)
   const turnCommitIdRef = useRef(0)
   const activeTurnIdRef = useRef(0)
   const lastCommitAtRef = useRef(0)
@@ -1414,11 +1377,11 @@ export function useFluVoiceAssistant({
 
   const resolveConversationSpeakerSync = useCallback(
     (
-      transcriptForIntro = '',
+      _transcriptForIntro = '',
       audioSnapshot,
       sampleRate,
       fallbackSpeaker,
-      { atTurnBoundary = false, allowNewCluster = true } = {},
+      { atTurnBoundary: _atTurnBoundary = false, allowNewCluster: _allowNewCluster = true } = {},
     ) => {
       const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
       const canDiarize = conversationActiveRef?.current === true && captureCfg.conversationAutoDiarize === true
@@ -2102,7 +2065,7 @@ export function useFluVoiceAssistant({
 
   const schedulePassiveAudioCapture = useCallback(() => {
     const runCapture = () => {
-      void setupPassiveAudioCapture().catch((error) => {
+      void setupPassiveAudioCapture().catch((_error) => {
         // audio opcional; SR sigue sin segundo stream
       })
     }
@@ -2612,7 +2575,6 @@ export function useFluVoiceAssistant({
 
     try {
 
-      const requireWake = !conversationActiveRef?.current
       if (!resume) {
         lastTurnSignatureRef.current = null
       }
@@ -2715,7 +2677,7 @@ export function useFluVoiceAssistant({
           await cleanupAudio()
           setStatus('idle')
         }
-      } catch (error) {
+      } catch {
         if (closing) {
           isListeningRef.current = false
           await cleanupAudio().catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
@@ -4460,7 +4422,7 @@ export function useFluVoiceAssistant({
       turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
     },
     scheduleIdentityPreflight,
-    touchMeaningfulIngress: ({ meaningful = true, reason = '' } = {}) => {
+    touchMeaningfulIngress: ({ meaningful = true, reason: _reason = '' } = {}) => {
       const now = Date.now()
       const echoWindowMs =
         Number(FLU_CONFIG.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200

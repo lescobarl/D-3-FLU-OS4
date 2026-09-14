@@ -141,7 +141,7 @@ export function useConversationPersistence(participantId?: string) {
                 console.error('[ConversationPersistence] Error loading history:', err);
             }
         })();
-    }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [scope]);
 
     // ---- Save each new entry to DB ----
     // Subscribe to conversationHistory.length only (not the full array) to avoid

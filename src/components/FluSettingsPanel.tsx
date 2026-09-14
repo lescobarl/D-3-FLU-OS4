@@ -18,7 +18,6 @@ import FluParticipantSettingsPanel from '../voice/components/FluParticipantSetti
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
 import { getAllPalettes, getPalette } from '../core/branding/seasonalPalettes';
 import { useBunnyStore } from '../avatar/store/bunnyStore';
-import type { BunnyComponent } from '../avatar/types/bunny';
 import type { VoiceConfig } from '../types/bridge';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { loadSearchConfigOverrides, saveSearchConfigOverrides, getLastStorageError, type SearchConfigOverrides } from '../core/search/searchConfigOverrides';
@@ -119,8 +118,6 @@ export function FluSettingsPanel({
     onBrandingBirthdayChange,
     onBrandingCelebrateAchievementsChange,
     // External Services props
-    voiceConfig,
-    setVoiceConfig,
     ocrApiKey,
     handleOcrApiKeyCommit,
     ocrModel,

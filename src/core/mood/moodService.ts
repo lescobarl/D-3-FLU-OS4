@@ -100,14 +100,6 @@ export interface RemoveMoodResult {
 // Helpers de fecha (día local 'YYYY-MM-DD' a partir de un timestamp)
 // ------------------------------------------------------------
 
-const toDateKey = (value: number): string => {
-  const d = new Date(value);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ------------------------------------------------------------

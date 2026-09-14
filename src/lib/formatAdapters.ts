@@ -68,7 +68,7 @@ function textResult(content: string, mime: string, ext: string, nombre: string):
 // ------------------------------------------------------------
 // Serialización binaria (import dinámico + degradación)
 // ------------------------------------------------------------
-function fallbackMarkdown(content: string, nombre: string, target: FormatInfo): GeneratedDocumentResult {
+function fallbackMarkdown(content: string, nombre: string, _target: FormatInfo): GeneratedDocumentResult {
   return textResult(content, FORMAT_INFO.md.mime, FORMAT_INFO.md.ext, nombre);
 }
 

@@ -24,7 +24,6 @@ import {
     hasToken,
     hasAnyToken,
     pickRandom,
-    adoptRandom,
 } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
