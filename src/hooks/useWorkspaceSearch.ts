@@ -273,6 +273,14 @@ export function useWorkspaceSearch(
 
             setLoading(true);
             setError('');
+            // SEARCH_START: una búsqueda nueva REEMPLAZA el turno anterior. Se
+            // vacían los resultados de los tres tipos de inmediato (no al llegar
+            // los nuevos) para que ninguna media previa quede "colgada" mientras
+            // carga la nueva consulta.
+            setResults([]);
+            setImages([]);
+            setVideo([]);
+            setAiOverview('');
             if (overrideQuery !== undefined) setQuery(q);
             if (overrideLang !== undefined) setLang(overrideLang);
 

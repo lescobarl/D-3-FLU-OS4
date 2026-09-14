@@ -17,7 +17,7 @@
 //   - El overlay de imagen se renderiza como hermano del contenido
 //     (no anidado) para preservar su `position: fixed`.
 // ============================================================
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { WorkspaceSearch } from './WorkspaceSearch';
@@ -304,6 +304,19 @@ export function WorkspaceHub({
         [image, runSearch],
     );
 
+    // Restauración ONE-SHOT del Historial: el último artefacto persistido se
+    // pinta SOLO al inicio de la sesión. En cuanto el usuario arranca cualquier
+    // petición o llega un artefacto vivo (generación, imagen o búsqueda en
+    // curso), la restauración se descarta para no repintar el artefacto ANTERIOR
+    // cuando la petición nueva no produce resultado (casos 2 y 4). Es estado de
+    // sesión (una sola transición), no un flag por render.
+    const [restoreDismissed, setRestoreDismissed] = useState(false);
+    useEffect(() => {
+        if (generation.isGenerating || image.isLoading || searchState.loading) {
+            setRestoreDismissed(true);
+        }
+    }, [generation.isGenerating, image.isLoading, searchState.loading]);
+
     // Comando de voz NAVEGAR/BUSCAR (evento RUN_SEARCH): ejecuta la búsqueda
     // externa inyectando consulta e idioma, y vuelca los resultados al feed
     // consolidado (Sección 2). Antes vivía en WorkspaceSearch; al elevar el
@@ -489,7 +502,7 @@ export function WorkspaceHub({
         // pantalla se omite, para no duplicar el render. El foco inicial lo
         // decide `pickInitialFilter` (una sola vez) al remontar el feed cuando
         // termina de cargar el historial.
-        if (documents && !documents.loading) {
+        if (documents && !documents.loading && !restoreDismissed) {
             const latestByFormato = (formato: string): DocumentRecord | undefined =>
                 documents.documents.find(
                     (d) => String(d.formato || '').toLowerCase() === formato,
@@ -684,6 +697,7 @@ export function WorkspaceHub({
         language,
         ws,
         searchState,
+        restoreDismissed,
     ]);
 
     // Foco por artefacto del turno: video o documento → "Video/Docs";
