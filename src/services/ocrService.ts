@@ -45,7 +45,6 @@ export function resolveOcrConfig(): OcrConfig {
  * Carga dinámica lazy: la biblioteca pesada solo se descarga bajo demanda.
  */
 export async function extractWithLocal(dataUrl: string): Promise<string> {
-    // @ts-ignore - biblioteca pesada, cargada dinámicamente bajo demanda
     const Tesseract: any = await import('tesseract.js');
     const worker = await Tesseract.createWorker('spa+eng');
     try {
@@ -114,7 +113,6 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
     if (typeof document === 'undefined') {
         return { text: '', engine: 'local', warnings: ['OCR de PDF requiere entorno de navegador.'] };
     }
-    // @ts-ignore - biblioteca opcional (pdfjs-dist), cargada dinámicamente
     const pdfjs: any = await import('pdfjs-dist');
     if (!pdfjs || typeof pdfjs.getDocument !== 'function') {
         throw new Error('módulo pdfjs-dist no disponible');

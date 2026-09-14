@@ -315,12 +315,10 @@ function renderFrameToPng(
  */
 async function tryLoadFFmpeg(): Promise<any | null> {
     try {
-        // @ts-ignore - biblioteca opcional (ffmpeg.wasm), puede no estar instalada
         const mod: any = await import('@ffmpeg/ffmpeg');
         const FFmpegClass = mod?.FFmpeg || mod?.default?.FFmpeg;
         if (typeof FFmpegClass !== 'function') return null;
 
-        // @ts-ignore - util opcional de ffmpeg.wasm
         const utilMod: any = await import('@ffmpeg/util');
         const toBlobURL = typeof utilMod?.toBlobURL === 'function'
             ? utilMod.toBlobURL

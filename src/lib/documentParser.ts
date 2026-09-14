@@ -271,7 +271,6 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
   const limits = getLimits();
   let XLSX: unknown;
   try {
-    // @ts-ignore - biblioteca opcional (SheetJS), cargada dinámicamente
     XLSX = await import('xlsx');
   } catch {
     return {
@@ -319,7 +318,6 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
 
 async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
-    // @ts-ignore - biblioteca opcional (pdfjs-dist), cargada dinámicamente
     const pdfjs: any = await import('pdfjs-dist');
     if (!pdfjs || typeof pdfjs.getDocument !== 'function') {
       throw new Error('módulo pdfjs-dist no disponible');
@@ -359,7 +357,6 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
 
 async function parseDocx(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
-    // @ts-ignore - biblioteca opcional (mammoth), cargada dinámicamente
     const mammoth: any = await import('mammoth');
     if (!mammoth || typeof mammoth.extractRawText !== 'function') {
       throw new Error('módulo mammoth no disponible');
@@ -379,7 +376,6 @@ async function parseDocx(data: ArrayBuffer): Promise<ParsedPayload> {
 
 async function parsePptx(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
-    // @ts-ignore - biblioteca opcional (pptx-parser), cargada dinámicamente
     const mod: any = await import('pptx-parser');
     const pptxParser = mod.default || mod;
     if (typeof pptxParser !== 'function') {

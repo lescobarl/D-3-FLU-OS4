@@ -74,7 +74,6 @@ function fallbackMarkdown(content: string, nombre: string, target: FormatInfo): 
 
 async function serializePdf(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (pdfkit), cargada dinámicamente
     const mod: any = await import('pdfkit/js/pdfkit.standalone');
     const PDFDocument = mod.default || mod;
     if (typeof PDFDocument !== 'function') throw new Error('pdfkit no disponible');
@@ -125,7 +124,6 @@ async function serializePdf(content: string, nombre: string): Promise<GeneratedD
 
 async function serializeDocx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (docx), cargada dinámicamente
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
     const lines = String(content || '').split(/\r?\n/).map((l) => l.trim());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,7 +159,6 @@ async function serializeDocx(content: string, nombre: string): Promise<Generated
 
 async function serializeXlsx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (SheetJS), cargada dinámicamente
     const XLSX: any = await import('xlsx');
     let parsed: any;
     try {
@@ -196,7 +193,6 @@ async function serializeXlsx(content: string, nombre: string): Promise<Generated
 
 async function serializePptx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (pptxgenjs), cargada dinámicamente
     const PptxGenJS: any = await import('pptxgenjs');
     const PptxGen = PptxGenJS.default || PptxGenJS;
     const pptx = new PptxGen();
