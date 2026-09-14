@@ -73,7 +73,7 @@ export interface UseWorkspaceSearchResult {
 
 /** Config de búsqueda base desde FLU_CONFIG.browser.search (sin hardcode). */
 export function buildRuntimeConfig(): SearchRuntimeConfig {
-    const cfg = (FLU_CONFIG as any).browser?.search || {};
+    const cfg = FLU_CONFIG.browser?.search || {};
     const ui = cfg.ui || {};
     const endpoints = cfg.endpoints || {};
     const byType = cfg.maxResultsByType || {};

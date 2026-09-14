@@ -59,7 +59,7 @@ export interface UseHabitsResult extends HabitsState, HabitsActions {
 // ------------------------------------------------------------
 
 export function useHabits({ now }: UseHabitsOptions = {}): UseHabitsResult {
-  const config = (FLU_CONFIG as any).habits || {};
+  const config = FLU_CONFIG.habits || {};
   const categories =
     Array.isArray(config.categories) && config.categories.length > 0
       ? (config.categories as string[])

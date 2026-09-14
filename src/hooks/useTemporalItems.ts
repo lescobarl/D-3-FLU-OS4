@@ -110,11 +110,12 @@ export function useTemporalItems({
   participantId,
 }: UseTemporalItemsOptions = {}): UseTemporalItemsResult {
   const scope = participantId || 'global';
-  const config = (FLU_CONFIG as any).temporal || {};
+  const config = FLU_CONFIG.temporal || {};
+  const configExtra = config as Record<string, unknown>;
   const maxActive = Number(config.maxActive) || 12;
   const tickMs = Number(config.tickMs) || 30000;
   const graceMs = Number(config.graceMs) || 15000;
-  const limit = Number(config.limit) || 20;
+  const limit = Number(configExtra.limit) || 20;
   const sound = (config.sound || {}) as SoundOptions;
   const voice = config.voice || {};
   const voiceAlarmDue = voice.alarmDue || 'Es la hora de tu alarma:';
@@ -163,7 +164,7 @@ export function useTemporalItems({
   const [loading, setLoading] = useState(true);
   const [ringing, setRinging] = useState<TemporalRinging | null>(null);
   const ringingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoStopMs = Number(config.autoStopMs) || 30000;
+  const autoStopMs = Number(configExtra.autoStopMs) || 30000;
 
   // Ref de guardia para no solapar ticks asíncronos del scheduler.
   const runningRef = useRef(false);
@@ -274,9 +275,10 @@ export function useTemporalItems({
   /** Agrega una alarma o temporizador y refresca las listas. */
   const add = useCallback(
     async (input: NewTemporalItemInput): Promise<AddTemporalResult> => {
+      const inputPersonId = (input as { personId?: string }).personId;
       const result = await service.add({
         ...input,
-        personId: (input as any).personId || (scope !== 'global' ? scope : undefined),
+        personId: inputPersonId || (scope !== 'global' ? scope : undefined),
       } as NewTemporalItemInput);
       if (result.ok) await refresh();
       return result;

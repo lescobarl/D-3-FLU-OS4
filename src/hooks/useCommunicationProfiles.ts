@@ -72,7 +72,7 @@ export function useCommunicationProfiles({
   now,
 }: UseCommunicationProfilesOptions = {}): UseCommunicationProfilesResult {
   // FASE P: configuración desde FLU_CONFIG.personalization (fuente de verdad).
-  const config = ((FLU_CONFIG as any).personalization || {}) as CommunicationProfileConfig;
+  const config = (FLU_CONFIG.personalization || {}) as CommunicationProfileConfig;
 
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado o los callbacks referencian `service`, y una referencia en

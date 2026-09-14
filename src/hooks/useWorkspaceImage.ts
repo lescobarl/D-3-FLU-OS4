@@ -166,7 +166,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
                 setIsFailed(false);
             } else {
                 traceImage('openrouter-fallback:sin-URL', {
-                    trace: (result as any)?.trace || undefined,
+                    trace: result.trace || undefined,
                     prompt: String(prompt).slice(0, 60),
                 });
                 console.warn('[useWorkspaceImage] OpenRouter fallback returned no image:', result.trace);
@@ -225,10 +225,10 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             traceImage('generateFromContract:result', {
                 tipo,
                 prompt: String(promptVisual).slice(0, 60),
-                provider: (result as any)?.trace?.provider || (result as any)?.provider || '?',
+                provider: result.trace?.provider || '?',
                 ok: Boolean(result.image_url),
                 url: String(result.image_url || '').slice(0, 90),
-                trace: (result as any)?.trace || undefined,
+                trace: result.trace || undefined,
             });
             if (result.image_url) {
                 urlRef.current = result.image_url;

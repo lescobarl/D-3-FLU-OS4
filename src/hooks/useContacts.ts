@@ -58,7 +58,7 @@ export interface UseContactsResult extends ContactsState, ContactsActions {
 // ------------------------------------------------------------
 
 export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult {
-  const config = (FLU_CONFIG as any).contacts || {};
+  const config = FLU_CONFIG.contacts || {};
   const maxContacts =
     typeof config.maxContacts === 'number' ? config.maxContacts : undefined;
   const birthdayWindowDays =

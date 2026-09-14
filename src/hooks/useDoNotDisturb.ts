@@ -64,7 +64,7 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
 }
 
 function readDndConfig(): DndConfigData {
-  const base = (FLU_CONFIG as any).dnd || {};
+  const base = FLU_CONFIG.dnd || {};
   const schedule: DndSchedule =
     base.schedule && base.schedule.start && base.schedule.end
       ? { start: String(base.schedule.start), end: String(base.schedule.end) }
@@ -85,7 +85,7 @@ export function useDoNotDisturb(): [DoNotDisturbState, DoNotDisturbActions] {
   const [config, setConfig] = useState<DndConfigData>(() => readDndConfig());
   const [now, setNow] = useState<Date>(() => new Date());
 
-  const tickMs = Number((FLU_CONFIG as any).dnd?.tickMs) || 60000;
+  const tickMs = Number(FLU_CONFIG.dnd?.tickMs) || 60000;
 
   useEffect(() => {
     if (!config.enabled) return;

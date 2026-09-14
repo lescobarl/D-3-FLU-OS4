@@ -60,7 +60,7 @@ export interface UseHorarioResult extends HorarioState, HorarioActions {
 
 export function useHorario({ now, participantId }: UseHorarioOptions = {}): UseHorarioResult {
   const scope = participantId || 'global';
-  const config = (FLU_CONFIG as any).horario || {};
+  const config = FLU_CONFIG.horario || {};
   const maxClasesPorDia = Number(config.maxClasesPorDia) || 16;
   const diaMin = Number(config.diaMin) || 1;
   const diaMax = Number(config.diaMax) || 7;
@@ -111,9 +111,10 @@ export function useHorario({ now, participantId }: UseHorarioOptions = {}): UseH
   /** Registra una clase y refresca la lista. */
   const add = useCallback(
     async (input: NewHorarioInput): Promise<AddHorarioResult> => {
+      const inputPersonId = (input as { personId?: string }).personId;
       const result = await service.add({
         ...input,
-        personId: (input as any).personId || (scope !== 'global' ? scope : undefined),
+        personId: inputPersonId || (scope !== 'global' ? scope : undefined),
       } as NewHorarioInput);
       if (result.ok) await refresh();
       return result;

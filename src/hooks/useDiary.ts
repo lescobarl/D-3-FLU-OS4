@@ -57,7 +57,7 @@ export interface UseDiaryResult extends DiaryState, DiaryActions {
 // ------------------------------------------------------------
 
 export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
-  const config = (FLU_CONFIG as any).diary || {};
+  const config = FLU_CONFIG.diary || {};
   const maxEntriesPerDay =
     typeof config.maxEntriesPerDay === 'number' ? config.maxEntriesPerDay : undefined;
 

@@ -82,7 +82,7 @@ export function useReminders({
   participantId,
 }: UseRemindersOptions = {}): UseRemindersResult {
   const scope = participantId || 'global';
-  const config = (FLU_CONFIG as any).reminders || {};
+  const config = FLU_CONFIG.reminders || {};
   const maxPerDay = Number(config.maxPerDay) || 20;
   const defaultCategory = config.defaultCategory || 'reminder';
   const tickMs = Number(config.tickMs) || 30000;

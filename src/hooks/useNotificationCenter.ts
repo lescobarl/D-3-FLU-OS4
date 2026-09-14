@@ -11,6 +11,7 @@ import {
   createNotificationService,
   NOTIFICATION_EVENT,
   type NotificationChannel,
+  type NotificationConfig,
   type NotificationDispatch,
   type NotificationDndState,
   type NotificationService,
@@ -59,10 +60,24 @@ export function useNotificationCenter({
   language = 'es',
   dnd,
 }: UseNotificationCenterOptions): NotificationCenterState {
-  const config = (FLU_CONFIG as any).notifications || {};
+  const config = FLU_CONFIG.notifications || {};
+  const configExtra = config as Record<string, unknown>;
   const maxStack = Number(config.maxStack) || 4;
-  const maxHistory = Number(config.maxHistory) || 50;
+  const maxHistory = Number(configExtra.maxHistory) || 50;
   const toastDurationMs = Number(config.toastDurationMs) || 6000;
+  const channelConfig: NotificationChannel =
+    config.channel === 'none' || config.channel === 'voice' || config.channel === 'both'
+      ? config.channel
+      : 'toast';
+  const notificationConfig: NotificationConfig = {
+    enabled: config.enabled,
+    channel: channelConfig,
+    toastDurationMs: config.toastDurationMs,
+    defaultTitle: config.defaultTitle,
+    maxStack: config.maxStack,
+    webApiEnabled: config.webApiEnabled,
+    mutedCategories: config.mutedCategories,
+  };
   const lang = language === 'en' ? 'en' : 'es';
 
   // Crear el servicio ANTES de cualquier useState: el inicializador de
@@ -72,7 +87,7 @@ export function useNotificationCenter({
   const serviceRef = useRef<NotificationService | null>(null);
   if (!serviceRef.current) {
     serviceRef.current = createNotificationService({
-      config,
+      config: notificationConfig,
       dnd: dnd || { isActive: false, allowUrgent: false },
     });
   }

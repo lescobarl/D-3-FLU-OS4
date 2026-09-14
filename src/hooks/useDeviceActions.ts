@@ -51,7 +51,7 @@ export function useDeviceActions({
   contacts = [],
   countryDial,
 }: UseDeviceActionsOptions): UseDeviceActionsResult {
-  const deviceActionsConfig = (FLU_CONFIG as any).deviceActions || {};
+  const deviceActionsConfig = FLU_CONFIG.deviceActions || {};
 
   // El servicio se reconstruye solo cuando cambian las dependencias
   // de resolución (el ContactService o la copia en memoria).

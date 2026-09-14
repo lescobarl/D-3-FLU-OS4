@@ -52,7 +52,7 @@ export interface UseMateriaGrisResult extends MateriaGrisState, MateriaGrisActio
 // ------------------------------------------------------------
 
 export function useMateriaGris({ now }: UseMateriaGrisOptions = {}): UseMateriaGrisResult {
-  const config = (FLU_CONFIG as any).materiaGris || {};
+  const config = FLU_CONFIG.materiaGris || {};
   const actions =
     config.actions && typeof config.actions === 'object'
       ? (config.actions as Record<string, number>)

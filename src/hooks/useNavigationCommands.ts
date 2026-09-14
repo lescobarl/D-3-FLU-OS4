@@ -89,7 +89,7 @@ export function useNavigationCommands(
     // clamp en [min, max] para no degradar la paridad OS2.
     // ============================================================
     const resolveResumeAfterSpeechMs = useCallback((textLength = 0): number => {
-        const timing = (FLU_CONFIG as any)?.timing ?? {};
+        const timing = FLU_CONFIG?.timing ?? {};
         const base = Number(timing.resumeAfterSpeechMs) || 50;
         const perChar = Number(timing.resumeAfterSpeechPerCharMs) || 0;
         const min = Number(timing.resumeAfterSpeechMinMs) || base;
@@ -162,7 +162,7 @@ export function useNavigationCommands(
         // Marca global: hay corrección parcial→completo en vuelo. El dedup de
         // capturas no debe descartar el superconjunto entrante.
         setNavSettlePending(true);
-        const settleMs = Number((FLU_CONFIG as any)?.timing?.searchCommandSettleMs) || 2800;
+        const settleMs = Number(FLU_CONFIG?.timing?.searchCommandSettleMs) || 2800;
         navSettleTimerRef.current = window.setTimeout(() => {
             navSettleTimerRef.current = null;
             const pending = pendingNavRef.current;
@@ -416,7 +416,7 @@ export function useNavigationCommands(
                 // NAVEGAR NO debe disparar nada; Flu responde conversacional en App.
                 if (!userRequested) break;
                 const parametros = (navegacion.parametros || {}) as Record<string, any>;
-                const browserCfg = (FLU_CONFIG as any).browser || {};
+                const browserCfg = FLU_CONFIG.browser || {};
                 const allowlist = Array.isArray(browserCfg.defaultProfile?.allowlist)
                     ? browserCfg.defaultProfile.allowlist
                     : ['wikipedia.org', 'educ.ar'];
@@ -448,7 +448,7 @@ export function useNavigationCommands(
                 );
                 const scheme = String(browserCfg.allowlistScheme || 'https');
                 const langInput = applyLanguageToHost(input, requestLang, languageHosts);
-                const browserUi = (FLU_CONFIG as any).browser?.ui || {};
+                const browserUi = FLU_CONFIG.browser?.ui || {};
                 const result = resolveBrowserNavigation(langInput, allowlist, scheme, {
                     resultTitle: browserUi.resultTitle || 'NavegaciÃ³n curada',
                     blockedTitle: browserUi.blockedTitle || 'Sitio no permitido',
@@ -496,14 +496,14 @@ export function useNavigationCommands(
                 // debe disparar nada; Flu responde conversacional en App.
                 if (!userRequested) break;
                 const parametros = (navegacion.parametros || {}) as Record<string, any>;
-                const browserCfg = (FLU_CONFIG as any).browser || {};
+                const browserCfg = FLU_CONFIG.browser || {};
                 const searchCfg = browserCfg.search || {};
                 const searchUi = searchCfg.ui || {};
                 // F1 â€” Idioma: igual que NAVEGAR, el idioma pedido por voz
                 // ("â€¦en inglÃ©s") define el idioma de la bÃºsqueda y se quita de
                 // la frase para que los marcadores no se cuelen en la consulta
                 // ("buscÃ¡ capital de Francia en inglÃ©s" â†’ "capital de Francia").
-                const languageWords = searchCfg.languageWords || browserCfg.languageWords || {};
+                const languageWords = browserCfg.languageWords || {};
                 const profileLang = String(browserCfg.defaultProfile?.language || 'es');
                 const requestLang = resolveSearchLanguage(transcript, profileLang, languageWords);
                 // §9: ÚNICA derivación de la query. Toma los parámetros del LLM si
@@ -512,7 +512,7 @@ export function useNavigationCommands(
                 const rawQuery = deriveSearchQuery({
                     provided: parametros.consulta || parametros.query || parametros.busqueda || '',
                     transcript,
-                    voiceCommands: (FLU_CONFIG as any).voiceCommands,
+                    voiceCommands: FLU_CONFIG.voiceCommands,
                 });
                 const query = stripLanguageWords(rawQuery, languageWords);
                 if (!query) {
@@ -547,7 +547,7 @@ export function useNavigationCommands(
                     const offReady = onFluSearchReady(() => {
                         offReady();
                         const readyMsg =
-                            searchUi.resultsReady ||
+                            ('resultsReady' in searchUi ? String(searchUi.resultsReady) : '') ||
                             (resolvedLanguage === 'en'
                                 ? 'Done, I already have the results. They are in the Search tab.'
                                 : 'Listo, ya tengo los resultados. Los tenés en la pestaña Buscar.');

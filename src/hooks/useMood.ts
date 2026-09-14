@@ -56,7 +56,7 @@ export interface UseMoodResult extends MoodState, MoodActions {
 // ------------------------------------------------------------
 
 export function useMood({ now }: UseMoodOptions = {}): UseMoodResult {
-  const config = (FLU_CONFIG as any).mood || {};
+  const config = FLU_CONFIG.mood || {};
   const scaleMin = typeof config.scaleMin === 'number' ? config.scaleMin : 1;
   const scaleMax = typeof config.scaleMax === 'number' ? config.scaleMax : 5;
   const maxLogsPerParticipant =

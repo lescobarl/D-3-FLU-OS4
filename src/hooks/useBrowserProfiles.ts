@@ -68,7 +68,7 @@ export interface UseBrowserProfilesResult extends BrowserProfilesState, BrowserP
 
 export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): UseBrowserProfilesResult {
   // Punto 2: configuración desde FLU_CONFIG.browser (fuente de verdad).
-  const config = ((FLU_CONFIG as any).browser || {}) as BrowserProfileConfig;
+  const config = (FLU_CONFIG.browser || {}) as BrowserProfileConfig;
 
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado o los callbacks referencian `service`, y una referencia en

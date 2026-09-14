@@ -24,7 +24,7 @@ import {
   type OnboardingState,
   type OnboardingStep,
 } from '../core/onboarding/onboardingFlow';
-import { createNotificationService } from '../core/notifications/notificationService';
+import { createNotificationService, type NotificationChannel } from '../core/notifications/notificationService';
 import { fluDb } from '../core/db/fluDatabase';
 import {
   createOnboardingService,
@@ -79,7 +79,7 @@ export function useOnboarding({
   participantId,
   onCompleted,
 }: UseOnboardingOptions): UseOnboardingResult {
-  const config = ((FLU_CONFIG as any).onboarding || { enabled: false, steps: [] }) as OnboardingConfig;
+  const config = (FLU_CONFIG.onboarding || { enabled: false, steps: [] }) as OnboardingConfig;
   const lang = language === 'en' ? 'en' : 'es';
   const isPerUser =
     participantId !== undefined && participantId !== '' && participantId !== DEFAULT_ONBOARDING_USER;
@@ -173,8 +173,12 @@ export function useOnboarding({
 
   const handleAction = useCallback(async (result: AdvanceResult) => {
     if (result.action.type !== 'requestNotifications') return;
-    const notifConfig = (FLU_CONFIG as any).notifications || {};
-    const service = createNotificationService({ config: notifConfig });
+    const notifConfig = FLU_CONFIG.notifications || {};
+    const notifChannel: NotificationChannel =
+      notifConfig.channel === 'none' || notifConfig.channel === 'voice' || notifConfig.channel === 'both'
+        ? notifConfig.channel
+        : 'toast';
+    const service = createNotificationService({ config: { ...notifConfig, channel: notifChannel } });
     try {
       const permission = await service.requestPermission();
       service.setChannel(permission === 'granted' ? 'both' : 'toast');

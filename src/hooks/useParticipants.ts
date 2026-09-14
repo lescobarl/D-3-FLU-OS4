@@ -68,7 +68,7 @@ export interface UseParticipantsResult extends ParticipantsState, ParticipantsAc
 // ------------------------------------------------------------
 
 export function useParticipants({ now }: UseParticipantsOptions = {}): UseParticipantsResult {
-  const config = (FLU_CONFIG as any).multiuser || {};
+  const config = FLU_CONFIG.multiuser || {};
   const roles = Array.isArray(config.roles) ? (config.roles as readonly string[]) : [];
   // A5: la voz base por defecto nunca se hardcodea; se parte de
   // DEFAULT_VOICE_CONFIG (config central) y se fusiona la sección
