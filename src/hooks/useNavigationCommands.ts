@@ -26,12 +26,29 @@ import {
 } from '../core/search/searchLanguage';
 import type { IntegrationStore } from '../store/integrationStore';
 import { buildSelfManifesto } from '../core/selfKnowledge/selfKnowledge';
+import type { AuditLogEntry } from '../core/db/fluDatabase';
 
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
     volume?: number;
     rate?: number;
     pitch?: number;
+}
+
+/** Contrato de auditoría usado por los comandos de navegación. */
+export interface NavigationAuditLog {
+    logEvent: (type: string, category: string, id: string, data: unknown, description: string) => Promise<AuditLogEntry>;
+}
+
+/**
+ * Devuelve `String(primerValorVerdadero)` o `''`. Equivale a la cadena
+ * `a || b || c || ''` seguida de coerción a string.
+ */
+function firstString(...values: unknown[]): string {
+    for (const value of values) {
+        if (value) return String(value);
+    }
+    return '';
 }
 
 export interface NavigationCommands {
@@ -47,7 +64,7 @@ export interface NavigationCommands {
         commandSpeech: string;
         showListeningAck?: () => void;
         integrationStore: IntegrationStore;
-        auditLog: { logEvent: (type: string, category: string, id: string, data: any, description: string) => Promise<any> };
+        auditLog: NavigationAuditLog;
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
         /** Puerta única e idempotente de generación de medios (video/doc). */
@@ -204,7 +221,7 @@ export function useNavigationCommands(
         commandSpeech: string;
         showListeningAck?: () => void;
         integrationStore: IntegrationStore;
-        auditLog: { logEvent: (type: string, category: string, id: string, data: any, description: string) => Promise<any> };
+        auditLog: NavigationAuditLog;
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
         /** Puerta única e idempotente de generación de medios (video/doc). */
@@ -414,7 +431,7 @@ export function useNavigationCommands(
                 // ("platicame de los aviones") que la IA clasifique por error como
                 // NAVEGAR NO debe disparar nada; Flu responde conversacional en App.
                 if (!userRequested) break;
-                const parametros = (navegacion.parametros || {}) as Record<string, any>;
+                const parametros: Record<string, unknown> = navegacion.parametros || {};
                 const browserCfg = FLU_CONFIG.browser || {};
                 const allowlist = Array.isArray(browserCfg.defaultProfile?.allowlist)
                     ? browserCfg.defaultProfile.allowlist
@@ -494,7 +511,7 @@ export function useNavigationCommands(
                 // conversacional que la IA clasifique por error como BUSCAR NO
                 // debe disparar nada; Flu responde conversacional en App.
                 if (!userRequested) break;
-                const parametros = (navegacion.parametros || {}) as Record<string, any>;
+                const parametros: Record<string, unknown> = navegacion.parametros || {};
                 const browserCfg = FLU_CONFIG.browser || {};
                 const searchCfg = browserCfg.search || {};
                 const searchUi = searchCfg.ui || {};
@@ -509,7 +526,7 @@ export function useNavigationCommands(
                 // existen o el transcript canónico, y limpia con un solo limpiador
                 // (deriveSearchQuery). Antes había dos derivadores en el mismo bloque.
                 const rawQuery = deriveSearchQuery({
-                    provided: parametros.consulta || parametros.query || parametros.busqueda || '',
+                    provided: firstString(parametros.consulta, parametros.query, parametros.busqueda),
                     transcript,
                     voiceCommands: FLU_CONFIG.voiceCommands,
                 });

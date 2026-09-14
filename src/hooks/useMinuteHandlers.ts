@@ -17,32 +17,36 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { createMinuteDraftFromSummary } from '../lib/minuteKnowledgeHelpers';
 import type { IntegrationStore } from '../store/integrationStore';
 import type { MinuteUIEntry } from './useMinuteKnowledge';
+import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
+
+/** Draft de minuta producido por `createMinuteDraftFromSummary`. */
+export type MinuteDraft = ReturnType<typeof createMinuteDraftFromSummary>;
 
 export interface MinuteHandlers {
     isGeneratingMinute: boolean;
     isSummarizing: boolean;
     handleGenerateMinute: () => Promise<void>;
     handleGenerateSummary: (opts?: { announce?: boolean }) => Promise<void>;
-    handleSaveMinute: (draftOverride?: any, opts?: { announce?: boolean }) => Promise<void>;
+    handleSaveMinute: (draftOverride?: MinuteDraft | null, opts?: { announce?: boolean }) => Promise<void>;
     handleSaveConversationSummary: (opts?: { announce?: boolean }) => Promise<void>;
-    handleSelectMinuteHistory: (entry: any) => void;
+    handleSelectMinuteHistory: (entry: MinuteUIEntry) => void;
 }
 
 export interface MinuteHandlersDeps {
     integrationStore: IntegrationStore;
     minuteKnowledge: {
         minutes: MinuteUIEntry[];
-        addMinute: (snapshot: any, options?: { profileId?: string; userId?: string; kind?: 'minuta' | 'conversacion' | 'diario' }) => Promise<MinuteUIEntry>;
+        addMinute: (snapshot: MinuteSummarySnapshot, options?: { profileId?: string; userId?: string; kind?: 'minuta' | 'conversacion' | 'diario' }) => Promise<MinuteUIEntry>;
     };
     auditLog: {
-        logEvent: (type: string, category: string, id: string, data: any, description: string) => Promise<any>;
+        logEvent: (type: string, category: string, id: string, data: unknown, description: string) => Promise<AuditLogEntry>;
     };
     language: string;
     apiKey: string;
     sessionRole: string;
     voiceStatus: string;
-    minuteDraft: any;
-    setMinuteDraft: (draft: any) => void;
+    minuteDraft: MinuteDraft | null;
+    setMinuteDraft: (draft: MinuteDraft | null) => void;
     setSelectedMinuteId: (id: string | null) => void;
     os2StartListening: (opts?: { resume?: boolean }) => Promise<void>;
     os2StopListening: (opts?: { closing?: boolean }) => Promise<void>;
@@ -217,7 +221,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
     // ============================================================
     // handleSaveMinute
     // ============================================================
-    const handleSaveMinute = useCallback(async (draftOverride?: any, { announce = true }: { announce?: boolean } = {}) => {
+    const handleSaveMinute = useCallback(async (draftOverride?: MinuteDraft | null, { announce = true }: { announce?: boolean } = {}) => {
         const sourceDraft = draftOverride || minuteDraft;
         if (!sourceDraft) return;
 
@@ -321,7 +325,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
     // ============================================================
     // handleSelectMinuteHistory
     // ============================================================
-    const handleSelectMinuteHistory = useCallback((entry: any) => {
+    const handleSelectMinuteHistory = useCallback((entry: MinuteUIEntry) => {
         if (!entry) return;
         setSelectedMinuteId(entry.id);
         const snapshot = entry.summarySnapshot || entry;

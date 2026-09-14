@@ -11,22 +11,33 @@
 // ============================================================
 
 import { useEffect, useRef } from 'react';
-import { fluDb, newSyncTuple } from '../core/db/fluDatabase';
+import { fluDb, newSyncTuple, type ConversationRow } from '../core/db/fluDatabase';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
 /**
+ * Normaliza el campo `sentiment` persistido (string libre en la fila) al
+ * conjunto cerrado que admite `ConversationEntry`.
+ */
+function toConversationSentiment(value: string | undefined): ConversationEntry['sentiment'] {
+    if (value === 'positive' || value === 'negative' || value === 'neutral' || value === 'question') {
+        return value;
+    }
+    return undefined;
+}
+
+/**
  * Convert a DB ConversationRow to a ConversationEntry (store format).
  */
-function rowToEntry(row: any): ConversationEntry {
+function rowToEntry(row: ConversationRow): ConversationEntry {
     return {
         id: row.id,
         role: row.role,
         text: row.text,
         timestamp: row.timestamp,
-        sentiment: row.sentiment,
+        sentiment: toConversationSentiment(row.sentiment),
         speakerName: row.speakerName,
         response: row.response || '',
         meta: row.meta || (row.response ? { response: row.response } : undefined),
@@ -84,8 +95,8 @@ export function useConversationPersistence(participantId?: string) {
                     useIntegrationStore.getState().batchLoadHistory([]);
                 }
                 const rows = (await fluDb.conversations.toArray())
-                    .filter((row: any) => (row.participantId || 'global') === scope)
-                    .sort((a: any, b: any) => a.timestamp - b.timestamp)
+                    .filter((row) => (row.participantId || 'global') === scope)
+                    .sort((a, b) => a.timestamp - b.timestamp)
                     .slice(-MAX_LOADED_ROWS);
 
                 if (rows.length > 0) {
@@ -173,8 +184,8 @@ export function useConversationPersistence(participantId?: string) {
                 .toArray()
                 .then((all) =>
                     all
-                        .filter((row: any) => (row.participantId || 'global') === scope)
-                        .map((row: any) => row.id),
+                        .filter((row) => (row.participantId || 'global') === scope)
+                        .map((row) => row.id),
                 )
                 .then((ids) => (ids.length ? fluDb.conversations.bulkDelete(ids) : undefined))
                 .catch((err) => {

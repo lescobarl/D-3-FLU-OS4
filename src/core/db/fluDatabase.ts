@@ -14,6 +14,7 @@ import type { EnvironmentDefinition } from '../environments/environmentRegistry'
 import type { PaletteDefinition } from '../branding/seasonalPalettes';
 import type { SearchSite } from '../search/searchSiteTypes';
 import type { ReminderRepeat, TemporalItemRecord } from '../temporal/temporalTypes';
+import type { ConversationEntry } from '../../types/bridge';
 
 // -----------------------------------------------------------
 // Sync Tuple — Obligación #7
@@ -51,7 +52,7 @@ export interface ConversationRow {
     sentiment?: string;
     timestamp: number;
     response?: string;
-    meta?: Record<string, unknown> | null;
+    meta?: ConversationEntry['meta'] | null;
     signature?: number[] | null;
     phase?: string;
     navigation?: Record<string, unknown> | null;

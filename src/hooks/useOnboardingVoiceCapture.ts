@@ -32,6 +32,7 @@ import {
   startSpeechRecognition,
   stopSpeechRecognition,
 } from '../voice/lib/speechRecognitionLocal';
+import type { SpeechRecognitionLike } from '../types/fluWindow';
 
 export interface UseOnboardingVoiceCaptureOptions {
   /** true solo mientras el paso actual acepta voz (config acceptVoice).
@@ -81,7 +82,7 @@ export function useOnboardingVoiceCapture({
   const languageRef = useRef(language);
   const onFinalRef = useRef(onFinal);
   const onEventRef = useRef(onEvent);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const restartTimerRef = useRef<number | null>(null);
   const activeRef = useRef(false);
   const suspendedRef = useRef(false);
@@ -179,7 +180,7 @@ export function useOnboardingVoiceCapture({
         setListening(true);
         onEventRef.current?.('start');
       },
-      onResult: (event: any) => {
+      onResult: (event: SpeechRecognitionEvent) => {
         let finalText = '';
         let interimText = '';
         for (let i = 0; i < event.results.length; i += 1) {
@@ -206,7 +207,7 @@ export function useOnboardingVoiceCapture({
         setInterim('');
         onFinalRef.current(clean);
       },
-      onError: (event: any) => {
+      onError: (event: SpeechRecognitionErrorEvent) => {
         const name = String(event?.error || event?.message || '').toLowerCase();
         onEventRef.current?.('error', name);
         if (name === 'not-allowed' || name === 'service-not-allowed') {
