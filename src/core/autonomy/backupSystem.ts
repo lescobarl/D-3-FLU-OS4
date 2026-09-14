@@ -21,6 +21,8 @@
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { v4 as uuidv4 } from 'uuid';
+import type { ConversationEntry, ConversationState, VoiceBridgeEvent, WorkspaceEntry } from '../../types/bridge';
+import type { MinuteUIEntry } from '../../hooks/useMinuteKnowledge';
 
 // -----------------------------------------------------------
 // Tipos
@@ -61,11 +63,74 @@ export interface BackupMetadata {
     notes?: string;
 }
 
+/** Estado de conversación extraído/restaurado. */
+export interface ConversationStateData {
+    conversationHistory: ConversationEntry[];
+    conversationState: ConversationState;
+    eventLog: VoiceBridgeEvent[];
+    lastUpdated: number;
+}
+
+/** Configuración de IA extraída/restaurada. */
+export interface AIConfigurationData {
+    provider: string;
+    apiKeys: { gemini: string; deepseek: string };
+    models: { gemini: string; deepseek: string };
+    creativity: string;
+    maxTokens: string;
+}
+
+/** Preferencias de usuario extraídas/restauradas. */
+export interface UserPreferencesData {
+    language: string;
+    sessionRole: string;
+    voiceConfig: { speed: string; volume: string; pitch: string };
+    uiPreferences: { theme: string; fontSize: string; animations: string };
+    avatarConfig: { color: string; pantsColor: string; bodyColor: string; faceColor: string };
+}
+
+/** Datos del workspace extraídos/restaurados. */
+export interface WorkspaceData {
+    workspaceArtifact: WorkspaceEntry | null;
+}
+
+/** Configuración del sistema extraída/restaurada. */
+export interface SystemSettingsData {
+    branding: { mode: string; activeSeason: string; birthday: string | null };
+    autonomy: { healthMonitoring: string; autoRecovery: string; decisionEngine: string };
+    performance: { cacheEnabled: string; loggingLevel: string; analyticsEnabled: string };
+    lastBackup: string | null;
+    backupCount: number;
+}
+
+/** Datos por componente persistidos en un backup (solo los extraídos están presentes). */
+export interface BackupComponentsData {
+    conversation_state: ConversationStateData | null;
+    ai_configuration: AIConfigurationData | null;
+    user_preferences: UserPreferencesData | null;
+    minute_history: MinuteUIEntry[];
+    workspace_data: WorkspaceData | null;
+    voice_profiles: unknown[];
+    system_settings: SystemSettingsData | null;
+}
+
+/** Resultado de extraer un componente (incluye el payload agregado de `all`). */
+export type ExtractedComponentData =
+    | ConversationStateData
+    | AIConfigurationData
+    | UserPreferencesData
+    | MinuteUIEntry[]
+    | WorkspaceData
+    | unknown[]
+    | SystemSettingsData
+    | Partial<BackupComponentsData>
+    | null;
+
 export interface BackupData {
     /** Metadatos del backup */
     metadata: BackupMetadata;
     /** Datos de los componentes */
-    components: Record<BackupComponent, any>;
+    components: Partial<BackupComponentsData>;
 }
 
 export interface RestoreResult {
@@ -133,7 +198,7 @@ export const DEFAULT_BACKUP_CONFIG: BackupSystemConfig = {
 // -----------------------------------------------------------
 
 class DataExtractor {
-    extractConversationState(): any {
+    extractConversationState(): ConversationStateData | null {
         try {
             // Extraer estado de conversación desde integrationStore (fuente canónica)
             const state = useIntegrationStore.getState();
@@ -149,7 +214,7 @@ class DataExtractor {
         return null;
     }
     
-    extractAIConfiguration(): any {
+    extractAIConfiguration(): AIConfigurationData | null {
         try {
             return {
                 provider: readStorage(STORAGE_KEYS.AI_PROVIDER, 'openrouter'),
@@ -170,7 +235,7 @@ class DataExtractor {
         return null;
     }
     
-    extractUserPreferences(): any {
+    extractUserPreferences(): UserPreferencesData | null {
         try {
             return {
                 language: readStorage(STORAGE_KEYS.LANGUAGE, 'es'),
@@ -198,7 +263,7 @@ class DataExtractor {
         return null;
     }
     
-    extractMinuteHistory(): any {
+    extractMinuteHistory(): MinuteUIEntry[] {
         try {
             // Extraer desde IndexedDB o localStorage
             const minutesJson = localStorage.getItem(STORAGE_KEYS.MINUTE_HISTORY);
@@ -214,7 +279,7 @@ class DataExtractor {
         return [];
     }
     
-    extractWorkspaceData(): any {
+    extractWorkspaceData(): WorkspaceData | null {
         try {
             const state = useIntegrationStore.getState();
             return {
@@ -226,7 +291,7 @@ class DataExtractor {
         return null;
     }
     
-    extractVoiceProfiles(): any {
+    extractVoiceProfiles(): unknown[] {
         try {
             const profilesJson = localStorage.getItem(STORAGE_KEYS.VOICE_PROFILES);
             if (profilesJson) {
@@ -238,7 +303,7 @@ class DataExtractor {
         return [];
     }
     
-    extractSystemSettings(): any {
+    extractSystemSettings(): SystemSettingsData | null {
         try {
             return {
                 branding: {
@@ -265,7 +330,7 @@ class DataExtractor {
         return null;
     }
     
-    extractComponent(component: BackupComponent): any {
+    extractComponent(component: BackupComponent): ExtractedComponentData {
         switch (component) {
             case 'conversation_state':
                 return this.extractConversationState();
@@ -302,12 +367,12 @@ class DataExtractor {
 // -----------------------------------------------------------
 
 class DataRestorer {
-    restoreConversationState(data: any): boolean {
+    restoreConversationState(data: ConversationStateData | null): boolean {
         try {
             if (!data) return false;
             
             // Restaurar a integrationStore (fuente canónica)
-            useIntegrationStore.setState((state: any) => ({
+            useIntegrationStore.setState((state) => ({
                 ...state,
                 conversationHistory: data.conversationHistory || [],
                 conversationState: data.conversationState || 'idle',
@@ -320,7 +385,7 @@ class DataRestorer {
         return false;
     }
     
-    restoreAIConfiguration(data: any): boolean {
+    restoreAIConfiguration(data: AIConfigurationData | null): boolean {
         try {
             if (!data) return false;
             
@@ -359,7 +424,7 @@ class DataRestorer {
         return false;
     }
     
-    restoreUserPreferences(data: any): boolean {
+    restoreUserPreferences(data: UserPreferencesData | null): boolean {
         try {
             if (!data) return false;
             
@@ -417,7 +482,7 @@ class DataRestorer {
         return false;
     }
     
-    restoreMinuteHistory(data: any): boolean {
+    restoreMinuteHistory(data: MinuteUIEntry[] | null): boolean {
         try {
             if (!data) return false;
             
@@ -425,7 +490,7 @@ class DataRestorer {
             
             // También restaurar a integrationStore (fuente canónica) si es un array
             if (Array.isArray(data)) {
-                useIntegrationStore.setState((state: any) => ({
+                useIntegrationStore.setState((state) => ({
                     ...state,
                     minuteHistory: data,
                 }));
@@ -438,11 +503,11 @@ class DataRestorer {
         return false;
     }
     
-    restoreWorkspaceData(data: any): boolean {
+    restoreWorkspaceData(data: WorkspaceData | null): boolean {
         try {
             if (!data) return false;
             
-            useIntegrationStore.setState((state: any) => ({
+            useIntegrationStore.setState((state) => ({
                 ...state,
                 workspaceArtifact: data.workspaceArtifact || state.workspaceArtifact,
             }));
@@ -454,7 +519,7 @@ class DataRestorer {
         return false;
     }
     
-    restoreVoiceProfiles(data: any): boolean {
+    restoreVoiceProfiles(data: unknown[] | null): boolean {
         try {
             if (!data) return false;
             
@@ -466,7 +531,7 @@ class DataRestorer {
         return false;
     }
     
-    restoreSystemSettings(data: any): boolean {
+    restoreSystemSettings(data: SystemSettingsData | null): boolean {
         try {
             if (!data) return false;
             
@@ -513,22 +578,22 @@ class DataRestorer {
         return false;
     }
     
-    restoreComponent(component: BackupComponent, data: any): boolean {
+    restoreComponent(component: BackupComponent, components: Partial<BackupComponentsData>): boolean {
         switch (component) {
             case 'conversation_state':
-                return this.restoreConversationState(data);
+                return this.restoreConversationState(components.conversation_state ?? null);
             case 'ai_configuration':
-                return this.restoreAIConfiguration(data);
+                return this.restoreAIConfiguration(components.ai_configuration ?? null);
             case 'user_preferences':
-                return this.restoreUserPreferences(data);
+                return this.restoreUserPreferences(components.user_preferences ?? null);
             case 'minute_history':
-                return this.restoreMinuteHistory(data);
+                return this.restoreMinuteHistory(components.minute_history ?? null);
             case 'workspace_data':
-                return this.restoreWorkspaceData(data);
+                return this.restoreWorkspaceData(components.workspace_data ?? null);
             case 'voice_profiles':
-                return this.restoreVoiceProfiles(data);
+                return this.restoreVoiceProfiles(components.voice_profiles ?? null);
             case 'system_settings':
-                return this.restoreSystemSettings(data);
+                return this.restoreSystemSettings(components.system_settings ?? null);
             default:
                 return false;
         }
@@ -574,13 +639,13 @@ class BackupManager implements IBackupManager {
             const backupId = `backup-${uuidv4()}`;
             
             // Extraer datos de componentes
-            const extractedData: Record<BackupComponent, any> = {} as Record<BackupComponent, any>;
+            const extractedData: Partial<BackupComponentsData> = {};
             let totalSize = 0;
             
             for (const component of components) {
                 const data = this.dataExtractor.extractComponent(component);
                 if (data !== null) {
-                    extractedData[component] = data;
+                    Object.assign(extractedData, { [component]: data });
                     
                     // Calcular tamaño aproximado
                     const jsonStr = JSON.stringify(data);
@@ -651,14 +716,14 @@ class BackupManager implements IBackupManager {
                     // Restaurar todos los componentes individualmente
                     const individualComponents = backup.metadata.components.filter(c => c !== 'all');
                     for (const individualComponent of individualComponents) {
-                        if (this.dataRestorer.restoreComponent(individualComponent, backup.components[individualComponent])) {
+                        if (this.dataRestorer.restoreComponent(individualComponent, backup.components)) {
                             restoredComponents.push(individualComponent);
                         } else {
                             failedComponents.push(individualComponent);
                         }
                     }
                 } else {
-                    if (this.dataRestorer.restoreComponent(component, backup.components[component])) {
+                    if (this.dataRestorer.restoreComponent(component, backup.components)) {
                         restoredComponents.push(component);
                     } else {
                         failedComponents.push(component);
@@ -861,7 +926,7 @@ class BackupManager implements IBackupManager {
         }
     }
     
-    private calculateChecksum(data: any): string {
+    private calculateChecksum(data: unknown): string {
         // Checksum simplificado (en producción usaría algo como SHA-256)
         const jsonStr = JSON.stringify(data);
         let hash = 0;

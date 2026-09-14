@@ -75,15 +75,45 @@ export interface AutonomousDecision {
     actions: DecisionAction[];
 }
 
-export interface DecisionAction {
-    /** Acción a realizar */
-    action: string;
-    /** Parámetros de la acción */
-    params: Record<string, any>;
-    /** Orden de ejecución */
-    order: number;
-    /** Dependencias de otras acciones */
-    dependencies?: string[];
+/** Parámetros de la acción `monitor_continue`. */
+export interface MonitorContinueParams {
+    provider: string;
+    reason: string;
+}
+
+/** Parámetros de la acción `update_provider_config`. */
+export interface UpdateProviderConfigParams {
+    newProvider: string;
+    oldProvider: string;
+}
+
+/** Parámetros de la acción `notify_system`. */
+export interface NotifySystemParams {
+    message: string;
+    type: 'info' | 'warning' | 'error';
+}
+
+/** Parámetros de la acción `record_decision`. */
+export interface RecordDecisionParams {
+    decisionType: string;
+    from: string;
+    to: string;
+    timestamp: number;
+}
+
+/** Acción ejecutable derivada de una decisión autónoma, discriminada por `action`. */
+export type DecisionAction =
+    | { action: 'monitor_continue'; params: MonitorContinueParams; order: number; dependencies?: string[] }
+    | { action: 'update_provider_config'; params: UpdateProviderConfigParams; order: number; dependencies?: string[] }
+    | { action: 'notify_system'; params: NotifySystemParams; order: number; dependencies?: string[] }
+    | { action: 'record_decision'; params: RecordDecisionParams; order: number; dependencies?: string[] };
+
+/** Registro persistido en `flu-provider-changes`. */
+interface ProviderChangeRecord {
+    from: string;
+    to: string;
+    timestamp: number;
+    reason: string;
 }
 
 export interface DecisionEngineConfig {
@@ -324,8 +354,8 @@ class FactorEvaluator {
     
     private calculateChangePenalty(_currentProvider: string, _newProvider: string): number {
         // Penalizar cambios frecuentes
-        const changeHistory = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
-        const recentChanges = changeHistory.filter((c: any) => 
+        const changeHistory: ProviderChangeRecord[] = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
+        const recentChanges = changeHistory.filter((c) => 
             Date.now() - c.timestamp < 3600000 // Última hora
         );
         
@@ -674,6 +704,7 @@ export class DecisionEngine {
     }
     
     private async executeSingleAction(action: DecisionAction, decision: AutonomousDecision): Promise<void> {
+        const actionName = action.action;
         switch (action.action) {
             case 'update_provider_config':
                 await this.executeUpdateProviderConfig(action.params);
@@ -692,18 +723,18 @@ export class DecisionEngine {
                 break;
                 
             default:
-                console.warn(`Acción no implementada: ${action.action}`);
+                console.warn(`Acción no implementada: ${actionName}`);
         }
     }
     
-    private async executeUpdateProviderConfig(params: any): Promise<void> {
+    private async executeUpdateProviderConfig(params: UpdateProviderConfigParams): Promise<void> {
         const { newProvider, oldProvider } = params;
         
         // Actualizar configuración
         localStorage.setItem('flu-ai-provider', newProvider);
         
         // Registrar cambio
-        const changeHistory = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
+        const changeHistory: ProviderChangeRecord[] = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
         changeHistory.push({
             from: oldProvider,
             to: newProvider,
@@ -727,7 +758,7 @@ export class DecisionEngine {
         });
     }
     
-    private async executeNotifySystem(params: any): Promise<void> {
+    private async executeNotifySystem(params: NotifySystemParams): Promise<void> {
         const { message, type } = params;
         
         emitAutonomyEvent({
@@ -738,8 +769,8 @@ export class DecisionEngine {
         });
     }
     
-    private async executeRecordDecision(params: any, decision: AutonomousDecision): Promise<void> {
-        const decisionHistory = JSON.parse(localStorage.getItem('flu-autonomous-decisions') || '[]');
+    private async executeRecordDecision(_params: RecordDecisionParams, decision: AutonomousDecision): Promise<void> {
+        const decisionHistory: Array<AutonomousDecision & { executedAt: number }> = JSON.parse(localStorage.getItem('flu-autonomous-decisions') || '[]');
         
         decisionHistory.push({
             ...decision,

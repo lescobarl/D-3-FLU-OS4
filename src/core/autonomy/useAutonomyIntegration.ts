@@ -23,25 +23,31 @@ import { v4 as uuidv4 } from 'uuid';
 import { 
     HealthMonitor, 
     startGlobalHealthMonitoring,
-    SystemHealth 
+    SystemHealth,
+    type HealthMonitorConfig
 } from './healthMonitor';
 import { 
     AutoRecoverySystem, 
     startGlobalAutoRecovery,
+    type AutoRecoveryConfig,
+    type RecoveryIncident
 } from './autoRecovery';
 import { 
     DecisionEngine, 
     startGlobalDecisionEngine,
-    AutonomousDecision 
+    AutonomousDecision,
+    type DecisionEngineConfig
 } from './decisionEngine';
 import { 
     AutoOptimizationSystem, 
-    startGlobalAutoOptimization 
+    startGlobalAutoOptimization,
+    type AutoOptimizationConfig
 } from './autoOptimization';
 import {
     BackupSystem,
     startGlobalBackupSystem,
-    RestoreResult
+    RestoreResult,
+    type BackupSystemConfig
 } from './backupSystem';
 import { onAutonomyEvent, emitAutonomyEvent, type AutonomyEvent } from './autonomyEvents';
 
@@ -63,7 +69,7 @@ export interface AutonomyState {
     /** Métricas de salud actuales */
     healthMetrics: SystemHealth | null;
     /** Incidentes activos de recuperación */
-    activeIncidents: any[];
+    activeIncidents: RecoveryIncident[];
     /** Decisiones autónomas recientes */
     recentDecisions: AutonomousDecision[];
     /** Estadísticas de backups */
@@ -89,6 +95,27 @@ export interface AutonomyNotification {
     };
 }
 
+/** Configuración tipada de cada sistema autónomo integrado. */
+export interface AutonomySystemConfigs {
+    healthMonitor: HealthMonitorConfig;
+    autoRecovery: AutoRecoveryConfig;
+    decisionEngine: DecisionEngineConfig;
+    autoOptimization: AutoOptimizationConfig;
+    backupSystem: BackupSystemConfig;
+}
+
+/**
+ * Configuración parcial aceptada por `updateSystemConfig`. Cada sistema
+ * consume el subconjunto de propiedades que le aplica y descarta el resto.
+ */
+export type AutonomySystemConfigUpdate = Partial<
+    HealthMonitorConfig &
+    AutoRecoveryConfig &
+    DecisionEngineConfig &
+    AutoOptimizationConfig &
+    BackupSystemConfig
+>;
+
 export interface AutonomyActions {
     /** Iniciar todos los sistemas de autonomía */
     startAllSystems: () => void;
@@ -107,9 +134,9 @@ export interface AutonomyActions {
     /** Marcar notificación como leída */
     markNotificationAsRead: (id: string) => void;
     /** Obtener configuración de sistemas */
-    getSystemConfig: () => Record<string, any>;
+    getSystemConfig: () => Partial<AutonomySystemConfigs>;
     /** Actualizar configuración de sistema */
-    updateSystemConfig: (system: string, config: any) => void;
+    updateSystemConfig: (system: string, config: AutonomySystemConfigUpdate) => void;
 }
 
 // -----------------------------------------------------------
@@ -600,7 +627,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     }, []);
 
     const getSystemConfig = useCallback(() => {
-        const configs: Record<string, any> = {};
+        const configs: Partial<AutonomySystemConfigs> = {};
         
         if (healthMonitorRef.current) {
             configs.healthMonitor = healthMonitorRef.current.getConfig();
@@ -621,7 +648,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
         return configs;
     }, []);
 
-    const updateSystemConfig = useCallback((system: string, config: any) => {
+    const updateSystemConfig = useCallback((system: string, config: AutonomySystemConfigUpdate) => {
         switch (system) {
             case 'healthMonitor':
                 if (healthMonitorRef.current) {
