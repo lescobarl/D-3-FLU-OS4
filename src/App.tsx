@@ -120,7 +120,8 @@ import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/dev
 // ---- Horario de clases (Pizarrón): hook temprano y panel presentacional ----
 import { useHorario } from './hooks/useHorario';
 import { clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
-import { diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
+import { diaDeFecha, toMin, type HorarioClaseEstructurada } from './core/horario/horarioService';
+import { addHorarioVoiceEntry } from './core/horario/horarioVoiceEntry';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
 import { parseHorarioIntent, type HorarioIntent, type HorarioIntentData } from './core/horario/horarioIntentParser';
@@ -3918,41 +3919,24 @@ function App() {
 
             switch (intent.action) {
                 case 'horario.add': {
-                    const materia = String(data.materia || '').trim();
-                    const dia = data.dia;
-                    const inicio = data.inicio;
-                    if (!materia || !dia || !inicio) return '';
-                    // Si no se dictó hora de fin, derivar una duración por defecto
-                    // (config data-driven, Regla #1: sin hardcode).
-                    let fin = data.fin;
-                    if (!fin) {
-                        const durMin = Number(
-                            (FLU_CONFIG.horario?.defaultDurationMinutes) ?? 60,
-                        );
-                        const startMin = toMin(inicio);
-                        fin = toHHMM(startMin >= 0 ? startMin + (Number.isFinite(durMin) ? durMin : 60) : 0);
-                    }
-                    const result = await horario.add({
-                        materia,
-                        dia,
-                        inicio,
-                        fin,
-                        aula: data.aula,
-                        // Aislamiento por usuario: la entrada se guarda con el
-                        // MISMO scope que lee `useHorario` (participante activo),
-                        // no con el nombre del hablante (que no es un id y hacía
-                        // que el panel la descartara). El nombre del hablante no
-                        // es el dueño del registro.
+                    // RUTA ÚNICA de alta por voz: normaliza + scope (participante
+                    // activo, el mismo que lee `useHorario`) + duración por defecto
+                    // config-driven. El nombre del hablante NO es el dueño.
+                    const { result, entry } = await addHorarioVoiceEntry(horario, data, {
                         personId: activeParticipantId,
+                        defaultDurationMinutes: Number(
+                            (FLU_CONFIG.horario?.defaultDurationMinutes) ?? 60,
+                        ),
                     });
+                    if (!entry) return '';
                     if (!result.ok) {
-                        return pick(voice, 'addError', `No pude registrar "${materia}".`)
-                            .replace('{titulo}', materia);
+                        return pick(voice, 'addError', `No pude registrar "${entry.materia}".`)
+                            .replace('{titulo}', entry.materia);
                     }
-                    const hora = fin ? `${inicio} a ${fin}` : `a las ${inicio}`;
-                    return pick(voice, 'addOk', `Listo, agregué "${materia}" al horario.`)
-                        .replace('{titulo}', materia)
-                        .replace('{dia}', dayLabel(dia))
+                    const hora = entry.fin ? `${entry.inicio} a ${entry.fin}` : `a las ${entry.inicio}`;
+                    return pick(voice, 'addOk', `Listo, agregué "${entry.materia}" al horario.`)
+                        .replace('{titulo}', entry.materia)
+                        .replace('{dia}', dayLabel(entry.dia))
                         .replace('{hora}', hora);
                 }
                 case 'horario.query': {
