@@ -13,6 +13,7 @@ import {
   normalizeMicText,
   hasSpeechAnchor,
   preferNewRowForShortFinal,
+  utterancesRelate,
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit, shouldRelaxIngressTextGuards } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg } from './fluTranscriptPause.js'
@@ -29,20 +30,8 @@ export {
   collapseAsrStutter,
   normalizeMicText,
   hasSpeechAnchor,
+  utterancesRelate,
 } from './speechMerge.js'
-
-/** Misma frase acumulativa de Chrome o revisión ASR (cola), no un turno nuevo. */
-export function utterancesRelate(previous = '', next = '') {
-  const prev = cleanForSpeech(previous)
-  const nxt = cleanForSpeech(next)
-  if (!prev || !nxt) return true
-  const pLow = prev.toLowerCase()
-  const nLow = nxt.toLowerCase()
-  if (nLow.startsWith(pLow) || pLow.startsWith(nLow)) return true
-  if (prev.length > nxt.length && (prev.endsWith(nxt) || prev.includes(` ${nxt}`))) return true
-  if (nxt.length > prev.length && (nxt.endsWith(prev) || nxt.includes(` ${prev}`))) return true
-  return false
-}
 
 /** Revisión progresiva ASR (com→Comes po→Comes pollo): mismo turno, no concatenar. */
 export function utterancesAsrProgress(previous = '', next = '') {

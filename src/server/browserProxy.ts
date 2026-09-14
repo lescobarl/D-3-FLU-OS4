@@ -9,18 +9,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { buildBrowserUrl } from '../core/browser/browserSession';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
+import { sendJson as sendJsonShared } from './httpJson';
 
 const DEFAULT_TIMEOUT_MS = 10000;
 
-function sendJson(res: ServerResponse, status: number, data: unknown) {
-  try {
-    if (res.writableEnded || res.destroyed) return;
-    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(data));
-  } catch (err: any) {
-    console.warn('[browserProxy] sendJson failed:', err?.message || err);
-  }
-}
+/** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
+const sendJson = (res: ServerResponse, status: number, data: unknown) =>
+  sendJsonShared(res, status, data, '[browserProxy] sendJson failed:');
 
 function parseAllowlist(raw: string | null): string[] {
   if (!raw) return [];

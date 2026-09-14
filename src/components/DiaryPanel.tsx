@@ -18,6 +18,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { configText } from './configText';
 import type { DiaryEntryRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { DiaryEntryInput } from '../core/diary/diaryService';
+import { runBusyAction, todayLocalDate } from './panelUtils';
 
 export interface DiaryPanelProps {
   participants: ParticipantRecord[];
@@ -46,13 +47,7 @@ export function DiaryPanel({
   const [busy, setBusy] = useState(false);
 
   // Fecha local de hoy (mismo formato 'YYYY-MM-DD' que diaryService).
-  const today = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  const today = todayLocalDate();
 
   const moodValues: number[] = [];
   for (let value = 1; value <= moodMax; value += 1) {
@@ -87,15 +82,7 @@ export function DiaryPanel({
     }
   };
 
-  const handleRemove = async (id: string) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onRemove(id);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleRemove = (id: string) => runBusyAction(busy, setBusy, () => onRemove(id));
 
   return (
     <details className="flu-settings-image-config">

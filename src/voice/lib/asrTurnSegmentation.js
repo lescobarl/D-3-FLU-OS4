@@ -2,16 +2,12 @@
  * Un final ASR → varias filas solo cuando hay evidencia fuerte (prior embebido + timbre distinto).
  * No trocea monólogos/TV; evita alternancia H2/H3 por ruido de snapshots.
  */
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 
 export function getAsrSegmentationCfg(config = FLU_CONFIG) {
   return config.transcript?.asrSegmentation || {}
-}
-
-function speechWords(text = '') {
-  return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
 function snapshotVector(entry = {}) {

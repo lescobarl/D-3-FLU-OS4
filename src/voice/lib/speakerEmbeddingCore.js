@@ -4,6 +4,7 @@
  */
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from './fluConfig.js'
+import { downsampleTo16k, tensorToEmbeddingVector } from './embeddingFrames.js'
 
 let modelBundlePromise = null
 let preloadError = null
@@ -31,27 +32,6 @@ function getMinSamples(cfg = getEmbeddingConfig()) {
   const ratio = Number(cfg.minSampleRatio)
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.35
   return Math.floor(getTargetSampleRate(cfg) * safeRatio)
-}
-
-function downsampleTo16k(samples, sampleRate, targetRate) {
-  if (!samples?.length) return new Float32Array(0)
-  const safeTargetRate = Number(targetRate) > 0 ? Number(targetRate) : 16000
-  if (sampleRate <= safeTargetRate) {
-    return samples instanceof Float32Array ? samples : new Float32Array(samples)
-  }
-  const ratio = sampleRate / safeTargetRate
-  const length = Math.max(1, Math.floor(samples.length / ratio))
-  const result = new Float32Array(length)
-  for (let index = 0; index < length; index += 1) {
-    result[index] = samples[Math.min(samples.length - 1, Math.floor(index * ratio))]
-  }
-  return result
-}
-
-function tensorToEmbeddingVector(output) {
-  const tensor = output?.embeddings ?? output?.logits
-  if (!tensor?.data) return []
-  return Array.from(tensor.data)
 }
 
 function normalizeVector(vector = []) {

@@ -1,12 +1,8 @@
-import { cleanForSpeech } from './audioMath.js'
-
-function toWords(text = '') {
-  return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
-}
+import { cleanForSpeech, speechWords } from './audioMath.js'
 
 function findWordBoundaryDelta(previous = '', next = '') {
-  const prevWords = toWords(previous)
-  const nextWords = toWords(next)
+  const prevWords = speechWords(previous)
+  const nextWords = speechWords(next)
   const limit = Math.min(prevWords.length, nextWords.length)
   for (let overlap = limit; overlap >= 1; overlap -= 1) {
     const tail = prevWords.slice(-overlap).join(' ')

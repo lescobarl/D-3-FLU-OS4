@@ -60,9 +60,7 @@ import {
  * Build diagnostics metadata for a text engine response.
  */
 function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics {
-    const savedModel = (() => {
-        try { return localStorage.getItem(STORAGE_KEYS.TEXT_MODEL); } catch { return null; }
-    })();
+    const savedModel = readStorage<string | null>(STORAGE_KEYS.TEXT_MODEL, null);
     return {
         provider: 'openrouter',
         model: model || savedModel || OPENROUTER_CONFIG.MODEL,

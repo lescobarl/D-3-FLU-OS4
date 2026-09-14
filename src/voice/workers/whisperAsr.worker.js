@@ -5,6 +5,7 @@
  */
 import { pipeline, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
+import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
 
 env.allowLocalModels = false
 env.allowRemoteModels = true
@@ -14,27 +15,6 @@ let asrPromise = null
 
 function getAsrConfig() {
   return FLU_CONFIG.transcript?.asr || {}
-}
-
-function samplesFromTransfer(payload = {}) {
-  const { audioBuffer, samples, byteOffset = 0, sampleCount } = payload
-  if (audioBuffer instanceof ArrayBuffer) {
-    const count =
-      Number.isFinite(sampleCount) && sampleCount > 0
-        ? sampleCount
-        : Math.floor((audioBuffer.byteLength - byteOffset) / 4)
-    return count > 0 ? new Float32Array(audioBuffer, byteOffset, count) : new Float32Array(0)
-  }
-  if (samples instanceof ArrayBuffer) {
-    const count =
-      Number.isFinite(sampleCount) && sampleCount > 0
-        ? sampleCount
-        : Math.floor(samples.byteLength / 4)
-    return count > 0 ? new Float32Array(samples, byteOffset, count) : new Float32Array(0)
-  }
-  if (samples instanceof Float32Array) return samples
-  if (Array.isArray(samples)) return new Float32Array(samples)
-  return new Float32Array(0)
 }
 
 async function ensurePipeline(payload = {}) {
@@ -49,9 +29,7 @@ async function ensurePipeline(payload = {}) {
 
 self.onmessage = async (event) => {
   const { id, type, payload = {} } = event.data || {}
-  const reply = (ok, result, error) => {
-    self.postMessage({ id, ok, result, error: error ? String(error?.message || error) : '' })
-  }
+  const reply = createWorkerReply(id)
 
   try {
     if (type === 'preload') {

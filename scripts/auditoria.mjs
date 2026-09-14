@@ -420,10 +420,10 @@ const FINDINGS = [
     note: 'Implementacion real en src/voice/lib/imageGeneration.js; el .mjs importa ruta inexistente.',
   },
   {
-    id: 'V18', sev: 'media', info: true, title: 'Mismo cuerpo con DISTINTO nombre (reporte; no gate)',
+    id: 'V18', sev: 'media', title: 'Mismo cuerpo con DISTINTO nombre (duplicados renombrados)',
     target: 0,
     detect: () => duplicateBodies(),
-    note: 'Candidatos a unificar. Cerrar por pares; requiere revision manual.',
+    note: 'Unificar/renombrar por pares; verificar equivalencia real antes; no forzar los dispares.',
   },
   {
     id: 'V19', sev: 'baja', info: true, title: 'npm run lint no es lint real (sin config eslint)',

@@ -19,6 +19,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { configText } from './configText';
 import type { GoalStatus, ParticipantRecord } from '../core/db/fluDatabase';
 import type { GoalStats, NewGoalInput } from '../core/habits/habitService';
+import { runBusyAction, todayLocalDate } from './panelUtils';
 
 export interface HabitsPanelProps {
   participants: ParticipantRecord[];
@@ -55,13 +56,7 @@ export function HabitsPanel({
   const [busy, setBusy] = useState(false);
 
   // Fecha local de hoy (mismo formato 'YYYY-MM-DD' que habitService).
-  const today = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  const today = todayLocalDate();
 
   const handleAdd = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,15 +99,7 @@ export function HabitsPanel({
     }
   };
 
-  const handleRemove = async (id: string) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onRemove(id);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleRemove = (id: string) => runBusyAction(busy, setBusy, () => onRemove(id));
 
   const statusLabel = (status: GoalStatus): string =>
     ui[`status_${status}`] || status;

@@ -19,6 +19,7 @@ import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { ContactRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { BirthdayContact, ContactInput } from '../core/contacts/contactService';
+import { runBusyAction } from './panelUtils';
 
 export interface ContactsPanelProps {
   participants: ParticipantRecord[];
@@ -79,15 +80,7 @@ export function ContactsPanel({
     }
   };
 
-  const handleRemove = async (id: string) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onRemove(id);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleRemove = (id: string) => runBusyAction(busy, setBusy, () => onRemove(id));
 
   const birthdayLabel = (item: BirthdayContact): string => {
     const days = item.daysUntil;

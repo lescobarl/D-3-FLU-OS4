@@ -19,6 +19,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { configText } from './configText';
 import type { MoodRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { LogMoodInput, MoodSummary } from '../core/mood/moodService';
+import { runBusyAction, todayLocalDate } from './panelUtils';
 
 export interface MoodPanelProps {
   participants: ParticipantRecord[];
@@ -77,24 +78,10 @@ export function MoodPanel({
     }
   };
 
-  const handleRemove = async (id: string) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onRemove(id);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleRemove = (id: string) => runBusyAction(busy, setBusy, () => onRemove(id));
 
   // Fecha local de hoy (mismo formato 'YYYY-MM-DD' que moodService).
-  const today = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  const today = todayLocalDate();
 
   const summaryItem = (label: string, value?: number | string): string | null =>
     value === undefined || value === null ? null : `${label}: ${value}`;

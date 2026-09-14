@@ -1,12 +1,13 @@
 /**
  * Fusión de texto ASR (interinos acumulativos y finales).
  */
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, speechWords } from './audioMath.js'
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getShortFinalKeywordSet, getSpeechMergeCfg } from './fluTranscriptMotor.js'
 import { getTranscriptDelta, mergeTranscriptText } from './transcriptDelta.js'
 
-function utterancesRelateLocal(previous = '', next = '') {
+/** Misma frase acumulativa de Chrome o revisión ASR (cola), no un turno nuevo. Dueño único (V18). */
+export function utterancesRelate(previous = '', next = '') {
   const prev = cleanForSpeech(previous)
   const nxt = cleanForSpeech(next)
   if (!prev || !nxt) return true
@@ -16,10 +17,6 @@ function utterancesRelateLocal(previous = '', next = '') {
   if (prev.length > nxt.length && (prev.endsWith(nxt) || prev.includes(` ${nxt}`))) return true
   if (nxt.length > prev.length && (nxt.endsWith(prev) || nxt.includes(` ${prev}`))) return true
   return false
-}
-
-function speechWords(text = '') {
-  return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
 function countSharedPrefixWords(a = '', b = '') {
@@ -371,7 +368,7 @@ export function shouldPreferShortFinalRow(next = '', prior = '', context = {}) {
   const minConf = Number(getSpeechMergeCfg().minKeywordConfidence)
   if (confidence < minConf) return false
 
-  const related = utterancesRelateLocal(prev, fin)
+  const related = utterancesRelate(prev, fin)
 
   /** Interrupción tras monólogo TV: frase corta no relacionada (p. ej. «hola»). */
   if (!related && finWords.length <= 3) {
@@ -399,7 +396,7 @@ export function wouldShrinkLog(capture = '', lastEmitted = '', context = {}) {
   if (!next || !prev || next.length >= prev.length) return false
   if (context.relaxShrinkGuards === true) return false
   if (shouldPreferShortFinalRow(next, prev, context)) return false
-  if (!utterancesRelateLocal(prev, next)) return false
+  if (!utterancesRelate(prev, next)) return false
   if (prev.startsWith(next)) return true
   if (prev.endsWith(` ${next}`)) return true
   return false

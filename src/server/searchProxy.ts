@@ -25,20 +25,15 @@ import {
 } from '../core/search/searchSession';
 import type { ResolvedLanguage } from '../core/search/searchLanguage';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
+import { sendJson as sendJsonShared } from './httpJson';
 
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_MAX_RESULTS = 8;
 const USER_AGENT = 'FLU-OS4-Curaduria/1.0 (modo lectura curada)';
 
-function sendJson(res: ServerResponse, status: number, data: unknown) {
-  try {
-    if (res.writableEnded || res.destroyed) return;
-    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(data));
-  } catch (err: any) {
-    console.warn('[searchProxy] sendJson failed:', err?.message || err);
-  }
-}
+/** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
+const sendJson = (res: ServerResponse, status: number, data: unknown) =>
+  sendJsonShared(res, status, data, '[searchProxy] sendJson failed:');
 
 function parseAllowlist(raw: string | null): string[] {
   if (!raw) return [];

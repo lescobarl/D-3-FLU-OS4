@@ -1,6 +1,7 @@
 import { computeSpeakerEmbedding } from './speakerEmbedding.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { detectParticipantFloorCommand } from './participantFloor.js'
+import { compareCosineSignatures } from './speakerCosineStrict.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 
 const ACCENT_MAP = {
@@ -502,7 +503,8 @@ export function matchWakeWordInText(text = '', wakeWords = []) {
   }
 }
 
-function speechWords(text = '') {
+/** Palabras normalizadas (sin acentos, minúsculas) de un texto de voz. Dueño único (V18). */
+export function speechWords(text = '') {
   return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
@@ -1579,28 +1581,12 @@ export function cosineSimilarity(vectorA = [], vectorB = []) {
   return Math.max(0, Math.min(1, dot))
 }
 
-/** Similitud coseno L2 explícita (misma fórmula que voiceIdentity.compareAudioSignatures). */
-export function compareAudioSignatures(sig1 = [], sig2 = []) {
-  if (!Array.isArray(sig1) || !Array.isArray(sig2) || !sig1.length || !sig2.length) {
-    return 0
-  }
-  const dim = Math.min(sig1.length, sig2.length)
-  let dot = 0
-  let norm1 = 0
-  let norm2 = 0
-  for (let i = 0; i < dim; i += 1) {
-    const a = Number(sig1[i] || 0)
-    const b = Number(sig2[i] || 0)
-    dot += a * b
-    norm1 += a * a
-    norm2 += b * b
-  }
-  const denom = Math.sqrt(norm1) * Math.sqrt(norm2)
-  if (!denom || !Number.isFinite(denom)) return 0
-  const similarity = dot / denom
-  if (!Number.isFinite(similarity)) return 0
-  return Math.max(0, Math.min(1, similarity))
-}
+/**
+ * Similitud coseno L2 explícita. Dueño único: speakerCosineStrict.js
+ * (misma fórmula que compareCosineSignatures); aquí solo se re-exporta con
+ * el nombre histórico para no duplicar el cuerpo (V18).
+ */
+export { compareCosineSignatures as compareAudioSignatures }
 
 export function formatEmbeddingPreview(vector = [], { head = 3, tail = 2 } = {}) {
   if (!Array.isArray(vector) || !vector.length) return ''

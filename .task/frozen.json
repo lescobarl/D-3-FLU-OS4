@@ -6,7 +6,7 @@
   "tests/voiceTurnClosingSingleRoute.test.ts": "4cc83557999b1b5a536529f4986552afad4d6c704b21e1e56bf4110f8d5ff9e0",
   "tests/schedulerSingleDefinition.test.ts": "16a793d68c19e0a24baeb69fa20e2533c8913acc31db9fac2ad27b8799a1eb70",
   "scripts/hito.mjs": "b616834298d471ff271104c2fe236643f0022c5af4a2731daa4db8f1931c3890",
-  "scripts/auditoria.mjs": "2264df353562e0ed65f63615dad15ad7debab6d0f2601419b8c980cd5e8cfd1d",
+  "scripts/auditoria.mjs": "b8d4f8ca0c0a431bd9682ea8b92c3c46d195d60ff53d4619ce5e17b7ed522cc5",
   "scripts/corregir.mjs": "fda60aca735e1b611d84116562dacfa08d532bd49075b2606f5f0862b48c5df5",
   "tests/syncTupleSingleSource.test.ts": "a54407b8f1a1c2d2cccea2c652280b7cb1d2c4066f09c55a6a34e6250ec1a55e"
 }

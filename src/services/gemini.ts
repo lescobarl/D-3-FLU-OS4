@@ -14,7 +14,7 @@
 //   - Obligación #2: JSDoc en todo método
 // ============================================================
 
-import { GEMINI_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, WORKSPACE_TIPOS, buildPollinationsUrl, resolveTextApiKey } from '../core/config/appConfig';
+import { GEMINI_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, WORKSPACE_TIPOS, buildPollinationsUrl, readStorage, resolveTextApiKey } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
 import { useIntegrationStore } from '../store/integrationStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -58,9 +58,7 @@ import { postGeminiContract } from './geminiContractClient';
  * Build diagnostics metadata for a Gemini response.
  */
 function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics {
-    const savedModel = (() => {
-        try { return localStorage.getItem(STORAGE_KEYS.TEXT_MODEL); } catch { return null; }
-    })();
+    const savedModel = readStorage<string | null>(STORAGE_KEYS.TEXT_MODEL, null);
     return {
         provider: 'google-gemini',
         model: model || savedModel || GEMINI_CONFIG.MODEL,
