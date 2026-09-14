@@ -87,17 +87,28 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         }
     }, []);
 
+    // ---- Iniciar petición de imagen ----
+    /** Invalida la petición previa y limpia el resultado vivo: al pedir una
+     *  imagen nueva, la anterior deja de pintarse hasta que llegue la nueva. */
+    const beginImageRequest = useCallback((): number => {
+        const requestId = Date.now();
+        requestRef.current = requestId;
+        loadAttemptRef.current = 0;
+        setLoadAttempt(0);
+        setIsLoading(true);
+        setIsFailed(false);
+        setImageUrl(null);
+        urlRef.current = '';
+        clearLoadTimeout();
+        return requestId;
+    }, [clearLoadTimeout]);
+
     // ---- Retry ----
     const retry = useCallback(() => {
         const prompt = promptRef.current;
         const tipo = tipoRef.current;
         if (!prompt) return;
-        loadAttemptRef.current = 0;
-        setLoadAttempt(0);
-        setIsLoading(true);
-        setIsFailed(false);
-        const requestId = Date.now();
-        requestRef.current = requestId;
+        const requestId = beginImageRequest();
         aiService.generateWorkspaceImage(prompt, tipo, language).then((result) => {
             if (requestRef.current !== requestId) return;
             if (result.image_url) {
@@ -115,7 +126,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             setIsLoading(false);
             setIsFailed(true);
         });
-    }, [language]);
+    }, [language, beginImageRequest]);
 
     // ---- Expand / Close ----
     const expand = useCallback(() => setIsExpanded(true), []);
@@ -148,10 +159,8 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             return;
         }
         // Evitar reintentos concurrentes: invalidar peticiones previas
-        const requestId = Date.now();
-        requestRef.current = requestId;
-        setIsLoading(true);
-        setIsFailed(false);
+        // y limpiar el resultado anterior antes de pintar el nuevo.
+        const requestId = beginImageRequest();
         try {
             const result = await fetchOpenRouterImageFallback({
                 workspace: { prompt_visual: prompt, tipo: tipoRef.current },
@@ -179,7 +188,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             setIsLoading(false);
             setIsFailed(true);
         }
-    }, [language, markFailed]);
+    }, [language, markFailed, beginImageRequest]);
 
     // ---- Retry load of current URL (Pollinations is stateless) ----
     // Cuando el <img> dispara onError por un fallo transitorio o por generación
@@ -213,12 +222,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         // Guardar prompt y tipo para posible retry
         promptRef.current = promptVisual;
         tipoRef.current = tipo;
-        loadAttemptRef.current = 0;
-        setLoadAttempt(0);
-        setIsLoading(true);
-        setIsFailed(false);
-        const requestId = Date.now();
-        requestRef.current = requestId;
+        const requestId = beginImageRequest();
         try {
             const result = await aiService.generateWorkspaceImage(promptVisual, tipo, language);
             if (requestRef.current !== requestId) return;
@@ -245,7 +249,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             setIsLoading(false);
             setIsFailed(true);
         }
-    }, [language]);
+    }, [language, beginImageRequest]);
 
     // ---- Clear ----
     const clear = useCallback(() => {
