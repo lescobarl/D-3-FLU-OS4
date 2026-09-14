@@ -6,7 +6,7 @@
 // Mockea localStorage y verifica carga/guardado de configuraciones
 // ============================================================
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test as vitestTest, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConfigPersistence } from '../../src/hooks/useConfigPersistence';
 
@@ -40,6 +40,18 @@ Object.defineProperty(window, 'speechSynthesis', {
   value: mockSpeechSynthesis,
   writable: true,
 });
+
+// Envuelve cada test para drenar DENTRO de act() el refresh() asíncrono de
+// useAuditLog (su IndexedDB no existe en jsdom): sin esto, su setLoading(false)
+// resuelve después del cuerpo síncrono y React emite "not wrapped in act(...)".
+// No cambia aserciones: solo añade el flush posterior al cuerpo del test.
+const test = (name: string, fn: () => void) =>
+  vitestTest(name, async () => {
+    fn();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  });
 
 describe('useConfigPersistence', () => {
   beforeEach(() => {
