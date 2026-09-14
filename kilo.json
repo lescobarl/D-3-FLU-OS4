@@ -13,6 +13,7 @@
       "tests/*Guard*.test.ts": "deny",
       "tests/*guard*.test.ts": "deny",
       "tests/taskGateInvariant.test.ts": "deny",
+      "tests/syncTupleSingleSource.test.ts": "deny",
       "tests/voiceTurnCommitDerivation.test.ts": "deny",
       "tests/voiceTurnClosingSingleRoute.test.ts": "deny",
       "tests/voiceTurnSingleWriter.test.ts": "deny",
