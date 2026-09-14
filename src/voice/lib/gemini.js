@@ -33,6 +33,7 @@ import { buildCapabilitiesPrompt } from '../../services/capabilities'
 import { buildConfiguracionPrompt } from '../../core/config/voiceConfigCatalog'
 import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
 import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
+import { postGeminiContractResilient } from '../../services/geminiContractClient'
 
 export {
   buildVisualAnchorBlock,
@@ -1221,15 +1222,9 @@ export async function requestFluContract(params) {
     model: savedModel || undefined,
     apiKey: String(params?.apiKey ?? '').trim() || savedApiKey || undefined,
   }
-  const response = await fetchTextEngineResilient(
-    '/api/gemini/contract',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    { timeoutMs: resolveClientRequestTimeout(params) },
-  )
+  const response = await postGeminiContractResilient(body, {
+    timeoutMs: resolveClientRequestTimeout(params),
+  })
   return parseGeminiApiResponse(response)
 }
 
