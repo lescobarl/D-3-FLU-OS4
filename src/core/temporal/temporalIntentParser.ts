@@ -24,6 +24,7 @@ import {
   MS_MINUTE,
   MS_SECOND,
   dayOfWeek,
+  localDayDiff,
   parseTimeOfDayToMs,
   startOfLocalDay,
 } from './scheduleEngine';
@@ -409,12 +410,40 @@ export function formatDurationMs(ms: number, lang: 'es' | 'en' = 'es'): string {
 // Respuestas deterministas (es/en)
 // ------------------------------------------------------------
 
-function alarmAddedReply(timeOfDay: string, recurrence: TemporalRecurrence, label: string, lang: 'es' | 'en'): string {
+/** Nombres de día local (0=Domingo … 6=Sábado), para respuestas verbales. */
+const WEEKDAY_NAMES_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const WEEKDAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * Frase de cualificación del día para un disparo de UNA sola vez. Devuelve ''
+ * cuando el disparo cae HOY (la hora ya es suficiente) y expresa el día en
+ * lenguaje natural cuando cae en otro día. Fuente única de esta decisión:
+ * la confirmación no debe quedar ambigua cuando "hoy" con hora pasada se rola.
+ */
+function dayQualifierPhrase(at: number, now: number, lang: 'es' | 'en'): string {
+  const diff = localDayDiff(now, at);
+  if (diff === 0) return '';
+  if (diff === 1) return lang === 'es' ? ' para mañana' : ' for tomorrow';
+  if (diff === -1) return lang === 'es' ? ' para ayer' : ' for yesterday';
+  const d = new Date(at);
+  const name = (lang === 'es' ? WEEKDAY_NAMES_ES : WEEKDAY_NAMES_EN)[d.getDay()] || '';
+  return lang === 'es' ? ` para el ${name} ${d.getDate()}` : ` for ${name} ${d.getDate()}`;
+}
+
+function alarmAddedReply(
+  timeOfDay: string,
+  recurrence: TemporalRecurrence,
+  label: string,
+  lang: 'es' | 'en',
+  at: number,
+  now: number,
+): string {
   const labelPhrase = label ? ` "${label}"` : '';
   const recPhrase = recurrencePhrase(recurrence, lang);
+  const dayPhrase = recurrence.kind === 'once' ? dayQualifierPhrase(at, now, lang) : '';
   return lang === 'es'
-    ? `Listo, puse la alarma${labelPhrase} a las ${timeOfDay}${recPhrase}.`
-    : `Done, I set the alarm${labelPhrase} for ${timeOfDay}${recPhrase}.`;
+    ? `Listo, puse la alarma${labelPhrase}${dayPhrase} a las ${timeOfDay}${recPhrase}.`
+    : `Done, I set the alarm${labelPhrase}${dayPhrase} at ${timeOfDay}${recPhrase}.`;
 }
 
 function timerStartedReply(durationLabel: string, label: string, lang: 'es' | 'en'): string {
@@ -608,6 +637,9 @@ export function parseTemporalIntent(
 
     let trigger: TemporalTrigger;
     let recurrence: TemporalRecurrence;
+    // Momento resuelto del disparo de UNA sola vez (para cualificar el día en
+    // la confirmación y no dejar ambiguo el "hoy" rolado a mañana).
+    let resolvedAt = 0;
     if (explicitRecurrence) {
       // Recurrencia explícita: disparador diario a la hora indicada.
       trigger = { kind: 'daily', timeOfDay };
@@ -618,6 +650,7 @@ export function parseTemporalIntent(
       // nlDateParser en recordatorios): evita rechazar el alta en silencio.
       let at = absoluteAt(now, day.dayOffset, timeOfDay);
       if (day.dayOffset === 0 && at <= now) at += MS_DAY;
+      resolvedAt = at;
       trigger = { kind: 'absolute', at };
       recurrence = onceRecurrence();
     } else {
@@ -626,6 +659,7 @@ export function parseTemporalIntent(
       // pide explícitamente ("todos los días", "los lunes", "cada día"…).
       let at = absoluteAt(now, 0, timeOfDay);
       if (at <= now) at += MS_DAY;
+      resolvedAt = at;
       trigger = { kind: 'absolute', at };
       recurrence = onceRecurrence();
     }
@@ -635,7 +669,7 @@ export function parseTemporalIntent(
     return {
       handled: true,
       action: 'alarm.add',
-      reply: alarmAddedReply(timeOfDay, recurrence, userLabel, lang),
+      reply: alarmAddedReply(timeOfDay, recurrence, userLabel, lang, resolvedAt, now),
       data,
     };
   }

@@ -35,6 +35,15 @@ export function dayOfWeek(at: number): number {
   return new Date(at).getDay();
 }
 
+/**
+ * Diferencia en DÍAS LOCALES completos entre dos instantes (`b` respecto a `a`).
+ * 0 = mismo día local, 1 = día siguiente, -1 = día anterior. Robusto a DST
+ * porque compara el inicio del día local, no el delta crudo de ms.
+ */
+export function localDayDiff(a: number, b: number): number {
+  return Math.round((startOfLocalDay(b) - startOfLocalDay(a)) / MS_DAY);
+}
+
 /** 'HH:MM' local → ms desde medianoche; null si el formato es inválido. */
 export function parseTimeOfDayToMs(timeOfDay: string | undefined): number | null {
   if (!timeOfDay) return null;
