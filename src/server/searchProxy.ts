@@ -11,6 +11,7 @@
 //  /api/search/video  (GET) — cuadrícula de vídeo (F4)
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson';
 import {
   buildProviderRequest,
   capResults,
@@ -25,7 +26,7 @@ import {
 } from '../core/search/searchSession';
 import type { ResolvedLanguage } from '../core/search/searchLanguage';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
-import { sendJson as sendJsonShared } from './httpJson';
+
 
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_MAX_RESULTS = 8;
@@ -120,11 +121,12 @@ async function fetchProviderJson(
     }
     const json = await response.json();
     return { ok: true, json };
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
       return { ok: false, reason: 'timeout' };
     }
-    return { ok: false, reason: 'fetch_error', detail: err?.message || 'Unknown error' };
+    const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
+    return { ok: false, reason: 'fetch_error', detail: String(message || 'Unknown error') };
   } finally {
     clearTimeout(timer);
   }
@@ -252,20 +254,21 @@ export function createSearchProxy({ env = {} }: { env?: Record<string, string> }
   void env;
   return {
     name: 'search-proxy',
-    configureServer(server: any) {
+    configureServer(server: MiddlewareHost) {
       // F4 — Registro de las tres rutas (web, imágenes, vídeo) con el mismo
       // manejador parametrizado por tipo.
       const register = (path: string, type: SearchResultType) => {
-        server.middlewares.use(path, async (req: any, res: any, next: any) => {
+        server.middlewares.use(path, async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
           if (req.method !== 'GET') return next();
           try {
             await handleSearch(req, res, type);
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error(`[searchProxy] ${path} failed:`, err);
+            const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
             sendJson(res, 500, {
               ok: false,
               reason: 'internal_error',
-              detail: err?.message || 'Unknown error',
+              detail: String(message || 'Unknown error'),
             });
           }
         });

@@ -45,7 +45,7 @@ export function resolveOcrConfig(): OcrConfig {
  * Carga dinámica lazy: la biblioteca pesada solo se descarga bajo demanda.
  */
 export async function extractWithLocal(dataUrl: string): Promise<string> {
-    const Tesseract: any = await import('tesseract.js');
+    const Tesseract = await import('tesseract.js');
     const worker = await Tesseract.createWorker('spa+eng');
     try {
         const { data } = await worker.recognize(dataUrl);
@@ -70,7 +70,7 @@ async function extractWithRemote(dataUrl: string, cfg: OcrConfig): Promise<strin
         }),
     });
     if (!res.ok) throw new Error(`OCR remoto respondió ${res.status}`);
-    const payload: any = await res.json();
+    const payload: { text?: unknown; texto_extraido?: unknown } = await res.json();
     const text = payload?.text ?? payload?.texto_extraido ?? '';
     return String(text || '').trim();
 }
@@ -113,7 +113,7 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
     if (typeof document === 'undefined') {
         return { text: '', engine: 'local', warnings: ['OCR de PDF requiere entorno de navegador.'] };
     }
-    const pdfjs: any = await import('pdfjs-dist');
+    const pdfjs = await import('pdfjs-dist');
     if (!pdfjs || typeof pdfjs.getDocument !== 'function') {
         throw new Error('módulo pdfjs-dist no disponible');
     }
@@ -127,7 +127,8 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
             /* sin worker configurado: se intenta igual; degradación si falla */
         }
     }
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
+    const doc = await loadingTask.promise;
     const pagesToScan = Math.min(doc.numPages, maxPages);
     const chunks: string[] = [];
     try {
@@ -142,11 +143,11 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
                 warnings.push(`No se pudo rasterizar la página ${pageNum}.`);
                 continue;
             }
-            await page.render({ canvasContext: ctx, viewport }).promise;
+            await page.render({ canvasContext: ctx, canvas, viewport }).promise;
             chunks.push(await extractWithLocal(canvas.toDataURL('image/png')));
         }
     } finally {
-        await doc.destroy().catch(() => undefined);
+        await loadingTask.destroy().catch(() => undefined);
     }
     return { text: chunks.join('\n').trim(), engine: 'local', warnings };
 }

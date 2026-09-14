@@ -28,25 +28,25 @@ declare global {
         webkitSpeechRecognition?: new () => SpeechRecognitionLike;
         SpeechRecognition?: new () => SpeechRecognitionLike;
         /** Callback REAL de resolución de contrato (hook E2E). */
-        __fluOnContractResolved?(resolved: any): Promise<void>;
+        __fluOnContractResolved?(resolved: unknown): Promise<unknown>;
 
         /** Manejadores deterministas por dominio (E2E + integración). */
         __fluHandleReminderText?(
-            input: any,
+            input: unknown,
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
-        __fluHandleTemporalText?(input: any): Promise<string>;
+        __fluHandleTemporalText?(input: unknown): Promise<string>;
         __fluHandleConocerFluText?(text: string): Promise<string>;
         __fluHandleDeviceActionText?(text: string): Promise<string>;
         __fluHandleNoteText?(
-            input: any,
+            input: unknown,
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
         __fluHandleDiaryText?(
-            input: any,
+            input: unknown,
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
-        __fluHandleHorarioText?(input: any): Promise<string>;
+        __fluHandleHorarioText?(input: unknown): Promise<string>;
 
         /** Stores y flags expuestos en window (debug/E2E). */
         __fluStore?: unknown;

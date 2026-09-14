@@ -318,7 +318,7 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
 
 async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
-    const pdfjs: any = await import('pdfjs-dist');
+    const pdfjs = await import('pdfjs-dist');
     if (!pdfjs || typeof pdfjs.getDocument !== 'function') {
       throw new Error('módulo pdfjs-dist no disponible');
     }
@@ -332,18 +332,19 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
         /* sin worker configurado: se intenta igual; si falla, degradación */
       }
     }
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
+    const doc = await loadingTask.promise;
     const pages: string[] = [];
     const maxPages = Math.min(doc.numPages, getLimits().maxSheets);
     for (let i = 1; i <= maxPages; i += 1) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
       const text = (content.items || [])
-        .map((it: any) => ('str' in it ? it.str : ''))
+        .map((it) => ('str' in it ? it.str : ''))
         .join(' ');
       pages.push(`=== Página ${i} ===\n${text}`);
     }
-    await doc.destroy().catch(() => undefined);
+    await loadingTask.destroy().catch(() => undefined);
     return { rawText: pages.join('\n'), errores: [], qa_context: '', warnings: [] };
   } catch (e) {
     return {
@@ -357,7 +358,7 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
 
 async function parseDocx(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
-    const mammoth: any = await import('mammoth');
+    const mammoth = await import('mammoth');
     if (!mammoth || typeof mammoth.extractRawText !== 'function') {
       throw new Error('módulo mammoth no disponible');
     }
@@ -374,32 +375,38 @@ async function parseDocx(data: ArrayBuffer): Promise<ParsedPayload> {
   }
 }
 
+/** Diapositiva devuelta por pptx-parser (módulo sin tipos declarados). */
+interface PptxSlide {
+  texts?: unknown;
+}
+
 async function parsePptx(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
-    const mod: any = await import('pptx-parser');
-    const pptxParser = mod.default || mod;
+    const mod = await import('pptx-parser');
+    const pptxParser = mod.default || Reflect.get(mod, 'default') || mod;
     if (typeof pptxParser !== 'function') {
       throw new Error('módulo pptx-parser no disponible');
     }
     const slides = await pptxParser(new Uint8Array(data));
     const lines: string[] = [];
-    (slides || []).forEach((slide: any, idx: number) => {
+    (slides || []).forEach((slide: PptxSlide, idx: number) => {
       lines.push(`=== Diapositiva ${idx + 1} ===`);
       const texts: string[] = [];
-      const collect = (node: any) => {
+      const collect = (node: unknown): void => {
         if (!node) return;
         if (typeof node === 'string') {
           if (node.trim()) texts.push(node.trim());
           return;
         }
-        if (typeof node.text === 'string' && node.text.trim()) texts.push(node.text.trim());
+        if (typeof node === 'object' && 'text' in node && typeof node.text === 'string' && node.text.trim()) {
+          texts.push(node.text.trim());
+        }
         if (Array.isArray(node)) {
           node.forEach(collect);
-        } else if (node && typeof node === 'object') {
-          Object.keys(node).forEach((k) => {
-            const v = node[k];
+        } else if (typeof node === 'object') {
+          for (const v of Object.values(node)) {
             if (typeof v === 'string' || typeof v === 'object') collect(v);
-          });
+          }
         }
       };
       collect(slide && slide.texts);

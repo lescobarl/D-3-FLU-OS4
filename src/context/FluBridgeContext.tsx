@@ -14,6 +14,7 @@
 // ============================================================
 
 import React, { createContext, useContext, useMemo } from 'react';
+import type { ConversationState } from '../types/bridge';
 
 // -----------------------------------------------------------
 // Types
@@ -44,7 +45,7 @@ export interface FluBridgeContextValue {
     welcomeMessage?: string;
 
     // Callbacks
-    onStateChange?: (state: any) => void;
+    onStateChange?: (state: ConversationState) => void;
     onFluParticipa?: () => void;
     onWorkspaceImage?: (imageUrl: string) => void;
     onGeminiError?: (error: string | null) => void;

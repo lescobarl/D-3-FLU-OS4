@@ -43,7 +43,7 @@ import { useConversationPersistence } from './hooks/useConversationPersistence';
 import { useFluParticipant } from './hooks/useFluParticipant';
 import { useSessionPersistence, loadSessionState } from './hooks/useSessionPersistence';
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
-import { useMinuteHandlers } from './hooks/useMinuteHandlers';
+import { useMinuteHandlers, type MinuteDraft } from './hooks/useMinuteHandlers';
 import { useNavigationCommands } from './hooks/useNavigationCommands';
 import { useCommunicationProfiles } from './hooks/useCommunicationProfiles';
 import { useBrowserProfiles } from './hooks/useBrowserProfiles';
@@ -52,7 +52,8 @@ import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
 import { STORAGE_KEYS, WELCOME_MESSAGE, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
 import { dayKey, shouldRolloverDay } from './core/days/dayRollover';
-import type { ConversationState, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
+import type { ConversationEntry, ConversationState, FluContract, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
+import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
 import { playSong, pauseMusic, stopMusic } from './services/musicPlayer';
@@ -106,10 +107,10 @@ import { useDoNotDisturb } from './hooks/useDoNotDisturb';
 // ---- Fase 2 — Memoria y recordatorios: hooks, paneles y parser de intención ----
 import { useReminders } from './hooks/useReminders';
 import { useShoppingList } from './hooks/useShoppingList';
-import { parseReminderIntent } from './core/reminders/reminderIntentParser';
+import { parseReminderIntent, type ReminderIntent, type ReminderIntentData } from './core/reminders/reminderIntentParser';
 // ---- Motor temporal genérico — alarmas y temporizadores (despertador + temporizador) ----
 import { useTemporalItems } from './hooks/useTemporalItems';
-import { parseTemporalIntent, formatDurationMs } from './core/temporal/temporalIntentParser';
+import { parseTemporalIntent, formatDurationMs, type TemporalIntent, type TemporalIntentData } from './core/temporal/temporalIntentParser';
 // ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
 import { useDeviceActions } from './hooks/useDeviceActions';
 import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
@@ -119,7 +120,7 @@ import { clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
 import { diaDeFecha, toMin, toHHMM, type HorarioClaseEstructurada } from './core/horario/horarioService';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
-import { parseHorarioIntent } from './core/horario/horarioIntentParser';
+import { parseHorarioIntent, type HorarioIntent, type HorarioIntentData } from './core/horario/horarioIntentParser';
 import type { NotificationService } from './core/notifications/notificationService';
 import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
 import {
@@ -186,6 +187,7 @@ import {
     buildMinuteKnowledgeBase2,
     resolveMinuteQuery,
     selectMinuteForLookup,
+    type MinuteLookupSelection,
 } from './lib/minuteKnowledgeHelpers';
 import {
     buildDailyAgenda,
@@ -988,6 +990,66 @@ const scheduleAdapter = createScheduleAdapter({
     minEntries: Number(FLU_CONFIG?.horario?.ocrAdapter?.minEntries) || 2,
 });
 
+/** Resultado del árbitro determinista (contrato de deterministicArbiter.js). */
+interface ArbiterResult {
+    matched: boolean;
+    domain: string | null;
+    action: unknown;
+    channel: string | null;
+}
+
+/** Diagnóstico del contrato resuelto (incluye la ruta de minuta). */
+interface ContractDiagnostics {
+    route?: string;
+    historyCode?: string | null;
+    [key: string]: unknown;
+}
+
+/** Workspace del contrato con el campo extra `modo` (horario). */
+type ResolvedWorkspace = NonNullable<FluContract['workspace']> & { modo?: unknown };
+
+/** Contrato FLU con los campos extra que el motor de voz adjunta. */
+type ResolvedContract = Omit<FluContract, 'workspace'> & {
+    workspace?: ResolvedWorkspace | null;
+    juego?: unknown;
+    ambiente?: unknown;
+};
+
+/** Payload entregado por el motor de voz al resolver un contrato. */
+interface ContractResolution {
+    userCommitOnly?: boolean;
+    transcript?: string;
+    speakerName?: string;
+    rawOnly?: boolean;
+    phase?: string;
+    replaceLastRawLog?: boolean;
+    contract?: ResolvedContract | null;
+    diagnostics?: ContractDiagnostics;
+    fastPathGame?: unknown;
+    fastPathEnvironment?: unknown;
+}
+
+/** Intención estructurada de nota aceptada por el manejador de voz. */
+interface NoteVoiceIntent {
+    action?: string;
+    handled?: boolean;
+    data?: { label?: unknown };
+}
+
+/** Intención estructurada de diario aceptada por el manejador de voz. */
+interface DiaryVoiceIntent {
+    action?: string;
+    handled?: boolean;
+    data?: { content?: unknown };
+}
+
+/** Lee una propiedad string de un valor desconocido (para logs). */
+function readStringProp(value: unknown, key: string): string | undefined {
+    if (!value || typeof value !== 'object') return undefined;
+    const prop = Reflect.get(value, key);
+    return typeof prop === 'string' ? prop : undefined;
+}
+
 /**
  * Resuelve una intención ESTRUCTURADA a partir del `dominio` que el cerebro
  * conversacional ya clasificó (`accion.dominio`), cuando el re-parseo del texto
@@ -998,7 +1060,7 @@ function resolveDomainScopedIntent(
     domain: string | null | undefined,
     text: string,
     opts: { defaultOffsetMs?: number; now?: number; language?: 'es' | 'en' },
-): any | null {
+): ArbiterResult | null {
     if (!domain || !text) return null;
     if (domain === 'reminder') {
         const intent = parseReminderIntent(text, {
@@ -1074,13 +1136,17 @@ function resolveDomainScopedIntent(
  * frescas porque se reasignan cada render).
  */
 async function dispatchArbiterIntent(
-    arbiterResult: any,
+    arbiterResult: ArbiterResult,
     opts: { speakerName?: string },
 ): Promise<string> {
     const w = window;
     const domain = arbiterResult?.matched ? arbiterResult.domain : null;
-    const intent: any = arbiterResult?.action || null;
-    relayLog('LOG', 'App', `dispatchArbiterIntent: domain="${domain}" action="${intent?.action ?? intent?.gameId ?? intent?.comando ?? JSON.stringify(intent ?? null)?.slice(0, 120)}"`);
+    const intent: unknown = arbiterResult?.action || null;
+    const intentLabel = readStringProp(intent, 'action')
+        ?? readStringProp(intent, 'gameId')
+        ?? readStringProp(intent, 'comando')
+        ?? JSON.stringify(intent ?? null)?.slice(0, 120);
+    relayLog('LOG', 'App', `dispatchArbiterIntent: domain="${domain}" action="${intentLabel}"`);
     if (!domain || !intent) {
         relayLog('LOG', 'App', 'dispatchArbiterIntent: SIN domain/intent → no se despacha');
         return '';
@@ -1212,7 +1278,7 @@ function App() {
 
     // Cache for rawOnly speaker lookup: Map<speakerName, { index, entry }>
     // Avoids O(n) backward scan of conversation history on every raw transcript.
-    const speakerIndexRef = useRef<Map<string, { index: number; entry: any }>>(new Map());
+    const speakerIndexRef = useRef<Map<string, { index: number; entry: ConversationEntry }>>(new Map());
 
     // §9 — Identidad de la emisión cruda en curso: id de la última fila cruda
     // commiteada. Permite que `replaceLastRawLog` (decisión del motor) actualice
@@ -1279,7 +1345,7 @@ function App() {
     }, []);
 
     // ---- Estado para la minuta actual en edición ----
-    const [minuteDraft, setMinuteDraft] = useState<any>(null);
+    const [minuteDraft, setMinuteDraft] = useState<MinuteDraft | null>(null);
 
     // ---- Estado para la minuta seleccionada en el historial ----
     const [selectedMinuteId, setSelectedMinuteId] = useState<string | null>(savedSession.current.selectedMinuteId);
@@ -1735,7 +1801,7 @@ function App() {
         // (window.__fluOnContractResolved) para que las pruebas de verificación
         // puedan disparar un contrato play_music de forma determinista. Se asigna
         // en CREACIÓN (expresión de asignación), disponible desde el montaje.
-        onContractResolved: (window.__fluOnContractResolved = useCallback(async (resolved: any) => {
+        onContractResolved: (window.__fluOnContractResolved = useCallback(async (resolved: ContractResolution) => {
             // §9 — Fila del USUARIO inmediata: el motor la pide al terminar de
             // capturar (antes de la IA). Aquí SOLO se agrega la fila y se sale;
             // la resolución posterior deduplica y agrega la respuesta de FLU.
@@ -1760,7 +1826,7 @@ function App() {
                 }
                 return;
             }
-            const contract: any = resolved?.contract || {};
+            const contract: Partial<ResolvedContract> = resolved?.contract || {};
             const transcript: string = resolved?.transcript || '';
             const rawOnly: boolean = resolved?.rawOnly === true;
             const speakerName: string = resolved?.speakerName || '';
@@ -1833,7 +1899,7 @@ function App() {
                     return;
                 }
 
-                let lastEntryForSpeaker: any = null;
+                let lastEntryForSpeaker: ConversationEntry | null = null;
                 let lastEntryIndex = -1;
                 const cached = speakerIndexRef.current.get(speakerKey);
                 if (cached && cached.index >= 0 && cached.index < history.length && history[cached.index] === cached.entry) {
@@ -1903,7 +1969,7 @@ function App() {
             }
 
             let respuestaVoz = contract?.respuesta_voz || '';
-            const navegacion = contract?.navegacion || {};
+            const navegacion: FluContract['navegacion'] = contract?.navegacion || { comando: null, destino: null, parametros: {} };
             const workspace = contract?.workspace || null;
             const musica = contract?.musica || null;
 
@@ -1951,8 +2017,8 @@ function App() {
                     // árbitro determinista (fuente única del parseo preciso). No se
                     // despacha todavía para poder garantizar antes que una nota del
                     // turno no se pierda si el LLM la omitió.
-                    const resolvedActions: Array<{ result: any; viaDomain: boolean }> = [];
-                    for (const accion of acciones) {
+                    const resolvedActions: Array<{ result: ArbiterResult; viaDomain: boolean }> = [];
+                    for (const accion of acciones ?? []) {
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
                         // Guard anti-arrastre (Bug #5): el contrato exige que
@@ -1970,12 +2036,12 @@ function App() {
                             continue;
                         }
                         const commandText = normalizeCommandForDeterministic(texto, wakeWords);
-                        const arbiterResult: any = resolveDeterministicCommand(commandText, arbiterOptions);
+                        const arbiterResult: ArbiterResult = resolveDeterministicCommand(commandText, arbiterOptions);
                         // El cerebro LLM ya clasificó el dominio (`accion.dominio`).
                         // Si el re-parseo del texto libre no matchea, se resuelve la
                         // estructura con el MISMO parser de dominio sin exigir trigger
                         // (evita "respondió bien pero no hizo nada").
-                        const effectiveResult: any = arbiterResult?.matched
+                        const effectiveResult: ArbiterResult | null = arbiterResult?.matched
                             ? arbiterResult
                             : resolveDomainScopedIntent(accion?.dominio, commandText, {
                                 defaultOffsetMs: (arbiterOptions)?.defaultOffsetMs,
@@ -1995,7 +2061,9 @@ function App() {
                     // nota o si el turno resuelve otro dominio (sin ruta doble).
                     const noteRescue = resolveNoteRescue({
                         transcript,
-                        resolvedDomains: resolvedActions.map((entry) => entry.result?.domain),
+                        resolvedDomains: resolvedActions
+                            .map((entry) => entry.result.domain)
+                            .filter((domain): domain is string => domain !== null),
                         wakeWords,
                         arbiterOptions,
                     });
@@ -2007,7 +2075,7 @@ function App() {
                             'LOG',
                             'App',
                             `onContractResolved: acción LLM → dominio "${effectiveResult.domain}" (${JSON.stringify(
-                                effectiveResult.action?.action ?? effectiveResult.action,
+                                readStringProp(effectiveResult.action, 'action') ?? effectiveResult.action,
                             )})${viaDomain ? ' [vía dominio LLM]' : ''}`,
                         );
                         const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
@@ -2018,7 +2086,7 @@ function App() {
                             // se creó (p. ej. "todos los días"). Se habla ese texto en
                             // vez del del LLM, que puede omitir la recurrencia.
                             const actionName = String(
-                                effectiveResult.action?.action ?? effectiveResult.action ?? '',
+                                readStringProp(effectiveResult.action, 'action') ?? effectiveResult.action ?? '',
                             );
                             if (actionName === 'alarm.add' || actionName === 'timer.start') {
                                 respuestaVoz = reply;
@@ -2096,14 +2164,14 @@ function App() {
                     // defaultAlarmTimeOfDay, defaultTimerMinutes) y se pasa al
                     // árbitro, que lo reenvía al parser.
                     const arbiterOptions = buildArbiterOptions();
-                    const arbiterResult: any = resolveDeterministicCommand(commandText, arbiterOptions);
+                    const arbiterResult: ArbiterResult = resolveDeterministicCommand(commandText, arbiterOptions);
                     const arbiterDomain = arbiterResult?.matched ? arbiterResult.domain : null;
                     if (arbiterDomain) {
                         relayLog(
                             'LOG',
                             'App',
                             `onContractResolved: árbitro → dominio "${arbiterDomain}" (acción ${JSON.stringify(
-                                arbiterResult.action?.action ?? arbiterResult.action,
+                                readStringProp(arbiterResult.action, 'action') ?? arbiterResult.action,
                             )})`,
                         );
                     } else {
@@ -2139,7 +2207,7 @@ function App() {
                         // despacha por dispatchArbiterIntent (que no tiene rama navigation):
                         // se marca el comando en `navegacion` y lo ejecuta handleNavigationCommand
                         // más abajo, por el MISMO camino que el contrato navegacion del LLM.
-                        (navegacion).comando = arbiterResult.action;
+                        navegacion.comando = typeof arbiterResult.action === 'string' ? arbiterResult.action : null;
                         relayLog('LOG', 'App', `onContractResolved: navigation → comando="${arbiterResult.action}" (handleNavigationCommand)`);
                     } else {
                         reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
@@ -2227,7 +2295,7 @@ function App() {
             // activa) cambiar a la pestaña de minutas para que el usuario
             // la vea visualmente. FluShell.jsx:464-583 hace el equivalente.
             // ============================================================
-            let minuteSelection: any = null;
+            let minuteSelection: MinuteLookupSelection | null = null;
             try {
                 minuteSelection = selectMinuteForLookup({
                     diagnostics: resolved?.diagnostics,
@@ -3255,7 +3323,7 @@ function App() {
     // Se asigna en CREACIÓN (expresión de asignación), disponible desde el montaje,
     // siguiendo el precedente de __fluOnContractResolved (línea 1105).
     window.__fluHandleReminderText = useCallback(
-        async (input: any, opts?: { personId?: string; personName?: string }) => {
+        async (input: ReminderIntent | string, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
@@ -3263,16 +3331,16 @@ function App() {
             const remindersConfig = FLU_CONFIG.reminders || {};
             const offsetMinutes = Number(remindersConfig.defaultReminderOffsetMinutes);
             const defaultOffsetMs = (Number.isFinite(offsetMinutes) ? offsetMinutes : 10) * 60 * 1000;
-            const isIntent =
+            const intent = (
                 input &&
                 typeof input === 'object' &&
                 typeof input.action === 'string' &&
-                input.handled !== false;
-            const intent = isIntent
-                ? (input)
+                input.handled !== false
+            )
+                ? input
                 : parseReminderIntent(String(input || ''), { defaultOffsetMs });
             if (!intent || !intent.handled) return '';
-            const data = intent.data || {};
+            const data: ReminderIntentData = intent.data || {};
 
             switch (intent.action) {
                 case 'reminder.add': {
@@ -3389,26 +3457,26 @@ function App() {
     // Motor temporal genérico — manejador de alarmas y temporizadores por texto (E2E + integración).
     // Un único motor (trigger + recurrencia + entrega) cubre recordatorios, despertador y temporizador.
     window.__fluHandleTemporalText = useCallback(
-        async (input: any) => {
+        async (input: TemporalIntent | string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
             // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
             const temporalConfig = FLU_CONFIG.temporal || {};
-            const isIntent =
+            const intent = (
                 input &&
                 typeof input === 'object' &&
                 typeof input.action === 'string' &&
-                input.handled !== false;
-            const intent = isIntent
-                ? (input)
+                input.handled !== false
+            )
+                ? input
                 : parseTemporalIntent(String(input || ''), {
                       now: Date.now(),
                       defaultAlarmTimeOfDay: temporalConfig.defaultAlarmTimeOfDay,
                       defaultTimerMinutes: Number(temporalConfig.defaultTimerMinutes) || 5,
                   });
             if (!intent || !intent.handled) return '';
-            const data = intent.data || {};
+            const data: TemporalIntentData = intent.data || {};
 
             switch (intent.action) {
                 case 'alarm.add':
@@ -3426,19 +3494,19 @@ function App() {
                             const d = new Date(ts);
                             return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                         };
-                        const trig = (data.trigger) || {};
+                        const trig = data.trigger;
                         const wantedTime =
-                            trig.timeOfDay || (trig.kind === 'absolute' && trig.at ? hhmmOf(trig.at) : '');
+                            trig?.timeOfDay || (trig?.kind === 'absolute' && trig.at ? hhmmOf(trig.at) : '');
                         const wantedRec = String((data.recurrence)?.kind || 'once');
                         const wantedLabel = String(data.label || fallbackLabel);
                         const duplicate = temporals.alarms.find((a) => {
                             if (a.status !== 'pending') return false;
-                            const at = (a.trigger) || {};
+                            const at = a.trigger;
                             const aTime =
-                                at.timeOfDay || (at.kind === 'absolute' && at.at ? hhmmOf(at.at) : '');
+                                at?.timeOfDay || (at?.kind === 'absolute' && at.at ? hhmmOf(at.at) : '');
                             const aRec = String(
                                 (a.recurrence)?.kind ||
-                                    (at.kind === 'daily' ? 'daily' : 'once'),
+                                    (at?.kind === 'daily' ? 'daily' : 'once'),
                             );
                             return aTime === wantedTime && aRec === wantedRec && String(a.label) === wantedLabel;
                         });
@@ -3449,7 +3517,7 @@ function App() {
                     const result = await temporals.add({
                         kind: data.kind || 'alarm',
                         label: data.label || fallbackLabel,
-                        trigger: data.trigger,
+                        trigger: data.trigger ?? { kind: 'absolute' },
                         recurrence: data.recurrence,
                     });
                     if (!result.ok) {
@@ -3628,7 +3696,7 @@ function App() {
     // negocio", "apunta/anota {texto}", "nota: {texto}") y crea la nota vía
     // notes.add. Devuelve la confirmación hablada (o '' si no aplica).
     window.__fluHandleNoteText = useCallback(
-        async (input: any, opts?: { personId?: string; personName?: string }) => {
+        async (input: NoteVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const notesVoice = FLU_CONFIG.notes?.voice || {};
             const addedMsg =
@@ -3668,8 +3736,8 @@ function App() {
             if (target) {
                 const item = label.replace(/^Super:\s*/i, '').trim();
                 const existing = [...(notes?.notes ?? [])]
-                    .filter((n: any) => !n.done && /^Super:/i.test(n.label || ''))
-                    .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+                    .filter((n) => !n.done && /^Super:/i.test(n.label || ''))
+                    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
                 const head = existing[0];
                 if (head && item && head.id !== undefined) {
                     const merged = `${String(head.label).trim().replace(/[,;]\s*$/, '')}, ${item}`;
@@ -3704,7 +3772,7 @@ function App() {
     // "guarda en el diario {contenido}", "diario: {contenido}") y crea la
     // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
     window.__fluHandleDiaryText = useCallback(
-        async (input: any, opts?: { personId?: string; personName?: string }) => {
+        async (input: DiaryVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
             // DIARIO PAUSADO: no se crean entradas hasta su reimplementación.
             if (!FLU_CONFIG.diary?.enabled) return '';
             const lang = (languageRef.current as 'es' | 'en') || 'es';
@@ -3727,7 +3795,7 @@ function App() {
 
             let content: string | null = null;
             if (isIntent) {
-                const data = (input).data || {};
+                const data = input.data || {};
                 content = data.content ? String(data.content).trim() : null;
             } else {
                 const clean = String(input || '').trim();
@@ -3763,31 +3831,34 @@ function App() {
     // determinista: parseHorarioIntent interpreta el transcript y aquí se
     // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
     window.__fluHandleHorarioText = useCallback(
-        async (input: any) => {
+        async (input: HorarioIntent | string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro, que ya ejecutó parseHorarioIntent), se ejecuta
             // DIRECTAMENTE sin re-parcear la cadena. Si se llama con texto crudo
             // (uso autónomo E2E/integración), se parcea aquí.
-            const isIntent =
+            const intent = (
                 input &&
                 typeof input === 'object' &&
                 typeof input.action === 'string' &&
-                input.handled !== false;
-            const intent = isIntent
-                ? (input)
+                input.handled !== false
+            )
+                ? input
                 : parseHorarioIntent(String(input || '').trim());
             if (!intent || !intent.handled) return '';
-            const data = intent.data || {};
+            const data: HorarioIntentData = intent.data || {};
             const voice = FLU_CONFIG.horario?.voice || {};
             const dayLabels = (FLU_CONFIG.horario?.dayLabels as string[]) || [];
             const dayLabel = (dia?: number) =>
                 dia && dia >= 1 && dia <= 7 ? dayLabels[dia] || String(dia) : '';
 
-            const pick = (obj: any, key: string, fallback: string) => {
+            const pick = (obj: Record<string, unknown>, key: string, fallback: string): string => {
                 const v = obj?.[key];
-                if (v && typeof v === 'object') return v[lang] || v.es || fallback;
-                return v || fallback;
+                if (v && typeof v === 'object') {
+                    const localized = Reflect.get(v, lang) ?? Reflect.get(v, 'es');
+                    return typeof localized === 'string' ? localized : fallback;
+                }
+                return typeof v === 'string' ? v : fallback;
             };
 
             switch (intent.action) {
@@ -3914,10 +3985,10 @@ function App() {
         const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
         const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').toLowerCase();
         const kindStep = (FLU_CONFIG.onboarding?.steps || []).find(
-            (s: any) => s.key === 'kind',
+            (s) => s.key === 'kind',
         );
         const kindTokens = new Set<string>();
-        (kindStep?.options || []).forEach((opt: any) => {
+        (kindStep?.options || []).forEach((opt) => {
             [opt.value, opt.es, opt.en]
                 .filter(Boolean)
                 .forEach((t: string) => kindTokens.add(String(t).toLowerCase()));
@@ -4314,7 +4385,7 @@ function App() {
     // ---- Handlers ----
 
 
-    const handleParticipantConfigChange = useCallback((overrides: Record<string, any>) => {
+    const handleParticipantConfigChange = useCallback((overrides: Record<string, unknown>) => {
         const prev = participantConfig;
         const newConfig = setFluParticipantOverrides(overrides);
         setParticipantConfig(newConfig);
@@ -4539,7 +4610,7 @@ const {
     // OS2 parity: handleRemoveParticipant (Gap G)
     // FluShell.jsx lines 1216-1232: handleRemoveParticipant
     // ============================================================
-    const handleRemoveParticipant = useCallback(async (row: any) => {
+    const handleRemoveParticipant = useCallback(async (row: VoiceProfileRow) => {
         const label = String(row?.label || '').trim();
         if (!label) return;
 
@@ -4577,7 +4648,7 @@ const {
         // Barrido defensivo para filas legacy cuyo speakerId quedó en 'usuario'
         // pero speakerName coincide con el label (speakerName no es índice).
         const legacyRows = await fluDb.conversations
-            .filter((r: any) => String(r?.speakerName || '').trim() === label)
+            .filter((r) => String(r?.speakerName || '').trim() === label)
             .primaryKeys()
             .catch(() => [] as string[]);
         if (legacyRows.length > 0) {
@@ -4639,16 +4710,17 @@ const {
     // FluShell.jsx lines 1196-1214: handleRenameVoiceProfile
     // ============================================================
     const handleRenameProfile = useCallback(async (profileId: string, label: string) => {
-        const saved: any = await voiceProfiles.renameProfile(profileId, label);
-        if (!saved?.label) return;
+        const saved: unknown = await voiceProfiles.renameProfile(profileId, label);
+        if (!saved || typeof saved !== 'object' || !('label' in saved) || !saved.label) return;
+        const savedLabel = String(saved.label);
 
         os2RenameSessionSpeaker(
-            String(voiceProfiles.profiles.find((p: any) => p.id === profileId)?.label || '').trim(),
-            saved.label,
+            String(voiceProfiles.profiles.find((p) => p.id === profileId)?.label || '').trim(),
+            savedLabel,
         );
         auditLog.logEvent('profile:renamed', 'config', uuidv4(), {
             profileId,
-            newLabel: saved.label,
+            newLabel: savedLabel,
         }, 'Voice profile renamed').catch(console.error);
     }, [voiceProfiles, os2RenameSessionSpeaker, auditLog]);
 
@@ -4693,7 +4765,7 @@ const {
         const set = new Set<string>();
         const speech = FLU_CONFIG.ui?.commandSpeech;
         if (speech && typeof speech === 'object') {
-            Object.values(speech).forEach((phrase: any) => {
+            Object.values(speech).forEach((phrase) => {
                 if (phrase && typeof phrase === 'object') {
                     if (phrase.es) set.add(phrase.es);
                     if (phrase.en) set.add(phrase.en);

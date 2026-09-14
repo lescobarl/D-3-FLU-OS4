@@ -14,11 +14,26 @@
  *
  * @returns true si instaló el shim; false si `document` ya existía.
  */
+/** Elemento falso mínimo que emula un `<img>` para ImageLoader de THREE. */
+interface FakeImageElement {
+  tagName: string;
+  style: Record<string, unknown>;
+  complete: boolean;
+  width: number;
+  height: number;
+  naturalWidth: number;
+  naturalHeight: number;
+  crossOrigin: string;
+  _listeners: Record<string, Array<(...args: unknown[]) => void>>;
+  _src?: unknown;
+  [key: string]: unknown;
+}
+
 export function installDomShim(): boolean {
   if ((globalThis as { document?: unknown }).document) return false;
 
-  const fakeImage = () => {
-    const el: any = {
+  const fakeImage = (): FakeImageElement => {
+    const el: FakeImageElement = {
       tagName: 'IMG',
       style: {},
       complete: false,

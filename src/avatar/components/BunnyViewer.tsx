@@ -17,7 +17,7 @@
 // ============================================================
 
 import { useEffect, useMemo } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, type RootState } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import { useBunnyStore } from '../store/bunnyStore';
 import BunnyModel from '../model/BunnyModel';
@@ -242,7 +242,7 @@ export default function BunnyViewer({ orientation = BUNNY_SCENE.orientationDefau
                     preserveDrawingBuffer: true,
                 }}
                 style={{ background: `var(--bg-secondary, ${BUNNY_SCENE.background})` }}
-                onCreated={(state: any) => {
+                onCreated={(state: RootState) => {
                     const gl = state.gl;
                     // Con alpha:false, el clear color del WebGL es lo que se ve;
                     // lo reaplica SceneBackgroundSync según la paleta de branding.

@@ -25,6 +25,8 @@
 //     texto (sin romper el video).
 // ============================================================
 
+import type { FFmpeg } from '@ffmpeg/ffmpeg';
+
 export interface VideoStoryboardItem {
     /** Título de la diapositiva/escena. */
     title: string;
@@ -313,16 +315,16 @@ function renderFrameToPng(
  * Intenta cargar ffmpeg.wasm (v0.12) autohospedado. Retorna null si no
  * está disponible. Los límites de carga viven aquí (Rule #1: NO HARDCODE).
  */
-async function tryLoadFFmpeg(): Promise<any | null> {
+async function tryLoadFFmpeg(): Promise<FFmpeg | null> {
     try {
-        const mod: any = await import('@ffmpeg/ffmpeg');
-        const FFmpegClass = mod?.FFmpeg || mod?.default?.FFmpeg;
+        const mod = await import('@ffmpeg/ffmpeg');
+        const FFmpegClass = mod?.FFmpeg || Reflect.get(mod, 'default')?.FFmpeg;
         if (typeof FFmpegClass !== 'function') return null;
 
-        const utilMod: any = await import('@ffmpeg/util');
+        const utilMod = await import('@ffmpeg/util');
         const toBlobURL = typeof utilMod?.toBlobURL === 'function'
             ? utilMod.toBlobURL
-            : utilMod?.default?.toBlobURL;
+            : Reflect.get(utilMod, 'default')?.toBlobURL;
         if (typeof toBlobURL !== 'function') return null;
 
         const base = (import.meta.env?.BASE_URL as string) || '/';
@@ -402,7 +404,7 @@ export async function assembleVideo(
         await ffmpeg.exec(args);
 
         const data = await ffmpeg.readFile('output.mp4');
-        const bytes = typeof data === 'string' ? Uint8Array.from(atob(data), (c) => c.charCodeAt(0)) : new Uint8Array(data as ArrayBuffer);
+        const bytes = typeof data === 'string' ? Uint8Array.from(atob(data), (c) => c.charCodeAt(0)) : new Uint8Array(data);
         const blob = new Blob([bytes.buffer], { type: 'video/mp4' });
         return {
             url: URL.createObjectURL(blob),

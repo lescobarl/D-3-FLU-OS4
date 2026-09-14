@@ -375,7 +375,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 const now = Date.now();
                 const prevState = current.conversationState;
                 relayLog('LOG', 'IntegrationStore', `setConversationState(${state}) — prev=${prevState}`);
-                const patch: Record<string, any> = { conversationState: state };
+                const patch: Partial<IntegrationState> = { conversationState: state };
 
                 // Si estamos entrando a THINKING, registrar el timestamp
                 if (state === 'THINKING') {

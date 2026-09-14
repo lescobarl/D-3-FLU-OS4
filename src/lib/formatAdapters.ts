@@ -22,6 +22,19 @@ export interface FormatInfo {
   mime: string;
 }
 
+/** Definición de hoja admitida en el JSON de entrada para XLSX. */
+interface XlsxSheetDefinition {
+  name?: string;
+  rows?: unknown[][];
+}
+
+/** Payload JSON admitido por el serializador XLSX. */
+interface XlsxPayload {
+  sheets?: XlsxSheetDefinition[];
+  rows?: unknown[][];
+  filas?: unknown[][];
+}
+
 export const FORMAT_INFO: Record<GenerationFormato, FormatInfo> = {
   pdf: { ext: 'pdf', mime: 'application/pdf' },
   docx: { ext: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
@@ -74,7 +87,7 @@ function fallbackMarkdown(content: string, nombre: string, _target: FormatInfo):
 
 async function serializePdf(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    const mod: any = await import('pdfkit/js/pdfkit.standalone');
+    const mod = await import('pdfkit/js/pdfkit.standalone');
     const PDFDocument = mod.default || mod;
     if (typeof PDFDocument !== 'function') throw new Error('pdfkit no disponible');
     const doc = new PDFDocument({ margin: 48 });
@@ -126,8 +139,7 @@ async function serializeDocx(content: string, nombre: string): Promise<Generated
   try {
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
     const lines = String(content || '').split(/\r?\n/).map((l) => l.trim());
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const children: any[] = [];
+    const children: InstanceType<typeof Paragraph>[] = [];
     for (const line of lines) {
       if (!line) continue;
       if (/^#\s/.test(line)) {
@@ -159,8 +171,8 @@ async function serializeDocx(content: string, nombre: string): Promise<Generated
 
 async function serializeXlsx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    const XLSX: any = await import('xlsx');
-    let parsed: any;
+    const XLSX = await import('xlsx');
+    let parsed: XlsxPayload;
     try {
       parsed = JSON.parse(String(content || '{}'));
     } catch {
@@ -193,7 +205,7 @@ async function serializeXlsx(content: string, nombre: string): Promise<Generated
 
 async function serializePptx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    const PptxGenJS: any = await import('pptxgenjs');
+    const PptxGenJS = await import('pptxgenjs');
     const PptxGen = PptxGenJS.default || PptxGenJS;
     const pptx = new PptxGen();
     const slidesRaw = String(content || '').split(/(?=^#\s)/m);
@@ -211,7 +223,8 @@ async function serializePptx(content: string, nombre: string): Promise<Generated
         if (y > 6.8) break;
       }
     }
-    const data = await pptx.write('arraybuffer');
+    const data = await pptx.write({ outputType: 'arraybuffer' });
+    if (!(data instanceof ArrayBuffer)) throw new Error('pptx no devolvió un ArrayBuffer');
     const bytes = new Uint8Array(data);
     const dataUrl = `data:${FORMAT_INFO.pptx.mime};base64,${bytesToBase64(bytes)}`;
     return {

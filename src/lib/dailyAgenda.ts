@@ -13,6 +13,7 @@
 
 import { normalizeSpaces } from './textUtils';
 import type { ReminderRecord } from '../core/db/fluDatabase';
+import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
 
 // -----------------------------------------------------------
 // Types
@@ -83,7 +84,7 @@ function parseHistoryDate(code: string = ''): number {
  * @returns Array de items de agenda, vacío si no hay pendientes
  */
 export function buildDailyAgenda(
-    records: any[] = [],
+    records: readonly MinuteUIEntry[] = [],
     config: Partial<DailyAgendaConfig> = {},
 ): DailyAgendaItem[] {
     const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
@@ -97,13 +98,13 @@ export function buildDailyAgenda(
         const pendingItems: string[] = (
             Array.isArray(snapshot?.pendientes) ? snapshot.pendientes : []
         )
-            .map((item: any) => normalizeSpaces(String(item)))
+            .map((item: string) => normalizeSpaces(String(item)))
             .filter(Boolean);
 
         const nextSteps: string[] = (
             Array.isArray(snapshot?.siguientes_pasos) ? snapshot.siguientes_pasos : []
         )
-            .map((item: any) => normalizeSpaces(String(item)))
+            .map((item: string) => normalizeSpaces(String(item)))
             .filter(Boolean);
 
         // Solo incluir si hay al menos un pendiente o siguiente paso

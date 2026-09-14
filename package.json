@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "lint:eslint": "eslint . --max-warnings=173",
+    "lint:eslint": "eslint . --max-warnings=1",
     "lint": "vitest run tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts tests/voiceSingleSourceGuard.test.ts tests/searchSingleRouteGuard.test.ts tests/voiceTurnSingleWriter.test.ts tests/voiceTurnCommitDerivation.test.ts tests/voiceTurnClosingSingleRoute.test.ts tests/taskGateInvariant.test.ts tests/schedulerSingleDefinition.test.ts --reporter=dot --silent",
     "test": "vitest run --changed --reporter=dot --silent",
     "test:full": "vitest run",

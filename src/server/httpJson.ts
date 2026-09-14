@@ -7,7 +7,24 @@
 // catch, ese throw se convertiría en una unhandled rejection. Nunca
 // propagamos errores de escritura.
 // ============================================================
-import type { ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+/** Handler de middleware (forma mínima que necesitan los proxies). */
+export type ProxyMiddlewareHandler = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: () => void,
+) => unknown;
+
+/**
+ * Host de middlewares con la forma mínima usada por los proxies. Es
+ * satisfecho tanto por `ViteDevServer` como por los dobles de prueba.
+ */
+export interface MiddlewareHost {
+    middlewares: {
+        use(path: string, handler: ProxyMiddlewareHandler): void;
+    };
+}
 
 /**
  * Responde `data` como JSON con `status`, tolerando sockets cerrados.
@@ -28,7 +45,10 @@ export function sendJson(
         if (res.writableEnded || res.destroyed) return;
         res.writeHead(status, { 'Content-Type': contentType });
         res.end(JSON.stringify(data));
-    } catch (err: any) {
-        console.warn(label, err?.message || err);
+    } catch (err: unknown) {
+        const message = err && typeof err === 'object' && 'message' in err
+            ? (err.message || err)
+            : err;
+        console.warn(label, message);
     }
 }

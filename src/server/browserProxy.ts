@@ -7,9 +7,10 @@
 // Registrado como /api/browser/fetch (GET)
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson';
 import { buildBrowserUrl } from '../core/browser/browserSession';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
-import { sendJson as sendJsonShared } from './httpJson';
+
 
 const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -61,11 +62,12 @@ async function fetchSite(
     }
     const html = await response.text();
     return { ok: true, url: response.url || url, html };
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
       return { ok: false, reason: 'timeout' };
     }
-    return { ok: false, reason: 'fetch_error', detail: err?.message || 'Unknown error' };
+    const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
+    return { ok: false, reason: 'fetch_error', detail: String(message || 'Unknown error') };
   } finally {
     clearTimeout(timer);
   }
@@ -116,14 +118,15 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
 export function createBrowserProxy({ env: _env = {} }: { env?: Record<string, string> } = {}) {
   return {
     name: 'browser-proxy',
-    configureServer(server: any) {
-      server.middlewares.use('/api/browser/fetch', async (req: any, res: any, next: any) => {
+    configureServer(server: MiddlewareHost) {
+      server.middlewares.use('/api/browser/fetch', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         if (req.method !== 'GET') return next();
         try {
           await handleBrowserFetch(req, res);
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error('[browserProxy] /api/browser/fetch failed:', err);
-          sendJson(res, 500, { ok: false, reason: 'internal_error', detail: err?.message || 'Unknown error' });
+          const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
+          sendJson(res, 500, { ok: false, reason: 'internal_error', detail: String(message || 'Unknown error') });
         }
       });
     },

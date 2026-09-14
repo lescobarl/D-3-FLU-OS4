@@ -25,6 +25,37 @@
 
 import { normalizeSpaces, cleanForSpeech } from './textUtils';
 
+/** Snapshot de minuta (campos opcionales) admitido por los helpers. */
+export interface MinuteSnapshotLike {
+    id?: string;
+    kind?: string;
+    titulo?: string;
+    tema_sesion?: string;
+    resumen?: string;
+    participantes?: string[];
+    acuerdos?: string[];
+    pendientes?: string[];
+    siguientes_pasos?: string[];
+    date?: string;
+    mood?: unknown;
+    content?: string;
+}
+
+/** Registro de conocimiento (minuta/conversación) admitido por los helpers. */
+export interface MinuteRecordLike extends MinuteSnapshotLike {
+    description?: string;
+    historyCode?: string;
+    summarySnapshot?: MinuteSnapshotLike;
+}
+
+/** Entrada de diario admitida por los helpers. */
+export interface DiaryEntryLike {
+    date?: string;
+    title?: string;
+    content?: string;
+    mood?: unknown;
+}
+
 // ------------------------------------------------------------
 // Etiquetas OS2 (FLU_CONFIG.ui.minuteFields) — versionadas
 // ------------------------------------------------------------
@@ -129,7 +160,7 @@ function isGenericMinuteSessionTheme(theme: string = ''): boolean {
 }
 
 /** Tema útil para voz/UI; omite placeholder genérico y duplicado del título. */
-export function resolveMinuteThemeForSpeech(snapshot: any = {}, record: any = {}): string {
+export function resolveMinuteThemeForSpeech(snapshot: MinuteSnapshotLike = {}, record: MinuteRecordLike = {}): string {
     const titulo = normalizeSpaces(snapshot?.titulo || record?.description || '');
     const tema = normalizeSpaces(snapshot?.tema_sesion || '');
     if (!tema || isGenericMinuteSessionTheme(tema)) return '';
@@ -141,7 +172,7 @@ export function resolveMinuteThemeForSpeech(snapshot: any = {}, record: any = {}
 // createMinuteDraftFromSummary (OS2 parity) — usado por buildMinuteLookupContract
 // ------------------------------------------------------------
 
-export function createMinuteDraftFromSummary(summary: any = {}, theme: string = '', id: string = ''): {
+export function createMinuteDraftFromSummary(summary: MinuteSnapshotLike = {}, theme: string = '', id: string = ''): {
     id: string;
     titulo: string;
     participantes: string[];
@@ -180,7 +211,7 @@ function listSection(label: string, items: string[] = []): string {
     return `${label}:\n${items.map((item) => `- ${item}`).join('\n')}`;
 }
 
-export function formatMinuteDraftText(draft: any = {}): string {
+export function formatMinuteDraftText(draft: MinuteSnapshotLike = {}): string {
     return [
         `${MINUTE_FIELDS.title}: ${normalizeSpaces(draft?.titulo || '')}`,
         `${MINUTE_FIELDS.participants}: ${Array.isArray(draft?.participantes) ? draft.participantes.join(', ') : ''}`,
@@ -211,7 +242,7 @@ function resolveKindLabel(kind: string = ''): string {
     }
 }
 
-function formatMinuteKnowledgeEntry(record: any = {}, { fallbackIndex = 0 }: { fallbackIndex?: number } = {}): string {
+function formatMinuteKnowledgeEntry(record: MinuteRecordLike = {}, { fallbackIndex = 0 }: { fallbackIndex?: number } = {}): string {
     const snapshot = record?.summarySnapshot || record;
     const kind = String(snapshot?.kind || record?.kind || 'minuta');
     const kindLabel = resolveKindLabel(kind);
@@ -254,7 +285,7 @@ function formatMinuteKnowledgeEntry(record: any = {}, { fallbackIndex = 0 }: { f
 }
 
 /** Convierte una entrada de diario (DiaryEntryRecord) a un registro de conocimiento con kind 'diario'. */
-function diaryEntryToKnowledgeRecord(entry: any = {}): any {
+function diaryEntryToKnowledgeRecord(entry: DiaryEntryLike = {}): MinuteRecordLike {
     const date = String(entry?.date || '');
     const title = String(entry?.title || '').trim();
     const content = String(entry?.content || '').trim();
@@ -285,7 +316,7 @@ function diaryEntryToKnowledgeRecord(entry: any = {}): any {
  * - `records`: MinuteRecord[] (minutas + conversaciones con kind).
  * - `options.diary`: DiaryEntryRecord[] (se normalizan a kind 'diario').
  */
-export function buildMinuteKnowledgeBase2(records: any[] = [], options?: { diary?: any[] }): string {
+export function buildMinuteKnowledgeBase2(records: MinuteRecordLike[] = [], options?: { diary?: DiaryEntryLike[] }): string {
     const diaryRecords = (options?.diary || []).map(diaryEntryToKnowledgeRecord);
     const all = [...(Array.isArray(records) ? records : []), ...diaryRecords];
     if (!all.length) return '';
@@ -301,14 +332,14 @@ export function buildMinuteKnowledgeBase2(records: any[] = [], options?: { diary
 // ------------------------------------------------------------
 
 export interface MinuteLookupSelection {
-    matched: any;
+    matched: MinuteRecordLike;
     draft: ReturnType<typeof createMinuteDraftFromSummary>;
     shouldSwitchTab: boolean;
 }
 
 export interface MinuteLookupSelectionInput {
-    diagnostics: { route?: string; historyCode?: string | null;[k: string]: any } | null | undefined;
-    minutes: any[];
+    diagnostics: { route?: string; historyCode?: string | null; [k: string]: unknown } | null | undefined;
+    minutes: MinuteRecordLike[];
     conversationActive: boolean;
     fallbackTheme?: string;
 }
@@ -346,7 +377,7 @@ export function selectMinuteForLookup(input: MinuteLookupSelectionInput): Minute
 // Catálogo de minutas (para mensaje de "no encontrada")
 // ------------------------------------------------------------
 
-function minuteCatalogSpeech(records: any[] = [], { language = 'es' }: { language?: string } = {}): string {
+function minuteCatalogSpeech(records: MinuteRecordLike[] = [], { language = 'es' }: { language?: string } = {}): string {
     const isEnglish = language === 'en';
     if (!Array.isArray(records) || !records.length) {
         return isEnglish ? 'No saved minutes yet.' : 'Aun no hay minutas guardadas.';
@@ -373,17 +404,40 @@ function minuteCatalogSpeech(records: any[] = [], { language = 'es' }: { languag
 // Contrato Flu para consulta de minuta (respuesta local)
 // ------------------------------------------------------------
 
+export interface MinuteLookupWorkspace {
+    tipo: 'text';
+    titulo: string;
+    contenido: string;
+    prompt_visual: string;
+    puntos_clave: string[];
+}
+
+export interface MinuteLookupContract {
+    respuesta_voz: string;
+    navegacion: { comando: null; destino: null; parametros: Record<string, never> };
+    workspace: MinuteLookupWorkspace | null;
+}
+
+export interface MinuteLookupContractInput {
+    sequence?: number;
+    record?: MinuteRecordLike | null;
+    records?: MinuteRecordLike[];
+    language?: string;
+}
+
+/** Con registro presente, el workspace queda garantizado (no nulo). */
+export function buildMinuteLookupContract(
+    input: MinuteLookupContractInput & { record: MinuteRecordLike },
+): MinuteLookupContract & { workspace: MinuteLookupWorkspace };
+export function buildMinuteLookupContract(
+    input: MinuteLookupContractInput,
+): MinuteLookupContract;
 export function buildMinuteLookupContract({
     sequence = 0,
     record = null,
     records = [],
     language = 'es',
-}: {
-    sequence?: number;
-    record?: any;
-    records?: any[];
-    language?: string;
-} = {}): { respuesta_voz: string; navegacion: { comando: null; destino: null; parametros: Record<string, never> }; workspace: any } {
+}: MinuteLookupContractInput = {}): MinuteLookupContract {
     const isEnglish = language === 'en';
     const target = Number.parseInt(String(sequence), 10);
 
@@ -480,7 +534,7 @@ export interface MinuteLookupResult {
  */
 export function resolveMinuteQuery(
     query: string = '',
-    records: any[] = [],
+    records: MinuteRecordLike[] = [],
     { language = 'es' }: { language?: string } = {},
 ): MinuteLookupResult {
     const sequence = parseMinuteSequenceFromQuery(query);

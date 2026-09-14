@@ -102,7 +102,7 @@ function resolveCreativityTemperature(): number | undefined {
 /**
  * Parsea JSON de forma segura; devuelve null si falla (nunca lanza).
  */
-function safeParseJson(text: string): any | null {
+function safeParseJson(text: string): Record<string, unknown> | null {
     if (!text || !text.trim()) return null;
     try {
         const value = JSON.parse(text);
@@ -473,7 +473,7 @@ Genera la minuta en formato JSON.`;
             if (!rawAcciones || rawAcciones.length === 0) return undefined;
             const VALID_DOMINIOS = ['reminder', 'temporal', 'diary', 'note', 'horario'];
             const parsed = rawAcciones
-                .map((item: any): FluAccion | null => {
+                .map((item: Record<string, unknown>): FluAccion | null => {
                     if (!item || typeof item !== 'object') return null;
                     const dominio = String(item.dominio || '').trim();
                     const texto = String(item.texto || '').trim();
@@ -588,8 +588,9 @@ Genera la minuta en formato JSON.`;
                     language,
                 },
             };
-        } catch (error: any) {
-            console.warn('[Gemini] Workspace image generation failed:', error?.message || error);
+        } catch (error: unknown) {
+            const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
+            console.warn('[Gemini] Workspace image generation failed:', detail || error);
             // Fallback: build URL directly (Pollinations is stateless, no API key needed)
             try {
                 const imageUrl = buildPollinationsUrl(prompt);
@@ -610,7 +611,7 @@ Genera la minuta en formato JSON.`;
                         provider: 'error',
                         hasImage: false,
                         source: 'generation_failed',
-                        error: error?.message || 'unknown',
+                        error: (error && typeof error === 'object' && 'message' in error ? error.message : undefined) || 'unknown',
                         prompt,
                     },
                 };
@@ -656,8 +657,9 @@ Genera la minuta en formato JSON.`;
             }
 
             return await response.json();
-        } catch (error: any) {
-            console.warn('[Gemini] Vision analysis failed:', error?.message || error);
+        } catch (error: unknown) {
+            const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
+            console.warn('[Gemini] Vision analysis failed:', detail || error);
             return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' };
         }
     }
@@ -803,8 +805,8 @@ Genera la minuta en formato JSON.`;
             ].join('\n');
             const raw = await this.postText({ apiKey, system, prompt, maxTokens: 2200 });
             const parsed = safeParseJson(raw);
-            const screens = Array.isArray(parsed?.pantallas) ? parsed.pantallas : [];
-            const flows = Array.isArray(parsed?.flujos) ? parsed.flujos : [];
+            const screens: Record<string, unknown>[] = Array.isArray(parsed?.pantallas) ? parsed.pantallas : [];
+            const flows: Record<string, unknown>[] = Array.isArray(parsed?.flujos) ? parsed.flujos : [];
             const llmErrors = Array.isArray(parsed?.errores_detectados) ? parsed.errores_detectados.map(String) : [];
             const mergedErrors = Array.from(new Set([
                 ...(Array.isArray(payload.errores_detectados) ? payload.errores_detectados : []),
@@ -813,7 +815,7 @@ Genera la minuta en formato JSON.`;
             return {
                 proyecto: payload.proyecto || 'Proyecto',
                 framework: payload.framework || 'other',
-                pantallas: screens.map((s: any) => ({
+                pantallas: screens.map((s) => ({
                     id: String(s?.id || `screen-${uuidv4()}`),
                     nombre: String(s?.nombre || 'Pantalla'),
                     proposito: String(s?.proposito || ''),
@@ -821,7 +823,7 @@ Genera la minuta en formato JSON.`;
                     acciones: Array.isArray(s?.acciones) ? s.acciones.map(String) : [],
                     salidas: Array.isArray(s?.salidas) ? s.salidas.map(String) : [],
                 })),
-                flujos: flows.map((f: any) => ({
+                flujos: flows.map((f) => ({
                     nombre: String(f?.nombre || 'Flujo'),
                     pasos: Array.isArray(f?.pasos) ? f.pasos.map(String) : [],
                 })),

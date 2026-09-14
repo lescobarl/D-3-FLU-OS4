@@ -264,17 +264,31 @@ export function findLastFluDialogueTurn(history = []) {
   return null
 }
 
-/** Filas de audit log: pregunta/comando humano + respuesta Flu (sin campo response pegado). */
-export function buildFluSpeechAuditRows({
-  timestamp,
-  humanSpeaker = '',
-  humanTranscript = '',
-  fluText = '',
-  phase = 'SESION_ACTIVA',
-  signature = null,
-  navigation = {},
-  navigationComando = null,
-} = {}) {
+/**
+ * Filas de audit log: pregunta/comando humano + respuesta Flu (sin campo response pegado).
+ *
+ * @param {{
+ *   timestamp?: string,
+ *   humanSpeaker?: string,
+ *   humanTranscript?: string,
+ *   fluText?: string,
+ *   phase?: string,
+ *   signature?: unknown,
+ *   navigation?: object,
+ *   navigationComando?: string | null,
+ * }} [params]
+ */
+export function buildFluSpeechAuditRows(params = {}) {
+  const {
+    timestamp,
+    humanSpeaker = '',
+    humanTranscript = '',
+    fluText = '',
+    phase = 'SESION_ACTIVA',
+    signature = null,
+    navigation = {},
+    navigationComando = null,
+  } = params
   const rows = []
   const humanText = cleanForSpeech(humanTranscript)
   const fluSpeech = cleanForSpeech(fluText)

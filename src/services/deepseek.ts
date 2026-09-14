@@ -112,7 +112,7 @@ export function hasUsableTextBackend(): boolean {
 /**
  * Parsea JSON de forma segura; devuelve null si falla (nunca lanza).
  */
-function safeParseJson(text: string): any | null {
+function safeParseJson(text: string): Record<string, unknown> | null {
     if (!text || !text.trim()) return null;
     try {
         const value = JSON.parse(text);
@@ -466,15 +466,16 @@ Formato de respuesta (JSON):
                     language,
                 },
             };
-        } catch (error: any) {
-            console.warn('[Text engine] Workspace image generation failed:', error?.message || error);
+        } catch (error: unknown) {
+            const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
+            console.warn('[Text engine] Workspace image generation failed:', detail || error);
             return {
                 image_url: '',
                 trace: {
                     provider: 'error',
                     hasImage: false,
                     source: 'generation_failed',
-                    error: error?.message || 'unknown',
+                    error: detail || 'unknown',
                     prompt,
                 },
             };
@@ -579,7 +580,7 @@ Formato de respuesta (JSON):
      * POST a chat completion and return the raw content string (JSON-object mode).
      */
     private async postJson(
-        messages: Array<{ role: string; content: any }>,
+        messages: Array<{ role: string; content: string }>,
         options: { maxTokens?: number; temperature?: number; timeoutMs?: number; jsonMode?: boolean } = {},
     ): Promise<string> {
         const url = buildTextApiUrl('/chat/completions');
@@ -725,8 +726,8 @@ Formato de respuesta (JSON):
                 ].join('\n') },
             ], { maxTokens: 2200 });
             const parsed = safeParseJson(raw);
-            const screens = Array.isArray(parsed?.pantallas) ? parsed.pantallas : [];
-            const flows = Array.isArray(parsed?.flujos) ? parsed.flujos : [];
+            const screens: Record<string, unknown>[] = Array.isArray(parsed?.pantallas) ? parsed.pantallas : [];
+            const flows: Record<string, unknown>[] = Array.isArray(parsed?.flujos) ? parsed.flujos : [];
             const llmErrors = Array.isArray(parsed?.errores_detectados) ? parsed.errores_detectados.map(String) : [];
             const mergedErrors = Array.from(new Set([
                 ...(Array.isArray(payload.errores_detectados) ? payload.errores_detectados : []),
@@ -735,7 +736,7 @@ Formato de respuesta (JSON):
             return {
                 proyecto: payload.proyecto || 'Proyecto',
                 framework: payload.framework || 'other',
-                pantallas: screens.map((s: any) => ({
+                pantallas: screens.map((s) => ({
                     id: String(s?.id || `screen-${uuidv4()}`),
                     nombre: String(s?.nombre || 'Pantalla'),
                     proposito: String(s?.proposito || ''),
@@ -743,7 +744,7 @@ Formato de respuesta (JSON):
                     acciones: Array.isArray(s?.acciones) ? s.acciones.map(String) : [],
                     salidas: Array.isArray(s?.salidas) ? s.salidas.map(String) : [],
                 })),
-                flujos: flows.map((f: any) => ({
+                flujos: flows.map((f) => ({
                     nombre: String(f?.nombre || 'Flujo'),
                     pasos: Array.isArray(f?.pasos) ? f.pasos.map(String) : [],
                 })),
