@@ -288,6 +288,18 @@ const FINDINGS = [
         ),
     note: 'Los intencionales y cableados están en DEBUG_ALLOWLIST (justificados). El resto: borrar.',
   },
+  {
+    id: 'V10', sev: 'media', title: 'Boilerplate fetch /api/gemini/contract (>=2 sitios)',
+    target: 1,
+    detect: () => grep(srcFiles, /fetch\('\/api\/gemini\/contract'/),
+    note: 'Un helper postGeminiContract; una sola aparicion del fetch.',
+  },
+  {
+    id: 'V11', sev: 'baja', title: 'new de dependencias dentro de la logica (§2.4)',
+    target: 0,
+    detect: () => grep(srcFiles, /new (DecisionEngine|BackupManager)\(/),
+    note: 'Inyectar por interfaz; no instanciar dentro de la logica.',
+  },
 
   // -------- nombres repetidos NO duplicados (no tocar) --------
   {

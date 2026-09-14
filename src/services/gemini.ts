@@ -48,6 +48,7 @@ import {
     buildGenerationSystemPrompt,
     buildGenerationFallbackContent,
 } from '../lib/generationPrompts';
+import { postGeminiContract } from './geminiContractClient';
 
 // -----------------------------------------------------------
 // Helpers
@@ -169,20 +170,16 @@ ${conversationLog}
 Genera la minuta en formato JSON.`;
 
         // Delegate to proxy with mode='minute'
-        const response = await fetch('/api/gemini/contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: 'minute',
-                apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
-                language: options.language || 'es',
-                role: options.role || '',
-                theme: options.theme || '',
-                history: history,
-                systemPrompt,
-                userMessage,
-                temperature,
-            }),
+        const response = await postGeminiContract({
+            mode: 'minute',
+            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            language: options.language || 'es',
+            role: options.role || '',
+            theme: options.theme || '',
+            history: history,
+            systemPrompt,
+            userMessage,
+            temperature,
         });
 
         if (!response.ok) {
@@ -262,22 +259,18 @@ Mensaje del usuario: ${userText}
 Responde como ${botName}:`;
 
         // Delegate to proxy with mode='response'
-        const response = await fetch('/api/gemini/contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: 'response',
-                apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
-                transcript: userText,
-                language: options.language || 'es',
-                role: options.role || '',
-                theme: options.theme || '',
-                history: history,
-                personality,
-                systemPrompt,
-                userMessage,
-                temperature: resolveCreativityTemperature(),
-            }),
+        const response = await postGeminiContract({
+            mode: 'response',
+            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            transcript: userText,
+            language: options.language || 'es',
+            role: options.role || '',
+            theme: options.theme || '',
+            history: history,
+            personality,
+            systemPrompt,
+            userMessage,
+            temperature: resolveCreativityTemperature(),
         });
 
         if (!response.ok) {
@@ -364,20 +357,16 @@ ${conversationLog}
 Genera la minuta en formato JSON.`;
 
         // Delegate to proxy with mode='minute' (same route as generateMinute)
-        const response = await fetch('/api/gemini/contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: 'minute',
-                apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
-                language: options.language || 'es',
-                role: options.role || '',
-                theme: options.theme || '',
-                history: history,
-                systemPrompt,
-                userMessage,
-                temperature,
-            }),
+        const response = await postGeminiContract({
+            mode: 'minute',
+            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            language: options.language || 'es',
+            role: options.role || '',
+            theme: options.theme || '',
+            history: history,
+            systemPrompt,
+            userMessage,
+            temperature,
         });
 
         if (!response.ok) {
@@ -425,19 +414,15 @@ Genera la minuta en formato JSON.`;
             : null;
 
         // Delegate to proxy
-        const response = await fetch('/api/gemini/contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: 'contract',
-                apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
-                transcript,
-                language: options.language || 'es',
-                role: options.role || '',
-                theme: options.theme || '',
-                history,
-                personality,
-            }),
+        const response = await postGeminiContract({
+            mode: 'contract',
+            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            transcript,
+            language: options.language || 'es',
+            role: options.role || '',
+            theme: options.theme || '',
+            history,
+            personality,
         });
 
         if (!response.ok) {

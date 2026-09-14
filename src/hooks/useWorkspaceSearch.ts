@@ -31,6 +31,7 @@ import {
     type SearchRuntimeConfig,
 } from '../core/search/searchConfigOverrides';
 import { dayKey } from '../core/browser/browserSession';
+import { postGeminiContract } from '../services/geminiContractClient';
 
 export type SearchLevel = 'simple' | 'detallado' | 'avanzado';
 
@@ -170,22 +171,18 @@ export async function fetchAiOverview(
             ? `You are FLU. Provide the key points about: "${query}" in English, as short plain-text bullets, max ${maxChars} characters. No markdown.`
             : `Eres FLU. Entrega los ${title} sobre: "${query}" en español, como viñetas cortas en texto plano, máximo ${maxChars} caracteres. Sin markdown.`;
     try {
-        const response = await fetch('/api/gemini/contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: 'response',
-                apiKey: '',
-                transcript: query,
-                language: lang,
-                role: '',
-                theme: 'search',
-                history: [],
-                personality: null,
-                systemPrompt,
-                userMessage: query,
-                temperature: 0.3,
-            }),
+        const response = await postGeminiContract({
+            mode: 'response',
+            apiKey: '',
+            transcript: query,
+            language: lang,
+            role: '',
+            theme: 'search',
+            history: [],
+            personality: null,
+            systemPrompt,
+            userMessage: query,
+            temperature: 0.3,
         });
         if (!response.ok) return '';
         const data = await response.json();
