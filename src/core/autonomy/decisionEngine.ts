@@ -590,6 +590,14 @@ export class DecisionEngine {
     private evaluationIntervalId: number | null = null;
     private decisionHistory: AutonomousDecision[] = [];
     
+    /**
+     * Fábrica por defecto del motor. Punto de composición del singleton:
+     * permite inyectar otra fábrica vía setDecisionEngineFactory (§2.4).
+     */
+    static create(config: Partial<DecisionEngineConfig> = {}): DecisionEngine {
+        return new this(config);
+    }
+    
     constructor(config: Partial<DecisionEngineConfig> = {}) {
         this.config = { ...DEFAULT_DECISION_CONFIG, ...config };
         this.decisionMaker = new DecisionMaker();
@@ -796,9 +804,22 @@ export class DecisionEngine {
 
 let globalDecisionEngine: DecisionEngine | null = null;
 
+/** Fábrica inyectable del motor global (seam de DI, §2.4). */
+export type DecisionEngineFactory = (config?: Partial<DecisionEngineConfig>) => DecisionEngine;
+
+let decisionEngineFactory: DecisionEngineFactory = (config) => DecisionEngine.create(config);
+
+/**
+ * Inyecta la fábrica usada al crear el motor global. Debe llamarse antes de
+ * la primera creación; si el singleton ya existe, esta llamada no lo reemplaza.
+ */
+export function setDecisionEngineFactory(factory: DecisionEngineFactory): void {
+    decisionEngineFactory = factory;
+}
+
 export function getDecisionEngine(config?: Partial<DecisionEngineConfig>): DecisionEngine {
     if (!globalDecisionEngine) {
-        globalDecisionEngine = new DecisionEngine(config);
+        globalDecisionEngine = decisionEngineFactory(config);
     }
     return globalDecisionEngine;
 }

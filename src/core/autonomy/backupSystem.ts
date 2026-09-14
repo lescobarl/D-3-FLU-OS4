@@ -539,10 +539,24 @@ class DataRestorer {
 // Gestor de backups
 // -----------------------------------------------------------
 
-class BackupManager {
+/** Contrato del gestor de backups (inyectable en BackupSystem, §2.4). */
+export interface IBackupManager {
+    createBackup(strategy?: BackupStrategy, components?: BackupComponent[], notes?: string): BackupMetadata | null;
+    getAvailableBackups(): BackupMetadata[];
+    restoreBackup(backupId: string, componentsToRestore?: BackupComponent[]): RestoreResult;
+    verifyBackupIntegrity(backupId: string): boolean;
+    cleanupOldBackups(): number;
+}
+
+class BackupManager implements IBackupManager {
     private dataExtractor: DataExtractor;
     private dataRestorer: DataRestorer;
     private backups: BackupMetadata[] = [];
+    
+    /** Fábrica por defecto del gestor (punto de composición del default). */
+    static create(): BackupManager {
+        return new this();
+    }
     
     constructor() {
         this.dataExtractor = new DataExtractor();
@@ -902,12 +916,12 @@ class BackupManager {
 
 export class BackupSystem {
     private config: BackupSystemConfig;
-    private backupManager: BackupManager;
+    private backupManager: IBackupManager;
     private autoBackupIntervalId: number | null = null;
     
-    constructor(config: Partial<BackupSystemConfig> = {}) {
+    constructor(config: Partial<BackupSystemConfig> = {}, backupManager?: IBackupManager) {
         this.config = { ...DEFAULT_BACKUP_CONFIG, ...config };
-        this.backupManager = new BackupManager();
+        this.backupManager = backupManager ?? BackupManager.create();
     }
     
     start(): void {
@@ -1050,9 +1064,9 @@ export class BackupSystem {
 
 let globalBackupSystem: BackupSystem | null = null;
 
-export function getBackupSystem(config?: Partial<BackupSystemConfig>): BackupSystem {
+export function getBackupSystem(config?: Partial<BackupSystemConfig>, backupManager?: IBackupManager): BackupSystem {
     if (!globalBackupSystem) {
-        globalBackupSystem = new BackupSystem(config);
+        globalBackupSystem = new BackupSystem(config, backupManager);
     }
     return globalBackupSystem;
 }
