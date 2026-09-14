@@ -148,6 +148,20 @@ function parseBody(req: IncomingMessage): Promise<any> {
     });
 }
 
+/**
+ * Lee el cuerpo crudo como texto (para sinks que envían NDJSON, no JSON).
+ * @param req Petición entrante.
+ * @returns El cuerpo completo como string UTF-8.
+ */
+function readRawBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => chunks.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+        req.on('error', (err) => reject(err));
+    });
+}
+
 function sendJson(res: ServerResponse, status: number, data: any) {
     // FIX estabilidad: si el socket ya se cerró (el cliente navegó / recargó a
     // mitad de petición), writeHead/end lanzan. Como sendJson suele llamarse
@@ -617,7 +631,14 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 if (req.method !== 'POST') return next();
                 try {
                     const body = await parseBody(req);
-                } catch {
+                    const count = Number(body?.count) || 0;
+                    console.info(
+                        `[geminiProxy] agent trace aceptado (no persistido): count=${count} delta=${body?.delta === true}`,
+                    );
+                } catch (err: any) {
+                    // El sink es de diagnóstico: un body ilegible no debe romper la app,
+                    // pero tampoco se silencia (queda contexto en el log del servidor).
+                    console.warn('[geminiProxy] agent trace: body ilegible, se acepta igual:', err?.message || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'trace logged but not persisted' }));
@@ -626,8 +647,11 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
             server.middlewares.use('/__flu_listen_log', async (req: any, res: any, next: any) => {
                 if (req.method !== 'POST') return next();
                 try {
-                    const body = await parseBody(req);
-                } catch {
+                    const raw = await readRawBody(req);
+                    const lines = raw.split(/\r?\n/).filter(Boolean).length;
+                    console.info(`[geminiProxy] listen log aceptado (no persistido): ${lines} línea(s)`);
+                } catch (err: any) {
+                    console.warn('[geminiProxy] listen log: body ilegible, se acepta igual:', err?.message || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'listen log logged but not persisted' }));
@@ -644,11 +668,15 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                         const { level, tag, message, data } = entry || {};
                         const ts = new Date().toISOString().slice(11, 23);
                         const safeMessage = message ?? '';
-                        if (data) {
+                        if (data !== undefined) {
+                            console.info(`[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`, data);
                         } else {
+                            console.info(`[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`);
                         }
                     }
-                } catch {
+                } catch (err: any) {
+                    // Relay de diagnóstico: no se silencia el fallo de parseo.
+                    console.warn('[geminiProxy] client log: body ilegible, se acepta igual:', err?.message || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true }));
