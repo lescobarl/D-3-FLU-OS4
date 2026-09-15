@@ -56,7 +56,7 @@ function colorFor(kind: AgendaKind): string {
 
 // --- Trigger → próxima ocurrencia (reutiliza scheduleEngine) ---
 function timeOfDayMs(timeOfDay: string): number {
-    return parseTimeOfDayToMs(timeOfDay);
+    return parseTimeOfDayToMs(timeOfDay) ?? 0;
 }
 
 function nextDue(trigger: Trigger, now: number): number {
