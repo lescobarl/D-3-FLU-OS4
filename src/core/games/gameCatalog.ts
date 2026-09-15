@@ -136,6 +136,36 @@ export const GAME_MENU_FRAMES: readonly string[] = Object.freeze([
     'cambiar el juego',
     'menu de juegos',
     'mas juegos',
+    'otra cosa',
+    'jugar otra cosa',
+    'otra actividad',
+    'algo mas',
+]);
+
+/**
+ * Peticiones de INFORMACIÓN que NO son una respuesta del juego activo: las
+ * responde la IA, no el motor (que entraría en ciclo repitiendo la pregunta).
+ * Genérico para TODOS los juegos: el enrutador lo consulta igual para
+ * cualquier partida activa.
+ */
+export const NON_GAME_REQUEST_FRAMES: readonly string[] = Object.freeze([
+    'platicame',
+    'platica',
+    'cuentame',
+    'hablame',
+    'explicame',
+    'dime sobre',
+    'dime acerca',
+    'dime de',
+    'que sabes',
+    'informacion sobre',
+    'informacion de',
+    'ensename',
+    'habla sobre',
+    'cuenta sobre',
+    'explica sobre',
+    'platicame sobre',
+    'platicame de',
 ]);
 
 // --- Catálogo (Fase 2: solo juegos implementados, sin dummies) ---

@@ -70,7 +70,7 @@ export interface ReminderIntentParserOptions {
 // ------------------------------------------------------------
 
 const REMINDER_TRIGGERS_ES =
-  /^(?:recuérdame|recuerdame|recordame|recuerdale|recuérdale|recuerda|recuerdá|acordate|acuerdate|no\s+olvides|pon(?:me)?\s+un\s+recordatorio|pon(?:me)?\s+una\s+alarma)\b\s*(?:de\s+)?(?:que\s+)?/i;
+  /^(?:recuérdame|recuerdame|recordame|recuerdale|recuérdale|recuerda|recuerdá|acordate|acuerdate|no\s+olvides|pon(?:me)?\s+un\s+recordatorio)\b\s*(?:de\s+)?(?:que\s+)?/i;
 const REMINDER_TRIGGERS_EN =
   /^(?:remind\s+me|remind|don'?t\s+forget)\b\s*(?:to\s+)?/i;
 
@@ -208,6 +208,33 @@ function cleanCitaSubject(text: string): string {
     .trim();
 }
 
+/**
+ * Conectores que NUNCA son un asunto cuando encabezan una cláusula de tiempo.
+ * "ponme un recordatorio para el jueves a las 13:00" creaba una cita titulada
+ * "para". El recorte es QUIRÚRGICO: solo se quitan si lo que queda empieza por
+ * una cláusula de tiempo ("…que llame" conserva su contenido).
+ */
+const LEADING_CONNECTORS = /^(?:para|de|del|que|el|la|los|las|un|una|unos|unas|al|a|en|por)\s+/i;
+
+const WHEN_START_MARKERS = WHEN_MARKERS.map(
+  (marker) => new RegExp(`^(?:${marker.pattern.source})`, 'i'),
+);
+
+function startsWithWhenMarker(text: string): boolean {
+  return WHEN_START_MARKERS.some((re) => re.test(text));
+}
+
+function stripLeadingConnectors(text: string): string {
+  let probe = String(text || '').trim();
+  for (let i = 0; i < 4; i += 1) {
+    const match = LEADING_CONNECTORS.exec(probe);
+    if (!match) break;
+    probe = probe.slice(match[0].length).trim();
+    if (startsWithWhenMarker(probe)) return probe;
+  }
+  return String(text || '').trim();
+}
+
 /** Separa el texto del recordatorio de su cláusula 'cuándo'. */
 function splitWhen(remainder: string): { textPart: string; whenClause: string | null } {
   let earliest = -1;
@@ -311,8 +338,9 @@ function buildReminderFromRest(
     }
   }
 
-  // Cláusula 'cuándo' (opcional).
-  const { textPart, whenClause } = splitWhen(remaining);
+  // Cláusula 'cuándo' (opcional). Los conectores iniciales se recortan para
+  // que el asunto nunca quede en una preposición ("para").
+  const { textPart, whenClause } = splitWhen(stripLeadingConnectors(remaining));
   if (!textPart) {
     return { handled: true, action: null, reply: askTextReply(lang) };
   }

@@ -2117,16 +2117,13 @@ function App() {
                         const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
                         if (reply) {
                             localHandledReply = reply;
-                            // Para acciones de ESTADO (alarma/timer) el manejador es
-                            // la fuente de verdad: su reply describe lo que REALMENTE
-                            // se creó (p. ej. "todos los días"). Se habla ese texto en
-                            // vez del del LLM, que puede omitir la recurrencia.
-                            const actionName = String(
-                                readStringProp(effectiveResult.action, 'action') ?? effectiveResult.action ?? '',
-                            );
-                            if (actionName === 'alarm.add' || actionName === 'timer.start') {
-                                respuestaVoz = reply;
-                            }
+                            // El manejador determinista es la fuente de verdad de
+                            // lo que REALMENTE se escribió (recordatorio, alarma,
+                            // nota, diario, horario, agenda): su confirmación
+                            // reemplaza a la del LLM, que puede describir otra
+                            // entidad (p. ej. decir "alarma" cuando se creó una
+                            // cita). Regla única para TODAS las funciones-adición.
+                            respuestaVoz = reply;
                         }
                     }
                 } catch (err) {

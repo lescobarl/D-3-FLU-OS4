@@ -18,6 +18,7 @@ import {
   matchGameIntent,
   END_GAME_FRAMES,
   GAME_MENU_FRAMES,
+  NON_GAME_REQUEST_FRAMES,
   getGameEngine,
 } from '../../core/games/gameCatalog'
 import { getActiveGameSession } from '../../core/games/gameSessionStore'
@@ -47,14 +48,18 @@ const QUESTION_STARTERS = Object.freeze([
   'puedes',
   'me puedes',
   'sabes',
+  'estas',
+  'estan',
+  'hay',
 ]);
 
-function isQuestionLike(normalized) {
-  // El ASR/texto puede traer signos de apertura ("¿cómo estás?"): se ignoran.
-  const clean = normalized.replace(/^[^a-z0-9]+/, '');
-  return QUESTION_STARTERS.some(
-    (starter) => clean === starter || clean.startsWith(`${starter} `),
-  );
+/** ¿El texto limpio (sin puntuación inicial) empieza con alguno de los frames? */
+function startsWithFrame(clean, frames) {
+  return frames.some((frame) => clean === frame || clean.startsWith(`${frame} `));
+}
+
+function isQuestionLike(clean) {
+  return startsWithFrame(clean, QUESTION_STARTERS);
 }
 
 /**
@@ -98,8 +103,12 @@ export function resolveGameCommandFromText(text = '') {
     if (engine && engine.isGameCommand(text)) {
       return { gameId: activeSession.id, action: 'turn', playerText: text }
     }
-    // 5. Pregunta general → que responda la IA (rompe el ciclo).
-    if (isQuestionLike(normalized)) return null
+    // 5. Petición general (pregunta o "platícame de…") → la responde la IA.
+    //    Genérico: mismo criterio para cualquier juego activo (rompe el ciclo).
+    const clean = normalized.replace(/^[^a-z0-9]+/, '')
+    if (isQuestionLike(clean) || startsWithFrame(clean, NON_GAME_REQUEST_FRAMES)) {
+      return null
+    }
     // 6. Respuesta abierta del jugador (el motor decide si es correcta).
     return { gameId: activeSession.id, action: 'turn', playerText: text }
   }
