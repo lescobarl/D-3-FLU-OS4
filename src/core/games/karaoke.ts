@@ -129,7 +129,9 @@ const HINT_FRAMES: readonly string[] = Object.freeze([
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'sigue', 'paso', 'siguiente', 'adelante', 'ya', 'sigo',
+    // 'ya' se EXCLUYE a propósito: aparece dentro de las letras ("cierra los
+    // ojitos ya") y, si fuera control, la canción se auto-avanzaba.
+    'sigue', 'paso', 'siguiente', 'adelante', 'sigo',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([
@@ -243,6 +245,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 state.cursor += 1;
                 session.round += 1;
+                session.score += 1;
                 if (state.cursor >= state.lineas.length) {
                     state.phase = 'done';
                     return {

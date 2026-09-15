@@ -37,9 +37,20 @@ export interface GameSession {
     state: Record<string, unknown>; // estado específico del juego (serializable)
     score: number;
     round: number;
+    /**
+     * Estado POR JUGADOR (multiusuario): clave = participantId. Los juegos de
+     * un solo jugador lo dejan vacío; los de fiesta (lotería, etc.) guardan
+     * aquí la tabla/puntaje de cada participante. Fuente única de aislamiento.
+     */
+    players?: Record<string, Record<string, unknown>>;
 }
 
-export type GameActionType = 'start' | 'turn' | 'end' | 'narrate';
+/** Contexto opcional de un turno: quién habla. */
+export interface GameTurnContext {
+    playerId?: string;
+}
+
+export type GameActionType = 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch';
 
 export interface GameNarrativeScene {
     texto: string;
@@ -51,6 +62,7 @@ export interface GameContract {
     gameId: GameId;
     action: GameActionType;
     playerText?: string;   // respuesta del jugador (turn)
+    playerId?: string;     // hablante del turno (multiusuario)
     narrative?: {          // solo para cuentacuentos / cuento colaborativo
         scenes: GameNarrativeScene[];
     };

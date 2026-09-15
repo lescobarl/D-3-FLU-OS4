@@ -716,6 +716,8 @@ interface ApplyGameContext {
     speakFluRef: React.MutableRefObject<(text: string, lang: string, opts?: GameSpeechOptions) => Promise<void>>;
     /** Reanuda la escucha tras hablar (useNavigationCommands, estable). */
     scheduleResumeListening: (textLength?: number) => void;
+    /** Participante activo (dueño del turno, mismo scope que horario/notas). */
+    participantIdRef: React.MutableRefObject<string | undefined>;
 }
 
 /** Aplica la emoción/animación de un resultado de motor al avatar. */
@@ -830,6 +832,7 @@ interface NormalizedGameAction {
     gameId: string;
     action: string;
     playerText?: string;
+    playerId?: string;
     narrative?: { scenes: Array<{ texto: string; animacion?: string; emocion?: string }> };
 }
 
@@ -903,7 +906,8 @@ async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGame
         return;
     }
     const songBefore = (activeSession.state as { songId?: string } | null)?.songId;
-    const result = engine.turn(activeSession, juegoAction.playerText || '');
+    const playerId = juegoAction.playerId || ctx.participantIdRef?.current;
+    const result = engine.turn(activeSession, juegoAction.playerText || '', { playerId });
     // Juegos musicales: si el turno cambió de canción (ronda nueva), hay que
     // reproducir la del turno. Antes solo se reproducía en `start`, así que a
     // partir de la ronda 2 sonaba la melodía de la primera canción.
@@ -1271,6 +1275,12 @@ function App() {
     const auditLog = useAuditLog();
     // Usuario activo (se declara temprano: lo consumen varios hooks con aislamiento).
     const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
+    // Ref espejo del participante activo para pasarlo por valor a los helpers
+    // module-level (applyGameAction), igual que el resto de flujos scoped.
+    const activeParticipantIdRef = useRef<string | undefined>(activeParticipantId);
+    useEffect(() => {
+        activeParticipantIdRef.current = activeParticipantId;
+    }, [activeParticipantId]);
     const minuteKnowledge = useMinuteKnowledge(activeParticipantId);
     const voiceProfiles = useVoiceProfiles();
     // Historial de documentos/imágenes generados o cargados (por usuario).
@@ -2867,6 +2877,7 @@ function App() {
                         conversationActiveRef,
                         speakFluRef,
                         scheduleResumeListening,
+                        participantIdRef: activeParticipantIdRef,
                     });
                 } catch (err) {
                     console.error('[App] applyGameAction failed (non-critical):', err);

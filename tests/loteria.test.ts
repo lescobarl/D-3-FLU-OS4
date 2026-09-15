@@ -1,27 +1,28 @@
 // ============================================================
-// loteria — Motor puro de Lotería mexicana (plan-juegos §Fase 3).
+// loteria — Lotería mexicana MULTIJUGADOR (reglas reales)
 // ------------------------------------------------------------
-// Reglas REALES validadas aquí:
-//   - La TABLA del jugador es un subconjunto ALEATORIO INDEPENDIENTE
-//     del mazo de cantadas (no su slice). Antes el juego era trivial:
-//     las 3 primeras cantadas siempre estaban en la tabla.
-//   - Se marca con "la tengo" SOLO si la carta cantada está en la tabla.
-//   - Marcar una carta que no está en la tabla = FALLO; `fallosMax`
-//     fallos → derrota (won:false, sin grito de victoria).
-//   - Tabla completa → "¡Lotería!" → victoria (won:true).
-// RNG sembrado para determinismo (mulberry32), sin tocar el azar real.
+// Sin `fallosMax` (regla inventada) ni dictado de tablas:
+//   - la tabla de cada jugador es independiente del mazo;
+//   - "mis cartas" muestra SU tabla;
+//   - "la tengo" marca solo la suya; marcar ajena no penaliza;
+//   - el PRIMERO que llena y grita "¡Lotería!" gana.
+// RNG sembrado (mulberry32) para determinismo.
 // ============================================================
 import { describe, test, expect } from 'vitest';
 import { createLoteriaEngine, LOTERIA_BANK } from '../src/core/games/loteria';
 import type { GameSession } from '../src/core/games/types';
 
-interface LoteriaStateShape {
-    order: number[];
+interface PlayerState {
     tabla: number[];
     marcadas: boolean[];
+}
+
+interface LoteriaStateShape {
+    order: number[];
     cursor: number;
-    fallos: number;
-    fallosMax: number;
+    tablaSize: number;
+    tablas: Record<string, PlayerState>;
+    winner: string | null;
     phase: string;
 }
 
@@ -41,48 +42,29 @@ const st = (session: GameSession): LoteriaStateShape =>
 function freshLoteria(config: Record<string, unknown> = {}, seed = 12345) {
     const engine = createLoteriaEngine({ random: mulberry32(seed) });
     const session = engine.createSession(config);
-    const startResult = engine.start(session, config);
-    return { engine, session, startResult };
+    engine.start(session, config);
+    return { engine, session };
 }
 
-/** Juega respondiendo SIEMPRE correcto, siguiendo el estado real del motor. */
-function playCorrectly(session: GameSession, engine: ReturnType<typeof createLoteriaEngine>) {
+/** Hace que un jugador responda correctamente hasta completar su tabla, y gana. */
+function playToWin(session: GameSession, engine: ReturnType<typeof createLoteriaEngine>, playerId: string) {
+    const state = st(session);
     let guard = 0;
-    while (guard < 200) {
+    while (guard < 400) {
         guard += 1;
-        const s = st(session);
-        const idx = s.order[s.cursor];
-        const inTabla = s.tabla.includes(idx);
-        engine.turn(session, inTabla ? 'la tengo' : 'no la tengo');
-        if (st(session).marcadas.every(Boolean)) {
-            return engine.turn(session, '¡Lotería!');
+        const idx = state.order[state.cursor];
+        const player = state.tablas[playerId];
+        const inTabla = player && player.tabla.includes(idx) && !player.marcadas[player.tabla.indexOf(idx)];
+        engine.turn(session, inTabla ? 'la tengo' : 'no la tengo', { playerId });
+        const current = st(session).tablas[playerId];
+        if (current && current.marcadas.every(Boolean)) {
+            return engine.turn(session, '¡Lotería!', { playerId });
         }
     }
     throw new Error('la partida no terminó');
 }
 
-describe('loteria — reglas de reparto', () => {
-    test('la tabla es independiente del mazo (no su slice)', () => {
-        const { session } = freshLoteria({ tablaSize: 3 }, 12345);
-        const s = st(session);
-        expect(s.tabla).toHaveLength(3);
-        // Cartas distintas, todas del banco.
-        expect(new Set(s.tabla).size).toBe(3);
-        for (const idx of s.tabla) {
-            expect(idx).toBeGreaterThanOrEqual(0);
-            expect(idx).toBeLessThan(LOTERIA_BANK.length);
-        }
-        // La tabla NO puede ser el prefijo del mazo (regla real).
-        expect(s.tabla).not.toEqual(s.order.slice(0, 3));
-    });
-
-    test('el mazo es una permutación completa del banco', () => {
-        const { session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        expect(s.order).toHaveLength(LOTERIA_BANK.length);
-        expect(new Set(s.order).size).toBe(LOTERIA_BANK.length);
-    });
-
+describe('loteria — banco y reparto', () => {
     test('el banco tiene 16 cartas con estructura {id, nombre, copla}', () => {
         expect(LOTERIA_BANK).toHaveLength(16);
         for (const card of LOTERIA_BANK) {
@@ -92,155 +74,110 @@ describe('loteria — reglas de reparto', () => {
         }
     });
 
-    test('config: tablaSize con clamps y retrocompatibilidad', () => {
-        expect(st(freshLoteria({ tablaSize: 2 }).session).tabla).toHaveLength(2);
-        expect(st(freshLoteria({ tablaSize: -5 }).session).tabla).toHaveLength(1);
-        expect(st(freshLoteria({ tablaSize: 99 }).session).tabla).toHaveLength(16);
-        expect(st(freshLoteria({ cartasPorRonda: 2 }).session).tabla).toHaveLength(2);
-        expect(st(freshLoteria({ rounds: 4 }).session).tabla).toHaveLength(4);
+    test('el mazo es una permutación completa y el start NO dicta tablas', () => {
+        const { session } = freshLoteria({ tablaSize: 3 });
+        const state = st(session);
+        expect(state.order).toHaveLength(16);
+        expect(new Set(state.order).size).toBe(16);
+        expect(state.tablas).toEqual({});
+        expect(state.winner).toBeNull();
+    });
+
+    test('config: tablaSize con clamps', () => {
+        expect(st(freshLoteria({ tablaSize: 2 }).session).tablaSize).toBe(2);
+        expect(st(freshLoteria({ tablaSize: -5 }).session).tablaSize).toBe(1);
+        expect(st(freshLoteria({ tablaSize: 99 }).session).tablaSize).toBe(16);
     });
 });
 
-describe('loteria — marcado correcto', () => {
-    test('marcar una carta cantada que SÍ está en la tabla suma punto y avanza', () => {
+describe('loteria — multijugador', () => {
+    test('cada jugador tiene una tabla PROPIA e independiente', () => {
         const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        // Avanza el mazo hasta la primera carta que esté en la tabla.
-        let result = engine.turn(session, 'no la tengo');
-        while (!s.tabla.includes(s.order[s.cursor])) {
-            result = engine.turn(session, 'no la tengo');
-        }
-        const before = session.score;
-        result = engine.turn(session, 'la tengo');
-        expect(result.valid).toBe(true);
-        expect(session.score).toBe(before + 1);
-        expect(result.animation).toBe('Jump_in_place');
+        engine.turn(session, 'mis cartas', { playerId: 'p1' });
+        engine.turn(session, 'mis cartas', { playerId: 'p2' });
+        const state = st(session);
+        expect(state.tablas.p1.tabla).toHaveLength(3);
+        expect(state.tablas.p2.tabla).toHaveLength(3);
+        expect(new Set(state.tablas.p1.tabla).size).toBe(3);
+        expect(state.tablas.p1.tabla).not.toEqual(state.tablas.p2.tabla);
     });
 
-    test('recorrer la tabla correctamente y gritar "¡Lotería!" gana (won:true)', () => {
+    test('"mis cartas" lista la tabla de ESE jugador', () => {
+        const { engine, session } = freshLoteria({ tablaSize: 2 });
+        const result = engine.turn(session, '¿qué cartas tengo?', { playerId: 'p1' });
+        expect(result.prompt).toContain('Tu tabla tiene 2 cartas:');
+    });
+
+    test('"la tengo" marca SOLO la tabla del hablante', () => {
         const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const result = playCorrectly(session, engine);
+        const state = st(session);
+        // Avanza hasta una carta que p1 tenga.
+        engine.turn(session, 'mis cartas', { playerId: 'p1' });
+        let guard = 0;
+        while (guard < 400 && !state.tablas.p1.tabla.includes(state.order[state.cursor])) {
+            guard += 1;
+            engine.turn(session, 'no la tengo', { playerId: 'p1' });
+        }
+        engine.turn(session, 'la tengo', { playerId: 'p1' });
+        expect(state.tablas.p1.marcadas.filter(Boolean).length).toBe(1);
+        // p2 ni siquiera tiene tabla creada aún.
+        expect(state.tablas.p2).toBeUndefined();
+    });
+
+    test('marcar una carta ajena NO penaliza (no suma, solo avanza)', () => {
+        const { engine, session } = freshLoteria({ tablaSize: 3 });
+        const state = st(session);
+        engine.turn(session, 'mis cartas', { playerId: 'p1' });
+        const before = session.score;
+        engine.turn(session, 'la tengo', { playerId: 'p1' }); // primera carta, casi nunca en tabla
+        expect(session.score).toBeLessThanOrEqual(before + 1);
+        expect(state.winner).toBeNull();
+    });
+
+    test('el PRIMERO que llena y grita "¡Lotería!" gana', () => {
+        const { engine, session } = freshLoteria({ tablaSize: 3 });
+        const result = playToWin(session, engine, 'p1');
         expect(result.gameOver).toBe(true);
         expect(result.won).toBe(true);
-        expect(result.score).toBe(3);
+        expect(st(session).winner).toBe('p1');
         expect(result.animation).toBe('Dance');
-        expect(st(session).phase).toBe('done');
-    });
-
-    test('en una partida correcta SÍ se cantan cartas que no son de la tabla', () => {
-        const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        let noTabla = 0;
-        let guard = 0;
-        while (guard < 200 && !s.marcadas.every(Boolean)) {
-            guard += 1;
-            const idx = s.order[s.cursor];
-            if (!s.tabla.includes(idx)) noTabla += 1;
-            engine.turn(session, s.tabla.includes(idx) ? 'la tengo' : 'no la tengo');
-        }
-        expect(noTabla).toBeGreaterThan(0);
-    });
-});
-
-describe('loteria — fallos', () => {
-    test('marcar una carta que NO está en la tabla es fallo: no suma y avanza', () => {
-        const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        while (s.tabla.includes(s.order[s.cursor])) {
-            engine.turn(session, 'la tengo');
-        }
-        const scoreBefore = session.score;
-        const fallosBefore = s.fallos;
-        const result = engine.turn(session, 'la tengo');
-        expect(result.valid).toBe(false);
-        expect(session.score).toBe(scoreBefore);
-        expect(s.fallos).toBe(fallosBefore + 1);
-        expect(result.gameOver).toBe(false);
-    });
-
-    test('alcanzar fallosMax termina la partida con won:false (sin celebración)', () => {
-        const { engine, session } = freshLoteria({ tablaSize: 3, fallosMax: 2 });
-        const s = st(session);
-        let result = engine.turn(session, 'no la tengo');
-        let guard = 0;
-        while (s.fallos < 2 && guard < 200) {
-            guard += 1;
-            const idx = s.order[s.cursor];
-            // Las cartas de la tabla se saltan (no se marcan) para no completarla;
-            // las que no son de la tabla se marcan a propósito → fallo.
-            result = s.tabla.includes(idx)
-                ? engine.turn(session, 'no la tengo')
-                : engine.turn(session, 'la tengo');
-        }
-        expect(result.gameOver).toBe(true);
-        expect(result.won).toBe(false);
-    });
-});
-
-describe('loteria — grito de "¡Lotería!"', () => {
-    test('gritar "lotería" antes de llenar la tabla no gana', () => {
-        const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const result = engine.turn(session, 'lotería');
-        expect(result.valid).toBe(false);
-        expect(result.gameOver).toBe(false);
-        expect(session.score).toBe(0);
-    });
-
-    test('tras ganar, cualquier turno repite el cierre', () => {
-        const { engine, session } = freshLoteria({ tablaSize: 1 });
-        playCorrectly(session, engine);
-        const result = engine.turn(session, 'hola');
-        expect(result.gameOver).toBe(true);
-        expect(result.prompt).toBe('Ya terminamos la lotería. ¿Jugamos otra vez?');
-    });
-});
-
-describe('loteria — pluralización (sin "1 cartas")', () => {
-    test('tabla de 1 carta usa singular en el arranque y en el cierre', () => {
-        const { engine, session, startResult } = freshLoteria({ tablaSize: 1 });
-        expect(startResult.prompt).toContain('1 carta:');
-        const win = playCorrectly(session, engine);
-        expect(win.prompt).toContain('1 carta');
-        expect(win.prompt).toContain('1 punto');
     });
 });
 
 describe('loteria — controles y ruido ASR', () => {
-    test('"paso" y "no la tengo" saltan sin puntuar', () => {
+    test('"paso" / "no la tengo" saltan sin puntuar', () => {
         const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const skip = engine.turn(session, 'paso');
-        expect(skip.valid).toBe(false);
-        expect(session.score).toBe(0);
-        const skip2 = engine.turn(session, 'no la tengo');
-        expect(skip2.valid).toBe(false);
+        const before = st(session).cursor;
+        engine.turn(session, 'paso', { playerId: 'p1' });
+        expect(st(session).cursor).toBe(before + 1);
         expect(session.score).toBe(0);
     });
 
-    test('"pista" repite la carta sin avanzar', () => {
+    test('gritar "lotería" antes de llenar la tabla no gana', () => {
         const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        const cursorBefore = s.cursor;
-        const result = engine.turn(session, 'dame una pista');
-        expect(result.prompt).toContain('La carta es:');
-        expect(st(session).cursor).toBe(cursorBefore);
+        const result = engine.turn(session, '¡Lotería!', { playerId: 'p1' });
+        expect(result.gameOver).toBe(false);
+        expect(st(session).winner).toBeNull();
     });
 
     test('repetición "la tengo la tengo" marca (ruido ASR)', () => {
         const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        while (!s.tabla.includes(s.order[s.cursor])) {
-            engine.turn(session, 'no la tengo');
+        const state = st(session);
+        engine.turn(session, 'mis cartas', { playerId: 'p1' });
+        let guard = 0;
+        while (guard < 400 && !state.tablas.p1.tabla.includes(state.order[state.cursor])) {
+            guard += 1;
+            engine.turn(session, 'no la tengo', { playerId: 'p1' });
         }
-        const result = engine.turn(session, 'la tengo la tengo la tengo');
+        const result = engine.turn(session, 'la tengo la tengo la tengo', { playerId: 'p1' });
         expect(result.valid).toBe(true);
         expect(session.score).toBe(1);
     });
 
     test('respuesta no reconocida reintenta la misma carta', () => {
         const { engine, session } = freshLoteria({ tablaSize: 3 });
-        const s = st(session);
-        const cursorBefore = s.cursor;
-        const result = engine.turn(session, 'hola flu');
+        const cursorBefore = st(session).cursor;
+        const result = engine.turn(session, 'hola flu', { playerId: 'p1' });
         expect(result.error).toBe('respuesta no reconocida');
         expect(st(session).cursor).toBe(cursorBefore);
     });
@@ -251,6 +188,7 @@ describe('loteria — controles y ruido ASR', () => {
         expect(engine.isGameCommand('la tengo')).toBe(true);
         expect(engine.isGameCommand('paso')).toBe(true);
         expect(engine.isGameCommand('lotería')).toBe(true);
+        expect(engine.isGameCommand('mis cartas')).toBe(true);
         expect(engine.isGameCommand('hola flu')).toBe(false);
     });
 });

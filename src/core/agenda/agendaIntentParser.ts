@@ -23,7 +23,7 @@ export interface AgendaIntent {
 const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i;
 
 const QUERY_TRIGGERS_ES =
-  /^(?:qué|que)\s+(?:hay|tengo|tienes|tiene)\s*(?:para\s+)?(?:hoy|el\s+d[ií]a\s+de\s+hoy)\b|^(?:agenda|plan|resumen|resúmeme|resumeme)\s*(?:de\s+|del\s+|para\s+(?:el\s+|la\s+)?)?(?:hoy|el\s+d[ií]a|mi\s+d[ií]a)\b|^(?:dime|muestra|muéstrame|muestrame|dame|ver|enseñame|ensename)\s+(?:mi\s+|la\s+|el\s+)?(?:agenda|plan|resumen|d[ií]a)\b/i;
+  /^(?:qué|que)\s+(?:hay|tengo|tienes|tiene)\s*(?:para\s+)?(?:hoy|el\s+d[ií]a\s+de\s+hoy)\b|^(?:agenda|plan|resumen|resúmeme|resumeme)\s*(?:de\s+|del\s+|para\s+(?:el\s+|la\s+)?)?(?:hoy|el\s+d[ií]a|mi\s+d[ií]a)\b|^(?:dime|cuentame|cuéntame|dame|platícame|platicame)\s+(?:que\s+|qué\s+)?(?:hay|tengo|tienes|tiene)\s*(?:para\s+)?(?:hoy|el\s+d[ií]a\s+de\s+hoy)\b|^(?:dime|muestra|muéstrame|muestrame|dame|ver|enseñame|ensename)\s+(?:mi\s+|la\s+|el\s+)?(?:agenda|plan|resumen|d[ií]a)\b/i;
 
 const QUERY_TRIGGERS_EN =
   /^what(?:'s| is)?\s+(?:on|up|do\s+i\s+have)\s*(?:for\s+)?(?:today|my\s+day)\b|^(?:my|today'?s)\s+(?:agenda|schedule|plan)\b|^show\s+(?:me\s+)?(?:my\s+)?(?:agenda|day|plan)\b/i;

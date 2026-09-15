@@ -162,8 +162,16 @@ describe('karaoke — controles del jugador (pista / saltar)', () => {
             '¡Sigue así! Siguiente línea: "Me pregunto qué serás." Cántala y dime "sigue".'
         );
         expect(result.valid).toBe(true);
-        expect(result.score).toBe(0);
+        expect(result.score).toBe(1);
         expect(session.state.cursor).toBe(1);
+    });
+
+    test('decir una línea que contiene "ya" NO auto-avanza', () => {
+        const { engine, session } = freshKaraoke();
+        const result = engine.turn(session, 'cierra los ojitos ya');
+        expect(result.valid).toBe(false);
+        expect(session.state.cursor).toBe(0);
+        expect(session.score).toBe(0);
     });
 });
 

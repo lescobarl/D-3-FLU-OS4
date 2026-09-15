@@ -77,7 +77,7 @@ export const RIDDLE_BANK: readonly Riddle[] = Object.freeze([
     },
     {
         pregunta: 'Aparezco después de la lluvia, tengo siete colores y no puedes tocarme.',
-        respuesta: ['arcoiris'],
+        respuesta: ['arcoiris', 'arco iris'],
         pista: 'Tiene los colores del arco en el cielo.',
     },
     {

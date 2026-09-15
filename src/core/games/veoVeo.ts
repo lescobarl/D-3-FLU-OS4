@@ -161,8 +161,19 @@ function itemLetter(item: VeoVeoItem): string {
     return stripDiacritics(item.nombre).trim()[0]?.toUpperCase() ?? '?';
 }
 
+/** ¿La inicial es ÚNICA en el banco? Si no, la letra sola es ambigua. */
+function letterIsUnique(letter: string): boolean {
+    return VEO_VEO_BANK.filter((item) => itemLetter(item) === letter).length === 1;
+}
+
 function itemPrompt(item: VeoVeoItem): string {
-    return `Veo una cosita que empieza con la letra ${itemLetter(item)}. ¿Qué es?`;
+    const letter = itemLetter(item);
+    // Si varios objetos comparten la inicial, la pista por letra es ambigua y
+    // el niño puede nombrar otro objeto con la misma inicial: se desambigua con
+    // la categoría (misma fuente de datos, sin valores especiales).
+    return letterIsUnique(letter)
+        ? `Veo una cosita que empieza con la letra ${letter}. ¿Qué es?`
+        : `Veo una cosita que empieza con la letra ${letter} y es ${item.categoria}. ¿Qué es?`;
 }
 
 export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine {
