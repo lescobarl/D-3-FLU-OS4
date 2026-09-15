@@ -21,8 +21,15 @@ describe('auditoría de rutas de ejecución (una por intención)', () => {
         expect(count(app(), /await handleNavigationCommand\(/g)).toBe(1);
     });
 
-    it('respuesta FLU: un único commit (addFluMessage) en App', () => {
-        expect(count(app(), /addFluMessage\(/g)).toBe(1);
+    it('respuesta FLU: un único commit (logFluReply) en el módulo dueño', () => {
+        // El escritor de la fila de FLU vive en UN módulo; App solo lo invoca.
+        expect(count(app(), /addFluMessage\(/g)).toBe(0);
+        expect(count(app(), /logFluReply\(/g)).toBeGreaterThan(0);
+        const logModule = readFileSync(
+            join(process.cwd(), 'src/voice/lib/fluConversationLog.ts'),
+            'utf8',
+        );
+        expect(count(logModule, /addFluMessage\(/g)).toBe(1);
     });
 
     it('acciones de dominio: 1 helper y 2 entradas EXCLUYENTES por hasAcciones', () => {

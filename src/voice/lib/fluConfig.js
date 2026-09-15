@@ -277,6 +277,12 @@ export const FLU_CONFIG = {
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 1400,
     /**
+     * Espera antes de abrir la escucha al COMPLETAR el onboarding (el TTS de
+     * cierre y el cierre del overlay tienen que asentarse). Config-driven:
+     * antes vivía como un `700` literal en App.tsx.
+     */
+    onboardingStartListeningDelayMs: 700,
+    /**
      * Consolidación de BUSCAR: los reinicios del reconocedor entregan el mismo
      * comando en varias revisiones (parcial → completo). Para NO buscar 2 veces,
      * la búsqueda se ejecuta cuando el turno se asienta (la última revisión gana).

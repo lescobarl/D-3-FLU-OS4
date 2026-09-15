@@ -66,6 +66,7 @@ import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocument
 import { isDataUrl } from './lib/formatAdapters';
 import { commitUserTurnRow } from './voice/lib/conversationTurnRow';
 import { createConversationModeController } from './voice/lib/conversationMode';
+import { logFluReply } from './voice/lib/fluConversationLog';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
 import {
@@ -174,7 +175,7 @@ import {
     DEFAULT_AMBIENTE_ID,
 } from './core/environments/environmentRegistry';
 import { useEnvironmentStore } from './store/environmentStore';
-import { getGameEngine } from './core/games/gameCatalog';
+import { getGameEngine, gameMenuNames } from './core/games/gameCatalog';
 import {
     getActiveGameSession,
     setActiveGameSession,
@@ -867,7 +868,25 @@ async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGame
         return;
     }
 
-    if (juegoAction.action === 'start') {
+    // Menú de juegos con partida activa: cierra la partida y ofrece el catálogo
+    // (antes se enrutaba al motor activo y quedaba en ciclo).
+    if (juegoAction.action === 'menu') {
+        clearActiveGameSession();
+        stopMusicForGame(juegoAction.gameId);
+        await speakGameText(
+            `Claro, salimos de la partida. Podemos jugar: ${gameMenuNames().join(', ')}. ¿Cuál eliges?`,
+            ctx,
+        );
+        return;
+    }
+
+    // Cambio de juego: cierra el actual y arranca el nuevo por la MISMA ruta.
+    if (juegoAction.action === 'switch') {
+        clearActiveGameSession();
+        stopMusic();
+    }
+
+    if (juegoAction.action === 'start' || juegoAction.action === 'switch') {
         const config = buildGameConfig(juegoAction.gameId);
         const session = engine.createSession(config);
         const result = engine.start(session, config);
@@ -2572,7 +2591,7 @@ function App() {
             ) {
                 lastResponseRef.current = { key: responseKey, at: nowMs };
                 integrationStore.setLastResponse(respuestaVoz);
-                integrationStore.addFluMessage(respuestaVoz);
+                logFluReply(respuestaVoz);
 
                 // ============================================================
                 // APLICAR EMOCIÓN DE GEMINI ANTES DE SPEAKING
@@ -3287,7 +3306,10 @@ function App() {
                     }
                 });
             };
-            window.setTimeout(tryStartListening, 700);
+            window.setTimeout(
+                tryStartListening,
+                Number(FLU_CONFIG.timing.onboardingStartListeningDelayMs),
+            );
         },
         [conversationMode],
     );

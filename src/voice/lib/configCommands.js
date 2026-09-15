@@ -808,7 +808,14 @@ export function normalizeJuego(raw = null) {
   if (!gameId || !isGameId(gameId)) return null
 
   const action = String(parsed.action || parsed.accion || '').trim()
-  if (action !== 'start' && action !== 'turn' && action !== 'end' && action !== 'narrate') return null
+  if (
+    action !== 'start'
+    && action !== 'turn'
+    && action !== 'end'
+    && action !== 'narrate'
+    && action !== 'menu'
+    && action !== 'switch'
+  ) return null
 
   const result = {
     gameId,

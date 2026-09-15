@@ -119,6 +119,25 @@ export const END_GAME_FRAMES: readonly string[] = Object.freeze([
     'se acabo',
 ]);
 
+/**
+ * Con una partida ACTIVA, frases que piden el MENÚ de juegos (no son un turno
+ * del juego). Sin esto, "¿qué otro juego podemos jugar?" se enrutaba al motor
+ * activo y quedaba en un ciclo infinito.
+ */
+export const GAME_MENU_FRAMES: readonly string[] = Object.freeze([
+    'otro juego',
+    'otros juegos',
+    'que otro juego',
+    'que juegos hay',
+    'que juegos podemos',
+    'a que podemos jugar',
+    'a que jugamos',
+    'cambiar de juego',
+    'cambiar el juego',
+    'menu de juegos',
+    'mas juegos',
+]);
+
 // --- Catálogo (Fase 2: solo juegos implementados, sin dummies) ---
 
 export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
@@ -277,6 +296,20 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
         }
     }
     return null;
+}
+
+/**
+ * Nombre visible de un juego (para menús): su primer alias, capitalizado.
+ * Fuente única: el alias canónico del catálogo; sin lista de títulos aparte.
+ */
+export function gameDisplayName(entry: GameIntentEntry): string {
+    const name = entry.aliases[0] || entry.id;
+    return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Nombres visibles de todos los juegos, en orden del catálogo. */
+export function gameMenuNames(): string[] {
+    return GAME_CATALOG.map(gameDisplayName);
 }
 
 export function getGameEngine(id: GameId): GameEngine | null {

@@ -19,6 +19,7 @@ import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
 import { deriveSearchQuery } from '../voice/lib/audioMath';
 import { setNavSettlePending } from '../voice/lib/navSettleFlag';
+import { logFluReply } from '../voice/lib/fluConversationLog';
 import {
     applyLanguageToHost,
     resolveSearchLanguage,
@@ -96,6 +97,9 @@ export function useNavigationCommands(
         clearResumeListeningTimer();
         await os2SuspendRecognition?.();
         await speakResponse(text, lang, opts);
+        // FLU es un participante: TODA locución suya queda en el historial
+        // (contexto de la IA). Escritor único de la fila: `logFluReply`.
+        logFluReply(text);
         await waitForSpeechIdle();
     }, [clearResumeListeningTimer, os2SuspendRecognition]);
 

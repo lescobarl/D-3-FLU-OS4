@@ -14,7 +14,12 @@
 // ============================================================
 
 import { normalizeForMatch, hasToken } from './configCommands.js'
-import { matchGameIntent, END_GAME_FRAMES } from '../../core/games/gameCatalog'
+import {
+  matchGameIntent,
+  END_GAME_FRAMES,
+  GAME_MENU_FRAMES,
+  getGameEngine,
+} from '../../core/games/gameCatalog'
 import { getActiveGameSession } from '../../core/games/gameSessionStore'
 
 // ------------------------------------------------------------
@@ -22,13 +27,50 @@ import { getActiveGameSession } from '../../core/games/gameSessionStore'
 // ------------------------------------------------------------
 
 /**
+ * Arranques interrogativos: una PREGUNTA general durante una partida no es una
+ * respuesta del juego, y debe responderla la IA (no el motor, que entraría en
+ * ciclo). Los comandos propios del juego ("pista", "paso"…) tienen prioridad
+ * vía `engine.isGameCommand`.
+ */
+const QUESTION_STARTERS = Object.freeze([
+  'que',
+  'como',
+  'por que',
+  'porque',
+  'donde',
+  'cuando',
+  'quien',
+  'cuantos',
+  'cuanta',
+  'cuanto',
+  'para que',
+  'puedes',
+  'me puedes',
+  'sabes',
+]);
+
+function isQuestionLike(normalized) {
+  // El ASR/texto puede traer signos de apertura ("¿cómo estás?"): se ignoran.
+  const clean = normalized.replace(/^[^a-z0-9]+/, '');
+  return QUESTION_STARTERS.some(
+    (starter) => clean === starter || clean.startsWith(`${starter} `),
+  );
+}
+
+/**
  * Deriva un contrato `juego` determinista a partir del texto transcrito.
  * Retorna `null` si no hay evento de juego resoluble (guardia estricta).
  *
- * Orden de resolución (espejo de resolveConfigCommandFromText):
- *   1. ¿Partida activa? → `end` (frase de salida) o `turn` (responder).
- *   2. ¿Intención de iniciar? → `matchGameIntent` → `start`.
- *   3. Nada → null (no es un juego; Gemini arbitra la conversación).
+ * Orden de resolución con partida ACTIVA (evita secuestrar la conversación):
+ *   1. Frase de salida            → `end`
+ *   2. Pide el menú de juegos     → `menu`
+ *   3. Pide OTRO juego concreto   → `switch` (cerrar el actual y abrir el nuevo)
+ *   4. Comando propio del juego   → `turn` (señal positiva del motor)
+ *   5. Pregunta general           → null (la responde la IA, no el motor)
+ *   6. Cualquier otra cosa        → `turn` (respuesta abierta del jugador)
+ * Sin partida activa:
+ *   1. Intención explícita de iniciar → `start`
+ *   2. Nada                           → null
  */
 export function resolveGameCommandFromText(text = '') {
   const normalized = normalizeForMatch(text)
@@ -37,19 +79,35 @@ export function resolveGameCommandFromText(text = '') {
   const activeSession = getActiveGameSession()
 
   if (activeSession) {
-    // 1a. Frase de salida → terminar la partida activa.
+    // 1. Frase de salida → terminar la partida activa.
     if (END_GAME_FRAMES.some((frame) => hasToken(normalized, frame))) {
       return { gameId: activeSession.id, action: 'end' }
     }
-    // 1b. Cualquier otra cosa con partida activa = turno del jugador.
-    //     En modo conversación el niño responde SIN wake word.
+    // 2. Pide el menú de juegos.
+    if (GAME_MENU_FRAMES.some((frame) => hasToken(normalized, frame))) {
+      return { gameId: activeSession.id, action: 'menu' }
+    }
+    // 3. Pide OTRO juego concreto → cambiar (cerrar el actual y abrir el nuevo).
+    const intent = matchGameIntent(text)
+    if (intent && intent.id !== activeSession.id) {
+      return { gameId: intent.id, action: 'switch' }
+    }
+    const engine = getGameEngine(activeSession.id)
+    // 4. Comando propio del juego (pista, paso, "la tengo"…): siempre turno,
+    //    aunque empiece como pregunta.
+    if (engine && engine.isGameCommand(text)) {
+      return { gameId: activeSession.id, action: 'turn', playerText: text }
+    }
+    // 5. Pregunta general → que responda la IA (rompe el ciclo).
+    if (isQuestionLike(normalized)) return null
+    // 6. Respuesta abierta del jugador (el motor decide si es correcta).
     return { gameId: activeSession.id, action: 'turn', playerText: text }
   }
 
-  // 2. Sin partida activa: solo inicia si hay intención explícita y resoluble.
+  // Sin partida activa: solo inicia si hay intención explícita y resoluble.
   const intent = matchGameIntent(text)
   if (intent) return { gameId: intent.id, action: 'start' }
 
-  // 3. Nada → no es un juego.
+  // Nada → no es un juego.
   return null
 }
