@@ -212,10 +212,10 @@ describe('config — soloNewVoiceFactor (sin hardcode)', () => {
         expect(room?.classroomMultiSpeaker).toBe(true);
     });
 
-    it('thresholds de producción: NEW_VOICE 0.64, CONTINUITY 0.70, REUSE 0.70', () => {
+    it('thresholds de producción: NEW_VOICE 0.75, CONTINUITY 0.80, REUSE 0.78', () => {
         const thresholds = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds;
-        expect(thresholds?.cosineNewVoiceThreshold).toBe(0.64);
-        expect(thresholds?.cosineContinuityThreshold).toBe(0.70);
-        expect(thresholds?.productionClusterReuseThreshold).toBe(0.70);
+        expect(thresholds?.cosineNewVoiceThreshold).toBe(0.75);
+        expect(thresholds?.cosineContinuityThreshold).toBe(0.80);
+        expect(thresholds?.productionClusterReuseThreshold).toBe(0.78);
     });
 });

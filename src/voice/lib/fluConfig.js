@@ -73,21 +73,21 @@ export const FLU_CONFIG = {
       conversationMaxAutoSpeakers: 0,
       /** Umbrales de similitud coseno entre embeddings WavLM-SV 512-D (mayor = misma persona). */
       conversationSpeakerThresholds: {
-        /** Bajo de 0.88→0.82: misma persona con variación natural de tono no crea H2/H3. */
-        cosineMatchThreshold: 0.82,
+        /** Misma persona con variación natural de tono NO crea H2/H3. Subido para separar voces claras. */
+        cosineMatchThreshold: 0.85,
         /** Re-identificación room-rematch estricta (512-D L2 + coseno). */
         roomRematchThreshold: 0.80,
         roomRematchThresholdMax: 0.80,
         roomRematchShortThreshold: 0.80,
-        cosineContinuityThreshold: 0.70,
-        cosineNewVoiceThreshold: 0.64,
+        cosineContinuityThreshold: 0.80,
+        cosineNewVoiceThreshold: 0.75,
         /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
         abruptSimilarityDrop: 0.08,
-        cosineRegisteredMatchThreshold: 0.68,
+        cosineRegisteredMatchThreshold: 0.76,
         /** Distancia coseno máxima para pegar al hablante del turno anterior. */
         lastTurnSignatureContinuityDistance: 0.075,
         /** Reutilización de cluster en producción (512-D real). */
-        productionClusterReuseThreshold: 0.70,
+        productionClusterReuseThreshold: 0.78,
         shortUtteranceMaxMs: 1500,
         shortUtteranceThresholdRelax: 0.04,
         /** Con ≥N clusters y frase no corta: sube umbral (evita colapsar voces distintas). */
@@ -103,9 +103,9 @@ export const FLU_CONFIG = {
         turnBoundaryVoicedFactor: 0.32,
         turnBoundaryNewVoiceFactor: 0.82,
         /** Frases cortas inestables: unificar con histórico si coseno ≥ este valor (evita H7/H8). */
-        shortUtteranceHistoricalMatch: 0.66,
+        shortUtteranceHistoricalMatch: 0.74,
         /** <4 palabras: mantener locutor anterior si coseno ≥ 0.68 (evita H5/H7). */
-        shortUtteranceImmediateContinuity: 0.68,
+        shortUtteranceImmediateContinuity: 0.76,
         shortUtteranceImmediateMaxWords: 4,
       },
       /** Matching de perfiles guardados vs clusters (identificación por segmento). */

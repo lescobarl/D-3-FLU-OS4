@@ -13,6 +13,19 @@ export function getFallbackSpeaker(config = FLU_CONFIG) {
   return String(label || '').trim() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 }
 
+/** Umbral del bloque conversationSpeakerThresholds (config-driven; sin literal quemado). */
+function thresholdFromConfig(key, fallback, config = FLU_CONFIG) {
+  const t = config?.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
+  const v = Number(t[key])
+  return Number.isFinite(v) && v > 0 && v <= 1 ? v : fallback
+}
+
+/** Factor de roomCapture (config-driven; sin literal quemado). */
+function roomFactorFromConfig(key, fallback, config = FLU_CONFIG) {
+  const v = Number(config?.voiceIdentity?.capture?.roomCapture?.[key])
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+
 /** Etiqueta automática «Hablante N» desde la plantilla de config. */
 export function autoSpeakerLabel(index = 1, config = FLU_CONFIG) {
   const template =
@@ -121,15 +134,15 @@ export function assignSpeaker(
   rawVector,
   {
     clusters = [],
-    matchThreshold = 0.85,
+    matchThreshold,
     reservedLabels = [],
     preferLabel = '',
     lastSpeaker = '',
     lastSignature = null,
-    continuityThreshold = 0.74,
-    newVoiceThreshold = 0.68,
-    matchThresholdCluster = 0.76,
-    soloNewVoiceFactor = 0.82,
+    continuityThreshold,
+    newVoiceThreshold,
+    matchThresholdCluster,
+    soloNewVoiceFactor,
     config = FLU_CONFIG,
   } = {},
 ) {
@@ -147,10 +160,16 @@ export function assignSpeaker(
 
   const floor = Number(matchThreshold) > 0 && Number(matchThreshold) <= 1
     ? Number(matchThreshold)
-    : 0.85
-  const continuity = Number(continuityThreshold) > 0 ? Number(continuityThreshold) : 0.74
-  const newVoice = Number(newVoiceThreshold) > 0 ? Number(newVoiceThreshold) : 0.68
-  const clusterMatch = Number(matchThresholdCluster) > 0 ? Number(matchThresholdCluster) : 0.76
+    : thresholdFromConfig('cosineMatchThreshold', 0.85, config)
+  const continuity = Number(continuityThreshold) > 0
+    ? Number(continuityThreshold)
+    : thresholdFromConfig('cosineContinuityThreshold', 0.74, config)
+  const newVoice = Number(newVoiceThreshold) > 0
+    ? Number(newVoiceThreshold)
+    : thresholdFromConfig('cosineNewVoiceThreshold', 0.68, config)
+  const clusterMatch = Number(matchThresholdCluster) > 0
+    ? Number(matchThresholdCluster)
+    : thresholdFromConfig('productionClusterReuseThreshold', 0.76, config)
   const autoClusters = clusters.filter(
     (c) =>
       /^Hablante\s+\d+$/i.test(String(c?.label || '').trim()) &&
@@ -161,7 +180,7 @@ export function assignSpeaker(
   const soloNewVoice =
     Number(soloNewVoiceFactor) > 0 && Number(soloNewVoiceFactor) <= 1
       ? Number(soloNewVoiceFactor)
-      : 0.82
+      : roomFactorFromConfig('soloNewVoiceFactor', 0.82, config)
   const newVoiceOpen = soloSession ? newVoice * soloNewVoice : newVoice
 
   const { bestLabel, bestSim } = clusterBestSimilarity(normalized, clusters)
