@@ -160,9 +160,17 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
 
             const normalized = normalizeForMatch(text);
 
-            // ¿Pide pista (paridad)?
+            // ¿Pide pista? Progresiva: paridad → mayor/menor que el medio →
+            // rango cercano. Antes repetía la MISMA paridad hasta `pistasMax`.
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                if (state.pistasUsadas >= state.pistasMax) {
+                const half = Math.floor((state.min + state.max) / 2);
+                const margin = Math.max(1, Math.round((state.max - state.min) / 4));
+                const hints: string[] = [
+                    `mi número es ${state.number % 2 === 0 ? 'par' : 'impar'}`,
+                    `mi número es ${state.number > (state.min + state.max) / 2 ? 'mayor' : 'menor'} que ${half}`,
+                    `mi número está entre ${Math.max(state.min, state.number - margin)} y ${Math.min(state.max, state.number + margin)}`,
+                ];
+                if (state.pistasUsadas >= state.pistasMax || state.pistasUsadas >= hints.length) {
                     return {
                         prompt: 'Ya te di todas mis pistas. ¡Sigue adivinando!',
                         valid: false,
@@ -172,10 +180,10 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
                         emotion: 'neutral',
                     };
                 }
+                const hint = hints[state.pistasUsadas];
                 state.pistasUsadas += 1;
-                const par = state.number % 2 === 0 ? 'par' : 'impar';
                 return {
-                    prompt: `Te doy una pista: mi número es ${par}.`,
+                    prompt: `Te doy una pista: ${hint}.`,
                     valid: false,
                     gameOver: false,
                     score: session.score,
@@ -184,16 +192,17 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
                 };
             }
 
-            // ¿Se rinde / no sabe la respuesta?
+            // ¿Se rinde / no sabe la respuesta? → derrota (sin grito de victoria).
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 state.phase = 'done';
                 return {
-                    prompt: `¡El número era ${state.number}! Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                    prompt: `¡El número era ${state.number}! Terminamos con ${session.score} puntos. ¡Otra vez será!`,
                     valid: false,
                     gameOver: true,
+                    won: false,
                     score: session.score,
                     animation: 'Idle',
-                    emotion: 'happy',
+                    emotion: 'encouraging',
                 };
             }
 

@@ -43,11 +43,12 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = TRIVIA_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    'pista', 'ayuda', 'ayudame', 'dame una pista',
 ]);
 
+// "no sé" = rendirse → SALTAR (antes era código muerto: el hint iba primero).
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'paso', 'siguiente', 'otra', 'sigo', 'no se', 'no sé',
+    'paso', 'siguiente', 'otra', 'sigo', 'no se', 'no sé', 'me rindo',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([
@@ -59,11 +60,17 @@ const END_FRAMES: readonly string[] = Object.freeze([
 ]);
 
 const ORDINAL_ES: Record<string, number> = Object.freeze({
-    primera: 1, primer: 1, uno: 1,
-    segunda: 2, segundo: 2, dos: 2,
-    tercera: 3, tercero: 3, tres: 3,
-    cuarta: 4, cuarto: 4, cuatro: 4,
+    primera: 1, primer: 1,
+    segunda: 2, segundo: 2,
+    tercera: 3, tercero: 3,
+    cuarta: 4, cuarto: 4,
+    quinta: 5, quinto: 5,
 });
+
+/** Palabras cortas/función que no identifican una opción ("la", "un"…). */
+const OPTION_STOPWORDS: ReadonlySet<string> = new Set([
+    'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'al', 'y', 'o', 'en', 'con',
+]);
 
 type RandomSource = () => number;
 
@@ -92,9 +99,15 @@ function currentPrompt(state: TriviaState): string {
 }
 
 function resolveOptionIndex(normalized: string, question: TriviaQuestion): number | null {
-    // 1) Texto de la opción ("el gato").
+    // 1) Texto completo de la opción ("la luna") o su palabra significativa
+    //    ("luna"): exigir la frase completa rechazaba respuestas naturales.
     for (let i = 0; i < question.opciones.length; i += 1) {
-        if (hasToken(normalized, question.opciones[i])) return i;
+        const option = question.opciones[i];
+        if (hasToken(normalized, option)) return i;
+        const keywords = option
+            .split(/\s+/)
+            .filter((token) => token.length >= 4 && !OPTION_STOPWORDS.has(token));
+        if (keywords.some((keyword) => hasToken(normalized, keyword))) return i;
     }
     // 2) Número / ordinal ("la opción 2", "la segunda").
     const num = resolveNumericAnswer(normalized);
@@ -108,8 +121,8 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
             if (idx >= 0 && idx < question.opciones.length) return idx;
         }
     }
-    // 3) Letra ("la b").
-    const letter = normalized.match(/\b([abcd])\b/);
+    // 3) Letra ("la b"): el banco admite hasta 5 opciones (a–e).
+    const letter = normalized.match(/\b([a-e])\b/);
     if (letter) {
         const idx = letter[1].charCodeAt(0) - 97;
         if (idx >= 0 && idx < question.opciones.length) return idx;

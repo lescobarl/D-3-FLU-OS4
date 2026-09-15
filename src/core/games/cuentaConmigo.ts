@@ -47,18 +47,12 @@ interface CuentaConmigoState {
 }
 
 export function createCuentaConmigoEngine(_options?: { random?: RandomSource }): GameEngine {
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-        }
-    };
-
     const readHasta = (cfg: Record<string, unknown> | undefined): number => {
         const hasta = Number(cfg?.hasta) || DEFAULT_HASTA;
         return clamp(hasta, 3, MAX_HASTA);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentaConmigoState => {
-        adoptRandom(cfg);
         const state: CuentaConmigoState = {
             siguiente: 2,
             hasta: readHasta(cfg),
@@ -74,7 +68,6 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         id: 'cuenta_conmigo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
             return {
                 id: 'cuenta_conmigo',
                 state: {

@@ -136,11 +136,20 @@ describe('trivia — controles del jugador (pista / saltar)', () => {
         expect(session.round).toBe(1);
     });
 
-    test('"no sé" entrega pista (no salta: hint tiene prioridad)', () => {
+    test('"no sé" se rinde: salta a la siguiente pregunta (no es pista)', () => {
         const { engine, session } = freshTrivia();
         const result = engine.turn(session, 'no sé');
-        expect(result.prompt).toBe('Aquí va una pista: Es un felino que ronronea.');
-        expect(session.round).toBe(1);
+        expect(result.valid).toBe(false);
+        expect(result.gameOver).toBe(false);
+        expect(result.prompt.startsWith('¡Claro! Aquí va otra:')).toBe(true);
+    });
+
+    test('acepta la palabra significativa de la opción ("luna" de "la luna")', () => {
+        const { engine, session } = freshTrivia();
+        // Primera pregunta del banco con rng identidad: respuesta 'el gato' → "gato".
+        const result = engine.turn(session, 'gato');
+        expect(result.valid).toBe(true);
+        expect(session.score).toBe(1);
     });
 
     test('"paso" salta a la siguiente pregunta sin puntuar', () => {

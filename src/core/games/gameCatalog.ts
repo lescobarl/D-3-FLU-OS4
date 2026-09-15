@@ -210,7 +210,8 @@ export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
         id: 'cuento_colaborativo',
         aliases: ['cuento colaborativo', 'hagamos un cuento', 'inventemos un cuento', 'cuento juntos'],
         engine: createCuentoColaborativoEngine,
-        requiresApi: true,
+        // 100% local (no implementa `narrate`): el flag `requiresApi` era falso.
+        requiresApi: false,
     },
     {
         id: 'repite_traduce',

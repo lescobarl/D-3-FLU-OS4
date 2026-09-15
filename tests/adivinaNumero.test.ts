@@ -68,7 +68,8 @@ describe('adivinaNumero — acierto y fin', () => {
         expect(result.valid).toBe(false);
         expect(result.gameOver).toBe(true);
         expect(result.score).toBe(0);
-        expect(result.prompt).toBe('¡El número era 1! Terminamos con 0 puntos. ¡Muy bien jugado!');
+        expect(result.prompt).toBe('¡El número era 1! Terminamos con 0 puntos. ¡Otra vez será!');
+        expect(result.won).toBe(false);
     });
 });
 

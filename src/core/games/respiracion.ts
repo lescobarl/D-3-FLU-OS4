@@ -54,18 +54,12 @@ function stepPrompt(step: number): string {
 }
 
 export function createRespiracionEngine(_options?: { random?: RandomSource }): GameEngine {
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-        }
-    };
-
     const readRondas = (cfg: Record<string, unknown> | undefined): number => {
         const rondas = Number(cfg?.rondas) || Number(cfg?.defaultRondas) || DEFAULT_RONDAS;
         return clamp(rondas, 1, MAX_RONDAS);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RespiracionState => {
-        adoptRandom(cfg);
         const state: RespiracionState = {
             step: 0,
             totalSteps: readRondas(cfg) * 2,
@@ -81,7 +75,6 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         id: 'respiracion',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
             return {
                 id: 'respiracion',
                 state: {
