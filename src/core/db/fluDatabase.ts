@@ -14,6 +14,7 @@ import type { EnvironmentDefinition } from '../environments/environmentRegistry'
 import type { PaletteDefinition } from '../branding/seasonalPalettes';
 import type { SearchSite } from '../search/searchSiteTypes';
 import type { ReminderRepeat, TemporalItemRecord } from '../temporal/temporalTypes';
+import type { AgendaItem } from '../agenda/agendaModel';
 import type { ConversationEntry } from '../../types/bridge';
 
 // -----------------------------------------------------------
@@ -617,6 +618,7 @@ export class FluDatabase extends Dexie {
     searchSites!: EntityTable<SearchSiteRecord, 'id'>;
     notes!: EntityTable<NoteRecord, 'id'>;
     documents!: EntityTable<DocumentRecord, 'id'>;
+    agenda!: EntityTable<AgendaItem, 'id'>;
 
     constructor() {
         super('flu-os3');
@@ -721,6 +723,13 @@ export class FluDatabase extends Dexie {
             documents: 'id, kind, formato, createdAt, personId',
         });
 
+        // v21: Calendario UNIFICADO — alarma/recordatorio/cita/junta/clase en una
+        // sola tabla. El color se deriva en LECTURA (FLU_CONFIG.agenda.colors),
+        // no se guarda.
+        this.version(21).stores({
+            agenda: 'id, kind, status, personId',
+        });
+
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
         this.minutes = this.table('minutes');
@@ -746,6 +755,7 @@ export class FluDatabase extends Dexie {
         this.searchSites = this.table('searchSites');
         this.notes = this.table('notes');
         this.documents = this.table('documents');
+        this.agenda = this.table('agenda');
     }
 }
 
