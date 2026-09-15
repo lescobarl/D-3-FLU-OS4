@@ -65,6 +65,7 @@ import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
 import { isDataUrl } from './lib/formatAdapters';
 import { commitUserTurnRow } from './voice/lib/conversationTurnRow';
+import { createConversationModeController } from './voice/lib/conversationMode';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
 import {
@@ -2977,6 +2978,22 @@ function App() {
         handleNavigationCommand,
     } = navigationCommands;
 
+    // Dueño ÚNICO del modo conversación: nadie más escribe
+    // `conversationActiveRef.current`. Abrir la escucha en conversación pasa
+    // siempre por aquí (botón y arranque automático tras onboarding).
+    const conversationMode = useMemo(
+        () =>
+            createConversationModeController({
+                conversationActiveRef,
+                startListening: os2StartListening,
+            }),
+        [os2StartListening],
+    );
+
+    // Entrada ÚNICA de "abrir escucha" desde la UI (puente del avatar):
+    // delega en el dueño del modo para no abrir en comando por accidente.
+    const openListeningFromUi = useCallback(() => conversationMode.open(), [conversationMode]);
+
     // Keep speakFluRef in sync so onContractResolved always reads the latest speakFlu
     speakFluRef.current = speakFlu;
 
@@ -3240,7 +3257,10 @@ function App() {
                 } catch {
                     // Sin habla activa / timeout: continuar igual.
                 }
-                os2StartListening({ resume: true }).catch((err: unknown) => {
+                // Abre la escucha EN MODO CONVERSACIÓN (dueño único del modo):
+                // antes se arrancaba sin fijar el modo y quedaba en comando
+                // (wake word + temporizadores de dictado → tarde y de golpe).
+                conversationMode.open({ resume: true }).catch((err: unknown) => {
                     const errorName = err instanceof Error ? err.name : '';
                     const blocked =
                         errorName === 'not-allowed' ||
@@ -3254,7 +3274,7 @@ function App() {
                         };
                         const startOnGesture = () => {
                             cleanup();
-                            os2StartListening({ resume: true }).catch((err2: unknown) =>
+                            conversationMode.open({ resume: true }).catch((err2: unknown) =>
                                 console.warn('[App] escucha tras gesto del usuario falló:', err2),
                             );
                         };
@@ -3269,7 +3289,7 @@ function App() {
             };
             window.setTimeout(tryStartListening, 700);
         },
-        [os2StartListening],
+        [conversationMode],
     );
 
     // Al COMPLETAR el onboarding (primer arranque, perfil nuevo o re-entrega en
@@ -4597,8 +4617,8 @@ const {
         if (voiceStatus === 'processing') return;
 
         if (voiceStatus === 'listening') {
-            // OS2 parity: conversationActiveRef.current = false on close (FluShell.jsx line 1021)
-            conversationActiveRef.current = false;
+            // OS2 parity: se sale del modo conversación (dueño único: el controlador)
+            conversationMode.exit();
             
             // Solo cancelar si realmente hay speech activo y es necesario
             const synth = window.speechSynthesis;
@@ -4622,8 +4642,7 @@ const {
             return;
         }
 
-        // OS2 parity: conversationActiveRef.current = true on open (FluShell.jsx line 1030 via openListeningSession)
-        conversationActiveRef.current = true;
+        // El modo conversación lo fija `conversationMode.open()` (dueño único).
         
         // Solo cancelar si realmente hay speech activo
         const synth = window.speechSynthesis;
@@ -4640,8 +4659,8 @@ const {
                 console.warn('[App] ABRIR_ESCUCHA speech failed:', speechErr);
             }
         }
-        await os2StartListening({ resume: true });
-    }, [voiceStatus, language, os2StartListening, os2StopListening]);
+        await conversationMode.open({ resume: true });
+    }, [voiceStatus, language, conversationMode, os2StopListening]);
 
     // ============================================================
     // OS2 parity: handleStartConversation (Gap E)
@@ -4669,17 +4688,17 @@ const {
         integrationStore.resetConversationHistory();
         auditLog.clearAll().catch(console.error);
 
-        // OS2 parity: conversationActiveRef.current = true (FluShell.jsx line 999)
-        conversationActiveRef.current = true;
+        // OS2 parity: se entra al modo conversación (dueño único: el controlador)
+        conversationMode.enter();
 
         if (wasListening) {
             await os2StopListening({ closing: false }).catch((err) => console.warn('[App] fallo al detener la escucha:', err));
-            await os2StartListening({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
+            await conversationMode.open({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
             return;
         }
 
-        await os2StartListening({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
-    }, [language, voiceStatus, integrationStore, auditLog, os2StartListening, os2StopListening]);
+        await conversationMode.open({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
+    }, [language, voiceStatus, integrationStore, auditLog, conversationMode, os2StopListening]);
 
     // ============================================================
     // OS2 parity: handleRemoveParticipant (Gap G)
@@ -5136,7 +5155,7 @@ const {
                                 voiceError,
                                 liveTranscript,
                                 lastTranscript,
-                                onStartListening: os2StartListening,
+                                onStartListening: openListeningFromUi,
                                 onStopListening: os2StopListening,
                                 onToggleListening: handleToggleListening,
                                 onParticipantEmotionRef: participantEmotionRef,
