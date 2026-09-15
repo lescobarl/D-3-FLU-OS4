@@ -15,6 +15,7 @@ import type { PaletteDefinition } from '../branding/seasonalPalettes';
 import type { SearchSite } from '../search/searchSiteTypes';
 import type { ReminderRepeat, TemporalItemRecord } from '../temporal/temporalTypes';
 import type { AgendaItem } from '../agenda/agendaModel';
+import { mapLegacyToAgenda } from '../agenda/agendaMigration';
 import type { ConversationEntry } from '../../types/bridge';
 
 // -----------------------------------------------------------
@@ -725,10 +726,19 @@ export class FluDatabase extends Dexie {
 
         // v21: Calendario UNIFICADO — alarma/recordatorio/cita/junta/clase en una
         // sola tabla. El color se deriva en LECTURA (FLU_CONFIG.agenda.colors),
-        // no se guarda.
-        this.version(21).stores({
-            agenda: 'id, kind, status, personId',
-        });
+        // no se guarda. La migración COPIA los datos viejos (reminders/temporal/
+        // horario) a `agenda` sin borrarlos (no destructiva).
+        this.version(21)
+            .stores({
+                agenda: 'id, kind, status, personId',
+            })
+            .upgrade(async (tx) => {
+                const reminders = await tx.table<ReminderRecord, 'id'>('reminders').toArray();
+                const temporals = await tx.table<TemporalItemRecord, 'id'>('temporalItems').toArray();
+                const horario = await tx.table<HorarioRecord, 'id'>('horario').toArray();
+                const items = mapLegacyToAgenda({ reminders, temporals, horario });
+                await tx.table<AgendaItem, 'id'>('agenda').bulkAdd(items);
+            });
 
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
