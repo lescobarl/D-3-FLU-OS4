@@ -2872,7 +2872,16 @@ function App() {
             // ============================================================
             if (juegoAction?.action) {
                 try {
-                    await applyGameAction(juegoAction, {
+                    // Diarización: el dueño del turno es el HABLANTE real, no el
+                    // participante activo. Se reutiliza el mapeo único
+                    // etiqueta→participante del servicio de participantes.
+                    let playerId = (juegoAction as { playerId?: string }).playerId;
+                    if (!playerId && speakerName) {
+                        const speakerParticipant =
+                            await participants.service.resolveParticipantBySpeakerLabel(speakerName);
+                        playerId = speakerParticipant?.id;
+                    }
+                    await applyGameAction({ ...juegoAction, playerId }, {
                         languageRef,
                         conversationActiveRef,
                         speakFluRef,
