@@ -71,7 +71,7 @@ describe('abecedario — respuesta correcta', () => {
         expect(result.animation).toBe('Jump_in_place');
         expect(result.emotion).toBe('happy');
         expect(result.prompt).toBe(
-            '¡Correcto! Ahora dime una palabra que empiece con la letra "b".'
+            '¡Muy bien! "abeja" empieza con la "a". Ahora dime una palabra que empiece con la letra "b".'
         );
     });
 
@@ -85,8 +85,16 @@ describe('abecedario — respuesta correcta', () => {
         expect(result.score).toBe(3);
         expect(result.animation).toBe('Dance');
         expect(result.prompt).toBe(
-            '¡Muy bien! "casa" empieza con la "c". Completaste 3 letras con 3 puntos. ¡Conoces el abecedario!'
+            '¡Muy bien! "caballo" empieza con la "c". Completaste 3 letras con 3 puntos. ¡Conoces el abecedario!'
         );
+    });
+
+    test('stopwords NO cuentan como palabra ("el", "lo", "se", "te"…)', () => {
+        const { engine, session } = freshAbecedario();
+        expect(engine.turn(session, 'el').valid).toBe(false);
+        expect(engine.turn(session, 'lo').valid).toBe(false);
+        expect(engine.turn(session, 'es').valid).toBe(false);
+        expect(session.score).toBe(0);
     });
 });
 

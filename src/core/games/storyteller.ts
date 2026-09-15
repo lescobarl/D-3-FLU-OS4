@@ -140,16 +140,25 @@ export function sanitizeScenes(
  * Personaliza un cuento con el nombre de un participante (F2).
  * Sustituye el token `{nombre}` en título y escenas; si el título no
  * lleva token, lo antepone ("Un cuento para {nombre}: ...").
- * Sin participante devuelve el cuento sin cambios (determinista).
+ * SIN participante usa un nombre neutro ("nuestro amigo"): antes devolvía
+ * el cuento intacto y FLU narraba literalmente "{nombre}" en voz alta.
  */
+export const STORY_FALLBACK_NAME = 'nuestro amigo';
+
 export function personalizeStory(story: Story, participantName?: string): Story {
     const name = (participantName ?? '').trim();
-    if (!name) return story;
-    const token = /\{nombre\}/gi;
-    const replace = (text: string): string => text.replace(token, name);
+    const value = name || STORY_FALLBACK_NAME;
+    const replace = (text: string): string =>
+        text.replace(/\{nombre\}/gi, (_match, offset: number) => {
+            const before = text.slice(0, offset).trimEnd();
+            const atSentenceStart = before.length === 0 || /[.!?¡¿]$/.test(before);
+            return atSentenceStart ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+        });
     const titulo = /\{nombre\}/i.test(story.titulo)
         ? replace(story.titulo)
-        : `Un cuento para ${name}: ${story.titulo}`;
+        : name
+            ? `Un cuento para ${name}: ${story.titulo}`
+            : story.titulo;
     return {
         titulo,
         escenas: story.escenas.map((scene) => ({ ...scene, texto: replace(scene.texto) })),

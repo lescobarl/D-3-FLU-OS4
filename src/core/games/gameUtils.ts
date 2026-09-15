@@ -58,7 +58,7 @@ export function shuffleOrder(rng: RandomSource, length: number): number[] {
     return order;
 }
 
-/** Números del 0 al 20 en español (palabras), para resolver respuestas numéricas. */
+/** Números en español (0-100) en palabras, para resolver respuestas numéricas. */
 export const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
     cero: 0,
     uno: 1,
@@ -82,22 +82,60 @@ export const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
     dieciocho: 18,
     diecinueve: 19,
     veinte: 20,
+    veintiuno: 21,
+    veintidos: 22,
+    veintidós: 22,
+    veintitres: 23,
+    veintitrés: 23,
+    veinticuatro: 24,
+    veinticinco: 25,
+    veintiseis: 26,
+    veintiséis: 26,
+    veintisiete: 27,
+    veintiocho: 28,
+    veintinueve: 29,
+    treinta: 30,
+    cuarenta: 40,
+    cincuenta: 50,
+    sesenta: 60,
+    setenta: 70,
+    ochenta: 80,
+    noventa: 90,
+    cien: 100,
+    ciento: 100,
 });
 
 /**
  * Resuelve una respuesta numérica a partir de texto normalizado.
- * Acepta dígitos ("7", "7.5") y palabras en español 0-20 ("siete").
+ * Acepta dígitos ("7", "7.5"), palabras 0-100 ("siete", "veinticinco") y
+ * compuestos con "y" ("treinta y cinco" → 35). Devuelve el ÚLTIMO número de
+ * la frase: el niño suele cerrar con su respuesta ("después del 2 viene el 3").
  */
 export function resolveNumericAnswer(normalized: string): number | null {
-    const digits = normalized.match(/(\d+(?:[.,]\d+)?)/);
-    if (digits) {
-        const value = Number.parseFloat(digits[1].replace(',', '.'));
+    const digitMatches = [...normalized.matchAll(/(\d+(?:[.,]\d+)?)/g)];
+    if (digitMatches.length > 0) {
+        const raw = digitMatches[digitMatches.length - 1][1];
+        const value = Number.parseFloat(raw.replace(',', '.'));
         if (Number.isFinite(value)) return Math.round(value);
     }
-    for (const token of normalized.split(/\s+/)) {
-        if (token in NUMBER_WORDS_ES) return NUMBER_WORDS_ES[token];
+
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    const found: number[] = [];
+    for (let i = 0; i < tokens.length; i += 1) {
+        const token = tokens[i];
+        if (!(token in NUMBER_WORDS_ES)) continue;
+        let value = NUMBER_WORDS_ES[token];
+        // Decena + "y" + unidad: "treinta y cinco" → 35.
+        if (value >= 30 && value % 10 === 0 && tokens[i + 1] === 'y') {
+            const unit = NUMBER_WORDS_ES[tokens[i + 2]];
+            if (unit >= 1 && unit <= 9) {
+                value += unit;
+                i += 2;
+            }
+        }
+        found.push(value);
     }
-    return null;
+    return found.length > 0 ? found[found.length - 1] : null;
 }
 
 /**

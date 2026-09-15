@@ -34,7 +34,7 @@ export const SONG_BANK: readonly SongOption[] = Object.freeze([
         id: 'sueño',
         titulo: 'Sueño de Bunny',
         pista: 'Habla de dormir y soñar con conejitos.',
-        alias: ['sueno de bunny', 'bunny'],
+        alias: ['sueno de bunny', 'bunny', 'sueno'],
     },
     {
         id: 'baila',

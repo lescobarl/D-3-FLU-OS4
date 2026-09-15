@@ -74,15 +74,27 @@ function itemAt(state: AbecedarioState): AbecedarioItem | null {
     return index === undefined ? null : ABECEDARIO_BANK[index];
 }
 
-/** ¿Alguna palabra dicha por el niño empieza con la letra objetivo? */
-function startsWithLetter(normalized: string, letra: string): boolean {
+/**
+ * Palabras función que NO cuentan como "una palabra que empieza con…":
+ * sin esto, "el", "lo", "se", "te", "mi"… daban acierto gratis y se ganaba
+ * el juego sin decir una palabra real.
+ */
+const STOPWORDS_ES: ReadonlySet<string> = new Set([
+    'el', 'la', 'lo', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'del',
+    'es', 'en', 'se', 'si', 'te', 'tu', 'tus', 'me', 'mi', 'mis', 'su', 'sus',
+    'no', 'ni', 'por', 'para', 'que', 'con', 'de', 'y', 'o', 'le', 'les',
+    'muy', 'ya', 'hay', 'son', 'mas', 'tan', 'sin',
+]);
+
+/** Palabra REAL dicha por el niño que empieza con la letra objetivo, o null. */
+function matchedWord(normalized: string, letra: string): string | null {
     const target = letra.toLowerCase();
     for (const token of normalized.split(/\s+/)) {
-        if (token.length >= 2 && token.startsWith(target)) {
-            return true;
+        if (token.length >= 2 && token.startsWith(target) && !STOPWORDS_ES.has(token)) {
+            return token;
         }
     }
-    return false;
+    return null;
 }
 
 export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine {
@@ -196,15 +208,15 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
                 };
             }
 
-            // ¿Acierta? Cualquier palabra con la letra inicial o la del banco.
-            const acierto = startsWithLetter(normalized, item.letra) || hasToken(normalized, item.palabra);
-            if (acierto) {
+            // ¿Acierta? Una palabra REAL del niño con la letra inicial.
+            const word = matchedWord(normalized, item.letra);
+            if (word) {
                 session.score += 1;
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
                     return {
-                        prompt: `¡Muy bien! "${item.palabra}" empieza con la "${item.letra}". Completaste ${state.maxRounds} letras con ${session.score} puntos. ¡Conoces el abecedario!`,
+                        prompt: `¡Muy bien! "${word}" empieza con la "${item.letra}". Completaste ${state.maxRounds} letras con ${session.score} puntos. ¡Conoces el abecedario!`,
                         valid: true,
                         gameOver: true,
                         score: session.score,
@@ -215,7 +227,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
                 state.cursor += 1;
                 const next = itemAt(state);
                 return {
-                    prompt: `¡Correcto! Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`,
+                    prompt: `¡Muy bien! "${word}" empieza con la "${item.letra}". Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`,
                     valid: true,
                     gameOver: false,
                     score: session.score,

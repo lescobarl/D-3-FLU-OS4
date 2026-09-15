@@ -7,7 +7,7 @@
 // acertadas. Validación normalizada sin acentos.
 //
 // Controles del jugador:
-//   "pista" / "ayuda"    → revela la primera letra oculta
+//   "pista" / "ayuda"    → da la PISTA (categoría), sin revelar letras
 //   "paso" / "siguiente" → revela la palabra y salta
 // Gana al completar la palabra; pierde al agotar los intentos.
 // ============================================================
@@ -23,7 +23,7 @@ export interface AhorcadoWord {
 }
 
 export const AHORCADO_BANK: readonly AhorcadoWord[] = Object.freeze([
-    { palabra: 'agua', pista: 'La bebes para tener sed.' },
+    { palabra: 'agua', pista: 'La bebes cuando tienes sed.' },
     { palabra: 'sol', pista: 'Brilla en el cielo de día.' },
     { palabra: 'luna', pista: 'La ves de noche acompañando a las estrellas.' },
     { palabra: 'gato', pista: 'Es un animal que dice miau.' },
@@ -44,12 +44,35 @@ const DEFAULT_INTENTOS = 6;
 const MAX_INTENTOS = 10;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    'pista', 'ayuda', 'ayudame', 'dame una pista',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'paso', 'siguiente', 'otra palabra', 'no se', 'no sé', 'sigo',
+    'paso', 'siguiente', 'otra palabra', 'no se', 'no sé', 'sigo', 'me rindo',
 ]);
+
+/**
+ * Nombres hablados de las letras (ASR transcribe "eme", no "m"). Sin esto,
+ * una respuesta válida por voz no se reconocía como letra.
+ */
+const LETTER_NAMES: Record<string, string> = Object.freeze({
+    a: 'a', be: 'b', ce: 'c', de: 'd', e: 'e', efe: 'f', ge: 'g', hache: 'h',
+    i: 'i', jota: 'j', ka: 'k', ele: 'l', eme: 'm', ene: 'n', o: 'o', pe: 'p',
+    cu: 'q', erre: 'r', ese: 's', te: 't', u: 'u', uve: 'v', equis: 'x',
+    ye: 'y', zeta: 'z',
+});
+
+/** Letra dicha por el niño: nombre hablado ("eme") o letra suelta ("m"). */
+function extractLetter(normalized: string): string | null {
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    for (const token of tokens) {
+        if (Object.prototype.hasOwnProperty.call(LETTER_NAMES, token)) return LETTER_NAMES[token];
+    }
+    for (const token of tokens) {
+        if (/^[a-z]$/.test(token)) return token;
+    }
+    return null;
+}
 
 const END_FRAMES: readonly string[] = Object.freeze([
     'salir del juego',
@@ -161,41 +184,30 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
             }
 
             const normalized = normalizeForMatch(text);
-            const finish = (prompt: string, valid: boolean, emotion: string): GameTurnResult => {
+            const finish = (
+                prompt: string,
+                valid: boolean,
+                emotion: string,
+                won: boolean,
+            ): GameTurnResult => {
                 state.phase = 'done';
                 return {
                     prompt,
                     valid,
                     gameOver: true,
+                    won,
                     score: session.score,
-                    animation: 'Dance',
+                    animation: won ? 'Dance' : 'Idle',
                     emotion,
                 };
             };
 
-            // ¿Pide pista?
+            // ¿Pide pista? → la PISTA (categoría), nunca revela letras:
+            // antes la pista destapaba letras sin coste (se ganaba pidiendo
+            // "pista" repetidas veces) y anulaba el juego.
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                const hidden = state.palabra
-                    .split('')
-                    .find((ch) => !state.adivinadas.includes(ch));
-                if (hidden && !state.adivinadas.includes(hidden)) {
-                    state.adivinadas.push(hidden);
-                    state.intentos = Math.max(1, state.intentos - 1);
-                    if (isComplete(state)) {
-                        session.score += 1;
-                        return finish(`¡Correcto! La palabra era ${state.palabra}. ¡Eres muy listo!`, true, 'happy');
-                    }
-                    return {
-                        prompt: `Aquí va una pista: la letra "${hidden}" está en la palabra. ${displayWord(state)} Quedan ${state.intentos} intentos.`,
-                        valid: false,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Idle',
-                        emotion: 'thinking',
-                    };
-                }
                 return {
-                    prompt: `Pista: ${state.pista}`,
+                    prompt: `Pista: ${state.pista} ${displayWord(state)} Dime una letra.`,
                     valid: false,
                     gameOver: false,
                     score: session.score,
@@ -204,22 +216,21 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                 };
             }
 
-            // ¿La palabra completa?
-            if (normalized === state.palabra) {
+            // ¿La palabra completa? (acepta que venga dentro de la frase:
+            // "la palabra es agua").
+            if (hasToken(normalized, state.palabra)) {
                 state.adivinadas = state.palabra.split('');
                 session.score += 1;
-                return finish(`¡Correcto! La palabra era ${state.palabra}. ¡Eres muy listo!`, true, 'happy');
+                return finish(`¡Correcto! La palabra era ${state.palabra}. ¡Eres muy listo!`, true, 'happy', true);
             }
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                return finish(`La palabra era ${state.palabra}. ¡Jugamos otra y la adivinas!`, false, 'neutral');
+                return finish(`La palabra era ${state.palabra}. ¡Jugamos otra y la adivinas!`, false, 'neutral', false);
             }
 
-            // ¿Dice una letra?
-            const letter = normalized
-                .split(/\s+/)
-                .find((token) => /^[a-z]$/.test(token));
+            // ¿Dice una letra (nombre hablado o letra suelta)?
+            const letter = extractLetter(normalized);
             if (letter) {
                 if (state.adivinadas.includes(letter)) {
                     return {
@@ -235,7 +246,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                     state.adivinadas.push(letter);
                     if (isComplete(state)) {
                         session.score += 1;
-                        return finish(`¡Correcto! La palabra era ${state.palabra}. ¡Eres muy listo!`, true, 'happy');
+                        return finish(`¡Correcto! La palabra era ${state.palabra}. ¡Eres muy listo!`, true, 'happy', true);
                     }
                     return {
                         prompt: `¡La letra "${letter}" está! ${displayWord(state)} Sigue así.`,
@@ -248,7 +259,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                 }
                 state.intentos -= 1;
                 if (state.intentos <= 0) {
-                    return finish(`Se acabaron los intentos. La palabra era ${state.palabra}. ¡Otra vez será!`, false, 'neutral');
+                    return finish(`Se acabaron los intentos. La palabra era ${state.palabra}. ¡Otra vez será!`, false, 'encouraging', false);
                 }
                 return {
                     prompt: `La letra "${letter}" no está. Quedan ${state.intentos} intentos. ${displayWord(state)}`,

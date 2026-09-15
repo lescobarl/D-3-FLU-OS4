@@ -90,12 +90,14 @@ export const VEO_VEO_BANK: readonly VeoVeoItem[] = Object.freeze([
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = VEO_VEO_BANK.length;
 
+// "no sé" = el niño está atascado → PISTA de la categoría (documentado).
+// Se elimina de SKIP: tenerlo en ambas listas era código muerto (HINT gana).
 const HINT_FRAMES: readonly string[] = Object.freeze([
     'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'otra', 'siguiente', 'paso', 'no se', 'no sé',
+    'otra', 'siguiente', 'paso', 'me rindo',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([

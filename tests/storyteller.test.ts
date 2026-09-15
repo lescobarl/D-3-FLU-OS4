@@ -251,10 +251,15 @@ describe('cuentacuentos — personalización por participante (F2)', () => {
         expect(robot.escenas[0].texto).toContain('{nombre}');
         expect(robot.escenas[0].texto).not.toContain('Luis');
     });
-    test('personalizeStory sin nombre devuelve el mismo cuento (misma referencia)', () => {
+    test('personalizeStory SIN nombre usa un nombre neutro (nunca narra "{nombre}")', () => {
         const robot = STORY_BANK.find((s) => s.titulo === 'El robot que quería aprender')!;
-        expect(personalizeStory(robot, '   ')).toBe(robot);
-        expect(personalizeStory(robot, undefined)).toBe(robot);
+        for (const input of ['   ', undefined]) {
+            const personal = personalizeStory(robot, input);
+            const serialized = JSON.stringify(personal);
+            expect(serialized).not.toContain('{nombre}');
+            expect(personal.escenas[0].texto).toContain('Nuestro amigo encontró');
+            expect(personal.escenas[1].texto).toContain('pero nuestro amigo le enseñó');
+        }
     });
     test('personalizeStory personaliza un cuento cuyo título lleva token', () => {
         const custom: Story = {

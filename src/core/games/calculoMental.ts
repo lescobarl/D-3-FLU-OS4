@@ -15,6 +15,14 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
+import {
+    clamp,
+    normalizeForMatch,
+    hasToken,
+    hasAnyToken,
+    pickRandom,
+    resolveNumericAnswer,
+} from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -40,13 +48,7 @@ const END_FRAMES: readonly string[] = Object.freeze([
     'cerrar el juego',
 ]);
 
-/** Números en letras (0-20) para robustez de ASR en voz. */
-const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
-    cero: 0, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6,
-    siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12,
-    trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17,
-    dieciocho: 18, diecinueve: 19, veinte: 20,
-});
+/** Números en letras y su resolución: fuente única en `gameUtils`. */
 
 interface CalculoMentalConfig {
     maxSuma: number;
@@ -65,34 +67,6 @@ interface CalculoMentalState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
-function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
-    return items[Math.floor(rng() * items.length)];
-}
 
 /**
  * Genera una operación determinista: suma acotada por maxSuma
@@ -116,23 +90,6 @@ function generateOperation(
 
 function operationPrompt(state: CalculoMentalState): string {
     return `¿Cuánto es ${state.a} ${OP_WORD[state.op]} ${state.b}?`;
-}
-
-/**
- * Resuelve una respuesta numérica a partir del texto normalizado.
- * Espejo local del algoritmo de resolveNumberValue: primero dígitos
- * ("12", "3.5") y, si no, un número escrito en letras.
- */
-function resolveNumericAnswer(normalized: string): number | null {
-    const digits = normalized.match(/(\d+(?:[.,]\d+)?)/);
-    if (digits) {
-        const value = Number.parseFloat(digits[1].replace(',', '.'));
-        if (Number.isFinite(value)) return Math.round(value);
-    }
-    for (const token of normalized.split(/\s+/)) {
-        if (token in NUMBER_WORDS_ES) return NUMBER_WORDS_ES[token];
-    }
-    return null;
 }
 
 export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine {

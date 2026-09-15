@@ -96,12 +96,19 @@ function lastLetter(word: string): string {
     return clean[clean.length - 1]?.toLowerCase() ?? '';
 }
 
-/** Primera palabra del banco mencionada en el texto (límites de palabra). */
-function findBankWord(normalized: string): string | null {
+/**
+ * Palabra del banco mencionada en el texto. Si se indica `requiredLetter`,
+ * prefiere la que empieza con esa letra (antes se devolvía la PRIMERA del
+ * banco en la frase: "la casa del oso" con letra "o" rechazaba "oso").
+ */
+function findBankWord(normalized: string, requiredLetter?: string): string | null {
+    let anyMatch: string | null = null;
     for (const word of WORD_BANK) {
-        if (hasToken(normalized, word)) return word;
+        if (!hasToken(normalized, word)) continue;
+        if (requiredLetter && firstLetter(word) === requiredLetter) return word;
+        if (!anyMatch) anyMatch = word;
     }
-    return null;
+    return anyMatch;
 }
 
 /** Palabra del banco que continúa la cadena desde la última letra dada. */
@@ -202,8 +209,8 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 };
             }
 
-            // Palabra del niño (del banco local).
-            const playerWord = findBankWord(normalized);
+            // Palabra del niño (del banco local), prefiriendo la que enlaza.
+            const playerWord = findBankWord(normalized, state.nextLetter);
             if (!playerWord) {
                 return {
                     prompt: `No reconozco esa palabra. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`,

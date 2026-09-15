@@ -51,7 +51,7 @@ describe('ahorcado — inicio de partida', () => {
         const session = engine.createSession({});
         const state = session.state as Record<string, unknown>;
         expect(state.palabra).toBe('agua');
-        expect(state.pista).toBe('La bebes para tener sed.');
+        expect(state.pista).toBe('La bebes cuando tienes sed.');
         expect(state.adivinadas).toEqual([]);
         expect(state.intentos).toBe(6);
         expect(state.maxIntentos).toBe(6);
@@ -131,21 +131,33 @@ describe('ahorcado — respuesta incorrecta y límites de letra', () => {
 });
 
 describe('ahorcado — controles del jugador (pista / saltar)', () => {
-    test('"dame una pista" revela la primera letra oculta y descuenta un intento', () => {
+    test('"dame una pista" da la PISTA (no revela letras ni gasta intentos)', () => {
         const { engine, session } = freshAhorcado();
         const result = engine.turn(session, 'dame una pista');
         expect(result.valid).toBe(false);
         expect(result.gameOver).toBe(false);
         expect(result.emotion).toBe('thinking');
-        expect(result.prompt).toBe('Aquí va una pista: la letra "a" está en la palabra. a _ _ a Quedan 5 intentos.');
-        expect((session.state as { intentos: number }).intentos).toBe(5);
+        expect(result.prompt).toBe('Pista: La bebes cuando tienes sed. _ _ _ _ Dime una letra.');
+        expect((session.state as { intentos: number }).intentos).toBe(6);
     });
 
-    test('"no sé" entrega pista (no salta: hint tiene prioridad)', () => {
+    test('pedir pista muchas veces NO revela la palabra ni gana (sin exploit)', () => {
+        const { engine, session } = freshAhorcado();
+        for (let i = 0; i < 10; i += 1) {
+            const r = engine.turn(session, 'pista');
+            expect(r.gameOver).toBe(false);
+        }
+        const state = session.state as { adivinadas: string[] };
+        expect(state.adivinadas).toEqual([]);
+        expect(session.score).toBe(0);
+    });
+
+    test('"no sé" se rinde: termina sin puntuar (no es pista)', () => {
         const { engine, session } = freshAhorcado();
         const result = engine.turn(session, 'no sé');
-        expect(result.prompt).toBe('Aquí va una pista: la letra "a" está en la palabra. a _ _ a Quedan 5 intentos.');
-        expect((session.state as { intentos: number }).intentos).toBe(5);
+        expect(result.gameOver).toBe(true);
+        expect(result.won).toBe(false);
+        expect(result.prompt).toBe('La palabra era agua. ¡Jugamos otra y la adivinas!');
     });
 
     test('"paso" revela la palabra y termina sin puntuar', () => {
@@ -153,10 +165,21 @@ describe('ahorcado — controles del jugador (pista / saltar)', () => {
         const result = engine.turn(session, 'paso');
         expect(result.valid).toBe(false);
         expect(result.gameOver).toBe(true);
+        expect(result.won).toBe(false);
         expect(result.score).toBe(0);
-        expect(result.animation).toBe('Dance');
+        expect(result.animation).toBe('Idle');
         expect(result.emotion).toBe('neutral');
         expect(result.prompt).toBe('La palabra era agua. ¡Jugamos otra y la adivinas!');
+    });
+
+    test('acepta la palabra embebida ("la palabra es agua") y los nombres de letra', () => {
+        const { engine, session } = freshAhorcado();
+        const byName = engine.turn(session, 'eme');
+        expect(byName.valid).toBe(false); // 'm' no está en "agua"
+        const win = engine.turn(session, 'la palabra es agua');
+        expect(win.gameOver).toBe(true);
+        expect(win.won).toBe(true);
+        expect(session.score).toBe(1);
     });
 
     test('agotar los intentos termina la partida', () => {

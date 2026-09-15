@@ -882,7 +882,15 @@ async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGame
         await speakGameText('No hay una partida activa. Dime a qué juego quieres jugar.', ctx);
         return;
     }
+    const songBefore = (activeSession.state as { songId?: string } | null)?.songId;
     const result = engine.turn(activeSession, juegoAction.playerText || '');
+    // Juegos musicales: si el turno cambió de canción (ronda nueva), hay que
+    // reproducir la del turno. Antes solo se reproducía en `start`, así que a
+    // partir de la ronda 2 sonaba la melodía de la primera canción.
+    const songAfter = (activeSession.state as { songId?: string } | null)?.songId;
+    if (songAfter && songAfter !== songBefore) {
+        playSongForGame(activeSession, juegoAction.gameId);
+    }
     if (result.gameOver) {
         clearActiveGameSession();
         stopMusicForGame(juegoAction.gameId);

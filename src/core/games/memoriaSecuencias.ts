@@ -65,11 +65,29 @@ function sequencePrompt(sequence: readonly string[]): string {
     return sequence.join(' ');
 }
 
+/**
+ * Nombres hablados de las letras del juego (A–H) → letra. El ASR transcribe
+ * "be", "efe", "hache"… no "b", "f", "h"; sin este mapeo una secuencia dicha
+ * correctamente se rechazaba.
+ */
+const LETTER_NAME_TO_LETTER: Readonly<Record<string, string>> = Object.freeze({
+    a: 'A', be: 'B', ce: 'C', de: 'D', e: 'E', efe: 'F', ge: 'G', hache: 'H',
+});
+
 function extractLetters(normalized: string): string[] {
-    return normalized
-        .split(/\s+/)
-        .map((token) => token.replace(/[^a-z]/g, '').toUpperCase())
-        .filter((token) => token.length === 1 && MEMORY_LETTERS.includes(token));
+    const out: string[] = [];
+    for (const raw of normalized.split(/\s+/)) {
+        const clean = raw.replace(/[^a-z]/g, '');
+        if (!clean) continue;
+        if (clean.length === 1) {
+            const upper = clean.toUpperCase();
+            if (MEMORY_LETTERS.includes(upper)) out.push(upper);
+            continue;
+        }
+        const mapped = LETTER_NAME_TO_LETTER[clean];
+        if (mapped && MEMORY_LETTERS.includes(mapped)) out.push(mapped);
+    }
+    return out;
 }
 
 function isOrderedMatch(sub: readonly string[], seq: readonly string[]): boolean {

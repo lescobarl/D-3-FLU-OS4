@@ -15,6 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
+import { clamp, normalizeForMatch, hasToken, hasAnyToken } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -104,30 +105,6 @@ interface QuienSoyState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
 
 /** Baraja determinista (Fisher-Yates) de los índices del banco. */
 function shuffleOrder(rng: RandomSource): number[] {

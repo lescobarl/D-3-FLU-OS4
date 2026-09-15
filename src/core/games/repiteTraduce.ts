@@ -30,7 +30,7 @@ export const REPITE_BANK: readonly RepiteTraduceItem[] = Object.freeze([
     { es: 'casa', en: 'house', pista: 'El lugar donde vives.' },
     { es: 'sol', en: 'sun', pista: 'Brilla en el cielo de día.' },
     { es: 'luna', en: 'moon', pista: 'La ves de noche.' },
-    { es: 'agua', en: 'water', pista: 'La bebes para tener sed.' },
+    { es: 'agua', en: 'water', pista: 'La bebes cuando tienes sed.' },
     { es: 'pan', en: 'bread', pista: 'Lo comes en el desayuno.' },
     { es: 'leche', en: 'milk', pista: 'Es blanca y sale de la vaca.' },
     { es: 'rojo', en: 'red', pista: 'El color de una manzana.' },
@@ -185,8 +185,10 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
                 };
             }
 
-            // ¿Lo dice en español o en inglés?
-            const acierto = hasToken(normalized, item.es) || hasToken(normalized, item.en);
+            // Acierto SOLO con la traducción al inglés: el prompt pregunta
+            // "¿cómo se dice X en inglés?"; aceptar `item.es` permitía ganar
+            // repitiendo la palabra que FLU acababa de decir.
+            const acierto = hasToken(normalized, item.en);
             if (acierto) {
                 session.score += 1;
                 session.round += 1;
