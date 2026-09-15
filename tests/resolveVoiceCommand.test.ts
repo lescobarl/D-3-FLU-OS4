@@ -28,13 +28,13 @@ describe('resolveVoiceCommand — ruta única (wake-first)', () => {
     it('con wake + comando → command vía árbitro', () => {
         const r = resolveVoiceCommand('ok flu pon una alarma a las 7', { requireWake: true, wakeWords: WAKE });
         expect(r.kind).toBe('command');
-        expect(r.domain).toBe('temporal');
+        expect(r.domain).toBe('agendaCommand');
     });
 
     it('con wake + recordatorio → command vía árbitro', () => {
         const r = resolveVoiceCommand('ok flu recuérdame comprar leche mañana a las 9', { requireWake: true, wakeWords: WAKE });
         expect(r.kind).toBe('command');
-        expect(r.domain).toBe('reminder');
+        expect(r.domain).toBe('agendaCommand');
     });
 
     it('con wake + consulta genérica → flu (IA)', () => {

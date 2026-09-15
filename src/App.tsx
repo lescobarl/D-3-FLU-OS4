@@ -151,6 +151,8 @@ import { useNotes } from './hooks/useNotes';
 import { useDocuments } from './hooks/useDocuments';
 import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
+import { createAgendaService } from './core/agenda/agendaService';
+import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
@@ -1238,6 +1240,13 @@ async function dispatchArbiterIntent(
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
+        } else if (domain === 'agendaCommand' && typeof w.__fluHandleAgendaCommandText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaCommandText (agendaCommand)');
+            reply =
+                (await w.__fluHandleAgendaCommandText(intent, {
+                    personId: undefined,
+                    personName: opts.speakerName || undefined,
+                })) || '';
         } else if (domain === 'agenda' && typeof w.__fluHandleAgendaText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaText (agenda)');
             reply = (await w.__fluHandleAgendaText(intent)) || '';
@@ -1500,6 +1509,65 @@ function App() {
         participantId: activeParticipantId,
     });
     const shopping = useShoppingList({});
+
+    // ---- Calendario UNIFICADO: un solo servicio sobre la tabla `agenda` ----
+    const agendaService = useMemo(
+        () => createAgendaService({ db: fluDb.agenda, now: () => Date.now() }),
+        [],
+    );
+    window.__fluHandleAgendaCommandText = useCallback(
+        async (input: AgendaCommand | string, opts?: { personId?: string; personName?: string }) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const cmd = typeof input === 'object' && input?.action
+                ? input
+                : parseAgendaCommand(String(input || ''));
+            if (!cmd?.handled || !cmd.action || !cmd.kind) return '';
+            const kind = cmd.kind;
+            switch (cmd.action) {
+                case 'agenda.create': {
+                    if (!cmd.trigger) return '';
+                    const result = await agendaService.create({
+                        kind,
+                        label: cmd.label || kind,
+                        trigger: cmd.trigger,
+                        personId: opts?.personId,
+                    });
+                    if (!result.ok) {
+                        return result.reason === 'duplicado'
+                            ? (lang === 'en' ? 'That item already exists.' : 'Ese evento ya existe.')
+                            : (lang === 'en' ? "I couldn't create it." : 'No pude crearlo.');
+                    }
+                    return lang === 'en'
+                        ? `Scheduled: ${result.item?.label}`
+                        : `Listo: ${result.item?.label}`;
+                }
+                case 'agenda.cancel': {
+                    const pending = await agendaService.list({ personId: opts?.personId, status: 'pending' });
+                    const target = pending.find((item) => item.kind === kind);
+                    if (!target) {
+                        return lang === 'en' ? 'Nothing to cancel.' : 'No encontré nada que cancelar.';
+                    }
+                    await agendaService.cancel(target.id);
+                    return lang === 'en' ? 'Cancelled.' : 'Cancelado.';
+                }
+                case 'agenda.update': {
+                    const pending = await agendaService.list({ personId: opts?.personId, status: 'pending' });
+                    const target = pending.find((item) => item.kind === kind);
+                    if (!target) {
+                        return lang === 'en' ? 'Nothing to update.' : 'No encontré nada que cambiar.';
+                    }
+                    await agendaService.update(target.id, {
+                        ...(cmd.label ? { label: cmd.label } : {}),
+                        ...(cmd.trigger ? { trigger: cmd.trigger } : {}),
+                    });
+                    return lang === 'en' ? 'Updated.' : 'Actualizado.';
+                }
+                default:
+                    return '';
+            }
+        },
+        [agendaService, languageRef],
+    );
 
     // ---- Horario de clases: hook temprano (Pizarrón + consulta por voz) ----
     const horario = useHorario({ participantId: activeParticipantId });

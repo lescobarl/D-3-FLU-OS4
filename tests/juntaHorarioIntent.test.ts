@@ -19,16 +19,18 @@ describe('Caso 9 — junta como entrada de horario, ruta única', () => {
         expect(String(r.data?.materia || '').toLowerCase()).toContain('equipo');
     });
 
-    it('el árbitro enruta "crea una junta …" a horario (una sola ruta)', () => {
+    it('el árbitro enruta "crea una junta …" a agendaCommand (una sola ruta)', () => {
         const r = resolveDeterministicCommand('crea una junta para hoy a las 12:00');
         expect(r.matched).toBe(true);
-        expect(r.domain).toBe('horario');
-        expect((r.action as { action?: string }).action).toBe('horario.add');
+        expect(r.domain).toBe('agendaCommand');
+        expect((r.action as { action?: string }).action).toBe('agenda.create');
+        expect((r.action as { kind?: string }).kind).toBe('junta');
     });
 
-    it('"reunión" también se reconoce como horario', () => {
+    it('"reunión" también se reconoce como agenda (junta)', () => {
         const r = resolveDeterministicCommand('reunión del equipo hoy a las 12:00');
-        expect(r.domain).toBe('horario');
-        expect((r.action as { action?: string }).action).toBe('horario.add');
+        expect(r.domain).toBe('agendaCommand');
+        expect((r.action as { action?: string }).action).toBe('agenda.create');
+        expect((r.action as { kind?: string }).kind).toBe('junta');
     });
 });

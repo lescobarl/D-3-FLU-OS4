@@ -48,6 +48,10 @@ declare global {
         ): Promise<string>;
         __fluHandleHorarioText?(input: unknown): Promise<string>;
         __fluHandleAgendaText?(input: unknown): Promise<string>;
+        __fluHandleAgendaCommandText?(
+            input: unknown,
+            opts?: { personId?: string; personName?: string },
+        ): Promise<string>;
 
         /** Stores y flags expuestos en window (debug/E2E). */
         __fluStore?: unknown;

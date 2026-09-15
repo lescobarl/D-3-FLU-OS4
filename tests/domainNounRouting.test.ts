@@ -33,9 +33,9 @@ describe('sustantivo manda — alarma → temporal', () => {
         expect(d.getMinutes()).toBe(0);
     });
 
-    it('el árbitro resuelve dominio temporal (no reminder)', () => {
+    it('el árbitro resuelve dominio agendaCommand (no reminder)', () => {
         const r = resolveDeterministicCommand(PHRASE, { now: NOW, defaultOffsetMs: 600000 });
-        expect(r.domain).toBe('temporal');
+        expect(r.domain).toBe('agendaCommand');
     });
 });
 

@@ -24,6 +24,7 @@ import { parseNoteIntentText, parseNoteRemoveIntentText } from './noteIntentPars
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseAgendaIntent } from '../../core/agenda/agendaIntentParser'
+import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
 import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
 import { parseTemporalIntent } from '../../core/temporal/temporalIntentParser'
@@ -46,6 +47,7 @@ export const ARBITER_DOMAINS = Object.freeze([
   'config',
   'game',
   'environment',
+  'agendaCommand',
   'reminder',
   'temporal',
   'diary',
@@ -163,6 +165,16 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   const env = resolveEnvironmentIntent(transcript, language)
   if (env?.tipo) {
     return { matched: true, domain: 'environment', action: env, channel: 'flu' }
+  }
+
+  // 3.a Calendario unificado (agendaCommand): crear/editar/cancelar de
+  //     alarma/recordatorio/cita/junta/clase por el parser y servicio ÚNICOS.
+  //     Se evalúa ANTES que los dominios viejos (reminder/temporal/horario)
+  //     para que el sustantivo mande y exista UNA sola ruta de escritura.
+  //     La consulta ("qué hay para hoy") la sigue resolviendo `agenda`.
+  const agendaCmd = parseAgendaCommand(transcript, { now })
+  if (agendaCmd?.handled && agendaCmd.action !== 'agenda.list') {
+    return { matched: true, domain: 'agendaCommand', action: agendaCmd, channel: 'flu' }
   }
 
   // 3.b Reuniones (junta/reunión/meeting): son ENTRADAS de horario. Se resuelven

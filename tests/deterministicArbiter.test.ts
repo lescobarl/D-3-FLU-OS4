@@ -164,8 +164,8 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
   it('resuelve el dominio de recordatorio (reminder.add)', () => {
     const result = resolveDeterministicCommand('recuérdame comprar leche mañana');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('reminder');
-    expect(result.action).toMatchObject({ handled: true, action: 'reminder.add' });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.create', kind: 'recordatorio' });
     expect(result.channel).toBe('flu');
   });
 
@@ -180,16 +180,16 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
   it('resuelve el dominio de recordatorio (reminder.remove / negación)', () => {
     const result = resolveDeterministicCommand('quita el recordatorio de comprar leche');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('reminder');
-    expect(result.action).toMatchObject({ handled: true, action: 'reminder.remove' });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.cancel', kind: 'recordatorio' });
     expect(result.channel).toBe('flu');
   });
 
   it('resuelve el dominio de recordatorio (reminder.remove / "ya no quiero")', () => {
     const result = resolveDeterministicCommand('ya no quiero el recordatorio de la junta');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('reminder');
-    expect(result.action).toMatchObject({ handled: true, action: 'reminder.remove' });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.cancel', kind: 'recordatorio' });
   });
 
   it('Point B: propaga defaultOffsetMs al parser para fechas consistentes', () => {
@@ -207,19 +207,19 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
     expect(typeof action.data?.dueAt).toBe('number');
   });
 
-  it('resuelve el dominio temporal (alarm.add)', () => {
+  it('resuelve el dominio agenda (alarma)', () => {
     const result = resolveDeterministicCommand('pon una alarma a las 7');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('temporal');
-    expect(result.action).toMatchObject({ handled: true, action: 'alarm.add' });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.create', kind: 'alarma' });
     expect(result.channel).toBe('flu');
   });
 
-  it('resuelve el dominio temporal (timer.start)', () => {
+  it('resuelve el dominio agenda (temporizador)', () => {
     const result = resolveDeterministicCommand('pon un temporizador de 5 minutos');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('temporal');
-    expect(result.action).toMatchObject({ handled: true, action: 'timer.start' });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.create', kind: 'alarma' });
     expect(result.channel).toBe('flu');
   });
 
@@ -289,23 +289,22 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
     return a.data as Record<string, unknown>;
   };
 
-  it('reminder.add: el intent del árbitro trae data.text/dueAt para el manejador', () => {
+  it('reminder.add: el intent del árbitro trae kind/trigger para el handler único', () => {
     const r = resolveDeterministicCommand('recuérdame comprar leche mañana', {
       defaultOffsetMs: 10 * 60 * 1000,
     });
-    expect(r.domain).toBe('reminder');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('reminder.add');
-    expect(typeof data.text).toBe('string');
-    expect(typeof data.dueAt).toBe('number');
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.create');
+    expect((r.action as { kind?: string }).kind).toBe('recordatorio');
+    expect(typeof (r.action as { label?: string }).label).toBe('string');
+    expect((r.action as { trigger?: { type?: string } }).trigger?.type).toBe('absolute');
   });
 
-  it('reminder.remove: el intent del árbitro trae data.text para localizar el recordatorio', () => {
+  it('reminder.remove: el intent del árbitro trae kind para cancelar el evento', () => {
     const r = resolveDeterministicCommand('quita el recordatorio de comprar leche');
-    expect(r.domain).toBe('reminder');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('reminder.remove');
-    expect(typeof data.text).toBe('string');
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.cancel');
+    expect((r.action as { kind?: string }).kind).toBe('recordatorio');
   });
 
   it('shopping.add: el intent del árbitro trae data.label para la lista de compras', () => {
@@ -316,37 +315,32 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
     expect(typeof data.label).toBe('string');
   });
 
-  it('alarm.add: el intent del árbitro trae data.kind/trigger completos (options propagadas)', () => {
-    // Con options temporales propagadas, el intent del árbitro es COMPLETO:
-    // el manejador NO necesita re-parcear la cadena para saber la hora.
+  it('alarm.add: el intent del árbitro trae kind/trigger completos (alarma única)', () => {
     const r = resolveDeterministicCommand('pon una alarma a las 7', {
       now: Date.now(),
       defaultAlarmTimeOfDay: '07:00',
       defaultTimerMinutes: 5,
     });
-    expect(r.domain).toBe('temporal');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('alarm.add');
-    expect(data.kind).toBe('alarm');
-    expect(data.trigger).toBeTruthy();
-    // Alarma de UNA sola vez: trigger absolute con timestamp (no daily/timeOfDay);
-    // lo recurrente requiere pedirlo explícito ("todos los días").
-    expect((data.trigger as { kind?: string }).kind).toBe('absolute');
-    expect(typeof (data.trigger as { at?: number }).at).toBe('number');
-    expect((data.recurrence as { kind?: string })?.kind).toBe('once');
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.create');
+    expect((r.action as { kind?: string }).kind).toBe('alarma');
+    const trigger = (r.action as { trigger?: { type?: string; at?: number } }).trigger;
+    expect(trigger?.type).toBe('absolute');
+    expect(typeof trigger?.at).toBe('number');
   });
 
-  it('timer.start: el intent del árbitro trae data.kind/trigger con duración', () => {
+  it('timer.start: el intent del árbitro trae kind/trigger con duración', () => {
     const r = resolveDeterministicCommand('pon un temporizador de 5 minutos', {
       now: Date.now(),
       defaultAlarmTimeOfDay: '07:00',
       defaultTimerMinutes: 5,
     });
-    expect(r.domain).toBe('temporal');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('timer.start');
-    expect(data.kind).toBe('timer');
-    expect((data.trigger as { durationMs?: number }).durationMs).toBeGreaterThan(0);
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.create');
+    expect((r.action as { kind?: string }).kind).toBe('alarma');
+    const trigger = (r.action as { trigger?: { type?: string; durationMs?: number } }).trigger;
+    expect(trigger?.type).toBe('countdown');
+    expect((trigger?.durationMs ?? 0)).toBeGreaterThan(0);
   });
 
   it('diary.addEntry: el intent del árbitro trae data.content para crear la entrada', () => {
@@ -471,6 +465,7 @@ describe('deterministicArbiter — dominios declarados', () => {
       'config',
       'game',
       'environment',
+      'agendaCommand',
       'reminder',
       'temporal',
       'diary',

@@ -15,7 +15,7 @@ import {
     describeNlDateTime,
 } from '../reminders/nlDateParser';
 import { pickTimeOfDay } from '../temporal/timeOfDay';
-import { parseTimeOfDayToMs } from '../temporal/scheduleEngine';
+import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 
 export type AgendaCommandAction =
@@ -36,7 +36,7 @@ export interface AgendaCommand {
 const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i;
 
 const KIND_NOUNS: ReadonlyArray<{ kind: AgendaKind; nouns: readonly string[] }> = Object.freeze([
-    { kind: 'alarma', nouns: ['alarma', 'despertador'] },
+    { kind: 'alarma', nouns: ['alarma', 'despertador', 'temporizador', 'timer'] },
     { kind: 'recordatorio', nouns: ['recordatorio', 'recuerdame', 'recordame', 'aviso'] },
     { kind: 'cita', nouns: ['cita'] },
     { kind: 'junta', nouns: ['junta', 'reunion', 'reunión', 'meeting'] },
@@ -54,6 +54,7 @@ const LIST_FRAMES: readonly string[] = Object.freeze([
 
 const CANCEL_FRAMES: readonly string[] = Object.freeze([
     'cancela', 'cancelar', 'borra', 'borrar', 'quita', 'quitar', 'elimina', 'eliminar',
+    'ya no quiero', 'no quiero',
 ]);
 
 const UPDATE_FRAMES: readonly string[] = Object.freeze([
@@ -71,7 +72,7 @@ const WEEKDAY_NAMES: ReadonlyArray<{ name: string; day: number }> = Object.freez
 ]);
 
 const DAILY_RE = /\b(?:todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
-const COUNTDOWN_RE = /\ben\s+(\d+)\s+(segundos?|minutos?|horas?)\b/i;
+const COUNTDOWN_RE = /\b(?:en|de)\s+(\d+)\s+(segundos?|minutos?|horas?)\b/i;
 
 function normalize(text: string): string {
     return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -94,9 +95,15 @@ function detectAction(text: string): AgendaCommandAction | null {
     return null;
 }
 
+const WEEKLY_LEAD_RE = /\b(?:los|cada|todos\s+los|todas\s+las)\s+/i;
+
+/** Días de semana SOLO con recurrencia explícita ("los lunes"), no "el jueves". */
 function detectWeekdays(text: string): number[] {
     const t = normalize(text);
-    return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(t)).map((w) => w.day);
+    const lead = WEEKLY_LEAD_RE.exec(t);
+    if (!lead) return [];
+    const after = t.slice(lead.index + lead[0].length);
+    return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(after)).map((w) => w.day);
 }
 
 function resolveTrigger(text: string, now: number): AgendaTrigger | null {
@@ -122,13 +129,18 @@ function resolveTrigger(text: string, now: number): AgendaTrigger | null {
     const picked = pickTimeOfDay(text);
     const dateText = picked.rest || text;
     const nl = parseNlDateTime(dateText, { now: () => now });
-    if (!nl || !nl.at) return null;
     if (picked.timeOfDay) {
-        const day = new Date(nl.at);
-        const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
+        // Base: fecha explícita ("mañana/jueves") o HOY si no la hay ("a las 7").
+        const baseAt = nl?.at ?? now;
+        const day = new Date(baseAt);
+        let at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
             + (parseTimeOfDayToMs(picked.timeOfDay) ?? 0);
+        // Misma semántica que el temporal viejo: "a las 7" con esa hora ya
+        // pasada cae a la PRÓXIMA ocurrencia (mañana), no a hoy.
+        if (at <= now) at += MS_DAY;
         return { type: 'absolute', at };
     }
+    if (!nl || !nl.at) return null;
     return { type: 'absolute', at: nl.at };
 }
 
@@ -149,15 +161,14 @@ function resolveLabel(text: string): string {
     return label || withoutWake;
 }
 
-export function parseAgendaCommand(input: string, options?: { now?: () => number }): AgendaCommand {
-    const now = options?.now?.() ?? Date.now();
+export function parseAgendaCommand(input: string, options?: { now?: number | (() => number) }): AgendaCommand {
+    const rawNow = options?.now;
+    const now = typeof rawNow === 'function' ? rawNow() : typeof rawNow === 'number' ? rawNow : Date.now();
     const text = String(input || '').trim();
     const cleaned = text.replace(WAKE_LEAD, ' ').replace(/^[¿¡]+/, '').trim();
     if (!cleaned) return { handled: false, action: null, reply: '' };
 
     const action = detectAction(cleaned);
-    if (!action) return { handled: false, action: null, reply: '' };
-
     if (action === 'agenda.list') {
         return { handled: true, action, reply: '' };
     }
@@ -165,17 +176,22 @@ export function parseAgendaCommand(input: string, options?: { now?: () => number
     const kind = detectKind(cleaned);
     if (!kind) return { handled: false, action: null, reply: '' };
 
+    // Sin verbo explícito ("reunión del equipo mañana a las 12", "junta hoy"):
+    // se interpreta como CREAR si trae cláusula de tiempo. Sin tiempo no hay
+    // intención accionable.
+    const resolvedAction = action ?? 'agenda.create';
+
     // El disparo es OBLIGATORIO solo para crear; cancelar/editar identifican
     // el item por kind+label (la fecha puede venir o no).
     const trigger = resolveTrigger(cleaned, now);
-    if (!trigger && action === 'agenda.create') {
+    if (!trigger && resolvedAction === 'agenda.create') {
         return { handled: false, action: null, reply: '' };
     }
 
     const label = resolveLabel(cleaned);
     return {
         handled: true,
-        action,
+        action: resolvedAction,
         kind,
         label,
         trigger: trigger ?? undefined,
