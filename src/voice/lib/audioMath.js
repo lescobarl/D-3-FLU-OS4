@@ -1,7 +1,7 @@
 import { computeSpeakerEmbedding } from './speakerEmbedding.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { detectParticipantFloorCommand } from './participantFloor.js'
-import { compareCosineSignatures } from './speakerCosineStrict.js'
+import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 
 const ACCENT_MAP = {
@@ -1402,17 +1402,6 @@ export function cosineDistance(vectorA = [], vectorB = []) {
   return 1 - Math.max(-1, Math.min(1, cosineSimilarity))
 }
 
-export function normalizeEmbeddingVector(vector = []) {
-  if (!Array.isArray(vector) || !vector.length) return []
-  const out = vector.map((value) => Number(value || 0))
-  let norm = 0
-  for (let index = 0; index < out.length; index += 1) {
-    norm += out[index] * out[index]
-  }
-  norm = Math.sqrt(norm) || 1
-  return out.map((value) => value / norm)
-}
-
 export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5) {
   const dim = Math.max(vectorA.length, vectorB.length)
   if (!dim) return []
@@ -1440,9 +1429,9 @@ export function cosineSimilarity(vectorA = [], vectorB = []) {
 }
 
 /**
- * Similitud coseno L2 explícita. Dueño único: speakerCosineStrict.js
- * (misma fórmula que compareCosineSignatures); aquí solo se re-exporta con
- * el nombre histórico para no duplicar el cuerpo (V18).
+ * Similitud coseno L2 explícita. Dueño único: speakerCore.js
+ * (compareCosineSignatures); aquí solo se re-exporta con el nombre histórico
+ * para no duplicar el cuerpo.
  */
 export { compareCosineSignatures as compareAudioSignatures }
 

@@ -5,12 +5,14 @@
 // (`replaceLastRawLog`, misma emisión creciendo) o si es una fila Nueva.
 // Esta capa pura resuelve la fila objetivo SIN depender de la etiqueta de
 // hablante: entre commits la voz puede resolverse y el nombre pasar de
-// provisional ("Hablante 1") a real ("Luis"). Buscar por nombre hacía que el
+// provisional (config-driven) a real ("Luis"). Buscar por nombre hacía que el
 // reemplazo no encontrara la fila y se duplicara (dos filas por una frase).
 //
 // Invariante (§9): una frase hablada → UNA fila. El reemplazo se identifica
 // por el id de la emisión cruda en curso, no por el hablante.
 // ============================================================
+
+import { FLU_CONFIG } from './fluConfig.js'
 
 /**
  * Resuelve la operación de commit de una emisión cruda.
@@ -37,6 +39,6 @@ export function planRawCommit(history, {
   const resolved =
     String(speakerName || '').trim() ||
     String(prev.speakerName || '').trim() ||
-    'Hablante 1'
+    FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
   return { action: 'replace', index, speakerName: resolved }
 }

@@ -145,7 +145,7 @@ function assignEmbeddedSegments(embedded, speakerRuns = [], fallbackSpeaker = ''
   const segCfg = getAsrSegmentationCfg(config)
   const minWords = Number(segCfg.minWordsPerSegment) || 6
   const maxSegments = Number(segCfg.maxSegmentsPerFinal) || 2
-  const fallback = normalizeSpeakerLabel(fallbackSpeaker) || 'Hablante 1'
+  const fallback = normalizeSpeakerLabel(fallbackSpeaker) || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
   const firstSpeaker = speakerRuns[0]?.speaker || fallback
   const lastSpeaker = speakerRuns[speakerRuns.length - 1]?.speaker || fallback
 

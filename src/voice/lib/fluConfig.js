@@ -51,6 +51,8 @@ export const FLU_CONFIG = {
   voiceIdentity: {
     labels: {
       fallbackSpeaker: 'Hablante 1',
+      /** Plantilla de etiqueta automática («Hablante {n}») — sin literales quemados. */
+      template: 'Hablante {n}',
     },
     confidence: {
       display: {
@@ -220,6 +222,23 @@ export const FLU_CONFIG = {
         seedSessionPrimaryFromActiveParticipant: true,
         /** Crear el cluster del participante primario si aún no existe (primer turno). */
         sessionPrimaryCreateCluster: true,
+      },
+      /** Factores de diarización (sin hardcode): los literales 0.82/0.88/0.92/0.95/… viven aquí. */
+      diarizationFactors: {
+        /** Gate de continuidad en límite de turno: CONTINUITY × factor. */
+        continuityBoundaryFactor: 0.82,
+        /** Factor de voz nueva en límite de turno (fallback si no hay threshold configurado). */
+        newVoiceBoundaryFactor: 0.88,
+        /** Match al sticky fuera de límite: MATCH × factor. */
+        stickyMatchFactor: 0.92,
+        /** Match al último cluster fuera de límite: MATCH × factor. */
+        lastClusterMatchFactor: 0.95,
+        /** Margen para no reabsorber el cluster sticky con voz distinta. */
+        stickyClusterReidentifyMargin: 0.025,
+        /** Umbral de voz nueva más estricto al alcanzar el tope de auto-hablantes. */
+        strictNewVoiceAtCapFactor: 0.88,
+        /** Umbral de voz nueva más estricto con sticky en tope blando. */
+        strictNewVoiceStickySoftCapFactor: 0.82,
       },
       /** Siempre mic sala al escuchar (máx sensibilidad, también antes de «Iniciar conversación»). */
       maxSensitivity: true,
@@ -451,6 +470,15 @@ export const FLU_CONFIG = {
       alarms: { es: 'Alarmas', en: 'Alarms' },
       notes: { es: 'Notas pendientes', en: 'Pending notes' },
       empty: { es: 'No tienes nada programado para hoy.', en: "You have nothing scheduled for today." },
+    },
+    // Color POR TIPO (derivado en lectura, nunca guardado). Fuente única del
+    // calendario unificado: un solo lugar decide el color de cada kind.
+    colors: {
+      recordatorio: '#f59e0b',
+      cita: '#3b82f6',
+      junta: '#8b5cf6',
+      clase: '#22c55e',
+      alarma: '#ef4444',
     },
   },
   vision: {

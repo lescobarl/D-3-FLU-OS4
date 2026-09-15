@@ -5,11 +5,12 @@
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import {
-  assignSpeakerStrictCosine,
+  assignSpeaker as assignSpeakerStrict,
   compareCosineSignatures,
-  labelToSpeakerIdStrict as labelToSpeakerId,
-  normalizeSignatureVector,
-} from '../lib/speakerCosineStrict.js'
+  getFallbackSpeaker,
+  labelToSpeakerId,
+  normalizeEmbeddingVector as normalizeVector,
+} from '../lib/speakerCore.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from '../lib/embeddingFrames.js'
 import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
 
@@ -51,15 +52,6 @@ async function ensureModel(modelId = getModelId(), quantized = true) {
   return modelBundlePromise
 }
 
-/** Coseno L2 explícito entre embeddings normalizados. */
-function compareAudioSignatures(sig1 = [], sig2 = []) {
-  return compareCosineSignatures(sig1, sig2)
-}
-
-function normalizeVector(vector = []) {
-  return normalizeSignatureVector(vector)
-}
-
 async function embedAudio(payload = {}) {
   const frame = samplesFromTransfer(payload)
   if (!frame.length) return []
@@ -77,11 +69,7 @@ async function embedAudio(payload = {}) {
 }
 
 function assignSpeakerStrict(vector, options = {}) {
-  const assignment = assignSpeakerStrictCosine(vector, options)
-  return {
-    ...assignment,
-    speakerId: labelToSpeakerId(assignment.speakerName),
-  }
+  return assignSpeaker(vector, options)
 }
 
 self.onmessage = async (event) => {
@@ -103,7 +91,7 @@ self.onmessage = async (event) => {
     }
 
     if (type === 'compare') {
-      const similarity = compareAudioSignatures(payload.a || [], payload.b || [])
+      const similarity = compareCosineSignatures(payload.a || [], payload.b || [])
       reply(true, { similarity })
       return
     }
@@ -118,7 +106,8 @@ self.onmessage = async (event) => {
             : DEFAULT_MATCH_THRESHOLD
 
       if (!vector.length) {
-        const fallbackLabel = String(payload.fallbackSpeaker || 'Hablante 1').trim() || 'Hablante 1'
+        const fallbackLabel =
+          String(payload.fallbackSpeaker || getFallbackSpeaker()).trim() || getFallbackSpeaker()
         reply(true, {
           vector: [],
           speakerId: labelToSpeakerId(fallbackLabel),

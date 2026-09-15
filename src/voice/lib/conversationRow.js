@@ -58,7 +58,7 @@ export function speakerIdToDefaultName(speakerId = '', config = FLU_CONFIG) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ')
   }
-  return config?.voiceIdentity?.labels?.fallbackSpeaker || 'Hablante 1'
+  return config?.voiceIdentity?.labels?.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 }
 
 export function resolveSpeakerNameFromId(speakerId = '', clusters = [], config = FLU_CONFIG) {

@@ -51,7 +51,7 @@ export function resolveCommitRowSignature({
 export function resolveTurnSpeakerAtCommit({
   phrase = '',
   wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [],
-  stickyFallback = 'Hablante 1',
+  stickyFallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
   sessionPrimary = '',
   lastLogged = '',
   sameRevisionReplace = false,
@@ -97,8 +97,8 @@ export function resolveTurnSpeakerAtCommit({
   if (explicitNext) {
     const labels = Array.isArray(knownSpeakerLabels) ? knownSpeakerLabels.filter(Boolean) : []
     const nextName = normalizeSpeakerLabel(nextSpeakerLabel(labels))
-    const fallbackName = normalizeSpeakerLabel(lastLogged || stickyFallback || 'Hablante 1')
-    const name = nextName || fallbackName || 'Hablante 1'
+    const fallbackName = normalizeSpeakerLabel(lastLogged || stickyFallback || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker)
+    const name = nextName || fallbackName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     return {
       speakerId: labelToSpeakerId(name),
       speakerName: name,
@@ -163,13 +163,13 @@ export function resolveTurnSpeakerAtCommit({
   }
 
   const sticky = normalizeSpeakerLabel(
-    cleanForSpeech(stickyFallback) || lastLogged || sessionPrimary || 'Hablante 1',
+    cleanForSpeech(stickyFallback) || lastLogged || sessionPrimary || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
   )
   const labels = Array.isArray(knownSpeakerLabels) ? knownSpeakerLabels.filter(Boolean) : []
   const name =
     sticky ||
     normalizeSpeakerLabel(nextSpeakerLabel(labels)) ||
-    'Hablante 1'
+    FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
   return {
     speakerId: labelToSpeakerId(name),

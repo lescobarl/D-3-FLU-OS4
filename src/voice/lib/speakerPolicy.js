@@ -147,7 +147,7 @@ export function resolveSpeakerPreference({
   primary = '',
   lastLogged = '',
   lastSpeaker = '',
-  fallback = 'Hablante 1',
+  fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
   requested = '',
   shortUtterance = false,
 } = {}) {
@@ -211,7 +211,7 @@ export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './f
 export function resolveCommitStickyFallback({
   sessionPrimary = '',
   lastLogged = '',
-  fallback = 'Hablante 1',
+  fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
   phrase = '',
 } = {}) {
   const primary = normalizeSpeakerLabel(sessionPrimary)

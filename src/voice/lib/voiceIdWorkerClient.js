@@ -172,7 +172,7 @@ async function runMainThreadFallback(type, payload) {
     if (type === 'embed') {
       return { vector, dim: vector.length, fallback: true }
     }
-    const speakerName = payload.fallbackSpeaker || 'Hablante 1'
+    const speakerName = payload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     return {
       vector,
       speakerId: labelToSpeakerId(speakerName),
@@ -241,7 +241,7 @@ function resolveIdentityIdle(vector, matchPayload, sampleRate, sourceLength) {
 export async function resolveSpeakerFromAudio(samples, sampleRate = 48000, matchPayload = {}) {
   const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(samples)
   const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
-  const fallbackName = matchPayload.fallbackSpeaker || 'Hablante 1'
+  const fallbackName = matchPayload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
   if (!sampleCount) {
     return {

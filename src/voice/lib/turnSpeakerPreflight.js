@@ -150,7 +150,7 @@ export function createTurnSpeakerAudioResolver({
           atTurnBoundary,
         })
       : new Float32Array(0)
-    const fallback = getFallbackSpeaker?.() || 'Hablante 1'
+    const fallback = getFallbackSpeaker?.() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     if (!audio.length) {
       return Promise.resolve({
         speakerId: labelToSpeakerId(fallback),

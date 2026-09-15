@@ -11,7 +11,7 @@ import {
   labelToSpeakerId,
   resolveSpeakerNameFromId,
 } from './conversationRow.js'
-import { resolveConversationSpeaker as matchSpeakerByVoice } from './voiceIdentity.js'
+import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
 
 /**
  * @param {number[]} vector — embedding 512-D (solo capa diarización)
@@ -23,7 +23,7 @@ export function resolveSpeakerIdentityFromVector(
     speakerClusters = [],
     lastSpeaker = '',
     lastSignature = null,
-    fallbackSpeaker = 'Hablante 1',
+    fallbackSpeaker = getFallbackSpeaker(),
     utteranceText = '',
     sampleRate = 48000,
     voicedSampleCount = 0,

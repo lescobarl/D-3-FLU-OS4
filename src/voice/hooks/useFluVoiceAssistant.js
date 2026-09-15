@@ -88,7 +88,7 @@ import {
   getRecognitionLanguage,
   isBilingualListenMode,
   resolveRecognitionLocale,
-  resolveConversationSpeaker as resolveConversationSpeakerLabel,
+  resolveSpeakerByText as resolveConversationSpeakerLabel,
   sealPendingInterim,
   syncSpeakerIndexFromLabel,
 } from '../lib/activeListen.js'
@@ -215,7 +215,7 @@ function segmentAudio(samples, sampleRate, threshold) {
 }
 
 async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cachedProfiles = []) {
-  if (!segments.length) return 'Hablante 1'
+  if (!segments.length) return FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
   const profiles = Array.isArray(cachedProfiles) ? cachedProfiles : []
 
@@ -259,7 +259,7 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
   // expresa como "máxima distancia" → umbral de similitud = 1 - distancia.
   const registeredMinSimilarity = 1 - Number(profileMatch.registeredProfileMaxDistance ?? 0.12)
   if (bestMatch && bestSimilarity >= registeredMinSimilarity && isPlausiblePersonName(bestMatch.label || '')) {
-    return bestMatch.label || 'Hablante 1'
+    return bestMatch.label || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
   }
 
   let clusterMatch = null
@@ -277,7 +277,7 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
   const blendWeight = profileMatch.clusterSignatureBlendWeight
 
   if (clusterMatch && clusterSimilarity >= MATCH_THRESHOLD) {
-    const label = clusterMatch.label || 'Hablante 1'
+    const label = clusterMatch.label || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     if (isPlausiblePersonName(label) || /^Hablante\s+\d+$/i.test(label)) {
       clusterMatch.signature = clusterMatch.signature.map((value, index) => {
         const previous = Number(value || 0)
@@ -1387,7 +1387,7 @@ export function useFluVoiceAssistant({
       const canDiarize = conversationActiveRef?.current === true && captureCfg.conversationAutoDiarize === true
       // §3 Regla dura: sin EVIDENCIA de audio NO se estampa un nombre propio
       // (respeta requireWakeWordForSpeakerName). Se usa etiqueta genérica.
-      const GENERIC_SPEAKER = 'Hablante 1'
+      const GENERIC_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const isProperName = (value) => {
         const s = String(value || '').trim()
         return Boolean(s) && s !== 'FLU' && !/^Hablante\s+\d+$/i.test(s)
@@ -1448,7 +1448,7 @@ export function useFluVoiceAssistant({
         getLastSpeaker: () => lastLoggedSpeakerRef.current || lastSpeakerRef.current,
         getLastSignature: () => lastTurnSignatureRef.current,
         getFallbackSpeaker: () =>
-          lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1',
+          lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
         getUtteranceText: () => cleanForSpeech(utterance) || lastDiarizeUtteranceRef.current,
         atTurnBoundary,
         allowNewCluster,
@@ -2706,7 +2706,7 @@ export function useFluVoiceAssistant({
       clearAutoProcessTimer()
 
       const commandSpeaker =
-        lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
+        lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
       const shouldBlockParticipantFloorGrant = () => {
         const participant = fluParticipantRef.current
@@ -2726,8 +2726,8 @@ export function useFluVoiceAssistant({
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
         setSpeakerClusters([])
-        lastSpeakerRef.current = 'Hablante 1'
-        lastLoggedSpeakerRef.current = 'Hablante 1'
+        lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
+        lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         sessionPrimarySpeakerRef.current = ''
         // Fase E: tras reiniciar la sesión, re-sembrar el participante activo (Juan/Luis)
         // como sessionPrimary para que sus turnos sigan etiquetándose con su nombre.
@@ -2769,7 +2769,7 @@ export function useFluVoiceAssistant({
 
       if (command === 'FLU_ADELANTE') {
         const commandSpeaker =
-          lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
+          lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         const participant = fluParticipantRef.current
         const respondParticipantFloor = async (speechText, { floor = false } = {}) => {
           await commitAndResolveTurn({
@@ -3147,7 +3147,7 @@ export function useFluVoiceAssistant({
       const sampleRate = sampleRateRef.current || 48000
       const streamSamples = flattenChunks(chunksRef.current)
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
-      const fallbackSpeaker = lastSpeakerRef.current || 'Hablante 1'
+      const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const currentClock = formatClock()
       const detectedLanguage = detectTranscriptLanguage(question)
 
@@ -3584,7 +3584,7 @@ export function useFluVoiceAssistant({
         const toLog = cleanForSpeech(snapshot)
         if (toLog) {
           await emitConversationLog(toLog, {
-            fallbackSpeaker: lastSpeakerRef.current || 'Hablante 1',
+            fallbackSpeaker: lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
             currentClock: formatClock(),
           })
         }
@@ -3634,7 +3634,7 @@ export function useFluVoiceAssistant({
       const sampleRate = sampleRateRef.current || 48000
       const streamSamples = flattenChunks(chunksRef.current)
       const currentClock = formatClock()
-      const fallbackSpeaker = lastSpeakerRef.current || 'Hablante 1'
+      const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
 
       const finishTurn = () => {

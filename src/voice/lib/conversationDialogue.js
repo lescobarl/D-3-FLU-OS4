@@ -1,11 +1,13 @@
 /**
  * Turnos de conversación: un participante = una fila en log + contexto Gemini.
- * Flu usa el mismo mecanismo que Hablante 1, 2, … (sin canal paralelo).
+ * Flu usa el mismo mecanismo que los hablantes automáticos (sin canal paralelo).
  */
 import { cleanForSpeech } from './audioMath.js'
 import { phrasesEquivalent } from './activeListen.js'
 import { utterancesRelate } from './conversationStream.js'
 import { FLU_CONFIG } from './fluConfig.js'
+
+const FALLBACK_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
 export const FLU_DIALOGUE_SPEAKER = 'Flu'
 
@@ -47,7 +49,7 @@ export function appendDialogueEntry(history = [], entry = {}, max = FLU_CONFIG.l
 
   const speaker =
     String(entry.speaker || '').trim() ||
-    (entry.role === 'assistant' ? FLU_DIALOGUE_SPEAKER : 'Hablante 1')
+    (entry.role === 'assistant' ? FLU_DIALOGUE_SPEAKER : FALLBACK_SPEAKER)
 
   const normalized = {
     role: entry.role === 'assistant' || isFluSpeaker(speaker) ? 'assistant' : 'user',
@@ -77,7 +79,7 @@ function appendDialogueTurn(
     )
   }
 
-  const speakerLabel = String(speaker || '').trim() || 'Hablante 1'
+  const speakerLabel = String(speaker || '').trim() || FALLBACK_SPEAKER
   const last = history[history.length - 1]
 
   if (replaceLast && last?.role === 'user' && last.speaker === speakerLabel) {
@@ -122,7 +124,7 @@ export function recordConversationTurn(
   const cleaned = cleanForSpeech(text)
   if (!cleaned) return dialogueHistory
 
-  const speakerLabel = String(speaker || '').trim() || 'Hablante 1'
+  const speakerLabel = String(speaker || '').trim() || FALLBACK_SPEAKER
   const lastText = logTexts[logTexts.length - 1] || ''
 
   if (replaceLast && logTexts.length && utterancesRelate(lastText, cleaned)) {
@@ -197,7 +199,7 @@ export function deriveDialogueHistory(conversationHistory = []) {
   const list = Array.isArray(conversationHistory) ? conversationHistory : []
   return list.map((entry) => ({
     role: entry?.role === 'flu' ? 'assistant' : entry?.role === 'system' ? 'system' : 'user',
-    speaker: entry?.speakerName || (entry?.role === 'flu' ? FLU_DIALOGUE_SPEAKER : 'Hablante 1'),
+    speaker: entry?.speakerName || (entry?.role === 'flu' ? FLU_DIALOGUE_SPEAKER : FALLBACK_SPEAKER),
     text: entry?.text || '',
     phase: entry?.phase || 'SESION_ACTIVA',
     source: DIALOGUE_SOURCE.LOG,
@@ -215,7 +217,7 @@ export function deriveUserRowSpeakers(conversationHistory = []) {
   const list = Array.isArray(conversationHistory) ? conversationHistory : []
   return list
     .filter((entry) => entry?.role === 'user')
-    .map((entry) => entry?.speakerName || 'Hablante 1')
+    .map((entry) => entry?.speakerName || FALLBACK_SPEAKER)
 }
 
 /**
@@ -296,7 +298,7 @@ export function buildFluSpeechAuditRows(params = {}) {
   if (humanText) {
     rows.push({
       timestamp,
-      speaker: humanSpeaker || 'Hablante 1',
+      speaker: humanSpeaker || FALLBACK_SPEAKER,
       transcript: humanText,
       response: '',
       navigation: { ...navigation, comando: navigationComando },

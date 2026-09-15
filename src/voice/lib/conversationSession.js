@@ -2,7 +2,7 @@
  * Sesión de conversación — tres reglas:
  * 1. Frontera = turnCapture acumulativo del ASR (qué ya se registró).
  * 2. Log = delta respecto a la frontera, sin duplicar la línea anterior.
- * 3. Hablante = continuidad (Hablante 1) salvo "me llamo…".
+ * 3. Hablante = continuidad (config-driven) salvo "me llamo…".
  */
 import { logFluAsyncError } from './fluAsyncError.js'
 import { cleanForSpeech } from './audioMath.js'
@@ -144,7 +144,7 @@ export function filterSessionHistoryByStart(history = [], startedAt = 0) {
   })
 }
 
-export function resolvePassiveSpeaker(transcript = '', lastSpeaker = '', fallback = 'Hablante 1') {
+export function resolvePassiveSpeaker(transcript = '', lastSpeaker = '', fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker) {
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const introduced = resolveSpeakerNameFromUtterance(transcript, { wakeWords })
   if (introduced) return introduced

@@ -324,7 +324,7 @@ export function nextSpeakerLabel(knownLabels = []) {
   return nextAvailableSpeakerLabel([], knownLabels, { maxSpeakers: cap > 0 ? cap : 0 })
 }
 
-export function resolveConversationSpeaker(transcript = '', lastSpeaker = '') {
+export function resolveSpeakerByText(transcript = '', lastSpeaker = '') {
   const { speakers } = getActiveListenConfig()
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const introduced = detectWakeIntroducedName(transcript, wakeWords)
