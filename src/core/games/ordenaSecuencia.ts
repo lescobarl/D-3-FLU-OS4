@@ -15,12 +15,14 @@
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
-    clamp, normalizeForMatch, hasToken, hasAnyToken,
+    clamp, normalizeForMatch, hasToken, hasAnyToken, findTokenIndex,
 } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
     clave: string;           // keyword para validar la recitación
+    /** Variantes habladas de la clave (conjugaciones, sinónimos naturales). */
+    alias?: string[];
 }
 
 export interface OrdenaSecuenciaItem {
@@ -34,9 +36,9 @@ export const ORDENA_BANK: readonly OrdenaSecuenciaItem[] = Object.freeze([
         titulo: 'lavarse las manos',
         pasos: [
             { texto: 'abrir el agua', clave: 'agua' },
-            { texto: 'ponerse jabón', clave: 'jabon' },
-            { texto: 'enjuagarse', clave: 'enjuagar' },
-            { texto: 'secarse con la toalla', clave: 'secar' },
+            { texto: 'ponerse jabón', clave: 'jabon', alias: ['jabón'] },
+            { texto: 'enjuagarse', clave: 'enjuagar', alias: ['enjuagarse'] },
+            { texto: 'secarse con la toalla', clave: 'secar', alias: ['secarse', 'toalla'] },
         ],
         pista: 'Primero el agua, luego el jabón, después enjuagar y al final secar.',
     },
@@ -44,9 +46,9 @@ export const ORDENA_BANK: readonly OrdenaSecuenciaItem[] = Object.freeze([
         titulo: 'lavarse los dientes',
         pasos: [
             { texto: 'poner pasta al cepillo', clave: 'pasta' },
-            { texto: 'cepillarse', clave: 'cepillo' },
+            { texto: 'cepillarse', clave: 'cepillo', alias: ['cepillarse', 'cepillar'] },
             { texto: 'escupir', clave: 'escupir' },
-            { texto: 'enjuagar la boca', clave: 'enjuagar' },
+            { texto: 'enjuagar la boca', clave: 'enjuagar', alias: ['enjuagarse'] },
         ],
         pista: 'Primero la pasta, luego cepillar, escupir y enjuagar.',
     },
@@ -54,9 +56,9 @@ export const ORDENA_BANK: readonly OrdenaSecuenciaItem[] = Object.freeze([
         titulo: 'preparar un sándwich',
         pasos: [
             { texto: 'sacar el pan', clave: 'pan' },
-            { texto: 'poner el jamón', clave: 'jamon' },
+            { texto: 'poner el jamón', clave: 'jamon', alias: ['jamón'] },
             { texto: 'poner el queso', clave: 'queso' },
-            { texto: 'tapar con el otro pan', clave: 'tapar' },
+            { texto: 'tapar con el otro pan', clave: 'tapar', alias: ['taparse'] },
         ],
         pista: 'Pan, jamón, queso y tapar.',
     },
@@ -64,7 +66,7 @@ export const ORDENA_BANK: readonly OrdenaSecuenciaItem[] = Object.freeze([
         titulo: 'guardar los juguetes',
         pasos: [
             { texto: 'recoger los bloques', clave: 'bloques' },
-            { texto: 'guardar los muñecos', clave: 'munecos' },
+            { texto: 'guardar los muñecos', clave: 'munecos', alias: ['muñecos'] },
             { texto: 'cerrar la caja', clave: 'caja' },
             { texto: 'dejar todo en su lugar', clave: 'lugar' },
         ],
@@ -74,7 +76,7 @@ export const ORDENA_BANK: readonly OrdenaSecuenciaItem[] = Object.freeze([
         titulo: 'vestirse para salir',
         pasos: [
             { texto: 'ponerse la camisa', clave: 'camisa' },
-            { texto: 'ponerse el pantalón', clave: 'pantalon' },
+            { texto: 'ponerse el pantalón', clave: 'pantalon', alias: ['pantalón'] },
             { texto: 'ponerse los zapatos', clave: 'zapatos' },
             { texto: 'ponerse la chamarra', clave: 'chamarra' },
         ],
@@ -86,11 +88,12 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = ORDENA_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'repite', 'no se', 'no sé',
+    'pista', 'ayuda', 'ayudame', 'repite',
 ]);
 
+// "no sé" / "me rindo" = el niño se rinde → SALTAR (no dar la respuesta).
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'paso', 'siguiente', 'otro', 'sigo', 'no se', 'no sé',
+    'paso', 'siguiente', 'otro', 'sigo', 'no se', 'no sé', 'me rindo',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([
@@ -129,18 +132,47 @@ function displayScrambled(item: OrdenaSecuenciaItem, shuffled: number[]): string
     return shuffled.map((pasoIdx, pos) => `${labels[pos]}) ${item.pasos[pasoIdx].texto}`).join(', ');
 }
 
-function extractClavesInOrder(normalized: string, item: OrdenaSecuenciaItem): string[] {
-    const found: string[] = [];
-    for (const paso of item.pasos) {
-        if (hasToken(normalized, paso.clave)) found.push(paso.clave);
+/** Posición de la clave (o de un alias hablado) en el texto, o null si falta. */
+function claveIndex(normalized: string, paso: OrdenaPaso): number | null {
+    const candidates = [paso.clave, ...(paso.alias || [])];
+    let best: number | null = null;
+    for (const candidate of candidates) {
+        const idx = findTokenIndex(normalized, normalizeForMatch(candidate));
+        if (idx !== null && (best === null || idx < best)) best = idx;
     }
-    return found;
+    return best;
 }
 
-function isFullOrder(extracted: readonly string[], item: OrdenaSecuenciaItem): boolean {
-    const expected = item.pasos.map((paso) => paso.clave);
-    return extracted.length === expected.length
-        && expected.every((clave, index) => clave === extracted[index]);
+/**
+ * Posiciones de TODAS las claves en el texto, o `null` si falta alguna.
+ * El orden REAL lo decide el texto del niño (posición creciente), no el
+ * orden del banco: antes se recorría `item.pasos` (siempre ordenado) y la
+ * validación solo comprobaba completitud, permitiendo ganar en desorden.
+ */
+function clavePositions(normalized: string, item: OrdenaSecuenciaItem): number[] | null {
+    const positions: number[] = [];
+    for (const paso of item.pasos) {
+        const idx = claveIndex(normalized, paso);
+        if (idx === null) return null;
+        positions.push(idx);
+    }
+    return positions;
+}
+
+/** ¿Las posiciones van estrictamente en aumento? (orden correcto recitado). */
+function isAscending(positions: readonly number[]): boolean {
+    for (let i = 1; i < positions.length; i += 1) {
+        if (positions[i] <= positions[i - 1]) return false;
+    }
+    return true;
+}
+
+/** Cuántos pasos reconoció el niño (distingue "incompleto" de "sin pasos"). */
+function countRecognized(normalized: string, item: OrdenaSecuenciaItem): number {
+    return item.pasos.reduce(
+        (acc, paso) => acc + (claveIndex(normalized, paso) !== null ? 1 : 0),
+        0,
+    );
 }
 
 export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine {
@@ -263,9 +295,9 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                 };
             }
 
-            // ¿Recita en orden correcto?
-            const extracted = extractClavesInOrder(normalized, item);
-            if (extracted.length > 0 && isFullOrder(extracted, item)) {
+            // ¿Recita TODOS los pasos en el orden correcto?
+            const positions = clavePositions(normalized, item);
+            if (positions && isAscending(positions)) {
                 session.score += 1;
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
@@ -339,8 +371,8 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                 };
             }
 
-            // Intentó pero el orden está incompleto.
-            if (extracted.length > 0) {
+            // Intentó pero el orden está incompleto o desordenado.
+            if (countRecognized(normalized, item) > 0) {
                 return {
                     prompt: `Casi. El orden correcto es: ${item.pasos.map((paso) => paso.texto).join(', ')}. Inténtalo de nuevo.`,
                     valid: false,

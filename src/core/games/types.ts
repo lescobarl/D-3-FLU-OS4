@@ -24,6 +24,12 @@ export interface GameTurnResult {
     animation?: AvatarAnimation;
     emotion?: string;
     error?: string;          // mensaje amigable si el turno no se entendió
+    /**
+     * Resultado de la partida cuando `gameOver` es true: `true` = victoria,
+     * `false` = derrota/rendición. Permite que la voz celebre solo victorias
+     * (antes TODO `gameOver` se gritaba como triunfo).
+     */
+    won?: boolean;
 }
 
 export interface GameSession {

@@ -1,18 +1,20 @@
 // ============================================================
 // src/core/games/loteria.ts
-// Lotería (plan-juegos §Fase 3, viabilidad línea 138).
-// Motor puro sin I/O. Banco local de cartas `{ id, nombre, copla }`
-// inspirado en la Lotería mexicana clásica.
+// Lotería mexicana para voz (plan-juegos §Fase 3).
+// Motor puro sin I/O. Banco local de cartas `{ id, nombre, copla }`.
 //
 // Reglas REALES de la Lotería mexicana:
-//   FLU reparte una TABLA fija de `tablaSize` cartas y canta las
-//   cartas del mazo una por una. El niño MARCA su carta con
-//   "la tengo" / "yo la tengo" (solo si la carta está en su tabla).
-//   "¡Lotería!" se grita ÚNICAMENTE al final, cuando el niño
-//   completa TODA su tabla (= ganar). "no la tengo" / "paso"
-//   salta la carta sin marcarla.
-//   Config (data-driven): `loteria.tablaSize` → `cartasPorRonda`
-//   (retrocompatibilidad) → `rounds` → DEFAULT_TABLA=3, [1,16].
+//   - La TABLA del jugador es un subconjunto ALEATORIO e INDEPENDIENTE
+//     del mazo de cantadas (antes se tomaba del mismo orden → todas las
+//     primeras cantadas estaban en la tabla y el juego era trivial).
+//   - FLU canta el mazo carta por carta (copla). El jugador marca con
+//     "la tengo" / "yo la tengo" SOLO si la carta cantada está en su tabla.
+//   - Cantada que NO está en la tabla: no se marca ("no la tengo" avanza;
+//     si el jugador la marca por error es un FALLO).
+//   - `fallosMax` marcas equivocadas → se pierde la partida.
+//   - Al marcar TODA la tabla se grita "¡Lotería!" para ganar.
+//   - Config (data-driven, sin hardcode): `loteria.tablaSize`
+//     (retrocompatibilidad: `cartasPorRonda`/`rounds`) y `loteria.fallosMax`.
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
@@ -52,6 +54,8 @@ export const LOTERIA_BANK: readonly LoteriaCard[] = Object.freeze([
 
 const DEFAULT_TABLA = 3;
 const MAX_TABLA = LOTERIA_BANK.length;
+const DEFAULT_FALLOS_MAX = 3;
+const MAX_FALLOS = 5;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
     'pista', 'ayuda', 'ayudame', 'repite', 'no escuche', 'no escuché',
@@ -75,11 +79,28 @@ const END_FRAMES: readonly string[] = Object.freeze([
 ]);
 
 interface LoteriaState {
+    /** Orden del MAZO (cantadas): permutación completa del banco. */
     order: number[];
+    /** Cartas de la TABLA del jugador (subconjunto independiente del mazo). */
     tabla: number[];
+    /** Marca por slot de la tabla. */
     marcadas: boolean[];
     cursor: number;
+    /** Marcas equivocadas acumuladas (carta cantada que no era de la tabla). */
+    fallos: number;
+    /** Tope de fallos configurado para esta partida. */
+    fallosMax: number;
     phase: 'announce' | 'lista' | 'done';
+}
+
+interface LoteriaConfig {
+    tablaSize: number;
+    fallosMax: number;
+}
+
+/** Pluraliza de forma simple (es): `1 carta` / `3 cartas`. */
+function plural(count: number, singular: string, pluralForm: string): string {
+    return count === 1 ? singular : pluralForm;
 }
 
 function cardAt(state: LoteriaState): LoteriaCard | null {
@@ -98,34 +119,52 @@ function markedCount(state: LoteriaState): number {
     return state.marcadas.filter(Boolean).length;
 }
 
-function cardPrompt(state: LoteriaState, intro = 'Siguiente carta: '): string {
+/** ¿La carta cantada actual pertenece a la tabla del jugador? */
+function currentIsInTabla(state: LoteriaState): boolean {
+    const cardIdx = state.order[state.cursor];
+    return cardIdx !== undefined && state.tabla.includes(cardIdx);
+}
+
+function cantarPrompt(state: LoteriaState, intro = 'Siguiente carta: '): string {
     const card = cardAt(state);
     if (!card) return 'Ya se me acabaron las cartas.';
-    return `${intro}${card.copla} ¡Dime "la tengo" si la tienes!`;
+    return `${intro}${card.copla} ¿La tienes? Di "la tengo" solo si está en tu tabla.`;
 }
 
 export function createLoteriaEngine(options?: { random?: RandomSource }): GameEngine {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const readConfig = (cfg: Record<string, unknown> | undefined): number => {
+    const readConfig = (cfg: Record<string, unknown> | undefined): LoteriaConfig => {
         const tablaSize = Number(cfg?.tablaSize)
             || Number(cfg?.cartasPorRonda) // retrocompatibilidad
             || Number(cfg?.rounds)
             || DEFAULT_TABLA;
-        return clamp(tablaSize, 1, MAX_TABLA);
+        const fallosMax = Number(cfg?.fallosMax) || DEFAULT_FALLOS_MAX;
+        return {
+            tablaSize: clamp(tablaSize, 1, MAX_TABLA),
+            fallosMax: clamp(fallosMax, 1, MAX_FALLOS),
+        };
     };
 
     const buildState = (cfg: Record<string, unknown> | undefined): LoteriaState => {
         if (cfg && typeof cfg.random === 'function') {
             rng = cfg.random as RandomSource;
         }
+        const config = readConfig(cfg);
+        // Mazo y tabla son DOS permutaciones independientes del banco: la
+        // tabla no puede derivarse del mazo (regla real; antes era su slice).
         const order = shuffleOrder(rng, LOTERIA_BANK.length);
-        const tablaSize = readConfig(cfg);
+        const tabla =
+            config.tablaSize >= LOTERIA_BANK.length
+                ? order.slice()
+                : shuffleOrder(rng, LOTERIA_BANK.length).slice(0, config.tablaSize);
         return {
             order,
-            tabla: order.slice(0, tablaSize),
-            marcadas: new Array(tablaSize).fill(false),
+            tabla,
+            marcadas: new Array(tabla.length).fill(false),
             cursor: 0,
+            fallos: 0,
+            fallosMax: config.fallosMax,
             phase: 'announce',
         };
     };
@@ -138,23 +177,43 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         return state;
     };
 
-    const exhaustionResult = (session: GameSession, state: LoteriaState): GameTurnResult => ({
-        prompt: `¡Se acabaron las cartas y no llenaste tu tabla! Marcaste ${session.score} de ${state.tabla.length}. ¡Puedes volver a intentarlo!`,
+    const exhaustResult = (session: GameSession, state: LoteriaState): GameTurnResult => ({
+        prompt: `¡Se acabaron las cartas y no llenaste tu tabla! Marcaste ${session.score} de ${state.tabla.length} ${plural(state.tabla.length, 'carta', 'cartas')}. ¡Puedes volver a intentarlo!`,
         valid: false,
         gameOver: true,
+        won: false,
         score: session.score,
         animation: 'Idle',
         emotion: 'encouraging',
     });
 
-    const advanceFrom = (state: LoteriaState, session: GameSession, intro = '¡Claro! Siguiente carta: '): GameTurnResult => {
+    const loseByFaultsResult = (
+        session: GameSession,
+        state: LoteriaState,
+        fallosMax: number,
+    ): GameTurnResult => ({
+        prompt: `¡Ay, no! Marcaste ${fallosMax} ${plural(fallosMax, 'carta', 'cartas')} que no eran de tu tabla y se acabó la partida. Alcanzaste ${session.score} de ${state.tabla.length}. ¡Otra vez será!`,
+        valid: false,
+        gameOver: true,
+        won: false,
+        score: session.score,
+        animation: 'Idle',
+        emotion: 'sad',
+    });
+
+    /** Avanza a la siguiente carta del mazo (o cierra por agotamiento). */
+    const advanceFrom = (
+        state: LoteriaState,
+        session: GameSession,
+        intro = '¡Claro! Siguiente carta: ',
+    ): GameTurnResult => {
         state.cursor += 1;
         if (!cardAt(state)) {
             state.phase = 'done';
-            return exhaustionResult(session, state);
+            return exhaustResult(session, state);
         }
         return {
-            prompt: cardPrompt(state, intro),
+            prompt: cantarPrompt(state, intro),
             valid: false,
             gameOver: false,
             score: session.score,
@@ -178,9 +237,10 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as unknown as LoteriaState;
+            const fallosMax = state.fallosMax;
             const first = cardAt(state);
             return {
-                prompt: `¡Vamos a jugar a la lotería! Tu tabla tiene ${state.tabla.length} cartas: ${tablaNames(state)}. Primera carta: ${first ? first.copla : ''} ¡Dime "la tengo" si la tienes!`,
+                prompt: `¡Vamos a jugar a la lotería! Tu tabla tiene ${state.tabla.length} ${plural(state.tabla.length, 'carta', 'cartas')}: ${tablaNames(state)}. Voy a cantar las cartas del mazo y tú dices "la tengo" solo si es de tu tabla; ojo, con ${fallosMax} ${plural(fallosMax, 'error', 'errores')} pierdes. Primera carta: ${first ? first.copla : ''} ¿La tienes?`,
                 valid: false,
                 gameOver: false,
                 score: session.score,
@@ -191,6 +251,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
 
         turn(session: GameSession, text = ''): GameTurnResult {
             const state = session.state as unknown as LoteriaState;
+            const fallosMax = state.fallosMax;
 
             if (state.phase === 'done') {
                 return {
@@ -206,7 +267,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             const card = cardAt(state);
             if (!card) {
                 state.phase = 'done';
-                return exhaustionResult(session, state);
+                return exhaustResult(session, state);
             }
 
             const normalized = normalizeForMatch(text);
@@ -216,9 +277,10 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                 if (hasToken(normalized, 'loteria')) {
                     state.phase = 'done';
                     return {
-                        prompt: `¡LOTERÍA! ¡Completaste tu tabla con ${state.tabla.length} cartas y ${session.score} puntos! ¡Eres muy listo!`,
+                        prompt: `¡LOTERÍA! ¡Ganaste! Llenaste tu tabla de ${state.tabla.length} ${plural(state.tabla.length, 'carta', 'cartas')} con ${session.score} ${plural(session.score, 'punto', 'puntos')}. ¡Eres un campeón!`,
                         valid: true,
                         gameOver: true,
+                        won: true,
                         score: session.score,
                         animation: 'Dance',
                         emotion: 'happy',
@@ -237,7 +299,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             // ¿Pide que repita la copla?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
                 return {
-                    prompt: `La carta es: ${card.nombre}. ${card.copla} ¡Dime "la tengo" si la tienes!`,
+                    prompt: `La carta es: ${card.nombre}. ${card.copla} ¿La tienes? Di "la tengo" solo si está en tu tabla.`,
                     valid: false,
                     gameOver: false,
                     score: session.score,
@@ -256,7 +318,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             if (hasToken(normalized, 'loteria')) {
                 const remaining = state.tabla.length - markedCount(state);
                 return {
-                    prompt: `¡Todavía no! Te faltan ${remaining} cartas para llenar tu tabla. ${cardPrompt(state, '')}`,
+                    prompt: `¡Todavía no! Te faltan ${remaining} ${plural(remaining, 'carta', 'cartas')} para llenar tu tabla. ${cantarPrompt(state, '')}`,
                     valid: false,
                     gameOver: false,
                     score: session.score,
@@ -287,10 +349,10 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                     state.cursor += 1;
                     if (!cardAt(state)) {
                         state.phase = 'done';
-                        return exhaustionResult(session, state);
+                        return exhaustResult(session, state);
                     }
                     return {
-                        prompt: `¡${card.nombre}, lo tienes! ${cardPrompt(state)}`,
+                        prompt: `¡${card.nombre}, sí la tienes! ${cantarPrompt(state)}`,
                         valid: true,
                         gameOver: false,
                         score: session.score,
@@ -298,14 +360,24 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                         emotion: 'happy',
                     };
                 }
-                // La carta cantada NO está en la tabla → no se marca.
+                // La carta cantada NO está en la tabla → FALLO (no se marca).
+                state.fallos += 1;
                 session.round += 1;
-                return advanceFrom(state, session, '¡Esa carta no está en tu tabla! No la marques. Siguiente carta: ');
+                if (state.fallos >= fallosMax) {
+                    state.phase = 'done';
+                    return loseByFaultsResult(session, state, fallosMax);
+                }
+                const restantes = fallosMax - state.fallos;
+                return advanceFrom(
+                    state,
+                    session,
+                    `¡Uy! Esa carta no está en tu tabla, no la marques. Te ${plural(restantes, 'queda', 'quedan')} ${restantes} ${plural(restantes, 'error', 'errores')} y sigues. Siguiente carta: `,
+                );
             }
 
             // No entendió → reintenta la misma carta.
             return {
-                prompt: `¡Casi! Escúchame otra vez. ${cardPrompt(state, '')}`,
+                prompt: `¡Casi! Escúchame otra vez. ${cantarPrompt(state, '')}`,
                 valid: false,
                 gameOver: false,
                 score: session.score,

@@ -41,19 +41,22 @@ const CELEBRATION_ANIMS: ReadonlySet<string> = new Set(['Dance', 'Jump_in_place'
 /** Subconjunto de GameTurnResult que decide los overrides de voz. */
 export interface GameSpeechResult {
     gameOver?: boolean;
+    /** `false` = derrota/rendición: no se celebra (ver `GameTurnResult.won`). */
+    won?: boolean;
     animation?: string;
     emotion?: string;
 }
 
 /**
  * Resuelve los overrides de voz para el prompt de un resultado de motor.
- * - gameOver → grito de victoria (fin de partida).
+ * - gameOver victorioso (o sin `won` explícito) → grito de victoria.
+ * - gameOver con `won === false` (derrota/rendición) → sin grito.
  * - animación de celebración no final → boost moderado.
  * - resto → sin overrides (respeta la config de voz del perfil activo).
  */
 export function resolveGameSpeechOptions(result: GameSpeechResult): GameSpeechOptions {
     if (!result) return {};
-    if (result.gameOver) return WIN_SHOUT;
+    if (result.gameOver) return result.won === false ? {} : WIN_SHOUT;
     if (result.animation && CELEBRATION_ANIMS.has(result.animation)) {
         return CELEBRATION_BOOST;
     }

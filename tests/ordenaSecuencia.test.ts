@@ -111,6 +111,23 @@ describe('ordena_secuencia — respuesta incorrecta y no reconocido', () => {
         expect(result.emotion).toBe('encouraging');
     });
 
+    test('todas las claves pero EN DESORDEN → no gana (orden real validado)', () => {
+        const { engine, session } = freshOrdena();
+        const result = engine.turn(session, 'secar enjuagar jabon agua');
+        expect(result.valid).toBe(false);
+        expect(result.gameOver).toBe(false);
+        expect(result.error).toBe('orden incorrecto');
+        expect(session.score).toBe(0);
+        expect(session.round).toBe(1);
+    });
+
+    test('acepta conjugaciones naturales ("enjuagarse", "secarse")', () => {
+        const { engine, session } = freshOrdena();
+        const result = engine.turn(session, 'agua jabon enjuagarse secarse');
+        expect(result.valid).toBe(true);
+        expect(result.score).toBe(1);
+    });
+
     test('sin claves reconocidas → error amigable y se queda en la misma secuencia', () => {
         const { engine, session } = freshOrdena();
         const result = engine.turn(session, 'hola flu');
@@ -137,13 +154,14 @@ describe('ordena_secuencia — controles del jugador (pista / saltar)', () => {
         expect(session.round).toBe(1);
     });
 
-    test('"no se" entrega pista (no salta: hint tiene prioridad)', () => {
+    test('"no se" salta a la siguiente secuencia (rendirse, no pista)', () => {
         const { engine, session } = freshOrdena();
         const result = engine.turn(session, 'no se');
+        expect(result.score).toBe(0);
+        expect(session.round).toBe(2);
         expect(result.prompt).toBe(
-            'El orden correcto es: abrir el agua, ponerse jabón, enjuagarse, secarse con la toalla. Primero el agua, luego el jabón, después enjuagar y al final secar.'
+            '¡Claro! Aquí va otra: ordena los pasos para lavarse los dientes: A) poner pasta al cepillo, B) cepillarse, C) escupir, D) enjuagar la boca'
         );
-        expect(session.round).toBe(1);
     });
 
     test('"paso" salta a la siguiente secuencia sin puntuar', () => {

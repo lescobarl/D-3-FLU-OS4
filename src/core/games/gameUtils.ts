@@ -22,15 +22,21 @@ export function normalizeForMatch(text = ''): string {
     return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-export function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
+/**
+ * Índice (en el texto normalizado) donde aparece la frase como palabra/token,
+ * o `null` si no aparece. Límites: inicio, espacio o puntuación tipográfica
+ * (incluido el "¡"/"¿" de apertura española). Fuente única de `hasToken`.
+ */
+export function findTokenIndex(normalized = '', phrase = ''): number | null {
+    if (!phrase) return null;
     const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Límites de palabra: la frase puede iniciar en el arranque (^), tras un
-    // espacio o tras puntuación tipográfica (incluido el "¡"/"¿" de apertura
-    // española, p. ej. "¡Lotería!" → "¡loteria!"). El cierre ya admite la
-    // puntuación española de apertura y cierre.
     const pattern = new RegExp(`(^|\\s|[.,;!?¡¿])${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
+    const match = pattern.exec(normalized);
+    return match ? (match.index ?? 0) + match[1].length : null;
+}
+
+export function hasToken(normalized = '', phrase = ''): boolean {
+    return findTokenIndex(normalized, phrase) !== null;
 }
 
 export function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
