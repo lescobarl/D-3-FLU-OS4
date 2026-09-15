@@ -135,7 +135,7 @@ import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPau
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
 // App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
-import { isSpeechSynthesisSpeaking, isSpeechBusy, waitForSpeechIdle } from '../lib/fluSpeech.js'
+import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
 import {
   FLU_DIALOGUE_SPEAKER,
   deriveDialogueHistory,
@@ -2129,10 +2129,12 @@ export function useFluVoiceAssistant({
       }
 
       Recognition.onresult = (event) => {
-        // Supresión de eco: mientras FLU habla (TTS), ignorar resultados del
-        // reconocedor para no capturar la propia voz de FLU y re-mandarla a la IA
-        // (causa del bucle de respuestas repetidas en otro idioma).
-        if (isSpeechSynthesisSpeaking()) {
+        // Supresión de eco: mientras FLU HABLA, ignorar resultados del
+        // reconocedor para no capturar la propia voz y re-mandarla a la IA.
+        // Se usa la promesa propia de FLU (`isFluSpeaking`, acotada por el
+        // watchdog), NUNCA el flag global `speechSynthesis.speaking`: ese
+        // quedaba pegado y silenciaba la escucha hasta recargar la página.
+        if (isFluSpeaking()) {
           return
         }
         logMicRaw(event)

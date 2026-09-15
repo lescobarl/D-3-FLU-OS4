@@ -321,6 +321,9 @@ export const FLU_CONFIG = {
   speech: {
     chunkMaxChars: 220,
     resumeBeforeSpeak: true,
+    // Tope duro de una locución: si el navegador no dispara `onend`/`onerror`
+    // (bug de Chrome), el watchdog libera el habla y la escucha no se bloquea.
+    watchdogMs: 20000,
   },
   /** Escucha activa local (SpeechRecognition del navegador). */
   activeListen: {

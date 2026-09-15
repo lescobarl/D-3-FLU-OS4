@@ -188,12 +188,15 @@ export function useNavigationCommands(
         }, settleMs);
     }, [flushNavSettle]);
 
-    // Limpieza del timer de asentamiento al desmontar.
+    // Limpieza del timer de asentamiento al desmontar. También se limpia la
+    // bandera global: antes se borraba el timer sin apagarla y quedaba pegada.
     useEffect(() => () => {
         if (navSettleTimerRef.current !== null) {
             window.clearTimeout(navSettleTimerRef.current);
             navSettleTimerRef.current = null;
         }
+        pendingNavRef.current = null;
+        setNavSettlePending(false);
     }, []);
 
     // ============================================================

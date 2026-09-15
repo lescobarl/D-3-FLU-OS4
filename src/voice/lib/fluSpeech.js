@@ -70,6 +70,10 @@ let activeSpeechPromise = null
 let lastCompletedSpeechKey = ''
 let lastCompletedSpeechAt = 0
 let speechVoicesReady = false
+// Watchdog del TTS: si un utterance no dispara `onend`/`onerror` (bug conocido
+// de Chrome), `activeSpeechPromise` nunca resolvería y la escucha quedaría
+// bloqueada para siempre. El temporizador acota esa espera.
+let speechWatchdogTimer = null
 
 function getSpeechCfg() {
   return FLU_CONFIG.speech || {}
@@ -143,6 +147,16 @@ export function isSpeechSynthesisSpeaking() {
   return typeof window !== 'undefined' && Boolean(window.speechSynthesis?.speaking)
 }
 
+/**
+ * ¿FLU está hablando AHORA? Fuente de verdad de la supresión de eco: se basa
+ * en la promesa propia del módulo (acotada por el watchdog), NO en el flag
+ * global `speechSynthesis.speaking`, que puede quedar pegado en `true` y
+ * silenciar la escucha hasta recargar la página.
+ */
+export function isFluSpeaking() {
+  return Boolean(activeSpeechPromise)
+}
+
 export function isSpeechBusy() {
   if (activeSpeechPromise) return true
   if (typeof window === 'undefined' || !window.speechSynthesis) return false
@@ -163,7 +177,16 @@ export async function waitForSpeechIdle() {
 
 function speakSingleChunk(spoken, language, overrides = {}) {
   return new Promise((resolve) => {
-    const finish = () => resolve()
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      if (speechWatchdogTimer !== null) {
+        clearTimeout(speechWatchdogTimer)
+        speechWatchdogTimer = null
+      }
+      resolve()
+    }
 
     try {
       ensureSpeechVoicesReady()
@@ -210,6 +233,10 @@ function speakSingleChunk(spoken, language, overrides = {}) {
       if (getSpeechCfg().resumeBeforeSpeak !== false && typeof synth.resume === 'function') {
         synth.resume()
       }
+      // Watchdog: acota la espera aunque el navegador no dispare onend/onerror.
+      const watchdogMs = Number(getSpeechCfg().watchdogMs) || 20000
+      if (speechWatchdogTimer !== null) clearTimeout(speechWatchdogTimer)
+      speechWatchdogTimer = setTimeout(finish, watchdogMs)
       synth.speak(utterance)
     } catch {
       finish()
@@ -266,9 +293,14 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
     if (activeSpeechPromise) {
       return activeSpeechPromise
     }
-    // Si no hay promesa activa pero synth está hablando (podría ser de otra fuente),
-    // simplemente ignorar esta solicitud para no interrumpir
-    return Promise.resolve()
+    // Sin promesa propia pero el sintetizador dice estar ocupado: el flag
+    // global quedó pegado (bug de Chrome tras intercalar cancel/speak/resume).
+    // Se limpia en vez de descartar el habla en silencio para siempre.
+    try {
+      synth.cancel()
+    } catch {
+      // ignore
+    }
   }
 
   activeSpeechKey = speechKey
