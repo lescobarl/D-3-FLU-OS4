@@ -10,7 +10,7 @@
 //   - 'manda un mensaje de texto a Monse'               → sms.send
 //   - 'envía un correo a Monse'                         → email.send
 //   - 'envía un whatsapp a Monse dile que es mi vida'   → whatsapp.send (+message)
-// Mismo patrón probado que temporalIntentParser:
+// Patrón determinista:
 //   - `handled:false` si no reconoce ninguna intención.
 //   - `handled:true, action:null` si hace falta aclaración.
 // Regla #1: sin hardcode — textos deterministas es/en.

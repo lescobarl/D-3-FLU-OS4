@@ -2234,10 +2234,9 @@ function App() {
                     // El transcript crudo llega CON la wake word pegada ("Okay Blue
                     // generame una cita...") y con fragmentos ASR duplicados ("Okay
                     // Flow generame Una Okay flu genérame una nota..."). Los parsers
-                    // deterministas (parseReminderIntent, __fluHandleNoteText, etc.)
-                    // anclan sus regex al inicio del mandato, así que aquí se limpia
-                    // TODO el prefijo de wake word (una sola vez, para todos los
-                    // manejadores) y se colapsan los fragmentos duplicados antes de
+                    // deterministas anclan sus regex al inicio del mandato, así que
+                    // aquí se limpia TODO el prefijo de wake word (una sola vez, para todos
+                    // los manejadores) y se colapsan los fragmentos duplicados antes de
                     // despachar. Este es EL ÚNICO punto donde se separa la wake word
                     // del mandato para la resolución determinista de intención.
                     const wakeWords: string[] =
@@ -3811,8 +3810,8 @@ function App() {
     );
 
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
-    // determinista: parseHorarioIntent interpreta el transcript y aquí se
-    // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
+    // determinista: parseAgendaCommand interpreta el transcript y ejecuta la
+    // acción sobre el servicio único de agenda (tabla `agenda`).
     const onboardingOverlayLabels = FLU_CONFIG.onboarding?.overlay || {};
     const onboardingPrompt = onboarding.currentStep
         ? promptForStep(

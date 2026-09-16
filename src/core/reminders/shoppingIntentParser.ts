@@ -2,9 +2,9 @@
 // src/core/reminders/shoppingIntentParser.ts
 // Parser de la LISTA DE COMPRAS (separado del calendario).
 // ------------------------------------------------------------
-// Se extrajo de `reminderIntentParser` para que el calendario unificado
-// (`agenda`) no arrastre la lista de compras. Una sola fuente de la gramática
-// de "agrega/tacha/quita/muestra … la lista de compras".
+// Separado del calendario unificado (`agenda`) para que no arrastre la lista
+// de compras. Una sola fuente de la gramática de "agrega/tacha/quita/muestra
+// … la lista de compras".
 // ============================================================
 
 export type ShoppingIntentAction =

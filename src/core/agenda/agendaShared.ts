@@ -3,50 +3,13 @@
 // Utilidades y TIPOS compartidos del calendario unificado.
 // ------------------------------------------------------------
 // Fuente única (sin doble ruta) de las utilidades de tiempo/hora y de la
-// estructuración OCR de horarios que antes vivían dentro de los servicios
-// viejos (reminder/temporal/horario) y que consumen los paneles, hooks y
-// parsers. Los CRUD viven en `agendaService.ts` (única fuente de mutación).
+// estructuración OCR de horarios que consumen los paneles, hooks y parsers.
+// Los CRUD viven en `agendaService.ts` (única fuente de mutación).
 // ============================================================
 
-import type {
-    TemporalItemKind,
-    TemporalRecurrence,
-    TemporalTrigger,
-} from '../temporal/temporalTypes';
-
 // ------------------------------------------------------------
-// Re-export de los tipos temporales (fuente única: temporalTypes.ts)
+// Tipos de entrada (estructuración OCR de horarios)
 // ------------------------------------------------------------
-export type {
-    TemporalItemKind,
-    TemporalItemRecord,
-    TemporalItemStatus,
-    TemporalRecurrence,
-    TemporalTrigger,
-} from '../temporal/temporalTypes';
-
-// ------------------------------------------------------------
-// Tipos de entrada (CRUD unificado) — antes en los servicios viejos
-// ------------------------------------------------------------
-
-/** Entrada para crear un recordatorio (memoria/recordatorios). */
-export interface NewReminderInput {
-    text: string;
-    dueAt: number;
-    personId?: string;
-    personName?: string;
-    category?: string;
-}
-
-/** Entrada para crear una alarma o temporizador (motor temporal). */
-export interface NewTemporalItemInput {
-    kind: TemporalItemKind;
-    label: string;
-    trigger: TemporalTrigger;
-    recurrence?: TemporalRecurrence;
-    message?: string;
-    personId?: string;
-}
 
 /** Entrada estructurada a partir del texto OCR de un horario. */
 export interface HorarioClaseEstructurada {

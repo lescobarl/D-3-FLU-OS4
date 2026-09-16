@@ -366,8 +366,6 @@ describe('Fase 2 — Database v5: tablas reminders y shoppingItems', () => {
 
     it('fluDatabase must export the Phase 2 record types', async () => {
         const src = (await import('fs')).readFileSync('./src/core/db/fluDatabase.ts', 'utf-8');
-        expect(src).toContain('export interface ReminderRecord');
         expect(src).toContain('export interface ShoppingItemRecord');
-        expect(src).toContain("export type ReminderStatus = 'pending' | 'done' | 'dismissed'");
     });
 });

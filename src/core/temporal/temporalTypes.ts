@@ -9,8 +9,6 @@
 // FLU_CONFIG.temporal; aquí solo viven los contratos de datos.
 // ============================================================
 
-import type { SyncTuple } from '../db/fluDatabase';
-
 // ------------------------------------------------------------
 // Disparador: de dónde sale el "cuándo"
 // ------------------------------------------------------------
@@ -38,39 +36,6 @@ export interface TemporalRecurrence {
   /** interval: cada N ms. */
   everyMs?: number;
 }
-
-// ------------------------------------------------------------
-// Ítems temporales persistentes (alarmas y temporizadores)
-// ------------------------------------------------------------
-export type TemporalItemKind = 'alarm' | 'timer';
-export type TemporalItemStatus = 'pending' | 'done' | 'cancelled';
-
-/**
- * Registro persistente de una alarma o un temporizador.
- * `nextAt` es el próximo disparo derivado de `trigger`+`recurrence`
- * (lo calcula scheduleEngine en el servicio y lo re-arranca el hook).
- */
-export interface TemporalItemRecord {
-  id: string; // UUIDv4 (Obligación #6)
-  kind: TemporalItemKind;
-  label: string;
-  trigger: TemporalTrigger;
-  recurrence: TemporalRecurrence;
-  /** Próximo disparo en ms epoch (determinista para el scheduler). */
-  nextAt: number;
-  status: TemporalItemStatus;
-  message?: string;
-  /** Usuario dueño del ítem (aislamiento por usuario). */
-  personId?: string;
-  createdAt: number;
-  updatedAt: number;
-  sync: SyncTuple; // Obligación #7
-}
-
-// ------------------------------------------------------------
-// Recurrencia de recordatorios (extensión de ReminderRecord.repeat)
-// ------------------------------------------------------------
-export type ReminderRepeat = TemporalRecurrence;
 
 // ------------------------------------------------------------
 // Constructores declarativos (evitan objetos sueltos y hardcode)

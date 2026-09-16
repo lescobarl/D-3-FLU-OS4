@@ -6,12 +6,12 @@
 // ============================================================
 
 import { describe, expect, it } from 'vitest';
-import type { ReminderRecord } from '../src/core/db/fluDatabase';
 import {
   countPendingItems,
   DEFAULT_AGENDA_CONFIG,
   formatAgendaForPrompt,
   mergeRemindersIntoAgenda,
+  type AgendaReminderLike,
   type DailyAgendaItem,
 } from '../src/lib/dailyAgenda';
 
@@ -22,7 +22,15 @@ function T(h: number, m: number): number {
   return new Date(2099, 0, 15, h, m, 0, 0).getTime();
 }
 
-function makeReminder(overrides: Partial<ReminderRecord> = {}): ReminderRecord {
+interface TestReminder extends AgendaReminderLike {
+  id: string;
+  category: string;
+  createdAt: number;
+  updatedAt: number;
+  sync: { revision: number; updated_at: string; deleted: boolean };
+}
+
+function makeReminder(overrides: Partial<TestReminder> = {}): TestReminder {
   return {
     id: 'r1',
     text: 'comprar leche',
@@ -51,7 +59,7 @@ describe('mergeRemindersIntoAgenda — casos sin fusión', () => {
   it('devuelve la misma referencia con reminders vacíos o no-array', () => {
     const items = [makeItem()];
     expect(mergeRemindersIntoAgenda(items, [])).toBe(items);
-    expect(mergeRemindersIntoAgenda(items, null as unknown as ReadonlyArray<ReminderRecord>)).toBe(items);
+    expect(mergeRemindersIntoAgenda(items, null as unknown as ReadonlyArray<AgendaReminderLike>)).toBe(items);
   });
 
   it('devuelve la misma referencia si no hay pendientes (solo done/dismissed)', () => {

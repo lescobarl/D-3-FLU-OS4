@@ -13,9 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { EnvironmentDefinition } from '../environments/environmentRegistry';
 import type { PaletteDefinition } from '../branding/seasonalPalettes';
 import type { SearchSite } from '../search/searchSiteTypes';
-import type { ReminderRepeat, TemporalItemRecord } from '../temporal/temporalTypes';
 import type { AgendaItem } from '../agenda/agendaModel';
-import { mapLegacyToAgenda } from '../agenda/agendaMigration';
 import type { ConversationEntry } from '../../types/bridge';
 
 // -----------------------------------------------------------
@@ -177,30 +175,6 @@ export interface BrandingConfigRecord {
     meta?: Record<string, unknown>;
     /** Timestamp ISO 8601 */
     timestamp: string;
-    sync: SyncTuple;
-}
-
-// -----------------------------------------------------------
-// Reminder Record (persistente) — Memoria y recordatorios (Fase 2)
-// -----------------------------------------------------------
-
-export type ReminderStatus = 'pending' | 'done' | 'dismissed';
-
-/** Registro persistente de un recordatorio. */
-export interface ReminderRecord {
-    id: string; // UUIDv4
-    text: string;
-    /** Vencimiento en ms desde epoch (UTC). Determinista para el scheduler. */
-    dueAt: number;
-    /** Opcional: persona/participante al que va dirigido (B4). */
-    personId?: string;
-    personName?: string;
-    /** Recurrencia opcional (motor temporal genérico): once/daily/weekdays/interval. */
-    repeat?: ReminderRepeat;
-    category: string;
-    status: ReminderStatus;
-    createdAt: number;
-    updatedAt: number;
     sync: SyncTuple;
 }
 
@@ -563,7 +537,6 @@ export class FluDatabase extends Dexie {
     voiceProfiles!: EntityTable<VoiceProfileRecord, 'id'>;
     sessionState!: EntityTable<SessionStateRecord, 'id'>;
     brandingConfig!: EntityTable<BrandingConfigRecord, 'id'>;
-    reminders!: EntityTable<ReminderRecord, 'id'>;
     shoppingItems!: EntityTable<ShoppingItemRecord, 'id'>;
     participants!: EntityTable<ParticipantRecord, 'id'>;
     materiaGris!: EntityTable<MateriaGrisRecord, 'id'>;
@@ -574,7 +547,6 @@ export class FluDatabase extends Dexie {
     diaryEntries!: EntityTable<DiaryEntryRecord, 'id'>;
     ambientes!: EntityTable<AmbienteCatalogRecord, 'id'>;
     paletas!: EntityTable<PaletaCatalogRecord, 'id'>;
-    temporalItems!: EntityTable<TemporalItemRecord, 'id'>;
     communicationProfiles!: EntityTable<CommunicationProfileRecord, 'id'>;
     onboardingStates!: EntityTable<OnboardingStateRecord, 'id'>;
     browserProfiles!: EntityTable<BrowserProfileRecord, 'id'>;
@@ -687,19 +659,11 @@ export class FluDatabase extends Dexie {
 
         // v21: Calendario UNIFICADO — alarma/recordatorio/cita/junta/clase en una
         // sola tabla. El color se deriva en LECTURA (FLU_CONFIG.agenda.colors),
-        // no se guarda. La migración COPIA los datos viejos (reminders/temporal)
-        // a `agenda` sin borrarlos (no destructiva). El horario ya no es una
-        // tabla propia: se escribe directamente como `clase` weekly en `agenda`.
-        this.version(21)
-            .stores({
-                agenda: 'id, kind, status, personId',
-            })
-            .upgrade(async (tx) => {
-                const reminders = await tx.table<ReminderRecord, 'id'>('reminders').toArray();
-                const temporals = await tx.table<TemporalItemRecord, 'id'>('temporalItems').toArray();
-                const items = mapLegacyToAgenda({ reminders, temporals });
-                await tx.table<AgendaItem, 'id'>('agenda').bulkAdd(items);
-            });
+        // no se guarda. Los datos legacy (reminders/temporal/horario) ya no se
+        // migran: la tabla `agenda` es la única fuente.
+        this.version(21).stores({
+            agenda: 'id, kind, status, personId',
+        });
 
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
@@ -707,7 +671,6 @@ export class FluDatabase extends Dexie {
         this.voiceProfiles = this.table('voiceProfiles');
         this.sessionState = this.table('sessionState');
         this.brandingConfig = this.table('brandingConfig');
-        this.reminders = this.table('reminders');
         this.shoppingItems = this.table('shoppingItems');
         this.participants = this.table('participants');
         this.materiaGris = this.table('materiaGris');
@@ -718,7 +681,6 @@ export class FluDatabase extends Dexie {
         this.diaryEntries = this.table('diaryEntries');
         this.ambientes = this.table('ambientes');
         this.paletas = this.table('paletas');
-        this.temporalItems = this.table('temporalItems');
         this.communicationProfiles = this.table('communicationProfiles');
         this.onboardingStates = this.table('onboardingStates');
         this.browserProfiles = this.table('browserProfiles');
