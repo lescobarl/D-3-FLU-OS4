@@ -17,11 +17,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ReminderRecord } from '../core/db/fluDatabase';
 import {
-  createReminderService,
+  createReminderAgenda,
   type AddReminderResult,
-  type NewReminderInput,
-  type ReminderService,
-} from '../core/reminders/reminderService';
+  type ReminderAgenda,
+} from '../core/agenda/agendaService';
+import type { NewReminderInput } from '../core/agenda/agendaShared';
 import { collectDueOrdered } from '../core/reminders/reminderScheduler';
 
 // ------------------------------------------------------------
@@ -67,7 +67,7 @@ export interface RemindersActions {
 }
 
 export interface UseRemindersResult extends RemindersState, RemindersActions {
-  service: ReminderService;
+  service: ReminderAgenda;
 }
 
 // ------------------------------------------------------------
@@ -94,9 +94,9 @@ export function useReminders({
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<ReminderService | null>(null);
+  const serviceRef = useRef<ReminderAgenda | null>(null);
   if (!serviceRef.current) {
-    serviceRef.current = createReminderService({
+    serviceRef.current = createReminderAgenda({
       db: fluDb.reminders,
       config: { maxPerDay, defaultCategory },
       now: now || (() => Date.now()),

@@ -10,7 +10,7 @@
 // ============================================================
 
 import { toHHMM, toMin } from '../agenda/agendaShared';
-import type { AddHorarioResult, HorarioService } from './horarioService';
+import type { AddHorarioResult, HorarioAgenda } from '../agenda/agendaService';
 import type { HorarioIntentData } from './horarioIntentParser';
 
 /** Scope y parámetros de la alta por voz. */
@@ -63,7 +63,7 @@ export function buildHorarioVoiceEntry(
  * la entrada normalizada (para componer la respuesta).
  */
 export async function addHorarioVoiceEntry(
-    service: Pick<HorarioService, 'add'>,
+    service: Pick<HorarioAgenda, 'add'>,
     data: HorarioIntentData,
     scope: HorarioVoiceScope,
 ): Promise<{ result: AddHorarioResult; entry: HorarioVoiceEntry | null }> {

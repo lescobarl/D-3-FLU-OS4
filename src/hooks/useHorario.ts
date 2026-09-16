@@ -16,12 +16,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type HorarioRecord } from '../core/db/fluDatabase';
 import {
-  createHorarioService,
-  toMin,
+  createHorarioAgenda,
   type AddHorarioResult,
-  type HorarioService,
-  type NewHorarioInput,
-} from '../core/horario/horarioService';
+  type HorarioAgenda,
+} from '../core/agenda/agendaService';
+import { toMin, type NewHorarioInput } from '../core/agenda/agendaShared';
 
 // ------------------------------------------------------------
 // Tipos
@@ -51,7 +50,7 @@ export interface HorarioActions {
 }
 
 export interface UseHorarioResult extends HorarioState, HorarioActions {
-  service: HorarioService;
+  service: HorarioAgenda;
 }
 
 // ------------------------------------------------------------
@@ -73,9 +72,9 @@ export function useHorario({ now, participantId }: UseHorarioOptions = {}): UseH
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<HorarioService | null>(null);
+  const serviceRef = useRef<HorarioAgenda | null>(null);
   if (!serviceRef.current) {
-    serviceRef.current = createHorarioService({
+    serviceRef.current = createHorarioAgenda({
       db: fluDb.horario,
       config: { maxClasesPorDia, diaMin, diaMax, defaultColor, colores },
       now: now || (() => Date.now()),

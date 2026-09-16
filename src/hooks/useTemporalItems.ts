@@ -24,12 +24,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb } from '../core/db/fluDatabase';
 import {
-  createTemporalService,
+  createTemporalAgenda,
   type AddTemporalResult,
-  type NewTemporalItemInput,
-  type TemporalItemRecord,
-  type TemporalService,
-} from '../core/temporal/temporalService';
+  type TemporalAgenda,
+} from '../core/agenda/agendaService';
+import type { NewTemporalItemInput, TemporalItemRecord } from '../core/agenda/agendaShared';
 import { collectDueOrdered, nextOccurrence } from '../core/temporal/scheduleEngine';
 import {
   createWebAudioDriver,
@@ -94,7 +93,7 @@ export interface TemporalItemsActions {
 }
 
 export interface UseTemporalItemsResult extends TemporalItemsState, TemporalItemsActions {
-  service: TemporalService;
+  service: TemporalAgenda;
 }
 
 // ------------------------------------------------------------
@@ -129,9 +128,9 @@ export function useTemporalItems({
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<TemporalService | null>(null);
+  const serviceRef = useRef<TemporalAgenda | null>(null);
   if (!serviceRef.current) {
-    serviceRef.current = createTemporalService({
+    serviceRef.current = createTemporalAgenda({
       db: fluDb.temporalItems,
       config: { maxActive },
       now: now || (() => Date.now()),
@@ -284,11 +283,10 @@ export function useTemporalItems({
   /** Agrega una alarma o temporizador y refresca las listas. */
   const add = useCallback(
     async (input: NewTemporalItemInput): Promise<AddTemporalResult> => {
-      const inputPersonId = (input as { personId?: string }).personId;
       const result = await service.add({
         ...input,
-        personId: inputPersonId || (scope !== 'global' ? scope : undefined),
-      } as NewTemporalItemInput);
+        personId: input.personId || (scope !== 'global' ? scope : undefined),
+      });
       if (result.ok) await refresh();
       return result;
     },
