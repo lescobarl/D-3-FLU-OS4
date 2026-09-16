@@ -213,6 +213,7 @@ const ALLOW_COLLISION = new Set([
   'formatMinuteHistoryLabel',        // useMinuteKnowledge .trim() sin fallback; js normalizeSpaces+fallback titulo
   'saveSessionState',                // useSessionPersistence (localStorage, SessionState UI) vs fluStorage (IDB voz: phase/history)
   'loadSessionState',                // idem saveSessionState
+  'labelToSpeakerId',                // conversationRow (normaliza diacriticos + fallback SPEAKER_ID_CALCULATING) vs speakerCore (regex simple + fallback speaker_1)
 ])
 
 /** TODOS los símbolos exportados definidos en >1 archivo (catch-all). */
