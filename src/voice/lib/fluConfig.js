@@ -207,10 +207,10 @@ export const FLU_CONFIG = {
         classroomMultiSpeakerRoomClusterMin: 2,
         classroomReuseRelax: 0.03,
         classroomNewVoiceRelax: 0.04,
-        /** Sesión efectivamente solitaria (1 cluster auto): aprieta el umbral de apertura de voz
-         * nueva (NEW_VOICE_OPEN = NEW_VOICE_EFF * soloNewVoiceFactor) para evitar «Hablante 2»
-         * fantasma sin romper voces realmente distintas (sims < NEW_VOICE_OPEN siguen abriendo). */
-        soloNewVoiceFactor: 0.82,
+        /** Factor de relajación de "solo". 1.0 = sin relajación: una voz claramente
+         *  distinta separa aunque solo haya hablado 1 persona (hombre/mujer/niño).
+         *  La protección anti "hola hola" la aporta el coalesce de frase corta. */
+        soloNewVoiceFactor: 1.0,
         /** Tras ≥N clusters auto: no forzar production-primary-rematch si otro cluster encaja mejor. */
         classroomPrimaryRematchMaxClusters: 1,
         /**
