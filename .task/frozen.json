@@ -11,5 +11,6 @@
   "tests/syncTupleSingleSource.test.ts": "a54407b8f1a1c2d2cccea2c652280b7cb1d2c4066f09c55a6a34e6250ec1a55e",
   "tests/hardcodeGuard.test.ts": "c0193fb23bff338bafac668277bbf09093a23d67f7a4cf43bda576bf1929d37d",
   "tests/speakerDiarizationUnified.test.ts": "f6152426161e903351de484505a0bb9c8dd19491f65007bc68a0f8d229f2e4b2",
-  "tests/speakerDiarizationSeparation.test.ts": "f2c5c0d1516f80d689d91429f9611f48a78b0b2f53c36695d3dcaabf8dfe5c57"
+  "tests/speakerDiarizationSeparation.test.ts": "f2c5c0d1516f80d689d91429f9611f48a78b0b2f53c36695d3dcaabf8dfe5c57",
+  "tests/agendaSingleSource.test.ts": "aa95a7511a0d49751e13226c35ba0d0b4f30a5f91a685cf64ae9cef9eb192113"
 }
