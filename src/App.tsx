@@ -153,6 +153,8 @@ import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
 import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
+import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
+import type { AgendaColorMap } from './core/agenda/agendaModel';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
@@ -1113,6 +1115,7 @@ function buildAgendaLabels(voice: Record<string, unknown>): TodayAgendaLabels {
     };
 }
 
+
 /**
  * Resuelve una intención ESTRUCTURADA a partir del `dominio` que el cerebro
  * conversacional ya clasificó (`accion.dominio`), cuando el re-parseo del texto
@@ -1530,7 +1533,7 @@ function App() {
                         kind,
                         label: cmd.label || kind,
                         trigger: cmd.trigger,
-                        personId: opts?.personId,
+                        personId: activeParticipantIdRef.current,
                     });
                     if (!result.ok) {
                         return result.reason === 'duplicado'
@@ -1542,7 +1545,7 @@ function App() {
                         : `Listo: ${result.item?.label}`;
                 }
                 case 'agenda.cancel': {
-                    const pending = await agendaService.list({ personId: opts?.personId, status: 'pending' });
+                    const pending = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
                     const target = pending.find((item) => item.kind === kind);
                     if (!target) {
                         return lang === 'en' ? 'Nothing to cancel.' : 'No encontré nada que cancelar.';
@@ -1551,7 +1554,7 @@ function App() {
                     return lang === 'en' ? 'Cancelled.' : 'Cancelado.';
                 }
                 case 'agenda.update': {
-                    const pending = await agendaService.list({ personId: opts?.personId, status: 'pending' });
+                    const pending = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
                     const target = pending.find((item) => item.kind === kind);
                     if (!target) {
                         return lang === 'en' ? 'Nothing to update.' : 'No encontré nada que cambiar.';
@@ -1566,7 +1569,7 @@ function App() {
                     return '';
             }
         },
-        [agendaService, languageRef],
+        [agendaService, languageRef, activeParticipantIdRef],
     );
 
     // ---- Horario de clases: hook temprano (Pizarrón + consulta por voz) ----
@@ -4001,21 +4004,23 @@ function App() {
                 : parseAgendaIntent(String(input || '').trim());
             if (!intent || !intent.handled || intent.action !== 'agenda.today') return '';
 
-            const agendaCfg = FLU_CONFIG.agenda || {};
-            const voice = (agendaCfg.voice || {}) as Record<string, unknown>;
-            const labels = buildAgendaLabels(voice);
-            const text = buildTodayAgenda({
-                horario: horario.horario || [],
-                reminders: reminders.reminders || [],
-                alarms: temporals.alarms || [],
-                notes: (notes.notes || []).map((n) => ({ label: n.label, done: n.done })),
-                now: Date.now(),
-                language: lang,
-                labels,
+            // Lectura ÚNICA: la agenda del día sale de la tabla `agenda`, no de
+            // las fuentes viejas (horario/reminders/temporal).
+            const items = await agendaService.list({
+                personId: activeParticipantIdRef.current,
+                status: 'pending',
             });
-            return text;
+            const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
+            const summary = summarizeAgenda(items, 'day', Date.now(), colors);
+            const voice = ((FLU_CONFIG.agenda as Record<string, unknown>)?.voice ?? {}) as {
+                empty?: { es?: string; en?: string };
+            };
+            return agendaSummaryText(summary, lang, {
+                es: voice.empty?.es ?? 'No tienes nada programado.',
+                en: voice.empty?.en ?? 'Nothing scheduled.',
+            });
         },
-        [horario, reminders, temporals, notes, languageRef],
+        [agendaService, languageRef, activeParticipantIdRef],
     );
 
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
