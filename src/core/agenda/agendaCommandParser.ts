@@ -46,6 +46,7 @@ const KIND_NOUNS: ReadonlyArray<{ kind: AgendaKind; nouns: readonly string[] }> 
 const CREATE_FRAMES: readonly string[] = Object.freeze([
     'crea', 'crear', 'pon', 'ponme', 'agenda', 'agendar', 'programa', 'programar',
     'genera', 'generar', 'recuerdame', 'recordame', 'despiertame', 'despertame',
+    'agrega', 'agregar', 'añade', 'añadir',
 ]);
 
 const LIST_FRAMES: readonly string[] = Object.freeze([
@@ -86,6 +87,18 @@ function detectKind(text: string): AgendaKind | null {
     return null;
 }
 
+/**
+ * Kind implícito cuando no hay sustantivo explícito: el dictado escolar
+ * "agrega matemáticas el lunes a las 8" (materia + día + hora) es una CLASE.
+ */
+function resolveImplicitKind(text: string, action: AgendaCommandAction | null): AgendaKind | null {
+    if (action && action !== 'agenda.create') return null;
+    const t = normalize(text);
+    const hasWeekday = WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
+    if (hasWeekday && pickTimeOfDay(text).timeOfDay) return 'clase';
+    return null;
+}
+
 function detectAction(text: string): AgendaCommandAction | null {
     const t = normalize(text);
     if (LIST_FRAMES.some((f) => t.includes(f))) return 'agenda.list';
@@ -96,6 +109,22 @@ function detectAction(text: string): AgendaCommandAction | null {
 }
 
 const WEEKLY_LEAD_RE = /\b(?:los|cada|todos\s+los|todas\s+las)\s+/i;
+
+/** Cualquier día de semana mencionado (con o sin "los"), para CLASES. */
+function detectAnyWeekdays(text: string): number[] {
+    const t = normalize(text);
+    return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(t)).map((w) => w.day);
+}
+
+/** Clase = horario semanal: día(s) + hora (el/los/lunes…). */
+function resolveClaseTrigger(text: string, now: number): AgendaTrigger | null {
+    const days = detectAnyWeekdays(text);
+    if (days.length > 0) {
+        const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
+        return { type: 'weekly', daysOfWeek: days, timeOfDay: time };
+    }
+    return resolveTrigger(text, now);
+}
 
 /** Días de semana SOLO con recurrencia explícita ("los lunes"), no "el jueves". */
 function detectWeekdays(text: string): number[] {
@@ -173,7 +202,7 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
         return { handled: true, action, reply: '' };
     }
 
-    const kind = detectKind(cleaned);
+    const kind = detectKind(cleaned) ?? resolveImplicitKind(cleaned, action);
     if (!kind) return { handled: false, action: null, reply: '' };
 
     // Sin verbo explícito ("reunión del equipo mañana a las 12", "junta hoy"):
@@ -182,8 +211,11 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const resolvedAction = action ?? 'agenda.create';
 
     // El disparo es OBLIGATORIO solo para crear; cancelar/editar identifican
-    // el item por kind+label (la fecha puede venir o no).
-    const trigger = resolveTrigger(cleaned, now);
+    // el item por kind+label (la fecha puede venir o no). Las CLASES con día
+    // de semana son SIEMPRE semanales (es su horario, no una cita puntual).
+    const trigger = kind === 'clase'
+        ? resolveClaseTrigger(cleaned, now)
+        : resolveTrigger(cleaned, now);
     if (!trigger && resolvedAction === 'agenda.create') {
         return { handled: false, action: null, reply: '' };
     }

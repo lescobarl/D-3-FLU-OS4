@@ -95,12 +95,8 @@ describe('deterministicArbiter — resolveDeterministicCommand', () => {
   it('resuelve el dominio de horario (agregar por dictado)', () => {
     const result = resolveDeterministicCommand('agrega matemáticas el lunes a las 8');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('horario');
-    expect(result.action).toMatchObject({
-      handled: true,
-      action: 'horario.add',
-      data: { materia: 'matemáticas', dia: 1, inicio: '08:00' },
-    });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.create', kind: 'clase' });
   });
 
   it('resuelve el dominio de horario (consulta por dictado)', () => {
@@ -376,16 +372,15 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
     expect(String(data.label)).toContain('Recordar');
   });
 
-  it('horario.add: el intent del árbitro trae data.materia/dia/inicio para registrar', () => {
-    const r = resolveDeterministicCommand(
-      'agrega matemáticas el lunes a las 8 al horario',
-    );
-    expect(r.domain).toBe('horario');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('horario.add');
-    expect(typeof data.materia).toBe('string');
-    expect(data.dia).toBeTruthy();
-    expect(typeof data.inicio).toBe('string');
+  it('horario.add: el intent del árbitro trae kind/trigger de CLASE semanal', () => {
+    const r = resolveDeterministicCommand('agrega matemáticas el lunes a las 8 al horario');
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.create');
+    expect((r.action as { kind?: string }).kind).toBe('clase');
+    const trigger = (r.action as { trigger?: { type?: string; daysOfWeek?: number[]; timeOfDay?: string } }).trigger;
+    expect(trigger?.type).toBe('weekly');
+    expect(trigger?.daysOfWeek).toContain(1);
+    expect(trigger?.timeOfDay).toBe('08:00');
   });
 
   it('horario.query: el intent del árbitro trae data para consultar el horario', () => {

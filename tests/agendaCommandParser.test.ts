@@ -63,6 +63,14 @@ describe('agenda.intent — list/cancel', () => {
         expect(r.kind).toBe('alarma');
     });
 
+    it('"agrega matemáticas el lunes a las 8" → clase (dictado escolar)', () => {
+        const r = parseAgendaCommand('agrega matemáticas el lunes a las 8', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.create');
+        expect(r.kind).toBe('clase');
+        expect(r.trigger?.type).toBe('weekly');
+    });
+
     it('frase sin intención no matchea', () => {
         expect(parseAgendaCommand('hola flu').handled).toBe(false);
     });
