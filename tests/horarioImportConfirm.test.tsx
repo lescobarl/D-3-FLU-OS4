@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { HorarioImportConfirm } from '../src/components/WorkspaceHub';
-import type { HorarioClaseEstructurada } from '../src/core/horario/horarioService';
+import type { HorarioClaseEstructurada } from '../src/core/agenda/agendaShared';
 
 function entrada(overrides: Partial<HorarioClaseEstructurada> = {}): HorarioClaseEstructurada {
     return {

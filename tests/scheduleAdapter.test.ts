@@ -6,7 +6,7 @@
 // ============================================================
 import { describe, expect, it } from 'vitest';
 import { createScheduleAdapter } from '../src/core/documents/scheduleAdapter';
-import { structureHorarioText } from '../src/core/horario/horarioService';
+import { structureHorarioText } from '../src/core/agenda/agendaShared';
 
 const adapter = createScheduleAdapter({ minEntries: 2 });
 
