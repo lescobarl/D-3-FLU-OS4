@@ -27,6 +27,7 @@ import { parseAgendaIntent } from '../../core/agenda/agendaIntentParser'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
 import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
+import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { parseTemporalIntent } from '../../core/temporal/temporalIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
 import { cleanForSpeech, splitTranscriptAtWakeWord } from './audioMath.js'
@@ -48,6 +49,7 @@ export const ARBITER_DOMAINS = Object.freeze([
   'game',
   'environment',
   'agendaCommand',
+  'shopping',
   'reminder',
   'temporal',
   'diary',
@@ -189,7 +191,14 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     }
   }
 
-  // 4. Recordatorios/compras/citas (reminderIntentParser): función-adición.
+  // 4. Lista de compras (shoppingIntentParser): función-adición separada del
+  //    calendario. Se evalúa ANTES que recordatorios.
+  const shopping = parseShoppingIntent(transcript)
+  if (shopping?.handled && shopping?.action) {
+    return { matched: true, domain: 'shopping', action: shopping, channel: 'flu' }
+  }
+
+  // 5. Recordatorios/citas (reminderIntentParser): función-adición.
   //    Solo MATCH cuando el parser devuelve una intención ACCIONABLE
   //    (action truthy). Los casos de aclaración (action === null) NO se marcan
   //    aquí: el despacho real vive en App.tsx (__fluHandleReminderText).
@@ -198,7 +207,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'reminder', action: reminder, channel: 'flu' }
   }
 
-  // 5. Temporales (temporalIntentParser): temporizadores/alarmas (función-adición).
+  // 6. Temporales (temporalIntentParser): temporizadores/alarmas (función-adición).
   //    Se propagan LOS MISMOS options que el manejador de App.tsx (now,
   //    defaultAlarmTimeOfDay, defaultTimerMinutes) para que el `action` devuelto
   //    sea COMPLETO y el despacho no tenga que re-parcear la cadena.
@@ -211,7 +220,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'temporal', action: temporal, channel: 'flu' }
   }
 
-  // 6. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
+  // 7. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
   //    ("... en el diario ...") es MÁS específico que el "apunta {texto}" de
   //    nota: así "anota X en el diario" gana diario.
   const diary = parseDiaryIntent(transcript, { language })

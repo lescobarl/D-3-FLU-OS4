@@ -52,6 +52,7 @@ declare global {
             input: unknown,
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
+        __fluHandleShoppingText?(input: unknown): Promise<string>;
 
         /** Stores y flags expuestos en window (debug/E2E). */
         __fluStore?: unknown;

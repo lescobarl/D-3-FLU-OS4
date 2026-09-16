@@ -153,6 +153,7 @@ import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
 import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
+import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
 import { normalizeAgendaLabel, type AgendaColorMap } from './core/agenda/agendaModel';
 import { MS_DAY } from './core/temporal/scheduleEngine';
@@ -1244,6 +1245,9 @@ async function dispatchArbiterIntent(
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
+        } else if (domain === 'shopping' && typeof w.__fluHandleShoppingText === 'function') {
+            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleShoppingText (shopping)');
+            reply = (await w.__fluHandleShoppingText(intent)) || '';
         } else if (domain === 'agendaCommand' && typeof w.__fluHandleAgendaCommandText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaCommandText (agendaCommand)');
             reply =
@@ -3567,6 +3571,25 @@ function App() {
                         ? `Removed reminder${candidates.length > 1 ? 's' : ''}: ${removedText}`
                         : `Quité el recordatorio: ${removedText}`;
                 }
+                default:
+                    return '';
+            }
+        },
+        [reminders, languageRef],
+    );
+
+    // Lista de compras por voz (dominio `shopping`, separado del calendario).
+    window.__fluHandleShoppingText = useCallback(
+        async (input: ShoppingIntent | string) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const intent = (
+                input && typeof input === 'object' && typeof input.action === 'string'
+            )
+                ? input
+                : parseShoppingIntent(String(input || '').trim());
+            if (!intent || !intent.handled || !intent.action) return '';
+            const data = intent.data || {};
+            switch (intent.action) {
                 case 'shopping.add': {
                     const labels = String(data.label || '')
                         .split(',')
@@ -3624,7 +3647,7 @@ function App() {
                     return '';
             }
         },
-        [reminders, shopping, languageRef],
+        [shopping, languageRef],
     );
 
     // Motor temporal genérico — manejador de alarmas y temporizadores por texto (E2E + integración).

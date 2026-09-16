@@ -164,7 +164,7 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
   it('resuelve el dominio de recordatorio (shopping.add)', () => {
     const result = resolveDeterministicCommand('agrega leche a la lista de compras');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('reminder');
+    expect(result.domain).toBe('shopping');
     expect(result.action).toMatchObject({ handled: true, action: 'shopping.add' });
     expect(result.channel).toBe('flu');
   });
@@ -301,7 +301,7 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
 
   it('shopping.add: el intent del árbitro trae data.label para la lista de compras', () => {
     const r = resolveDeterministicCommand('agrega leche a la lista de compras');
-    expect(r.domain).toBe('reminder');
+    expect(r.domain).toBe('shopping');
     const data = expectConsumableIntent(r.action);
     expect((r.action as { action?: string }).action).toBe('shopping.add');
     expect(typeof data.label).toBe('string');
@@ -457,6 +457,7 @@ describe('deterministicArbiter — dominios declarados', () => {
       'game',
       'environment',
       'agendaCommand',
+      'shopping',
       'reminder',
       'temporal',
       'diary',
