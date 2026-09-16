@@ -154,7 +154,8 @@ import { fluDb } from './core/db/fluDatabase';
 import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
-import type { AgendaColorMap } from './core/agenda/agendaModel';
+import { normalizeAgendaLabel, type AgendaColorMap } from './core/agenda/agendaModel';
+import { MS_DAY } from './core/temporal/scheduleEngine';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
@@ -1527,6 +1528,21 @@ function App() {
             if (!cmd?.handled || !cmd.action || !cmd.kind) return '';
             const kind = cmd.kind;
             switch (cmd.action) {
+                case 'agenda.list': {
+                    const items = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
+                    const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
+                    const view = cmd.when === 'semana' ? 'week' : cmd.when === 'mes' ? 'month' : 'day';
+                    // "mañana" = ventana de día corrida un día.
+                    const refNow = cmd.when === 'mañana' ? Date.now() + MS_DAY : Date.now();
+                    const summary = summarizeAgenda(items, view, refNow, colors);
+                    const voice = ((FLU_CONFIG.agenda as Record<string, unknown>)?.voice ?? {}) as {
+                        empty?: { es?: string; en?: string };
+                    };
+                    return agendaSummaryText(summary, lang, {
+                        es: voice.empty?.es ?? 'No tienes nada programado.',
+                        en: voice.empty?.en ?? 'Nothing scheduled.',
+                    });
+                }
                 case 'agenda.create': {
                     if (!cmd.trigger) return '';
                     const result = await agendaService.create({
@@ -1546,7 +1562,10 @@ function App() {
                 }
                 case 'agenda.cancel': {
                     const pending = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
-                    const target = pending.find((item) => item.kind === kind);
+                    const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
+                    const target = pending.find((item) =>
+                        item.kind === kind && (!targetLabel || normalizeAgendaLabel(item.label) === targetLabel),
+                    );
                     if (!target) {
                         return lang === 'en' ? 'Nothing to cancel.' : 'No encontré nada que cancelar.';
                     }
@@ -1555,7 +1574,10 @@ function App() {
                 }
                 case 'agenda.update': {
                     const pending = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
-                    const target = pending.find((item) => item.kind === kind);
+                    const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
+                    const target = pending.find((item) =>
+                        item.kind === kind && (!targetLabel || normalizeAgendaLabel(item.label) === targetLabel),
+                    );
                     if (!target) {
                         return lang === 'en' ? 'Nothing to update.' : 'No encontré nada que cambiar.';
                     }

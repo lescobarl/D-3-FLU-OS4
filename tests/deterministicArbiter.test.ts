@@ -112,12 +112,8 @@ describe('deterministicArbiter — resolveDeterministicCommand', () => {
   it('resuelve el dominio de horario (quitar por dictado)', () => {
     const result = resolveDeterministicCommand('quita historia del viernes');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('horario');
-    expect(result.action).toMatchObject({
-      handled: true,
-      action: 'horario.remove',
-      data: { materia: 'historia', dia: 5 },
-    });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.cancel', kind: 'clase' });
   });
 
   it('no matchea horario cuando falta la hora (aclaración, no acción accionable)', () => {

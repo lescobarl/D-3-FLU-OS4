@@ -30,6 +30,8 @@ export interface AgendaCommand {
     kind?: AgendaKind;
     label?: string;
     trigger?: AgendaTrigger;
+    /** Vista de la consulta (agenda.list): hoy/mañana/semana/mes. */
+    when?: 'hoy' | 'mañana' | 'semana' | 'mes';
     reply: string;
 }
 
@@ -90,13 +92,28 @@ function detectKind(text: string): AgendaKind | null {
 /**
  * Kind implícito cuando no hay sustantivo explícito: el dictado escolar
  * "agrega matemáticas el lunes a las 8" (materia + día + hora) es una CLASE.
+ * También "quita matemáticas del viernes" (materia + día).
  */
 function resolveImplicitKind(text: string, action: AgendaCommandAction | null): AgendaKind | null {
-    if (action && action !== 'agenda.create') return null;
+    if (!action) return null;
     const t = normalize(text);
     const hasWeekday = WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
-    if (hasWeekday && pickTimeOfDay(text).timeOfDay) return 'clase';
+    if (!hasWeekday) return null;
+    // Cancelar/editar una clase se identifica por materia + día (sin hora).
+    if (action === 'agenda.cancel' || action === 'agenda.update') return 'clase';
+    // Crear una clase exige la HORA ("el lunes a las 8"); sin hora no hay
+    // acción accionable (se pide aclaración, no se inventa una hora).
+    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay) return 'clase';
     return null;
+}
+
+/** Vista de la consulta "qué hay/tengo <hoy|mañana|esta semana|este mes>". */
+function detectQueryView(text: string): AgendaCommand['when'] {
+    const t = normalize(text); // sin acentos: "mañana" → "manana"
+    if (/\bmanana\b/.test(t)) return 'mañana';
+    if (/\b(?:esta\s+semana|semana)\b/.test(t)) return 'semana';
+    if (/\b(?:este\s+mes|mes)\b/.test(t)) return 'mes';
+    return 'hoy';
 }
 
 function detectAction(text: string): AgendaCommandAction | null {
@@ -199,7 +216,7 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
 
     const action = detectAction(cleaned);
     if (action === 'agenda.list') {
-        return { handled: true, action, reply: '' };
+        return { handled: true, action, when: detectQueryView(cleaned), reply: '' };
     }
 
     const kind = detectKind(cleaned) ?? resolveImplicitKind(cleaned, action);

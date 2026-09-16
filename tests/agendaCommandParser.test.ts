@@ -56,6 +56,24 @@ describe('agenda.intent — list/cancel', () => {
         expect(parseAgendaCommand('qué hay para hoy').action).toBe('agenda.list');
     });
 
+    it('"qué hay mañana" → list when=mañana', () => {
+        const r = parseAgendaCommand('qué hay mañana', { now: () => NOW });
+        expect(r.action).toBe('agenda.list');
+        expect(r.when).toBe('mañana');
+    });
+
+    it('"qué hay esta semana" → list when=semana', () => {
+        expect(parseAgendaCommand('qué hay esta semana').when).toBe('semana');
+    });
+
+    it('"quita historia del viernes" → cancel clase (por materia+día)', () => {
+        const r = parseAgendaCommand('quita historia del viernes', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+        expect(r.label).toContain('historia');
+    });
+
     it('"cancela la alarma de las 7" → cancel alarma', () => {
         const r = parseAgendaCommand('cancela la alarma de las 7', { now: () => NOW });
         expect(r.handled).toBe(true);
