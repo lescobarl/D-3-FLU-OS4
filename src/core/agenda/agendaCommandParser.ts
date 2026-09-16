@@ -51,10 +51,6 @@ const CREATE_FRAMES: readonly string[] = Object.freeze([
     'agrega', 'agregar', 'añade', 'añadir',
 ]);
 
-const LIST_FRAMES: readonly string[] = Object.freeze([
-    'que hay', 'que tengo', 'que tienes', 'agenda de', 'agenda para', 'mi agenda',
-]);
-
 const CANCEL_FRAMES: readonly string[] = Object.freeze([
     'cancela', 'cancelar', 'borra', 'borrar', 'quita', 'quitar', 'elimina', 'eliminar',
     'ya no quiero', 'no quiero',
@@ -97,13 +93,15 @@ function detectKind(text: string): AgendaKind | null {
 function resolveImplicitKind(text: string, action: AgendaCommandAction | null): AgendaKind | null {
     if (!action) return null;
     const t = normalize(text);
+    const isHorario = /\bhorario\b/.test(t);
     const hasWeekday = WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
-    if (!hasWeekday) return null;
-    // Cancelar/editar una clase se identifica por materia + día (sin hora).
-    if (action === 'agenda.cancel' || action === 'agenda.update') return 'clase';
+    // Cancelar/editar una clase: "quita X del viernes" (día) o "quita X del horario".
+    if (action === 'agenda.cancel' || action === 'agenda.update') {
+        return hasWeekday || isHorario ? 'clase' : null;
+    }
     // Crear una clase exige la HORA ("el lunes a las 8"); sin hora no hay
     // acción accionable (se pide aclaración, no se inventa una hora).
-    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay) return 'clase';
+    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay && (hasWeekday || isHorario)) return 'clase';
     return null;
 }
 
@@ -118,7 +116,9 @@ function detectQueryView(text: string): AgendaCommand['when'] {
 
 function detectAction(text: string): AgendaCommandAction | null {
     const t = normalize(text);
-    if (LIST_FRAMES.some((f) => t.includes(f))) return 'agenda.list';
+    // Consulta ANCLADA: "qué <hay|tengo|...>" al inicio, o "mi agenda/agenda de".
+    if (t.startsWith('que ') && /\b(?:hay|tengo|tienes|tiene)\b/.test(t)) return 'agenda.list';
+    if (/\b(?:mi agenda|agenda de|agenda para)\b/.test(t)) return 'agenda.list';
     if (CANCEL_FRAMES.some((f) => t.includes(f))) return 'agenda.cancel';
     if (UPDATE_FRAMES.some((f) => t.includes(f))) return 'agenda.update';
     if (CREATE_FRAMES.some((f) => t.includes(f))) return 'agenda.create';

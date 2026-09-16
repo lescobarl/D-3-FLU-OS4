@@ -73,19 +73,20 @@ describe('caso 1 — reconocimiento determinista de "¿qué hay para hoy?"', () 
     expect(parseAgendaIntent('ok flu agenda de hoy').action).toBe('agenda.today');
   });
 
-  it('el árbitro enruta "qué hay para hoy" a agenda (0 IA)', () => {
+  it('el árbitro enruta "qué hay para hoy" a agendaCommand (0 IA)', () => {
     const result = resolveDeterministicCommand('qué hay para hoy', { language: 'es' });
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('agenda');
+    expect(result.domain).toBe('agendaCommand');
     expect(result.channel).toBe('flu');
     const action = result.action as { handled?: boolean; action?: string };
     expect(action.handled).toBe(true);
-    expect(action.action).toBe('agenda.today');
+    expect(action.action).toBe('agenda.list');
   });
 
-  it('"qué clases tengo hoy" sigue siendo horario.query (no agenda)', () => {
+  it('"qué clases tengo hoy" es agendaCommand.list (no horario)', () => {
     const result = resolveDeterministicCommand('qué clases tengo hoy', { language: 'es' });
-    expect(result.domain).toBe('horario');
+    expect(result.domain).toBe('agendaCommand');
+    expect((result.action as { action?: string }).action).toBe('agenda.list');
   });
 });
 

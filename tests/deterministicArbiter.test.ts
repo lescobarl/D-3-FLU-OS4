@@ -99,14 +99,11 @@ describe('deterministicArbiter — resolveDeterministicCommand', () => {
     expect(result.action).toMatchObject({ handled: true, action: 'agenda.create', kind: 'clase' });
   });
 
-  it('resuelve el dominio de horario (consulta por dictado)', () => {
+  it('resuelve el dominio agenda (consulta por dictado)', () => {
     const result = resolveDeterministicCommand('qué clases tengo mañana');
     expect(result.matched).toBe(true);
-    expect(result.domain).toBe('horario');
-    expect(result.action).toMatchObject({
-      handled: true,
-      action: 'horario.query',
-    });
+    expect(result.domain).toBe('agendaCommand');
+    expect(result.action).toMatchObject({ handled: true, action: 'agenda.list', when: 'mañana' });
   });
 
   it('resuelve el dominio de horario (quitar por dictado)', () => {
@@ -182,21 +179,6 @@ describe('deterministicArbiter — funciones-adición (Phase B)', () => {
     expect(result.matched).toBe(true);
     expect(result.domain).toBe('agendaCommand');
     expect(result.action).toMatchObject({ handled: true, action: 'agenda.cancel', kind: 'recordatorio' });
-  });
-
-  it('Point B: propaga defaultOffsetMs al parser para fechas consistentes', () => {
-    // El árbitro y el handler de App.tsx deben resolver el MISMO dueAt cuando
-    // no hay cláusula de cuándo. Sin defaultOffsetMs el parser no fija dueAt;
-    // con él, el dueAt del árbitro coincide con el del parser directo.
-    const offset = 5 * 60 * 1000;
-    const arbiter = resolveDeterministicCommand('recuérdame comprar leche', {
-      defaultOffsetMs: offset,
-    });
-    expect(arbiter.matched).toBe(true);
-    expect(arbiter.domain).toBe('reminder');
-    const action = arbiter.action as { action?: string; data?: { dueAt?: number } };
-    expect(action.action).toBe('reminder.add');
-    expect(typeof action.data?.dueAt).toBe('number');
   });
 
   it('resuelve el dominio agenda (alarma)', () => {
@@ -379,19 +361,17 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
     expect(trigger?.timeOfDay).toBe('08:00');
   });
 
-  it('horario.query: el intent del árbitro trae data para consultar el horario', () => {
+  it('horario.query: la consulta de clases es agendaCommand.list', () => {
     const r = resolveDeterministicCommand('qué tengo el lunes en el horario');
-    expect(r.domain).toBe('horario');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('horario.query');
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.list');
   });
 
-  it('horario.remove: el intent del árbitro trae data.materia para quitar la entrada', () => {
+  it('horario.remove: quitar una clase del horario es agenda.cancel', () => {
     const r = resolveDeterministicCommand('quita matemáticas del horario');
-    expect(r.domain).toBe('horario');
-    const data = expectConsumableIntent(r.action);
-    expect((r.action as { action?: string }).action).toBe('horario.remove');
-    expect(typeof data.materia).toBe('string');
+    expect(r.domain).toBe('agendaCommand');
+    expect((r.action as { action?: string }).action).toBe('agenda.cancel');
+    expect((r.action as { kind?: string }).kind).toBe('clase');
   });
 });
 
@@ -458,11 +438,8 @@ describe('deterministicArbiter — dominios declarados', () => {
       'environment',
       'agendaCommand',
       'shopping',
-      'reminder',
-      'temporal',
       'diary',
       'note',
-      'horario',
       'navigation',
     ]);
   });

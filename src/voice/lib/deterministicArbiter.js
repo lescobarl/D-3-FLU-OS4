@@ -23,12 +23,8 @@ import { resolveGameCommandFromText } from './gameCommands.js'
 import { parseNoteIntentText, parseNoteRemoveIntentText } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
-import { parseAgendaIntent } from '../../core/agenda/agendaIntentParser'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
-import { parseHorarioIntent } from '../../core/horario/horarioIntentParser'
-import { parseReminderIntent } from '../../core/reminders/reminderIntentParser'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
-import { parseTemporalIntent } from '../../core/temporal/temporalIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
 import { cleanForSpeech, splitTranscriptAtWakeWord } from './audioMath.js'
 
@@ -50,11 +46,8 @@ export const ARBITER_DOMAINS = Object.freeze([
   'environment',
   'agendaCommand',
   'shopping',
-  'reminder',
-  'temporal',
   'diary',
   'note',
-  'horario',
   'navigation',
 ])
 
@@ -175,21 +168,12 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   //     para que el sustantivo mande y exista UNA sola ruta de escritura.
   //     La consulta ("qué hay para hoy") la sigue resolviendo `agenda`.
   const agendaCmd = parseAgendaCommand(transcript, { now })
-  if (agendaCmd?.handled && agendaCmd.action !== 'agenda.list') {
+  if (agendaCmd?.handled && agendaCmd?.action) {
     return { matched: true, domain: 'agendaCommand', action: agendaCmd, channel: 'flu' }
   }
 
-  // 3.b Reuniones (junta/reunión/meeting): son ENTRADAS de horario. Se resuelven
-  //     aquí, ANTES de reminder (que también reconoce "junta" como cita), para
-  //     que exista UNA sola ruta de ingreso por señal. Solo gana si el horario
-  //     produce una acción completa (día + hora + título).
-  const MEETING_NOUN_RE = /\b(?:junta|reuni[oó]n|reuniones|meeting)\b/i
-  if (MEETING_NOUN_RE.test(transcript)) {
-    const horarioMeeting = parseHorarioIntent(transcript)
-    if (horarioMeeting?.handled && horarioMeeting?.action) {
-      return { matched: true, domain: 'horario', action: horarioMeeting, channel: 'flu' }
-    }
-  }
+  // 3.b Reuniones (junta/reunión/meeting): ya cubiertas por agendaCommand
+  //     (kind 'junta'). No hay ruta doble: el calendario unificado las resuelve.
 
   // 4. Lista de compras (shoppingIntentParser): función-adición separada del
   //    calendario. Se evalúa ANTES que recordatorios.
@@ -198,29 +182,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'shopping', action: shopping, channel: 'flu' }
   }
 
-  // 5. Recordatorios/citas (reminderIntentParser): función-adición.
-  //    Solo MATCH cuando el parser devuelve una intención ACCIONABLE
-  //    (action truthy). Los casos de aclaración (action === null) NO se marcan
-  //    aquí: el despacho real vive en App.tsx (__fluHandleReminderText).
-  const reminder = parseReminderIntent(transcript, { defaultOffsetMs })
-  if (reminder?.handled && reminder?.action) {
-    return { matched: true, domain: 'reminder', action: reminder, channel: 'flu' }
-  }
-
-  // 6. Temporales (temporalIntentParser): temporizadores/alarmas (función-adición).
-  //    Se propagan LOS MISMOS options que el manejador de App.tsx (now,
-  //    defaultAlarmTimeOfDay, defaultTimerMinutes) para que el `action` devuelto
-  //    sea COMPLETO y el despacho no tenga que re-parcear la cadena.
-  const temporal = parseTemporalIntent(transcript, {
-    now,
-    defaultAlarmTimeOfDay,
-    defaultTimerMinutes,
-  })
-  if (temporal?.handled && temporal?.action) {
-    return { matched: true, domain: 'temporal', action: temporal, channel: 'flu' }
-  }
-
-  // 7. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
+  // 5. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
   //    ("... en el diario ...") es MÁS específico que el "apunta {texto}" de
   //    nota: así "anota X en el diario" gana diario.
   const diary = parseDiaryIntent(transcript, { language })
@@ -234,27 +196,11 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'note', action: note, channel: 'flu' }
   }
 
-  // 7.b Agenda del día ("¿qué hay para hoy?"). Se evalúa ANTES que el horario
-  // para que la consulta general de agenda no se trague en horario.query
-  // (que solo lista el horario de clases). La compilación determinista vive
-  // en src/core/agenda/todayAgenda.ts y la despacha __fluHandleAgendaText.
-  const agenda = parseAgendaIntent(transcript)
-  if (agenda?.handled && agenda?.action) {
-    return { matched: true, domain: 'agenda', action: agenda, channel: 'flu' }
-  }
+  // 8. Agenda del día ("¿qué hay para hoy?"): cubierta por agendaCommand.list.
+  //    No hay ruta doble.
 
-  // 8. Horario por dictado (horarioIntentParser): agregar/consultar/quitar
-  //    entradas del horario semanal. §2C del plan de afinado estructural.
-  //    Solo se considera MATCH cuando el parser devuelve una intención
-  //    ACCIONABLE (horario.add/query/remove). Los casos de aclaración
-  //    (action === null, p. ej. falta la hora) NO se marcan como match aquí:
-  //    el despacho real vive en App.tsx (__fluHandleHorarioText, que sí
-  //    maneja la aclaración) y este árbitro solo reconoce el dictado completo
-  //    para que el flujo pueda saltarse Gemini (§2B).
-  const horario = parseHorarioIntent(transcript)
-  if (horario?.handled && horario?.action) {
-    return { matched: true, domain: 'horario', action: horario, channel: 'flu' }
-  }
+  // 8. Horario por dictado: ya cubierto por agendaCommand (crear/consultar/
+  //    quitar clase). No hay ruta doble.
 
   // 9. Navegación (voiceCommands): comandos de UI/navegación directos. El canal
   //    se deriva del comando (web/video/documento/app/flu).
