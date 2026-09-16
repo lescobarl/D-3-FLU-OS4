@@ -454,43 +454,6 @@ export interface SearchSiteRecord {
 }
 
 // -----------------------------------------------------------
-// Horario Record (persistente) — Clases en el Pizarrón
-// -----------------------------------------------------------
-
-/**
- * Registro persistente de una entrada del horario (GENÉRICO — no atado a
- * "clases escolares" ni a un carnet fijo). Puede representar cualquier tipo
- * de agenda recurrente: horario escolar, carnet médico (IMSS u otro),
- * horario laboral, rutina de gimnasio, etc.
- * - `tipo`: etiqueta libre del tipo de horario (p. ej. 'escuela', 'medico',
- *   'trabajo'). Opcional y NO hardcodeado (Rule #1).
- * - `materia`: título legible de la entrada (materia, consulta, actividad…).
- * - `aula`: lugar opcional (aula, consultorio, oficina, sede…).
- * - `dia`: 1=Lunes ... 7=Domingo (ISO 8601).
- * - `inicio`/`fin`: hora local 'HH:MM' de 24 h.
- * - `color`: token opcional (m1..m6) definido en FLU_CONFIG.horario.colores.
- * - `reminders`: ids de recordatorios vinculados (opcional, FASE D).
- */
-export interface HorarioRecord {
-    id: string; // UUIDv4
-    /** Etiqueta libre del tipo de horario (escuela, medico, trabajo…). Opcional. */
-    tipo?: string;
-    /** Título legible de la entrada (materia, consulta, actividad…). */
-    materia: string;
-    dia: number; // 1-7 (1=Lunes)
-    inicio: string; // 'HH:MM' 24h local
-    fin: string; // 'HH:MM' 24h local
-    aula?: string;
-    color?: string;
-    reminders?: string[];
-    /** Usuario dueño de la entrada (aislamiento por usuario). */
-    personId?: string;
-    createdAt: number;
-    updatedAt: number;
-    sync: SyncTuple;
-}
-
-// -----------------------------------------------------------
 // Communication Profile Record (persistente) — FASE P: Personalización profunda por persona
 // -----------------------------------------------------------
 
@@ -712,9 +675,8 @@ export class FluDatabase extends Dexie {
             conversations: 'id, role, timestamp, speakerId, participantId',
         });
 
-        // v19: Aislar horario y temporales por usuario (personId indexado).
+        // v19: Aislar temporales por usuario (personId indexado).
         this.version(19).stores({
-            horario: 'id, dia, materia, createdAt, personId',
             temporalItems: 'id, kind, status, nextAt, createdAt, personId',
         });
 
@@ -725,8 +687,9 @@ export class FluDatabase extends Dexie {
 
         // v21: Calendario UNIFICADO — alarma/recordatorio/cita/junta/clase en una
         // sola tabla. El color se deriva en LECTURA (FLU_CONFIG.agenda.colors),
-        // no se guarda. La migración COPIA los datos viejos (reminders/temporal/
-        // horario) a `agenda` sin borrarlos (no destructiva).
+        // no se guarda. La migración COPIA los datos viejos (reminders/temporal)
+        // a `agenda` sin borrarlos (no destructiva). El horario ya no es una
+        // tabla propia: se escribe directamente como `clase` weekly en `agenda`.
         this.version(21)
             .stores({
                 agenda: 'id, kind, status, personId',
@@ -734,8 +697,7 @@ export class FluDatabase extends Dexie {
             .upgrade(async (tx) => {
                 const reminders = await tx.table<ReminderRecord, 'id'>('reminders').toArray();
                 const temporals = await tx.table<TemporalItemRecord, 'id'>('temporalItems').toArray();
-                const horario = await tx.table<HorarioRecord, 'id'>('horario').toArray();
-                const items = mapLegacyToAgenda({ reminders, temporals, horario });
+                const items = mapLegacyToAgenda({ reminders, temporals });
                 await tx.table<AgendaItem, 'id'>('agenda').bulkAdd(items);
             });
 

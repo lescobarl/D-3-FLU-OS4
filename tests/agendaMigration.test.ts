@@ -2,11 +2,11 @@
 // Prueba de escritorio de la migración (mapeo viejo → agenda)
 // ------------------------------------------------------------
 // Valida el mapeo documentado sin tocar Dexie real: reminder→recordatorio/cita,
-// temporal→alarma, horario→clase weekly, y el borrado lógico de estados.
+// temporal→alarma, y el borrado lógico de estados.
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { mapLegacyToAgenda } from '../src/core/agenda/agendaMigration';
-import type { ReminderRecord, HorarioRecord } from '../src/core/db/fluDatabase';
+import type { ReminderRecord } from '../src/core/db/fluDatabase';
 import type { TemporalItemRecord } from '../src/core/temporal/temporalTypes';
 
 const SYNC = { revision: 1, updated_at: '2026-09-15T00:00:00.000Z', deleted: false };
@@ -49,21 +49,6 @@ describe('migración → agenda unificada', () => {
         const items = mapLegacyToAgenda({ temporals: [timer] });
         expect(items[0].kind).toBe('alarma');
         expect(items[0].trigger).toEqual({ type: 'countdown', durationMs: 300_000 });
-    });
-
-    it('horario → clase weekly (dia 1=Lunes → day 1; dia 7=Domingo → day 0)', () => {
-        const lunes: HorarioRecord = {
-            id: 'h1', materia: 'Matemáticas', dia: 1, inicio: '09:00', fin: '10:00',
-            personId: 'p1', createdAt: NOW, updatedAt: NOW, sync: SYNC,
-        };
-        const domingo: HorarioRecord = {
-            id: 'h2', materia: 'Taller', dia: 7, inicio: '10:00', fin: '11:00',
-            personId: 'p1', createdAt: NOW, updatedAt: NOW, sync: SYNC,
-        };
-        const items = mapLegacyToAgenda({ horario: [lunes, domingo] });
-        expect(items.find((i) => i.id === 'h1')?.kind).toBe('clase');
-        expect(items.find((i) => i.id === 'h1')?.trigger).toEqual({ type: 'weekly', daysOfWeek: [1], timeOfDay: '09:00' });
-        expect(items.find((i) => i.id === 'h2')?.trigger).toEqual({ type: 'weekly', daysOfWeek: [0], timeOfDay: '10:00' });
     });
 
     it('estados done/dismissed/cancelled se traducen a done/deleted (lógico)', () => {
