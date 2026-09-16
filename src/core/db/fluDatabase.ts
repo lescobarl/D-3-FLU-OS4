@@ -611,7 +611,6 @@ export class FluDatabase extends Dexie {
     diaryEntries!: EntityTable<DiaryEntryRecord, 'id'>;
     ambientes!: EntityTable<AmbienteCatalogRecord, 'id'>;
     paletas!: EntityTable<PaletaCatalogRecord, 'id'>;
-    horario!: EntityTable<HorarioRecord, 'id'>;
     temporalItems!: EntityTable<TemporalItemRecord, 'id'>;
     communicationProfiles!: EntityTable<CommunicationProfileRecord, 'id'>;
     onboardingStates!: EntityTable<OnboardingStateRecord, 'id'>;
@@ -757,7 +756,6 @@ export class FluDatabase extends Dexie {
         this.diaryEntries = this.table('diaryEntries');
         this.ambientes = this.table('ambientes');
         this.paletas = this.table('paletas');
-        this.horario = this.table('horario');
         this.temporalItems = this.table('temporalItems');
         this.communicationProfiles = this.table('communicationProfiles');
         this.onboardingStates = this.table('onboardingStates');

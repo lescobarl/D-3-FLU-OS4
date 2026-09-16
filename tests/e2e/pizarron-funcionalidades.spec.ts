@@ -602,69 +602,6 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
         });
     });
 
-    test.describe('10. Horario de clases (HoyPanel → vista del día y rejilla semanal)', () => {
-        test('10.1 Las clases sembradas en IndexedDB se renderizan en el HoyPanel y en la rejilla semanal', async ({ page }) => {
-            await gotoClean(page);
-
-            // Sembrar una clase HOY en IndexedDB (base 'flu-os3', store 'horario').
-            const hoy = ((new Date().getDay() + 6) % 7) + 1;
-            await page.evaluate((diaHoy) => {
-                return new Promise<void>((resolve, reject) => {
-                    const request = indexedDB.open('flu-os3');
-                    request.onupgradeneeded = (event: any) => {
-                        const db = event.target.result as IDBDatabase;
-                        if (!db.objectStoreNames.contains('horario')) {
-                            db.createObjectStore('horario', { keyPath: 'id' });
-                        }
-                    };
-                    request.onsuccess = (event: any) => {
-                        const db = event.target.result as IDBDatabase;
-                        const tx = db.transaction('horario', 'readwrite');
-                        const store = tx.objectStore('horario');
-                        const now = Date.now();
-                        store.put({
-                            id: 'e2e-horario-001',
-                            materia: 'Matemáticas',
-                            dia: diaHoy,
-                            inicio: '08:00',
-                            fin: '09:00',
-                            aula: 'Aula 12',
-                            color: 'm1',
-                            reminders: [],
-                            createdAt: now,
-                            updatedAt: now,
-                            sync: { revision: 1, updated_at: new Date(now).toISOString(), deleted: false },
-                        });
-                        tx.oncomplete = () => resolve();
-                        tx.onerror = () => reject(tx.error);
-                    };
-                    request.onerror = () => reject(request.error);
-                });
-            }, hoy);
-
-            // Recargar para que useHorario relea IndexedDB.
-            await page.reload({ waitUntil: 'load', timeout: 30000 });
-            await page.waitForSelector('.flu-shell', { timeout: 15000 });
-            await page.waitForSelector('.workspace-hub', { timeout: 15000 });
-
-            // En el Pizarrón consolidado el horario vive dentro del HoyPanel (columna lateral).
-            // La clase sembrada para HOY aparece por defecto en la lista de clases del día.
-            const hoyPanel = page.getByTestId('hoy-panel');
-            await expect(hoyPanel).toBeVisible({ timeout: 20000 });
-            const clasesHoy = page.getByTestId('hoy-clases-list');
-            await expect(clasesHoy).toBeVisible({ timeout: 20000 });
-            await expect(clasesHoy.locator('.hoy-panel__clase-materia', { hasText: 'Matemáticas' })).toBeVisible();
-
-            // La rejilla semanal (horario-week) solo se muestra al expandir "Ver horario completo".
-            await page.getByTestId('hoy-ver-horario').click();
-            await expect(page.getByTestId('hoy-horario-completo')).toBeVisible({ timeout: 20000 });
-            await expect(page.getByTestId('horario-week')).toBeVisible({ timeout: 20000 });
-            await expect(page.locator('.flu-horario__cls-materia', { hasText: 'Matemáticas' })).toBeVisible();
-
-            await captureScreenshot(page, SHOTS_DIR, '10-horario.png');
-        });
-    });
-
     test.describe('11. Análisis de documento (pestaña documento)', () => {
         test('11.1 El artefacto de documento se renderiza en la pestaña documento', async ({ page }) => {
             await gotoClean(page);
