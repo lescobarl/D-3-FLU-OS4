@@ -12,7 +12,6 @@
 export {
   normalizeEmbeddingVector,
   compareCosineSignatures,
-  compareCosineSignatures as compareAudioSignatures,
   labelToSpeakerId,
   autoSpeakerLabel,
   nextAutoSpeakerLabel,

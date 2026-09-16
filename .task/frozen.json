@@ -10,6 +10,6 @@
   "scripts/corregir.mjs": "fda60aca735e1b611d84116562dacfa08d532bd49075b2606f5f0862b48c5df5",
   "tests/syncTupleSingleSource.test.ts": "a54407b8f1a1c2d2cccea2c652280b7cb1d2c4066f09c55a6a34e6250ec1a55e",
   "tests/hardcodeGuard.test.ts": "c0193fb23bff338bafac668277bbf09093a23d67f7a4cf43bda576bf1929d37d",
-  "tests/speakerDiarizationUnified.test.ts": "19f3f31c15e06cd039c5c3613a762ac0bca56bba2329d1289b291d4d70dc5fe6",
+  "tests/speakerDiarizationUnified.test.ts": "f6152426161e903351de484505a0bb9c8dd19491f65007bc68a0f8d229f2e4b2",
   "tests/speakerDiarizationSeparation.test.ts": "f2c5c0d1516f80d689d91429f9611f48a78b0b2f53c36695d3dcaabf8dfe5c57"
 }

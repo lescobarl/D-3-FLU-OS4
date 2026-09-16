@@ -12,6 +12,7 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage';
@@ -463,10 +464,10 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             addUserMessage: (text: string, speakerName?: string) => {
                 const sentiment = detectSentiment(text);
-                // OS2 parity: default speaker label is 'Hablante 1', not 'Usuario'
+                // OS2 parity: default speaker label is the configured fallback, not 'Usuario'
                 // OS2's activeListen.js resolveConversationSpeaker falls back to
-                // cleanForSpeech(lastSpeaker) || speakers.defaultLabel ('Hablante 1')
-                const resolvedSpeaker = speakerName || 'Hablante 1';
+                // cleanForSpeech(lastSpeaker) || speakers.defaultLabel (fallback configurado)
+                const resolvedSpeaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
                 const emotion = sentimentToEmotion(sentiment);
                 const entry: ConversationEntry = {
                     role: 'user',

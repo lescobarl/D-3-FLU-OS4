@@ -26,7 +26,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js';
-import { assignSpeakerStrictCosine } from '../src/voice/lib/speakerCosineStrict.js';
+import { assignSpeaker } from '../src/voice/lib/speakerCore.js';
 import { anchorResolvedToLastLogged } from '../src/voice/lib/speakerPolicy.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 
@@ -131,7 +131,7 @@ describe('resolveConversationSpeaker — solo coalesce (main thread)', () => {
     });
 });
 
-describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
+describe('assignSpeaker — solo coalesce (worker path)', () => {
     const workerBase = {
         continuityThreshold: 0.70,
         newVoiceThreshold: 0.68,
@@ -140,7 +140,7 @@ describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
     };
 
     it('solo (1 cluster) sim 0.60 → solo-coalesce / Hablante 1', () => {
-        const r = assignSpeakerStrictCosine(query(0.6), {
+        const r = assignSpeaker(query(0.6), {
             ...workerBase,
             clusters: [{ label: 'Hablante 1', signature: E1 }],
             lastSpeaker: 'Hablante 1',
@@ -152,7 +152,7 @@ describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
     });
 
     it('solo (1 cluster) sim 0.50 → abre Hablante 2 (voz genuina)', () => {
-        const r = assignSpeakerStrictCosine(query(0.5), {
+        const r = assignSpeaker(query(0.5), {
             ...workerBase,
             clusters: [{ label: 'Hablante 1', signature: E1 }],
             lastSpeaker: 'Hablante 1',
@@ -163,7 +163,7 @@ describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
     });
 
     it('multi-hablante (2 clusters) sim 0.60 → abre Hablante 3 (no alterado)', () => {
-        const r = assignSpeakerStrictCosine(query(0.6), {
+        const r = assignSpeaker(query(0.6), {
             ...workerBase,
             clusters: [
                 { label: 'Hablante 1', signature: E1 },

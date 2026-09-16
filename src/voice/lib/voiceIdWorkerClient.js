@@ -182,8 +182,8 @@ async function runMainThreadFallback(type, payload) {
     }
   }
   if (type === 'compare') {
-    const { compareAudioSignatures } = await import('./voiceIdentity.js')
-    return { similarity: compareAudioSignatures(payload.a, payload.b), fallback: true }
+    const { compareCosineSignatures } = await import('./voiceIdentity.js')
+    return { similarity: compareCosineSignatures(payload.a, payload.b), fallback: true }
   }
   throw new Error(`voiceId fallback unsupported: ${type}`)
 }

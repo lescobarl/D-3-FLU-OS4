@@ -10,7 +10,7 @@ import {
   extractTheme,
   formatClock,
   extractFluVoiceCommand,
-  compareAudioSignatures,
+  compareCosineSignatures,
   getRecognitionRetryDelay,
   getRecognitionErrorMessage,
   isRecoverableRecognitionError,
@@ -247,7 +247,7 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
 
   profiles.forEach((profile) => {
     if (!Array.isArray(profile.signature)) return
-    const similarity = compareAudioSignatures(signatureVector, profile.signature)
+    const similarity = compareCosineSignatures(signatureVector, profile.signature)
     if (similarity > bestSimilarity) {
       bestSimilarity = similarity
       bestMatch = profile
@@ -255,7 +255,7 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
   })
 
   const profileMatch = getProfileMatchCfg()
-  // compareAudioSignatures devuelve SIMILITUD (1 = misma voz); la config la
+  // compareCosineSignatures devuelve SIMILITUD (1 = misma voz); la config la
   // expresa como "máxima distancia" → umbral de similitud = 1 - distancia.
   const registeredMinSimilarity = 1 - Number(profileMatch.registeredProfileMaxDistance ?? 0.12)
   if (bestMatch && bestSimilarity >= registeredMinSimilarity && isPlausiblePersonName(bestMatch.label || '')) {
@@ -266,7 +266,7 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
   let clusterSimilarity = -1
   speakerClusters.forEach((cluster) => {
     if (!Array.isArray(cluster?.signature)) return
-    const similarity = compareAudioSignatures(signatureVector, cluster.signature)
+    const similarity = compareCosineSignatures(signatureVector, cluster.signature)
     if (similarity > clusterSimilarity) {
       clusterSimilarity = similarity
       clusterMatch = cluster
@@ -1397,7 +1397,7 @@ export function useFluVoiceAssistant({
         return isProperName(sticky) ? GENERIC_SPEAKER : sticky || GENERIC_SPEAKER
       }
       // Embeddings async (worker): el preflight ya resolvió identidad por audio
-      // (assignSpeakerStrictCosine, signatureVector 512-D). Se consulta el slot del
+      // (assignSpeaker, signatureVector 512-D). Se consulta el slot del
       // turno activo para que la vista previa NO rompa la diarización de conversación:
       // con evidencia lista se usa el hablante real; sin ella se mantiene sticky.
       if (canDiarize) {
@@ -1620,7 +1620,7 @@ export function useFluVoiceAssistant({
         Array.isArray(lastTurnSignatureRef.current) &&
         lastTurnSignatureRef.current.length
       ) {
-        const distanceToLast = compareAudioSignatures(signatureVector, lastTurnSignatureRef.current)
+        const distanceToLast = compareCosineSignatures(signatureVector, lastTurnSignatureRef.current)
         if (distanceToLast < getLastTurnSignatureContinuityDistance()) {
           resolvedSpeakerName = lastSpeakerRef.current || speakerName
         }

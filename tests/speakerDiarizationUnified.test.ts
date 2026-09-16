@@ -38,12 +38,13 @@ function grepExportFn(names: string[]): string[] {
 
 function grepLiteral(lit: string, exclude: RegExp): string[] {
   const out: string[] = []
-  for (const f of walk(join(ROOT, 'src', 'voice'))) {
+  for (const f of walk(join(ROOT, 'src'))) {
     const rf = relative(ROOT, f).replace(/\\/g, '/')
     if (exclude.test(rf)) continue
     readFileSync(f, 'utf8')
       .split(/\r?\n/)
       .forEach((line, i) => {
+        if (/^\s*(\/\/|\*|\/\*)/.test(line)) return
         if (line.includes(lit)) out.push(`${rf}:${i + 1}`)
       })
   }

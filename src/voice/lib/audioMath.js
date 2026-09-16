@@ -1433,7 +1433,7 @@ export function cosineSimilarity(vectorA = [], vectorB = []) {
  * (compareCosineSignatures); aquí solo se re-exporta con el nombre histórico
  * para no duplicar el cuerpo.
  */
-export { compareCosineSignatures as compareAudioSignatures }
+export { compareCosineSignatures }
 
 export function formatEmbeddingPreview(vector = [], { head = 3, tail = 2 } = {}) {
   if (!Array.isArray(vector) || !vector.length) return ''

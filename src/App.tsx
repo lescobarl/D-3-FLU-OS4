@@ -2908,7 +2908,7 @@ function App() {
                 // FluShell.jsx lines 638-647
                 const auditInput = {
                     timestamp: new Date().toISOString(),
-                    humanSpeaker: speakerName || 'Hablante 1',
+                    humanSpeaker: speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
                     humanTranscript: transcript,
                     fluText: respuestaVoz,
                     phase,
