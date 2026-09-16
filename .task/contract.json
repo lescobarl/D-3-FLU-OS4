@@ -1,47 +1,47 @@
 {
-  "id": "T-AGENDA-UI-SWAP",
+  "id": "T-VOICE-OFFLINE-FALLBACK",
   "mode": "full",
-  "objective": "Terminar el swap de UI del calendario a un solo panel (AgendaPanel) sin reintroducir los bugs de alarma.",
+  "objective": "Terminar el fallback OFFLINE de voz: degradar Chrome SpeechRecognition al motor local Whisper WASM ante network/no-speech, sin ruta doble y sin romper el flujo online.",
   "dod": {
-    "command": "npx vitest run tests/agendaUiSwap.test.ts --reporter=dot",
-    "expect": "2 passed (A=0, B=1)"
+    "command": "npx vitest run tests/voiceOfflineFallback.test.ts tests/voiceOfflineFallbackBehavior.test.ts --reporter=dot",
+    "expect": "5 passed"
   },
   "guard": {
-    "command": "npx vitest run tests/agendaUiSwap.test.ts --reporter=dot",
+    "command": "npx vitest run tests/voiceOfflineFallback.test.ts --reporter=dot",
     "expect": "2 passed",
     "mustStartRed": true,
-    "behavior": "tests/agendaUiSwap.test.ts"
+    "behavior": "tests/voiceOfflineFallbackBehavior.test.ts"
   },
   "groundTruth": {
     "command": "npm run typecheck && npm run test:full",
-    "expect": "0 errores de tipos; 219 archivos / 2867 tests en verde"
+    "expect": "0 errores de tipos; 213 archivos / 2823 tests en verde"
   },
   "baseline": {
-    "command": "npx vitest run tests/agendaUiSwap.test.ts --reporter=dot",
-    "failPattern": "A: los paneles viejos de agenda ya no se importan"
+    "command": "npm run test:full",
+    "failPattern": "\\bFAIL\\b"
   },
   "invariants": [
     {
       "id": "A",
-      "statement": "Los paneles viejos (RemindersPanel/TemporalItemsPanel/HoyPanel) ya no se importan en src",
-      "count": "rg \"from ['\\\"].*(RemindersPanel|TemporalItemsPanel|HoyPanel)\" src | wc -l",
-      "today": 5,
-      "target": 0,
-      "guard": "tests/agendaUiSwap.test.ts"
+      "statement": "El motor local (Whisper WASM) esta conectado al hook principal de voz",
+      "count": "rg -c \"voiceLocalFallback\" src/voice/hooks/useFluVoiceAssistant.js",
+      "today": 1,
+      "target": 1,
+      "guard": "tests/voiceOfflineFallback.test.ts"
     },
     {
       "id": "B",
-      "statement": "AgendaPanel esta conectado en App.tsx",
-      "count": "rg -c AgendaPanel src/App.tsx",
-      "today": 0,
-      "target": 1,
-      "guard": "tests/agendaUiSwap.test.ts"
+      "statement": "Existe ruta config-driven que degrada a motor local ante network/no-speech",
+      "count": "rg -c \"shouldUseLocalFallback\" src/voice/hooks/useFluVoiceAssistant.js",
+      "today": 2,
+      "target": 2,
+      "guard": "tests/voiceOfflineFallbackBehavior.test.ts"
     }
   ],
-  "allow": ["src/**", "tests/**"],
-  "deny": [".task/**", "scripts/task-gate.mjs"],
+  "allow": ["src/voice/**", "tests/**"],
+  "deny": [".task/frozen.json", "scripts/task-gate.mjs", "scripts/auditoria.mjs"],
   "frozen": {
-    "contractHash": "frozen-por-usuario",
-    "guardHash": "7f9974edc34fe79d87d70bb7f9ca39709a427fba1b5bc8fe77350afa12a1263b"
+    "contractHash": "no-congelado",
+    "guardHash": "no-congelado"
   }
 }
