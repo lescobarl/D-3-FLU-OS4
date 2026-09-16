@@ -63,6 +63,12 @@ export const FLU_CONFIG = {
     },
     capture: {
       passiveBufferMs: 30000,
+      /** Fallback OFFLINE (§1/§9): errores de Chrome SpeechRecognition que
+       *  degradan al motor local Whisper WASM. Sin hardcode: la lista vive
+       *  aquí y puede afinarse desde config. */
+      recognition: {
+        fallbackErrors: ['network', 'no-speech'],
+      },
       conversationSpeakerTailMs: 5000,
       /** Tope de ventana de audio en límite de turno (ms). */
       turnBoundaryTailCapMs: 900,
