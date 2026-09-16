@@ -65,6 +65,8 @@ export interface AgendaService {
     update: (id: string, patch: Partial<Pick<AgendaItem, 'label' | 'trigger'>>) => Promise<{ ok: boolean; reason?: string }>;
     cancel: (id: string) => Promise<{ ok: boolean; reason?: string }>;
     restore: (id: string) => Promise<{ ok: boolean; reason?: string }>;
+    /** Marca un item como hecho (vence y no re-tica si es de una vez). */
+    complete: (id: string) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 export function createAgendaService(options: AgendaServiceOptions): AgendaService {
@@ -144,6 +146,18 @@ export function createAgendaService(options: AgendaServiceOptions): AgendaServic
                 sync: { ...buildSyncTuple(current.sync, now()), deleted: false },
             };
             await db.put(restored);
+            return { ok: true };
+        },
+
+        async complete(id) {
+            const current = await db.get(id);
+            if (!current) return { ok: false, reason: 'no-encontrado' };
+            const completed: AgendaItem = {
+                ...current,
+                status: 'done',
+                sync: buildSyncTuple(current.sync, now()),
+            };
+            await db.put(completed);
             return { ok: true };
         },
     };
