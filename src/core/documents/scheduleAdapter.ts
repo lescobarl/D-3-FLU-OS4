@@ -9,7 +9,7 @@ import {
   structureHorarioText,
   esNombreDeDia,
   type HorarioClaseEstructurada,
-} from '../horario/horarioService';
+} from '../agenda/agendaShared';
 
 export interface ScheduleProposal {
   adapterId: 'horario';

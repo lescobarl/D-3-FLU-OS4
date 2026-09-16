@@ -39,7 +39,7 @@ import type {
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { VideoAssemblyResult } from '../services/videoAssembler';
 import type { DocumentRecord } from '../core/db/fluDatabase';
-import type { HorarioClaseEstructurada } from '../core/horario/horarioService';
+import type { HorarioClaseEstructurada } from '../core/agenda/agendaShared';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import type { SearchResult } from '../core/search/searchSession';
 import { dispatchFluSearchReady, onFluResetSearch, onFluSearch } from '../core/events/fluEvents';

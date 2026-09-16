@@ -18,9 +18,9 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { configChild, configText } from './configText';
 import type { HorarioRecord, DiaryEntryRecord, NoteRecord, ReminderRecord } from '../core/db/fluDatabase';
 import { describeNlDateTime } from '../core/reminders/nlDateParser';
-import type { TemporalItemRecord } from '../core/temporal/temporalService';
+import type { TemporalItemRecord } from '../core/agenda/agendaShared';
 import { formatTimeOfDayMeridiem, timerRemainingMs, formatCountdown } from '../core/temporal/scheduleEngine';
-import { diaDeFecha, type NewHorarioInput } from '../core/horario/horarioService';
+import { diaDeFecha, type NewHorarioInput } from '../core/agenda/agendaShared';
 import {
   HorarioPizarron,
   proximaClaseDe,

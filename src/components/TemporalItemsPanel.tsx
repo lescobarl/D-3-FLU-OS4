@@ -19,7 +19,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import type { NewTemporalItemInput, TemporalItemRecord } from '../core/temporal/temporalService';
+import type { NewTemporalItemInput, TemporalItemRecord } from '../core/agenda/agendaShared';
 import { formatCountdown, formatTimeOfDay, timerRemainingMs } from '../core/temporal/scheduleEngine';
 import { dailyRecurrence, onceRecurrence } from '../core/temporal/temporalTypes';
 

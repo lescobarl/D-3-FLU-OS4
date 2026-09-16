@@ -14,7 +14,7 @@
 // Regla de oro: motor determinista (no toca Gemini ni el DOM).
 // ============================================================
 
-import { extractHorarioHoras, diaDeFecha, toHHMM } from './horarioService';
+import { extractHorarioHoras, diaDeFecha, toHHMM } from '../agenda/agendaShared';
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 
 // ------------------------------------------------------------

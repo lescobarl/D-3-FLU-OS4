@@ -122,7 +122,7 @@ import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/dev
 // ---- Horario de clases (Pizarrón): hook temprano y panel presentacional ----
 import { useHorario } from './hooks/useHorario';
 import { clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
-import { diaDeFecha, toMin, type HorarioClaseEstructurada } from './core/horario/horarioService';
+import { diaDeFecha, toMin, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
 import { addHorarioVoiceEntry } from './core/horario/horarioVoiceEntry';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';

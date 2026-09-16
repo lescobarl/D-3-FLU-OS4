@@ -12,7 +12,7 @@
 //   - Pure functions — sin React ni DOM (testeable con vitest).
 // ============================================================
 
-import { diaDeFecha, toMin } from '../horario/horarioService';
+import { diaDeFecha, toMin } from '../agenda/agendaShared';
 import type { HorarioRecord, ReminderRecord } from '../db/fluDatabase';
 import type { TemporalItemRecord } from '../temporal/temporalTypes';
 

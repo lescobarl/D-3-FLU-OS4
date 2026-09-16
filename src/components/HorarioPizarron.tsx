@@ -30,7 +30,7 @@ import {
   minutosDeFecha,
   toMin,
   type NewHorarioInput,
-} from '../core/horario/horarioService';
+} from '../core/agenda/agendaShared';
 
 // ------------------------------------------------------------
 // Tipos

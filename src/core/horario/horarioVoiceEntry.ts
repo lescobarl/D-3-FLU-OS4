@@ -9,7 +9,7 @@
 // Regla #1: la duración por defecto se inyecta (config), no se hardcodea.
 // ============================================================
 
-import { toHHMM, toMin } from './horarioService';
+import { toHHMM, toMin } from '../agenda/agendaShared';
 import type { AddHorarioResult, HorarioService } from './horarioService';
 import type { HorarioIntentData } from './horarioIntentParser';
 
