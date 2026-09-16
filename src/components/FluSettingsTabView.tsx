@@ -21,8 +21,7 @@ import { BrowserProfilesPanel, type BrowserProfilesPanelProps } from './BrowserP
 import { SearchControlCenter, type SearchControlCenterProps } from './SearchControlCenter';
 import { SettingsSaveProvider, SettingsSaveBar } from './SettingsSaveContext';
 import { ContactsPanel, type ContactsPanelProps } from './ContactsPanel';
-import { RemindersPanel, type RemindersPanelProps } from './RemindersPanel';
-import { TemporalItemsPanel, type TemporalItemsPanelProps } from './TemporalItemsPanel';
+import { AgendaPanel, type AgendaPanelProps } from './AgendaPanel';
 import { ShoppingPanel, type ShoppingPanelProps } from './ShoppingPanel';
 import { MateriaGrisPanel, type MateriaGrisPanelProps } from './MateriaGrisPanel';
 
@@ -67,11 +66,9 @@ export interface FluSettingsTabViewProps {
     /** Contactos de la agenda personal. */
     contacts: ContactsPanelProps;
 
-    // ---- Grupo Gestión — recordatorios, compras y reconocimiento ----
-    /** Recordatorios por autor. */
-    reminders: RemindersPanelProps;
-    /** Alarmas y temporizadores. */
-    temporals: TemporalItemsPanelProps;
+    // ---- Grupo Gestión — calendario, compras y reconocimiento ----
+    /** Calendario unificado (AgendaPanel). */
+    agenda: AgendaPanelProps;
     /** Lista de compras. */
     shopping: ShoppingPanelProps;
     /** Tabla de reconocimiento (materia gris). */
@@ -97,8 +94,7 @@ export function FluSettingsTabView({
     browser,
     search,
     contacts,
-    reminders,
-    temporals,
+    agenda,
     shopping,
     materiaGris,
 }: FluSettingsTabViewProps) {
@@ -166,8 +162,7 @@ export function FluSettingsTabView({
                     role="tabpanel"
                     hidden={group !== 'management'}
                 >
-                    <RemindersPanel {...reminders} />
-                    <TemporalItemsPanel {...temporals} />
+                    <AgendaPanel {...agenda} />
                     <ShoppingPanel {...shopping} />
                     <MateriaGrisPanel {...materiaGris} />
                 </div>

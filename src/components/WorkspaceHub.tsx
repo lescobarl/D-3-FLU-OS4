@@ -22,7 +22,7 @@ import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
-import { HoyPanel, type HoyPanelProps } from './HoyPanel';
+import { AgendaPanel, type AgendaPanelProps } from './AgendaPanel';
 import DocumentResultPanel from './DocumentResultPanel';
 import { DocumentsHistoryPanel, downloadDocumentContent, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 import AppAnalysisPanel from './AppAnalysisPanel';
@@ -160,12 +160,12 @@ export interface WorkspaceHubProps {
     // Idioma
     language: string;
 
-    // Panel lateral "Hoy" (Pizarrón consolidado — Paso 2/4).
+    // Panel lateral de agenda (Pizarrón consolidado — Paso 2/4).
     // Cuando se provee, el hub se muestra en layout de 2 columnas:
     // columna principal = feed de resultados consolidado; columna
-    // lateral = HoyPanel (HOY/DIARIO/NOTAS). Opcional para no romper
+    // lateral = AgendaPanel (calendario unificado). Opcional para no romper
     // los usos/test que aún no lo cablean.
-    hoy?: HoyPanelProps;
+    agenda?: AgendaPanelProps;
 }
 
 // ------------------------------------------------------------
@@ -272,7 +272,7 @@ export function WorkspaceHub({
     horarioImport,
     upload,
     language,
-    hoy,
+    agenda,
 }: WorkspaceHubProps) {
     const ws = FLU_CONFIG.ui?.workspace || {};
 
@@ -741,7 +741,7 @@ export function WorkspaceHub({
                 />
             </div>
             <div className="workspace-hub__body">
-                {hoy ? (
+                {agenda ? (
                     <div className="workspace-hub__columns" data-testid="workspace-hub-columns">
                         <div className="workspace-hub__main" data-testid="workspace-hub-main">
                             {/* Feed de resultados consolidado (columna principal) */}
@@ -828,14 +828,11 @@ export function WorkspaceHub({
                                     language={language}
                                 />
                             )}
-                            <HoyPanel
-                                horario={hoy.horario}
-                                diary={hoy.diary}
-                                notes={hoy.notes}
-                                reminders={hoy.reminders}
-                                temporals={hoy.temporals}
-                                now={hoy.now}
-                                language={language}
+                            <AgendaPanel
+                                items={agenda.items}
+                                colors={agenda.colors}
+                                onCancel={agenda.onCancel}
+                                now={agenda.now}
                             />
                         </aside>
                     </div>

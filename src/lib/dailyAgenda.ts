@@ -12,7 +12,6 @@
 // ============================================================
 
 import { normalizeSpaces } from './textUtils';
-import type { ReminderRecord } from '../core/db/fluDatabase';
 import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
 
 // -----------------------------------------------------------
@@ -160,6 +159,17 @@ function formatReminderWhen(at: number, language: 'es' | 'en'): string {
 }
 
 /**
+ * Forma mínima de un recordatorio pendiente que la fusión necesita leer.
+ * Estructural: acepta `ReminderRecord` (legacy) y los items del calendario
+ * unificado mapeados a `{ text, dueAt, status }` (una sola fuente).
+ */
+export interface AgendaReminderLike {
+    text?: string;
+    dueAt?: number;
+    status?: string;
+}
+
+/**
  * Fusiona los recordatorios pendientes en la agenda del día.
  * Agrega un item sintético ("Recordatorios pendientes") al final del
  * array, ordenado por vencimiento ascendente y limitado a maxReminders.
@@ -167,14 +177,14 @@ function formatReminderWhen(at: number, language: 'es' | 'en'): string {
  * No muta el array original; devuelve una copia con el item agregado.
  *
  * @param items - Agenda previa (de buildDailyAgenda)
- * @param reminders - Registros de recordatorios (desde IndexedDB)
+ * @param reminders - Registros de recordatorios pendientes (text/dueAt/status)
  * @param config - Configuración opcional (usa defaults si no se provee)
  * @param language - 'es' | 'en' para las etiquetas de tiempo
  * @returns La agenda con el item de recordatorios fusionado
  */
 export function mergeRemindersIntoAgenda(
     items: DailyAgendaItem[],
-    reminders: ReadonlyArray<ReminderRecord> = [],
+    reminders: ReadonlyArray<AgendaReminderLike> = [],
     config: Partial<DailyAgendaConfig> = {},
     language: 'es' | 'en' = 'es',
 ): DailyAgendaItem[] {
@@ -192,7 +202,7 @@ export function mergeRemindersIntoAgenda(
 
     const reminderLines = top.map((r) => {
         const text = normalizeSpaces(r.text || '');
-        const when = formatReminderWhen(r.dueAt, language);
+        const when = formatReminderWhen(r.dueAt ?? 0, language);
         return text ? `${when} — ${text}` : when;
     });
 

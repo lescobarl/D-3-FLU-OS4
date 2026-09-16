@@ -109,10 +109,7 @@ import { useOnboardingVoiceCapture } from './hooks/useOnboardingVoiceCapture';
 import { useNotificationCenter } from './hooks/useNotificationCenter';
 import { useDoNotDisturb } from './hooks/useDoNotDisturb';
 // ---- Fase 2 — Memoria y recordatorios: hooks, paneles y parser de intención ----
-import { useReminders } from './hooks/useReminders';
 import { useShoppingList } from './hooks/useShoppingList';
-// ---- Motor temporal genérico — alarmas y temporizadores (despertador + temporizador) ----
-import { useTemporalItems } from './hooks/useTemporalItems';
 // ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
 import { useDeviceActions } from './hooks/useDeviceActions';
 import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
@@ -143,14 +140,17 @@ import { useContacts } from './hooks/useContacts';
 import { useDiary } from './hooks/useDiary';
 import { useNotes } from './hooks/useNotes';
 import { useDocuments } from './hooks/useDocuments';
-import type { ParticipantRecord, ReminderRecord } from './core/db/fluDatabase';
+import type { ParticipantRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
 import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
-import { normalizeAgendaLabel, type AgendaColorMap } from './core/agenda/agendaModel';
+import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap } from './core/agenda/agendaModel';
 import { MS_DAY } from './core/temporal/scheduleEngine';
+import { useAgenda } from './hooks/useAgenda';
+import { AgendaPanel } from './components/AgendaPanel';
+import { createWebAudioDriver, type AudioDriver, type SoundOptions } from './core/temporal/audioAlert';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
@@ -1423,26 +1423,12 @@ function App() {
     } = useConfigPersistence();
 
     // ---- Fase 2 — Memoria y recordatorios: hooks tempranos ----
-    // useReminders debe declararse ANTES de useFluVoiceAssistant porque
+    // useAgenda debe declararse ANTES de useFluVoiceAssistant porque
     // getDailyAgenda (más abajo) lo referencia. speakFlu y el servicio de
-    // notificaciones se resuelven después (línea 1726 y 1740), así que se
-    // inyectan vía refs:
-    //   - speakFluRef (declarado arriba, sincronizado en la línea 1733)
+    // notificaciones se resuelven después, así que se inyectan vía refs:
+    //   - speakFluRef (declarado arriba)
     //   - notificationServiceRef (actualizado tras useNotificationCenter)
     const notificationServiceRef = useRef<NotificationService | null>(null);
-    const reminders = useReminders({
-        speak: (text, lang) => speakFluRef.current(text, lang),
-        notify: (input) => notificationServiceRef.current?.notify(input),
-        language,
-        participantId: activeParticipantId,
-    });
-    // ---- Motor temporal genérico: alarmas y temporizadores (despertador + temporizador) ----
-    const temporals = useTemporalItems({
-        speak: (text, lang) => speakFluRef.current(text, lang),
-        notify: (input) => notificationServiceRef.current?.notify(input),
-        language,
-        participantId: activeParticipantId,
-    });
     const shopping = useShoppingList({});
 
     // ---- Calendario UNIFICADO: un solo servicio sobre la tabla `agenda` ----
@@ -1450,6 +1436,70 @@ function App() {
         () => createAgendaService({ db: fluDb.agenda, now: () => Date.now() }),
         [],
     );
+
+    // Color por tipo (derivado en lectura, fuente única FLU_CONFIG.agenda.colors).
+    const agendaColors = useMemo<AgendaColorMap>(
+        () => (((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap),
+        [],
+    );
+
+    // Driver de audio del calendario: UN solo driver para sonar Y detener
+    // (useAgenda lo usa para stopRinging/auto-stop sobre EL MISMO tono).
+    const agendaAudioRef = useRef<AudioDriver | null>(null);
+    if (!agendaAudioRef.current) {
+        agendaAudioRef.current = createWebAudioDriver();
+    }
+    const agendaAudioDriver = agendaAudioRef.current;
+
+    // Motor ÚNICO del calendario: lista pendientes + disparo seguro (audio +
+    // notificación + voz con dedup) + detener/auto-stop. Los paneles leen
+    // `agenda.items` y cancelan vía `agendaService.cancel` (borrado lógico).
+    const agenda = useAgenda({
+        service: agendaService,
+        personId: activeParticipantId,
+        audio: agendaAudioDriver,
+        onFire: async (action, item) => {
+            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const temporalCfg = (FLU_CONFIG.temporal || {}) as Record<string, unknown>;
+            const temporalVoice = (temporalCfg.voice || {}) as Record<string, string>;
+            const temporalUi = (temporalCfg.ui || {}) as Record<string, string>;
+            const remindersVoice = (FLU_CONFIG.reminders?.voice || {}) as Record<string, string>;
+            const sound = (temporalCfg.sound || {}) as SoundOptions;
+            const notify = notificationServiceRef.current?.notify;
+            if (action === 'sonar') {
+                // Alarma: tono + notificación + voz (como useTemporalItems).
+                const dueText = temporalVoice.alarmDue || 'Es la hora de tu alarma:';
+                const dueTitle = temporalUi.alarmsLabel || 'Alarmas';
+                const dueBody = `${dueText} ${item.label}`;
+                let deliveredByVoice = false;
+                if (typeof notify === 'function') {
+                    const delivery = notify({ category: item.kind, title: dueTitle, body: dueBody, urgent: true });
+                    deliveredByVoice = delivery === 'voice' || delivery === 'both';
+                }
+                if (!deliveredByVoice) {
+                    speakFluRef.current(dueBody, lang).catch(() => undefined);
+                }
+                agendaAudioDriver.play(sound).catch(() => undefined);
+            } else if (action === 'avisar') {
+                // Recordatorio: notificación + voz (como useReminders), sin tono.
+                const voiceDue = remindersVoice.due || 'Tienes un recordatorio pendiente:';
+                const dueTitle = lang === 'en' ? 'Reminder' : 'Recordatorio';
+                const dueBody = `${voiceDue} ${item.label}`;
+                let deliveredByVoice = false;
+                if (typeof notify === 'function') {
+                    const delivery = notify({ category: 'reminder', title: dueTitle, body: dueBody, urgent: true });
+                    deliveredByVoice = delivery === 'voice' || delivery === 'both';
+                }
+                if (!deliveredByVoice) {
+                    speakFluRef.current(dueBody, lang).catch(() => undefined);
+                }
+            } else if (typeof notify === 'function') {
+                // Cita/junta/clase: notificación pasiva (toast), sin voz ni tono.
+                notify({ category: item.kind, title: lang === 'en' ? 'Agenda' : 'Agenda', body: item.label, urgent: false });
+            }
+        },
+    });
+
     window.__fluHandleAgendaCommandText = useCallback(
         async (input: AgendaCommand | string, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
@@ -1621,28 +1671,6 @@ function App() {
             active = false;
         };
     }, [participants.participants, participants.participantsWithBirthdayNear]);
-
-    // B11: pendientes filtrados por autor (listPendingByAuthor) desde el filtro del panel.
-    // Se recalcula al escribir el autor y cuando cambia la lista de recordatorios.
-    const [remindersAuthor, setRemindersAuthor] = useState('');
-    const [pendingByAuthor, setPendingByAuthor] = useState<ReminderRecord[]>([]);
-    useEffect(() => {
-        let active = true;
-        const author = remindersAuthor.trim();
-        if (!author) {
-            setPendingByAuthor([]);
-            return undefined;
-        }
-        reminders.service
-            .listPendingByAuthor(author)
-            .then((rows) => {
-                if (active) setPendingByAuthor(rows);
-            })
-            .catch((err) => console.error('[App] pendingByAuthor error:', err));
-        return () => {
-            active = false;
-        };
-    }, [remindersAuthor, reminders.service, reminders.reminders]);
 
     // ---- AI Provider Selection ----
     const [aiProvider, setAiProviderState] = useState<string>(() => getPreferredAIProvider());
@@ -1831,11 +1859,18 @@ function App() {
                 maxItems: agendaConfig.maxItems,
                 minImportance: agendaConfig.minImportance,
             });
-            // Fase 2 — B5: fusiona los recordatorios pendientes como un item
-            // sintético al final de la agenda, aunque no haya minutas.
+            // Fase 2 — B5: fusiona los recordatorios/citas pendientes (del
+            // calendario unificado) como un item sintético al final de la
+            // agenda, aunque no haya minutas.
             items = mergeRemindersIntoAgenda(
                 items,
-                reminders.reminders,
+                agenda.items
+                    .filter((it) => it.kind === 'recordatorio' || it.kind === 'cita')
+                    .map((it) => ({
+                        text: it.label,
+                        dueAt: nextAgendaDue(it.trigger, Date.now()),
+                        status: it.status,
+                    })),
                 { maxReminders: agendaConfig.maxReminders },
                 languageRef.current as 'es' | 'en',
             );
@@ -5021,55 +5056,12 @@ const {
                                             onProjectFolderSelected: handleProjectFolderSelected,
                                             onClearImage: handleClearImage,
                                         },
-                                        hoy: {
-                                            horario: {
-                                                items: horario.horario,
-                                                loading: horario.loading,
-                                                modo: horarioModo,
-                                                onModoChange: setHorarioModo,
-                                                onAdd: async (input) => horario.add(input),
-                                                onRemove: async (id) => {
-                                                    await horario.remove(id);
-                                                },
-                                                onEdit: async (id, materia) => {
-                                                    await horario.update(id, { materia });
-                                                },
+                                        agenda: {
+                                            items: agenda.items,
+                                            colors: agendaColors,
+                                            onCancel: async (id) => {
+                                                await agendaService.cancel(id);
                                             },
-                                            diary: {
-                                                entries: diary.entries,
-                                                loading: diary.loading,
-                                            },
-                                            notes: {
-                                                notes: notes.notes,
-                                                loading: notes.loading,
-                                                onToggle: async (id) => notes.toggle(id),
-                                                onRemove: async (id) => notes.remove(id),
-                                                onRename: async (id, label) => notes.rename(id, label),
-                                            },
-                                            reminders: {
-                                                items: reminders.reminders,
-                                                loading: reminders.loading,
-                                                onRemove: async (id) => {
-                                                    await reminders.remove(id);
-                                                },
-                                                onEdit: async (id, text) => {
-                                                    await reminders.update(id, { text });
-                                                },
-                                            },
-                                            temporals: {
-                                                alarms: temporals.alarms,
-                                                timers: temporals.timers,
-                                                loading: temporals.loading,
-                                                onCancel: async (id) => {
-                                                    await temporals.cancel(id);
-                                                },
-                                                onEdit: async (id, patch) => {
-                                                    await temporals.update(id, patch);
-                                                },
-                                                ringing: temporals.ringing,
-                                                onStopRinging: () => temporals.stopRinging(),
-                                            },
-                                            language,
                                         },
                                         language,
                                     }}
@@ -5229,44 +5221,11 @@ const {
                                         await contacts.removeContact(id);
                                     },
                                 }}
-                                reminders={{
-                                    items: reminders.reminders,
-                                    loading: reminders.loading,
-                                    pendingCount: reminders.pendingCount,
-                                    authorFilter: remindersAuthor,
-                                    authorPending: pendingByAuthor,
-                                    onAuthorFilterChange: setRemindersAuthor,
-                                    onAdd: async (input) => {
-                                        await reminders.add(input);
-                                    },
-                                    onComplete: async (id) => {
-                                        await reminders.complete(id);
-                                    },
-                                    onDismiss: async (id) => {
-                                        await reminders.dismiss(id);
-                                    },
-                                    onRemove: async (id) => {
-                                        await reminders.remove(id);
-                                    },
-                                    onEdit: async (id, text) => {
-                                        await reminders.update(id, { text });
-                                    },
-                                }}
-                                temporals={{
-                                    alarms: temporals.alarms,
-                                    timers: temporals.timers,
-                                    loading: temporals.loading,
-                                    onAdd: async (input) => {
-                                        await temporals.add(input);
-                                    },
+                                agenda={{
+                                    items: agenda.items,
+                                    colors: agendaColors,
                                     onCancel: async (id) => {
-                                        await temporals.cancel(id);
-                                    },
-                                    onRemove: async (id) => {
-                                        await temporals.remove(id);
-                                    },
-                                    onEdit: async (id, patch) => {
-                                        await temporals.update(id, patch);
+                                        await agendaService.cancel(id);
                                     },
                                 }}
                                 shopping={{
