@@ -136,6 +136,7 @@ import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPau
 // App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
+import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import {
   FLU_DIALOGUE_SPEAKER,
   deriveDialogueHistory,
@@ -2056,6 +2057,12 @@ export function useFluVoiceAssistant({
           FLU_CONFIG.voiceIdentity?.capture?.passiveBufferMs,
           chunkTotalSamplesRef,
         )
+        // Fallback OFFLINE: el motor local (Whisper WASM) se alimenta del MISMO
+        // PCM del micrófono cuando es la instancia activa. Chrome SR no expone
+        // `pushAudio`, así que el chequeo no afecta el flujo online (default).
+        if (typeof recognitionRef.current?.pushAudio === 'function') {
+          recognitionRef.current.pushAudio(input, sampleRateRef.current || 48000)
+        }
       },
     })
 
@@ -2289,6 +2296,42 @@ export function useFluVoiceAssistant({
           isStopping: isStoppingRef.current,
           recognitionActive: recognitionActiveRef.current,
         })
+
+        // Fallback OFFLINE (§1/§9): ante error de red ('network') o ausencia de
+        // habla ('no-speech') se degrada al motor local Whisper WASM en lugar de
+        // reintentar Chrome. Config-driven (fallbackErrors). Solo cuando la
+        // instancia activa sigue siendo Chrome (el motor local expone `pushAudio`),
+        // para no re-degradar si el propio motor local reporta 'network'.
+        if (
+          shouldUseLocalFallback(errorCode) &&
+          typeof recognitionRef.current?.pushAudio !== 'function'
+        ) {
+          const previous = recognitionRef.current
+          if (previous) {
+            previous.onstart = null
+            previous.onresult = null
+            previous.onerror = null
+            previous.onend = null
+            try {
+              if (typeof previous.abort === 'function') previous.abort()
+              else previous.stop()
+            } catch {
+              // ignore
+            }
+          }
+
+          const localEngine = createLocalRecognition()
+          if (!localEngine) {
+            requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+            return
+          }
+
+          recognitionRef.current = localEngine
+          recognitionActiveRef.current = false
+          wireRecognitionEvents(localEngine)
+          localEngine.start()
+          return
+        }
 
         if (errorCode === 'no-speech' || errorCode === 'aborted') {
           if ((isListeningRef.current || (conversationActiveRef?.current && !isStoppingRef.current)) && !isStoppingRef.current) {
