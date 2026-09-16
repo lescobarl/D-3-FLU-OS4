@@ -15,7 +15,7 @@ import type { AgendaItem, AgendaKind, AgendaStatus, AgendaTrigger } from './agen
 import { agendaDedupKey } from './agendaModel';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
-import { addAuditLog, type HorarioRecord, type ReminderRecord, type ReminderStatus } from '../db/fluDatabase';
+import { addAuditLog, type ReminderRecord, type ReminderStatus } from '../db/fluDatabase';
 import type {
     TemporalItemKind,
     TemporalItemRecord,
@@ -26,10 +26,6 @@ import type {
 import { onceRecurrence } from '../temporal/temporalTypes';
 import { firstDueAt, nextOccurrence, parseTimeOfDayToMs } from '../temporal/scheduleEngine';
 import {
-    diaDeFecha,
-    minutosDeFecha,
-    toMin,
-    type NewHorarioInput,
     type NewReminderInput,
     type NewTemporalItemInput,
 } from './agendaShared';
@@ -51,6 +47,8 @@ export interface AgendaCreateInput {
     label: string;
     trigger: AgendaTrigger;
     personId?: string;
+    fin?: string;
+    aula?: string;
 }
 
 export interface AgendaServiceOptions {
@@ -98,6 +96,8 @@ export function createAgendaService(options: AgendaServiceOptions): AgendaServic
                 personId: input.personId,
                 status: 'pending',
                 sync: buildSyncTuple(undefined, now()),
+                ...(input.fin !== undefined ? { fin: input.fin } : {}),
+                ...(input.aula !== undefined ? { aula: input.aula } : {}),
             };
             await db.add(item);
             return { ok: true, item };
@@ -650,234 +650,3 @@ export function createTemporalAgenda({
 }
 
 export type TemporalAgenda = ReturnType<typeof createTemporalAgenda>;
-
-// ------------------------------------------------------------
-// Dominio HORARIO (antes horarioService.ts) — absorbido aquí
-// ------------------------------------------------------------
-
-export interface HorarioConfig {
-    maxClasesPorDia: number;
-    diaMin: number;
-    diaMax: number;
-    defaultColor: string;
-    colores: readonly string[];
-}
-
-export interface HorarioDb {
-    add(record: HorarioRecord): Promise<unknown>;
-    put(record: HorarioRecord): Promise<unknown>;
-    delete(id: string): Promise<void>;
-    get(id: string): Promise<HorarioRecord | undefined>;
-    toArray(): Promise<HorarioRecord[]>;
-}
-
-export interface HorarioAgendaOptions {
-    db: HorarioDb;
-    config: HorarioConfig;
-    now?: () => number;
-    newId?: () => string;
-}
-
-export interface AddHorarioResult {
-    ok: boolean;
-    record?: HorarioRecord;
-    reason?: 'invalid-input' | 'max-per-dia';
-}
-
-const cleanAula = (value: unknown): string | undefined => {
-    const trimmed = String(value ?? '').trim();
-    return trimmed ? trimmed : undefined;
-};
-
-export function createHorarioAgenda({
-    db,
-    config,
-    now = () => Date.now(),
-    newId = uuidv4,
-}: HorarioAgendaOptions) {
-    const timestamp = makeTupleTimestamp(now);
-
-    const clampDia = (dia: number): number => {
-        const n = Number(dia);
-        if (!Number.isInteger(n)) return config.diaMin;
-        return Math.min(config.diaMax, Math.max(config.diaMin, n));
-    };
-
-    const isValidTime = (value: string): boolean => toMin(value) >= 0;
-
-    const add = async (input: NewHorarioInput): Promise<AddHorarioResult> => {
-        const materia = typeof input?.materia === 'string' ? input.materia.trim() : '';
-        const tipo = typeof input?.tipo === 'string' ? input.tipo.trim() : '';
-        const dia = input?.dia;
-        const inicio = typeof input?.inicio === 'string' ? input.inicio.trim() : '';
-        const fin = typeof input?.fin === 'string' ? input.fin.trim() : '';
-
-        if (!materia) return { ok: false, reason: 'invalid-input' };
-        if (!Number.isInteger(dia) || dia < config.diaMin || dia > config.diaMax) {
-            return { ok: false, reason: 'invalid-input' };
-        }
-        if (!isValidTime(inicio) || !isValidTime(fin)) return { ok: false, reason: 'invalid-input' };
-        if (toMin(fin) <= toMin(inicio)) return { ok: false, reason: 'invalid-input' };
-
-        const count = (await db.toArray()).filter((r) => clampDia(r.dia) === dia).length;
-        if (count >= config.maxClasesPorDia) return { ok: false, reason: 'max-per-dia' };
-
-        const id = newId();
-        const t = timestamp();
-        const record: HorarioRecord = {
-            id,
-            materia,
-            dia,
-            inicio,
-            fin,
-            aula: cleanAula(input.aula),
-            color: config.colores.includes(String(input.color || '')) ? String(input.color).trim() : config.defaultColor,
-            reminders: [],
-            personId: input.personId,
-            createdAt: t,
-            updatedAt: t,
-            sync: buildSyncTuple(undefined, timestamp()),
-        };
-        if (tipo) record.tipo = tipo;
-        await db.add(record);
-        const auditPayload: Record<string, unknown> = { materia, dia, inicio, fin };
-        if (tipo) auditPayload.tipo = tipo;
-        await addAuditLog('horario.create', 'horario', id, null, auditPayload, 'horarioService');
-        return { ok: true, record };
-    };
-
-    const get = async (id: string): Promise<HorarioRecord | undefined> => {
-        if (!id) return undefined;
-        const row = await db.get(id);
-        return row ? copyRecord(row) : undefined;
-    };
-
-    const list = async (): Promise<HorarioRecord[]> => {
-        const all = await db.toArray();
-        return all.map(copyRecord);
-    };
-
-    const listByDia = async (dia: number): Promise<HorarioRecord[]> => {
-        const all = await db.toArray();
-        return all
-            .filter((r) => clampDia(r.dia) === dia)
-            .map(copyRecord)
-            .sort((a, b) => toMin(a.inicio) - toMin(b.inicio));
-    };
-
-    const listByMateria = async (materia: string): Promise<HorarioRecord[]> => {
-        const needle = String(materia || '').trim().toLowerCase();
-        if (!needle) return [];
-        const all = await db.toArray();
-        return all.filter((r) => r.materia.trim().toLowerCase().includes(needle)).map(copyRecord);
-    };
-
-    const update = async (
-        id: string,
-        patch: Partial<NewHorarioInput>,
-    ): Promise<HorarioRecord | null> => {
-        const row = await db.get(id);
-        if (!row) return null;
-
-        const materia = patch.materia !== undefined ? String(patch.materia).trim() : row.materia;
-        const dia = patch.dia !== undefined ? patch.dia : row.dia;
-        const inicio = patch.inicio !== undefined ? String(patch.inicio).trim() : row.inicio;
-        const fin = patch.fin !== undefined ? String(patch.fin).trim() : row.fin;
-
-        if (!materia) return null;
-        if (!Number.isInteger(dia) || dia < config.diaMin || dia > config.diaMax) return null;
-        if (!isValidTime(inicio) || !isValidTime(fin)) return null;
-        if (toMin(fin) <= toMin(inicio)) return null;
-
-        const next: HorarioRecord = {
-            ...row,
-            materia,
-            dia,
-            inicio,
-            fin,
-            aula: patch.aula !== undefined ? cleanAula(patch.aula) : row.aula,
-            color: patch.color !== undefined
-                ? config.colores.includes(String(patch.color || '')) ? String(patch.color).trim() : row.color
-                : row.color,
-            updatedAt: timestamp(),
-            sync: buildSyncTuple(row.sync, timestamp()),
-        };
-        if (patch.tipo !== undefined) {
-            const tipo = String(patch.tipo).trim();
-            if (tipo) next.tipo = tipo;
-            else delete next.tipo;
-        }
-        await db.put(next);
-        await addAuditLog('horario.update', 'horario', id, row, next, 'horarioService');
-        return copyRecord(next);
-    };
-
-    const remove = async (id: string): Promise<boolean> => {
-        const row = await db.get(id);
-        if (!row) return false;
-        await db.delete(id);
-        await addAuditLog('horario.remove', 'horario', id, row, null, 'horarioService');
-        return true;
-    };
-
-    const countPorDia = async (dia: number): Promise<number> => {
-        const all = await db.toArray();
-        return all.filter((r) => clampDia(r.dia) === dia).length;
-    };
-
-    const proximaClase = async (at?: number): Promise<HorarioRecord | null> => {
-        const reference = at ?? timestamp();
-        const all = await db.toArray();
-        const nowKey = diaDeFecha(reference) * 1440 + minutosDeFecha(reference);
-
-        let best: HorarioRecord | null = null;
-        let bestKey = Infinity;
-        for (const r of all) {
-            const start = toMin(r.inicio);
-            if (start < 0) continue;
-            const key = clampDia(r.dia) * 1440 + start;
-            if (key > nowKey && key < bestKey) {
-                bestKey = key;
-                best = r;
-            }
-        }
-        if (best) return copyRecord(best);
-
-        let wrapKey = Infinity;
-        for (const r of all) {
-            const start = toMin(r.inicio);
-            if (start < 0) continue;
-            const key = clampDia(r.dia) * 1440 + start;
-            if (key < wrapKey) {
-                wrapKey = key;
-                best = r;
-            }
-        }
-        return best ? copyRecord(best) : null;
-    };
-
-    const clasesDeHoy = async (at?: number): Promise<HorarioRecord[]> => {
-        const reference = at ?? timestamp();
-        const dia = diaDeFecha(reference);
-        const all = await db.toArray();
-        return all
-            .filter((r) => clampDia(r.dia) === dia)
-            .map(copyRecord)
-            .sort((a, b) => toMin(a.inicio) - toMin(b.inicio));
-    };
-
-    return {
-        add,
-        get,
-        list,
-        listByDia,
-        listByMateria,
-        update,
-        remove,
-        countPorDia,
-        proximaClase,
-        clasesDeHoy,
-    };
-}
-
-export type HorarioAgenda = ReturnType<typeof createHorarioAgenda>;

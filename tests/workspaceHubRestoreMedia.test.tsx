@@ -14,13 +14,6 @@ import type { WorkspaceHubProps } from '../src/components/WorkspaceHub';
 vi.mock('../src/components/WorkspaceSearch', () => ({
     WorkspaceSearch: () => <div data-testid="mock-workspace-search" />,
 }));
-vi.mock('../src/components/HorarioPizarron', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('../src/components/HorarioPizarron')>();
-    return {
-        ...actual,
-        HorarioPizarron: () => <div data-testid="mock-horario-pizarron" />,
-    };
-});
 vi.mock('../src/components/DocumentResultPanel', () => ({
     default: () => <div data-testid="mock-document-panel" />,
 }));

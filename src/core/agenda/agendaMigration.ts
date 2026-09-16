@@ -74,6 +74,8 @@ function horarioToAgenda(h: HorarioRecord): AgendaItem {
         trigger: { type: 'weekly', daysOfWeek: [day], timeOfDay: h.inicio },
         status: 'pending',
         sync: h.sync,
+        ...(h.fin !== undefined ? { fin: h.fin } : {}),
+        ...(h.aula !== undefined ? { aula: h.aula } : {}),
     };
 }
 

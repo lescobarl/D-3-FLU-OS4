@@ -41,6 +41,10 @@ export interface AgendaItem {
     status: AgendaStatus;
     /** Tupla de sincronización (§3.7) vía `buildSyncTuple`. */
     sync: SyncTuple;
+    /** Hora de fin 'HH:MM' (solo `clase` con trigger weekly). */
+    fin?: string;
+    /** Lugar opcional (aula, consultorio, oficina…). */
+    aula?: string;
 }
 
 export const AGENDA_KINDS: readonly AgendaKind[] = Object.freeze([

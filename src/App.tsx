@@ -113,10 +113,8 @@ import { useShoppingList } from './hooks/useShoppingList';
 // ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
 import { useDeviceActions } from './hooks/useDeviceActions';
 import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
-// ---- Horario de clases (Pizarrón): hook temprano y panel presentacional ----
-import { useHorario } from './hooks/useHorario';
-import { clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
-import { diaDeFecha, toMin, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
+// ---- Horario de clases: importación OCR desde imagen (estructura → agenda) ----
+import { diaDeFecha, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
 import { parseAgendaIntent, type AgendaIntent } from './core/agenda/agendaIntentParser';
@@ -1575,28 +1573,25 @@ function App() {
         [agendaService, languageRef, activeParticipantIdRef],
     );
 
-    // ---- Horario de clases: hook temprano (Pizarrón + consulta por voz) ----
-    const horario = useHorario({ participantId: activeParticipantId });
-    const [horarioModo, setHorarioModo] = useState<HorarioModo>('semana');
-    // Entradas de horario pendientes de confirmar (parseadas desde una imagen
-    // digitalizada). Nada se escribe en fluDb.horario sin el visto bueno del
+    // ---- Horario de clases: entradas pendientes de confirmar (parseadas desde
+    // una imagen digitalizada). Nada se escribe en agenda sin el visto bueno del
     // usuario (Regla #1: sin hardcode; el parseo es genérico vía structureHorarioText).
     const [pendingHorarioImport, setPendingHorarioImport] = useState<HorarioClaseEstructurada[] | null>(null);
     const [horarioImportBusy, setHorarioImportBusy] = useState(false);
 
-    // Confirma el parseo: persiste cada entrada estructurada en fluDb.horario.
-    // Genérico: mapea {materia, tipo, dia, inicio, fin, aula} → NewHorarioInput.
+    // Confirma el parseo: persiste cada entrada estructurada en la tabla agenda
+    // (kind 'clase' con trigger weekly). Genérico: {materia, dia, inicio, fin, aula}.
     const confirmHorarioImport = useCallback(async () => {
         const entries = pendingHorarioImport;
         if (!entries || entries.length === 0) return;
         setHorarioImportBusy(true);
         try {
             for (const entry of entries) {
-                await horario.add({
-                    materia: entry.materia,
-                    tipo: entry.tipo,
-                    dia: entry.dia,
-                    inicio: entry.inicio,
+                await agendaService.create({
+                    kind: 'clase',
+                    label: entry.materia,
+                    trigger: { type: 'weekly', daysOfWeek: [entry.dia % 7], timeOfDay: entry.inicio },
+                    personId: activeParticipantIdRef.current,
                     fin: entry.fin,
                     aula: entry.aula,
                 });
@@ -1611,7 +1606,7 @@ function App() {
             setPendingHorarioImport(null);
             setHorarioImportBusy(false);
         }
-    }, [pendingHorarioImport, horario, language]);
+    }, [pendingHorarioImport, agendaService, language]);
 
     // Descarta el parseo sin escribir nada.
     const cancelHorarioImport = useCallback(() => {
@@ -1901,14 +1896,30 @@ function App() {
             return pending.map((n) => `- ${n.label}`).join('\n');
         },
         getHorarioContext: () => {
-            // Bloque 9 — Horario del día (HOY): clases de hoy ordenadas por hora.
-            const items = horario.horario || [];
-            if (items.length === 0) return '';
-            const hoy = diaDeFecha(Date.now());
-            const clasesHoy = clasesDelDia(items, hoy);
+            // Bloque 9 — Horario del día (HOY): clases de hoy ordenadas por hora,
+            // leídas de la tabla unificada agenda (kind 'clase', trigger weekly).
+            const hoy = diaDeFecha(Date.now()); // 1=Lunes..7=Domingo
+            const dayAgenda = hoy % 7; // 0=Domingo..6=Sábado (convención agenda)
+            const clasesHoy = (agenda.items || [])
+                .filter(
+                    (it) =>
+                        it.kind === 'clase' &&
+                        it.trigger.type === 'weekly' &&
+                        it.trigger.daysOfWeek.includes(dayAgenda),
+                )
+                .sort((a, b) => {
+                    const ta = a.trigger.type === 'weekly' ? a.trigger.timeOfDay : '';
+                    const tb = b.trigger.type === 'weekly' ? b.trigger.timeOfDay : '';
+                    return ta.localeCompare(tb);
+                });
             if (clasesHoy.length === 0) return '';
             return clasesHoy
-                .map((c) => `${c.inicio}–${c.fin} ${c.materia}${c.aula ? ` (${c.aula})` : ''}`)
+                .map((c) => {
+                    const inicio = c.trigger.type === 'weekly' ? c.trigger.timeOfDay : '';
+                    const fin = c.fin ? `–${c.fin}` : '';
+                    const aula = c.aula ? ` (${c.aula})` : '';
+                    return `${inicio}${fin} ${c.label}${aula}`;
+                })
                 .join('\n');
         },
         getResultadosContext: () => {
@@ -2526,7 +2537,7 @@ function App() {
                     const horarioConfig = FLU_CONFIG.horario || {};
                     const modoValido = horarioConfig.modos ? Object.keys(horarioConfig.modos) : ['semana', 'dia', 'proxima', 'recordatorios'];
                     const rawModo = String(workspace.modo || '').trim().toLowerCase();
-                    const modo: HorarioModo = modoValido.includes(rawModo) ? (rawModo as HorarioModo) : 'semana';
+                    const modo = (modoValido.includes(rawModo) ? rawModo : 'semana') as 'semana' | 'dia' | 'proxima' | 'recordatorios';
                     // Obligación #6: UUIDv4
                     integrationStore.setWorkspaceArtifact({
                         id: uuidv4(),
@@ -2540,7 +2551,6 @@ function App() {
                         origen: 'ia',
                         timestamp: Date.now(),
                     });
-                    setHorarioModo(modo);
                 } else if (tipo === 'doc' || tipo === 'video') {
                     // Una petición de MINUTA no es un documento: se genera la minuta
                     // (comando determinista GENERAR_RESUMEN) y se OMITE el PDF/video.
@@ -3943,9 +3953,6 @@ function App() {
                     const proposal = scheduleAdapter.propose(result.texto_extraido);
                     if (proposal) {
                         setPendingHorarioImport(proposal.items);
-                        // Muestra el horario en modo "Hoy" para que el usuario vea
-                        // la confirmación del parseo junto a sus entradas del día.
-                        setHorarioModo('dia');
                     }
                 }
 

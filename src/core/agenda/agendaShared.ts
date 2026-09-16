@@ -48,25 +48,6 @@ export interface NewTemporalItemInput {
     personId?: string;
 }
 
-/** Entrada para crear una entrada del horario semanal. */
-export interface NewHorarioInput {
-    /** Título legible de la entrada (materia, consulta, actividad…). */
-    materia: string;
-    /** Etiqueta libre del tipo de horario (escuela, medico, trabajo…). Opcional. */
-    tipo?: string;
-    /** 1=Lunes ... 7=Domingo (ISO 8601). */
-    dia: number;
-    /** Hora local 'HH:MM' de 24 h. */
-    inicio: string;
-    /** Hora local 'HH:MM' de 24 h. */
-    fin: string;
-    /** Lugar opcional (aula, consultorio, oficina…). */
-    aula?: string;
-    color?: string;
-    /** Usuario/hablante dueño de la entrada (aislamiento por hablante). */
-    personId?: string;
-}
-
 /** Entrada estructurada a partir del texto OCR de un horario. */
 export interface HorarioClaseEstructurada {
     /** Título legible de la entrada (materia, consulta, actividad…). */
