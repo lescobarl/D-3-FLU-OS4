@@ -111,11 +111,8 @@ import { useDoNotDisturb } from './hooks/useDoNotDisturb';
 // ---- Fase 2 — Memoria y recordatorios: hooks, paneles y parser de intención ----
 import { useReminders } from './hooks/useReminders';
 import { useShoppingList } from './hooks/useShoppingList';
-import { parseReminderIntent, type ReminderIntent, type ReminderIntentData } from './core/reminders/reminderIntentParser';
 // ---- Motor temporal genérico — alarmas y temporizadores (despertador + temporizador) ----
 import { useTemporalItems } from './hooks/useTemporalItems';
-import { parseTemporalIntent, formatDurationMs, type TemporalIntent, type TemporalIntentData } from './core/temporal/temporalIntentParser';
-import { isDuplicateTemporalItem } from './core/temporal/temporalDedup';
 // ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
 import { useDeviceActions } from './hooks/useDeviceActions';
 import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
@@ -123,11 +120,8 @@ import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/dev
 import { useHorario } from './hooks/useHorario';
 import { clasesDelDia, type HorarioModo } from './components/HorarioPizarron';
 import { diaDeFecha, toMin, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
-import { addHorarioVoiceEntry } from './core/horario/horarioVoiceEntry';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
-import { parseHorarioIntent, type HorarioIntent, type HorarioIntentData } from './core/horario/horarioIntentParser';
-import { buildTodayAgenda, DEFAULT_TODAY_AGENDA_LABELS, type TodayAgendaLabels } from './core/agenda/todayAgenda';
 import { parseAgendaIntent, type AgendaIntent } from './core/agenda/agendaIntentParser';
 import type { NotificationService } from './core/notifications/notificationService';
 import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
@@ -1095,27 +1089,6 @@ function readStringProp(value: unknown, key: string): string | undefined {
 }
 
 /** Convierte FLU_CONFIG.agenda.voice en etiquetas de sección (es/en) tipadas. */
-function buildAgendaLabels(voice: Record<string, unknown>): TodayAgendaLabels {
-    const read = (key: string): { es: string; en: string } => {
-        const raw = voice?.[key];
-        if (raw && typeof raw === 'object') {
-            const es = Reflect.get(raw, 'es');
-            const en = Reflect.get(raw, 'en');
-            return {
-                es: typeof es === 'string' ? es : DEFAULT_TODAY_AGENDA_LABELS[key as keyof TodayAgendaLabels].es,
-                en: typeof en === 'string' ? en : DEFAULT_TODAY_AGENDA_LABELS[key as keyof TodayAgendaLabels].en,
-            };
-        }
-        return DEFAULT_TODAY_AGENDA_LABELS[key as keyof TodayAgendaLabels];
-    };
-    return {
-        horario: read('horario'),
-        reminders: read('reminders'),
-        alarms: read('alarms'),
-        notes: read('notes'),
-        empty: read('empty'),
-    };
-}
 
 
 /**
@@ -1130,18 +1103,6 @@ function resolveDomainScopedIntent(
     opts: { defaultOffsetMs?: number; now?: number; language?: 'es' | 'en' },
 ): ArbiterResult | null {
     if (!domain || !text) return null;
-    if (domain === 'reminder') {
-        const intent = parseReminderIntent(text, {
-            now: opts.now ? () => opts.now as number : undefined,
-            defaultOffsetMs: opts.defaultOffsetMs,
-            assumedDomain: 'reminder',
-            language: opts.language,
-        });
-        if (intent?.handled && intent?.action) {
-            return { matched: true, domain: 'reminder', action: intent, channel: 'flu' };
-        }
-        return null;
-    }
     if (domain === 'note') {
         const parsed = parseNoteIntentText(text);
         if (parsed?.label) {
@@ -1151,25 +1112,6 @@ function resolveDomainScopedIntent(
                 action: { handled: true, action: 'notes.add', data: { label: parsed.label } },
                 channel: 'flu',
             };
-        }
-        return null;
-    }
-    if (domain === 'horario') {
-        const intent = parseHorarioIntent(String(text || '').trim());
-        if (intent?.handled && intent?.action) {
-            return { matched: true, domain: 'horario', action: intent, channel: 'flu' };
-        }
-        return null;
-    }
-    if (domain === 'temporal') {
-        const temporalCfg = FLU_CONFIG.temporal || {};
-        const intent = parseTemporalIntent(String(text || ''), {
-            now: opts.now ?? Date.now(),
-            defaultAlarmTimeOfDay: temporalCfg.defaultAlarmTimeOfDay,
-            defaultTimerMinutes: Number(temporalCfg.defaultTimerMinutes) || 5,
-        });
-        if (intent?.handled && intent?.action) {
-            return { matched: true, domain: 'temporal', action: intent, channel: 'flu' };
         }
         return null;
     }
@@ -1221,17 +1163,7 @@ async function dispatchArbiterIntent(
     }
     let reply = '';
     try {
-        if (domain === 'reminder' && typeof w.__fluHandleReminderText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleReminderText (reminder)');
-            reply =
-                (await w.__fluHandleReminderText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else if (domain === 'temporal' && typeof w.__fluHandleTemporalText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleTemporalText (temporal)');
-            reply = (await w.__fluHandleTemporalText(intent)) || '';
-        } else if (domain === 'diary' && FLU_CONFIG.diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
+        if (domain === 'diary' && FLU_CONFIG.diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleDiaryText (diary)');
             reply =
                 (await w.__fluHandleDiaryText(intent, {
@@ -1258,11 +1190,6 @@ async function dispatchArbiterIntent(
         } else if (domain === 'agenda' && typeof w.__fluHandleAgendaText === 'function') {
             relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaText (agenda)');
             reply = (await w.__fluHandleAgendaText(intent)) || '';
-        } else if (domain === 'horario' && typeof w.__fluHandleHorarioText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleHorarioText (horario)');
-            // El scope del horario es el participante ACTIVO (lo resuelve el
-            // propio manejador); nunca el nombre del hablante.
-            reply = (await w.__fluHandleHorarioText(intent)) || '';
         } else {
             relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
         }
@@ -3497,87 +3424,6 @@ function App() {
     handleOnboardingCompletedRef.current = handleOnboardingCompleted;
 
     // Fase 2 — Exponer manejador de recordatorios por texto en window (E2E + integración).
-    // Se asigna en CREACIÓN (expresión de asignación), disponible desde el montaje,
-    // siguiendo el precedente de __fluOnContractResolved (línea 1105).
-    window.__fluHandleReminderText = useCallback(
-        async (input: ReminderIntent | string, opts?: { personId?: string; personName?: string }) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
-            // Punto único de parseo: si el despacho ya pasó el intent estructurado
-            // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
-            // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
-            const remindersConfig = FLU_CONFIG.reminders || {};
-            const offsetMinutes = Number(remindersConfig.defaultReminderOffsetMinutes);
-            const defaultOffsetMs = (Number.isFinite(offsetMinutes) ? offsetMinutes : 10) * 60 * 1000;
-            const intent = (
-                input &&
-                typeof input === 'object' &&
-                typeof input.action === 'string' &&
-                input.handled !== false
-            )
-                ? input
-                : parseReminderIntent(String(input || ''), { defaultOffsetMs });
-            if (!intent || !intent.handled) return '';
-            const data: ReminderIntentData = intent.data || {};
-
-            switch (intent.action) {
-                case 'reminder.add': {
-                    const result = await reminders.add({
-                        text: data.text || '',
-                        dueAt: data.dueAt || Date.now() + defaultOffsetMs,
-                        personName: data.personName || opts?.personName,
-                        personId: opts?.personId,
-                    });
-                    lastActionFailed = !result.ok;
-                    if (!result.ok) {
-                        return lang === 'en'
-                            ? `I couldn't create the reminder${result.reason ? ` (${result.reason})` : ''}.`
-                            : `No pude crear el recordatorio${result.reason ? ` (${result.reason})` : ''}.`;
-                    }
-                    return lang === 'en'
-                        ? `Reminder created: ${data.text || ''}`
-                        : `Recordatorio creado: ${data.text || ''}`;
-                }
-                case 'reminder.list': {
-                    const pending = reminders.reminders.filter((r) => r.status === 'pending');
-                    if (pending.length === 0) {
-                        return lang === 'en'
-                            ? 'You have no pending reminders.'
-                            : 'No tienes recordatorios pendientes.';
-                    }
-                    const lines = pending
-                        .slice()
-                        .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0))
-                        .slice(0, 10)
-                        .map((r) => `${new Date(r.dueAt ?? 0).toLocaleString(lang)} — ${r.text}`);
-                    return lang === 'en'
-                        ? `Pending reminders: ${lines.join(' | ')}`
-                        : `Recordatorios pendientes: ${lines.join(' | ')}`;
-                }
-                case 'reminder.remove': {
-                    const target = String(data.text || '').trim().toLowerCase();
-                    const candidates = reminders.reminders.filter(
-                        (r) => r.status === 'pending' && r.text.toLowerCase().includes(target),
-                    );
-                    if (candidates.length === 0) {
-                        return lang === 'en'
-                            ? `I couldn't find a pending reminder matching "${data.text}".`
-                            : `No encontré un recordatorio pendiente que coincida con "${data.text}".`;
-                    }
-                    for (const r of candidates) {
-                        await reminders.remove(r.id);
-                    }
-                    const removedText = candidates.map((r) => r.text).join(' | ');
-                    return lang === 'en'
-                        ? `Removed reminder${candidates.length > 1 ? 's' : ''}: ${removedText}`
-                        : `Quité el recordatorio: ${removedText}`;
-                }
-                default:
-                    return '';
-            }
-        },
-        [reminders, languageRef],
-    );
-
     // Lista de compras por voz (dominio `shopping`, separado del calendario).
     window.__fluHandleShoppingText = useCallback(
         async (input: ShoppingIntent | string) => {
@@ -3648,155 +3494,6 @@ function App() {
             }
         },
         [shopping, languageRef],
-    );
-
-    // Motor temporal genérico — manejador de alarmas y temporizadores por texto (E2E + integración).
-    // Un único motor (trigger + recurrencia + entrega) cubre recordatorios, despertador y temporizador.
-    window.__fluHandleTemporalText = useCallback(
-        async (input: TemporalIntent | string) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
-            // Punto único de parseo: si el despacho ya pasó el intent estructurado
-            // (del árbitro), se ejecuta DIRECTAMENTE sin re-parcear la cadena. Si se
-            // llama con texto crudo (uso autónomo E2E/integración), se parcea aquí.
-            const temporalConfig = FLU_CONFIG.temporal || {};
-            const intent = (
-                input &&
-                typeof input === 'object' &&
-                typeof input.action === 'string' &&
-                input.handled !== false
-            )
-                ? input
-                : parseTemporalIntent(String(input || ''), {
-                      now: Date.now(),
-                      defaultAlarmTimeOfDay: temporalConfig.defaultAlarmTimeOfDay,
-                      defaultTimerMinutes: Number(temporalConfig.defaultTimerMinutes) || 5,
-                  });
-            if (!intent || !intent.handled) return '';
-            const data: TemporalIntentData = intent.data || {};
-
-            switch (intent.action) {
-                case 'alarm.add':
-                case 'timer.start': {
-                    const fallbackLabel =
-                        data.kind === 'alarm'
-                            ? (data.trigger)?.timeOfDay || ''
-                            : formatDurationMs((data.trigger)?.durationMs || 0, lang);
-                    // Idempotencia (anti pile-up): no crear una alarma IDÉNTICA
-                    // (mismo datetime completo + recurrencia + etiqueta) si ya hay
-                    // una pendiente. Un criterio por hora bloqueaba "alarma mañana
-                    // 11:25" cuando ya existía la de hoy 11:25.
-                    if ((data.kind || 'alarm') === 'alarm') {
-                        const wantedLabel = String(data.label || fallbackLabel);
-                        const duplicate = temporals.alarms.some(
-                            (a) =>
-                                a.status === 'pending' &&
-                                isDuplicateTemporalItem(a, {
-                                    trigger: data.trigger,
-                                    recurrence: data.recurrence,
-                                    label: wantedLabel,
-                                }),
-                        );
-                        if (duplicate) {
-                            return lang === 'en' ? 'That alarm already exists.' : 'Esa alarma ya existe.';
-                        }
-                    }
-                    const result = await temporals.add({
-                        kind: data.kind || 'alarm',
-                        label: data.label || fallbackLabel,
-                        trigger: data.trigger ?? { kind: 'absolute' },
-                        recurrence: data.recurrence,
-                    });
-                    if (!result.ok) {
-                        if (result.reason === 'max-active') {
-                            return lang === 'en'
-                                ? "I can't keep more active temporal items."
-                                : 'No puedo guardar más ítems temporales activos.';
-                        }
-                        return lang === 'en'
-                            ? "I couldn't save the temporal item."
-                            : 'No pude guardar el ítem temporal.';
-                    }
-                    return intent.reply;
-                }
-                case 'alarm.list': {
-                    const pending = temporals.alarms.filter((a) => a.status === 'pending');
-                    if (pending.length === 0) {
-                        return lang === 'en'
-                            ? 'You have no alarms.'
-                            : 'No tienes alarmas.';
-                    }
-                    const lines = pending
-                        .slice()
-                        .sort((a, b) => a.nextAt - b.nextAt)
-                        .slice(0, 10)
-                        .map((a) => `${new Date(a.nextAt).toLocaleString(lang)} — ${a.label}`);
-                    return lang === 'en'
-                        ? `Alarms: ${lines.join(' | ')}`
-                        : `Tus alarmas: ${lines.join(' | ')}`;
-                }
-                case 'timer.list': {
-                    const pending = temporals.timers.filter((t) => t.status === 'pending');
-                    if (pending.length === 0) {
-                        return lang === 'en'
-                            ? 'You have no timers.'
-                            : 'No tienes temporizadores.';
-                    }
-                    const lines = pending
-                        .slice()
-                        .sort((a, b) => a.nextAt - b.nextAt)
-                        .slice(0, 10)
-                        .map((t) => `${formatDurationMs(t.trigger.durationMs ?? 0, lang)} — ${t.label}`);
-                    return lang === 'en'
-                        ? `Timers: ${lines.join(' | ')}`
-                        : `Tus temporizadores: ${lines.join(' | ')}`;
-                }
-                case 'alarm.stop':
-                case 'timer.stop': {
-                    // Silencia el tono en curso (no cancela el ítem pendiente).
-                    temporals.stopRinging();
-                    return intent.reply;
-                }
-                case 'alarm.cancel': {
-                    const target = data.cancelTarget as string | undefined;
-                    // Hora local HH:MM de la próxima ocurrencia: permite cancelar
-                    // por hora también las alarmas de UNA sola vez (trigger
-                    // 'absolute', que no trae timeOfDay).
-                    const hhmmOf = (ts?: number): string => {
-                        if (!ts) return '';
-                        const d = new Date(ts);
-                        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                    };
-                    const matches = temporals.alarms.filter(
-                        (a) =>
-                            a.status === 'pending' &&
-                            (data.all ||
-                                (target &&
-                                    (a.trigger?.timeOfDay === target || hhmmOf(a.nextAt) === target))),
-                    );
-                    for (const a of matches) await temporals.cancel(a.id);
-                    return intent.reply;
-                }
-                case 'timer.cancel': {
-                    const target = data.cancelTarget as string | undefined;
-                    let matches = temporals.timers.filter(
-                        (t) =>
-                            t.status === 'pending' &&
-                            (data.all ||
-                                (target &&
-                                    formatDurationMs(t.trigger.durationMs ?? 0, lang) === target)),
-                    );
-                    if (!data.all && matches.length === 0) {
-                        const first = temporals.timers.find((t) => t.status === 'pending');
-                        if (first) matches = [first];
-                    }
-                    for (const t of matches) await temporals.cancel(t.id);
-                    return intent.reply;
-                }
-                default:
-                    return intent.reply;
-            }
-        },
-        [temporals, languageRef],
     );
 
     // P1-C (§1.3.4) — autoconocimiento por texto (E2E + integración).
@@ -4071,116 +3768,6 @@ function App() {
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
     // determinista: parseHorarioIntent interpreta el transcript y aquí se
     // ejecuta la acción sobre el hook useHorario (fuente de verdad Dexie).
-    window.__fluHandleHorarioText = useCallback(
-        async (input: HorarioIntent | string) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
-            // Punto único de parseo: si el despacho ya pasó el intent estructurado
-            // (del árbitro, que ya ejecutó parseHorarioIntent), se ejecuta
-            // DIRECTAMENTE sin re-parcear la cadena. Si se llama con texto crudo
-            // (uso autónomo E2E/integración), se parcea aquí.
-            const intent = (
-                input &&
-                typeof input === 'object' &&
-                typeof input.action === 'string' &&
-                input.handled !== false
-            )
-                ? input
-                : parseHorarioIntent(String(input || '').trim());
-            if (!intent || !intent.handled) return '';
-            const data: HorarioIntentData = intent.data || {};
-            const voice = FLU_CONFIG.horario?.voice || {};
-            const dayLabels = (FLU_CONFIG.horario?.dayLabels as string[]) || [];
-            const dayLabel = (dia?: number) =>
-                dia && dia >= 1 && dia <= 7 ? dayLabels[dia] || String(dia) : '';
-
-            const pick = (obj: Record<string, unknown>, key: string, fallback: string): string => {
-                const v = obj?.[key];
-                if (v && typeof v === 'object') {
-                    const localized = Reflect.get(v, lang) ?? Reflect.get(v, 'es');
-                    return typeof localized === 'string' ? localized : fallback;
-                }
-                return typeof v === 'string' ? v : fallback;
-            };
-
-            switch (intent.action) {
-                case 'horario.add': {
-                    // RUTA ÚNICA de alta por voz: normaliza + scope (participante
-                    // activo, el mismo que lee `useHorario`) + duración por defecto
-                    // config-driven. El nombre del hablante NO es el dueño.
-                    const { result, entry } = await addHorarioVoiceEntry(horario, data, {
-                        personId: activeParticipantId,
-                        defaultDurationMinutes: Number(
-                            (FLU_CONFIG.horario?.defaultDurationMinutes) ?? 60,
-                        ),
-                    });
-                    if (!entry) return '';
-                    if (!result.ok) {
-                        return pick(voice, 'addError', `No pude registrar "${entry.materia}".`)
-                            .replace('{titulo}', entry.materia);
-                    }
-                    const hora = entry.fin ? `${entry.inicio} a ${entry.fin}` : `a las ${entry.inicio}`;
-                    return pick(voice, 'addOk', `Listo, agregué "${entry.materia}" al horario.`)
-                        .replace('{titulo}', entry.materia)
-                        .replace('{dia}', dayLabel(entry.dia))
-                        .replace('{hora}', hora);
-                }
-                case 'horario.query': {
-                    const all = horario.horario || [];
-                    if (all.length === 0) {
-                        return pick(voice, 'queryEmptyAll', 'Aún no hay entradas en el horario.');
-                    }
-                    let entries = all;
-                    if (data.dia) {
-                        entries = all.filter((r) => r.dia === data.dia);
-                    } else if (data.when === 'hoy') {
-                        entries = all.filter((r) => r.dia === diaDeFecha(Date.now()));
-                    } else if (data.when === 'manana') {
-                        const d = new Date(Date.now());
-                        d.setDate(d.getDate() + 1);
-                        entries = all.filter((r) => r.dia === diaDeFecha(d.getTime()));
-                    }
-                    if (entries.length === 0) {
-                        return pick(voice, 'queryEmpty', 'No tienes entradas registradas para ese día.');
-                    }
-                    const lines = entries
-                        .slice()
-                        .sort((a, b) => toMin(a.inicio) - toMin(b.inicio))
-                        .slice(0, 10)
-                        .map((r) => {
-                            const when = data.dia ? `${dayLabel(r.dia)} ` : '';
-                            const time = r.fin ? `${r.inicio} a ${r.fin}` : r.inicio;
-                            return `${when}${time} — ${r.materia}`;
-                        });
-                    return lang === 'en'
-                        ? `Schedule: ${lines.join(' | ')}`
-                        : `Horario: ${lines.join(' | ')}`;
-                }
-                case 'horario.remove': {
-                    const materia = String(data.materia || '').trim();
-                    if (!materia) return '';
-                    const norm = (s: string) =>
-                        String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                    let matches = (horario.horario || []).filter(
-                        (r) => norm(r.materia) === norm(materia),
-                    );
-                    if (data.dia) matches = matches.filter((r) => r.dia === data.dia);
-                    if (matches.length === 0) {
-                        return pick(voice, 'removeNotFound', `No encontré "${materia}" en el horario.`)
-                            .replace('{titulo}', materia);
-                    }
-                    for (const m of matches) {
-                        await horario.remove(m.id);
-                    }
-                    return pick(voice, 'removeOk', `Listo, quité "${materia}" del horario.`)
-                        .replace('{titulo}', materia);
-                }
-                default:
-                    return '';
-            }
-        },
-        [horario, languageRef, activeParticipantId],
-    );
-
     const onboardingOverlayLabels = FLU_CONFIG.onboarding?.overlay || {};
     const onboardingPrompt = onboarding.currentStep
         ? promptForStep(
