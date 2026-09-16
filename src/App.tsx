@@ -1623,7 +1623,7 @@ function App() {
     const participants = useParticipants({});
     // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
     // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
-    // (La declaración de activeParticipantId vive arriba, antes de useReminders.)
+    // (La declaración de activeParticipantId vive arriba, antes de useAgenda.)
     // Aislamiento por usuario: la conversación persistida se filtra por el
     // participante activo (cada usuario ve sólo la suya).
     useConversationPersistence(activeParticipantId);
@@ -3204,8 +3204,8 @@ function App() {
         dnd: { isActive: dnd.active, allowUrgent: dnd.allowUrgent },
     });
     // Sincroniza el servicio de notificaciones en el ref temprano para que
-    // useReminders (declarado antes de useFluVoiceAssistant) pueda notificar
-    // los vencimientos de recordatorios.
+    // useAgenda (declarado antes de useFluVoiceAssistant) pueda notificar
+    // los vencimientos del calendario.
     notificationServiceRef.current = notificationCenter.service;
 
     // ---- Onboarding multiusuario: selección/creación de participante ----

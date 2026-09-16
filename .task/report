@@ -1,0 +1,20 @@
+# Report — T-AGENDA-UI-SWAP (swap de UI del calendario)
+
+Cambios aplicados:
+- useAgenda.ts: portado el disparo seguro desde useTemporalItems (audioDriver + stopEpoch anti re-sonar + auto-stop + stopRinging + ringing). Expone { items, ringing, stopRinging } y mantiene el tick con runAgendaCycle.
+- App.tsx: cableado useAgenda (service=agendaService, audio=agendaAudioDriver, onFire con notificationServiceRef.notify + speakFluRef + audioDriver), renderizado <AgendaPanel items colors onCancel>. Eliminado uso de useReminders/useTemporalItems y el filtro por autor.
+- FluSettingsTabView.tsx / WorkspaceHub.tsx: paneles viejos reemplazados por AgendaPanel; props reminders/temporals retiradas.
+- Borrados: RemindersPanel.tsx, TemporalItemsPanel.tsx, HoyPanel.tsx, AgendaHub.tsx (+ sus tests obsoletos: agendaPanelsEdit, hoyPanel, hoyProximaRemove, workspaceHubLayout, workspaceHubRunSearch).
+- dailyAgenda.ts: mergeRemindersIntoAgenda acepta forma estructural (ReminderRecord o AgendaItem mapeado a {text,dueAt,status}); getDailyAgenda fusiona recordatorios/citas desde la agenda unificada.
+
+Validado contra:
+- Guard agendaUiSwap.test.ts: ANTES ROJO (A=5, B=0) -> DESPUES VERDE (A=0, B=1; 2 passed).
+- npm run typecheck: 0 errores.
+- npm run test:full: 219 archivos / 2867 tests en verde (0 fallos).
+
+No validado (DoD-producto, pendiente del usuario):
+- Pantalla real del calendario unificado (AgendaPanel en Ajustes y en el lateral del Pizarrón) y el sonar/detener/auto-stop de alarmas en el navegador.
+
+Notas fuera de alcance (deuda, no tocada):
+- src/hooks/useReminders.ts y src/hooks/useTemporalItems.ts quedaron sin consumidor (módulos vivos pero muertos). No se borraron porque el alcance pedía borrar solo los 4 paneles.
+- src/core/agenda/agendaService.ts conserva createReminderAgenda/createTemporalAgenda/createHorarioAgenda (usados por los hooks viejos), fuera del alcance de este swap.

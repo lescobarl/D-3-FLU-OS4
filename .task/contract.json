@@ -1,24 +1,47 @@
 {
-  "id": "T-LINT-WARNINGS-RATCHET",
-  "mode": "light",
-  "objective": "Cerrar warnings de ESLint (unused-vars, eqeqeq y eslint-disable inútiles) sin cambiar comportamiento y fijar el ratchet --max-warnings=263.",
-  "base": "HEAD",
-  "ignore": [
-    ".task/**",
-    "scripts/task-gate*.mjs",
-    "kilo.json",
-    ".github/**",
-    "scripts/auditoria.mjs",
-    "plans/**",
-    ".kilo/**",
-    "eslint.config.mjs",
-    "package.json"
+  "id": "T-AGENDA-UI-SWAP",
+  "mode": "full",
+  "objective": "Terminar el swap de UI del calendario a un solo panel (AgendaPanel) sin reintroducir los bugs de alarma.",
+  "dod": {
+    "command": "npx vitest run tests/agendaUiSwap.test.ts --reporter=dot",
+    "expect": "2 passed (A=0, B=1)"
+  },
+  "guard": {
+    "command": "npx vitest run tests/agendaUiSwap.test.ts --reporter=dot",
+    "expect": "2 passed",
+    "mustStartRed": true,
+    "behavior": "tests/agendaUiSwap.test.ts"
+  },
+  "groundTruth": {
+    "command": "npm run typecheck && npm run test:full",
+    "expect": "0 errores de tipos; 219 archivos / 2867 tests en verde"
+  },
+  "baseline": {
+    "command": "npx vitest run tests/agendaUiSwap.test.ts --reporter=dot",
+    "failPattern": "A: los paneles viejos de agenda ya no se importan"
+  },
+  "invariants": [
+    {
+      "id": "A",
+      "statement": "Los paneles viejos (RemindersPanel/TemporalItemsPanel/HoyPanel) ya no se importan en src",
+      "count": "rg \"from ['\\\"].*(RemindersPanel|TemporalItemsPanel|HoyPanel)\" src | wc -l",
+      "today": 5,
+      "target": 0,
+      "guard": "tests/agendaUiSwap.test.ts"
+    },
+    {
+      "id": "B",
+      "statement": "AgendaPanel esta conectado en App.tsx",
+      "count": "rg -c AgendaPanel src/App.tsx",
+      "today": 0,
+      "target": 1,
+      "guard": "tests/agendaUiSwap.test.ts"
+    }
   ],
-  "allow": [
-    "src/**",
-    "tests/**"
-  ],
-  "maxFiles": 120,
-  "maxLines": 2000,
-  "dod": "npm run lint:eslint"
+  "allow": ["src/**", "tests/**"],
+  "deny": [".task/**", "scripts/task-gate.mjs"],
+  "frozen": {
+    "contractHash": "frozen-por-usuario",
+    "guardHash": "7f9974edc34fe79d87d70bb7f9ca39709a427fba1b5bc8fe77350afa12a1263b"
+  }
 }
