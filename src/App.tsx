@@ -1659,12 +1659,16 @@ function App() {
         (async () => {
             try {
                 const existing = await agendaService.list({ personId: activeParticipantId || undefined });
-                if (existing.length > 0) return;
+                const existingLabels = new Set(existing.map((i) => i.label));
+                const firstRun = existingLabels.size === 0;
                 for (const input of buildDemoAgendaInputs(Date.now())) {
+                    if (existingLabels.has(input.label)) continue;
                     await agendaService.create({ ...input, personId: activeParticipantId || undefined });
                 }
-                for (const label of buildDemoNotes()) {
-                    await notes.add({ label });
+                if (firstRun) {
+                    for (const label of buildDemoNotes()) {
+                        await notes.add({ label });
+                    }
                 }
                 if (!cancelled) void notes.refresh();
             } catch (err) {
