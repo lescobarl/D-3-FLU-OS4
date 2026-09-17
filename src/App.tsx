@@ -1651,19 +1651,22 @@ function App() {
     const diary = useDiary({});
     const notes = useNotes({ participantId: activeParticipantId });
 
-    // ---- DEMO (solo desarrollo): sembrar datos de ejemplo si la agenda está
-    // vacía, para validar el look&feel del panel con datos productivos. ----
+    // ---- DEMO (solo desarrollo): sembrar datos de ejemplo POR USUARIO, solo
+    // cuando ya hay un participante real (se firmó), para validar el look&feel
+    // con datos productivos. Antes del onboarding no se siembra nada. ----
     useEffect(() => {
         if (!import.meta.env.DEV) return;
+        const pid = activeParticipantId;
+        if (!pid || pid === DEFAULT_ONBOARDING_USER) return;
         let cancelled = false;
         (async () => {
             try {
-                const existing = await agendaService.list({ personId: activeParticipantId || undefined });
+                const existing = await agendaService.list({ personId: pid });
                 const existingLabels = new Set(existing.map((i) => i.label));
                 const firstRun = existingLabels.size === 0;
                 for (const input of buildDemoAgendaInputs(Date.now())) {
                     if (existingLabels.has(input.label)) continue;
-                    await agendaService.create({ ...input, personId: activeParticipantId || undefined });
+                    await agendaService.create({ ...input, personId: pid });
                 }
                 if (firstRun) {
                     for (const note of buildDemoNotes()) {
@@ -1679,7 +1682,7 @@ function App() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [activeParticipantId]);
 
     // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
     const deviceActions = useDeviceActions({
