@@ -180,18 +180,12 @@ export function AgendaPanel({
         setEditingNoteLabel('');
     };
 
-    // Fila de item (agenda y próximos): color por tipo, sin texto de tipo.
+    // Fila de item (agenda y próximos): punto de color por tipo + hora + texto.
     const renderRow = (item: AgendaItem, timeText: string, idPrefix: string, cancelPrefix: string) => (
-        <li
-            key={item.id}
-            className="hoy-panel__card"
-            data-testid={`${idPrefix}${item.id}`}
-            style={{ borderLeftColor: colors[item.kind] }}
-        >
-            <span className="hoy-panel__card-time">{timeText}</span>
-            <div className="hoy-panel__card-body">
-                <span className="hoy-panel__card-title">{item.label}</span>
-            </div>
+        <li key={item.id} className="agenda-item" data-testid={`${idPrefix}${item.id}`}>
+            <span className="agenda-item__dot" style={{ background: colors[item.kind] }} aria-hidden="true" />
+            <span className="agenda-item__time">{timeText}</span>
+            <span className="agenda-item__label">{item.label}</span>
             <div className="agenda-item__actions">
                 {onEdit ? (
                     <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
