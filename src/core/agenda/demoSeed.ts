@@ -42,3 +42,16 @@ export function buildDemoNotes(): Array<{ label: string; body?: string }> {
         { label: 'Pagar la luz' },
     ];
 }
+
+/**
+ * Inputs de demo que AÚN no existen para el participante. Se compara por
+ * `label` contra TODOS los estados (incluido `deleted`): un demo cancelado no
+ * se vuelve a sembrar (bug de registros que reaparecen).
+ */
+export function selectDemoAgendaInputs(
+    existing: ReadonlyArray<{ label: string }>,
+    now: number,
+): AgendaCreateInput[] {
+    const existingLabels = new Set(existing.map((i) => i.label));
+    return buildDemoAgendaInputs(now).filter((input) => !existingLabels.has(input.label));
+}

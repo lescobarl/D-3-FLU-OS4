@@ -349,13 +349,11 @@ export function parseNlDateTime(
 
   const today = /\b(hoy|today)\b/i.exec(text);
   if (today) {
+    // "hoy" es explícito: SIEMPRE es hoy. No se rueda a mañana aunque la hora
+    // ya haya pasado — rodarla aquí era el bug de "hoy" agendado como mañana.
     const base = startOfDay(nowDate);
     const time = extractTime(text);
-    let at = time ? applyHourMinute(base, time.hour, time.minute).getTime() : base.getTime();
-    if (at <= now) {
-      // 'hoy' con hora ya pasada → mañana a esa hora.
-      at += DAY_MS;
-    }
+    const at = time ? applyHourMinute(base, time.hour, time.minute).getTime() : base.getTime();
     return { type: 'today', at, matchedText: today[0], label: 'hoy' };
   }
 

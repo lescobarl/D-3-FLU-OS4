@@ -176,14 +176,18 @@ function resolveTrigger(text: string, now: number): AgendaTrigger | null {
     const dateText = picked.rest || text;
     const nl = parseNlDateTime(dateText, { now: () => now });
     if (picked.timeOfDay) {
-        // Base: fecha explícita ("mañana/jueves") o HOY si no la hay ("a las 7").
+        // Base: fecha explícita ("hoy/mañana/jueves") o HOY si no la hay ("a las 7").
+        const explicitDay = Boolean(nl?.at);
         const baseAt = nl?.at ?? now;
         const day = new Date(baseAt);
-        let at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
+        const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
             + (parseTimeOfDayToMs(picked.timeOfDay) ?? 0);
-        // Misma semántica que el temporal viejo: "a las 7" con esa hora ya
-        // pasada cae a la PRÓXIMA ocurrencia (mañana), no a hoy.
-        if (at <= now) at += MS_DAY;
+        // Solo la hora PELADA ("a las 7") cae a la próxima ocurrencia si ya
+        // pasó. Con día explícito ("hoy", "mañana", "el jueves") NO se rueda:
+        // "hoy a las 9" es hoy, no mañana.
+        if (!explicitDay && at <= now) {
+            return { type: 'absolute', at: at + MS_DAY };
+        }
         return { type: 'absolute', at };
     }
     if (!nl || !nl.at) return null;

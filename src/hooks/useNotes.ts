@@ -67,7 +67,6 @@ export interface UseNotesResult extends NotesState, NotesActions {
 // ------------------------------------------------------------
 
 export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotesResult {
-  const scope = participantId || 'global';
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
@@ -87,10 +86,19 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
 
   /** Recarga la lista desde IndexedDB (cronológica, pendientes primero). */
   const refresh = useCallback(async (): Promise<void> => {
+    // Sin usuario real NO hay alcance de notas (son por usuario). No se cae a
+    // 'global/legacy': eso mostraba notas en el onboarding, antes de elegir
+    // usuario.
+    if (!participantId) {
+      setNotes([]);
+      setRemainingCount(0);
+      setLoading(false);
+      return;
+    }
     try {
       const all = await service.list();
       // Aislamiento por usuario: solo las notas de ESTE usuario.
-      const scoped = filterNotesByScope(all, scope);
+      const scoped = filterNotesByScope(all, participantId);
       const sorted = scoped.slice().sort((a, b) => {
         if (a.done !== b.done) return a.done ? 1 : -1;
         return (a.createdAt ?? 0) - (b.createdAt ?? 0);
@@ -102,7 +110,7 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     } finally {
       setLoading(false);
     }
-  }, [service, scope, participantId]);
+  }, [service, participantId]);
 
   // Carga inicial.
   useEffect(() => {
@@ -112,30 +120,34 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
   /** Agrega una nota y refresca la lista. */
   const add = useCallback(
     async (input: NewNoteInput): Promise<AddNoteResult> => {
+      // Toda nota pertenece a un usuario: sin usuario real no se crea (una nota
+      // sin personId quedaría en 'global' y se filtraría a otros contextos).
+      if (!participantId) return { ok: false, reason: 'invalid-input' };
       const result = await service.add({
         ...input,
-        personId: input.personId || (scope !== 'global' ? scope : undefined),
+        personId: input.personId || participantId,
       });
       if (result.ok) await refresh();
       return result;
     },
-    [service, refresh, scope],
+    [service, refresh, participantId],
   );
 
   /** Agrega varias etiquetas de una vez (multi-add del parser de intención). */
   const addMany = useCallback(
     async (labels: string[]): Promise<AddNoteResult[]> => {
+      if (!participantId) return [];
       const clean = (labels || []).map((l) => l.trim()).filter(Boolean);
       if (clean.length === 0) return [];
       const results: AddNoteResult[] = [];
       for (const label of clean) {
-        const result = await service.add({ label });
+        const result = await service.add({ label, personId: participantId });
         results.push(result);
       }
       if (results.some((r) => r.ok)) await refresh();
       return results;
     },
-    [service, refresh],
+    [service, refresh, participantId],
   );
 
   /** Alterna el estado hecho/pendiente y refresca. */

@@ -51,6 +51,32 @@ describe('agenda.intent — create', () => {
     });
 });
 
+describe('agenda.intent — "hoy" no salta a mañana', () => {
+    const MORNING = new Date(2026, 8, 15, 7, 56, 0, 0).getTime(); // 15-sep-2026 07:56
+
+    it('"crea una cita hoy con el doctor a las 9 a.m." → hoy 9 (no mañana)', () => {
+        const r = parseAgendaCommand('crea una cita hoy con el doctor a las 9 a.m.', { now: () => MORNING });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('cita');
+        expect(r.trigger?.type).toBe('absolute');
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(MORNING, at)).toBe(0); // hoy
+        expect(new Date(at).getHours()).toBe(9);
+    });
+
+    it('"hoy a las 9" con la hora ya pasada sigue siendo hoy', () => {
+        const r = parseAgendaCommand('crea una junta hoy a las 9', { now: () => NOW });
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(NOW, at)).toBe(0);
+    });
+
+    it('hora PELADA ya pasada sí rueda a la próxima ocurrencia (mañana)', () => {
+        const r = parseAgendaCommand('crea una junta a las 9', { now: () => NOW });
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(NOW, at)).toBe(1);
+    });
+});
+
 describe('agenda.intent — list/cancel', () => {
     it('"qué hay para hoy" → list', () => {
         expect(parseAgendaCommand('qué hay para hoy').action).toBe('agenda.list');

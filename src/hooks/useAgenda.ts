@@ -98,6 +98,14 @@ export function useAgenda({
         let cancelled = false;
         let timer: ReturnType<typeof setTimeout> | null = null;
 
+        // Sin usuario real NO hay agenda: ni lectura ni disparo. Evita mostrar
+        // (y sonar) ítems de otro alcance durante el onboarding.
+        if (!personId) {
+            setItems([]);
+            setRinging(null);
+            return;
+        }
+
         const tick = async () => {
             if (runningRef.current) return;
             runningRef.current = true;

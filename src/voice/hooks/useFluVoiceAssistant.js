@@ -1790,6 +1790,7 @@ export function useFluVoiceAssistant({
           activeTurnIdRef,
           flushPcmAfterTurnCommit,
           lastCommitAtRef,
+          lastOnresultAtRef,
           turnAudioStartSampleRef,
           chunkTotalSamplesRef,
           preflightScheduledForTurnRef,

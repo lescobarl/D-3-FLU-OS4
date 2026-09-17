@@ -6,7 +6,7 @@ import { cleanForSpeech, detectWakeIntroducedName, formatClock } from './audioMa
 import { resolveInlineWakeAtCommit } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { resolveMicCommitAction } from './turnStream.js'
+import { resolveMicCommitAction, isDuplicateTurnCommit } from './turnStream.js'
 import {
   advancePublishedDisplay,
   detectNextSpeakerPhrase,
@@ -61,6 +61,7 @@ import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
  * @property {import('react').MutableRefObject<number>} activeTurnIdRef
  * @property {() => void} flushPcmAfterTurnCommit
  * @property {import('react').MutableRefObject<number>} lastCommitAtRef
+ * @property {import('react').MutableRefObject<number>} lastOnresultAtRef
  * @property {import('react').MutableRefObject<number>} turnAudioStartSampleRef
  * @property {import('react').MutableRefObject<number>} chunkTotalSamplesRef
  * @property {import('react').MutableRefObject<boolean>} preflightScheduledForTurnRef
@@ -115,6 +116,7 @@ export function handleConversationStreamSync(
     activeTurnIdRef,
     flushPcmAfterTurnCommit,
     lastCommitAtRef,
+    lastOnresultAtRef,
     turnAudioStartSampleRef,
     chunkTotalSamplesRef,
     preflightScheduledForTurnRef,
@@ -189,6 +191,23 @@ export function handleConversationStreamSync(
     fluTailAfterCommit = inlineWake.fluTail
   }
   capture = inlineWake.capture
+
+  // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
+  // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión
+  // del mismo turno, no una fila nueva.
+  if (
+    isDuplicateTurnCommit(capture, {
+      lastEmitted: lastEmittedTranscriptRef?.current || '',
+      lastCommitted: lastCommittedRow,
+      lastResultAt: lastOnresultAtRef?.current || 0,
+      lastCommitAt: lastCommitAtRef?.current || 0,
+    })
+  ) {
+    if (import.meta.env.DEV && debugHotPath) {
+      fluDebugHot('stream-skip', { reason: 'duplicate-turn-commit', capture })
+    }
+    return
+  }
 
   const finalizeTurnCommit = () => {
     turnCommitIdRef.current += 1

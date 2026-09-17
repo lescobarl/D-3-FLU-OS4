@@ -145,7 +145,7 @@ import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaComm
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
 import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
-import { buildDemoAgendaInputs, buildDemoNotes } from './core/agenda/demoSeed';
+import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
 import { MS_DAY } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
 import { AgendaPanel } from './components/AgendaPanel';
@@ -1218,22 +1218,34 @@ function App() {
     const auditLog = useAuditLog();
     // Usuario activo (se declara temprano: lo consumen varios hooks con aislamiento).
     const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
-    // Ref espejo del participante activo para pasarlo por valor a los helpers
-    // module-level (applyGameAction), igual que el resto de flujos scoped.
-    const activeParticipantIdRef = useRef<string | undefined>(activeParticipantId);
+    // Sesión con usuario ELEGIDO en esta entrada. Aunque `activeParticipantId`
+    // venga persistido de una sesión previa, mientras el onboarding esté en
+    // pantalla NO hay alcance per-usuario (las notas/agenda del usuario anterior
+    // no deben verse antes de elegir).
+    const [sessionReady, setSessionReady] = useState(false);
+    // Usuario REAL (excluye el centinela de onboarding `DEFAULT_ONBOARDING_USER`).
+    // Es el ÚNICO alcance válido para datos por-usuario: sin usuario elegido no se
+    // lee ni se escribe nada suyo (notas, agenda, documentos, historial, búsqueda).
+    const realParticipantId = useMemo(
+        () => (sessionReady && activeParticipantId && activeParticipantId !== DEFAULT_ONBOARDING_USER
+            ? activeParticipantId
+            : undefined),
+        [sessionReady, activeParticipantId],
+    );
+    const realParticipantIdRef = useRef<string | undefined>(realParticipantId);
     useEffect(() => {
-        activeParticipantIdRef.current = activeParticipantId;
-    }, [activeParticipantId]);
+        realParticipantIdRef.current = realParticipantId;
+    }, [realParticipantId]);
     // Aislamiento multiusuario del pizarrón: sella las entradas del historial y
     // el artefacto del workspace con el participante activo; al cambiar de usuario
     // el store limpia el artefacto para no mostrar el del anterior.
     useEffect(() => {
-        useIntegrationStore.getState().setActivePersonId(activeParticipantId);
-    }, [activeParticipantId]);
-    const minuteKnowledge = useMinuteKnowledge(activeParticipantId);
+        useIntegrationStore.getState().setActivePersonId(realParticipantId);
+    }, [realParticipantId]);
+    const minuteKnowledge = useMinuteKnowledge(realParticipantId);
     const voiceProfiles = useVoiceProfiles();
     // Historial de documentos/imágenes generados o cargados (por usuario).
-    const documentHistory = useDocuments({ participantId: activeParticipantId });
+    const documentHistory = useDocuments({ participantId: realParticipantId });
 
     // ---- Autonomy Systems Integration ----
     const [autonomyState, autonomyActions] = useAutonomyIntegration();
@@ -1465,7 +1477,7 @@ function App() {
     // `agenda.items` y cancelan vía `agendaService.cancel` (borrado lógico).
     const agenda = useAgenda({
         service: agendaService,
-        personId: activeParticipantId,
+        personId: realParticipantId,
         audio: agendaAudioDriver,
         onFire: async (action, item) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
@@ -1519,7 +1531,7 @@ function App() {
             const kind = cmd.kind;
             switch (cmd.action) {
                 case 'agenda.list': {
-                    const items = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
+                    const items = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
                     const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
                     const view = cmd.when === 'semana' ? 'week' : cmd.when === 'mes' ? 'month' : 'day';
                     // "mañana" = ventana de día corrida un día.
@@ -1539,7 +1551,7 @@ function App() {
                         kind,
                         label: cmd.label || kind,
                         trigger: cmd.trigger,
-                        personId: activeParticipantIdRef.current,
+                        personId: realParticipantIdRef.current,
                     });
                     if (!result.ok) {
                         return result.reason === 'duplicado'
@@ -1551,7 +1563,7 @@ function App() {
                         : `Listo: ${result.item?.label}`;
                 }
                 case 'agenda.cancel': {
-                    const pending = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
+                    const pending = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
                     const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
                     const target = pending.find((item) =>
                         item.kind === kind && (!targetLabel || normalizeAgendaLabel(item.label) === targetLabel),
@@ -1563,7 +1575,7 @@ function App() {
                     return lang === 'en' ? 'Cancelled.' : 'Cancelado.';
                 }
                 case 'agenda.update': {
-                    const pending = await agendaService.list({ personId: activeParticipantIdRef.current, status: 'pending' });
+                    const pending = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
                     const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
                     const target = pending.find((item) =>
                         item.kind === kind && (!targetLabel || normalizeAgendaLabel(item.label) === targetLabel),
@@ -1581,7 +1593,7 @@ function App() {
                     return '';
             }
         },
-        [agendaService, languageRef, activeParticipantIdRef],
+        [agendaService, languageRef, realParticipantIdRef],
     );
 
     // ---- Horario de clases: entradas pendientes de confirmar (parseadas desde
@@ -1602,7 +1614,7 @@ function App() {
                     kind: 'clase',
                     label: entry.materia,
                     trigger: { type: 'weekly', daysOfWeek: [entry.dia % 7], timeOfDay: entry.inicio },
-                    personId: activeParticipantIdRef.current,
+                    personId: realParticipantIdRef.current,
                     fin: entry.fin,
                     aula: entry.aula,
                 });
@@ -1632,7 +1644,7 @@ function App() {
     // (La declaración de activeParticipantId vive arriba, antes de useAgenda.)
     // Aislamiento por usuario: la conversación persistida se filtra por el
     // participante activo (cada usuario ve sólo la suya).
-    useConversationPersistence(activeParticipantId);
+    useConversationPersistence(realParticipantId);
     // Guard de montaje: el onboarding se reinicia (para pedirlo SIEMPRE al
     // entrar) solo después de que los participantes carguen y el estado del
     // onboarding esté resuelto (ready). Evita resetear antes de tiempo.
@@ -1655,21 +1667,24 @@ function App() {
     // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
     const contacts = useContacts({});
     const diary = useDiary({});
-    const notes = useNotes({ participantId: activeParticipantId });
+    const notes = useNotes({ participantId: realParticipantId });
 
     // ---- DEMO (solo desarrollo): sembrar datos de ejemplo (uno de cada tipo
     // + notas) para el participante activo, para validar el look&feel. ----
     useEffect(() => {
         if (!import.meta.env.DEV) return;
-        const pid = activeParticipantId || undefined;
+        // Solo para un usuario real: el DEMO es por-usuario (no en onboarding).
+        if (!realParticipantId) return;
+        const pid = realParticipantId;
         let cancelled = false;
         (async () => {
             try {
-                const existing = await agendaService.list({ personId: pid, status: 'pending' });
-                const existingLabels = new Set(existing.map((i) => i.label));
-                const firstRun = existingLabels.size === 0;
-                for (const input of buildDemoAgendaInputs(Date.now())) {
-                    if (existingLabels.has(input.label)) continue;
+                // Se listan TODOS los estados (no solo 'pending'): un demo
+                // cancelado queda en 'deleted' y, si solo se mirara pending,
+                // el seed lo volvería a crear (bug de registros que reaparecen).
+                const existing = await agendaService.list({ personId: pid });
+                const firstRun = existing.length === 0;
+                for (const input of selectDemoAgendaInputs(existing, Date.now())) {
                     await agendaService.create({ ...input, personId: pid });
                 }
                 if (firstRun) {
@@ -1685,8 +1700,7 @@ function App() {
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeParticipantId]);
+    }, [realParticipantId]);
 
     // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
     const deviceActions = useDeviceActions({
@@ -2997,7 +3011,7 @@ function App() {
                         conversationActiveRef,
                         speakFluRef,
                         scheduleResumeListening,
-                        participantIdRef: activeParticipantIdRef,
+                        participantIdRef: realParticipantIdRef,
                     });
                 } catch (err) {
                     console.error('[App] applyGameAction failed (non-critical):', err);
@@ -3263,6 +3277,7 @@ function App() {
     // ---- Onboarding multiusuario: selección/creación de participante ----
     const handleSelectActiveUser = useCallback(
         (participantId: string) => {
+            setSessionReady(true);
             setActiveUser(undefined, participantId);
             setActiveParticipantId(participantId);
         },
@@ -3364,6 +3379,7 @@ function App() {
     // gesto del usuario, se reintenta con el PRIMER gesto durante 10 s.
     const activateParticipant = useCallback(
         (id: string) => {
+            setSessionReady(true);
             setActiveUser(undefined, id);
             setActiveParticipantId(id);
             const tryStartListening = async () => {
@@ -3836,7 +3852,7 @@ function App() {
             // Lectura ÚNICA: la agenda del día sale de la tabla `agenda`, no de
             // las fuentes viejas (horario/reminders/temporal).
             const items = await agendaService.list({
-                personId: activeParticipantIdRef.current,
+                personId: realParticipantIdRef.current,
                 status: 'pending',
             });
             const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
@@ -3849,7 +3865,7 @@ function App() {
                 en: voice.empty?.en ?? 'Nothing scheduled.',
             });
         },
-        [agendaService, languageRef, activeParticipantIdRef],
+        [agendaService, languageRef, realParticipantIdRef],
     );
 
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
@@ -5131,7 +5147,7 @@ const {
                                             ringing: agenda.ringing,
                                             onStop: agenda.stopRinging,
                                             onAdd: async (input) => {
-                                                await agendaService.create({ ...input, personId: activeParticipantId || undefined });
+                                                await agendaService.create({ ...input, personId: realParticipantId });
                                             },
                                             onEdit: async (id, patch) => {
                                                 await agendaService.update(id, patch);
@@ -5320,7 +5336,7 @@ const {
                                     ringing: agenda.ringing,
                                     onStop: agenda.stopRinging,
                                     onAdd: async (input) => {
-                                        await agendaService.create({ ...input, personId: activeParticipantId || undefined });
+                                        await agendaService.create({ ...input, personId: realParticipantId });
                                     },
                                     onEdit: async (id, patch) => {
                                         await agendaService.update(id, patch);
