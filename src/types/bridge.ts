@@ -384,10 +384,14 @@ export interface FluDiagnostics {
  * conversacional (la IA entiende y responde) pero la ejecución es precisa.
  */
 export interface FluAccion {
-    /** Dominio al que pertenece la acción (recordatorio, temporal, diario, nota, horario). */
-    dominio: 'reminder' | 'temporal' | 'diary' | 'note' | 'horario';
+    /** Dominio al que pertenece la acción (calendario, compras, diario, nota). */
+    dominio: 'agenda' | 'shopping' | 'diary' | 'note';
     /** Fragmento del mandato del usuario que dispara la acción (ej. "recuérdame comprar leche a las 7"). */
     texto: string;
+    /** Nota estructurada: título corto (ej. "Super"). */
+    nombre?: string;
+    /** Nota estructurada: contenido/texto de la nota (ej. "pan huevo"). */
+    contenido?: string;
 }
 
 /**

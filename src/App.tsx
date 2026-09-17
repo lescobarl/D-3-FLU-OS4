@@ -2119,6 +2119,33 @@ function App() {
                     // turno no se pierda si el LLM la omitió.
                     const resolvedActions: Array<{ result: ArbiterResult; viaDomain: boolean }> = [];
                     for (const accion of acciones ?? []) {
+                        // LLM ya ESTRUCTURÓ la nota (nombre + contenido): ejecutar
+                        // DIRECTAMENTE, sin re-parsear el texto (el regex es frágil
+                        // ante variantes del habla — "cuyo contenido sea", "con", etc.).
+                        if (
+                            accion?.dominio === 'note' &&
+                            typeof accion?.nombre === 'string' &&
+                            accion.nombre.trim() &&
+                            typeof accion?.contenido === 'string'
+                        ) {
+                            resolvedActions.push({
+                                result: {
+                                    matched: true,
+                                    domain: 'note',
+                                    action: {
+                                        handled: true,
+                                        action: 'notes.add',
+                                        data: {
+                                            label: String(accion.nombre).trim(),
+                                            body: String(accion.contenido).trim(),
+                                        },
+                                    },
+                                    channel: 'flu',
+                                } as ArbiterResult,
+                                viaDomain: true,
+                            });
+                            continue;
+                        }
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
                         // Guard anti-arrastre (Bug #5): el contrato exige que
