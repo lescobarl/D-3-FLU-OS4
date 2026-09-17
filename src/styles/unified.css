@@ -2439,7 +2439,7 @@
   gap: 0;
   font-family: var(--font-ui, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
   font-size: var(--text-xs, 11px);
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .hoy-panel__header {
@@ -2519,14 +2519,14 @@
 .hoy-panel__section {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 /* Línea separadora entre bloques (citas / alarmas / clases) sin aumentar
    el aire vertical. */
 .hoy-panel__section + .hoy-panel__section {
   border-top: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
-  padding-top: 1px;
+  padding-top: 0;
 }
 
 .hoy-panel__section-title {
@@ -2573,7 +2573,7 @@
   display: flex;
   align-items: flex-start;
   gap: 4px;
-  padding: 1px 0;
+  padding: 0;
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   border-left: 2px solid var(--accent-color, #7c6cff);
@@ -2596,7 +2596,7 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   min-width: 0;
 }
 
@@ -6988,13 +6988,13 @@ details[open].flu-card .flu-card__chev {
     font-size: var(--text-xs, 11px);
     cursor: pointer;
 }
-.agenda-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.agenda-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
 /* Item (agenda y próximos): bolita de color + hora + texto, sin borde de viñeta. */
 .agenda-item {
     display: flex;
     align-items: center;
     gap: 5px;
-    padding: 1px 2px;
+    padding: 0 2px;
     background: transparent;
     border-radius: 4px;
 }
@@ -7080,7 +7080,7 @@ details[open].flu-card .flu-card__chev {
     border-radius: 2px;
 }
 /* Nota: nombre + contenido (body multilínea). */
-.agenda-note-body { display: flex; flex-direction: column; gap: 3px; padding: 2px 0; }
+.agenda-note-body { display: flex; flex-direction: column; gap: 1px; padding: 0; }
 .agenda-note-body__area {
     width: 100%;
     min-height: 48px;
