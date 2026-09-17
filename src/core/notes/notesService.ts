@@ -223,6 +223,23 @@ export function createNotesService({
     return done.length;
   };
 
+  /** Borrado LÓGICO de TODAS las notas (§2.9): devuelve cuántas se marcaron. */
+  const clearAll = async (): Promise<number> => {
+    const all = await db.toArray();
+    const live = all.filter(isLive);
+    for (const note of live) {
+      await db.put({
+        ...note,
+        updatedAt: timestamp(),
+        sync: { ...buildSyncTuple(note.sync, timestamp()), deleted: true },
+      });
+    }
+    if (live.length > 0) {
+      await addAuditLog('notes.clearAll', 'note', '', live.length, 0, 'notesService');
+    }
+    return live.length;
+  };
+
   const remaining = async (): Promise<number> => {
     const all = await db.toArray();
     return notesRemaining(all.filter(isLive));
@@ -241,6 +258,7 @@ export function createNotesService({
     removeByTarget,
     uncheckAll,
     clearDone,
+    clearAll,
     remaining,
   };
 }

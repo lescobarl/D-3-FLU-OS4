@@ -22,7 +22,8 @@ export type AgendaCommandAction =
     | 'agenda.create'
     | 'agenda.list'
     | 'agenda.update'
-    | 'agenda.cancel';
+    | 'agenda.cancel'
+    | 'agenda.clear';
 
 export interface AgendaCommand {
     handled: boolean;
@@ -119,6 +120,8 @@ function detectAction(text: string): AgendaCommandAction | null {
     // Consulta ANCLADA: "qué <hay|tengo|...>" al inicio, o "mi agenda/agenda de".
     if (t.startsWith('que ') && /\b(?:hay|tengo|tienes|tiene)\b/.test(t)) return 'agenda.list';
     if (/\b(?:mi agenda|agenda de|agenda para)\b/.test(t)) return 'agenda.list';
+    // "borra/limpia TODO/TODA la agenda/el calendario" → vaciar todo.
+    if (/(?:borra|borrar|limpia|limpiar|vacia|vaciar|elimina|eliminar)\s+(?:todo|toda|todos|todas)\s+(?:el|la|lo)?\s*(?:contenido\s+(?:de\s+)?)?(?:agenda|calendario)\b/i.test(t)) return 'agenda.clear';
     if (CANCEL_FRAMES.some((f) => t.includes(f))) return 'agenda.cancel';
     if (UPDATE_FRAMES.some((f) => t.includes(f))) return 'agenda.update';
     if (CREATE_FRAMES.some((f) => t.includes(f))) return 'agenda.create';
@@ -221,6 +224,9 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const action = detectAction(cleaned);
     if (action === 'agenda.list') {
         return { handled: true, action, when: detectQueryView(cleaned), reply: '' };
+    }
+    if (action === 'agenda.clear') {
+        return { handled: true, action, reply: '' };
     }
 
     const kind = detectKind(cleaned) ?? resolveImplicitKind(cleaned, action);

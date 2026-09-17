@@ -49,6 +49,8 @@ export interface AgendaService {
     restore: (id: string) => Promise<{ ok: boolean; reason?: string }>;
     /** Marca un item como hecho (vence y no re-tica si es de una vez). */
     complete: (id: string) => Promise<{ ok: boolean; reason?: string }>;
+    /** Borrado lógico de TODOS los items pendientes (devuelve cuántos marcó). */
+    clearAll: () => Promise<number>;
 }
 
 export function createAgendaService(options: AgendaServiceOptions): AgendaService {
@@ -143,6 +145,19 @@ export function createAgendaService(options: AgendaServiceOptions): AgendaServic
             };
             await db.put(completed);
             return { ok: true };
+        },
+
+        async clearAll() {
+            const all = await db.toArray();
+            const live = all.filter((item) => item.status !== 'deleted');
+            for (const item of live) {
+                await db.put({
+                    ...item,
+                    status: 'deleted',
+                    sync: { ...buildSyncTuple(item.sync, now()), deleted: true },
+                });
+            }
+            return live.length;
         },
     };
 }

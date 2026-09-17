@@ -55,6 +55,11 @@ function stripAccentsEs(text = '') {
     .replace(/[ñ]/g, 'n')
 }
 
+/** Colapsa tartamudeo ASR: "bor borra" → "borra", "bo borra" → "borra". */
+function collapseStutter(text = '') {
+  return String(text || '').replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
+}
+
 // Verbos/conectores de relleno que pueden preceder al ítem cuando se enuncia
 // después del destino: "… la nota del súper QUE TAMBIÉN TRAIGA una computadora".
 const SUPER_ITEM_LEAD =
@@ -165,16 +170,23 @@ export function parseNoteIntentText(rawText = '') {
 }
 
 /**
- * Parsea una frase de BORRADO de nota y devuelve { target } o null.
+ * Parsea una frase de BORRADO de nota y devuelve { target, all } o null.
+ * - { target, all:false } → borrar UNA nota por destino.
+ * - { target:null, all:true } → borrar TODAS las notas.
  * Fuente única del reconocimiento de "borra/elimina/quita la nota X".
  */
 export function parseNoteRemoveIntentText(rawText = '') {
   let clean = String(rawText || '').trim()
   clean = clean.replace(WAKE_LEAD, ' ').trim()
+  clean = collapseStutter(clean).replace(/\s+/g, ' ').trim()
   if (!clean) return null
   const m = NOTE_REMOVE.exec(clean)
   if (!m) return null
   const target = normalizeRemoveTarget(m[1] ? m[1].trim() : '')
-  if (!target) return null
-  return { target }
+  if (target) return { target, all: false }
+  // Sin destino ("borra todas las notas") → borrar TODAS.
+  if (/\b(?:todas?|todos?|todo|completa?|entera?)\b/i.test(clean)) {
+    return { target: null, all: true }
+  }
+  return null
 }

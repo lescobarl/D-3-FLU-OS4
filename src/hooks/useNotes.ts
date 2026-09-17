@@ -56,6 +56,8 @@ export interface NotesActions {
   removeByTarget: (target: string) => Promise<number>;
   uncheckAll: () => Promise<number>;
   clearDone: () => Promise<number>;
+  /** Borra (lógico) TODAS las notas. */
+  clearAll: () => Promise<number>;
 }
 
 export interface UseNotesResult extends NotesState, NotesActions {
@@ -224,6 +226,13 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     return count;
   }, [service, refresh]);
 
+  /** Borra (lógico) TODAS las notas y refresca. */
+  const clearAll = useCallback(async (): Promise<number> => {
+    const count = await service.clearAll();
+    if (count > 0) await refresh();
+    return count;
+  }, [service, refresh]);
+
   return {
     service,
     notes,
@@ -240,5 +249,6 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     removeByTarget,
     uncheckAll,
     clearDone,
+    clearAll,
   };
 }

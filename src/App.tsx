@@ -1527,9 +1527,16 @@ function App() {
             const cmd = typeof input === 'object' && input?.action
                 ? input
                 : parseAgendaCommand(String(input || ''));
-            if (!cmd?.handled || !cmd.action || !cmd.kind) return '';
+            if (!cmd?.handled || !cmd.action) return '';
             const kind = cmd.kind;
             switch (cmd.action) {
+                case 'agenda.clear': {
+                    const cleared = await agendaService.clearAll();
+                    lastActionFailed = cleared === 0;
+                    return lang === 'en'
+                        ? 'Done, cleared your agenda.'
+                        : 'Listo, vacié tu agenda.';
+                }
                 case 'agenda.list': {
                     const items = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
                     const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
@@ -1546,6 +1553,7 @@ function App() {
                     });
                 }
                 case 'agenda.create': {
+                    if (!kind) return '';
                     if (!cmd.trigger) return '';
                     const result = await agendaService.create({
                         kind,
@@ -1563,6 +1571,7 @@ function App() {
                         : `Listo: ${result.item?.label}`;
                 }
                 case 'agenda.cancel': {
+                    if (!kind) return '';
                     const pending = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
                     const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
                     const target = pending.find((item) =>
@@ -1575,6 +1584,7 @@ function App() {
                     return lang === 'en' ? 'Cancelled.' : 'Cancelado.';
                 }
                 case 'agenda.update': {
+                    if (!kind) return '';
                     const pending = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
                     const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
                     const target = pending.find((item) =>
@@ -3701,6 +3711,16 @@ function App() {
                 typeof input === 'object' &&
                 typeof input.action === 'string' &&
                 input.handled !== false;
+
+            // Borrado lógico de TODAS las notas ("borra todas las notas"): el
+            // árbitro ya entregó action='notes.clear' (0 llamadas a IA).
+            if (isIntent && input.action === 'notes.clear') {
+                const clearedCount = await notes.clearAll();
+                lastActionFailed = clearedCount === 0;
+                return lang === 'en'
+                    ? 'Done, I cleared all your notes.'
+                    : 'Listo, borré todas tus notas.';
+            }
 
             // Borrado lógico por voz ("borra/elimina/quita la nota X"): el árbitro
             // ya entregó data.target; se localiza y marca la nota pendiente viva

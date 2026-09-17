@@ -88,8 +88,13 @@ function resolveChannelForNavigation(commandId = '') {
 // se evalúa ANTES que la nota para que "anota X en el diario" se enrute bien.
 function recognizeNoteIntent(text = '') {
   const removal = parseNoteRemoveIntentText(text)
-  if (removal && removal.target) {
-    return { handled: true, action: 'notes.remove', data: { target: removal.target } }
+  if (removal) {
+    if (removal.all) {
+      return { handled: true, action: 'notes.clear', data: {} }
+    }
+    if (removal.target) {
+      return { handled: true, action: 'notes.remove', data: { target: removal.target } }
+    }
   }
   const parsed = parseNoteIntentText(text)
   if (!parsed || !parsed.label) return null
