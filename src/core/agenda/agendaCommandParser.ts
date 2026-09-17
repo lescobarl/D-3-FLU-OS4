@@ -121,7 +121,9 @@ function detectAction(text: string): AgendaCommandAction | null {
     if (t.startsWith('que ') && /\b(?:hay|tengo|tienes|tiene)\b/.test(t)) return 'agenda.list';
     if (/\b(?:mi agenda|agenda de|agenda para)\b/.test(t)) return 'agenda.list';
     // "borra/limpia TODO/TODA la agenda/el calendario" → vaciar todo.
-    if (/(?:borra|borrar|limpia|limpiar|vacia|vaciar|elimina|eliminar)\s+(?:todo|toda|todos|todas)\s+(?:el|la|lo)?\s*(?:contenido\s+(?:de\s+)?)?(?:agenda|calendario)\b/i.test(t)) return 'agenda.clear';
+    // Conectores flexibles: "todo lo de la agenda", "todo el contenido de la
+    // agenda", "toda la agenda", "limpia el calendario".
+    if (/(?:borra|borrar|limpia|limpiar|vacia|vaciar|elimina|eliminar|quita|quitar)\s+(?:todo|toda|todos|todas)?\s*(?:el|la|lo)?\s*(?:contenido\s+)?(?:de\s+la\s+|de\s+el\s+|del\s+|de\s+|en\s+el\s+|en\s+la\s+)?(?:agenda|calendario)\b/i.test(t)) return 'agenda.clear';
     if (CANCEL_FRAMES.some((f) => t.includes(f))) return 'agenda.cancel';
     if (UPDATE_FRAMES.some((f) => t.includes(f))) return 'agenda.update';
     if (CREATE_FRAMES.some((f) => t.includes(f))) return 'agenda.create';
