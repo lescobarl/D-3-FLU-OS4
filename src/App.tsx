@@ -2313,12 +2313,15 @@ function App() {
                     console.warn('[App] Deterministic feature interception threw (non-critical):', err);
                     relayLog('WARN', 'App', `feature interception threw: ${err}`);
                 }
-                // La respuesta conversacional del LLM (respuesta_voz) tiene
-                // PRIORIDAD. La confirmación del manejador local solo se usa como
-                // respaldo cuando NO hay respuesta conversacional (fallback offline).
-                if (localHandledReply && !respuestaVoz) {
+                // Para intenciones DETERMINISTAS (agenda/notas/etc.), la
+                // confirmación del manejador es la AUTORIDAD: lleva la hora y el
+                // tipo correctos ("1:27 p.m." → 13:27, "alarma" ≠ "cita"). El LLM
+                // puede tergiversar estos detalles en `respuesta_voz` ("cita a las
+                // 1:27 de la madrugada pm"). Por eso, cuando el manejador produjo
+                // confirmación, ESA gana sobre la respuesta conversacional.
+                if (localHandledReply) {
                     respuestaVoz = localHandledReply;
-                    relayLog('LOG', 'App', `onContractResolved: intención local resuelta (sin respuesta conversacional) → "${localHandledReply}"`);
+                    relayLog('LOG', 'App', `onContractResolved: intención determinista resuelta → confirmación del manejador "${localHandledReply.slice(0, 80)}"`);
                 }
             }
             // ============================================================
