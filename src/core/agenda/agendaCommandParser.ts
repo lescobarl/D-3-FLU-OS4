@@ -88,6 +88,11 @@ function collapseQuantifierStutter(text: string): string {
     return String(text || '').replace(/\b(todo|toda|todos|todas)\s+(?=(todo|toda|todos|todas)\b)/gi, '');
 }
 
+/** Colapsa frase repetida inmediata: "6 de la 6 de la tarde" → "6 de la tarde". */
+function collapseRepeatedPhrase(text: string): string {
+    return String(text || '').replace(/\b((?:\d{1,2}\s+de\s+la\s+)|(?:\S+\s+\S+\s+\S+\s+))(?=\1)/gi, '');
+}
+
 function detectKind(text: string): AgendaKind | null {
     const t = normalize(text);
     for (const entry of KIND_NOUNS) {
@@ -150,6 +155,12 @@ function detectAnyWeekdays(text: string): number[] {
 
 /** Clase = horario semanal: día(s) + hora (el/los/lunes…). */
 function resolveClaseTrigger(text: string, now: number): AgendaTrigger | null {
+    const t = normalize(text);
+    // "toda la semana" / "todos los días" → clase recurrente TODOS los días.
+    if (/(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+dias|diario|diariamente|cada\s+dia)/i.test(t)) {
+        const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
+        return { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay: time };
+    }
     const days = detectAnyWeekdays(text);
     if (days.length > 0) {
         const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
@@ -224,6 +235,7 @@ function resolveLabel(text: string): string {
     label = label
         .replace(/\b(?:una|un|el|la|los|las|mi|para|de|al|del|a)\b/gi, ' ')
         .replace(/\b(?:manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|mañana|tarde|noche|madrugada)\b/gi, ' ')
+        .replace(/\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+semana|cada\s+d[ií]a|semanal|diario|diariamente|semana|semanalmente)\b/gi, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
     if (label) return label;
@@ -238,8 +250,10 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const rawNow = options?.now;
     const now = typeof rawNow === 'function' ? rawNow() : typeof rawNow === 'number' ? rawNow : Date.now();
     const text = String(input || '').trim();
-    const cleaned = collapseQuantifierStutter(
-        collapseStutter(text.replace(WAKE_LEAD, ' ').replace(/^[¿¡]+/, '').trim()),
+    const cleaned = collapseRepeatedPhrase(
+        collapseQuantifierStutter(
+            collapseStutter(text.replace(WAKE_LEAD, ' ').replace(/^[¿¡]+/, '').trim()),
+        ),
     ).replace(/\s+/g, ' ').trim();
     if (!cleaned) return { handled: false, action: null, reply: '' };
 

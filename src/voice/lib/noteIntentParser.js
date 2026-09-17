@@ -31,6 +31,9 @@ const NOTE_SUPER_NOTA_DEST_FIRST =
 const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
 const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
+// Nota GENERAL con contenido: "nota [que traiga/que contenga/con/sobre/para/de] X".
+const NOTE_GENERAL =
+  /^nota\s+(?:que\s+)?(?:traiga|trae|contenga|contiene|tenga|tiene|con|sobre|acerca\s+de|para|de)\s+(.+)$/i
 
 // Borrado de nota por voz: "borra la nota del súper", "elimina la nota X",
 // "quita la nota de compras". El destino se normaliza (súper → 'Super').
@@ -170,6 +173,15 @@ export function parseNoteIntentText(rawText = '') {
       : ''
     if (!label) return null
     return { label }
+  }
+
+  // 4) "nota [que traiga/que contenga/con/sobre/para/de] X" → nota general:
+  //     nombre por defecto "Nota" y contenido (body) = X.
+  const general = NOTE_GENERAL.exec(norm)
+  if (general) {
+    const content = cleanSuperItem(general[1] ? general[1].trim() : '')
+    if (!content) return null
+    return { label: 'Nota', body: content }
   }
 
   return null
