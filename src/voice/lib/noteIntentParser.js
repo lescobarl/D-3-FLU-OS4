@@ -66,7 +66,7 @@ function collapseStutter(text = '') {
 // Verbos/conectores de relleno que pueden preceder al ítem cuando se enuncia
 // después del destino: "… la nota del súper QUE TAMBIÉN TRAIGA una computadora".
 const SUPER_ITEM_LEAD =
-  /^(?:que\s+)?(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:traiga|trae|traer|lleva|llevar|compra|comprar|integra|integrar|mete|meter|agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|suma|sumar|pon|poner)\s+/i
+  /^(?:que\s+)?(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:traiga|trae|traer|lleva|llevar|compra|comprar|integra|integrar|mete|meter|agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|suma|sumar|pon|poner|con)\s+/i
 
 // Fecha relativa que precede al ítem ("para mañana y …", "de hoy …"): no es
 // parte del contenido de la nota. Dictado natural de niños.
@@ -103,6 +103,8 @@ function cleanSuperItem(rest = '') {
 export function parseNoteIntentText(rawText = '') {
   let clean = String(rawText || '').trim()
   clean = clean.replace(WAKE_LEAD, ' ').trim()
+  // Artículo inicial antes de "nota": "una nota del super …" → "nota del super …".
+  clean = clean.replace(/^(?:una|un|la|el|mi)\s+(?=notas?\b)/i, '').trim()
   if (!clean) return null
 
   // 0) Prefijos de creación explícita → forma canónica "nota ...".

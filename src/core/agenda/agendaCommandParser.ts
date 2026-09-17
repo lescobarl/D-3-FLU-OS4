@@ -45,7 +45,7 @@ const REMINDER_CLAUSE =
     /\b(?:que\s+)?(?:me\s+)?(?:recu[eé]rd[ae]s?|acu[eé]rd[ae]s?|acu[eé]rdate|acu[eé]rdame|recu[eé]rdame|rec[oó]rdame|recordar|recordatorio|recordatorios|aviso)\b/gi;
 
 const KIND_NOUNS: ReadonlyArray<{ kind: AgendaKind; nouns: readonly string[] }> = Object.freeze([
-    { kind: 'alarma', nouns: ['alarma', 'despertador', 'temporizador', 'timer'] },
+    { kind: 'alarma', nouns: ['alarma', 'despertador', 'temporizador', 'timer', 'despiertame', 'despertame'] },
     { kind: 'recordatorio', nouns: ['recordatorio', 'recuerdame', 'recordame', 'aviso'] },
     { kind: 'cita', nouns: ['cita'] },
     { kind: 'junta', nouns: ['junta', 'reunion', 'reunión', 'meeting'] },
@@ -117,13 +117,17 @@ function resolveImplicitKind(text: string, action: AgendaCommandAction | null): 
     const t = normalize(text);
     const isHorario = /\bhorario\b/.test(t);
     const hasWeekday = WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
+    // Recurrencia explícita ("toda la semana", "todos los días") también es clase.
+    const isRecurring = /(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)/i.test(t);
     // Cancelar/editar una clase: "quita X del viernes" (día) o "quita X del horario".
     if (action === 'agenda.cancel' || action === 'agenda.update') {
         return hasWeekday || isHorario ? 'clase' : null;
     }
     // Crear una clase exige la HORA ("el lunes a las 8"); sin hora no hay
     // acción accionable (se pide aclaración, no se inventa una hora).
-    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay && (hasWeekday || isHorario)) return 'clase';
+    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay && (hasWeekday || isHorario || isRecurring)) {
+        return 'clase';
+    }
     return null;
 }
 
@@ -226,6 +230,15 @@ function resolveTrigger(text: string, now: number): AgendaTrigger | null {
     return { type: 'absolute', at: nl.at };
 }
 
+/**
+ * Regex con fronteras de palabra Unicode: `\b` de JS trata las letras
+ * acentuadas como NO-palabra, así que "miércoles" se partía con el filler
+ * `mi` → "ércoles". Esto evita ese bug en toda la limpieza de etiqueta.
+ */
+function wordRe(alternation: string): RegExp {
+    return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`, 'giu');
+}
+
 function resolveLabel(text: string): string {
     // 1) Wake word en CUALQUIER posición (el eco del ASR lo mete en medio).
     const base = text.replace(WAKE_WORD_ANY, ' ').replace(WAKE_LEAD, ' ').trim();
@@ -235,22 +248,20 @@ function resolveLabel(text: string): string {
     let label = pickTimeOfDay(base).rest || base;
     label = label.replace(REMINDER_CLAUSE, ' ');
     for (const noun of KIND_NOUNS.flatMap((e) => e.nouns)) {
-        label = label.replace(new RegExp(`\\b${noun}\\b`, 'gi'), ' ');
+        label = label.replace(wordRe(noun), ' ');
     }
     for (const verb of [...CREATE_FRAMES, ...CANCEL_FRAMES, ...UPDATE_FRAMES]) {
-        label = label.replace(new RegExp(`\\b${verb}\\b`, 'gi'), ' ');
+        label = label.replace(wordRe(verb), ' ');
     }
     label = label
-        .replace(/\b(?:una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|será)\b/gi, ' ')
-        .replace(/\b(?:manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|mañana|tarde|noche|madrugada)\b/gi, ' ')
-        .replace(/\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+semana|cada\s+d[ií]a|semanal|diario|diariamente|semana|semanalmente)\b/gi, ' ')
+        .replace(wordRe('una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|será'), ' ')
+        .replace(wordRe('manana|mañana|hoy|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|tarde|noche|madrugada'), ' ')
+        .replace(wordRe('toda\\s+la\\s+semana|toda\\s+semana|todos\\s+los\\s+d[ií]as|cada\\s+semana|cada\\s+d[ií]a|semanal|diario|diariamente|semana|semanalmente'), ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
     if (label) return label;
     // Sin contenido: usar el SUSTANTIVO DE TIPO como etiqueta por defecto.
-    const kindNoun = KIND_NOUNS.flatMap((e) => e.nouns).find((noun) =>
-        new RegExp(`\\b${noun}\\b`, 'i').test(base),
-    );
+    const kindNoun = KIND_NOUNS.flatMap((e) => e.nouns).find((noun) => wordRe(noun).test(base));
     return kindNoun || base;
 }
 
