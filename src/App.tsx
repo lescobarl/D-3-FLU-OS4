@@ -1658,7 +1658,7 @@ function App() {
         let cancelled = false;
         (async () => {
             try {
-                const existing = await agendaService.list({});
+                const existing = await agendaService.list({ personId: activeParticipantId || undefined });
                 if (existing.length > 0) return;
                 for (const input of buildDemoAgendaInputs(Date.now())) {
                     await agendaService.create({ ...input, personId: activeParticipantId || undefined });
