@@ -324,6 +324,12 @@ export interface MinuteEntry {
  */
 export interface WorkspaceEntry {
     id: string;
+    /**
+     * Participante dueño del artefacto (aislamiento multiusuario del pizarrón).
+     * Se sella al establecer el artefacto con el participante activo; sin
+     * participante queda sin definir (ruta legacy/global).
+     */
+    personId?: string;
     /** Texto de la respuesta de FLU */
     respuesta: string;
     /** Título del contenido workspace (desde Gemini contract) */

@@ -635,14 +635,22 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             setWorkspaceArtifact: (entry: WorkspaceEntry | null) => {
-                set({ workspaceArtifact: entry });
+                const personId = get().activePersonId;
+                set({
+                    workspaceArtifact: entry && personId ? { ...entry, personId } : entry,
+                });
             },
 
             setActivePersonId: (personId?: string) => {
                 const normalized = personId ? String(personId) : undefined;
                 const current = get();
                 if (current.activePersonId === normalized) return;
-                set({ activePersonId: normalized });
+                set({
+                    activePersonId: normalized,
+                    // Aislamiento multiusuario: al cambiar de usuario se limpia el
+                    // artefacto activo del pizarrón para no mostrar el del anterior.
+                    workspaceArtifact: null,
+                });
             },
 
             clearWorkspace: () => {
