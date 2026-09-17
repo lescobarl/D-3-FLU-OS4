@@ -7003,3 +7003,25 @@ details[open].flu-card .flu-card__chev {
 }
 .agenda-item__cancel:hover { color: #b91c1c; }
 .agenda-item__edit:hover { color: var(--accent-color, #7c6cff); }
+.agenda-tab--add {
+    margin-top: 4px;
+    background: var(--accent-color, #7c6cff);
+    color: #fff;
+    border-color: var(--accent-color, #7c6cff);
+}
+.hoy-panel__card-title--note {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    font: inherit;
+    font-weight: var(--weight-medium, 500);
+    color: var(--text-primary, #e0e0e0);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.hoy-panel__card-title--note:hover { color: var(--accent-color, #7c6cff); }
