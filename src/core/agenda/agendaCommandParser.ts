@@ -211,19 +211,27 @@ function resolveTrigger(text: string, now: number): AgendaTrigger | null {
 
 function resolveLabel(text: string): string {
     const withoutWake = text.replace(WAKE_LEAD, '').trim();
-    let label = withoutWake;
+    // Quitar la HORA con el MISMO selector único (pickTimeOfDay): maneja
+    // "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3", etc. y deja
+    // solo el contenido + la fecha relativa ("hoy", "mañana", día de semana).
+    let label = pickTimeOfDay(withoutWake).rest || withoutWake;
     for (const noun of KIND_NOUNS.flatMap((e) => e.nouns)) {
-        label = label.replace(new RegExp(`\\b${noun}\\b`, 'i'), '');
+        label = label.replace(new RegExp(`\\b${noun}\\b`, 'i'), ' ');
     }
     for (const verb of [...CREATE_FRAMES, ...CANCEL_FRAMES, ...UPDATE_FRAMES]) {
-        label = label.replace(new RegExp(`\\b${verb}\\b`, 'i'), '');
+        label = label.replace(new RegExp(`\\b${verb}\\b`, 'i'), ' ');
     }
     label = label
-        .replace(/\b(?:una|un|el|la|los|las|mi|para|de)\b/gi, ' ')
-        .replace(/\b(?:manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|a\s+las\s+\d{1,2}(?::\d{2})?(?:\s*(?:a\.?\s*m\.?|p\.?\s*m\.?))?|en\s+\d+\s+(?:segundos?|minutos?|horas?))\b/gi, ' ')
+        .replace(/\b(?:una|un|el|la|los|las|mi|para|de|al|del|a)\b/gi, ' ')
+        .replace(/\b(?:manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|mañana|tarde|noche|madrugada)\b/gi, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
-    return label || withoutWake;
+    if (label) return label;
+    // Sin contenido: usar el SUSTANTIVO DE TIPO como etiqueta por defecto.
+    const kindNoun = KIND_NOUNS.flatMap((e) => e.nouns).find((noun) =>
+        new RegExp(`\\b${noun}\\b`, 'i').test(withoutWake),
+    );
+    return kindNoun || withoutWake;
 }
 
 export function parseAgendaCommand(input: string, options?: { now?: number | (() => number) }): AgendaCommand {
