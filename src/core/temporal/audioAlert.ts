@@ -20,6 +20,10 @@ export interface SoundOptions {
   gapMs?: number;
   /** Volumen 0..1. */
   volume?: number;
+  /** Repeticiones del patrón completo (además del primero). Ej. 2 → suena 3 veces. */
+  repeat?: number;
+  /** Intervalo entre repeticiones del patrón, en ms. */
+  repeatIntervalMs?: number;
 }
 
 export interface AudioDriver {
@@ -62,6 +66,8 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
     osc: { stop: (t: number) => void; disconnect?: () => void };
     gain?: { disconnect?: () => void };
   }> = [];
+  // Timers de las REPETICIONES del patrón (la alarma insiste): `stop()` los cancela.
+  const repeatTimers: Array<ReturnType<typeof setTimeout>> = [];
 
   const isSupported = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -83,33 +89,48 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
       const beeps = opts.beeps ?? 3;
       const gapMs = opts.gapMs ?? 150;
       const volume = opts.volume ?? 0.4;
+      // La alarma "insiste": por defecto suena 3 veces separadas 10 s
+      // (configurable por FLU_CONFIG.temporal.sound).
+      const repeat = Math.max(0, Math.floor(opts.repeat ?? 2));
+      const repeatIntervalMs = opts.repeatIntervalMs ?? 10_000;
       if (ctx.state === 'suspended' && ctx.resume) await ctx.resume();
       // stop() durante el resume invalida esta reproducción.
       if (myGeneration !== generation) return;
-      const stepSec = (durationMs + gapMs) / 1000;
-      for (let i = 0; i < beeps; i += 1) {
-        const osc = ctx.createOscillator() as {
-          type: string;
-          frequency: { value: number };
-          connect: (node: unknown) => void;
-          start: (t: number) => void;
-          stop: (t: number) => void;
-          disconnect?: () => void;
-        };
-        const gain = ctx.createGain() as {
-          gain: { value: number };
-          connect: (node: unknown) => void;
-          disconnect?: () => void;
-        };
-        osc.type = 'sine';
-        osc.frequency.value = frequency;
-        gain.gain.value = volume;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        const startAt = ctx.currentTime + i * stepSec;
-        osc.start(startAt);
-        osc.stop(startAt + durationMs / 1000);
-        activeNodes.push({ osc, gain });
+      const scheduleBurst = (): void => {
+        if (myGeneration !== generation || !ctx) return;
+        const stepSec = (durationMs + gapMs) / 1000;
+        for (let i = 0; i < beeps; i += 1) {
+          const osc = ctx.createOscillator() as {
+            type: string;
+            frequency: { value: number };
+            connect: (node: unknown) => void;
+            start: (t: number) => void;
+            stop: (t: number) => void;
+            disconnect?: () => void;
+          };
+          const gain = ctx.createGain() as {
+            gain: { value: number };
+            connect: (node: unknown) => void;
+            disconnect?: () => void;
+          };
+          osc.type = 'sine';
+          osc.frequency.value = frequency;
+          gain.gain.value = volume;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          const startAt = ctx.currentTime + i * stepSec;
+          osc.start(startAt);
+          osc.stop(startAt + durationMs / 1000);
+          activeNodes.push({ osc, gain });
+        }
+      };
+      scheduleBurst();
+      for (let r = 1; r <= repeat; r += 1) {
+        const timer = setTimeout(() => {
+          if (myGeneration !== generation) return;
+          scheduleBurst();
+        }, r * repeatIntervalMs);
+        repeatTimers.push(timer);
       }
     } catch {
       // Degradación elegante: el hook avisa con toast + voz.
@@ -117,9 +138,13 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
   };
 
   const stop = (): void => {
-    // Invalida cualquier play() en vuelo y detiene/libera los osciladores
-    // programados o activos (alarma sonando).
+    // Invalida cualquier play() en vuelo, cancela las repeticiones pendientes y
+    // detiene/libera los osciladores programados o activos (alarma sonando).
     generation += 1;
+    while (repeatTimers.length) {
+      const timer = repeatTimers.pop();
+      if (timer) clearTimeout(timer);
+    }
     while (activeNodes.length) {
       const node = activeNodes.pop();
       try {

@@ -4950,6 +4950,7 @@ const {
                             unread={notificationCenter.unread}
                             onMarkAllRead={notificationCenter.markAllRead}
                             onClear={notificationCenter.clear}
+                            onDismiss={notificationCenter.dismiss}
                             language={language}
                         />
                     </div>

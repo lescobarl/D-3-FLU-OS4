@@ -17,6 +17,8 @@ export interface NotificationCenterBellProps {
     unread: number;
     onMarkAllRead: () => void;
     onClear: () => void;
+    /** Borra UNA notificación (borrado manual desde la campana). */
+    onDismiss?: (id: string) => void;
     language?: string;
 }
 
@@ -51,6 +53,7 @@ export function NotificationCenterBell({
     unread,
     onMarkAllRead,
     onClear,
+    onDismiss,
     language = 'es',
 }: NotificationCenterBellProps) {
     const notifNode = asConfigNode(FLU_CONFIG?.notifications);
@@ -152,6 +155,18 @@ export function NotificationCenterBell({
                                             <time className="notif-bell__item-time" dateTime={new Date(row.timestamp).toISOString()}>
                                                 {timeLabel(row.timestamp)}
                                             </time>
+                                            {typeof onDismiss === 'function' && (
+                                                <button
+                                                    type="button"
+                                                    className="notif-bell__item-delete"
+                                                    aria-label={uiText('dismiss', 'Borrar')}
+                                                    title={uiText('dismiss', 'Borrar')}
+                                                    data-testid="notif-item-delete"
+                                                    onClick={() => onDismiss(row.id)}
+                                                >
+                                                    🗑
+                                                </button>
+                                            )}
                                         </article>
                                     ))}
                                 </section>
