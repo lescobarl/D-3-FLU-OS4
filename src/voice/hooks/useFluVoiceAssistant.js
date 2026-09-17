@@ -118,6 +118,7 @@ import { createConversationIngressRuntime } from '../lib/conversationIngressBrid
 import { formatGeminiUserMessage, buildGeminiDiagnosticsFromError } from '../lib/geminiDiagnostics.js'
 import { convertSimEventsToMicBursts } from '../lib/micEventProducer.js'
 import { collectRecognitionResultChunks } from '../lib/transcriptIngress.js'
+import { looksLikeGarbageTranscript } from '../lib/garbageTranscript.js'
 import {
   flushTranscriptStateOnFinal,
   flushPcmStateAfterCommit,
@@ -354,6 +355,9 @@ export function useFluVoiceAssistant({
    */
   const commitTurnPhrase = useCallback((text) => {
     const canonical = cleanForSpeech(typeof text === 'string' ? text : '')
+    // Guard anti-alucinación: descartar basura incoherente del Web Speech API
+    // (silencio interpretado como palabras) sin bajar sensibilidad.
+    if (canonical && looksLikeGarbageTranscript(canonical)) return ''
     if (canonical) commitVisibleTranscript(canonical)
     return canonical
   }, [commitVisibleTranscript])
@@ -370,6 +374,8 @@ export function useFluVoiceAssistant({
   const commitAndResolveTurn = useCallback(
     async ({ capture, contract, commitOnly = false, ...payload } = {}) => {
       const canonicalPhrase = commitTurnPhrase(capture)
+      // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
+      if (!canonicalPhrase) return ''
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
       // la IA). La resolución posterior re-commitea el MISMO valor (idempotente)
       // y deduplica la fila, así no hay doble fuente.
@@ -1693,6 +1699,8 @@ export function useFluVoiceAssistant({
       lastSpeakerRef.current = speakerName
       // §9: el MISMO valor commiteado es el de la fila (display === fila).
       const canonicalPhrase = commitTurnPhrase(capture)
+      // Basura descartada (anti-alucinación): no se emite fila de log.
+      if (!canonicalPhrase) return false
       if (!conversationActiveRef?.current) {
         lastEmittedTranscriptRef.current = canonicalPhrase
       }

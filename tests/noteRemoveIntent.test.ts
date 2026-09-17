@@ -74,9 +74,9 @@ describe('caso 10 — "borra la nota X" es determinista (notes.remove)', () => {
   });
 
   it('el parser normaliza el destino (súper → Super, acentos y conectores)', () => {
-    expect(parseNoteRemoveIntentText('borra la nota del súper')).toEqual({ target: 'Super' });
-    expect(parseNoteRemoveIntentText('elimina la nota de compras')).toEqual({ target: 'Super' });
-    expect(parseNoteRemoveIntentText('ok flu quita la nota del mercado')).toEqual({ target: 'Super' });
+  expect(parseNoteRemoveIntentText('borra la nota del súper')).toEqual({ target: 'Super', all: false });
+  expect(parseNoteRemoveIntentText('elimina la nota de compras')).toEqual({ target: 'Super', all: false });
+  expect(parseNoteRemoveIntentText('ok flu quita la nota del mercado')).toEqual({ target: 'Super', all: false });
   });
 
   it('matchNotesByTarget solo devuelve notas pendientes por substring normalizado', () => {
