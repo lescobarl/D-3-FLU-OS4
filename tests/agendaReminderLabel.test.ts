@@ -51,3 +51,36 @@ describe('agenda — etiqueta limpia de recordatorio (dictado real)', () => {
         expect(new Date((r.trigger as { at: number }).at).getHours()).toBe(7);
     });
 });
+
+// ============================================================
+// Citas: el handler SÍ crea (App.tsx:1573); el bug era la ETIQUETA
+// ("con doctor es homeópata"). Se quitan conectores ("con", "es").
+// ============================================================
+const strip = (v: unknown) =>
+    String(v || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+describe('agenda — etiqueta limpia de CITA (dictado real)', () => {
+    it('"cita para mañana a las 3 de la tarde con el homeópata" → "homeopata"', () => {
+        const r = parseAgendaCommand('Crea una cita para mañana a las 3 de la tarde con el homeópata', {
+            now: NOW,
+        });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('cita');
+        expect(r.action).toBe('agenda.create');
+        expect(strip(r.label)).toBe('homeopata');
+    });
+
+    it('"cita para con el doctor … es el homeópata" → "doctor homeopata"', () => {
+        const r = parseAgendaCommand(
+            'Okay Flow Crea una cita para con el doctor a las 3 de la tarde es el homeópata',
+            { now: NOW },
+        );
+        expect(r.kind).toBe('cita');
+        expect(strip(r.label)).toBe('doctor homeopata');
+        expect(strip(r.label)).not.toContain(' con ');
+        expect(strip(r.label)).not.toContain(' es ');
+    });
+});

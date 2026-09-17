@@ -68,7 +68,7 @@ import { commitUserTurnRow } from './voice/lib/conversationTurnRow';
 import { createConversationModeController } from './voice/lib/conversationMode';
 import { logFluReply } from './voice/lib/fluConversationLog';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
-import { buildResponseKey, isDuplicateResponse } from './core/voice/responseGate';
+import { buildResponseKey, isDuplicateResponseIn, pushResponseState } from './core/voice/responseGate';
 import {
     loadSearchConfigOverrides,
     saveSearchConfigOverrides,
@@ -1327,8 +1327,10 @@ function App() {
     >(() => false);
 
     // Idempotencia por turno de la RESPUESTA: si el mismo turno (texto+respuesta)
-    // se vuelve a entregar por una re-captura/eco, NO se repite el habla/fila.
-    const lastResponseRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+    // se vuelve a entregar por una re-captura/eco/re-emisión, NO se repite el
+    // habla/fila. Se recuerdan TODAS las respuestas de la ventana, no solo la
+    // última: así una re-emisión de una respuesta anterior tampoco se duplica.
+    const recentResponsesRef = useRef<Array<{ key: string; at: number }>>([]);
 
     // ---- Pestaña activa del panel derecho ----
     // Always start on Pizarron (workspace) tab as default
@@ -2661,8 +2663,8 @@ function App() {
             const responseKey = buildResponseKey(String(transcript || ''), String(respuestaVoz || ''));
             const responseWindowMs = Number(FLU_CONFIG?.timing?.responseDedupWindowMs) || 8000;
             const nowMs = Date.now();
-            const dupResponse = isDuplicateResponse(
-                lastResponseRef.current,
+            const dupResponse = isDuplicateResponseIn(
+                recentResponsesRef.current,
                 responseKey,
                 nowMs,
                 responseWindowMs,
@@ -2682,7 +2684,12 @@ function App() {
                 !(resolved)?.fastPathGame &&
                 !(resolved)?.fastPathEnvironment
             ) {
-                lastResponseRef.current = { key: responseKey, at: nowMs };
+                recentResponsesRef.current = pushResponseState(
+                    recentResponsesRef.current,
+                    responseKey,
+                    nowMs,
+                    responseWindowMs,
+                );
                 integrationStore.setLastResponse(respuestaVoz);
                 logFluReply(respuestaVoz);
 

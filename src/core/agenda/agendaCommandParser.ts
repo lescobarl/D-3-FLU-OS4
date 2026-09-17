@@ -241,7 +241,7 @@ function resolveLabel(text: string): string {
         label = label.replace(new RegExp(`\\b${verb}\\b`, 'gi'), ' ');
     }
     label = label
-        .replace(/\b(?:una|un|el|la|los|las|mi|para|de|al|del|a)\b/gi, ' ')
+        .replace(/\b(?:una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|será)\b/gi, ' ')
         .replace(/\b(?:manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|mañana|tarde|noche|madrugada)\b/gi, ' ')
         .replace(/\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+semana|cada\s+d[ií]a|semanal|diario|diariamente|semana|semanalmente)\b/gi, ' ')
         .replace(/\s{2,}/g, ' ')

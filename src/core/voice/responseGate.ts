@@ -36,3 +36,29 @@ export function isDuplicateResponse(
   if (!key || windowMs <= 0) return false;
   return state.key === key && now - state.at < windowMs;
 }
+
+/**
+ * true si `key` ya fue entregada por CUALQUIER respuesta de la ventana (⇒
+ * duplicado: se omite). A diferencia de `isDuplicateResponse` (solo la última),
+ * esto cubre la re-emisión de una respuesta ANTERIOR dentro de la ventana.
+ */
+export function isDuplicateResponseIn(
+  states: readonly ResponseGateState[],
+  key: string,
+  now: number,
+  windowMs: number,
+): boolean {
+  if (!key || windowMs <= 0) return false;
+  return states.some((state) => state.key === key && now - state.at < windowMs);
+}
+
+/** Registra `key` en la ventana y descarta las entradas vencidas. */
+export function pushResponseState(
+  states: readonly ResponseGateState[],
+  key: string,
+  at: number,
+  windowMs: number,
+): ResponseGateState[] {
+  if (!key || windowMs <= 0) return [...states];
+  return [...states.filter((state) => at - state.at < windowMs), { key, at }];
+}
