@@ -33,12 +33,14 @@ export interface AgendaAddInput {
 export interface AgendaNoteEntry {
     id: string;
     label: string;
+    body?: string;
 }
 
 export interface AgendaNotesProps {
     items: ReadonlyArray<AgendaNoteEntry>;
     onAdd?: (label: string) => void;
     onEdit?: (id: string, label: string) => void;
+    onEditBody?: (id: string, body: string) => void;
     onRemove?: (id: string) => void;
 }
 
@@ -135,6 +137,8 @@ export function AgendaPanel({
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
     const [editingNoteLabel, setEditingNoteLabel] = useState('');
     const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+    const [editingBodyNoteId, setEditingBodyNoteId] = useState<string | null>(null);
+    const [editingNoteBody, setEditingNoteBody] = useState('');
 
     const nowMs = typeof now === 'number' ? now : Date.now();
 
@@ -246,6 +250,18 @@ export function AgendaPanel({
         if (text) notes.onEdit(editingNoteId, text);
         setEditingNoteId(null);
         setEditingNoteLabel('');
+    };
+
+    const startEditBody = (n: AgendaNoteEntry) => {
+        setEditingBodyNoteId(n.id);
+        setEditingNoteBody(n.body || '');
+    };
+
+    const saveBodyEdit = () => {
+        if (!editingBodyNoteId || !notes?.onEditBody) return;
+        notes.onEditBody(editingBodyNoteId, editingNoteBody);
+        setEditingBodyNoteId(null);
+        setEditingNoteBody('');
     };
 
     // Fila de item (agenda y próximos): bolita de color por tipo + hora + texto.
@@ -480,7 +496,32 @@ export function AgendaPanel({
                                         </button>
                                     )}
                                     {expandedNoteId === n.id && editingNoteId !== n.id ? (
-                                        <span className="hoy-panel__card-meta">{n.label}</span>
+                                        editingBodyNoteId === n.id ? (
+                                            <div className="agenda-note-body">
+                                                <textarea
+                                                    className="agenda-note-body__area"
+                                                    value={editingNoteBody}
+                                                    aria-label="Contenido de la nota"
+                                                    onChange={(e) => setEditingNoteBody(e.target.value)}
+                                                />
+                                                <button className="agenda-form__submit" type="button" onClick={saveBodyEdit}>
+                                                    Guardar
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="agenda-note-body">
+                                                {n.body ? (
+                                                    <span className="agenda-note-body__text">{n.body}</span>
+                                                ) : (
+                                                    <span className="hoy-panel__empty">Sin contenido.</span>
+                                                )}
+                                                {notes.onEditBody ? (
+                                                    <button className="agenda-item__edit" type="button" aria-label="Editar contenido" onClick={() => startEditBody(n)}>
+                                                        ✎
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                        )
                                     ) : null}
                                 </div>
                                 <div className="agenda-item__actions">

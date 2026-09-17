@@ -5125,12 +5125,15 @@ const {
                                                 await agendaService.update(id, patch);
                                             },
                                             notes: {
-                                                items: notes.notes.map((n) => ({ id: n.id, label: n.label })),
+                                                items: notes.notes.map((n) => ({ id: n.id, label: n.label, body: n.body })),
                                                 onAdd: async (label) => {
                                                     await notes.add({ label });
                                                 },
                                                 onEdit: async (id, label) => {
                                                     await notes.rename(id, label);
+                                                },
+                                                onEditBody: async (id, body) => {
+                                                    await notes.setBody(id, body);
                                                 },
                                                 onRemove: async (id) => {
                                                     await notes.remove(id);

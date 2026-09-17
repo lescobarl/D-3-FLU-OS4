@@ -28,6 +28,7 @@ export type { NoteRecord } from '../db/fluDatabase';
 
 export interface NewNoteInput {
   label: string;
+  body?: string;
   personId?: string;
   personName?: string;
 }
@@ -75,6 +76,7 @@ export function createNotesService({
     const record: NoteRecord = {
       id: newId(),
       label,
+      body: typeof input.body === 'string' ? input.body : undefined,
       done: false,
       personId: input.personId,
       personName: input.personName,
@@ -130,6 +132,21 @@ export function createNotesService({
     };
     await db.put(updated);
     await addAuditLog('notes.rename', 'note', id, row.label, clean, 'notesService');
+    return copyRecord(updated);
+  };
+
+  /** Actualiza el contenido (body) de una nota. */
+  const setBody = async (id: string, body: string): Promise<NoteRecord | null> => {
+    const row = await db.get(id);
+    if (!row) return null;
+    const clean = typeof body === 'string' ? body : '';
+    const updated: NoteRecord = {
+      ...row,
+      body: clean,
+      updatedAt: timestamp(),
+      sync: buildSyncTuple(row.sync, timestamp()),
+    };
+    await db.put(updated);
     return copyRecord(updated);
   };
 
@@ -218,6 +235,7 @@ export function createNotesService({
     listFiltered,
     toggle,
     rename,
+    setBody,
     remove,
     softRemove,
     removeByTarget,

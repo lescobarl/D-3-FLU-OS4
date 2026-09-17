@@ -47,6 +47,8 @@ export interface NotesActions {
   addMany: (labels: string[]) => Promise<AddNoteResult[]>;
   toggle: (id: string) => Promise<NoteRecord | null>;
   rename: (id: string, label: string) => Promise<NoteRecord | null>;
+  /** Actualiza el contenido (body) de una nota. */
+  setBody: (id: string, body: string) => Promise<NoteRecord | null>;
   remove: (id: string) => Promise<boolean>;
   /** Borrado lógico (§2.9): marca `sync.deleted` sin borrar la fila. */
   softRemove: (id: string) => Promise<NoteRecord | null>;
@@ -156,6 +158,16 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     [service, refresh],
   );
 
+  /** Actualiza el contenido (body) de una nota y refresca. */
+  const setBody = useCallback(
+    async (id: string, body: string): Promise<NoteRecord | null> => {
+      const updated = await service.setBody(id, body);
+      if (updated) await refresh();
+      return updated;
+    },
+    [service, refresh],
+  );
+
   /** Elimina una nota y refresca. */
   const remove = useCallback(
     async (id: string): Promise<boolean> => {
@@ -210,6 +222,7 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     addMany,
     toggle,
     rename,
+    setBody,
     remove,
     softRemove,
     removeByTarget,

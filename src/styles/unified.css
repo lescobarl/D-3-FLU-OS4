@@ -7079,6 +7079,24 @@ details[open].flu-card .flu-card__chev {
     height: 4px;
     border-radius: 2px;
 }
+/* Nota: nombre + contenido (body multilínea). */
+.agenda-note-body { display: flex; flex-direction: column; gap: 3px; padding: 2px 0; }
+.agenda-note-body__area {
+    width: 100%;
+    min-height: 48px;
+    padding: 4px 6px;
+    border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary, #e0e0e0);
+    font-size: var(--text-xs, 11px);
+    resize: vertical;
+}
+.agenda-note-body__text {
+    white-space: pre-wrap;
+    color: var(--text-secondary, #a0a0b0);
+    font-size: var(--text-xs, 11px);
+}
 /* SEMANA — columnas por día (Outlook): una columna por día con sus items. */
 .agenda-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .agenda-week__col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

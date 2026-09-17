@@ -209,6 +209,8 @@ export interface ShoppingItemRecord {
 export interface NoteRecord {
     id: string; // UUIDv4
     label: string;
+    /** Contenido de la nota (texto multilínea, opcional). */
+    body?: string;
     done: boolean;
     /** Persona que registró la nota (opcional, multi-usuario). */
     personId?: string;
