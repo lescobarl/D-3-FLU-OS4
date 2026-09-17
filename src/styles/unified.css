@@ -7004,6 +7004,14 @@ details[open].flu-card .flu-card__chev {
     height: 8px;
     border-radius: 50%;
 }
+.agenda-item__day {
+    flex: 0 0 auto;
+    font-size: 9px;
+    font-weight: var(--weight-semibold, 600);
+    text-transform: capitalize;
+    color: var(--text-secondary, #a0a0b0);
+    white-space: nowrap;
+}
 .agenda-item__time {
     flex: 0 0 auto;
     min-width: 32px;
