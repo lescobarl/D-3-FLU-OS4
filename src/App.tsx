@@ -4341,6 +4341,9 @@ const {
         if (dayRolloverDoneRef.current) return;
         const history = integrationStore.conversationHistory;
         if (!history.length) return; // aún no cargó: se reevalúa al hidratar
+        // NO cerrar el día hasta saber QUIÉN entra: la minuta es POR usuario.
+        // Sin participante activo no se lee/guarda/limpia nada (se reevalúa al resolverse).
+        if (!activeParticipantId) return;
         const lastAt = Number(history[history.length - 1]?.timestamp) || 0;
         let lastSessionDay = '';
         try {
@@ -4374,7 +4377,7 @@ const {
                 /* ignorar */
             }
         })();
-    }, [integrationStore.conversationHistory, handleGenerateSummary]);
+    }, [integrationStore.conversationHistory, activeParticipantId, handleGenerateSummary]);
 
     // ============================================================
     // Paso 6: guardar el resumen de conversación UNA vez al cerrar
