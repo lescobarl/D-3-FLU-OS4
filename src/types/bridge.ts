@@ -388,10 +388,6 @@ export interface FluAccion {
     dominio: 'agenda' | 'shopping' | 'diary' | 'note';
     /** Fragmento del mandato del usuario que dispara la acción (ej. "recuérdame comprar leche a las 7"). */
     texto: string;
-    /** Nota estructurada: título corto (ej. "Super"). */
-    nombre?: string;
-    /** Nota estructurada: contenido/texto de la nota (ej. "pan huevo"). */
-    contenido?: string;
 }
 
 /**

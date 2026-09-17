@@ -31,19 +31,24 @@ describe('🧪 Bindings JS (notas) — sin import rotos', () => {
 
 // ============================================================
 // Dictado natural (niños): "nota DEL súper" (contracción) + ítems
-// enunciados con "y integra ...". Nace ROJO: NOTE_PARA_SUPER exige
-// "de el/de la", no "del", y el limpiador no quita "integra/mañana".
+// enunciados con "y integra ...". Spec vigente: el TÍTULO es corto
+// ("Super"/"Nota") y los artículos van al BODY (no al título).
+// El guard exige que el ítem quede capturado (label+body) y que el
+// relleno ("mañana", "integra", "notas") NO se cuele.
 // ============================================================
 describe('parseNoteIntentText — dictado natural (niños)', () => {
-    it('"crea una lista para el súper en las notas que traiga …" → nota Super', () => {
+    const combined = (parsed: { label?: string; body?: string } | null) =>
+        `${parsed?.label || ''} ${parsed?.body || ''}`.toLowerCase();
+
+    it('"crea una lista para el súper en las notas que traiga …" → captura los ítems', () => {
         const parsed = parseNoteIntentText(
             'crea una lista para el súper en las notas que traiga jabón pan huevo y queso',
         );
         expect(parsed).not.toBeNull();
-        const label = String(parsed?.label || '').toLowerCase();
-        expect(label).toContain('jabon');
-        expect(label).toContain('queso');
-        expect(label).not.toContain('notas');
+        const text = combined(parsed);
+        expect(text).toContain('jabon');
+        expect(text).toContain('queso');
+        expect(text).not.toContain('notas');
     });
 
     it('"genera una nota del súper para mañana y integra jabón cloro croquetas"', () => {
@@ -51,12 +56,12 @@ describe('parseNoteIntentText — dictado natural (niños)', () => {
             'genera una nota del súper para mañana y integra jabón cloro croquetas avión televisión',
         );
         expect(parsed).not.toBeNull();
-        const label = String(parsed?.label || '');
-        expect(label.toLowerCase()).toContain('jabon');
-        expect(label.toLowerCase()).toContain('croquetas');
-        expect(label.toLowerCase()).not.toContain('mañana');
-        expect(label.toLowerCase()).not.toContain('manana');
-        expect(label.toLowerCase()).not.toContain('integra');
+        const text = combined(parsed);
+        expect(text).toContain('jabon');
+        expect(text).toContain('croquetas');
+        expect(text).not.toContain('mañana');
+        expect(text).not.toContain('manana');
+        expect(text).not.toContain('integra');
     });
 
     it('"crea una nota de la lista del súper para mañana incluye leche pan"', () => {
@@ -64,9 +69,9 @@ describe('parseNoteIntentText — dictado natural (niños)', () => {
             'crea una nota de la lista del súper para mañana incluye leche pan',
         );
         expect(parsed).not.toBeNull();
-        const label = String(parsed?.label || '');
-        expect(label.toLowerCase()).toContain('leche');
-        expect(label.toLowerCase()).not.toContain('mañana');
-        expect(label.toLowerCase()).not.toContain('manana');
+        const text = combined(parsed);
+        expect(text).toContain('leche');
+        expect(text).not.toContain('mañana');
+        expect(text).not.toContain('manana');
     });
 });

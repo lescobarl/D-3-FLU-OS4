@@ -166,7 +166,7 @@ import {
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
-import { resolveNoteRescue } from './voice/lib/noteRescue';
+import { resolvePanelRescue } from './voice/lib/panelRescue';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import {
@@ -1107,7 +1107,14 @@ function resolveDomainScopedIntent(
             return {
                 matched: true,
                 domain: 'note',
-                action: { handled: true, action: 'notes.add', data: { label: parsed.label } },
+                action: {
+                    handled: true,
+                    action: 'notes.add',
+                    data: {
+                        label: parsed.label,
+                        ...(parsed.body ? { body: String(parsed.body).trim() } : {}),
+                    },
+                },
                 channel: 'flu',
             };
         }
@@ -2139,33 +2146,10 @@ function App() {
                     // turno no se pierda si el LLM la omitió.
                     const resolvedActions: Array<{ result: ArbiterResult; viaDomain: boolean }> = [];
                     for (const accion of acciones ?? []) {
-                        // LLM ya ESTRUCTURÓ la nota (nombre + contenido): ejecutar
-                        // DIRECTAMENTE, sin re-parsear el texto (el regex es frágil
-                        // ante variantes del habla — "cuyo contenido sea", "con", etc.).
-                        if (
-                            accion?.dominio === 'note' &&
-                            typeof accion?.nombre === 'string' &&
-                            accion.nombre.trim() &&
-                            typeof accion?.contenido === 'string'
-                        ) {
-                            resolvedActions.push({
-                                result: {
-                                    matched: true,
-                                    domain: 'note',
-                                    action: {
-                                        handled: true,
-                                        action: 'notes.add',
-                                        data: {
-                                            label: String(accion.nombre).trim(),
-                                            body: String(accion.contenido).trim(),
-                                        },
-                                    },
-                                    channel: 'flu',
-                                } as ArbiterResult,
-                                viaDomain: true,
-                            });
-                            continue;
-                        }
+                        // Panel derecho (agenda + notas): el LLM SOLO clasifica el
+                        // dominio; la ESTRUCTURA (fecha/hora en agenda, título+body
+                        // en nota) la produce el árbitro determinista, ÚNICO
+                        // estructurador del panel. No hay rama estructurada por IA.
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
                         // Guard anti-arrastre (Bug #5): el contrato exige que
@@ -2202,11 +2186,11 @@ function App() {
                             });
                         }
                     }
-                    // Garantía de nota: el LLM puede omitir la acción de nota aunque
-                    // el turno sea una nota determinista. Se agrega UNA sola por el
-                    // MISMO pipeline; `resolveNoteRescue` devuelve null si ya había
-                    // nota o si el turno resuelve otro dominio (sin ruta doble).
-                    const noteRescue = resolveNoteRescue({
+                    // Garantía determinista del PANEL (agenda + notas): el LLM puede
+                    // omitir la acción aunque el turno sea agenda/nota. Se agrega UNA
+                    // sola por el MISMO árbitro (`resolvePanelRescue` devuelve null si
+                    // el dominio ya está cubierto o si el turno resuelve otro dominio).
+                    const panelRescue = resolvePanelRescue({
                         transcript,
                         resolvedDomains: resolvedActions
                             .map((entry) => entry.result.domain)
@@ -2214,7 +2198,7 @@ function App() {
                         wakeWords,
                         arbiterOptions,
                     });
-                    if (noteRescue) resolvedActions.push({ result: noteRescue, viaDomain: false });
+                    if (panelRescue) resolvedActions.push({ result: panelRescue, viaDomain: false });
 
                     // Paso 2 — DESPACHAR: punto único, en orden, por el helper único.
                     for (const { result: effectiveResult, viaDomain } of resolvedActions) {

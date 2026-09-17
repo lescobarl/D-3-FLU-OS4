@@ -1,9 +1,9 @@
 {
   "id": "T-MULTIUSER-WORKSPACE-ISOLATION",
   "mode": "full",
-  "objective": "Aislar por usuario activo el pizarrón (workspaceArtifact, conversationHistory, búsqueda/imagen/video) y NO exponer datos per-usuario durante el onboarding; dejando además 'hoy' correcto en agenda, el seed DEMO idempotente, el commit de transcripción sin re-emisión y UN ÚNICO escritor de la fila del usuario (commitUserTurnRow), con sus guards.",
-  "dod": "npx vitest run tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts tests/demoSeed.test.ts tests/agendaCommandParser.test.ts tests/voiceTurnRefireDedup.test.ts tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/useWorkspaceSearchPersonReset.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts --reporter=dot",
+  "objective": "Aislar por usuario activo el pizarrón (workspaceArtifact, conversationHistory, búsqueda/imagen/video) y NO exponer datos per-usuario durante el onboarding; dejando además 'hoy' correcto en agenda, el seed DEMO idempotente, el commit de transcripción sin re-emisión, UN ÚNICO escritor de la fila del usuario (commitUserTurnRow) y el PANEL DERECHO (agenda + notas) con UN ÚNICO resolutor (árbitro determinista), con sus guards.",
+  "dod": "npx vitest run tests/panelUnifiedResolution.test.ts tests/panelRescue.test.ts tests/noteParserBindings.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts tests/demoSeed.test.ts tests/agendaCommandParser.test.ts tests/voiceTurnRefireDedup.test.ts tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/useWorkspaceSearchPersonReset.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/panelUnifiedResolution.test.ts tests/panelRescue.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts --reporter=dot",
   "guardExpect": "green",
   "groundTruth": {
     "command": "npm run typecheck && npm run test:full",
@@ -64,11 +64,19 @@
     "plans/estado-sesion-2026-09-17.md",
     "src/voice/lib/conversationTurnRow.ts",
     "src/voice/lib/rawCommitPlan.js",
-    "tests/conversationTurnRowSingleWriter.test.ts"
+    "tests/conversationTurnRowSingleWriter.test.ts",
+    "src/voice/lib/panelRescue.js",
+    "src/voice/lib/noteRescue.js",
+    "src/voice/lib/noteIntentParser.js",
+    "src/voice/lib/gemini.js",
+    "tests/panelRescue.test.ts",
+    "tests/panelUnifiedResolution.test.ts",
+    "tests/noteRescue.test.ts",
+    "tests/noteParserBindings.test.ts"
   ],
   "amendment": {
     "date": "2026-09-17",
-    "reason": "Enmienda autorizada por el usuario: (a) ampliar `allow` a los archivos de los fixes de onboarding/datos per-usuario, 'hoy' en agenda, seed DEMO idempotente, dedup de re-emisión de turno y la unificación del escritor de la fila del usuario; (b) alinear `dod`/`guard` al esquema del gate (string), conservando y ampliando la verificación.",
+    "reason": "Enmienda autorizada por el usuario: (a) ampliar `allow` a los archivos del panel derecho (agenda+notas) unificado en el árbitro determinista, además de los fixes previos de onboarding/datos per-usuario, 'hoy', seed DEMO, dedup de turno y unificación del escritor de la fila; (b) alinear `dod`/`guard` al esquema del gate (string), conservando y ampliando la verificación.",
     "authorizedBy": "usuario"
   },
   "deny": [

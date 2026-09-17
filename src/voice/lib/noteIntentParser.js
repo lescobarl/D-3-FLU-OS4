@@ -13,7 +13,7 @@ const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i
 const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hacer|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?(?:nota|lista)\b\s*(.*)$/i
 const NOTE_PARA_SUPER =
-  /^nota\s+(?:(?:de|del|para|al|a|el|la|los|las|en|de\s+la|de\s+los|de\s+las|para\s+el|para\s+la|a\s+el|a\s+la)\s+)*(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
+  /^nota\s+(?:(?:de|del|para|al|a|el|la|los|las|en|de\s+la|de\s+los|de\s+las|para\s+el|para\s+la|a\s+el|a\s+la)\s+)*(?:lista\s+(?:de\s+|del\s+)?)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_SUPER_LIST =
   /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
 const NOTE_SUPER_APPEND =
