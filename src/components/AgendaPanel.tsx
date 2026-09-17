@@ -32,13 +32,12 @@ export interface AgendaAddInput {
 export interface AgendaNoteEntry {
     id: string;
     label: string;
-    done: boolean;
 }
 
 export interface AgendaNotesProps {
     items: ReadonlyArray<AgendaNoteEntry>;
-    onToggle?: (id: string) => void;
     onAdd?: (label: string) => void;
+    onEdit?: (id: string, label: string) => void;
     onRemove?: (id: string) => void;
 }
 
@@ -103,12 +102,27 @@ export function AgendaPanel({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [noteDraft, setNoteDraft] = useState('');
+    const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+    const [editingNoteLabel, setEditingNoteLabel] = useState('');
 
     const submitNote = () => {
         const text = noteDraft.trim();
         if (!text || !notes?.onAdd) return;
         notes.onAdd(text);
         setNoteDraft('');
+    };
+
+    const startEditNote = (n: AgendaNoteEntry) => {
+        setEditingNoteId(n.id);
+        setEditingNoteLabel(n.label);
+    };
+
+    const saveNoteEdit = () => {
+        if (!editingNoteId || !notes?.onEdit) return;
+        const text = editingNoteLabel.trim();
+        if (text) notes.onEdit(editingNoteId, text);
+        setEditingNoteId(null);
+        setEditingNoteLabel('');
     };
 
     const nowMs = typeof now === 'number' ? now : Date.now();
@@ -315,30 +329,61 @@ export function AgendaPanel({
                     ) : (
                         notes.items.map((n) => (
                             <div key={n.id} className="hoy-panel__card">
-                                <input
-                                    type="checkbox"
-                                    checked={n.done}
-                                    onChange={() => notes.onToggle?.(n.id)}
-                                    aria-label="Hecha"
-                                />
                                 <div className="hoy-panel__card-body">
-                                    <span
-                                        className="hoy-panel__card-title"
-                                        style={n.done ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}
-                                    >
-                                        {n.label}
-                                    </span>
+                                    {editingNoteId === n.id ? (
+                                        <input
+                                            className="agenda-form__label"
+                                            type="text"
+                                            value={editingNoteLabel}
+                                            aria-label="Editar nota"
+                                            autoFocus
+                                            onChange={(e) => setEditingNoteLabel(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    saveNoteEdit();
+                                                } else if (e.key === 'Escape') {
+                                                    setEditingNoteId(null);
+                                                }
+                                            }}
+                                        />
+                                    ) : (
+                                        <span className="hoy-panel__card-title">{n.label}</span>
+                                    )}
                                 </div>
-                                {notes.onRemove ? (
-                                    <button
-                                        className="agenda-item__cancel"
-                                        type="button"
-                                        aria-label="Borrar nota"
-                                        onClick={() => notes.onRemove?.(n.id)}
-                                    >
-                                        ×
-                                    </button>
-                                ) : null}
+                                <div className="agenda-item__actions">
+                                    {editingNoteId === n.id ? (
+                                        <button
+                                            className="agenda-item__edit"
+                                            type="button"
+                                            aria-label="Guardar nota"
+                                            onClick={saveNoteEdit}
+                                        >
+                                            ✓
+                                        </button>
+                                    ) : (
+                                        notes.onEdit ? (
+                                            <button
+                                                className="agenda-item__edit"
+                                                type="button"
+                                                aria-label="Editar nota"
+                                                onClick={() => startEditNote(n)}
+                                            >
+                                                ✎
+                                            </button>
+                                        ) : null
+                                    )}
+                                    {notes.onRemove ? (
+                                        <button
+                                            className="agenda-item__cancel"
+                                            type="button"
+                                            aria-label="Borrar nota"
+                                            onClick={() => notes.onRemove?.(n.id)}
+                                        >
+                                            ×
+                                        </button>
+                                    ) : null}
+                                </div>
                             </div>
                         ))
                     )}
