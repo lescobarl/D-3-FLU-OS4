@@ -144,7 +144,7 @@ import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
-import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap } from './core/agenda/agendaModel';
+import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
 import { MS_DAY } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
 import { AgendaPanel } from './components/AgendaPanel';
@@ -1438,6 +1438,10 @@ function App() {
     // Color por tipo (derivado en lectura, fuente única FLU_CONFIG.agenda.colors).
     const agendaColors = useMemo<AgendaColorMap>(
         () => (((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap),
+        [],
+    );
+    const agendaLabels = useMemo<Record<AgendaKind, string>>(
+        () => (((FLU_CONFIG.agenda as Record<string, unknown>)?.labels ?? {}) as Record<AgendaKind, string>),
         [],
     );
 
@@ -5083,6 +5087,15 @@ const {
                                             onCancel: async (id) => {
                                                 await agendaService.cancel(id);
                                             },
+                                            labels: agendaLabels,
+                                            ringing: agenda.ringing,
+                                            onStop: agenda.stopRinging,
+                                            onAdd: async (input) => {
+                                                await agendaService.create({ ...input, personId: activeParticipantId || undefined });
+                                            },
+                                            onEdit: async (id, patch) => {
+                                                await agendaService.update(id, patch);
+                                            },
                                         },
                                         language,
                                     }}
@@ -5247,6 +5260,15 @@ const {
                                     colors: agendaColors,
                                     onCancel: async (id) => {
                                         await agendaService.cancel(id);
+                                    },
+                                    labels: agendaLabels,
+                                    ringing: agenda.ringing,
+                                    onStop: agenda.stopRinging,
+                                    onAdd: async (input) => {
+                                        await agendaService.create({ ...input, personId: activeParticipantId || undefined });
+                                    },
+                                    onEdit: async (id, patch) => {
+                                        await agendaService.update(id, patch);
                                     },
                                 }}
                                 shopping={{

@@ -828,12 +828,7 @@ export function WorkspaceHub({
                                     language={language}
                                 />
                             )}
-                            <AgendaPanel
-                                items={agenda.items}
-                                colors={agenda.colors}
-                                onCancel={agenda.onCancel}
-                                now={agenda.now}
-                            />
+                            <AgendaPanel {...agenda} />
                         </aside>
                     </div>
                 ) : (

@@ -486,6 +486,14 @@ export const FLU_CONFIG = {
       clase: '#22c55e',
       alarma: '#ef4444',
     },
+    // Nombres legibles por tipo (sin literales en la UI).
+    labels: {
+      recordatorio: 'Recordatorio',
+      cita: 'Cita',
+      junta: 'Junta',
+      clase: 'Clase',
+      alarma: 'Alarma',
+    },
   },
   vision: {
     temperature: 0.2,
