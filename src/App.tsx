@@ -5117,7 +5117,7 @@ const {
                                             onClearImage: handleClearImage,
                                         },
                                         agenda: {
-                                            items: onboarding.visible ? [] : agenda.items,
+                                            items: agenda.items,
                                             colors: agendaColors,
                                             onCancel: async (id) => {
                                                 await agendaService.cancel(id);
@@ -5131,23 +5131,21 @@ const {
                                             onEdit: async (id, patch) => {
                                                 await agendaService.update(id, patch);
                                             },
-                                            notes: onboarding.visible
-                                                ? undefined
-                                                : {
-                                                    items: notes.notes.map((n) => ({ id: n.id, label: n.label, body: n.body })),
-                                                    onAdd: async (label) => {
-                                                        await notes.add({ label });
-                                                    },
-                                                    onEdit: async (id, label) => {
-                                                        await notes.rename(id, label);
-                                                    },
-                                                    onEditBody: async (id, body) => {
-                                                        await notes.setBody(id, body);
-                                                    },
-                                                    onRemove: async (id) => {
-                                                        await notes.remove(id);
-                                                    },
+                                            notes: {
+                                                items: notes.notes.map((n) => ({ id: n.id, label: n.label, body: n.body })),
+                                                onAdd: async (label) => {
+                                                    await notes.add({ label });
                                                 },
+                                                onEdit: async (id, label) => {
+                                                    await notes.rename(id, label);
+                                                },
+                                                onEditBody: async (id, body) => {
+                                                    await notes.setBody(id, body);
+                                                },
+                                                onRemove: async (id) => {
+                                                    await notes.remove(id);
+                                                },
+                                            },
                                         },
                                         language,
                                     }}
