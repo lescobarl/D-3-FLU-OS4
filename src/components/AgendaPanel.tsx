@@ -47,6 +47,8 @@ export interface AgendaNotesProps {
 export interface AgendaPanelProps {
     items: readonly AgendaItem[];
     colors: AgendaColorMap;
+    /** Color de las notas (para su bolita y la leyenda). */
+    noteColor?: string;
     /** Nombres legibles por tipo (config-driven; sin literales). Solo se usan
      *  en el formulario de agregar, NUNCA como texto en los items. */
     labels?: Partial<Record<AgendaKind, string>>;
@@ -117,6 +119,7 @@ function itemTimeText(item: AgendaItem): string {
 export function AgendaPanel({
     items,
     colors,
+    noteColor = '#64748b',
     labels,
     notes,
     onCancel,
@@ -448,15 +451,6 @@ export function AgendaPanel({
                         })}
                     </ul>
                 )}
-
-                <div className="agenda-legend" aria-label="Colores por tipo">
-                    {AGENDA_KINDS.map((k) => (
-                        <span key={k} className="agenda-legend__item">
-                            <span className="agenda-legend__dot" style={{ background: colors[k] }} />
-                            {kindLabel(k)}
-                        </span>
-                    ))}
-                </div>
             </section>
 
             {/* NOTAS — separadas (texto, sin fecha) */}
@@ -467,7 +461,8 @@ export function AgendaPanel({
                         <p className="hoy-panel__empty">Aún no hay notas.</p>
                     ) : (
                         notes.items.map((n) => (
-                            <div key={n.id} className="hoy-panel__card">
+                            <div key={n.id} className="hoy-panel__card" style={{ borderLeft: 'none' }}>
+                                <span className="agenda-item__dot" style={{ background: noteColor }} />
                                 <div className="hoy-panel__card-body">
                                     {editingNoteId === n.id ? (
                                         <input
@@ -568,6 +563,19 @@ export function AgendaPanel({
                     ) : null}
                 </section>
             ) : null}
+
+            <div className="agenda-legend" aria-label="Colores por tipo">
+                {AGENDA_KINDS.map((k) => (
+                    <span key={k} className="agenda-legend__item">
+                        <span className="agenda-legend__dot" style={{ background: colors[k] }} />
+                        {kindLabel(k)}
+                    </span>
+                ))}
+                <span className="agenda-legend__item">
+                    <span className="agenda-legend__dot" style={{ background: noteColor }} />
+                    notas
+                </span>
+            </div>
         </div>
     );
 }

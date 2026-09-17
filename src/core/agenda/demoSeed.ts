@@ -18,7 +18,7 @@ function atHoursFromNow(hours: number, now: number): number {
 
 export function buildDemoAgendaInputs(now: number): AgendaCreateInput[] {
     return [
-        { kind: 'alarma', label: 'Tomar medicamento', trigger: { type: 'absolute', at: atHoursFromNow(0.75, now) } },
+        { kind: 'alarma', label: 'Tomar medicamento', trigger: { type: 'absolute', at: now + 35 * 1000 } },
         { kind: 'clase', label: 'Clase de Historia', trigger: { type: 'absolute', at: atHoursFromNow(1.5, now) }, fin: '10:30', aula: 'Aula 5' },
         { kind: 'junta', label: 'Junta de comité', trigger: { type: 'absolute', at: atHoursFromNow(3, now) } },
         { kind: 'recordatorio', label: 'Comprar leche', trigger: { type: 'absolute', at: atHoursFromNow(5, now) } },

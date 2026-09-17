@@ -2439,7 +2439,7 @@
   gap: 0;
   font-family: var(--font-ui, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
   font-size: var(--text-xs, 11px);
-  line-height: 1.15;
+  line-height: 1.1;
 }
 
 .hoy-panel__header {
@@ -2573,7 +2573,7 @@
   display: flex;
   align-items: flex-start;
   gap: 4px;
-  padding: 2px 0;
+  padding: 1px 0;
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   border-left: 2px solid var(--accent-color, #7c6cff);
@@ -6900,16 +6900,16 @@ details[open].flu-card .flu-card__chev {
 /* ===== AgendaPanel — calendario unificado (un solo panel, color por tipo) =====
    Reutiliza el lenguaje visual del Pizarrón (.hoy-panel__*); solo estilos
    para las pestañas, el formulario y el banner de alarma. */
-.agenda-tabs { display: flex; gap: 3px; padding: 4px 0; }
+.agenda-tabs { display: flex; gap: 2px; padding: 1px 0; }
 .agenda-tab {
     flex: 1;
-    padding: 4px 0;
+    padding: 1px 0;
     border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
     border-radius: var(--radius-sm, 6px);
     background: transparent;
     color: var(--text-secondary, #a0a0b0);
-    font-size: 10px;
-    font-weight: var(--weight-semibold, 600);
+    font-size: 9px;
+    font-weight: var(--weight-medium, 500);
     letter-spacing: 0.02em;
     text-transform: uppercase;
     cursor: pointer;
@@ -7150,7 +7150,8 @@ details[open].flu-card .flu-card__chev {
 .agenda-item__cancel:hover { color: #b91c1c; }
 .agenda-item__edit:hover { color: var(--accent-color, #7c6cff); }
 .agenda-tab--add {
-    margin-top: 4px;
+    margin-top: 1px;
+    padding: 1px 0;
     background: var(--accent-color, #7c6cff);
     color: #fff;
     border-color: var(--accent-color, #7c6cff);
