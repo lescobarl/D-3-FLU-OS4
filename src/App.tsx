@@ -1069,7 +1069,7 @@ interface ContractResolution {
 interface NoteVoiceIntent {
     action?: string;
     handled?: boolean;
-    data?: { label?: unknown; target?: unknown };
+    data?: { label?: unknown; target?: unknown; body?: unknown };
 }
 
 /** Intención estructurada de diario aceptada por el manejador de voz. */
@@ -3660,15 +3660,18 @@ function App() {
             }
 
             let label: string | null = null;
+            let body: string | null = null;
             if (isIntent) {
                 const data = (input).data || {};
                 label = data.label ? String(data.label).trim() : null;
+                body = data.body ? String(data.body).trim() : null;
             } else {
                 // Ruta cruda (E2E/integración/uso autónomo): parser ÚNICO de notas
                 // (src/voice/lib/noteIntentParser.js) — misma lógica que el árbitro
                 // (sin duplicación de regex en App).
                 const parsed = parseNoteIntentText(String(input || '').trim());
                 label = parsed && parsed.label ? parsed.label : null;
+                body = parsed && parsed.body ? String(parsed.body).trim() : null;
             }
 
             if (!label) return '';
@@ -3699,6 +3702,7 @@ function App() {
             }
             const result = await notes.add({
                 label,
+                body: body || undefined,
                 personId: opts?.personId,
                 personName: opts?.personName,
             });

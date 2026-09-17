@@ -74,6 +74,10 @@ const SUPER_DATE_LEAD =
 // parte del contenido.
 const SUPER_NOTE_DEST_LEAD = /^(?:en\s+las?\s+|a\s+las?\s+)?(?:notas?|listas?)\s*/i
 
+// Marcadores de CONTENIDO: "cuyo contenido sea/contenga/traiga X", "contenido: X",
+// "que traiga/contenga/tenga X". Separan el nombre del contenido de la nota.
+const SUPER_CONTENT_MARKER = /^(?:(?:cuyo|su)\s+)?(?:contenido|contenidos|art[ií]culos|productos|cosas)\s+(?:sea|es|son|:|contenga|contener|incluya|incluir|traiga|traer|tenga|tener|de)\s*/i
+
 /** Limpia el ítem de una nota "Super": quita fecha relativa y verbos líderes. */
 function cleanSuperItem(rest = '') {
   let item = String(rest || '').trim()
@@ -82,6 +86,7 @@ function cleanSuperItem(rest = '') {
     prev = item
     item = item.replace(SUPER_DATE_LEAD, '').trim()
     item = item.replace(SUPER_NOTE_DEST_LEAD, '').trim()
+    item = item.replace(SUPER_CONTENT_MARKER, '').trim()
     const m = SUPER_ITEM_LEAD.exec(item)
     if (m) item = item.slice(m[0].length).trim()
   }
@@ -106,11 +111,12 @@ export function parseNoteIntentText(rawText = '') {
   }
   const norm = stripAccentsEs(normalized)
 
-  // 1) "nota para el super/supermercado/compras/mercado" → "Super: {resto}".
+  // 1) "nota para el super/supermercado/compras/mercado" → nombre "Super" +
+  //    contenido (body) separado del título (lista de compras, no un chorizo).
   const paraSuper = NOTE_PARA_SUPER.exec(norm)
   if (paraSuper) {
     const rest = cleanSuperItem(paraSuper[2] ? paraSuper[2].trim() : '')
-    return { label: rest ? `Super: ${rest}` : 'Super' }
+    return { label: 'Super', body: rest || undefined }
   }
 
   // 1b) "apunta/agrega [en la lista [de]] super …" → "Super: {resto}".

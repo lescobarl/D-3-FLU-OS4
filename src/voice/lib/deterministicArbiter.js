@@ -98,7 +98,7 @@ function recognizeNoteIntent(text = '') {
   }
   const parsed = parseNoteIntentText(text)
   if (!parsed || !parsed.label) return null
-  return { handled: true, action: 'notes.add', data: { label: parsed.label } }
+  return { handled: true, action: 'notes.add', data: { label: parsed.label, body: parsed.body } }
 }
 
 /**
