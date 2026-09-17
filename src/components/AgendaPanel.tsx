@@ -29,11 +29,26 @@ export interface AgendaAddInput {
     trigger: AgendaTrigger;
 }
 
+export interface AgendaNoteEntry {
+    id: string;
+    label: string;
+    done: boolean;
+}
+
+export interface AgendaNotesProps {
+    items: ReadonlyArray<AgendaNoteEntry>;
+    onToggle?: (id: string) => void;
+    onAdd?: (label: string) => void;
+    onRemove?: (id: string) => void;
+}
+
 export interface AgendaPanelProps {
     items: readonly AgendaItem[];
     colors: AgendaColorMap;
     /** Nombres legibles por tipo (config-driven; sin literales). Opcional. */
     labels?: Partial<Record<AgendaKind, string>>;
+    /** Notas (texto, sin fecha): viven en su propia sección, no en el calendario. */
+    notes?: AgendaNotesProps;
     onCancel?: (id: string) => void;
     onAdd?: (input: AgendaAddInput) => void | Promise<void>;
     onEdit?: (id: string, patch: { label?: string; trigger?: AgendaTrigger }) => void | Promise<void>;
@@ -73,6 +88,7 @@ export function AgendaPanel({
     items,
     colors,
     labels,
+    notes,
     onCancel,
     onAdd,
     onEdit,
@@ -86,6 +102,14 @@ export function AgendaPanel({
     const [when, setWhen] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [noteDraft, setNoteDraft] = useState('');
+
+    const submitNote = () => {
+        const text = noteDraft.trim();
+        if (!text || !notes?.onAdd) return;
+        notes.onAdd(text);
+        setNoteDraft('');
+    };
 
     const nowMs = typeof now === 'number' ? now : Date.now();
 
@@ -281,6 +305,66 @@ export function AgendaPanel({
                     </ul>
                 )}
             </section>
+
+            {/* NOTAS — separadas (texto, sin fecha) */}
+            {notes ? (
+                <section className="hoy-panel__section" aria-label="Notas">
+                    <h4 className="hoy-panel__section-title">Notas</h4>
+                    {notes.items.length === 0 ? (
+                        <p className="hoy-panel__empty">Aún no hay notas.</p>
+                    ) : (
+                        notes.items.map((n) => (
+                            <div key={n.id} className="hoy-panel__card">
+                                <input
+                                    type="checkbox"
+                                    checked={n.done}
+                                    onChange={() => notes.onToggle?.(n.id)}
+                                    aria-label="Hecha"
+                                />
+                                <div className="hoy-panel__card-body">
+                                    <span
+                                        className="hoy-panel__card-title"
+                                        style={n.done ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}
+                                    >
+                                        {n.label}
+                                    </span>
+                                </div>
+                                {notes.onRemove ? (
+                                    <button
+                                        className="agenda-item__cancel"
+                                        type="button"
+                                        aria-label="Borrar nota"
+                                        onClick={() => notes.onRemove?.(n.id)}
+                                    >
+                                        ×
+                                    </button>
+                                ) : null}
+                            </div>
+                        ))
+                    )}
+                    {notes.onAdd ? (
+                        <form
+                            className="agenda-form"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                submitNote();
+                            }}
+                        >
+                            <input
+                                className="agenda-form__label"
+                                type="text"
+                                placeholder="Nueva nota…"
+                                value={noteDraft}
+                                aria-label="Nueva nota"
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                            />
+                            <button className="agenda-form__submit" type="submit" disabled={!noteDraft.trim()}>
+                                Agregar
+                            </button>
+                        </form>
+                    ) : null}
+                </section>
+            ) : null}
         </div>
     );
 }

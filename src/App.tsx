@@ -5096,6 +5096,18 @@ const {
                                             onEdit: async (id, patch) => {
                                                 await agendaService.update(id, patch);
                                             },
+                                            notes: {
+                                                items: notes.notes.map((n) => ({ id: n.id, label: n.label, done: n.done })),
+                                                onToggle: async (id) => {
+                                                    await notes.toggle(id);
+                                                },
+                                                onAdd: async (label) => {
+                                                    await notes.add({ label });
+                                                },
+                                                onRemove: async (id) => {
+                                                    await notes.remove(id);
+                                                },
+                                            },
                                         },
                                         language,
                                     }}
