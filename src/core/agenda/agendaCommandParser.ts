@@ -78,6 +78,16 @@ function normalize(text: string): string {
     return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+/** Colapsa tartamudeo de prefijo: "bor borra" → "borra". */
+function collapseStutter(text: string): string {
+    return String(text || '').replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '');
+}
+
+/** Colapsa tartamudeo de cuantificador: "todo toda" → "toda", "todo todo" → "todo". */
+function collapseQuantifierStutter(text: string): string {
+    return String(text || '').replace(/\b(todo|toda|todos|todas)\s+(?=(todo|toda|todos|todas)\b)/gi, '');
+}
+
 function detectKind(text: string): AgendaKind | null {
     const t = normalize(text);
     for (const entry of KIND_NOUNS) {
@@ -220,7 +230,9 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const rawNow = options?.now;
     const now = typeof rawNow === 'function' ? rawNow() : typeof rawNow === 'number' ? rawNow : Date.now();
     const text = String(input || '').trim();
-    const cleaned = text.replace(WAKE_LEAD, ' ').replace(/^[¿¡]+/, '').trim();
+    const cleaned = collapseQuantifierStutter(
+        collapseStutter(text.replace(WAKE_LEAD, ' ').replace(/^[¿¡]+/, '').trim()),
+    ).replace(/\s+/g, ' ').trim();
     if (!cleaned) return { handled: false, action: null, reply: '' };
 
     const action = detectAction(cleaned);
