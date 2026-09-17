@@ -1,14 +1,21 @@
 // ============================================================
 // src/components/AgendaPanel.tsx
 // UI ÚNICA del calendario unificado (alarmas, recordatorios, citas,
-// juntas, clases) — UN solo panel, diferenciados SOLO por color.
-// Notas y "próximos" NO viven aquí.
+// juntas, clases) — UN solo listado, diferenciado SOLO por color.
+// ------------------------------------------------------------
+// Secciones del panel lateral:
+//   - PRÓXIMOS: resumen de lo próximo (top-N pendientes).
+//   - AGENDA:   listado único día/semana/mes + agregar/editar/cancelar.
+//   - (NOTAS vive aparte, en su propia sección del Pizarrón).
+// Reutiliza el lenguaje visual del Pizarrón (`.hoy-panel__*`) ya definido
+// en unified.css: sin CSS nuevo, sin hardcode de colores (derivados de
+// FLU_CONFIG.agenda.colors en lectura).
 // ============================================================
 import { useMemo, useState } from 'react';
 import { summarizeAgenda } from '../core/agenda/agendaSummary';
 import type { AgendaView } from '../core/agenda/agendaQuery';
 import type { AgendaColorMap, AgendaItem, AgendaKind, AgendaTrigger } from '../core/agenda/agendaModel';
-import { AGENDA_KINDS } from '../core/agenda/agendaModel';
+import { AGENDA_KINDS, nextAgendaDue } from '../core/agenda/agendaModel';
 
 const VIEWS: ReadonlyArray<{ key: AgendaView; label: string }> = [
     { key: 'day', label: 'Hoy' },
@@ -46,6 +53,22 @@ function fromDateTimeLocal(value: string): number {
     return Number.isFinite(d.getTime()) ? d.getTime() : Date.now();
 }
 
+function formatDayLabel(ms: number, lang?: string): string {
+    const d = new Date(ms);
+    const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    if (lang === 'en') {
+        return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+    return `${days[d.getDay()]} ${d.getDate()} de ${months[d.getMonth()]}`;
+}
+
+function formatTimeLabel(ms: number): string {
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function AgendaPanel({
     items,
     colors,
@@ -64,10 +87,22 @@ export function AgendaPanel({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
+    const nowMs = typeof now === 'number' ? now : Date.now();
+
     const summary = useMemo(
-        () => summarizeAgenda(items, view, typeof now === 'number' ? now : Date.now(), colors),
-        [items, view, colors, now],
+        () => summarizeAgenda(items, view, nowMs, colors),
+        [items, view, colors, nowMs],
     );
+
+    // PRÓXIMOS: pendientes ordenados por su siguiente vencimiento (top 3).
+    const proximos = useMemo(() => {
+        return items
+            .filter((i) => i.status === 'pending')
+            .map((i) => ({ item: i, due: nextAgendaDue(i.trigger, nowMs) }))
+            .filter((e) => Number.isFinite(e.due))
+            .sort((a, b) => a.due - b.due)
+            .slice(0, 3);
+    }, [items, nowMs]);
 
     const resetForm = () => {
         setKind('recordatorio');
@@ -79,7 +114,7 @@ export function AgendaPanel({
     const submit = async () => {
         const text = label.trim();
         if (!text || !onAdd) return;
-        const at = when ? fromDateTimeLocal(when) : Date.now();
+        const at = when ? fromDateTimeLocal(when) : nowMs;
         setSaving(true);
         try {
             if (editingId && onEdit) {
@@ -101,129 +136,151 @@ export function AgendaPanel({
         else setWhen('');
     };
 
+    const kindLabel = (k: AgendaKind): string => labels?.[k] || k;
+
     return (
-        <div className="agenda-panel" data-testid="agenda-panel">
-            <div className="agenda-tabs" role="tablist">
-                {VIEWS.map((v) => (
-                    <button
-                        key={v.key}
-                        type="button"
-                        role="tab"
-                        data-testid={`agenda-view-${v.key}`}
-                        aria-selected={view === v.key}
-                        className={`agenda-tab${view === v.key ? ' agenda-tab--active' : ''}`}
-                        onClick={() => setView(v.key)}
-                    >
-                        {v.label}
-                    </button>
-                ))}
-            </div>
+        <div className="hoy-panel" data-testid="agenda-panel">
+            <header className="hoy-panel__header">
+                <span className="hoy-panel__header-title">{labels ? 'Agenda' : 'Agenda'}</span>
+                <span className="hoy-panel__header-date">{formatDayLabel(nowMs)}</span>
+            </header>
 
-            {onAdd ? (
-                <form
-                    className="agenda-form"
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        void submit();
-                    }}
-                >
-                    <select
-                        className="agenda-form__kind"
-                        value={kind}
-                        aria-label="Tipo"
-                        onChange={(e) => setKind(e.target.value as AgendaKind)}
-                    >
-                        {AGENDA_KINDS.map((k) => (
-                            <option key={k} value={k}>
-                                {labels?.[k] || k}
-                            </option>
-                        ))}
-                    </select>
-                    <input
-                        className="agenda-form__label"
-                        type="text"
-                        placeholder="¿Qué? Ej. junta de comité"
-                        value={label}
-                        aria-label="Descripción"
-                        onChange={(e) => setLabel(e.target.value)}
-                    />
-                    <input
-                        className="agenda-form__when"
-                        type="datetime-local"
-                        value={when}
-                        aria-label="Fecha y hora"
-                        onChange={(e) => setWhen(e.target.value)}
-                    />
-                    <button className="agenda-form__submit" type="submit" disabled={saving || !label.trim()}>
-                        {editingId ? 'Guardar' : 'Agregar'}
-                    </button>
-                    {editingId ? (
-                        <button className="agenda-form__cancel" type="button" onClick={resetForm}>
-                            Cancelar
-                        </button>
-                    ) : null}
-                </form>
-            ) : null}
+            {/* PRÓXIMOS */}
+            <section className="hoy-panel__section" aria-label="Próximos">
+                <h4 className="hoy-panel__section-title">Próximos</h4>
+                {proximos.length === 0 ? (
+                    <p className="hoy-panel__empty">Sin próximos.</p>
+                ) : (
+                    proximos.map(({ item, due }) => (
+                        <div key={item.id} className="hoy-panel__card" style={{ borderLeftColor: colors[item.kind] }}>
+                            <span className="hoy-panel__card-time">{formatTimeLabel(due)}</span>
+                            <div className="hoy-panel__card-body">
+                                <span className="hoy-panel__card-title">{item.label}</span>
+                                <span className="hoy-panel__card-meta">{kindLabel(item.kind)}</span>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </section>
 
-            {ringing ? (
-                <div className="agenda-ringing" role="alert">
-                    <span className="agenda-ringing__label">
-                        ⏰ {labels?.[ringing.kind] || ringing.kind}: {ringing.label}
-                    </span>
-                    {onStop ? (
-                        <button className="agenda-ringing__stop" type="button" onClick={onStop}>
-                            Detener
+            {/* AGENDA — un solo listado día/semana/mes */}
+            <section className="hoy-panel__section" aria-label="Agenda">
+                <h4 className="hoy-panel__section-title">Agenda</h4>
+
+                <div className="agenda-tabs" role="tablist">
+                    {VIEWS.map((v) => (
+                        <button
+                            key={v.key}
+                            type="button"
+                            role="tab"
+                            data-testid={`agenda-view-${v.key}`}
+                            aria-selected={view === v.key}
+                            className={`agenda-tab${view === v.key ? ' agenda-tab--active' : ''}`}
+                            onClick={() => setView(v.key)}
+                        >
+                            {v.label}
                         </button>
-                    ) : null}
+                    ))}
                 </div>
-            ) : null}
 
-            {summary.empty ? (
-                <p className="agenda-empty" data-testid="agenda-empty">
-                    Sin pendientes.
-                </p>
-            ) : (
-                <ul className="agenda-list">
-                    {summary.lines.map((line) => {
-                        const item = items.find((i) => i.id === line.id);
-                        return (
-                            <li key={line.id} className="agenda-item" data-testid={`agenda-item-${line.id}`}>
-                                <span className="agenda-item__swatch" style={{ background: line.color }} aria-hidden="true" />
-                                <div className="agenda-item__body">
-                                    <span className="agenda-item__time">{line.time}</span>
-                                    <span className="agenda-item__label">{line.label}</span>
-                                    {item?.kind ? (
-                                        <span className="agenda-item__kind">{labels?.[item.kind] || item.kind}</span>
-                                    ) : null}
-                                </div>
-                                <div className="agenda-item__actions">
-                                    {item && onEdit ? (
-                                        <button
-                                            className="agenda-item__edit"
-                                            type="button"
-                                            aria-label="Editar"
-                                            onClick={() => startEdit(item)}
-                                        >
-                                            ✎
-                                        </button>
-                                    ) : null}
-                                    {onCancel ? (
-                                        <button
-                                            className="agenda-item__cancel"
-                                            type="button"
-                                            aria-label="Cancelar"
-                                            data-testid={`agenda-cancel-${line.id}`}
-                                            onClick={() => onCancel(line.id)}
-                                        >
-                                            ×
-                                        </button>
-                                    ) : null}
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
+                {onAdd ? (
+                    <form
+                        className="agenda-form"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            void submit();
+                        }}
+                    >
+                        <select
+                            className="agenda-form__kind"
+                            value={kind}
+                            aria-label="Tipo"
+                            onChange={(e) => setKind(e.target.value as AgendaKind)}
+                        >
+                            {AGENDA_KINDS.map((k) => (
+                                <option key={k} value={k}>
+                                    {kindLabel(k)}
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            className="agenda-form__label"
+                            type="text"
+                            placeholder="¿Qué? Ej. junta de comité"
+                            value={label}
+                            aria-label="Descripción"
+                            onChange={(e) => setLabel(e.target.value)}
+                        />
+                        <input
+                            className="agenda-form__when"
+                            type="datetime-local"
+                            value={when}
+                            aria-label="Fecha y hora"
+                            onChange={(e) => setWhen(e.target.value)}
+                        />
+                        <button className="agenda-form__submit" type="submit" disabled={saving || !label.trim()}>
+                            {editingId ? 'Guardar' : 'Agregar'}
+                        </button>
+                        {editingId ? (
+                            <button className="agenda-form__cancel" type="button" onClick={resetForm}>
+                                Cancelar
+                            </button>
+                        ) : null}
+                    </form>
+                ) : null}
+
+                {ringing ? (
+                    <div className="agenda-ringing" role="alert">
+                        <span className="agenda-ringing__label">
+                            ⏰ {kindLabel(ringing.kind)}: {ringing.label}
+                        </span>
+                        {onStop ? (
+                            <button className="agenda-ringing__stop" type="button" onClick={onStop}>
+                                Detener
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {summary.empty ? (
+                    <p className="hoy-panel__empty" data-testid="agenda-empty">Sin pendientes.</p>
+                ) : (
+                    <ul className="agenda-list">
+                        {summary.lines.map((line) => {
+                            const item = items.find((i) => i.id === line.id);
+                            return (
+                                <li key={line.id} className="hoy-panel__card" data-testid={`agenda-item-${line.id}`} style={{ borderLeftColor: line.color }}>
+                                    <span className="hoy-panel__card-time">{line.time}</span>
+                                    <div className="hoy-panel__card-body">
+                                        <span className="hoy-panel__card-title">{line.label}</span>
+                                        {item?.kind ? (
+                                            <span className="hoy-panel__card-meta">{kindLabel(item.kind)}</span>
+                                        ) : null}
+                                    </div>
+                                    <div className="agenda-item__actions">
+                                        {item && onEdit ? (
+                                            <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
+                                                ✎
+                                            </button>
+                                        ) : null}
+                                        {onCancel ? (
+                                            <button
+                                                className="agenda-item__cancel"
+                                                type="button"
+                                                aria-label="Cancelar"
+                                                data-testid={`agenda-cancel-${line.id}`}
+                                                onClick={() => onCancel(line.id)}
+                                            >
+                                                ×
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </section>
         </div>
     );
 }
