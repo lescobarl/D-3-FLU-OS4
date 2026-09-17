@@ -5063,6 +5063,7 @@ const {
                                     hub={{
                                         searchAllowlist: resolvedBrowserAllowlist,
                                         searchOverrides,
+                                        participantId: activeParticipantId,
                                         workspaceArtifact: integrationStore.workspaceArtifact,
                                         latestResponse,
                                         livePhrase: visiblePhrase,

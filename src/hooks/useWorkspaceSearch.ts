@@ -14,7 +14,7 @@
 // Regla #1: sin hardcode — endpoints, proveedores, tope y etiquetas
 // viven en FLU_CONFIG.browser.search (config-driven).
 // ============================================================
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type {
     SearchResult,
@@ -52,6 +52,12 @@ export interface UseWorkspaceSearchOptions {
     allowlist?: string[];
     /** F5 — Overrides del Centro de Control (proveedores, seguridad, límite). */
     overrides?: SearchConfigOverrides;
+    /**
+     * Participante activo del pizarrón (aislamiento multiusuario). Al cambiar,
+     * los resultados de búsqueda/imagen/video se limpian para no mostrar los del
+     * usuario anterior.
+     */
+    participantId?: string;
 }
 
 export interface UseWorkspaceSearchResult {
@@ -247,6 +253,7 @@ export async function fetchTypeResults(
 export function useWorkspaceSearch(
     options: UseWorkspaceSearchOptions = {},
 ): UseWorkspaceSearchResult {
+    const participantId = options.participantId;
     const [query, setQuery] = useState('');
     const [lang, setLang] = useState<'es' | 'en'>('es');
     const [level, setLevel] = useState<SearchLevel>('simple');
@@ -386,6 +393,16 @@ export function useWorkspaceSearch(
         setError('');
         setLoading(false);
     }, []);
+
+    // Aislamiento multiusuario: al cambiar de participante activo se limpian los
+    // resultados de búsqueda/imagen/video (y la consulta) para que ningún usuario
+    // vea los resultados del usuario anterior. En el montaje no se dispara.
+    const prevPersonRef = useRef<string | undefined>(participantId);
+    useEffect(() => {
+        if (prevPersonRef.current === participantId) return;
+        prevPersonRef.current = participantId;
+        reset();
+    }, [participantId, reset]);
 
     return {
         state: { query, lang, level, loading, results, images, video, aiOverview, error },

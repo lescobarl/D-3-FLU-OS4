@@ -51,6 +51,8 @@ export interface WorkspaceHubProps {
     // Búsqueda (WorkspaceSearch)
     searchAllowlist?: string[];
     searchOverrides?: SearchConfigOverrides;
+    /** Participante activo (aislamiento multiusuario: limpia la búsqueda al cambiar). */
+    participantId?: string;
 
     // Store: artefacto de workspace (respuesta + horario)
     workspaceArtifact: WorkspaceEntry | null;
@@ -258,6 +260,7 @@ export function HorarioImportConfirm({
 export function WorkspaceHub({
     searchAllowlist,
     searchOverrides,
+    participantId,
     workspaceArtifact,
     latestResponse,
     livePhrase,
@@ -291,6 +294,7 @@ export function WorkspaceHub({
     } = useWorkspaceSearch({
         allowlist: searchAllowlist,
         overrides: searchOverrides,
+        participantId,
     });
 
     // Búsqueda nueva → limpiar la imagen generada (IA) de un turno anterior para
