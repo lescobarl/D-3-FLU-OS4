@@ -82,6 +82,36 @@ function formatTimeLabel(ms: number): string {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const WEEK_DAYS: ReadonlyArray<{ day: number; label: string }> = [
+    { day: 1, label: 'Lunes' },
+    { day: 2, label: 'Martes' },
+    { day: 3, label: 'Miércoles' },
+    { day: 4, label: 'Jueves' },
+    { day: 5, label: 'Viernes' },
+    { day: 6, label: 'Sábado' },
+    { day: 0, label: 'Domingo' },
+];
+
+function dayOfWeekOf(ms: number): number {
+    return new Date(ms).getDay(); // 0=Domingo..6=Sábado
+}
+
+function itemOccursOnDay(item: AgendaItem, day: number): boolean {
+    if (item.status === 'deleted' || item.status === 'done') return false;
+    const t = item.trigger;
+    if (t.type === 'weekly') return t.daysOfWeek.includes(day);
+    if (t.type === 'daily') return true;
+    if (t.type === 'absolute' && t.at !== undefined) return dayOfWeekOf(t.at) === day;
+    return false;
+}
+
+function itemTimeText(item: AgendaItem): string {
+    const t = item.trigger;
+    if (t.type === 'weekly' || t.type === 'daily') return t.timeOfDay || '';
+    if (t.type === 'absolute' && t.at !== undefined) return formatTimeLabel(t.at);
+    return '';
+}
+
 export function AgendaPanel({
     items,
     colors,
@@ -122,6 +152,16 @@ export function AgendaPanel({
             .sort((a, b) => a.due - b.due)
             .slice(0, 3);
     }, [items, nowMs]);
+
+    // SEMANA: columnas por día (Lunes..Domingo) con sus items agendados.
+    const weekColumns = useMemo(
+        () => WEEK_DAYS.map(({ day, label }) => ({
+            day,
+            label,
+            items: items.filter((i) => itemOccursOnDay(i, day)),
+        })),
+        [items],
+    );
 
     const resetForm = () => {
         setKind('recordatorio');
@@ -180,12 +220,18 @@ export function AgendaPanel({
         setEditingNoteLabel('');
     };
 
-    // Fila de item (agenda y próximos): punto de color por tipo + hora + texto.
+    // Fila de item (agenda y próximos): color por tipo, sin texto de tipo.
     const renderRow = (item: AgendaItem, timeText: string, idPrefix: string, cancelPrefix: string) => (
-        <li key={item.id} className="agenda-item" data-testid={`${idPrefix}${item.id}`}>
-            <span className="agenda-item__dot" style={{ background: colors[item.kind] }} aria-hidden="true" />
-            <span className="agenda-item__time">{timeText}</span>
-            <span className="agenda-item__label">{item.label}</span>
+        <li
+            key={item.id}
+            className="hoy-panel__card"
+            data-testid={`${idPrefix}${item.id}`}
+            style={{ borderLeftColor: colors[item.kind] }}
+        >
+            <span className="hoy-panel__card-time">{timeText}</span>
+            <div className="hoy-panel__card-body">
+                <span className="hoy-panel__card-title">{item.label}</span>
+            </div>
             <div className="agenda-item__actions">
                 {onEdit ? (
                     <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
@@ -313,7 +359,30 @@ export function AgendaPanel({
                     </div>
                 ) : null}
 
-                {summary.empty ? (
+                {view === 'week' ? (
+                    <div className="agenda-week" data-testid="agenda-week">
+                        {weekColumns.map((col) => (
+                            <div key={col.day} className="agenda-week__col">
+                                <span className="agenda-week__day">{col.label}</span>
+                                {col.items.length === 0 ? (
+                                    <span className="agenda-week__empty">—</span>
+                                ) : (
+                                    col.items.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className="agenda-week__item"
+                                            data-testid={`agenda-week-item-${item.id}`}
+                                            style={{ borderLeftColor: colors[item.kind] }}
+                                        >
+                                            <span className="agenda-week__item-time">{itemTimeText(item)}</span>
+                                            <span className="agenda-week__item-label">{item.label}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : summary.empty ? (
                     <p className="hoy-panel__empty" data-testid="agenda-empty">Sin pendientes.</p>
                 ) : (
                     <ul className="agenda-list">
