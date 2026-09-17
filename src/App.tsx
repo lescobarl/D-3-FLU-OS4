@@ -52,7 +52,7 @@ import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
 import { STORAGE_KEYS, WELCOME_MESSAGE, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
 import { dayKey, shouldRolloverDay } from './core/days/dayRollover';
-import type { ConversationEntry, ConversationState, FluContract, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
+import type { ConversationState, FluContract, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
 import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
@@ -209,7 +209,6 @@ import { buildFluSpeechAuditRows, deriveUserLastText, selectVisiblePhrase } from
 import { evaluateListenParity } from './voice/lib/listenParity';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
-import { planRawCommit } from './voice/lib/rawCommitPlan';
 
 // ============================================================
 // Tipo para las pestañas del panel derecho
@@ -1309,15 +1308,6 @@ function App() {
     // re-render/re-efecto del mismo participante (una vez por activación).
     const onboardingAckSpokenForRef = useRef<string | null>(null);
 
-    // Cache for rawOnly speaker lookup: Map<speakerName, { index, entry }>
-    // Avoids O(n) backward scan of conversation history on every raw transcript.
-    const speakerIndexRef = useRef<Map<string, { index: number; entry: ConversationEntry }>>(new Map());
-
-    // §9 — Identidad de la emisión cruda en curso: id de la última fila cruda
-    // commiteada. Permite que `replaceLastRawLog` (decisión del motor) actualice
-    // ESA fila aunque el hablante recién se resuelva y difiera del provisional.
-    const lastRawEntryIdRef = useRef<string | null>(null);
-
     // ---- Medios (video/documento): ruta ÚNICA e idempotente ----
     // El ASR puede re-capturar el mismo comando; sin gate, cada captura
     // dispararía una generación PAGA nueva. `mediaGateRef` es la fuente única
@@ -2044,105 +2034,18 @@ function App() {
             // dependencia de tipos en el barrel JS de flu-voz.
             // ============================================================
             if (rawOnly && transcript) {
-                const normalizedTranscript = cleanForSpeech(transcript);
-                if (!normalizedTranscript) return;
+                if (!cleanForSpeech(transcript)) return;
 
-                // Decisión ÚNICA de commit (§9): el motor ya calculó si esta emisión
-                // reemplaza la última fila (misma emisión creciendo) o si es una fila
-                // nueva, y lo envía en el payload como `replaceLastRawLog`. App OBEDECE
-                // esa señal; NO re-decide con heurística propia.
-                const liveStore = useIntegrationStore.getState();
-                const history = liveStore.conversationHistory;
-                const targetSpeaker = String(speakerName || '').trim().toLowerCase();
-                const speakerKey = targetSpeaker || '__default__';
-                const replaceLastRawLog = resolved?.replaceLastRawLog === true;
-
-                // §9 — La decisión de reemplazo la toma el MOTOR (`replaceLastRawLog`).
-                // `planRawCommit` resuelve la fila objetivo por el id de la emisión
-                // cruda en curso, NO por la etiqueta de hablante: entre commits la voz
-                // puede resolverse (provisional "Hablante 1" → nombre real) y la
-                // búsqueda por nombre fallaba, duplicando la fila.
-                const plan = planRawCommit(history, {
-                    replaceLastRawLog,
-                    lastRawEntryId: lastRawEntryIdRef.current,
-                    speakerName,
-                });
-
-                if (plan.action === 'replace') {
-                    const prev = history[plan.index];
-                    const updated = [...history];
-                    updated[plan.index] = {
-                        ...prev,
-                        text: transcript,
-                        speakerName: plan.speakerName,
-                        timestamp: Date.now(),
-                    };
-                    useIntegrationStore.getState().batchLoadHistory(updated);
-                    speakerIndexRef.current.set(speakerKey, { index: plan.index, entry: updated[plan.index] });
-                    return;
-                }
-
-                let lastEntryForSpeaker: ConversationEntry | null = null;
-                let lastEntryIndex = -1;
-                const cached = speakerIndexRef.current.get(speakerKey);
-                if (cached && cached.index >= 0 && cached.index < history.length && history[cached.index] === cached.entry) {
-                    lastEntryForSpeaker = cached.entry;
-                    lastEntryIndex = cached.index;
-                } else {
-                    // Cache miss or stale — fall back to backward scan and update cache
-                    for (let i = history.length - 1; i >= 0; i--) {
-                        const entry = history[i];
-                        const entrySpeaker = String(entry.speakerName || '').trim().toLowerCase();
-                        const matches = targetSpeaker ? entrySpeaker === targetSpeaker : !entrySpeaker;
-                        if (matches) {
-                            lastEntryForSpeaker = entry;
-                            lastEntryIndex = i;
-                            break;
-                        }
-                    }
-                    if (lastEntryForSpeaker) {
-                        speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: lastEntryForSpeaker });
-                    }
-                }
-
-                if (!replaceLastRawLog && lastEntryForSpeaker) {
-                    // Duplicado exacto de la fila del hablante: descartar (re-entrada idéntica).
-                    if (cleanForSpeech(lastEntryForSpeaker.text || '') === normalizedTranscript) {
-                        return;
-                    }
-                }
-
-                // Dedup por TEXTO dentro del turno actual (independiente del hablante
-                // provisional "Hablante 1" → nombre real): si la misma frase ya se
-                // commitó en este turno, no duplicar la fila. La ruta no-raw
-                // (`commitUserTurnRow`) reutiliza esa fila y completa el hablante.
-                const normLower = normalizedTranscript.toLowerCase();
-                for (let i = history.length - 1; i >= 0; i -= 1) {
-                    const e = history[i];
-                    if (!e) continue;
-                    if (e.role === 'flu') break;
-                    if (e.role === 'user' && cleanForSpeech(e.text || '').toLowerCase() === normLower) {
-                        return;
-                    }
-                }
-
-                // Agregar entrada raw al historial (OS2: optimisticRow)
-                // Obligación #6: UUIDv4
-                const rawEntryId = uuidv4();
-                useIntegrationStore.getState().addConversationEntry({
-                    id: rawEntryId,
-                    role: 'user',
+                // §9 — UN ÚNICO escritor de la fila del usuario: `commitUserTurnRow`.
+                // App NO escribe el historial por su cuenta: le pasa la señal del
+                // MOTOR (`replaceLastRawLog`) para el caso de la emisión que crece, y
+                // el módulo decide reemplazar/reutilizar/agregar. Así una frase ⇒ una
+                // fila, sin dedup heurístico por hablante en App.
+                commitUserTurnRow({
                     text: transcript,
-                    speakerName: speakerName || undefined,
-                    timestamp: Date.now(),
-                    sentiment: 'neutral',
+                    speakerName,
+                    replaceLast: resolved?.replaceLastRawLog === true,
                 });
-                // La emisión cruda en curso pasa a ser esta fila (identidad para el reemplazo).
-                lastRawEntryIdRef.current = rawEntryId;
-
-                // Update cache: new entry appended at the end
-                const newHistory = useIntegrationStore.getState().conversationHistory;
-                speakerIndexRef.current.set(speakerKey, { index: newHistory.length - 1, entry: newHistory[newHistory.length - 1] });
 
                 // OS2 parity: audit log for rawOnly entries (Gap 4)
                 // FluShell.jsx lines 430-438: addAuditLog after rawOnly entry
