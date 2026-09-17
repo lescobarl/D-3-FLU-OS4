@@ -145,6 +145,7 @@ import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaComm
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
 import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
+import { buildDemoAgendaInputs, buildDemoNotes } from './core/agenda/demoSeed';
 import { MS_DAY } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
 import { AgendaPanel } from './components/AgendaPanel';
@@ -1649,6 +1650,33 @@ function App() {
     const contacts = useContacts({});
     const diary = useDiary({});
     const notes = useNotes({ participantId: activeParticipantId });
+
+    // ---- DEMO (solo desarrollo): sembrar datos de ejemplo si la agenda está
+    // vacía, para validar el look&feel del panel con datos productivos. ----
+    useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const existing = await agendaService.list({});
+                if (existing.length > 0) return;
+                for (const input of buildDemoAgendaInputs(Date.now())) {
+                    await agendaService.create({ ...input, personId: activeParticipantId || undefined });
+                }
+                for (const label of buildDemoNotes()) {
+                    await notes.add({ label });
+                }
+                if (!cancelled) void notes.refresh();
+            } catch (err) {
+                console.error('[App] demo seed error:', err);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
     const deviceActions = useDeviceActions({
         service: contacts.service,
