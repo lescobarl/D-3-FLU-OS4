@@ -1651,13 +1651,11 @@ function App() {
     const diary = useDiary({});
     const notes = useNotes({ participantId: activeParticipantId });
 
-    // ---- DEMO (solo desarrollo): sembrar datos de ejemplo POR USUARIO, solo
-    // cuando ya hay un participante real (se firmó), para validar el look&feel
-    // con datos productivos. Antes del onboarding no se siembra nada. ----
+    // ---- DEMO (solo desarrollo): sembrar datos de ejemplo (uno de cada tipo
+    // + notas) para el participante activo, para validar el look&feel. ----
     useEffect(() => {
         if (!import.meta.env.DEV) return;
-        const pid = activeParticipantId;
-        if (!pid || pid === DEFAULT_ONBOARDING_USER) return;
+        const pid = activeParticipantId || undefined;
         let cancelled = false;
         (async () => {
             try {
