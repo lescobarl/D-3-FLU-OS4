@@ -36,6 +36,7 @@ export interface NewNoteInput {
 export interface NotesDb {
   add(record: NoteRecord): Promise<unknown>;
   put(record: NoteRecord): Promise<unknown>;
+  bulkPut(records: NoteRecord[]): Promise<unknown>;
   delete(id: string): Promise<void>;
   get(id: string): Promise<NoteRecord | undefined>;
   toArray(): Promise<NoteRecord[]>;
@@ -227,13 +228,13 @@ export function createNotesService({
   const clearAll = async (): Promise<number> => {
     const all = await db.toArray();
     const live = all.filter(isLive);
-    for (const note of live) {
-      await db.put({
-        ...note,
-        updatedAt: timestamp(),
-        sync: { ...buildSyncTuple(note.sync, timestamp()), deleted: true },
-      });
-    }
+    // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
+    const marked = live.map((note) => ({
+      ...note,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(note.sync, timestamp()), deleted: true },
+    }));
+    if (marked.length > 0) await db.bulkPut(marked);
     if (live.length > 0) {
       await addAuditLog('notes.clearAll', 'note', '', live.length, 0, 'notesService');
     }

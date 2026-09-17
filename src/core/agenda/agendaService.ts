@@ -21,6 +21,7 @@ import { buildSyncTuple } from '../db/syncTuple';
 export interface AgendaDb {
     add: (item: AgendaItem) => Promise<unknown>;
     put: (item: AgendaItem) => Promise<unknown>;
+    bulkPut: (items: AgendaItem[]) => Promise<unknown>;
     delete: (id: string) => Promise<unknown>;
     get: (id: string) => Promise<AgendaItem | undefined>;
     toArray: () => Promise<AgendaItem[]>;
@@ -150,14 +151,16 @@ export function createAgendaService(options: AgendaServiceOptions): AgendaServic
         async clearAll() {
             const all = await db.toArray();
             const live = all.filter((item) => item.status !== 'deleted');
-            for (const item of live) {
-                await db.put({
-                    ...item,
-                    status: 'deleted',
-                    sync: { ...buildSyncTuple(item.sync, now()), deleted: true },
-                });
-            }
-            return live.length;
+            // Escritura en LOTE (bulkPut): una sola transacción en vez de N put
+            // secuenciales → borrar "toda la agenda" es inmediato aunque haya
+            // muchos items.
+            const marked = live.map((item) => ({
+                ...item,
+                status: 'deleted' as const,
+                sync: { ...buildSyncTuple(item.sync, now()), deleted: true },
+            }));
+            if (marked.length > 0) await db.bulkPut(marked);
+            return marked.length;
         },
     };
 }

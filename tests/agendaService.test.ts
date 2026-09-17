@@ -17,6 +17,11 @@ function makeDb(): AgendaDb {
         async put(item) {
             map.set(item.id, { ...item, sync: { ...item.sync } });
         },
+        async bulkPut(items) {
+            for (const item of items) {
+                map.set(item.id, { ...item, sync: { ...item.sync } });
+            }
+        },
         async delete(id) {
             map.delete(id);
         },
