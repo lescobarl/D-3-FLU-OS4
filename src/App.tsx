@@ -2112,6 +2112,20 @@ function App() {
                     }
                 }
 
+                // Dedup por TEXTO dentro del turno actual (independiente del hablante
+                // provisional "Hablante 1" → nombre real): si la misma frase ya se
+                // commitó en este turno, no duplicar la fila. La ruta no-raw
+                // (`commitUserTurnRow`) reutiliza esa fila y completa el hablante.
+                const normLower = normalizedTranscript.toLowerCase();
+                for (let i = history.length - 1; i >= 0; i -= 1) {
+                    const e = history[i];
+                    if (!e) continue;
+                    if (e.role === 'flu') break;
+                    if (e.role === 'user' && cleanForSpeech(e.text || '').toLowerCase() === normLower) {
+                        return;
+                    }
+                }
+
                 // Agregar entrada raw al historial (OS2: optimisticRow)
                 // Obligación #6: UUIDv4
                 const rawEntryId = uuidv4();
