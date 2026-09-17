@@ -163,6 +163,34 @@ export function AgendaPanel({
         [items],
     );
 
+    // MES: rejilla de calendario (celdas por día) con chips de color.
+    const monthCells = useMemo(() => {
+        const d = new Date(nowMs);
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        const first = new Date(year, month, 1);
+        const startOffset = (first.getDay() + 6) % 7; // Lunes=0
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const cells: Array<{ day: number; items: AgendaItem[] } | null> = [];
+        for (let i = 0; i < startOffset; i++) cells.push(null);
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            const dayItems = items.filter((it) => {
+                if (it.status === 'deleted' || it.status === 'done') return false;
+                const t = it.trigger;
+                if (t.type === 'absolute' && t.at !== undefined) {
+                    const at = new Date(t.at);
+                    return at.getFullYear() === year && at.getMonth() === month && at.getDate() === day;
+                }
+                if (t.type === 'weekly') return t.daysOfWeek.includes(date.getDay());
+                if (t.type === 'daily') return true;
+                return false;
+            });
+            cells.push({ day, items: dayItems });
+        }
+        return cells;
+    }, [items, nowMs]);
+
     const resetForm = () => {
         setKind('recordatorio');
         setLabel('');
@@ -220,18 +248,12 @@ export function AgendaPanel({
         setEditingNoteLabel('');
     };
 
-    // Fila de item (agenda y próximos): color por tipo, sin texto de tipo.
+    // Fila de item (agenda y próximos): bolita de color por tipo + hora + texto.
     const renderRow = (item: AgendaItem, timeText: string, idPrefix: string, cancelPrefix: string) => (
-        <li
-            key={item.id}
-            className="hoy-panel__card"
-            data-testid={`${idPrefix}${item.id}`}
-            style={{ borderLeftColor: colors[item.kind] }}
-        >
-            <span className="hoy-panel__card-time">{timeText}</span>
-            <div className="hoy-panel__card-body">
-                <span className="hoy-panel__card-title">{item.label}</span>
-            </div>
+        <li key={item.id} className="agenda-item" data-testid={`${idPrefix}${item.id}`}>
+            <span className="agenda-item__dot" style={{ background: colors[item.kind] }} aria-hidden="true" />
+            <span className="agenda-item__time">{timeText}</span>
+            <span className="agenda-item__label">{item.label}</span>
             <div className="agenda-item__actions">
                 {onEdit ? (
                     <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
@@ -382,6 +404,24 @@ export function AgendaPanel({
                             </div>
                         ))}
                     </div>
+                ) : view === 'month' ? (
+                    <div className="agenda-month" data-testid="agenda-month">
+                        {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => (
+                            <span key={`dow-${i}`} className="agenda-month__dow">{d}</span>
+                        ))}
+                        {monthCells.map((cell, i) =>
+                            cell ? (
+                                <div key={`cell-${i}`} className="agenda-month__cell">
+                                    <span className="agenda-month__day">{cell.day}</span>
+                                    {cell.items.slice(0, 3).map((it) => (
+                                        <span key={it.id} className="agenda-month__chip" style={{ background: colors[it.kind] }} title={it.label} />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div key={`blank-${i}`} className="agenda-month__cell agenda-month__cell--blank" />
+                            ),
+                        )}
+                    </div>
                 ) : summary.empty ? (
                     <p className="hoy-panel__empty" data-testid="agenda-empty">Sin pendientes.</p>
                 ) : (
@@ -392,6 +432,15 @@ export function AgendaPanel({
                         })}
                     </ul>
                 )}
+
+                <div className="agenda-legend" aria-label="Colores por tipo">
+                    {AGENDA_KINDS.map((k) => (
+                        <span key={k} className="agenda-legend__item">
+                            <span className="agenda-legend__dot" style={{ background: colors[k] }} />
+                            {kindLabel(k)}
+                        </span>
+                    ))}
+                </div>
             </section>
 
             {/* NOTAS — separadas (texto, sin fecha) */}

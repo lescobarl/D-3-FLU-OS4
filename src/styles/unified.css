@@ -2439,7 +2439,7 @@
   gap: 0;
   font-family: var(--font-ui, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
   font-size: var(--text-xs, 11px);
-  line-height: 1.3;
+  line-height: 1.15;
 }
 
 .hoy-panel__header {
@@ -2519,14 +2519,14 @@
 .hoy-panel__section {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 
-/* LÃ­nea separadora entre bloques (citas / alarmas / clases) sin aumentar
-   el aire vertical: se compensa en el gap del contenedor (6px â†’ 4px). */
+/* Línea separadora entre bloques (citas / alarmas / clases) sin aumentar
+   el aire vertical. */
 .hoy-panel__section + .hoy-panel__section {
   border-top: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
-  padding-top: 2px;
+  padding-top: 1px;
 }
 
 .hoy-panel__section-title {
@@ -6988,7 +6988,97 @@ details[open].flu-card .flu-card__chev {
     font-size: var(--text-xs, 11px);
     cursor: pointer;
 }
-.agenda-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.agenda-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+/* Item (agenda y próximos): bolita de color + hora + texto, sin borde de viñeta. */
+.agenda-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 2px;
+    background: transparent;
+    border-radius: 4px;
+}
+.agenda-item__dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.agenda-item__time {
+    flex: 0 0 auto;
+    min-width: 32px;
+    font-size: 10px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    color: var(--text-secondary, #a0a0b0);
+    white-space: nowrap;
+}
+.agenda-item__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--text-xs, 11px);
+    font-weight: var(--weight-medium, 500);
+    line-height: 1.15;
+    color: var(--text-primary, #e0e0e0);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Leyenda de colores por tipo (abajo del listado). */
+.agenda-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 8px;
+    padding: 3px 0 0;
+    border-top: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+}
+.agenda-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+    color: var(--text-secondary, #a0a0b0);
+    text-transform: capitalize;
+}
+.agenda-legend__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+/* MES: rejilla de calendario con chips de color por día. */
+.agenda-month {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 1px;
+}
+.agenda-month__dow {
+    font-size: 9px;
+    font-weight: var(--weight-semibold, 600);
+    text-align: center;
+    color: var(--text-secondary, #a0a0b0);
+    text-transform: uppercase;
+}
+.agenda-month__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-height: 20px;
+    padding: 1px;
+    border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.06));
+    border-radius: 3px;
+    background: transparent;
+}
+.agenda-month__cell--blank { border-color: transparent; }
+.agenda-month__day {
+    font-size: 9px;
+    color: var(--text-secondary, #a0a0b0);
+    line-height: 1;
+}
+.agenda-month__chip {
+    display: block;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+}
 /* SEMANA — columnas por día (Outlook): una columna por día con sus items. */
 .agenda-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .agenda-week__col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
