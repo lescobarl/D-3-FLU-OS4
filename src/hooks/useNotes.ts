@@ -15,6 +15,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fluDb, type NoteRecord } from '../core/db/fluDatabase';
+import { DEFAULT_ONBOARDING_USER } from '../core/onboarding/onboardingService';
 import {
   createNotesService,
   type AddNoteResult,
@@ -87,6 +88,13 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
 
   /** Recarga la lista desde IndexedDB (cronológica, pendientes primero). */
   const refresh = useCallback(async (): Promise<void> => {
+    // Sin usuario real (no firmado): no se muestra NADA (todo es por usuario).
+    if (!participantId || participantId === DEFAULT_ONBOARDING_USER) {
+      setNotes([]);
+      setRemainingCount(0);
+      setLoading(false);
+      return;
+    }
     try {
       const all = await service.list();
       // Aislamiento por usuario: solo las notas de ESTE usuario.
@@ -102,7 +110,7 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     } finally {
       setLoading(false);
     }
-  }, [service, scope]);
+  }, [service, scope, participantId]);
 
   // Carga inicial.
   useEffect(() => {

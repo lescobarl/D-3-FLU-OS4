@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { runAgendaCycle } from '../core/agenda/agendaMotor';
 import type { AgendaService } from '../core/agenda/agendaService';
 import type { AgendaItem, AgendaKind } from '../core/agenda/agendaModel';
+import { DEFAULT_ONBOARDING_USER } from '../core/onboarding/onboardingService';
 import { createWebAudioDriver, type AudioDriver } from '../core/temporal/audioAlert';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
@@ -103,6 +104,16 @@ export function useAgenda({
             runningRef.current = true;
             const epoch = stopEpochRef.current;
             let nextTick: number | null = null;
+            // Sin usuario real (no firmado): no se muestra NADA (todo es por usuario).
+            if (!personId || personId === DEFAULT_ONBOARDING_USER) {
+                setItems([]);
+                setRinging(null);
+                runningRef.current = false;
+                if (!cancelled) {
+                    timer = setTimeout(() => void tick(), tickMs);
+                }
+                return;
+            }
             try {
                 const all = await service.list({ personId, status: 'pending' });
                 if (cancelled) return;
