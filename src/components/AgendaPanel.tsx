@@ -453,6 +453,18 @@ export function AgendaPanel({
                                         >
                                             <span className="agenda-week__item-time">{itemTimeText(item)}</span>
                                             <span className="agenda-week__item-label">{item.label}</span>
+                                            <div className="agenda-item__actions">
+                                                {onEdit ? (
+                                                    <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
+                                                        ✎
+                                                    </button>
+                                                ) : null}
+                                                {onCancel ? (
+                                                    <button className="agenda-item__cancel" type="button" aria-label="Cancelar" onClick={() => onCancel(item.id)}>
+                                                        ×
+                                                    </button>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -469,7 +481,15 @@ export function AgendaPanel({
                                 <div key={`cell-${i}`} className="agenda-month__cell">
                                     <span className="agenda-month__day">{cell.day}</span>
                                     {cell.items.slice(0, 3).map((it) => (
-                                        <span key={it.id} className="agenda-month__chip" style={{ background: colors[it.kind] }} title={it.label} />
+                                        <button
+                                            key={it.id}
+                                            type="button"
+                                            className="agenda-month__chip"
+                                            style={{ background: colors[it.kind] }}
+                                            title={`${it.label} — editar`}
+                                            aria-label={`Editar ${it.label}`}
+                                            onClick={() => startEdit(it)}
+                                        />
                                     ))}
                                 </div>
                             ) : (

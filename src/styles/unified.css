@@ -6924,9 +6924,13 @@ details[open].flu-card .flu-card__chev {
     padding: 3px 4px;
     border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
     border-radius: var(--radius-sm, 6px);
-    background: transparent;
-    color: var(--text-primary, #e0e0e0);
+    background: #fff;
+    color: #111827;
     font-size: var(--text-xs, 11px);
+}
+.agenda-form__kind option {
+    background: #fff;
+    color: #111827;
 }
 .agenda-form__label {
     flex: 1;
@@ -7084,8 +7088,10 @@ details[open].flu-card .flu-card__chev {
 .agenda-month__chip {
     display: block;
     width: 100%;
-    height: 4px;
+    height: 8px;
+    border: none;
     border-radius: 2px;
+    cursor: pointer;
 }
 /* Nota: nombre + contenido (body multilínea). */
 .agenda-note-body { display: flex; flex-direction: column; gap: 1px; padding: 0; }
