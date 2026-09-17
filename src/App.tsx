@@ -1659,7 +1659,7 @@ function App() {
         let cancelled = false;
         (async () => {
             try {
-                const existing = await agendaService.list({ personId: pid });
+                const existing = await agendaService.list({ personId: pid, status: 'pending' });
                 const existingLabels = new Set(existing.map((i) => i.label));
                 const firstRun = existingLabels.size === 0;
                 for (const input of buildDemoAgendaInputs(Date.now())) {
