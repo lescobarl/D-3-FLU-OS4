@@ -4344,10 +4344,22 @@ const {
         // NO cerrar el día hasta saber QUIÉN entra: la minuta es POR usuario.
         // Sin participante activo no se lee/guarda/limpia nada (se reevalúa al resolverse).
         if (!activeParticipantId) return;
-        const lastAt = Number(history[history.length - 1]?.timestamp) || 0;
+        // Conversación de ESTE usuario: turnos de rol 'user' cuyo hablante coincide
+        // con el nombre del participante activo. Sin coincidencia, se usa el global
+        // (evita que el cierre de día deje de disparar si el nombre no matchea).
+        const activeName = String(
+            participants.participants.find((p) => p.id === activeParticipantId)?.name || '',
+        ).trim();
+        const userHistory = activeName
+            ? history.filter((e) => e.role === 'user' && String(e.speakerName || '').trim() === activeName)
+            : [];
+        const scopedHistory = userHistory.length ? userHistory : history;
+        const lastAt = Number(scopedHistory[scopedHistory.length - 1]?.timestamp) || 0;
+        // Clave de día POR USUARIO: cada participante cierra su día por separado.
+        const dayStorageKey = `${STORAGE_KEYS.LAST_SESSION_DAY}:${activeParticipantId}`;
         let lastSessionDay = '';
         try {
-            lastSessionDay = window.localStorage.getItem(STORAGE_KEYS.LAST_SESSION_DAY) || '';
+            lastSessionDay = window.localStorage.getItem(dayStorageKey) || '';
         } catch {
             lastSessionDay = '';
         }
@@ -4357,7 +4369,7 @@ const {
                 relayLog(
                     'WARN',
                     'App',
-                    `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)})`,
+                    `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)}, user=${activeParticipantId})`,
                 );
                 // Cierre real: se GENERA y se GUARDA la minuta. El día se marca
                 // sólo si se guardó; si no, se reintenta en el próximo arranque.
@@ -4372,12 +4384,12 @@ const {
                 }
             }
             try {
-                window.localStorage.setItem(STORAGE_KEYS.LAST_SESSION_DAY, dayKey(Date.now()));
+                window.localStorage.setItem(dayStorageKey, dayKey(Date.now()));
             } catch {
                 /* ignorar */
             }
         })();
-    }, [integrationStore.conversationHistory, activeParticipantId, handleGenerateSummary]);
+    }, [integrationStore.conversationHistory, activeParticipantId, participants.participants, handleGenerateSummary]);
 
     // ============================================================
     // Paso 6: guardar el resumen de conversación UNA vez al cerrar
