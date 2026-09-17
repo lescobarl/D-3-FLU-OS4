@@ -56,6 +56,12 @@ export interface ConversationEntry {
     id: string;
     /** Nombre del hablante (OS2: speakerName / speaker) */
     speakerName?: string;
+    /**
+     * Participante dueño de la entrada (aislamiento multiusuario del pizarrón).
+     * Se sella al crear la fila con el participante activo; sin participante
+     * queda sin definir (ruta legacy/global).
+     */
+    personId?: string;
     /** Respuesta de FLU a este mensaje (OS2: response) */
     response?: string;
     /** Metadatos adicionales (OS2: meta.response) */

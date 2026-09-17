@@ -64,7 +64,7 @@ function entryToRow(entry: ConversationEntry, participantId: string) {
         signature: entry.signature || null,
         phase: entry.phase || '',
         navigation: entry.navigation || null,
-        participantId,
+        participantId: entry.personId || participantId,
         sync: newSyncTuple(),
     };
 }

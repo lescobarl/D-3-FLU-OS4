@@ -1224,6 +1224,12 @@ function App() {
     useEffect(() => {
         activeParticipantIdRef.current = activeParticipantId;
     }, [activeParticipantId]);
+    // Aislamiento multiusuario del pizarrón: sella las entradas del historial y
+    // el artefacto del workspace con el participante activo; al cambiar de usuario
+    // el store limpia el artefacto para no mostrar el del anterior.
+    useEffect(() => {
+        useIntegrationStore.getState().setActivePersonId(activeParticipantId);
+    }, [activeParticipantId]);
     const minuteKnowledge = useMinuteKnowledge(activeParticipantId);
     const voiceProfiles = useVoiceProfiles();
     // Historial de documentos/imágenes generados o cargados (por usuario).

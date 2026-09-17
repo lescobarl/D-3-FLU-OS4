@@ -137,6 +137,12 @@ export interface IntegrationState {
     appAnalysisArtifact: AppAnalysisContract | null;
     /** Job activo de generación de documento/video (F3/F4) */
     generationJob: GenerationJob | null;
+    /**
+     * Participante activo del pizarrón (aislamiento multiusuario). Se sella en
+     * las entradas del historial y en el artefacto del workspace; al cambiar se
+     * limpia el artefacto para no mostrar el del usuario anterior.
+     */
+    activePersonId?: string;
     /** Timestamps para calcular tiempo de respuesta */
     _thinkingStart: number;
     /** Última emoción/animación devuelta por Gemini (para monitoreo) */
@@ -220,6 +226,8 @@ export interface IntegrationActions {
     setPendingEmotionAnims: (anims: string[], source?: EmotionSource, sustainMode?: 'fixed' | 'song' | null) => void;
     /** Establecer el artifacto activo del workspace (OS2 parity: workspaceArtifact) */
     setWorkspaceArtifact: (entry: WorkspaceEntry | null) => void;
+    /** Establecer el participante activo (aislamiento multiusuario del pizarrón) */
+    setActivePersonId: (personId?: string) => void;
     /** Limpiar el artifacto del workspace */
     clearWorkspace: () => void;
     /** Establecer el artifacto del análisis de documentos (F1) */
@@ -270,6 +278,16 @@ function nextId(): string {
 function capConversationHistory(entries: ConversationEntry[]): ConversationEntry[] {
     const limit = UI_DEFAULTS.CONVERSATION_HISTORY_LIMIT;
     return entries.length > limit ? entries.slice(-limit) : entries;
+}
+
+/**
+ * Sella una entrada con el participante activo (aislamiento multiusuario).
+ * Solo se sella cuando hay participante; sin él, la entrada queda sin
+ * `personId` (ruta legacy/global) para no romper los guards de voz.
+ */
+function withActivePersonId(entry: ConversationEntry, personId?: string): ConversationEntry {
+    if (!personId) return entry;
+    return { ...entry, personId };
 }
 
 /**
@@ -358,6 +376,7 @@ const initialState: IntegrationState = {
     documentArtifact: null,
     appAnalysisArtifact: null,
     generationJob: null,
+    activePersonId: undefined,
     lastGeminiEmotion: '',
     _thinkingStart: 0,
     sync: newSyncTuple(),
@@ -434,8 +453,9 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             addConversationEntry: (entry: ConversationEntry) => {
+                const tagged = withActivePersonId(entry, get().activePersonId);
                 set((current) => ({
-                    conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
+                    conversationHistory: capConversationHistory([...current.conversationHistory, tagged]),
                 }));
             },
 
@@ -469,7 +489,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 // cleanForSpeech(lastSpeaker) || speakers.defaultLabel (fallback configurado)
                 const resolvedSpeaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
                 const emotion = sentimentToEmotion(sentiment);
-                const entry: ConversationEntry = {
+                const entry: ConversationEntry = withActivePersonId({
                     role: 'user',
                     text,
                     timestamp: Date.now(),
@@ -477,7 +497,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     id: nextId(),
                     speakerName: resolvedSpeaker,
                     response: '', // will be filled by addFluMessage
-                };
+                }, get().activePersonId);
                 // Single set() call — combine conversation update + emotional state
                 // to avoid two separate Zustand state updates (and two re-renders).
                 set((current) => {
@@ -499,26 +519,26 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             addSystemMessage: (text: string) => {
-                const entry: ConversationEntry = {
+                const entry: ConversationEntry = withActivePersonId({
                     role: 'system',
                     text,
                     timestamp: Date.now(),
                     id: nextId(),
                     speakerName: '⚙️ Sistema',
-                };
+                }, get().activePersonId);
                 set((current) => ({
                     conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                 }));
             },
 
             addFluMessage: (text: string) => {
-                const entry: ConversationEntry = {
+                const entry: ConversationEntry = withActivePersonId({
                     role: 'flu',
                     text,
                     timestamp: Date.now(),
                     id: nextId(),
                     speakerName: 'FLU',
-                };
+                }, get().activePersonId);
                 set((current) => {
                     const history = current.conversationHistory;
                     const lastUserIdx = history.length - 1;
@@ -616,6 +636,13 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             setWorkspaceArtifact: (entry: WorkspaceEntry | null) => {
                 set({ workspaceArtifact: entry });
+            },
+
+            setActivePersonId: (personId?: string) => {
+                const normalized = personId ? String(personId) : undefined;
+                const current = get();
+                if (current.activePersonId === normalized) return;
+                set({ activePersonId: normalized });
             },
 
             clearWorkspace: () => {
@@ -788,13 +815,13 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 // Log startupPrompt as system message in conversation history
                 if (profile.startupPrompt) {
                     const label = profile.label || profile.id;
-                    const entry: ConversationEntry = {
+                    const entry: ConversationEntry = withActivePersonId({
                         role: 'system',
                         text: `🧠 Perfil "${label}" activado — ${profile.startupPrompt}`,
                         timestamp: Date.now(),
                         id: nextId(),
                         speakerName: '⚙️ Sistema',
-                    };
+                    }, get().activePersonId);
                     set((current) => ({
                         conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                     }));

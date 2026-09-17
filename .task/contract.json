@@ -1,20 +1,20 @@
 {
-  "id": "T-VOICE-OFFLINE-FALLBACK",
+  "id": "T-MULTIUSER-WORKSPACE-ISOLATION",
   "mode": "full",
-  "objective": "Terminar el fallback OFFLINE de voz: degradar Chrome SpeechRecognition al motor local Whisper WASM ante network/no-speech, sin ruta doble y sin romper el flujo online.",
+  "objective": "Aislar por usuario activo (activeParticipantId) el pizarrón: workspaceArtifact, conversationHistory y resultados de búsqueda/imagen/video.",
   "dod": {
-    "command": "npx vitest run tests/voiceOfflineFallback.test.ts tests/voiceOfflineFallbackBehavior.test.ts --reporter=dot",
-    "expect": "5 passed"
+    "command": "npx vitest run tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/useWorkspaceSearchPersonReset.test.ts --reporter=dot",
+    "expect": "6 passed (guards de aislamiento en verde)"
   },
   "guard": {
-    "command": "npx vitest run tests/voiceOfflineFallback.test.ts --reporter=dot",
-    "expect": "2 passed",
+    "command": "npx vitest run tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts --reporter=dot",
+    "expect": "5 passed",
     "mustStartRed": true,
-    "behavior": "tests/voiceOfflineFallbackBehavior.test.ts"
+    "behavior": "tests/workspacePersonIsolation.test.ts"
   },
   "groundTruth": {
     "command": "npm run typecheck && npm run test:full",
-    "expect": "0 errores de tipos; 213 archivos / 2823 tests en verde"
+    "expect": "0 errores de tipos; suite completa en verde (0 fallos nuevos)"
   },
   "baseline": {
     "command": "npm run test:full",
@@ -22,24 +22,46 @@
   },
   "invariants": [
     {
-      "id": "A",
-      "statement": "El motor local (Whisper WASM) esta conectado al hook principal de voz",
-      "count": "rg -c \"voiceLocalFallback\" src/voice/hooks/useFluVoiceAssistant.js",
-      "today": 1,
+      "id": "I1",
+      "statement": "Cada entrada de conversationHistory queda sellada con el personId del participante activo",
+      "count": "rg -n \"personId\" src/types/bridge.ts src/store/integrationStore.ts | wc -l",
+      "today": 0,
       "target": 1,
-      "guard": "tests/voiceOfflineFallback.test.ts"
+      "guard": "tests/workspacePersonIsolation.test.ts"
     },
     {
-      "id": "B",
-      "statement": "Existe ruta config-driven que degrada a motor local ante network/no-speech",
-      "count": "rg -c \"shouldUseLocalFallback\" src/voice/hooks/useFluVoiceAssistant.js",
-      "today": 2,
-      "target": 2,
-      "guard": "tests/voiceOfflineFallbackBehavior.test.ts"
+      "id": "I2",
+      "statement": "Al cambiar de participante activo se limpia workspaceArtifact (no se ve el del usuario anterior)",
+      "count": "rg -n \"workspaceArtifact: null\" src/store/integrationStore.ts | wc -l",
+      "today": 0,
+      "target": 1,
+      "guard": "tests/workspaceArtifactPersonIsolation.test.ts"
+    },
+    {
+      "id": "I3",
+      "statement": "Al cambiar de participante activo se limpian los resultados de búsqueda/imagen/video",
+      "count": "rg -n \"participantId\" src/hooks/useWorkspaceSearch.ts | wc -l",
+      "today": 0,
+      "target": 1,
+      "guard": "tests/useWorkspaceSearchPersonReset.test.ts"
     }
   ],
-  "allow": ["src/voice/**", "tests/**"],
-  "deny": [".task/frozen.json", "scripts/task-gate.mjs", "scripts/auditoria.mjs"],
+  "allow": [
+    "src/types/bridge.ts",
+    "src/store/integrationStore.ts",
+    "src/hooks/useConversationPersistence.ts",
+    "src/hooks/useWorkspaceSearch.ts",
+    "src/components/WorkspaceHub.tsx",
+    "src/App.tsx",
+    "tests/workspacePersonIsolation.test.ts",
+    "tests/workspaceArtifactPersonIsolation.test.ts",
+    "tests/useWorkspaceSearchPersonReset.test.ts"
+  ],
+  "deny": [
+    "scripts/auditoria.mjs",
+    "scripts/task-gate.mjs",
+    ".task/frozen.json"
+  ],
   "frozen": {
     "contractHash": "no-congelado",
     "guardHash": "no-congelado"
