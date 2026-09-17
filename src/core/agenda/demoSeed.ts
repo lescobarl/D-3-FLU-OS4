@@ -18,20 +18,27 @@ function atHoursFromNow(hours: number, now: number): number {
 
 export function buildDemoAgendaInputs(now: number): AgendaCreateInput[] {
     return [
+        // ALARMA — suena una vez (hoy, en breve, para ver el banner "Detener").
         { kind: 'alarma', label: 'Tomar medicamento', trigger: { type: 'absolute', at: now + 35 * 1000 } },
-        { kind: 'clase', label: 'Clase de Historia', trigger: { type: 'absolute', at: atHoursFromNow(1.5, now) }, fin: '10:30', aula: 'Aula 5' },
+        // JUNTA — cita puntual de hoy.
         { kind: 'junta', label: 'Junta de comité', trigger: { type: 'absolute', at: atHoursFromNow(3, now) } },
+        // RECORDATORIO — aviso puntual de hoy.
         { kind: 'recordatorio', label: 'Comprar leche', trigger: { type: 'absolute', at: atHoursFromNow(5, now) } },
-        { kind: 'cita', label: 'Dentista 17:00', trigger: { type: 'absolute', at: now + DAY + 2 * HOUR } },
-        { kind: 'clase', label: 'Matemáticas (Aula 12)', trigger: { type: 'weekly', daysOfWeek: [1], timeOfDay: '08:00' }, fin: '09:30', aula: 'Aula 12' },
+        // CITA — turno puntual de mañana.
+        { kind: 'cita', label: 'Dentista', trigger: { type: 'absolute', at: now + DAY + 2 * HOUR } },
+        // CLASES — horario escolar semanal (recurrente), varios días.
+        { kind: 'clase', label: 'Matemáticas', trigger: { type: 'weekly', daysOfWeek: [1], timeOfDay: '08:00' }, fin: '09:30', aula: 'Aula 12' },
+        { kind: 'clase', label: 'Historia', trigger: { type: 'weekly', daysOfWeek: [2, 4], timeOfDay: '10:00' }, fin: '11:00', aula: 'Aula 3' },
+        { kind: 'clase', label: 'Ciencias', trigger: { type: 'weekly', daysOfWeek: [3], timeOfDay: '12:00' }, fin: '13:00', aula: 'Laboratorio' },
+        // RECORDATORIO futuro.
         { kind: 'recordatorio', label: 'Llamar a mamá', trigger: { type: 'absolute', at: now + 2 * DAY } },
     ];
 }
 
-export function buildDemoNotes(): string[] {
+export function buildDemoNotes(): Array<{ label: string; body?: string }> {
     return [
-        'Leer capítulo 3',
-        'Pagar la luz',
-        'Comprar regalo de cumpleaños',
+        { label: 'Super', body: 'huevo\npan\ncloro\njamón\ncroquetas' },
+        { label: 'Leer capítulo 3' },
+        { label: 'Pagar la luz' },
     ];
 }

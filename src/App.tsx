@@ -1666,8 +1666,8 @@ function App() {
                     await agendaService.create({ ...input, personId: activeParticipantId || undefined });
                 }
                 if (firstRun) {
-                    for (const label of buildDemoNotes()) {
-                        await notes.add({ label });
+                    for (const note of buildDemoNotes()) {
+                        await notes.add({ label: note.label, body: note.body });
                     }
                 }
                 if (!cancelled) void notes.refresh();
