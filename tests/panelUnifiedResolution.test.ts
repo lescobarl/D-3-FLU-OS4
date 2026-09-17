@@ -34,8 +34,7 @@ describe('panel derecho — un solo resolutor (árbitro determinista)', () => {
         expect(String(data?.label || '').length).toBeGreaterThan(0);
     });
 
-    it('el rescate del panel cubre agenda y nota, sin duplicar', () => {
-        expect(resolvePanelRescue({ transcript: 'recuérdame comprar pan a las 7' })?.domain).toBe('agendaCommand');
+    it('el rescate del panel cubre agenda y nota, sin duplicar', () => {        expect(resolvePanelRescue({ transcript: 'recuérdame comprar pan a las 7' })?.domain).toBe('agendaCommand');
         expect(resolvePanelRescue({ transcript: 'apunta comprar pan' })?.domain).toBe('note');
         expect(resolvePanelRescue({ transcript: 'apunta comprar pan', resolvedDomains: ['note'] })).toBeNull();
     });

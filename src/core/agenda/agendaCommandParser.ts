@@ -37,6 +37,12 @@ export interface AgendaCommand {
 }
 
 const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i;
+// El ASR puede pegar el wake word en MEDIO del eco ("… recordatorio Okay flu crea …").
+const WAKE_WORD_ANY = /\b(?:ok(?:ay)?\s*(?:flu|flow)|hey\s*flu)\b/gi;
+// Cláusula del recordatorio que NO es contenido: "que me recuerde tomar X",
+// "recuérdame X", "acordarme de X". Solo el contenido queda como etiqueta.
+const REMINDER_CLAUSE =
+    /\b(?:que\s+)?(?:me\s+)?(?:recu[eé]rd[ae]s?|acu[eé]rd[ae]s?|acu[eé]rdate|acu[eé]rdame|recu[eé]rdame|rec[oó]rdame|recordar|recordatorio|recordatorios|aviso)\b/gi;
 
 const KIND_NOUNS: ReadonlyArray<{ kind: AgendaKind; nouns: readonly string[] }> = Object.freeze([
     { kind: 'alarma', nouns: ['alarma', 'despertador', 'temporizador', 'timer'] },
@@ -221,16 +227,18 @@ function resolveTrigger(text: string, now: number): AgendaTrigger | null {
 }
 
 function resolveLabel(text: string): string {
-    const withoutWake = text.replace(WAKE_LEAD, '').trim();
-    // Quitar la HORA con el MISMO selector único (pickTimeOfDay): maneja
-    // "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3", etc. y deja
-    // solo el contenido + la fecha relativa ("hoy", "mañana", día de semana).
-    let label = pickTimeOfDay(withoutWake).rest || withoutWake;
+    // 1) Wake word en CUALQUIER posición (el eco del ASR lo mete en medio).
+    const base = text.replace(WAKE_WORD_ANY, ' ').replace(WAKE_LEAD, ' ').trim();
+    // 2) Quitar la HORA con el MISMO selector único (pickTimeOfDay): maneja
+    //    "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3", etc.
+    // 3) Quitar la cláusula del recordatorio ("que me recuerde", "recuérdame"…).
+    let label = pickTimeOfDay(base).rest || base;
+    label = label.replace(REMINDER_CLAUSE, ' ');
     for (const noun of KIND_NOUNS.flatMap((e) => e.nouns)) {
-        label = label.replace(new RegExp(`\\b${noun}\\b`, 'i'), ' ');
+        label = label.replace(new RegExp(`\\b${noun}\\b`, 'gi'), ' ');
     }
     for (const verb of [...CREATE_FRAMES, ...CANCEL_FRAMES, ...UPDATE_FRAMES]) {
-        label = label.replace(new RegExp(`\\b${verb}\\b`, 'i'), ' ');
+        label = label.replace(new RegExp(`\\b${verb}\\b`, 'gi'), ' ');
     }
     label = label
         .replace(/\b(?:una|un|el|la|los|las|mi|para|de|al|del|a)\b/gi, ' ')
@@ -241,9 +249,9 @@ function resolveLabel(text: string): string {
     if (label) return label;
     // Sin contenido: usar el SUSTANTIVO DE TIPO como etiqueta por defecto.
     const kindNoun = KIND_NOUNS.flatMap((e) => e.nouns).find((noun) =>
-        new RegExp(`\\b${noun}\\b`, 'i').test(withoutWake),
+        new RegExp(`\\b${noun}\\b`, 'i').test(base),
     );
-    return kindNoun || withoutWake;
+    return kindNoun || base;
 }
 
 export function parseAgendaCommand(input: string, options?: { now?: number | (() => number) }): AgendaCommand {
