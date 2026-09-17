@@ -56,6 +56,8 @@ export interface UseAgendaResult {
     ringing: AgendaRinging | null;
     /** Silencia lo que suena (no cancela el item pendiente). */
     stopRinging: () => void;
+    /** Vacía la agenda del usuario activo y refresca el panel de inmediato. */
+    clearAll: () => Promise<number>;
 }
 
 export function useAgenda({
@@ -68,6 +70,9 @@ export function useAgenda({
 }: UseAgendaOptions): UseAgendaResult {
     const [items, setItems] = useState<AgendaItem[]>([]);
     const [ringing, setRinging] = useState<AgendaRinging | null>(null);
+    // Al incrementarlo se re-ejecuta el tick del scheduler de inmediato
+    // (refresco bajo demanda, sin esperar los 15 s del polling).
+    const [reloadToken, setReloadToken] = useState(0);
 
     const onFireRef = useRef(onFire);
     onFireRef.current = onFire;
@@ -162,7 +167,19 @@ export function useAgenda({
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [service, personId, tickMs, autoStopMs, audioDriver]);
+    }, [service, personId, tickMs, autoStopMs, audioDriver, reloadToken]);
+
+    /**
+     * Vacía la agenda del usuario y REFRESCA el panel de inmediato (no espera
+     * al próximo tick del scheduler, que por defecto es de 15 s).
+     */
+    const clearAll = useCallback(async (): Promise<number> => {
+        if (!personId) return 0;
+        const count = await service.clearAll({ personId });
+        setItems([]);
+        setReloadToken((n) => n + 1);
+        return count;
+    }, [service, personId]);
 
     /** Silencia lo que está sonando (no cancela el item pendiente). */
     const stopRinging = useCallback((): void => {
@@ -184,5 +201,5 @@ export function useAgenda({
         [],
     );
 
-    return { items, ringing, stopRinging };
+    return { items, ringing, stopRinging, clearAll };
 }

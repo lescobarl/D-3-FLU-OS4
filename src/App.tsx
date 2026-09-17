@@ -1548,7 +1548,10 @@ function App() {
             const kind = cmd.kind;
             switch (cmd.action) {
                 case 'agenda.clear': {
-                    const cleared = await agendaService.clearAll();
+                    // Vía el hook: vacía el usuario activo y REFRESCA el panel de
+                    // inmediato (la llamada directa al servicio dejaba la agenda
+                    // visible hasta el próximo tick de 15 s).
+                    const cleared = await agenda.clearAll();
                     lastActionFailed = cleared === 0;
                     return lang === 'en'
                         ? 'Done, cleared your agenda.'
@@ -1622,7 +1625,7 @@ function App() {
                     return '';
             }
         },
-        [agendaService, languageRef, realParticipantIdRef],
+        [agenda, agendaService, languageRef, realParticipantIdRef],
     );
 
     // ---- Horario de clases: entradas pendientes de confirmar (parseadas desde

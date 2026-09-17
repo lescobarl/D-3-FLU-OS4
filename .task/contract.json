@@ -70,6 +70,8 @@
     "tests/responseGateWindow.test.ts",
     "tests/panelScenarios.test.ts",
     "src/core/voice/responseGate.ts",
+    "src/core/agenda/agendaService.ts",
+    "src/core/notes/notesService.ts",
     "src/voice/lib/noteRescue.js",
     "src/voice/lib/noteIntentParser.js",
     "src/voice/lib/gemini.js",
@@ -93,6 +95,7 @@
     "guardHash": "no-congelado"
   }
 }
+
 
 
 

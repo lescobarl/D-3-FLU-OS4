@@ -226,12 +226,13 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     return count;
   }, [service, refresh]);
 
-  /** Borra (lógico) TODAS las notas y refresca. */
+  /** Borra (lógico) TODAS las notas del usuario y refresca. */
   const clearAll = useCallback(async (): Promise<number> => {
-    const count = await service.clearAll();
+    if (!participantId) return 0;
+    const count = await service.clearAll({ personId: participantId });
     if (count > 0) await refresh();
     return count;
-  }, [service, refresh]);
+  }, [service, refresh, participantId]);
 
   return {
     service,

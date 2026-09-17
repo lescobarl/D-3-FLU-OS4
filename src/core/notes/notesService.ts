@@ -225,9 +225,12 @@ export function createNotesService({
   };
 
   /** Borrado LÓGICO de TODAS las notas (§2.9): devuelve cuántas se marcaron. */
-  const clearAll = async (): Promise<number> => {
+  const clearAll = async (opts?: { personId?: string }): Promise<number> => {
     const all = await db.toArray();
-    const live = all.filter(isLive);
+    // Aislamiento: si viene personId, solo se vacían las notas de ESE usuario.
+    const live = all.filter(
+      (note) => isLive(note) && (!opts?.personId || note.personId === opts.personId),
+    );
     // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
     const marked = live.map((note) => ({
       ...note,

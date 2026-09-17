@@ -51,7 +51,7 @@ export interface AgendaService {
     /** Marca un item como hecho (vence y no re-tica si es de una vez). */
     complete: (id: string) => Promise<{ ok: boolean; reason?: string }>;
     /** Borrado lógico de TODOS los items pendientes (devuelve cuántos marcó). */
-    clearAll: () => Promise<number>;
+    clearAll: (opts?: { personId?: string }) => Promise<number>;
 }
 
 export function createAgendaService(options: AgendaServiceOptions): AgendaService {
@@ -148,9 +148,12 @@ export function createAgendaService(options: AgendaServiceOptions): AgendaServic
             return { ok: true };
         },
 
-        async clearAll() {
+        async clearAll(opts?: { personId?: string }) {
             const all = await db.toArray();
-            const live = all.filter((item) => item.status !== 'deleted');
+            // Aislamiento: si viene personId, solo se vacía lo de ESE usuario.
+            const live = all.filter(
+                (item) => item.status !== 'deleted' && (!opts?.personId || item.personId === opts.personId),
+            );
             // Escritura en LOTE (bulkPut): una sola transacción en vez de N put
             // secuenciales → borrar "toda la agenda" es inmediato aunque haya
             // muchos items.
