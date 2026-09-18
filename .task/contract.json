@@ -71,6 +71,7 @@
     "tests/contractFilesExist.test.ts",
     "tests/turnMultiItem.test.ts tests/injectedValues.test.ts",
     "tests/injectedValues.test.ts",
+    "tests/minuteOnboardingGate.test.ts",
     "src/core/voice/responseGate.ts",
     "src/core/agenda/agendaService.ts",
     "src/core/notes/notesService.ts",
@@ -105,6 +106,7 @@
     "guardHash": "no-congelado"
   }
 }
+
 
 
 
