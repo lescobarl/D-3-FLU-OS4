@@ -38,6 +38,12 @@ export function useDocuments({ participantId }: UseDocumentsOptions = {}): UseDo
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async (): Promise<void> => {
+    // Sin usuario real: NO se lee el historial (todo el pizarrón es por usuario).
+    if (!participantId) {
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
     try {
       setDocuments(await service.list(scope));
     } catch (err) {
@@ -45,7 +51,7 @@ export function useDocuments({ participantId }: UseDocumentsOptions = {}): UseDo
     } finally {
       setLoading(false);
     }
-  }, [service, scope]);
+  }, [service, scope, participantId]);
 
   useEffect(() => {
     refresh().catch(console.error);

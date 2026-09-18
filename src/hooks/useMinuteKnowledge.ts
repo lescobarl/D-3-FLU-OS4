@@ -181,6 +181,12 @@ export function useMinuteKnowledge(participantId?: string) {
 
     /** Cargar minutas desde IndexedDB, ordenadas por createdAt descendente */
     const refresh = useCallback(async () => {
+        // Sin usuario real: NO se lee nada (todo el pizarrón es por usuario).
+        if (!participantId) {
+            setMinutes([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const records = await fluDb.minutes

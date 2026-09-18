@@ -83,6 +83,15 @@ export function useConversationPersistence(participantId?: string) {
 
     // ---- Load persisted history on mount / al cambiar de usuario ----
     useEffect(() => {
+        // Sin usuario real: no se carga NADA (todo el pizarrón es por usuario).
+        if (!participantId) {
+            if (useIntegrationStore.getState().conversationHistory.length > 0) {
+                useIntegrationStore.getState().batchLoadHistory([]);
+            }
+            loadedRef.current = false;
+            loadedScopeRef.current = '';
+            return;
+        }
         if (loadedRef.current && loadedScopeRef.current === scope) return;
         loadedRef.current = true;
         loadedScopeRef.current = scope;
