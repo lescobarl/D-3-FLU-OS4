@@ -254,6 +254,9 @@ function resolveLabel(text: string): string {
     for (const verb of [...CREATE_FRAMES, ...CANCEL_FRAMES, ...UPDATE_FRAMES]) {
         label = label.replace(wordRe(verb), ' ');
     }
+    // Verbos de alarma con acento ("despiértame"): el verbo de la lista es
+    // ASCII y no matchea con acento → se limpia aparte, tolerante a acentos.
+    label = label.replace(wordRe('despi[eé]rt[aá]me|despert[aá]me|despi[eé]rta'), ' ');
     label = label
         .replace(wordRe('una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|será'), ' ')
         .replace(wordRe('manana|mañana|hoy|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|tarde|noche|madrugada'), ' ')
@@ -261,9 +264,12 @@ function resolveLabel(text: string): string {
         .replace(/\s{2,}/g, ' ')
         .trim();
     if (label) return label;
-    // Sin contenido: usar el SUSTANTIVO DE TIPO como etiqueta por defecto.
-    const kindNoun = KIND_NOUNS.flatMap((e) => e.nouns).find((noun) => wordRe(noun).test(base));
-    return kindNoun || base;
+    // Sin contenido: etiqueta = sustantivo CANÓNICO del tipo ("alarma",
+    // "recordatorio", "cita"), no el verbo crudo. La detección se hace sobre el
+    // texto normalizado para que el acento no impida encontrar el tipo.
+    const baseNorm = normalize(base);
+    const kindEntry = KIND_NOUNS.find((entry) => entry.nouns.some((noun) => wordRe(noun).test(baseNorm)));
+    return kindEntry ? kindEntry.nouns[0] : base;
 }
 
 export function parseAgendaCommand(input: string, options?: { now?: number | (() => number) }): AgendaCommand {
