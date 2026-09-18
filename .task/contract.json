@@ -62,6 +62,7 @@
     "tests/useAgendaScope.test.ts",
     "tests/voiceTurnRefireDedup.test.ts",
     "plans/estado-sesion-2026-09-17.md",
+    "plans/estado-sesion-2026-09-18.md",
     "src/voice/lib/conversationTurnRow.ts",
     "src/voice/lib/rawCommitPlan.js",
     "tests/conversationTurnRowSingleWriter.test.ts",
@@ -101,8 +102,8 @@
     "tests/noteParserBindings.test.ts"
   ],
   "amendment": {
-    "date": "2026-09-17",
-    "reason": "Enmienda autorizada por el usuario: (a) ampliar `allow` a los archivos del panel derecho (agenda+notas) unificado en el árbitro determinista, además de los fixes previos de onboarding/datos per-usuario, 'hoy', seed DEMO, dedup de turno y unificación del escritor de la fila; (b) alinear `dod`/`guard` al esquema del gate (string), conservando y ampliando la verificación.",
+    "date": "2026-09-18",
+    "reason": "Enmienda autorizada por el usuario (\"dale commit\"): ampliar `allow` con el documento de estado `plans/estado-sesion-2026-09-18.md` para poder versionarlo. Se conserva la enmienda previa: (a) ampliar `allow` a los archivos del panel derecho (agenda+notas) unificado en el Ã¡rbitro determinista, ademÃ¡s de los fixes previos de onboarding/datos per-usuario, 'hoy', seed DEMO, dedup de turno y unificaciÃ³n del escritor de la fila; (b) alinear `dod`/`guard` al esquema del gate (string), conservando y ampliando la verificaciÃ³n.",
     "authorizedBy": "usuario"
   },
   "deny": [
