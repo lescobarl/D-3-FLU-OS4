@@ -49,10 +49,16 @@ const REPEAT_FRAMES: readonly string[] = Object.freeze([
 
 const NEXT_FRAMES: readonly string[] = Object.freeze([
     'siguiente', 'otra', 'canta otra', 'siguiente carta', 'paso', 'sigo', 'otra carta', 'dale',
+    // Afirmaciones: en la lotería el jugador no "responde"; un "sí"/"continúa"
+    // significa "canta la siguiente" (antes repetía la misma carta en ciclo).
+    'si', 'sí', 'continua', 'continúa', 'continuar', 'sigue', 'ok', 'okey', 'vale', 'adelante',
+    'yes', 'next', 'listo', 'vamos',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([
     'salir del juego', 'terminar el juego', 'dejar de jugar', 'ya no quiero jugar', 'cerrar el juego',
+    'salir', 'terminar', 'termina', 'basta', 'parar', 'stop', 'ya no quiero', 'no quiero jugar',
+    'fin del juego', 'se acabo', 'se acabó',
 ]);
 
 interface LoteriaState {

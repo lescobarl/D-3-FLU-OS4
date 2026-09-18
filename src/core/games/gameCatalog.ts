@@ -117,6 +117,17 @@ export const END_GAME_FRAMES: readonly string[] = Object.freeze([
     'terminemos',
     'ya basta',
     'se acabo',
+    // Salidas cortas (antes había que decir la frase completa y quedaba atrapado).
+    'salir',
+    'terminar',
+    'termina',
+    'basta',
+    'parar',
+    'stop',
+    'no quiero jugar',
+    'fin del juego',
+    'cancelar el juego',
+    'cancela el juego',
 ]);
 
 /**

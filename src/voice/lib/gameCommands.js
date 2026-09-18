@@ -14,6 +14,8 @@
 // ============================================================
 
 import { normalizeForMatch, hasToken } from './configCommands.js'
+import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
+import { parseNoteIntentText } from './noteIntentParser'
 import {
   matchGameIntent,
   END_GAME_FRAMES,
@@ -59,7 +61,32 @@ function startsWithFrame(clean, frames) {
 }
 
 function isQuestionLike(clean) {
-  return startsWithFrame(clean, QUESTION_STARTERS);
+  return startsWithFrame(clean, QUESTION_STARTERS)
+}
+
+/**
+ * ¿El texto es un comando ACCIONABLE de otro dominio (agenda o notas)?
+ * Con una partida activa, esos comandos NO deben consumirse como respuesta del
+ * juego: se dejan pasar (return null) para que el enrutador normal los ejecute
+ * (crear alarma/cita/recordatorio, poner/quitar notas…). El juego queda activo.
+ *
+ * Sin acoplamiento al árbitro (import directo de los parsers) para no crear
+ * un ciclo de imports (el árbitro ya importa este módulo).
+ */
+function isNonGameActionableCommand(text) {
+  try {
+    const agenda = parseAgendaCommand(text)
+    if (agenda?.handled && agenda.action) return true
+  } catch {
+    /* parser sin match no debe romper el juego */
+  }
+  try {
+    const note = parseNoteIntentText(text)
+    if (note?.label) return true
+  } catch {
+    /* idem */
+  }
+  return false
 }
 
 /**
@@ -107,6 +134,11 @@ export function resolveGameCommandFromText(text = '') {
     //    Genérico: mismo criterio para cualquier juego activo (rompe el ciclo).
     const clean = normalized.replace(/^[^a-z0-9]+/, '')
     if (isQuestionLike(clean) || startsWithFrame(clean, NON_GAME_REQUEST_FRAMES)) {
+      return null
+    }
+    // 5b. Comando accionable de OTRO dominio (agenda/notas): NO es respuesta del
+    //     juego → se deja pasar para que se ejecute (el juego sigue activo).
+    if (isNonGameActionableCommand(text)) {
       return null
     }
     // 6. Respuesta abierta del jugador (el motor decide si es correcta).
