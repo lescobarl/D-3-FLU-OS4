@@ -83,24 +83,27 @@ export function useConversationPersistence(participantId?: string) {
 
     // ---- Load persisted history on mount / al cambiar de usuario ----
     useEffect(() => {
-        // Sin usuario real: no se carga NADA (todo el pizarrón es por usuario).
+        // Sin usuario real: NO se carga y —NUNCA— se borra la conversación EN VIVO.
+        // (Antes hacía batchLoadHistory([]) y borraba el turno recién dicho cuando
+        // el usuario real era transitorio, p. ej. durante el onboarding.)
         if (!participantId) {
-            if (useIntegrationStore.getState().conversationHistory.length > 0) {
-                useIntegrationStore.getState().batchLoadHistory([]);
-            }
             loadedRef.current = false;
             loadedScopeRef.current = '';
             return;
         }
         if (loadedRef.current && loadedScopeRef.current === scope) return;
+        const previousScope = loadedScopeRef.current;
         loadedRef.current = true;
         loadedScopeRef.current = scope;
 
         (async () => {
             try {
-                // Al cambiar de usuario, vaciar el historial en memoria para no
-                // mostrar el del usuario anterior.
-                if (useIntegrationStore.getState().conversationHistory.length > 0) {
+                // Solo se vacía al cambiar entre DOS usuarios reales distintos
+                // (para no mezclar conversaciones). Hacia/desde "sin usuario" NO
+                // se toca lo que está en pantalla.
+                const switchedRealUser =
+                    Boolean(previousScope) && previousScope !== 'global' && previousScope !== scope;
+                if (switchedRealUser && useIntegrationStore.getState().conversationHistory.length > 0) {
                     useIntegrationStore.getState().batchLoadHistory([]);
                 }
                 const rows = (await fluDb.conversations.toArray())

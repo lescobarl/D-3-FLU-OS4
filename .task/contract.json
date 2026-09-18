@@ -92,6 +92,7 @@
     "tests/describeTriggerText.test.ts",
     "src/core/games/quienSoy.ts",
     "tests/quienSoyMention.test.ts",
+    "tests/conversationLiveNotWiped.test.ts",
     "src/voice/lib/noteRescue.js",
     "src/voice/lib/noteIntentParser.js",
     "src/voice/lib/gemini.js",
@@ -114,6 +115,7 @@
     "guardHash": "no-congelado"
   }
 }
+
 
 
 
