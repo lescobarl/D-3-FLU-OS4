@@ -161,14 +161,14 @@ export function AgendaPanel({
         [items, view, colors, nowMs],
     );
 
-    // PRÓXIMOS: pendientes ordenados por su siguiente vencimiento (top 3).
+    // PRÓXIMOS: pendientes ordenados por su siguiente vencimiento (top 10).
     const proximos = useMemo(() => {
         return items
             .filter((i) => i.status === 'pending')
             .map((i) => ({ item: i, due: nextAgendaDue(i.trigger, nowMs) }))
             .filter((e) => Number.isFinite(e.due))
             .sort((a, b) => a.due - b.due)
-            .slice(0, 3);
+            .slice(0, 10);
     }, [items, nowMs]);
 
     // SEMANA: columnas por día (Lunes..Domingo) con sus items agendados.

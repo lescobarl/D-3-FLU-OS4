@@ -85,6 +85,12 @@ describe('caso 10 — "borra la nota X" es determinista (notes.remove)', () => {
   expect(parseNoteRemoveIntentText('ok flu quita la nota del mercado')).toEqual({ target: 'Super', all: false });
   });
 
+  it('"limpia/vacía las notas" → borrar TODAS (misma ruta, sin IA)', () => {
+    expect(parseNoteRemoveIntentText('limpia las notas')).toEqual({ target: null, all: true });
+    expect(parseNoteRemoveIntentText('limpia todas las notas')).toEqual({ target: null, all: true });
+    expect(parseNoteRemoveIntentText('vacía las notas')).toEqual({ target: null, all: true });
+  });
+
   it('matchNotesByTarget solo devuelve notas pendientes por substring normalizado', () => {
     const items: NoteRecord[] = [
       makeNote({ id: 'n1', label: 'Super: cloro', done: false }),

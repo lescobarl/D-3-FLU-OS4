@@ -38,7 +38,7 @@ const NOTE_GENERAL =
 // Borrado de nota por voz: "borra la nota del súper", "elimina la nota X",
 // "quita la nota de compras". El destino se normaliza (súper → 'Super').
 const NOTE_REMOVE =
-  /^(?:borra|borrar|elimina|eliminar|quita|quitar|remueve|remover|saca|sacar|delete|remove|clear)\s+(?:todas?\s+las?\s+|la\s+|el\s+|las\s+|los\s+|esa\s+|esta\s+|mi\s+)?(?:notas?|listas?)\s*(?:de\s+|del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|para\s+el\s+|para\s+la\s+|con\s+)?(.*)$/i
+  /^(?:borra|borrar|elimina|eliminar|quita|quitar|remueve|remover|saca|sacar|limpia|limpiar|vac[ií]a|vac[ií]ar|delete|remove|clear)\s+(?:todas?\s+las?\s+|la\s+|el\s+|las\s+|los\s+|esa\s+|esta\s+|mi\s+)?(?:notas?|listas?)\s*(?:de\s+|del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|para\s+el\s+|para\s+la\s+|con\s+)?(.*)$/i
 
 /** Normaliza el destino: los destinos de compras se llaman 'Super' en las notas. */
 function normalizeRemoveTarget(raw = '') {
@@ -204,8 +204,12 @@ export function parseNoteRemoveIntentText(rawText = '') {
   if (!m) return null
   const target = normalizeRemoveTarget(m[1] ? m[1].trim() : '')
   if (target) return { target, all: false }
-  // Sin destino ("borra todas las notas") → borrar TODAS.
-  if (/\b(?:todas?|todos?|todo|completa?|entera?)\b/i.test(clean)) {
+  // Sin destino: "borra TODAS las notas" (todas/todo) O verbo de VACIADO
+  // ("limpia/vacía las notas", que implica todas) → borrar TODAS.
+  if (
+    /\b(?:todas?|todos?|todo|completa?|entera?)\b/i.test(clean) ||
+    /\b(?:limpia|limpiar|vac[ií]a|vac[ií]ar|clear)\b/i.test(clean)
+  ) {
     return { target: null, all: true }
   }
   return null

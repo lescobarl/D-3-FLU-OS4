@@ -144,10 +144,11 @@ import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
-import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind, type AgendaTrigger } from './core/agenda/agendaModel';
+import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
+import { describeTriggerWhen } from './core/agenda/describeTriggerText';
 import { resolvedActionIdentity } from './voice/lib/resolvedActionIdentity';
 import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
-import { MS_DAY, formatTimeOfDayMeridiem } from './core/temporal/scheduleEngine';
+import { MS_DAY } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
 import { AgendaPanel } from './components/AgendaPanel';
 import { createWebAudioDriver, type AudioDriver, type SoundOptions } from './core/temporal/audioAlert';
@@ -1523,21 +1524,7 @@ function App() {
     // Agenda por voz: crear/consultar/editar/cancelar + borrar todo. Motor
     // determinista: parseAgendaCommand interpreta el transcript y ejecuta la
     // acción sobre el servicio único de agenda (tabla `agenda`).
-    function describeTriggerWhen(trigger: AgendaTrigger, lang: string): string {
-        const t = trigger;
-        if (t.type === 'absolute' && t.at !== undefined) {
-            const d = new Date(t.at);
-            const days = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-            return `${days[d.getDay()]} a las ${formatTimeOfDayMeridiem(t.at, lang)}`;
-        }
-        if (t.type === 'daily') return `todos los días a las ${t.timeOfDay}`;
-        if (t.type === 'weekly') {
-            const names = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-            const days = (t.daysOfWeek ?? []).map((d) => names[d]).join(', ');
-            return `los ${days} a las ${t.timeOfDay}`;
-        }
-        return '';
-    }
+    // (describeTriggerWhen vive en src/core/agenda/describeTriggerText.ts)
     window.__fluHandleAgendaCommandText = useCallback(
         async (input: AgendaCommand | string, opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
@@ -5434,3 +5421,4 @@ const {
 }
 
 export default App;
+

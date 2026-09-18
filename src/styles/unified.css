@@ -2560,7 +2560,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 
 .hoy-panel__list-item {
@@ -2588,7 +2588,7 @@
   flex: 0 0 auto;
   min-width: 18px;
   font-size: var(--text-xs, 11px);
-  line-height: 1.3;
+  line-height: 1.05;
   text-align: center;
 }
 
@@ -2603,6 +2603,7 @@
 .hoy-panel__card-title {
   font-size: var(--text-xs, 11px);
   font-weight: var(--weight-medium, 500);
+  line-height: 1.05;
   color: var(--text-primary, #e0e0e0);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6997,8 +6998,9 @@ details[open].flu-card .flu-card__chev {
 .agenda-item {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     padding: 0 2px;
+    line-height: 1.05;
     background: transparent;
     border-radius: 4px;
 }
@@ -7029,18 +7031,23 @@ details[open].flu-card .flu-card__chev {
     min-width: 0;
     font-size: var(--text-xs, 11px);
     font-weight: var(--weight-medium, 500);
-    line-height: 1.15;
+    line-height: 1.05;
     color: var(--text-primary, #e0e0e0);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* Leyenda de colores por tipo (abajo del listado). */
+/* Leyenda de colores por tipo: FIJA al borde inferior del panel (siempre visible
+   mientras se scrollea), con fondo sólido para no transparentar el contenido. */
 .agenda-legend {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
     display: flex;
     flex-wrap: wrap;
-    gap: 3px 8px;
-    padding: 3px 0 0;
+    gap: 2px 8px;
+    padding: 4px 2px;
+    background: var(--board-frame-bg, #1d2739);
     border-top: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
 }
 .agenda-legend__item {

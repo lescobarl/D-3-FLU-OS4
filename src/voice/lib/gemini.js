@@ -268,7 +268,7 @@ export function detectSimpleRequest({ transcript = '', intent = {} } = {}) {
   if (words > 20) return false
   if (intent?.comando) return false
   const complexReference =
-    /(workspace|documento|documentos|imagen|im[áa]genes|m[úu]sica|cancion|canciones|canta|cantar|toca|tocar|sing|configura|configurar|pantalla|minuta|minutas|resumen|resumir|participante|participantes|v[íi]deo|archivo|reproduce|reproducir|toma nota|actas|horario|horarios|clase|clases)/i
+    /(workspace|documento|documentos|imagen|im[áa]genes|m[úu]sica|cancion|canciones|canta|cantar|baila|bailar|baile|bailamos|dance|toca|tocar|pon(?:me)?\s+m[úu]sica|sing|configura|configurar|pantalla|minuta|minutas|resumen|resumir|participante|participantes|v[íi]deo|archivo|reproduce|reproducir|toma nota|actas|horario|horarios|clase|clases)/i
   return !complexReference.test(transcript)
 }
 
