@@ -166,7 +166,6 @@ import {
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
-import { resolvePanelRescue } from './voice/lib/panelRescue';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import {
@@ -2150,18 +2149,26 @@ function App() {
                     // despacha todavía para poder garantizar antes que una nota del
                     // turno no se pierda si el LLM la omitió.
                     const resolvedActions: Array<{ result: ArbiterResult; viaDomain: boolean }> = [];
+                    // PUNTO ÚNICO DE ESTRUCTURACIÓN: el árbitro determinista resuelve
+                    // el TURNO completo. El LLM solo clasifica (`accion.dominio`); la app
+                    // estructura aquí (fecha/hora en agenda, título+body en nota). UNA
+                    // sola rama estructura el panel — sin IA-estructura ni rescate.
+                    const turnCommandText = normalizeCommandForDeterministic(transcript, wakeWords);
+                    const turnResult: ArbiterResult = resolveDeterministicCommand(turnCommandText, arbiterOptions);
+                    if (turnResult?.matched) {
+                        resolvedActions.push({ result: turnResult, viaDomain: false });
+                    }
+                    const coveredDomains = new Set(
+                        resolvedActions
+                            .map((entry) => entry.result.domain)
+                            .filter((domain): domain is string => Boolean(domain)),
+                    );
+                    // Acciones del LLM (clasificación) para dominios que el turno no cubrió.
                     for (const accion of acciones ?? []) {
-                        // Panel derecho (agenda + notas): el LLM SOLO clasifica el
-                        // dominio; la ESTRUCTURA (fecha/hora en agenda, título+body
-                        // en nota) la produce el árbitro determinista, ÚNICO
-                        // estructurador del panel. No hay rama estructurada por IA.
                         const texto = String(accion?.texto || '').trim();
                         if (!texto) continue;
-                        // Guard anti-arrastre (Bug #5): el contrato exige que
-                        // accion.texto sea un fragmento del mandato ACTUAL. Si el
-                        // LLM repite una acción de turnos anteriores (historial en
-                        // el prompt), se omite: evita re-crear alarmas/notas que el
-                        // usuario no pidió en este turno.
+                        // Guard anti-arrastre (Bug #5): accion.texto debe ser fragmento
+                        // del mandato ACTUAL, no de turnos anteriores (historial).
                         const belongsToTurn = actionBelongsToTranscript(texto, transcript, wakeWords);
                         if (!belongsToTurn) {
                             relayLog(
@@ -2173,10 +2180,6 @@ function App() {
                         }
                         const commandText = normalizeCommandForDeterministic(texto, wakeWords);
                         const arbiterResult: ArbiterResult = resolveDeterministicCommand(commandText, arbiterOptions);
-                        // El cerebro LLM ya clasificó el dominio (`accion.dominio`).
-                        // Si el re-parseo del texto libre no matchea, se resuelve la
-                        // estructura con el MISMO parser de dominio sin exigir trigger
-                        // (evita "respondió bien pero no hizo nada").
                         const effectiveResult: ArbiterResult | null = arbiterResult?.matched
                             ? arbiterResult
                             : resolveDomainScopedIntent(accion?.dominio, commandText, {
@@ -2184,26 +2187,14 @@ function App() {
                                 now: (arbiterOptions)?.now,
                                 language: (languageRef.current as 'es' | 'en') || 'es',
                             });
-                        if (effectiveResult?.matched) {
+                        if (effectiveResult?.matched && effectiveResult.domain && !coveredDomains.has(effectiveResult.domain)) {
+                            coveredDomains.add(effectiveResult.domain);
                             resolvedActions.push({
                                 result: effectiveResult,
                                 viaDomain: !arbiterResult?.matched,
                             });
                         }
                     }
-                    // Garantía determinista del PANEL (agenda + notas): el LLM puede
-                    // omitir la acción aunque el turno sea agenda/nota. Se agrega UNA
-                    // sola por el MISMO árbitro (`resolvePanelRescue` devuelve null si
-                    // el dominio ya está cubierto o si el turno resuelve otro dominio).
-                    const panelRescue = resolvePanelRescue({
-                        transcript,
-                        resolvedDomains: resolvedActions
-                            .map((entry) => entry.result.domain)
-                            .filter((domain): domain is string => domain !== null),
-                        wakeWords,
-                        arbiterOptions,
-                    });
-                    if (panelRescue) resolvedActions.push({ result: panelRescue, viaDomain: false });
 
                     // Paso 2 — DESPACHAR: punto único, en orden, por el helper único.
                     for (const { result: effectiveResult, viaDomain } of resolvedActions) {
