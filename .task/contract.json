@@ -2,8 +2,8 @@
   "id": "T-MULTIUSER-WORKSPACE-ISOLATION",
   "mode": "full",
   "objective": "Aislar por usuario activo el pizarrón (workspaceArtifact, conversationHistory, búsqueda/imagen/video) y NO exponer datos per-usuario durante el onboarding; dejando además 'hoy' correcto en agenda, el seed DEMO idempotente, el commit de transcripción sin re-emisión, UN ÚNICO escritor de la fila del usuario (commitUserTurnRow) y el PANEL DERECHO (agenda + notas) con UN ÚNICO resolutor (árbitro determinista), con sus guards.",
-  "dod": "npx vitest run tests/panelScenarios.test.ts tests/reportedScenariosSimulation.test.ts tests/gameCommandsPassThrough.test.ts tests/loteriaAdvance.test.ts tests/audioAlertRepeat.test.ts tests/agendaReminderLabel.test.ts tests/responseGateWindow.test.ts tests/panelUnifiedResolution.test.ts tests/panelRescue.test.ts tests/noteParserBindings.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts tests/demoSeed.test.ts tests/agendaCommandParser.test.ts tests/voiceTurnRefireDedup.test.ts tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/useWorkspaceSearchPersonReset.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/panelScenarios.test.ts tests/reportedScenariosSimulation.test.ts tests/gameCommandsPassThrough.test.ts tests/loteriaAdvance.test.ts tests/audioAlertRepeat.test.ts tests/responseGateWindow.test.ts tests/panelUnifiedResolution.test.ts tests/panelRescue.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/panelScenarios.test.ts tests/contractFilesExist.test.ts tests/turnMultiItem.test.ts tests/reportedScenariosSimulation.test.ts tests/gameCommandsPassThrough.test.ts tests/loteriaAdvance.test.ts tests/audioAlertRepeat.test.ts tests/agendaReminderLabel.test.ts tests/responseGateWindow.test.ts tests/panelUnifiedResolution.test.ts tests/noteParserBindings.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts tests/demoSeed.test.ts tests/agendaCommandParser.test.ts tests/voiceTurnRefireDedup.test.ts tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/useWorkspaceSearchPersonReset.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/panelScenarios.test.ts tests/contractFilesExist.test.ts tests/turnMultiItem.test.ts tests/reportedScenariosSimulation.test.ts tests/gameCommandsPassThrough.test.ts tests/loteriaAdvance.test.ts tests/audioAlertRepeat.test.ts tests/responseGateWindow.test.ts tests/panelUnifiedResolution.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts --reporter=dot",
   "guardExpect": "green",
   "groundTruth": {
     "command": "npm run typecheck && npm run test:full",
@@ -65,10 +65,11 @@
     "src/voice/lib/conversationTurnRow.ts",
     "src/voice/lib/rawCommitPlan.js",
     "tests/conversationTurnRowSingleWriter.test.ts",
-    "src/voice/lib/panelRescue.js",
     "tests/agendaReminderLabel.test.ts",
     "tests/responseGateWindow.test.ts",
-    "tests/panelScenarios.test.ts",
+    "tests/panelScenarios.test.ts tests/contractFilesExist.test.ts tests/turnMultiItem.test.ts",
+    "tests/contractFilesExist.test.ts",
+    "tests/turnMultiItem.test.ts",
     "src/core/voice/responseGate.ts",
     "src/core/agenda/agendaService.ts",
     "src/core/notes/notesService.ts",
@@ -84,7 +85,6 @@
     "src/voice/lib/noteRescue.js",
     "src/voice/lib/noteIntentParser.js",
     "src/voice/lib/gemini.js",
-    "tests/panelRescue.test.ts",
     "tests/panelUnifiedResolution.test.ts",
     "tests/noteRescue.test.ts",
     "tests/noteParserBindings.test.ts"
@@ -104,6 +104,7 @@
     "guardHash": "no-congelado"
   }
 }
+
 
 
 

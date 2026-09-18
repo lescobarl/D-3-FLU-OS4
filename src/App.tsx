@@ -2158,10 +2158,13 @@ function App() {
                     if (turnResult?.matched) {
                         resolvedActions.push({ result: turnResult, viaDomain: false });
                     }
-                    const coveredDomains = new Set(
-                        resolvedActions
-                            .map((entry) => entry.result.domain)
-                            .filter((domain): domain is string => Boolean(domain)),
+                    // Dedup por DOMINIO + TEXTO (no solo dominio): dos ítems del MISMO
+                    // tipo en un turno (p. ej. dos notas o dos alarmas) se estructuran
+                    // AMBOS; solo se descarta el fragmento IDÉNTICO ya cubierto.
+                    const coveredKeys = new Set<string>(
+                        resolvedActions.map((entry) =>
+                            `${entry.result.domain}|${normalizeCommandForDeterministic(transcript, wakeWords)}`,
+                        ),
                     );
                     // Acciones del LLM (clasificación) para dominios que el turno no cubrió.
                     for (const accion of acciones ?? []) {
@@ -2187,8 +2190,10 @@ function App() {
                                 now: (arbiterOptions)?.now,
                                 language: (languageRef.current as 'es' | 'en') || 'es',
                             });
-                        if (effectiveResult?.matched && effectiveResult.domain && !coveredDomains.has(effectiveResult.domain)) {
-                            coveredDomains.add(effectiveResult.domain);
+                        if (effectiveResult?.matched && effectiveResult.domain) {
+                            const entryKey = `${effectiveResult.domain}|${commandText}`;
+                            if (coveredKeys.has(entryKey)) continue;
+                            coveredKeys.add(entryKey);
                             resolvedActions.push({
                                 result: effectiveResult,
                                 viaDomain: !arbiterResult?.matched,
