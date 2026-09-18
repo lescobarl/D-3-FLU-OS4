@@ -143,6 +143,8 @@ interface QuienSoyState {
     clueIndex: number;
     maxRounds: number;
     phase: 'announce' | 'done';
+    /** Índices del banco que el JUGADOR ya nombró: FLU no los reutiliza como objetivo. */
+    mentioned: number[];
 }
 
 type RandomSource = () => number;
@@ -170,6 +172,18 @@ function cluePrompt(state: QuienSoyState, item: QuienSoyItem): string {
     return `Pista ${state.clueIndex + 1}: ${clueAt(state, item)} ¿Quién soy?`;
 }
 
+/**
+ * Avanza al siguiente objetivo SALTANDO los animales que el jugador ya nombró:
+ * FLU no debe "pensar" un animal que el jugador acaba de decir.
+ */
+function advanceSkippingMentioned(state: QuienSoyState): void {
+    state.cursor += 1;
+    while (state.cursor < state.order.length && state.mentioned.includes(state.order[state.cursor])) {
+        state.cursor += 1;
+    }
+    state.clueIndex = 0;
+}
+
 export function createQuienSoyEngine(options?: { random?: RandomSource }): GameEngine {
     let rng: RandomSource = options?.random ?? Math.random;
 
@@ -192,6 +206,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             clueIndex: 0,
             maxRounds: readRounds(cfg),
             phase: 'announce',
+            mentioned: [],
         };
         session.state = state as unknown as Record<string, unknown>;
         session.score = 0;
@@ -212,6 +227,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                     clueIndex: 0,
                     maxRounds: readRounds(optionsConfig),
                     phase: 'announce',
+                    mentioned: [],
                 },
                 score: 0,
                 round: 1,
@@ -260,6 +276,14 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             }
 
             const normalized = normalizeForMatch(text);
+
+            // Recordar animales que el JUGADOR nombró (aunque falle): FLU no los
+            // reutilizará como objetivo en los próximos turnos.
+            QUIEN_SOY_BANK.forEach((bankItem, index) => {
+                if (state.mentioned.includes(index)) return;
+                const names = [bankItem.nombre, ...(bankItem.keywords ?? [])];
+                if (hasAnyToken(normalized, names)) state.mentioned.push(index);
+            });
 
             // ¿Pide otra pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
@@ -314,8 +338,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                         emotion: 'happy',
                     };
                 }
-                state.cursor += 1;
-                state.clueIndex = 0;
+                advanceSkippingMentioned(state);
                 const next = itemAt(state);
                 return {
                     prompt: `¡Correcto, era ${item.nombre}! Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`,
@@ -341,8 +364,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                         emotion: 'happy',
                     };
                 }
-                state.cursor += 1;
-                state.clueIndex = 0;
+                advanceSkippingMentioned(state);
                 const next = itemAt(state);
                 return {
                     prompt: `¡Claro! Era ${item.nombre}. Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`,
@@ -374,3 +396,4 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         },
     };
 }
+

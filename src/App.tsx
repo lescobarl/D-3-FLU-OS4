@@ -2143,7 +2143,12 @@ function App() {
                     // sola rama estructura el panel — sin IA-estructura ni rescate.
                     const turnCommandText = normalizeCommandForDeterministic(transcript, wakeWords);
                     const turnResult: ArbiterResult = resolveDeterministicCommand(turnCommandText, arbiterOptions);
-                    if (turnResult?.matched) {
+                    // El JUEGO ya lo despachó el fast-path determinista (llega en el
+                    // contrato como `juego` o marcado `fastPathGame`): no re-despachar
+                    // el turno o se reinicia la partida (nueva semilla → otra canción).
+                    const gameAlreadyHandled =
+                        turnResult?.domain === 'game' && resolved?.fastPathGame === true;
+                    if (turnResult?.matched && !gameAlreadyHandled) {
                         resolvedActions.push({ result: turnResult, viaDomain: false });
                     }
                     // Dedup por IDENTIDAD DE LA ACCIÓN resuelta (no por texto): el
