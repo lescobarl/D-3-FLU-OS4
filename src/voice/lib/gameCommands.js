@@ -46,6 +46,11 @@ const QUESTION_STARTERS = Object.freeze([
   'cuantos',
   'cuanta',
   'cuanto',
+  'cuantas',
+  'dime',
+  'dime cuantas',
+  'dime cuantos',
+  'que es',
   'para que',
   'puedes',
   'me puedes',
@@ -145,7 +150,13 @@ export function resolveGameCommandFromText(text = '') {
     return { gameId: activeSession.id, action: 'turn', playerText: text }
   }
 
-  // Sin partida activa: solo inicia si hay intención explícita y resoluble.
+  // Sin partida activa: una PREGUNTA sobre el juego la responde la IA, NO inicia
+  // la partida (antes "dime cuántas cartas tiene la lotería" arrancaba el juego).
+  const cleanNoSession = normalized.replace(/^[^a-z0-9]+/, '')
+  if (isQuestionLike(cleanNoSession) || startsWithFrame(cleanNoSession, NON_GAME_REQUEST_FRAMES)) {
+    return null
+  }
+  // Solo inicia si hay intención explícita y resoluble.
   const intent = matchGameIntent(text)
   if (intent) return { gameId: intent.id, action: 'start' }
 

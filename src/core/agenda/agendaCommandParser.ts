@@ -143,8 +143,23 @@ function detectQueryView(text: string): AgendaCommand['when'] {
 
 function detectAction(text: string): AgendaCommandAction | null {
     const t = normalize(text);
-    // Consulta ANCLADA: "qué <hay|tengo|...>" al inicio, o "mi agenda/agenda de".
-    if (t.startsWith('que ') && /\b(?:hay|tengo|tienes|tiene)\b/.test(t)) return 'agenda.list';
+    // Consulta ANCLADA: exige un término de AGENDA o un marcador temporal; el
+    // solo "qué … tienes/hay" NO alcanza (antes "qué otro juego tienes" devolvía
+    // la agenda en vez de ir a la IA / al menú de juegos).
+    if (
+        t.startsWith('que ') &&
+        /\b(?:hay|tengo|tienes|tiene)\b/.test(t) &&
+        /\b(?:agenda|calendario|cita|citas|recordatorio|recordatorios|alarma|alarmas|clase|clases|junta|juntas|actividad|actividades|evento|eventos|pendiente|pendientes|horario)\b/.test(t)
+    ) {
+        return 'agenda.list';
+    }
+    if (
+        t.startsWith('que ') &&
+        /\b(?:hay|tengo|tienes|tiene)\b/.test(t) &&
+        /\b(?:hoy|manana|semana|mes)\b/.test(t)
+    ) {
+        return 'agenda.list';
+    }
     if (/\b(?:mi agenda|agenda de|agenda para)\b/.test(t)) return 'agenda.list';
     // "borra/limpia TODO/TODA la agenda/el calendario" → vaciar todo.
     // Conectores flexibles: "todo lo de la agenda", "todo el contenido de la

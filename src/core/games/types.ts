@@ -48,6 +48,8 @@ export interface GameSession {
 /** Contexto opcional de un turno: quién habla. */
 export interface GameTurnContext {
     playerId?: string;
+    /** Nombre legible del jugador (para anunciar ganador sin exponer el id). */
+    playerName?: string;
 }
 
 export type GameActionType = 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch';

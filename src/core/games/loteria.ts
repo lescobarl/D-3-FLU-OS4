@@ -175,7 +175,8 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             // "¡Lotería!" → alguien completó su cartón: gana.
             if (hasToken(normalized, 'loteria')) {
                 state.phase = 'done';
-                state.winner = context?.playerId || null;
+                // Nombre legible si viene; NUNCA el id crudo (antes se anunciaba un UUID).
+                state.winner = String(context?.playerName || '').trim() || null;
                 return {
                     prompt: state.winner
                         ? `¡LOTERÍA! ¡Ganó ${state.winner}! ¡A celebrar!`
