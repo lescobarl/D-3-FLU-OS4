@@ -145,6 +145,7 @@ import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaComm
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
 import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind, type AgendaTrigger } from './core/agenda/agendaModel';
+import { resolvedActionIdentity } from './voice/lib/resolvedActionIdentity';
 import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
 import { MS_DAY, formatTimeOfDayMeridiem } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
@@ -2158,13 +2159,12 @@ function App() {
                     if (turnResult?.matched) {
                         resolvedActions.push({ result: turnResult, viaDomain: false });
                     }
-                    // Dedup por DOMINIO + TEXTO (no solo dominio): dos ítems del MISMO
-                    // tipo en un turno (p. ej. dos notas o dos alarmas) se estructuran
-                    // AMBOS; solo se descarta el fragmento IDÉNTICO ya cubierto.
+                    // Dedup por IDENTIDAD DE LA ACCIÓN resuelta (no por texto): el
+                    // turno y el fragmento del LLM que resuelven al MISMO evento
+                    // cuentan como uno (evita "ese evento ya existe" por doble
+                    // despacho). Dos acciones distintas del mismo dominio se conservan.
                     const coveredKeys = new Set<string>(
-                        resolvedActions.map((entry) =>
-                            `${entry.result.domain}|${normalizeCommandForDeterministic(transcript, wakeWords)}`,
-                        ),
+                        resolvedActions.map((entry) => resolvedActionIdentity(entry.result)),
                     );
                     // Acciones del LLM (clasificación) para dominios que el turno no cubrió.
                     for (const accion of acciones ?? []) {
@@ -2191,7 +2191,7 @@ function App() {
                                 language: (languageRef.current as 'es' | 'en') || 'es',
                             });
                         if (effectiveResult?.matched && effectiveResult.domain) {
-                            const entryKey = `${effectiveResult.domain}|${commandText}`;
+                            const entryKey = resolvedActionIdentity(effectiveResult);
                             if (coveredKeys.has(entryKey)) continue;
                             coveredKeys.add(entryKey);
                             resolvedActions.push({
