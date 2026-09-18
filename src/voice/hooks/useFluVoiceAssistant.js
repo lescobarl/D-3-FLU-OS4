@@ -501,7 +501,20 @@ export function useFluVoiceAssistant({
     const cache = turnSignatureCacheRef.current
     const cached = cache.get(snapshot)
     if (cached) return cached
+    // BANDERA DE DIAGNÓSTICO: ¿el modelo de voz cargó y produjo vector?
     const promise = computeAudioSignature(snapshot, sampleRate)
+      .then((res) => {
+        relayLog(
+          'LOG',
+          'VoiceId',
+          `signature dim=${res?.stats?.dim ?? res?.vector?.length ?? 0} empty=${res?.stats?.empty === true} snap=${snapshot.length} sr=${sampleRate}`,
+        )
+        return res
+      })
+      .catch((err) => {
+        relayLog('ERROR', 'VoiceId', `signature FAILED: ${err?.message || err}`)
+        throw err
+      })
     cache.set(snapshot, promise)
     return promise
   }, [])
@@ -1593,6 +1606,12 @@ export function useFluVoiceAssistant({
           sampleRate,
           fallbackSpeaker,
         )
+        // BANDERA DE DIAGNÓSTICO: decisión de hablante del turno.
+        relayLog(
+          'LOG',
+          'SpeakerTrace',
+          `activo=true vecLen=${signatureVector.length} snap=${audioSnapshot.length} sr=${sampleRate} clusters=${speakerClustersRef.current?.length ?? 0} resolved="${resolvedSpeakerName}" fallback="${fallbackSpeaker}" last="${lastSpeakerRef.current || ''}"`,
+        )
         return {
           signatureVector,
           speakerName: resolvedSpeakerName,
@@ -1603,6 +1622,12 @@ export function useFluVoiceAssistant({
       }
 
       if (!audioSnapshot.length) {
+        // BANDERA DE DIAGNÓSTICO: sin audio NO hay diarización posible.
+        relayLog(
+          'LOG',
+          'SpeakerTrace',
+          `activo=false SIN AUDIO (snap=0) → fallback="${fallbackSpeaker}" (no se puede separar voces)`,
+        )
         return {
           signatureVector,
           speakerName: fallbackSpeaker,
