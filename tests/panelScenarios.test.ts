@@ -96,6 +96,18 @@ describe('CITAS', () => {
 });
 
 // ------------------------------------------------------------
+describe('JUNTAS', () => {
+    it('"hazme una junta para hoy a las 10:00 de la noche liberación de procesos"', () => {
+        const a = agenda('Okay flu hazme una junta para hoy a las 10:00 de la noche liberación de procesos');
+        expect(a.action).toBe('agenda.create');
+        expect(a.kind).toBe('junta');
+        expect(norm(a.label)).toBe('liberacion procesos');
+        expect(dayDiff(a.trigger!.at!)).toBe(0); // hoy
+        expect(hourOf(a.trigger!.at!)).toBe(22);
+    });
+});
+
+// ------------------------------------------------------------
 describe('RECORDATORIOS', () => {
     it('"crea un recordatorio para mañana que me recuerde tomar la medicina a las 9:00 a.m"', () => {
         const a = agenda('crea un recordatorio para mañana que me recuerde tomar la medicina a las 9:00 a.m');

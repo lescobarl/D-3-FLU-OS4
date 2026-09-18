@@ -55,7 +55,8 @@ const KIND_NOUNS: ReadonlyArray<{ kind: AgendaKind; nouns: readonly string[] }> 
 const CREATE_FRAMES: readonly string[] = Object.freeze([
     'crea', 'crear', 'pon', 'ponme', 'agenda', 'agendar', 'programa', 'programar',
     'genera', 'generar', 'recuerdame', 'recordame', 'despiertame', 'despertame',
-    'agrega', 'agregar', 'añade', 'añadir',
+    'agrega', 'agregar', 'añade', 'añadir', 'hazme', 'haz', 'arma', 'armar',
+    'prepara', 'preparar', 'apunta',
 ]);
 
 const CANCEL_FRAMES: readonly string[] = Object.freeze([
