@@ -127,14 +127,19 @@
     "tests/agendaPhraseDimeQueHay.test.ts",
     "tests/agendaQueryScenarios.test.ts",
     "tests/gamesAudit.test.ts",
-    "tests/panelScenarios.test.ts"
+    "tests/panelScenarios.test.ts",
+    "src/components/**",
+    "src/services/**",
+    "src/voice/**"
   ],
   "amendment": {
     "date": "2026-09-18",
     "reason": "Enmienda autorizada por el usuario (\"termina de implementar para ir a validar\"): ampliar `allow` a la ruta unica de texto mic->UI para eliminar la perdida de la primera palabra cuando coincide con la ultima (invariante: no eliminar una palabra cuya repeticion no es contigua). Archivos: src/voice/lib/speechMerge.js, src/voice/lib/conversationStream.js, src/voice/lib/transcriptIngress.js, src/voice/lib/activeListen.js, tests/speechMerge.test.ts. Se conserva la enmienda previa: (a) ampliar `allow` a los archivos del panel derecho (agenda+notas) unificado en el arbitro determinista, ademas de los fixes previos de onboarding/datos per-usuario, 'hoy', seed DEMO, dedup de turno y unificacion del escritor de la fila; (b) alinear `dod`/`guard` al esquema del gate (string), conservando y ampliando la verificacion; (c) el documento de estado plans/estado-sesion-2026-09-18.md.",
     "authorizedBy": "usuario",
     "date2": "2026-09-19",
-    "reason2": "Enmienda autorizada por el usuario (\"dale commit y actualiza el respaldo\") para consolidar la sesion en un commit: se amplia `allow` a src/core/games/**, src/lib/**, src/types/fluWindow.d.ts, src/core/agenda/agendaIntentParser.ts y los tests de la sesion; se suben maxFiles/maxLines por ser una consolidacion de hitos ya validados (juegos 457 tests verdes, typecheck 0)."
+    "reason2": "Enmienda autorizada por el usuario (\"dale commit y actualiza el respaldo\") para consolidar la sesion en un commit: se amplia `allow` a src/core/games/**, src/lib/**, src/types/fluWindow.d.ts, src/core/agenda/agendaIntentParser.ts y los tests de la sesion; se suben maxFiles/maxLines por ser una consolidacion de hitos ya validados (juegos 457 tests verdes, typecheck 0).",
+    "date3": "2026-09-19",
+    "reason3": "Enmienda autorizada por el usuario (\"toma la decision correcta y continua a terminar\"): limpieza de codigo muerto y artefactos regenerables. allow ampliado a src/components/**, src/services/** y src/voice/** para eliminar 12 archivos sin referencias y dist/reports/test-results."
   },
   "deny": [
     "scripts/auditoria.mjs",
