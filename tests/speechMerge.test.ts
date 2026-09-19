@@ -6,7 +6,6 @@
 import { describe, it, expect } from 'vitest';
 import {
     collapseRepeatedSpeech,
-    collapseMisorderedMicMerge,
     collapseEchoPhrase,
     collapseAsrStutter,
     normalizeMicText,
@@ -30,12 +29,6 @@ describe('speechMerge — collapseRepeatedSpeech', () => {
     });
 });
 
-describe('speechMerge — collapseMisorderedMicMerge', () => {
-    it('quita el prefijo huérfano inicial «ahí» y conserva el sufijo «estás ahí»', () => {
-        expect(collapseMisorderedMicMerge('ahí estás ahí')).toBe('estás ahí');
-    });
-});
-
 describe('speechMerge — collapseEchoPhrase', () => {
     it('quita eco de frase repetida al cierre', () => {
         expect(collapseEchoPhrase('el niño juega el niño juega')).toBe('el niño juega');
@@ -51,14 +44,30 @@ describe('speechMerge — collapseAsrStutter', () => {
 });
 
 describe('speechMerge — normalizeMicText', () => {
-    it('corto: pipeline quita el prefijo huérfano inicial y conserva el sufijo', () => {
-        expect(normalizeMicText('ahí estás ahí')).toBe('estás ahí');
-    });
-
     it('largo: colapsa stutter ASR sin perder el resto', () => {
         expect(
             normalizeMicText('hoy vamos a la escuela hoy vamos a la escuela y luego jugamos'),
         ).toBe('hoy vamos a la escuela y luego jugamos');
+    });
+});
+
+describe('speechMerge — invariante: no eliminar una palabra cuya repetición no es contigua', () => {
+    it('conserva la primera palabra legítima («hola ya hola»)', () => {
+        expect(normalizeMicText('hola ya hola')).toBe('hola ya hola');
+    });
+
+    it('conserva el arranque aunque la frase sea más larga', () => {
+        expect(normalizeMicText('hola ya estamos listos hola')).toBe('hola ya estamos listos hola');
+    });
+
+    it('no recorta nada cuando no hay duplicado contiguo', () => {
+        expect(normalizeMicText('ahí estás ahí')).toBe('ahí estás ahí');
+    });
+});
+
+describe('speechMerge — prefijo huérfano se descarta en el empalme (no en el texto)', () => {
+    it('un fragmento de una palabra que reaparece al final de la frase completa se descarta', () => {
+        expect(mergeMicChunks(['ahí', 'estás ahí'])).toBe('estás ahí');
     });
 });
 
@@ -115,8 +124,8 @@ describe('speechMerge — wouldShrinkLog', () => {
 });
 
 describe('speechMerge — micPublishedParityOk', () => {
-    it('detecta prefijo huérfano «ahí estás ahí» vs mic «estás ahí»', () => {
-        expect(micPublishedParityOk('ahí estás ahí', 'estás ahí')).toBe(true);
+    it('detecta prefijo huérfano «ahí estás ahí» vs mic «estás ahí» (ya no se enmascara)', () => {
+        expect(micPublishedParityOk('ahí estás ahí', 'estás ahí')).toBe(false);
     });
 
     it('marca no paridad cuando no hay relación', () => {

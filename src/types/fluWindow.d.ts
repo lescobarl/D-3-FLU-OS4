@@ -47,7 +47,6 @@ declare global {
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
         __fluHandleHorarioText?(input: unknown): Promise<string>;
-        __fluHandleAgendaText?(input: unknown): Promise<string>;
         __fluHandleAgendaCommandText?(
             input: unknown,
             opts?: { personId?: string; personName?: string },

@@ -3,6 +3,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { detectParticipantFloorCommand } from './participantFloor.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
+import { buildWakeWordPattern } from './wakeWord.js'
 
 const ACCENT_MAP = {
   á: 'a',
@@ -441,11 +442,8 @@ export function matchWakeWordPrefix(text = '', wakeWords = []) {
   if (!value || !wakeWords.length) return null
 
   const normalizedWakeWords = wakeWords.map((wakeWord) => normalizeVoiceCommandText(wakeWord)).filter(Boolean)
-  if (!normalizedWakeWords.length) return null
-
-  const wakeWordPattern = new RegExp(
-    `^(?:${normalizedWakeWords.map((wakeWord) => wakeWord.replace(/\s+/g, '\\s+')).join('|')})(?:\\b|$)`,
-  )
+  const wakeWordPattern = buildWakeWordPattern(normalizedWakeWords)
+  if (!wakeWordPattern) return null
 
   return value.match(wakeWordPattern)?.[0] || null
 }
@@ -459,11 +457,9 @@ export function matchWakeWordInText(text = '', wakeWords = []) {
   if (!value || !wakeWords.length) return null
 
   const normalizedWakeWords = wakeWords.map((wakeWord) => normalizeVoiceCommandText(wakeWord)).filter(Boolean)
-  if (!normalizedWakeWords.length) return null
+  const wakeWordPattern = buildWakeWordPattern(normalizedWakeWords, { anywhere: true })
+  if (!wakeWordPattern) return null
 
-  const wakeWordPattern = new RegExp(
-    `(?:^|\\s)(?:${normalizedWakeWords.map((wakeWord) => wakeWord.replace(/\s+/g, '\\s+')).join('|')})(?:\\b|$)`,
-  )
   const match = value.match(wakeWordPattern)
   if (!match) return null
 
@@ -1340,17 +1336,14 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
   if (!commandText || !wakeWords.length) return commandText
 
   // 1) Quitar TODAS las apariciones de wake word (no solo la primera) para
-  //    tolerar el eco ASR duplicado.
-  const candidates = wakeWords
-    .map((ww) => String(ww || '').toLowerCase())
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length) // compuestos primero
+  //    tolerar el eco ASR duplicado. Fuente ÚNICA del patrón: wakeWord.js.
+  const wakePattern = buildWakeWordPattern(
+    wakeWords.map((ww) => String(ww || '').toLowerCase()),
+    { anywhere: true },
+  )
   let stripped = commandText
-  for (const candidate of candidates) {
-    // Reemplazo global insensible a mayúsculas/acentos.
-    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(`(^|\\s)${escaped}(?=\\s|$|,|\\.)`, 'gi')
-    stripped = stripped.replace(re, ' ')
+  if (wakePattern) {
+    stripped = stripped.replace(new RegExp(wakePattern.source, 'gi'), ' ')
   }
   commandText = stripped.replace(/\s+/g, ' ').trim()
 

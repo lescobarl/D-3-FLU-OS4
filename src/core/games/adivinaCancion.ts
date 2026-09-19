@@ -261,7 +261,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
                     return {
-                        prompt: `¡Correcto, era "${song.titulo}"! Adivinaste ${state.maxRounds} canciones con ${session.score} puntos. ¡Gran oído musical!`,
+                        prompt: `¡Correcto, era "${song.titulo}"! Adivinaste ${session.score} canciones con ${session.score} puntos. ¡Gran oído musical!`,
                         valid: true,
                         gameOver: true,
                         score: session.score,

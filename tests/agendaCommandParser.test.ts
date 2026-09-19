@@ -118,4 +118,11 @@ describe('agenda.intent — list/cancel', () => {
     it('frase sin intención no matchea', () => {
         expect(parseAgendaCommand('hola flu').handled).toBe(false);
     });
+
+    it('«Okay flu borra la clase de historia» → cancel (wake «okay flu» desde config)', () => {
+        const r = parseAgendaCommand('Okay flu borra la clase de historia', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+    });
 });

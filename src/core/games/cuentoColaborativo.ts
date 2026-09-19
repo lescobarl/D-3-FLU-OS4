@@ -176,8 +176,10 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
 
             const normalized = normalizeForMatch(text);
 
-            // ¿Pide pista o que FLU continúe?
-            if (hasAnyToken(normalized, HINT_FRAMES) || hasAnyToken(normalized, SKIP_FRAMES)) {
+            // ¿Pide pista o que FLU continúe? Solo si la frase ES el control: el
+            // texto libre del niño que contenga "sigue"/"luego" debe ser aportación.
+            const isControl = HINT_FRAMES.includes(normalized) || SKIP_FRAMES.includes(normalized);
+            if (isControl) {
                 const frase = state.continuaciones[Math.floor(rng() * state.continuaciones.length)];
                 state.cuento.push(frase);
                 if (state.cuento.length >= state.maxTurnos) {

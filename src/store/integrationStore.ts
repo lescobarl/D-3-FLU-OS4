@@ -115,6 +115,12 @@ export interface IntegrationState {
     lastResponse: string;
     /** Historial completo de la conversación */
     conversationHistory: ConversationEntry[];
+    /**
+     * Contador de resets INTENCIONALES del historial (iniciar/limpiar conversación).
+     * Fuente única para que la persistencia borre lo guardado SOLO cuando el
+     * usuario lo pide, nunca por un historial vacío transitorio.
+     */
+    conversationEpoch: number;
     /** Estado emocional actual del avatar */
     emotionalState: EmotionalState;
     /** Historial de eventos (para depuración) */
@@ -350,6 +356,7 @@ const initialState: IntegrationState = {
     lastCommittedTranscript: '',
     lastResponse: '',
     conversationHistory: [],
+    conversationEpoch: 0,
     emotionalState: 'neutral',
     eventLog: [],
     config: defaultConfig,
@@ -604,12 +611,16 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             clearHistory: () => {
-                set({ conversationHistory: [] });
+                set((current) => ({
+                    conversationHistory: [],
+                    conversationEpoch: current.conversationEpoch + 1,
+                }));
             },
 
             resetConversationHistory: () => {
-                set({
+                set((current) => ({
                     conversationHistory: [],
+                    conversationEpoch: current.conversationEpoch + 1,
                     lastResponse: '',
                     currentTranscript: '',
                     lastCommittedTranscript: '',
@@ -619,7 +630,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     },
                     interactionCount: 0,
                     workspaceArtifact: null,
-                });
+                }));
             },
 
             addMinute: (minute: MinuteUIEntry) => {

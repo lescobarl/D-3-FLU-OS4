@@ -56,7 +56,7 @@ import type { ConversationState, FluContract, FluProfile, VoiceConfig, Personali
 import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
-import { playSong, pauseMusic, stopMusic } from './services/musicPlayer';
+import { playSong, pauseMusic, stopMusic, isMusicPlaying } from './services/musicPlayer';
 import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from './services/aiServiceFactory';
 import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
@@ -117,7 +117,6 @@ import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/dev
 import { diaDeFecha, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
-import { parseAgendaIntent, type AgendaIntent } from './core/agenda/agendaIntentParser';
 import type { NotificationService } from './core/notifications/notificationService';
 import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
 import {
@@ -144,7 +143,7 @@ import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
-import { normalizeAgendaLabel, nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
+import { nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
 import { describeTriggerWhen } from './core/agenda/describeTriggerText';
 import { resolvedActionIdentity } from './voice/lib/resolvedActionIdentity';
 import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
@@ -175,7 +174,7 @@ import {
     DEFAULT_AMBIENTE_ID,
 } from './core/environments/environmentRegistry';
 import { useEnvironmentStore } from './store/environmentStore';
-import { getGameEngine, gameMenuNames } from './core/games/gameCatalog';
+import { getGameEngine, gameMenuNames, isAudioGame } from './core/games/gameCatalog';
 import {
     getActiveGameSession,
     setActiveGameSession,
@@ -183,6 +182,7 @@ import {
 } from './core/games/gameSessionStore';
 import type { GameId, GameSession } from './core/games/types';
 import { resolveGameSpeechOptions, type GameSpeechOptions } from './core/games/gameSpeech';
+import { setAudioPlayingProbe } from './voice/lib/gameCommands';
 import { getCommandSpeech } from './voice/lib/voiceCommands';
 import { formatStreamSttUiStatus } from './voice/lib/transcriptConfig';
 import {
@@ -200,7 +200,7 @@ import {
 import {
     buildDailyAgenda,
     formatAgendaForPrompt,
-    mergeRemindersIntoAgenda,
+    appendPendingCalendar,
 } from './lib/dailyAgenda';
 import {
     buildSystemConversationEntry,
@@ -808,19 +808,21 @@ function buildGameConfig(gameId: string): Record<string, unknown> {
     return base;
 }
 
-/** Los juegos que reproducen pista musical real (FLU_PLAYLIST) en `session.state.songId`. */
-const MUSIC_GAME_IDS: ReadonlySet<string> = new Set(['adivina_cancion', 'karaoke']);
+// Mientras un juego de audio reproduce su pista, la voz ambiente no interviene
+// (dueño único: la sonda se conecta a `isMusicPlaying`; el flag de juego de audio
+// vive en el catálogo). El usuario siempre puede salir/parar con comandos explícitos.
+setAudioPlayingProbe(isMusicPlaying);
 
 /** Detiene la música si el juego activo la está usando. */
 function stopMusicForGame(gameId: string): void {
-    if (MUSIC_GAME_IDS.has(gameId)) {
+    if (isAudioGame(gameId as GameId)) {
         stopMusic();
     }
 }
 
 /** Reproduce la pista que el motor eligió (songId) para juegos musicales. */
 function playSongForGame(session: GameSession, gameId: string): void {
-    if (!MUSIC_GAME_IDS.has(gameId)) return;
+    if (!isAudioGame(gameId as GameId)) return;
     const songId = (session.state as { songId?: string } | null)?.songId;
     if (songId) {
         void playSong(songId);
@@ -1193,9 +1195,6 @@ async function dispatchArbiterIntent(
                     personId: undefined,
                     personName: opts.speakerName || undefined,
                 })) || '';
-        } else if (domain === 'agenda' && typeof w.__fluHandleAgendaText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaText (agenda)');
-            reply = (await w.__fluHandleAgendaText(intent)) || '';
         } else {
             relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
         }
@@ -1473,8 +1472,9 @@ function App() {
     const agendaAudioDriver = agendaAudioRef.current;
 
     // Motor ÚNICO del calendario: lista pendientes + disparo seguro (audio +
-    // notificación + voz con dedup) + detener/auto-stop. Los paneles leen
-    // `agenda.items` y cancelan vía `agendaService.cancel` (borrado lógico).
+    // notificación + voz con dedup) + detener/auto-stop. Los paneles y la voz
+    // usan SOLO los métodos del hook (`agenda.list/create/update/cancel…`),
+    // que refrescan `items` al resolverse (sin ticks de 15 s).
     const agenda = useAgenda({
         service: agendaService,
         personId: realParticipantId,
@@ -1521,6 +1521,19 @@ function App() {
         },
     });
 
+    // Métodos estables del hook de agenda: TODA mutación/lectura pasa por aquí
+    // (una sola vía; el hook refresca `items` al resolverse). Sin llamadas
+    // directas al servicio desde el adaptador de voz o los paneles.
+    const {
+        list: agendaList,
+        create: agendaCreate,
+        update: agendaUpdate,
+        cancel: agendaCancel,
+        cancelByTarget: agendaCancelByTarget,
+        updateByTarget: agendaUpdateByTarget,
+        clearAll: agendaClearAll,
+    } = agenda;
+
     // Agenda por voz: crear/consultar/editar/cancelar + borrar todo. Motor
     // determinista: parseAgendaCommand interpreta el transcript y ejecuta la
     // acción sobre el servicio único de agenda (tabla `agenda`).
@@ -1538,14 +1551,17 @@ function App() {
                     // Vía el hook: vacía el usuario activo y REFRESCA el panel de
                     // inmediato (la llamada directa al servicio dejaba la agenda
                     // visible hasta el próximo tick de 15 s).
-                    const cleared = await agenda.clearAll();
+                    const cleared = await agendaClearAll();
                     lastActionFailed = cleared === 0;
-                    return lang === 'en'
-                        ? 'Done, cleared your agenda.'
-                        : 'Listo, vacié tu agenda.';
+                    // Sin éxito falso: la confirmación solo se da si la escritura
+                    // ocurrió de verdad (el panel muestra lo mismo que se vació).
+                    if (cleared === 0) {
+                        return lang === 'en' ? "There's nothing to clear." : 'No había nada que vaciar.';
+                    }
+                    return lang === 'en' ? 'Done, cleared your agenda.' : 'Listo, vacié tu agenda.';
                 }
                 case 'agenda.list': {
-                    const items = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
+                    const items = await agendaList({ personId: realParticipantIdRef.current, status: 'pending' });
                     const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
                     const view = cmd.when === 'semana' ? 'week' : cmd.when === 'mes' ? 'month' : 'day';
                     // "mañana" = ventana de día corrida un día.
@@ -1562,7 +1578,7 @@ function App() {
                 case 'agenda.create': {
                     if (!kind) return '';
                     if (!cmd.trigger) return '';
-                    const result = await agendaService.create({
+                    const result = await agendaCreate({
                         kind,
                         label: cmd.label || kind,
                         trigger: cmd.trigger,
@@ -1581,38 +1597,35 @@ function App() {
                 }
                 case 'agenda.cancel': {
                     if (!kind) return '';
-                    const pending = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
-                    const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
-                    const target = pending.find((item) =>
-                        item.kind === kind && (!targetLabel || normalizeAgendaLabel(item.label) === targetLabel),
-                    );
-                    if (!target) {
+                    const count = await agendaCancelByTarget({
+                        personId: realParticipantIdRef.current,
+                        kind,
+                        target: cmd.label || '',
+                    });
+                    if (count === 0) {
                         return lang === 'en' ? 'Nothing to cancel.' : 'No encontré nada que cancelar.';
                     }
-                    await agendaService.cancel(target.id);
                     return lang === 'en' ? 'Cancelled.' : 'Cancelado.';
                 }
                 case 'agenda.update': {
                     if (!kind) return '';
-                    const pending = await agendaService.list({ personId: realParticipantIdRef.current, status: 'pending' });
-                    const targetLabel = cmd.label ? normalizeAgendaLabel(cmd.label) : '';
-                    const target = pending.find((item) =>
-                        item.kind === kind && (!targetLabel || normalizeAgendaLabel(item.label) === targetLabel),
+                    const count = await agendaUpdateByTarget(
+                        { personId: realParticipantIdRef.current, kind, target: cmd.label || '' },
+                        {
+                            ...(cmd.label ? { label: cmd.label } : {}),
+                            ...(cmd.trigger ? { trigger: cmd.trigger } : {}),
+                        },
                     );
-                    if (!target) {
+                    if (count === 0) {
                         return lang === 'en' ? 'Nothing to update.' : 'No encontré nada que cambiar.';
                     }
-                    await agendaService.update(target.id, {
-                        ...(cmd.label ? { label: cmd.label } : {}),
-                        ...(cmd.trigger ? { trigger: cmd.trigger } : {}),
-                    });
                     return lang === 'en' ? 'Updated.' : 'Actualizado.';
                 }
                 default:
                     return '';
             }
         },
-        [agenda, agendaService, languageRef, realParticipantIdRef],
+        [agendaList, agendaCreate, agendaCancelByTarget, agendaUpdateByTarget, agendaClearAll, languageRef, realParticipantIdRef],
     );
 
     // ---- Horario de clases: entradas pendientes de confirmar (parseadas desde
@@ -1629,7 +1642,7 @@ function App() {
         setHorarioImportBusy(true);
         try {
             for (const entry of entries) {
-                await agendaService.create({
+                await agendaCreate({
                     kind: 'clase',
                     label: entry.materia,
                     trigger: { type: 'weekly', daysOfWeek: [entry.dia % 7], timeOfDay: entry.inicio },
@@ -1648,7 +1661,7 @@ function App() {
             setPendingHorarioImport(null);
             setHorarioImportBusy(false);
         }
-    }, [pendingHorarioImport, agendaService, language]);
+    }, [pendingHorarioImport, agendaCreate, language]);
 
     // Descarta el parseo sin escribir nada.
     const cancelHorarioImport = useCallback(() => {
@@ -1701,10 +1714,10 @@ function App() {
                 // Se listan TODOS los estados (no solo 'pending'): un demo
                 // cancelado queda en 'deleted' y, si solo se mirara pending,
                 // el seed lo volvería a crear (bug de registros que reaparecen).
-                const existing = await agendaService.list({ personId: pid });
+                const existing = await agendaList({ personId: pid });
                 const firstRun = existing.length === 0;
                 for (const input of selectDemoAgendaInputs(existing, Date.now())) {
-                    await agendaService.create({ ...input, personId: pid });
+                    await agendaCreate({ ...input, personId: pid });
                 }
                 if (firstRun) {
                     for (const note of buildDemoNotes()) {
@@ -1719,7 +1732,7 @@ function App() {
         return () => {
             cancelled = true;
         };
-    }, [realParticipantId]);
+    }, [realParticipantId, agendaList, agendaCreate]);
 
     // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
     const deviceActions = useDeviceActions({
@@ -1930,17 +1943,20 @@ function App() {
                 maxItems: agendaConfig.maxItems,
                 minImportance: agendaConfig.minImportance,
             });
-            // Fase 2 — B5: fusiona los recordatorios/citas pendientes (del
-            // calendario unificado) como un item sintético al final de la
-            // agenda, aunque no haya minutas.
-            items = mergeRemindersIntoAgenda(
+            // Calendario unificado COMPLETO en el contexto IA: todos los kinds
+            // pendientes (alarma/recordatorio/cita/junta/clase), con su etiqueta
+            // de tipo. Antes solo entraban recordatorio/cita y la IA no podía
+            // responder por intención sobre el resto.
+            const kindLabels = (agendaConfig.labels ?? {}) as Record<string, string>;
+            items = appendPendingCalendar(
                 items,
-                agenda.items
-                    .filter((it) => it.kind === 'recordatorio' || it.kind === 'cita')
+                (agenda.items || [])
+                    .filter((it) => it.status === 'pending')
                     .map((it) => ({
                         text: it.label,
                         dueAt: nextAgendaDue(it.trigger, Date.now()),
                         status: it.status,
+                        kindLabel: kindLabels[it.kind] || it.kind,
                     })),
                 { maxReminders: agendaConfig.maxReminders },
                 languageRef.current as 'es' | 'en',
@@ -3106,8 +3122,14 @@ function App() {
             createConversationModeController({
                 conversationActiveRef,
                 startListening: os2StartListening,
+                // El modo es la ÚNICA fuente también de lo visible: entrar/abrir
+                // refleja LISTENING y salir refleja IDLE (fin del desalineo que
+                // hacía hablar creyendo que se transcribía y descartar la frase).
+                setConversationState: (state) => integrationStore.setConversationState(state),
+                onTransition: ({ event, active }) =>
+                    relayLog('LOG', 'conversationMode', `[MODE] ${event} active=${active}`),
             }),
-        [os2StartListening],
+        [os2StartListening, integrationStore],
     );
 
     // Entrada ÚNICA de "abrir escucha" desde la UI (puente del avatar):
@@ -3341,6 +3363,11 @@ function App() {
             setSessionReady(true);
             setActiveUser(undefined, id);
             setActiveParticipantId(id);
+            // El modo conversación se fija YA (dueño único): durante el saludo de
+            // cierre y la espera de idle el flag debe estar encendido. Si se deja
+            // en modo comando, la primera frase tras el onboarding se publica viva
+            // y se descarta (no entra a la conversación).
+            conversationMode.enter();
             const tryStartListening = async () => {
                 // Saludo de cierre "¡Listo… Háblame cuando quieras": se anuncia UNA
                 // vez por participante al completar el onboarding (texto del paso
@@ -3666,6 +3693,9 @@ function App() {
             if (isIntent && input.action === 'notes.clear') {
                 const clearedCount = await notes.clearAll();
                 lastActionFailed = clearedCount === 0;
+                if (clearedCount === 0) {
+                    return lang === 'en' ? "There's nothing to clear." : 'No había nada que borrar.';
+                }
                 return lang === 'en'
                     ? 'Done, I cleared all your notes.'
                     : 'Listo, borré todas tus notas.';
@@ -3804,41 +3834,6 @@ function App() {
             return addedMsg;
         },
         [diary, languageRef],
-    );
-
-    // Agenda del día por voz ("¿qué hay para hoy?"). Determinista: el árbitro
-    // ya reconoció agenda.today; aquí se compila la lista desde las fuentes
-    // reales (horario/recordatorios/alarmas/notas) SIN depender del LLM.
-    window.__fluHandleAgendaText = useCallback(
-        async (input: AgendaIntent | string) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
-            const intent = (
-                input &&
-                typeof input === 'object' &&
-                typeof input.action === 'string' &&
-                input.handled !== false
-            )
-                ? input
-                : parseAgendaIntent(String(input || '').trim());
-            if (!intent || !intent.handled || intent.action !== 'agenda.today') return '';
-
-            // Lectura ÚNICA: la agenda del día sale de la tabla `agenda`, no de
-            // las fuentes viejas (horario/reminders/temporal).
-            const items = await agendaService.list({
-                personId: realParticipantIdRef.current,
-                status: 'pending',
-            });
-            const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
-            const summary = summarizeAgenda(items, 'day', Date.now(), colors);
-            const voice = ((FLU_CONFIG.agenda as Record<string, unknown>)?.voice ?? {}) as {
-                empty?: { es?: string; en?: string };
-            };
-            return agendaSummaryText(summary, lang, {
-                es: voice.empty?.es ?? 'No tienes nada programado.',
-                en: voice.empty?.en ?? 'Nothing scheduled.',
-            });
-        },
-        [agendaService, languageRef, realParticipantIdRef],
     );
 
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
@@ -5115,16 +5110,16 @@ const {
                                             items: agenda.items,
                                             colors: agendaColors,
                                             onCancel: async (id) => {
-                                                await agendaService.cancel(id);
+                                                await agendaCancel(id);
                                             },
                                             labels: agendaLabels,
                                             ringing: agenda.ringing,
                                             onStop: agenda.stopRinging,
                                             onAdd: async (input) => {
-                                                await agendaService.create({ ...input, personId: realParticipantId });
+                                                await agendaCreate({ ...input, personId: realParticipantId });
                                             },
                                             onEdit: async (id, patch) => {
-                                                await agendaService.update(id, patch);
+                                                await agendaUpdate(id, patch);
                                             },
                                             notes: {
                                                 items: notes.notes.map((n) => ({ id: n.id, label: n.label, body: n.body })),
@@ -5304,16 +5299,16 @@ const {
                                     items: agenda.items,
                                     colors: agendaColors,
                                     onCancel: async (id) => {
-                                        await agendaService.cancel(id);
+                                        await agendaCancel(id);
                                     },
                                     labels: agendaLabels,
                                     ringing: agenda.ringing,
                                     onStop: agenda.stopRinging,
                                     onAdd: async (input) => {
-                                        await agendaService.create({ ...input, personId: realParticipantId });
+                                        await agendaCreate({ ...input, personId: realParticipantId });
                                     },
                                     onEdit: async (id, patch) => {
-                                        await agendaService.update(id, patch);
+                                        await agendaUpdate(id, patch);
                                     },
                                 }}
                                 shopping={{

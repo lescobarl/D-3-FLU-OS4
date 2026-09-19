@@ -730,8 +730,13 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 if (req.method !== 'POST') return next();
                 try {
                     const raw = await readRawBody(req);
-                    const lines = raw.split(/\r?\n/).filter(Boolean).length;
-                    console.info(`[geminiProxy] listen log aceptado (no persistido): ${lines} línea(s)`);
+                    const lines = raw.split(/\r?\n/).filter(Boolean);
+                    if (env.FLU_LISTEN_TRACE === '1' || env.FLU_LISTEN_TRACE === 'true') {
+                        for (const line of lines) {
+                            console.info(`[flu-listen] ${line}`);
+                        }
+                    }
+                    console.info(`[geminiProxy] listen log aceptado (no persistido): ${lines.length} línea(s)`);
                 } catch (err: unknown) {
                     console.warn('[geminiProxy] listen log: body ilegible, se acepta igual:', errorField(err, 'message') || err);
                 }

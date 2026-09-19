@@ -17,6 +17,15 @@ export interface ConversationModeBindings {
     conversationActiveRef: { current: boolean };
     /** Abre la escucha principal del motor (`os2StartListening`). */
     startListening: (options?: { resume?: boolean }) => Promise<void>;
+    /**
+     * Estado VISIBLE de la conversación (avatar/UI). El modo es la única fuente:
+     * al entrar/abrir se refleja 'LISTENING' y al salir 'IDLE'. Sin esto la UI
+     * podía quedar mostrando LISTENING con el ruteo apagado: el usuario hablaba
+     * creyendo que se transcribía y el turno se descartaba en silencio.
+     */
+    setConversationState?: (state: 'LISTENING' | 'IDLE') => void;
+    /** Traza de transiciones del modo (una sola fuente). Opcional. */
+    onTransition?: (info: { event: string; active: boolean }) => void;
 }
 
 export interface ConversationModeController {
@@ -35,18 +44,40 @@ export interface ConversationModeController {
 export function createConversationModeController({
     conversationActiveRef,
     startListening,
+    setConversationState,
+    onTransition,
 }: ConversationModeBindings): ConversationModeController {
+    const reflect = (state: 'LISTENING' | 'IDLE') => {
+        try {
+            setConversationState?.(state);
+        } catch {
+            // UI no disponible (tests/SSR): el modo y el ruteo siguen válidos.
+        }
+    };
+    const trace = (event: string) => {
+        try {
+            onTransition?.({ event, active: Boolean(conversationActiveRef.current) });
+        } catch {
+            // Traza no disponible: no afecta al modo.
+        }
+    };
     return {
         enter() {
             conversationActiveRef.current = true;
+            reflect('LISTENING');
+            trace('enter');
         },
         exit() {
             conversationActiveRef.current = false;
+            reflect('IDLE');
+            trace('exit');
         },
         async open(options: { resume?: boolean } = {}) {
             // El modo se fija SIEMPRE antes de arrancar: si se arranca en modo
             // comando, el motor exige wake word y publica la frase tarde.
             conversationActiveRef.current = true;
+            reflect('LISTENING');
+            trace('open');
             return startListening(options);
         },
     };

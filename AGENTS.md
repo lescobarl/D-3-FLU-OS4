@@ -193,6 +193,14 @@ Núcleo anti-mentira. Cualquier otra regla se interpreta bajo esta sección.
     en LISTENING sin responder HTTP (curl → 000) = proceso zombie. Matar con
     `taskkill /PID <pid> /F` y reiniciar con `python run_dev.py`
     (fuerza `WindowsSelectorEventLoopPolicy`).
+17. **No re-lecturas (prohibido).** Prohibido volver a leer un archivo, sección o
+    símbolo ya leído en la sesión o ya provisto en el contexto (AGENTS.md,
+    estado, sistema). Prohibido re-ejecutar búsquedas/listados ya hechos. Si falta
+    un dato exacto, se lee SOLO el fragmento/línea nuevo, nunca el bloque completo.
+    La información ya obtenida se reutiliza tal cual; un turno no repite la misma
+    lectura que el anterior. Aplica a Read/Grep/Glob y a comandos de listado.
+
+---
 
 ## 3. OBLIGACIONES ESTRICTAS
 
@@ -256,7 +264,9 @@ Núcleo anti-mentira. Cualquier otra regla se interpreta bajo esta sección.
   `"incremental": true` + `tsBuildInfoFile` en caché para typecheck caliente.
 
 ### Ahorro de tokens (contexto mínimo)
-- Leer solo fragmentos necesarios; no re-leer lo ya mapeado. Modelo adecuado por tarea
+- Leer solo fragmentos necesarios; **prohibido re-leer lo ya mapeado** (§2.17):
+  no se repite una lectura, búsqueda o listado ya hecho en la sesión. Si falta un
+  dato exacto, se lee solo el fragmento/línea nuevo. Modelo adecuado por tarea
   (ligero para refactors triviales, docs y búsquedas). Razonar antes de ejecutar; prohibido
   lanzar comandos a ciegas. Mantener output de tests limpio. No arrastrar contexto de
   tareas previas terminadas.
@@ -405,7 +415,44 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
 
 ---
 
-**Última actualización**: 2026-09-10
-**Versión del documento**: 7.1
-**Cambio clave**: §11 Receta de invariantes (intención → número HOY/META → guard rojo →
-hito con conteo ANTES/DESPUÉS; plantilla pegable y regla corta).
+## 12. VELOCIDAD DE INTERACCIÓN (genérico, todo proyecto)
+
+Objetivo: minimizar turnos e idas y vueltas sin perder rigor. Se cumple salvo
+que el usuario pida explícitamente lo contrario.
+
+1. **Evidencia en el primer mensaje.** Toda petición trae: entrada cruda + salida
+   real observada + resultado esperado. Si falta, el agente hace UNA pregunta con
+   propuesta por defecto y para (§D). Prohibido adivinar el caso.
+2. **Prohibido volcar contexto completo.** Nunca leer ni pegar un archivo, log o
+   listado entero si basta un fragmento (§2.17). Se lee la línea/bloque nuevo.
+3. **Ventana mínima de logs.** De un log se lee SOLO la marca o línea relevante
+   (búsqueda dirigida por patrón); jamás el buffer completo ni el archivo entero.
+4. **Un objetivo por turno, una pasada.** No agrupar hitos no relacionados; cada
+   turno cierra un contrato (§10.6).
+5. **Verificación por niveles.** (a) test del archivo tocado; (b) typecheck
+   incremental; (c) gate/suite completa SOLO al cierre. No correr todo por cada
+   edición.
+6. **No re-verificar lo ya verde.** Prohibido repetir un comando ya ejecutado y
+   verde en el mismo turno o sin que el código haya cambiado.
+7. **Delegar lo instrumental.** Búsquedas, exploración de símbolos y lectura de
+   logs se delegan a subagentes (en paralelo cuando son independientes); el
+   agente principal solo sintetiza y decide.
+8. **Instrumentación puntual, no trazas masivas.** Usar marcas concretas y
+   apagadas por defecto; el debug verboso se enciende solo para la medición y se
+   apaga al terminar. Un log que inunda es un defecto.
+9. **Modelo/razonamiento proporcional a la tarea.** Ligero y directo para cambios
+   mecánicos; profundo solo para diagnóstico o diseño.
+10. **Salida corta y de formato fijo** (§E). Sin narrar el proceso, sin repetir el
+    diff en prosa, sin mea culpa.
+11. **Cerrar antes de abrir.** Ningún hito queda "pendiente de validar" mientras
+    se empieza otro; se cierra con su guard verde.
+12. **Ante ambigüedad costosa, decidir y avanzar** con el default declarado; el
+    usuario corrige después. Evitar el ping-pong de preguntas.
+
+---
+
+**Última actualización**: 2026-09-18
+**Versión del documento**: 7.3
+**Cambio clave**: §12 Velocidad de interacción (evidencia en el primer mensaje,
+ventana mínima de logs, verificación por niveles, delegación de lo instrumental,
+instrumentación puntual). Refuerza §2.17 y §6.

@@ -2322,17 +2322,6 @@ export function useFluVoiceAssistant({
 
       Recognition.onerror = (event) => {
         const errorCode = String(event.error || '').trim()
-        if (import.meta.env.DEV && debugHotPath) {
-          // Ruido: onerror se repite ~5 veces/s. Solo con depuración fina.
-          relayLog('LOG', 'useFluVoiceAssistant', '[REC] onerror', {
-            error: errorCode,
-            message: String(event.message || ''),
-            isListening: isListeningRef.current,
-            conversationActive: Boolean(conversationActiveRef?.current),
-            isStopping: isStoppingRef.current,
-            recognitionActive: recognitionActiveRef.current,
-          })
-        }
 
         // Fallback OFFLINE (§1/§9): ante error de red ('network') o ausencia de
         // habla ('no-speech') se degrada al motor local Whisper WASM en lugar de
@@ -2422,16 +2411,6 @@ export function useFluVoiceAssistant({
       Recognition.onend = () => {
         recognitionActiveRef.current = false
         lastRecognitionEndAtRef.current = Date.now()
-        if (import.meta.env.DEV && debugHotPath) {
-          // Ruido: onend se repite en cada reinicio del reconocedor. Solo con
-          // depuración fina (si no, inunda el log y tapa las banderas útiles).
-          relayLog('LOG', 'useFluVoiceAssistant', '[REC] onend', {
-            isListening: isListeningRef.current,
-            conversationActive: Boolean(conversationActiveRef?.current),
-            isStopping: isStoppingRef.current,
-            endStream: Boolean(conversationActiveRef?.current),
-          })
-        }
         if (import.meta.env.DEV && debugHotPath && conversationActiveRef?.current) {
           fluDebugHot('recognition-end', {})
         }
@@ -3016,8 +2995,12 @@ export function useFluVoiceAssistant({
 
   const grantParticipantFloor = useCallback(async () => {
     if (fluParticipantRef.current?.shouldIgnoreDuplicateFloorGrant?.()) return
-    const wakeWord = String(resolvedWakeWords[0] || 'flu').trim()
-    const phrase = `ok ${wakeWord} adelante`
+    // Frase compuesta SOLO desde config (sin literales): wake + concesión de
+    // palabra (`grantFloor`). Antes: `ok ${wakeWords[0]} adelante` quemaba "ok"
+    // y "adelante" y producía "ok oye flu adelante".
+    const wakeWord = String(resolvedWakeWords[0] || '').trim()
+    const grantWord = String(FLU_CONFIG.voiceCommands?.grantFloor?.[0] || '').trim()
+    const phrase = [wakeWord, grantWord].filter(Boolean).join(' ')
     await emitActiveConversationCommand('FLU_ADELANTE', phrase)
   }, [emitActiveConversationCommand])
 

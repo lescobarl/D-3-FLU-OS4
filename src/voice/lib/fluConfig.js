@@ -468,6 +468,9 @@ export const FLU_CONFIG = {
     proactiveReminder: true,
     // Fase 2 — B5: cuántos recordatorios pendientes se fusionan a la agenda.
     maxReminders: 5,
+    // Solape mínimo de tokens (0-1) para casar la etiqueta de una serie de
+    // agenda (cancelar/editar/consultar por voz). Fuente única del matcher.
+    labelMatchMinTokenOverlap: 0.6,
     // Etiquetas de sección del listado DETERMINISTA "¿qué hay para hoy?"
     // (src/core/agenda/todayAgenda.ts). Sin hardcode: texto editable aquí.
     voice: {
@@ -2081,6 +2084,8 @@ export const FLU_CONFIG = {
     micRawConsole: true,
     consoleLog: false,
     refreshMs: 1500,
+    /** Relaya fragmentos crudos de Chrome (interim/final) al servidor para diagnóstico. */
+    listenTrace: false,
     /** Vectores de embedding en filas del log de conversación (solo diagnóstico). */
     showEmbeddingPreview: false,
     /** Reenviar logs del frontend al servidor (terminal) para que Roo pueda verlos. */

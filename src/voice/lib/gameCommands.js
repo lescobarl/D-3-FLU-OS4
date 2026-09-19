@@ -22,8 +22,21 @@ import {
   GAME_MENU_FRAMES,
   NON_GAME_REQUEST_FRAMES,
   getGameEngine,
+  suppressesAmbient,
 } from '../../core/games/gameCatalog'
 import { getActiveGameSession } from '../../core/games/gameSessionStore'
+
+// ------------------------------------------------------------
+// Sonda de audio en reproducción (dueño único: la capa de App la conecta a
+// `isMusicPlaying`). Mientras un juego de audio (karaoke/adivina canción)
+// reproduce su pista, la voz ambiente NO debe intervenir ni cambiar la partida.
+// ------------------------------------------------------------
+let audioPlayingProbe = () => false
+
+/** Conecta la sonda de reproducción de audio (una sola vez, desde App). */
+export function setAudioPlayingProbe(probe) {
+  audioPlayingProbe = typeof probe === 'function' ? probe : () => false
+}
 
 // ------------------------------------------------------------
 // Resolución determinista texto → evento de juego
@@ -123,6 +136,16 @@ export function resolveGameCommandFromText(text = '') {
     // 2. Pide el menú de juegos.
     if (GAME_MENU_FRAMES.some((frame) => hasToken(normalized, frame))) {
       return { gameId: activeSession.id, action: 'menu' }
+    }
+    // 2b. Juego que suprime voz ambiente (karaoke) con audio sonando: solo
+    //     controles explícitos del motor ("sigue"/"pista"/salir). La letra o el
+    //     ruido NO cambian la canción ni saltan de juego.
+    if (suppressesAmbient(activeSession.id) && audioPlayingProbe()) {
+      const audioEngine = getGameEngine(activeSession.id)
+      if (audioEngine && audioEngine.isGameCommand(text)) {
+        return { gameId: activeSession.id, action: 'turn', playerText: text }
+      }
+      return null
     }
     // 3. Pide OTRO juego concreto → cambiar (cerrar el actual y abrir el nuevo).
     const intent = matchGameIntent(text)

@@ -169,6 +169,11 @@ export interface AgendaReminderLike {
     status?: string;
 }
 
+/** Entrada del calendario pendiente con su etiqueta de tipo (contexto IA). */
+export interface PendingCalendarEntry extends AgendaReminderLike {
+    kindLabel?: string;
+}
+
 /**
  * Fusiona los recordatorios pendientes en la agenda del día.
  * Agrega un item sintético ("Recordatorios pendientes") al final del
@@ -182,42 +187,76 @@ export interface AgendaReminderLike {
  * @param language - 'es' | 'en' para las etiquetas de tiempo
  * @returns La agenda con el item de recordatorios fusionado
  */
+function buildPendingSection(
+    items: DailyAgendaItem[],
+    entries: ReadonlyArray<PendingCalendarEntry>,
+    title: string,
+    maxItems: number | undefined,
+    language: 'es' | 'en',
+): DailyAgendaItem[] {
+    if (!Array.isArray(entries) || entries.length === 0) return items;
+
+    const pending = entries
+        .filter((entry) => entry && entry.status === 'pending')
+        .slice()
+        .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
+
+    if (pending.length === 0) return items;
+
+    const top = pending.slice(0, maxItems);
+
+    const lines = top.map((entry) => {
+        const text = normalizeSpaces(entry.text || '');
+        const kindLabel = normalizeSpaces(entry.kindLabel || '');
+        const labeled = text && kindLabel ? `${text} (${kindLabel})` : text;
+        const when = formatReminderWhen(entry.dueAt ?? 0, language);
+        return labeled ? `${when} — ${labeled}` : when;
+    });
+
+    const sectionItem: DailyAgendaItem = {
+        minuteId: '',
+        title,
+        pendingItems: [],
+        nextSteps: [],
+        reminders: lines,
+        sourceDate: '',
+    };
+
+    return [...items, sectionItem];
+}
+
 export function mergeRemindersIntoAgenda(
     items: DailyAgendaItem[],
     reminders: ReadonlyArray<AgendaReminderLike> = [],
     config: Partial<DailyAgendaConfig> = {},
     language: 'es' | 'en' = 'es',
 ): DailyAgendaItem[] {
-    if (!Array.isArray(reminders) || reminders.length === 0) return items;
-
-    const pending = reminders
-        .filter((r) => r && r.status === 'pending')
-        .slice()
-        .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
-
-    if (pending.length === 0) return items;
-
     const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
-    const top = pending.slice(0, cfg.maxReminders);
+    return buildPendingSection(
+        items,
+        reminders,
+        language === 'en' ? 'Pending reminders' : 'Recordatorios pendientes',
+        cfg.maxReminders,
+        language,
+    );
+}
 
-    const reminderLines = top.map((r) => {
-        const text = normalizeSpaces(r.text || '');
-        const when = formatReminderWhen(r.dueAt ?? 0, language);
-        return text ? `${when} — ${text}` : when;
-    });
-
-    const title = language === 'en' ? 'Pending reminders' : 'Recordatorios pendientes';
-
-    const reminderItem: DailyAgendaItem = {
-        minuteId: '',
-        title,
-        pendingItems: [],
-        nextSteps: [],
-        reminders: reminderLines,
-        sourceDate: '',
-    };
-
-    return [...items, reminderItem];
+/**
+ * Sección del prompt con TODO el calendario pendiente (cualquier kind), con su
+ * etiqueta de tipo. Fuente ÚNICA del contexto de agenda para la IA: sin filtro
+ * de kinds (antes solo llegaban recordatorio/cita; alarma/junta/clase futura
+ * no estaban y la IA no podía responder por intención).
+ */
+export function appendPendingCalendar(
+    items: DailyAgendaItem[],
+    entries: ReadonlyArray<PendingCalendarEntry> = [],
+    config: Partial<DailyAgendaConfig> = {},
+    language: 'es' | 'en' = 'es',
+    title?: string,
+): DailyAgendaItem[] {
+    const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
+    const sectionTitle = title || (language === 'en' ? 'Pending calendar' : 'Calendario pendiente');
+    return buildPendingSection(items, entries, sectionTitle, cfg.maxReminders, language);
 }
 
 // -----------------------------------------------------------

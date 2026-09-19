@@ -28,7 +28,10 @@ function syncListenLogGlobals() {
 }
 
 export function isListenTraceEnabled() {
-  return IS_DEV && typeof window !== 'undefined' && window.__FLU_LISTEN_DEBUG === true
+  if (!IS_DEV || typeof window === 'undefined') return false
+  if (window.__FLU_LISTEN_DEBUG === false) return false
+  if (window.__FLU_LISTEN_DEBUG === true) return true
+  return FLU_CONFIG.debug?.listenTrace !== false
 }
 
 export function isChromeRawConsoleEnabled() {

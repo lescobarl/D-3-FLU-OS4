@@ -9,7 +9,8 @@
 // "apunta/anota/añade/nota {texto}" (sin conectores de relleno).
 // ============================================================
 
-const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i
+import { stripWakeWord } from './wakeWord.js'
+
 const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hazme|hazmelo|hacer|hagame|hágame|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?(?:nota|lista)\b\s*(.*)$/i
 const NOTE_PARA_SUPER =
@@ -101,8 +102,7 @@ function cleanSuperItem(rest = '') {
  * Texto esperado SIN el "ok flu" (si llegara con wake, se limpia aquí).
  */
 export function parseNoteIntentText(rawText = '') {
-  let clean = String(rawText || '').trim()
-  clean = clean.replace(WAKE_LEAD, ' ').trim()
+  let clean = stripWakeWord(rawText)
   // Artículo inicial antes de "nota": "una nota del super …" → "nota del super …".
   clean = clean.replace(/^(?:una|un|la|el|mi)\s+(?=notas?\b)/i, '').trim()
   if (!clean) return null
@@ -196,19 +196,25 @@ export function parseNoteIntentText(rawText = '') {
  * Fuente única del reconocimiento de "borra/elimina/quita la nota X".
  */
 export function parseNoteRemoveIntentText(rawText = '') {
-  let clean = String(rawText || '').trim()
-  clean = clean.replace(WAKE_LEAD, ' ').trim()
+  let clean = stripWakeWord(rawText)
   clean = collapseStutter(clean).replace(/\s+/g, ' ').trim()
   if (!clean) return null
   const m = NOTE_REMOVE.exec(clean)
   if (!m) return null
   const target = normalizeRemoveTarget(m[1] ? m[1].trim() : '')
   if (target) return { target, all: false }
-  // Sin destino: "borra TODAS las notas" (todas/todo) O verbo de VACIADO
-  // ("limpia/vacía las notas", que implica todas) → borrar TODAS.
+  // Sin destino: vaciado SOLO si es inequívoco:
+  //   - marcador de totalidad ("todas/todo/completa/entera"), o
+  //   - verbo de vaciado ("limpia/vacía/clear"), o
+  //   - verbo destructivo sobre el PLURAL ("borra/elimina/quita las notas").
+  // El singular sin destino ("borra la nota") sigue siendo ambiguo → null.
+  const pluralNotes = /\b(?:notas|listas)\b/i.test(clean)
+  const destructiveVerb =
+    /\b(?:borra|borrar|elimina|eliminar|quita|quitar|remueve|remover|saca|sacar|delete|remove)\b/i.test(clean)
   if (
     /\b(?:todas?|todos?|todo|completa?|entera?)\b/i.test(clean) ||
-    /\b(?:limpia|limpiar|vac[ií]a|vac[ií]ar|clear)\b/i.test(clean)
+    /\b(?:limpia|limpiar|vac[ií]a|vac[ií]ar|clear)\b/i.test(clean) ||
+    (pluralNotes && destructiveVerb)
   ) {
     return { target: null, all: true }
   }

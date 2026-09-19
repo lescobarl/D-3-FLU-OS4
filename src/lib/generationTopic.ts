@@ -10,6 +10,7 @@
 // ============================================================
 import { cleanForSpeech } from './textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { stripWakeWord } from '../voice/lib/wakeWord';
 
 export interface GenerationConversationSlice {
     conversationHistory?: Array<{
@@ -25,8 +26,6 @@ export interface GenerationConversationSlice {
     } | null;
 }
 
-const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|oye\s*flu|flu|ok\s*flow)[,.\s]*/i;
-
 const GENERATION_LEAD =
     /^\s*(?:crea|crear|creame|gen[ée]rame|genera|generar|hazme|haz|hacer|elabora|elaborar|escr[íi]beme|escribe|prepara|preparar|ponme|pon|agenda|agendar|programa|programar)\s+(?:un|una|unos|unas|el|la|los|las)?\s*(?:video|documento|carta|nota|informe|reporte|ensayo|resumen|imagen|guion|gu[íi]on|art[íi]culo|article|letter|note|essay|report|summary)\s*(?:sobre|de|acerca\s+de|acerca\s+del|para|por|con|en|del)?\s*/i;
 
@@ -38,7 +37,7 @@ const GENERATION_LEAD =
 export function cleanTopicFromCommand(text = ''): string {
     let value = cleanForSpeech(text);
     if (!value) return '';
-    value = value.replace(WAKE_LEAD, ' ').trim();
+    value = stripWakeWord(value);
     value = value.replace(GENERATION_LEAD, ' ').trim();
     value = cleanForSpeech(value);
     return value;

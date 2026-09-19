@@ -35,7 +35,6 @@ export {
   collapseEchoPhrase,
   mergeMicChunks,
   pickBestMicInterim,
-  collapseMisorderedMicMerge,
   micPublishedParityOk,
   collapseAsrStutter,
   normalizeMicText,

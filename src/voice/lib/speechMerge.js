@@ -67,24 +67,18 @@ export function collapseRepeatedSpeech(text = '') {
 }
 
 /**
- * Chrome a veces manda un sufijo suelto («ahí») en otro evento tras «estás»,
- * produciendo «ahí estás ahí». Colapsa prefijo huérfano repetido.
+ * Chrome a veces manda un sufijo suelto («ahí») en un evento previo y luego la
+ * frase completa («estás ahí»). El fragmento previo es huérfano: la frase
+ * entrante ya lo contiene como palabra final. Se descarta `prev` y NUNCA se
+ * recorta la entrante — así una primera palabra legítima repetida al cierre
+ * («hola ya hola») sobrevive. Solo aplica con `prev` de UNA palabra.
  */
-export function collapseMisorderedMicMerge(text = '') {
-  let cur = cleanForSpeech(text)
-  if (!cur) return ''
-
-  const words = cur.split(/\s+/).filter(Boolean)
-  if (words.length >= 3) {
-    const first = words[0].toLowerCase()
-    const last = words[words.length - 1].toLowerCase()
-    if (first === last && first.length >= 2) {
-      const inner = words.slice(1).join(' ')
-      if (inner.length >= first.length) return inner
-    }
-  }
-
-  return cur
+function dropOrphanSuffixFragment(prev = '', next = '') {
+  const pw = prev.split(/\s+/).filter(Boolean)
+  const nw = next.split(/\s+/).filter(Boolean)
+  if (pw.length !== 1 || nw.length < 2) return ''
+  if (pw[0].toLowerCase() !== nw[nw.length - 1].toLowerCase()) return ''
+  return next
 }
 
 function hasRepeatedWordBlock(words = [], minSize = 4) {
@@ -140,9 +134,9 @@ export function normalizeMicText(text = '') {
   const base = cleanForSpeech(text)
   if (!base) return ''
   if (base.length < 48) {
-    return collapseMisorderedMicMerge(collapseRepeatedSpeech(base))
+    return collapseRepeatedSpeech(base)
   }
-  return collapseMisorderedMicMerge(collapseAsrStutter(base))
+  return collapseAsrStutter(base)
 }
 
 function tryAsrProgressiveMerge(prev = '', next = '') {
@@ -162,8 +156,15 @@ function tryAsrProgressiveMerge(prev = '', next = '') {
   const nw = nLow.split(/\s+/)[0] || ''
   if (pw.length >= 2 && nw.startsWith(pw) && next.length >= prev.length) return next
   if (nw.length >= 2 && pw.startsWith(nw) && prev.length >= next.length) return prev
-  if (hasSpeechAnchor(prev, next) && next.length >= Math.floor(prev.length * 0.5)) return next
-  if (hasSpeechAnchor(next, prev) && prev.length >= Math.floor(next.length * 0.5)) return prev
+  if (hasSpeechAnchor(prev, next) && next.length >= Math.floor(prev.length * 0.5)) {
+    // Ventana deslizada: si la primera palabra de `prev` NO está en `next`, `next`
+    // no es un superconjunto sino el mismo turno sin su cabeza → no descartar
+    // `prev` (se pierde la primera palabra); se cae a la fusión que la conserva.
+    if (!pw || nLow.includes(pw)) return next
+  }
+  if (hasSpeechAnchor(next, prev) && prev.length >= Math.floor(next.length * 0.5)) {
+    if (!nw || pLow.includes(nw)) return prev
+  }
   return ''
 }
 
@@ -225,6 +226,8 @@ export function resolveMicFragmentMerge(previous = '', incoming = '') {
   if (!next) return prev
   const progressive = tryAsrProgressiveMerge(prev, next)
   if (progressive) return progressive
+  const orphanDropped = dropOrphanSuffixFragment(prev, next)
+  if (orphanDropped) return orphanDropped
   return mergeSpeechTextBlind(prev, next, { keepAll: true })
 }
 
@@ -234,7 +237,7 @@ export function mergeSpeechText(base = '', incoming = '', { keepAll = false } = 
   if (!next) return prev
   if (!prev) return normalizeMicText(next)
   const progressive = tryAsrProgressiveMerge(prev, next)
-  if (progressive) return progressive.length >= 48 ? normalizeMicText(progressive) : collapseMisorderedMicMerge(collapseRepeatedSpeech(progressive))
+  if (progressive) return progressive.length >= 48 ? normalizeMicText(progressive) : collapseRepeatedSpeech(progressive)
   return normalizeMicText(mergeSpeechTextBlind(prev, next, { keepAll }))
 }
 

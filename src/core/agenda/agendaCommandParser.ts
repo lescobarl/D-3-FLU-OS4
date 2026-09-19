@@ -2,9 +2,9 @@
 // src/core/agenda/agendaCommandParser.ts
 // Parser ÚNICO de CREACIÓN/EDICIÓN/CANCELACIÓN del calendario unificado.
 // ------------------------------------------------------------
-// Complementa a `agendaIntentParser.ts` (la consulta "qué hay para hoy"):
-// este reconoce create/list/update/cancel para los 5 kinds, resolviendo el
-// DISPARO (absolute/daily/weekly/countdown) con los utils ya validados:
+// Parser ÚNICO del calendario: reconoce create/list/update/cancel para los 5
+// kinds (la consulta del día incluida), resolviendo el DISPARO
+// (absolute/daily/weekly/countdown) con los utils ya validados:
 //   - `parseNlDateTime`  → fechas relativas/absolutas (mañana, jueves, 17 de…).
 //   - `pickTimeOfDay`    → hora "HH:MM" y resto sin hora.
 //   - `parseTimeOfDayToMs` → "HH:MM" → ms desde medianoche.
@@ -16,6 +16,7 @@ import {
 } from '../reminders/nlDateParser';
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
+import { stripWakeWord, stripWakeWordAnywhere } from '../../voice/lib/wakeWord.js';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 
 export type AgendaCommandAction =
@@ -36,9 +37,8 @@ export interface AgendaCommand {
     reply: string;
 }
 
-const WAKE_LEAD = /^(?:ok\s*flu|okay\s*flow|hey\s*flu|flu|ok\s*flow)[,.\s]*/i;
-// El ASR puede pegar el wake word en MEDIO del eco ("… recordatorio Okay flu crea …").
-const WAKE_WORD_ANY = /\b(?:ok(?:ay)?\s*(?:flu|flow)|hey\s*flu)\b/gi;
+// El ASR puede pegar el wake word en MEDIO del eco ("… recordatorio Okay flu crea …"):
+// ese barrido lo resuelve `stripWakeWordAnywhere` (vocabulario de FLU_CONFIG), sin regex local.
 // Cláusula del recordatorio que NO es contenido: "que me recuerde tomar X",
 // "recuérdame X", "acordarme de X". Solo el contenido queda como etiqueta.
 const REMINDER_CLAUSE =
@@ -79,6 +79,8 @@ const WEEKDAY_NAMES: ReadonlyArray<{ name: string; day: number }> = Object.freez
 ]);
 
 const DAILY_RE = /\b(?:todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
+/** Recurrencia de CLASE "toda la semana / todos los días" = horario de 7 días. */
+const CLASE_ALL_DAYS_RE = /\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
 const COUNTDOWN_RE = /\b(?:en|de)\s+(\d+)\s+(segundos?|minutos?|horas?)\b/i;
 
 function normalize(text: string): string {
@@ -161,6 +163,25 @@ function detectAction(text: string): AgendaCommandAction | null {
         return 'agenda.list';
     }
     if (/\b(?:mi agenda|agenda de|agenda para)\b/.test(t)) return 'agenda.list';
+    // Consulta del día con verbo de petición ("dime qué hay … hoy") y su forma
+    // interrogativa en inglés. Antes vivía duplicada en `agendaIntentParser`;
+    // ahora el reconocimiento es UNO (este parser) y el otro solo lo adapta.
+    if (
+        /^(?:dime|dame|cuentame|platicame|muestra|muestrame|ensename|ver)\b/.test(t) &&
+        /\bque\s+(?:hay|tengo|tienes|tiene)\b/.test(t) &&
+        /\b(?:hoy|manana|semana|mes|dia)\b/.test(t)
+    ) {
+        return 'agenda.list';
+    }
+    if (
+        /^(?:agenda|plan|resumen|resumeme)\s*(?:de\s+|del\s+|para\s+(?:el\s+|la\s+)?)?(?:hoy|el\s+dia|mi\s+dia)\b/.test(t) ||
+        /^(?:dime|muestra|muestrame|dame|ver|ensename)\s+(?:mi\s+|la\s+|el\s+)?(?:agenda|plan|resumen|dia)\b/.test(t) ||
+        /^what(?:'s| is)?\s+(?:on|up|do\s+i\s+have)\s*(?:for\s+)?(?:today|my\s+day)\b/.test(t) ||
+        /^(?:my|today'?s)\s+(?:agenda|schedule|plan)\b/.test(t) ||
+        /^show\s+(?:me\s+)?(?:my\s+)?(?:agenda|day|plan)\b/.test(t)
+    ) {
+        return 'agenda.list';
+    }
     // "borra/limpia TODO/TODA la agenda/el calendario" → vaciar todo.
     // Conectores flexibles: "todo lo de la agenda", "todo el contenido de la
     // agenda", "toda la agenda", "limpia el calendario".
@@ -179,22 +200,6 @@ function detectAnyWeekdays(text: string): number[] {
     return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(t)).map((w) => w.day);
 }
 
-/** Clase = horario semanal: día(s) + hora (el/los/lunes…). */
-function resolveClaseTrigger(text: string, now: number): AgendaTrigger | null {
-    const t = normalize(text);
-    // "toda la semana" / "todos los días" → clase recurrente TODOS los días.
-    if (/(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+dias|diario|diariamente|cada\s+dia)/i.test(t)) {
-        const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
-        return { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay: time };
-    }
-    const days = detectAnyWeekdays(text);
-    if (days.length > 0) {
-        const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
-        return { type: 'weekly', daysOfWeek: days, timeOfDay: time };
-    }
-    return resolveTrigger(text, now);
-}
-
 /** Días de semana SOLO con recurrencia explícita ("los lunes"), no "el jueves". */
 function detectWeekdays(text: string): number[] {
     const t = normalize(text);
@@ -204,8 +209,19 @@ function detectWeekdays(text: string): number[] {
     return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(after)).map((w) => w.day);
 }
 
-function resolveTrigger(text: string, now: number): AgendaTrigger | null {
-    const countdown = COUNTDOWN_RE.exec(normalize(text));
+/**
+ * Resolutor ÚNICO de recurrencia (clase y resto de kinds).
+ * Precedencia: countdown → días nombrados → diario → absoluto.
+ * Los días nombrados GANAN sobre "todos los días" (no al revés): así
+ * "todos los días los lunes" es semanal (lunes), no diario.
+ *   - CLASES: aceptan cualquier día nombrado ("el lunes").
+ *   - Resto: exigen recurrencia explícita ("los lunes"), no "el jueves".
+ * "todos los días" en una clase = horario semanal de 7 días; en el resto, daily.
+ */
+function resolveRecurrence(text: string, now: number, kind: AgendaKind): AgendaTrigger | null {
+    const t = normalize(text);
+
+    const countdown = COUNTDOWN_RE.exec(t);
     if (countdown) {
         const amount = Number(countdown[1]);
         const unit = normalize(countdown[2]);
@@ -213,15 +229,18 @@ function resolveTrigger(text: string, now: number): AgendaTrigger | null {
         return { type: 'countdown', durationMs: amount * ms };
     }
 
-    if (DAILY_RE.test(normalize(text))) {
+    const days = kind === 'clase' ? detectAnyWeekdays(text) : detectWeekdays(text);
+    if (days.length > 0) {
         const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
-        return { type: 'daily', timeOfDay: time };
+        return { type: 'weekly', daysOfWeek: days, timeOfDay: time };
     }
 
-    const weekdays = detectWeekdays(text);
-    if (weekdays.length > 0) {
-        const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
-        return { type: 'weekly', daysOfWeek: weekdays, timeOfDay: time };
+    const allDays = kind === 'clase' ? CLASE_ALL_DAYS_RE.test(t) : DAILY_RE.test(t);
+    if (allDays) {
+        const timeOfDay = pickTimeOfDay(text).timeOfDay ?? '09:00';
+        return kind === 'clase'
+            ? { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay }
+            : { type: 'daily', timeOfDay };
     }
 
     const picked = pickTimeOfDay(text);
@@ -257,7 +276,7 @@ function wordRe(alternation: string): RegExp {
 
 function resolveLabel(text: string): string {
     // 1) Wake word en CUALQUIER posición (el eco del ASR lo mete en medio).
-    const base = text.replace(WAKE_WORD_ANY, ' ').replace(WAKE_LEAD, ' ').trim();
+    const base = stripWakeWordAnywhere(text);
     // 2) Quitar la HORA con el MISMO selector único (pickTimeOfDay): maneja
     //    "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3", etc.
     // 3) Quitar la cláusula del recordatorio ("que me recuerde", "recuérdame"…).
@@ -273,9 +292,11 @@ function resolveLabel(text: string): string {
     // ASCII y no matchea con acento → se limpia aparte, tolerante a acentos.
     label = label.replace(wordRe('despi[eé]rt[aá]me|despert[aá]me|despi[eé]rta'), ' ');
     label = label
+        // Frases de recurrencia COMPLETAS antes de los stopwords: si se quita
+        // "los" primero, "todos los días" queda "todos días" y ya no casa.
+        .replace(wordRe('toda\\s+la\\s+semana|toda\\s+semana|todos\\s+los\\s+d[ií]as|cada\\s+semana|cada\\s+d[ií]a|semanalmente|semanal|diario|diariamente|semana'), ' ')
         .replace(wordRe('una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|será'), ' ')
         .replace(wordRe('manana|mañana|hoy|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|tarde|noche|madrugada'), ' ')
-        .replace(wordRe('toda\\s+la\\s+semana|toda\\s+semana|todos\\s+los\\s+d[ií]as|cada\\s+semana|cada\\s+d[ií]a|semanal|diario|diariamente|semana|semanalmente'), ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
     if (label) return label;
@@ -293,7 +314,7 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const text = String(input || '').trim();
     const cleaned = collapseRepeatedPhrase(
         collapseQuantifierStutter(
-            collapseStutter(text.replace(WAKE_LEAD, ' ').replace(/^[¿¡]+/, '').trim()),
+            collapseStutter(stripWakeWord(text).replace(/^[¿¡]+/, '')),
         ),
     ).replace(/\s+/g, ' ').trim();
     if (!cleaned) return { handled: false, action: null, reply: '' };
@@ -315,11 +336,9 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const resolvedAction = action ?? 'agenda.create';
 
     // El disparo es OBLIGATORIO solo para crear; cancelar/editar identifican
-    // el item por kind+label (la fecha puede venir o no). Las CLASES con día
-    // de semana son SIEMPRE semanales (es su horario, no una cita puntual).
-    const trigger = kind === 'clase'
-        ? resolveClaseTrigger(cleaned, now)
-        : resolveTrigger(cleaned, now);
+    // el item por kind+label (la fecha puede venir o no). Un ÚNICO resolutor de
+    // recurrencia atiende clases y resto de kinds (sin dos gramáticas).
+    const trigger = resolveRecurrence(cleaned, now, kind);
     if (!trigger && resolvedAction === 'agenda.create') {
         return { handled: false, action: null, reply: '' };
     }

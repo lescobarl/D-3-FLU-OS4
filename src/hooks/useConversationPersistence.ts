@@ -80,9 +80,14 @@ export function useConversationPersistence(participantId?: string) {
     const scope = participantId || 'global';
     const loadedRef = useRef(false);
     const loadedScopeRef = useRef<string>('');
+    // Último usuario REAL observado (independiente del bucket `'global'` de la DB).
+    const previousUserRef = useRef<string | undefined>(undefined);
 
     // ---- Load persisted history on mount / al cambiar de usuario ----
     useEffect(() => {
+        const previousUser = previousUserRef.current;
+        previousUserRef.current = participantId;
+
         // Sin usuario real: NO se carga y —NUNCA— se borra la conversación EN VIVO.
         // (Antes hacía batchLoadHistory([]) y borraba el turno recién dicho cuando
         // el usuario real era transitorio, p. ej. durante el onboarding.)
@@ -92,7 +97,6 @@ export function useConversationPersistence(participantId?: string) {
             return;
         }
         if (loadedRef.current && loadedScopeRef.current === scope) return;
-        const previousScope = loadedScopeRef.current;
         loadedRef.current = true;
         loadedScopeRef.current = scope;
 
@@ -101,8 +105,7 @@ export function useConversationPersistence(participantId?: string) {
                 // Solo se vacía al cambiar entre DOS usuarios reales distintos
                 // (para no mezclar conversaciones). Hacia/desde "sin usuario" NO
                 // se toca lo que está en pantalla.
-                const switchedRealUser =
-                    Boolean(previousScope) && previousScope !== 'global' && previousScope !== scope;
+                const switchedRealUser = Boolean(previousUser) && previousUser !== participantId;
                 if (switchedRealUser && useIntegrationStore.getState().conversationHistory.length > 0) {
                     useIntegrationStore.getState().batchLoadHistory([]);
                 }
@@ -173,7 +176,9 @@ export function useConversationPersistence(participantId?: string) {
     // Using a selector that returns the length ensures the component only
     // re-renders when entries are actually added or removed.
     const historyLength = useIntegrationStore((s) => s.conversationHistory.length);
+    const conversationEpoch = useIntegrationStore((s) => s.conversationEpoch);
     const savedLengthRef = useRef(historyLength);
+    const savedEpochRef = useRef(conversationEpoch);
 
     useEffect(() => {
         if (historyLength > savedLengthRef.current) {
@@ -185,24 +190,29 @@ export function useConversationPersistence(participantId?: string) {
             fluDb.conversations.bulkPut(rows).catch((err) => {
                 console.error('[ConversationPersistence] Error saving entries:', err);
             });
-            savedLengthRef.current = historyLength;
-            return;
         }
-        if (historyLength === 0 && savedLengthRef.current > 0) {
-            // El historial se vació en memoria ("iniciar conversación"/limpiar):
-            // borrar SOLO lo persistido de ESTE usuario (aislamiento por usuario).
-            savedLengthRef.current = 0;
-            fluDb.conversations
-                .toArray()
-                .then((all) =>
-                    all
-                        .filter((row) => (row.participantId || 'global') === scope)
-                        .map((row) => row.id),
-                )
-                .then((ids) => (ids.length ? fluDb.conversations.bulkDelete(ids) : undefined))
-                .catch((err) => {
-                    console.error('[ConversationPersistence] Error clearing persisted history:', err);
-                });
-        }
+        savedLengthRef.current = historyLength;
     }, [historyLength, scope]);
+
+    // ---- Borrado explícito de lo persistido ----
+    // Se borra SOLO cuando el store anuncia un reset INTENCIONAL del historial
+    // (conversationEpoch: "iniciar conversación"/"limpiar"). Un historial vacío
+    // transitorio (onboarding, carga asíncrona) NO borra nada: ese efecto colateral
+    // era la causa de "me borra lo que digo".
+    useEffect(() => {
+        if (conversationEpoch === savedEpochRef.current) return;
+        savedEpochRef.current = conversationEpoch;
+        savedLengthRef.current = 0;
+        fluDb.conversations
+            .toArray()
+            .then((all) =>
+                all
+                    .filter((row) => (row.participantId || 'global') === scope)
+                    .map((row) => row.id),
+            )
+            .then((ids) => (ids.length ? fluDb.conversations.bulkDelete(ids) : undefined))
+            .catch((err) => {
+                console.error('[ConversationPersistence] Error clearing persisted history:', err);
+            });
+    }, [conversationEpoch, scope]);
 }

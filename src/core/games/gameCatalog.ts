@@ -39,6 +39,13 @@ export interface GameIntentEntry {
     aliases: string[];              // 'juguemos a simón dice', 'simón dice', 'a jugar simón'
     engine: () => GameEngine;
     requiresApi?: boolean;          // true = cuentacuentos/trivia dinámica
+    /** true = el motor reproduce audio (música): `playSong`/`stopMusic` aplican. */
+    audio?: boolean;
+    /**
+     * true = mientras suena el audio la voz ambiente NO debe intervenir (karaoke:
+     * el niño canta; adivina canción NO lo activa porque el niño debe responder).
+     */
+    suppressAmbient?: boolean;
 }
 
 /** Todos los ids válidos (normalizeJuego los valida contra esta lista). */
@@ -259,6 +266,7 @@ export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
         aliases: ['adivina la cancion', 'que cancion es', 'adivina la melodia', 'adivinar la cancion', 'adivina que cancion'],
         engine: createAdivinaCancionEngine,
         requiresApi: false,
+        audio: true,
     },
     {
         id: 'cuentacuentos',
@@ -308,6 +316,8 @@ export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
         aliases: ['karaoke', 'cantar juntos', 'cantemos', 'canta conmigo'],
         engine: createKaraokeEngine,
         requiresApi: false,
+        audio: true,
+        suppressAmbient: true,
     },
 ]);
 
@@ -356,6 +366,16 @@ export function gameMenuNames(): string[] {
 export function getGameEngine(id: GameId): GameEngine | null {
     const entry = GAME_CATALOG.find((candidate) => candidate.id === id);
     return entry ? entry.engine() : null;
+}
+
+/** ¿El juego reproduce audio (música)? Fuente única: el flag del catálogo. */
+export function isAudioGame(id: GameId): boolean {
+    return Boolean(GAME_CATALOG.find((entry) => entry.id === id)?.audio);
+}
+
+/** ¿Suprime la voz ambiente mientras suena el audio? (karaoke sí; adivina no). */
+export function suppressesAmbient(id: GameId): boolean {
+    return Boolean(GAME_CATALOG.find((entry) => entry.id === id)?.suppressAmbient);
 }
 
 export function isGameId(value: unknown): value is GameId {

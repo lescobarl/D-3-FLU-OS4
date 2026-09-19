@@ -7,7 +7,7 @@
 // real con una nota y verifica que los bindings existen.
 import { describe, it, expect } from 'vitest';
 import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter';
-import { parseNoteIntentText } from '../src/voice/lib/noteIntentParser';
+import { parseNoteIntentText, parseNoteRemoveIntentText } from '../src/voice/lib/noteIntentParser';
 
 describe('🧪 Bindings JS (notas) — sin import rotos', () => {
     it('reconocer una nota no lanza ReferenceError y resuelve al dominio note', () => {
@@ -26,6 +26,45 @@ describe('🧪 Bindings JS (notas) — sin import rotos', () => {
         expect((result as any)?.matched).toBe(true);
         expect((result as any)?.domain).toBe('note');
         expect((result as any)?.action?.data?.label).toBe('Super: conejos');
+    });
+});
+
+// ============================================================
+// Vaciado de notas por voz (RAÍZ). Bug real: «Okay flu bor Borra
+// las notas» no se reconocía (wake desalineado + falta de "todas")
+// → el turno caía al LLM y respondía un saludo genérico.
+// El wake se normaliza desde FLU_CONFIG.voiceCommands.wakeWords.
+// ============================================================
+describe('parseNoteRemoveIntentText — vaciado de notas', () => {
+    it('«Okay flu bor Borra las notas» (wake configurado + tartamudeo) → vaciar todas', () => {
+        expect(parseNoteRemoveIntentText('Okay flu bor Borra las notas')).toEqual({ target: null, all: true });
+    });
+
+    it('«Borra las notas» (plural, sin «todas») → vaciar todas', () => {
+        expect(parseNoteRemoveIntentText('Borra las notas')).toEqual({ target: null, all: true });
+    });
+
+    it('«borra todas las notas» → vaciar todas', () => {
+        expect(parseNoteRemoveIntentText('borra todas las notas')).toEqual({ target: null, all: true });
+    });
+
+    it('singular sin destino sigue ambiguo (no vacía por error)', () => {
+        expect(parseNoteRemoveIntentText('borra la nota')).toBeNull();
+    });
+
+    it('borrar UNA nota por destino sigue funcionando', () => {
+        expect(parseNoteRemoveIntentText('borra la nota del super')).toEqual({ target: 'Super', all: false });
+    });
+
+    it('end-to-end: el árbitro clasifica el comando real como notes.clear', () => {
+        const result = resolveDeterministicCommand('Okay flu bor Borra las notas', { language: 'es' }) as {
+            matched?: boolean;
+            domain?: string;
+            action?: { action?: string };
+        };
+        expect(result?.matched).toBe(true);
+        expect(result?.domain).toBe('note');
+        expect(result?.action?.action).toBe('notes.clear');
     });
 });
 

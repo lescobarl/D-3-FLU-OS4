@@ -9,7 +9,6 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter';
-import { parseAgendaIntent } from '../src/core/agenda/agendaIntentParser';
 
 // Jueves 2026-09-17 10:00 local.
 const NOW = new Date(2026, 8, 17, 10, 0, 0, 0).getTime();
@@ -258,10 +257,8 @@ describe('CANCELAR / VACIAR / CONSULTAR', () => {
         expect(a.action).toBe('agenda.clear');
     });
 
-    it('"dime qué hay para hoy" (consulta: su resolver es agendaIntentParser)', () => {
-        expect(parseAgendaIntent('dime qué hay para hoy')).toMatchObject({
-            handled: true,
-            action: 'agenda.today',
-        });
+    it('"dime qué hay para hoy" (consulta: parser único agendaCommand)', () => {
+        const a = agenda('dime qué hay para hoy');
+        expect(a.action).toBe('agenda.list');
     });
 });

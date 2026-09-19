@@ -26,7 +26,7 @@ const HINT_FRAMES: readonly string[] = Object.freeze([
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'paso', 'siguiente', 'sigue tu', 'tu sigue', 'adelante',
+    'paso', 'siguiente', 'sigue', 'sigue tu', 'tu sigue', 'adelante',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([

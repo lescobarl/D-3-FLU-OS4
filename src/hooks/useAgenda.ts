@@ -18,8 +18,8 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { runAgendaCycle } from '../core/agenda/agendaMotor';
-import type { AgendaService } from '../core/agenda/agendaService';
-import type { AgendaItem, AgendaKind } from '../core/agenda/agendaModel';
+import type { AgendaService, AgendaCreateInput, AgendaTargetSelector } from '../core/agenda/agendaService';
+import type { AgendaItem, AgendaKind, AgendaStatus } from '../core/agenda/agendaModel';
 import { createWebAudioDriver, type AudioDriver } from '../core/temporal/audioAlert';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
@@ -56,6 +56,14 @@ export interface UseAgendaResult {
     ringing: AgendaRinging | null;
     /** Silencia lo que suena (no cancela el item pendiente). */
     stopRinging: () => void;
+    /** Lectura puntual (mismo servicio único; sin rutas paralelas). */
+    list: (filter?: { personId?: string; status?: AgendaStatus }) => Promise<AgendaItem[]>;
+    /** Mutaciones: TODAS refrescan `items` al resolverse (patrón useNotes). */
+    create: AgendaService['create'];
+    update: AgendaService['update'];
+    cancel: AgendaService['cancel'];
+    cancelByTarget: AgendaService['cancelByTarget'];
+    updateByTarget: AgendaService['updateByTarget'];
     /** Vacía la agenda del usuario activo y refresca el panel de inmediato. */
     clearAll: () => Promise<number>;
 }
@@ -169,6 +177,60 @@ export function useAgenda({
         };
     }, [service, personId, tickMs, autoStopMs, audioDriver, reloadToken]);
 
+    /** Refresco bajo demanda: re-ejecuta el tick (no espera los 15 s). */
+    const refresh = useCallback(() => setReloadToken((n) => n + 1), []);
+
+    /** Lectura puntual: mismo servicio único. */
+    const list = useCallback(
+        (filter?: { personId?: string; status?: AgendaStatus }) => service.list(filter),
+        [service],
+    );
+
+    const create = useCallback<AgendaService['create']>(
+        async (input: AgendaCreateInput) => {
+            const result = await service.create(input);
+            if (result.ok) refresh();
+            return result;
+        },
+        [service, refresh],
+    );
+
+    const update = useCallback<AgendaService['update']>(
+        async (id, patch) => {
+            const result = await service.update(id, patch);
+            if (result.ok) refresh();
+            return result;
+        },
+        [service, refresh],
+    );
+
+    const cancel = useCallback<AgendaService['cancel']>(
+        async (id) => {
+            const result = await service.cancel(id);
+            if (result.ok) refresh();
+            return result;
+        },
+        [service, refresh],
+    );
+
+    const cancelByTarget = useCallback<AgendaService['cancelByTarget']>(
+        async (selector: AgendaTargetSelector) => {
+            const count = await service.cancelByTarget(selector);
+            if (count > 0) refresh();
+            return count;
+        },
+        [service, refresh],
+    );
+
+    const updateByTarget = useCallback<AgendaService['updateByTarget']>(
+        async (selector: AgendaTargetSelector, patch) => {
+            const count = await service.updateByTarget(selector, patch);
+            if (count > 0) refresh();
+            return count;
+        },
+        [service, refresh],
+    );
+
     /**
      * Vacía la agenda del usuario y REFRESCA el panel de inmediato (no espera
      * al próximo tick del scheduler, que por defecto es de 15 s).
@@ -177,9 +239,9 @@ export function useAgenda({
         if (!personId) return 0;
         const count = await service.clearAll({ personId });
         setItems([]);
-        setReloadToken((n) => n + 1);
+        refresh();
         return count;
-    }, [service, personId]);
+    }, [service, personId, refresh]);
 
     /** Silencia lo que está sonando (no cancela el item pendiente). */
     const stopRinging = useCallback((): void => {
@@ -201,5 +263,5 @@ export function useAgenda({
         [],
     );
 
-    return { items, ringing, stopRinging, clearAll };
+    return { items, ringing, stopRinging, list, create, update, cancel, cancelByTarget, updateByTarget, clearAll };
 }

@@ -26,7 +26,6 @@ import {
 } from './activeListen.js'
 import {
   micPublishedParityOk,
-  collapseMisorderedMicMerge,
   buildPriorRowsForStrip,
   clearInterimOpenLineClock,
   readTurnLive,
@@ -55,19 +54,32 @@ function buildFinalCommitList(finalChunks = []) {
   if (normalized.length <= 1) return normalized
 
   const commits = []
+  // Canoniza quitando espacios: Chrome manda alternativas del MISMO result con
+  // distinto espaciado ("1 2 3" vs "123") que no deben contarse como frases nuevas.
+  const canon = (value) => String(value || '').replace(/\s+/g, '').toLowerCase()
   for (const capture of normalized) {
     const last = commits.at(-1) || ''
     if (!last) {
       commits.push(capture)
       continue
     }
+    const cLast = canon(last)
+    const cCapture = canon(capture)
     if (
       capture === last ||
       capture.startsWith(last) ||
+      last.startsWith(capture) ||
+      cCapture === cLast ||
+      cLast.startsWith(cCapture) ||
+      cCapture.startsWith(cLast) ||
       utterancesSameRevision(last, capture) ||
       utterancesRelate(last, capture)
     ) {
-      commits[commits.length - 1] = capture
+      // Misma revisión: Chrome manda alternativas del MISMO result y la más
+      // corta puede llegar al final ("1 2 3" → "123" → "1 2"; "… frases" →
+      // "ok flu"). Nunca encoger: la alternativa más completa gana. Encoger
+      // aquí borraba lo ya dictado (la interacción se perdía).
+      if (cCapture.length >= cLast.length) commits[commits.length - 1] = capture
       continue
     }
     commits.push(capture)
@@ -433,7 +445,6 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     ctx.fluDebugHot('mic-fragment-mismerge', {
       mic: commitCapture,
       published: packet.published,
-      collapsed: collapseMisorderedMicMerge(packet.published),
     })
   }
 
