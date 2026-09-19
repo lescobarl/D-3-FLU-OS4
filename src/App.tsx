@@ -834,6 +834,8 @@ interface NormalizedGameAction {
     action: string;
     playerText?: string;
     playerId?: string;
+    /** Nombre legible del jugador (ganador de lotería sin exponer el id). */
+    playerName?: string;
     narrative?: { scenes: Array<{ texto: string; animacion?: string; emocion?: string }> };
 }
 
@@ -908,7 +910,8 @@ async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGame
     }
     const songBefore = (activeSession.state as { songId?: string } | null)?.songId;
     const playerId = juegoAction.playerId || ctx.participantIdRef?.current;
-    const result = engine.turn(activeSession, juegoAction.playerText || '', { playerId });
+    const playerName = (juegoAction as { playerName?: string }).playerName;
+    const result = engine.turn(activeSession, juegoAction.playerText || '', { playerId, playerName });
     // Juegos musicales: si el turno cambió de canción (ronda nueva), hay que
     // reproducir la del turno. Antes solo se reproducía en `start`, así que a
     // partir de la ronda 2 sonaba la melodía de la primera canción.
@@ -2976,12 +2979,15 @@ function App() {
                     // participante activo. Se reutiliza el mapeo único
                     // etiqueta→participante del servicio de participantes.
                     let playerId = (juegoAction as { playerId?: string }).playerId;
-                    if (!playerId && speakerName) {
+                    let playerName = (juegoAction as { playerName?: string }).playerName;
+                    if (speakerName) {
                         const speakerParticipant =
                             await participants.service.resolveParticipantBySpeakerLabel(speakerName);
-                        playerId = speakerParticipant?.id;
+                        playerId = playerId || speakerParticipant?.id;
+                        // Nombre legible del ganador: evita anunciar un id/UUID.
+                        playerName = playerName || speakerParticipant?.name;
                     }
-                    await applyGameAction({ ...juegoAction, playerId }, {
+                    await applyGameAction({ ...juegoAction, playerId, playerName }, {
                         languageRef,
                         conversationActiveRef,
                         speakFluRef,

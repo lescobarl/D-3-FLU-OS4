@@ -14,6 +14,7 @@ import { GAME_CATALOG } from '../src/core/games/gameCatalog';
 import { createVeoVeoEngine, VEO_VEO_BANK } from '../src/core/games/veoVeo';
 import { createAdivinaCancionEngine } from '../src/core/games/adivinaCancion';
 import { getGameEngine } from '../src/core/games/gameCatalog';
+import { createQuienSoyEngine } from '../src/core/games/quienSoy';
 import { setActiveGameSession } from '../src/core/games/gameSessionStore';
 import { resolveGameCommandFromText, setAudioPlayingProbe } from '../src/voice/lib/gameCommands';
 
@@ -100,5 +101,25 @@ describe('gamesAudit — no intervenir mientras suena la música', () => {
 
         setAudioPlayingProbe(() => false);
         setActiveGameSession(null);
+    });
+});
+
+describe('gamesAudit — quien soy, rol invertido', () => {
+    it('el niño piensa el animal y FLU adivina con preguntas sí/no', () => {
+        const engine = createQuienSoyEngine({ random: RANDOM });
+        const session = engine.createSession({ random: RANDOM });
+        engine.start(session, { random: RANDOM });
+
+        const first = engine.turn(session, 'yo pienso un animal');
+        expect(first.gameOver).toBe(false);
+        expect(first.prompt).toMatch(/sí|no/i);
+
+        let result = first;
+        let guard = 0;
+        while (!result.gameOver && guard < 20) {
+            result = engine.turn(session, 'no');
+            guard += 1;
+        }
+        expect(result.gameOver).toBe(true);
     });
 });

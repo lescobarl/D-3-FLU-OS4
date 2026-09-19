@@ -62,12 +62,22 @@ const LETTER_NAMES: Record<string, string> = Object.freeze({
     ye: 'y', zeta: 'z',
 });
 
-/** Letra dicha por el niño: nombre hablado ("eme") o letra suelta ("m"). */
+/** Letra dicha por el niño: "letra X", nombre hablado ("eme") o letra suelta ("m"). */
 function extractLetter(normalized: string): string | null {
     const tokens = normalized.split(/\s+/).filter(Boolean);
-    for (const token of tokens) {
-        if (Object.prototype.hasOwnProperty.call(LETTER_NAMES, token)) return LETTER_NAMES[token];
+    // Patrón explícito "letra X" (cualquier posición).
+    const explicitIndex = tokens.indexOf('letra');
+    const explicit = explicitIndex >= 0 ? tokens[explicitIndex + 1] : null;
+    if (explicit) {
+        if (Object.prototype.hasOwnProperty.call(LETTER_NAMES, explicit)) return LETTER_NAMES[explicit];
+        if (/^[a-z]$/.test(explicit)) return explicit;
     }
+    // Nombre hablado solo si es la frase ENTERA ("eme", "de"): evita que
+    // homógrafas dentro de una oración ("es de color") gasten un intento.
+    if (tokens.length === 1 && Object.prototype.hasOwnProperty.call(LETTER_NAMES, tokens[0])) {
+        return LETTER_NAMES[tokens[0]];
+    }
+    // Letra suelta en cualquier posición ("la a").
     for (const token of tokens) {
         if (/^[a-z]$/.test(token)) return token;
     }
@@ -231,6 +241,26 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
 
             // ¿Dice una letra (nombre hablado o letra suelta)?
             const letter = extractLetter(normalized);
+            if (!letter) {
+                // Palabra completa fallida: una sola palabra de 2+ letras no es
+                // letra ni control → es un intento de palabra, consume intento.
+                const soloGuess = normalized.split(/\s+/).filter(Boolean);
+                if (soloGuess.length === 1 && /^[a-zñ]+$/.test(soloGuess[0]) && soloGuess[0].length >= 2) {
+                    state.intentos -= 1;
+                    if (state.intentos <= 0) {
+                        return finish(`Se acabaron los intentos. La palabra era ${state.palabra}. ¡Otra vez será!`, false, 'encouraging', false);
+                    }
+                    return {
+                        prompt: `"${soloGuess[0]}" no es. Te quedan ${state.intentos} intentos. ${displayWord(state)}`,
+                        valid: false,
+                        gameOver: false,
+                        score: session.score,
+                        animation: 'Idle',
+                        emotion: 'encouraging',
+                        error: 'palabra incorrecta',
+                    };
+                }
+            }
             if (letter) {
                 if (state.adivinadas.includes(letter)) {
                     return {

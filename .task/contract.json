@@ -130,7 +130,8 @@
     "tests/panelScenarios.test.ts",
     "src/components/**",
     "src/services/**",
-    "src/voice/**"
+    "src/voice/**",
+    "tests/palabrasEncadenadas.test.ts"
   ],
   "amendment": {
     "date": "2026-09-18",
@@ -139,7 +140,9 @@
     "date2": "2026-09-19",
     "reason2": "Enmienda autorizada por el usuario (\"dale commit y actualiza el respaldo\") para consolidar la sesion en un commit: se amplia `allow` a src/core/games/**, src/lib/**, src/types/fluWindow.d.ts, src/core/agenda/agendaIntentParser.ts y los tests de la sesion; se suben maxFiles/maxLines por ser una consolidacion de hitos ya validados (juegos 457 tests verdes, typecheck 0).",
     "date3": "2026-09-19",
-    "reason3": "Enmienda autorizada por el usuario (\"toma la decision correcta y continua a terminar\"): limpieza de codigo muerto y artefactos regenerables. allow ampliado a src/components/**, src/services/** y src/voice/** para eliminar 12 archivos sin referencias y dist/reports/test-results."
+    "reason3": "Enmienda autorizada por el usuario (\"toma la decision correcta y continua a terminar\"): limpieza de codigo muerto y artefactos regenerables. allow ampliado a src/components/**, src/services/** y src/voice/** para eliminar 12 archivos sin referencias y dist/reports/test-results.",
+    "date4": "2026-09-19",
+    "reason4": "Enmienda autorizada por el usuario (\"continua hasta terminar\"): cierre de deuda de juegos. allow + tests/palabrasEncadenadas.test.ts. Cambios: ahorcado (palabra fallida consume intento; homografas no gastan intento), loteria (nombre legible del ganador via App), palabras encadenadas (tildes correctas), quien soy (rol invertido: el niño piensa y FLU adivina por si/no)."
   },
   "deny": [
     "scripts/auditoria.mjs",

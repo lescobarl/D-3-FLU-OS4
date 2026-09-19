@@ -121,6 +121,136 @@ function resolveSiNoQuestion(normalized: string): QuienSoyAttribute | null {
     return null;
 }
 
+// --- Rol invertido: el NIÑO piensa un animal y FLU pregunta sí/no -----------
+// Reutiliza el banco y sus atributos (fuente única); sin banco nuevo.
+
+const ATTRIBUTE_ORDER: readonly QuienSoyAttribute[] = Object.freeze([
+    'vuela', 'agua', 'grande', 'mamifero', 'plumas', 'insecto',
+]);
+
+const ATTRIBUTE_QUESTIONS: Record<QuienSoyAttribute, string> = Object.freeze({
+    vuela: '¿Tu animal vuela?',
+    agua: '¿Vive en el agua?',
+    grande: '¿Es grande?',
+    mamifero: '¿Es un mamífero?',
+    plumas: '¿Tiene plumas?',
+    insecto: '¿Es un insecto?',
+});
+
+const SWAP_FRAMES: readonly string[] = Object.freeze([
+    'yo pienso un animal', 'yo pienso mi animal', 'adivina mi animal', 'adivina el mio',
+    'te toca adivinar', 'ahora adivinas tu', 'ahora adivina tu', 'yo escojo el animal',
+    'yo escogi el animal', 'yo elijo el animal',
+]);
+
+const AFFIRMATIVE_FRAMES: readonly string[] = Object.freeze(['si', 'claro', 'correcto', 'yes', 'aja']);
+const NEGATIVE_FRAMES: readonly string[] = Object.freeze(['no', 'nop', 'nel', 'no se']);
+
+/** Mejor atributo para partir los candidatos en dos mitades (determinista). */
+function bestSplitAttribute(
+    candidatos: readonly number[],
+    asked: readonly QuienSoyAttribute[],
+): QuienSoyAttribute | null {
+    let best: QuienSoyAttribute | null = null;
+    let bestBalance = 0;
+    for (const attribute of ATTRIBUTE_ORDER) {
+        if (asked.includes(attribute)) continue;
+        let yes = 0;
+        for (const index of candidatos) {
+            if (QUIEN_SOY_BANK[index].atributos?.[attribute] === true) yes += 1;
+        }
+        const no = candidatos.length - yes;
+        if (yes === 0 || no === 0) continue;
+        const balance = Math.min(yes, no);
+        if (balance > bestBalance) {
+            bestBalance = balance;
+            best = attribute;
+        }
+    }
+    return best;
+}
+
+function guessPrompt(nombre: string): string {
+    return `¿Es un ${nombre}? Di "sí" o "no".`;
+}
+
+function askNext(state: QuienSoyState, session: GameSession): GameTurnResult {
+    if (state.candidatos.length <= 1) {
+        state.fluGuess = QUIEN_SOY_BANK[state.candidatos[0]]?.nombre ?? QUIEN_SOY_BANK[0].nombre;
+        return {
+            prompt: guessPrompt(state.fluGuess),
+            valid: false,
+            gameOver: false,
+            score: session.score,
+            animation: 'Idle',
+            emotion: 'thinking',
+        };
+    }
+    const attribute = bestSplitAttribute(state.candidatos, state.asked);
+    if (!attribute) {
+        state.fluGuess = QUIEN_SOY_BANK[state.candidatos[0]].nombre;
+        return {
+            prompt: guessPrompt(state.fluGuess),
+            valid: false,
+            gameOver: false,
+            score: session.score,
+            animation: 'Idle',
+            emotion: 'thinking',
+        };
+    }
+    state.asked.push(attribute);
+    return {
+        prompt: `${ATTRIBUTE_QUESTIONS[attribute]} Di "sí" o "no".`,
+        valid: false,
+        gameOver: false,
+        score: session.score,
+        animation: 'Idle',
+        emotion: 'thinking',
+    };
+}
+
+function finishFluGuessing(session: GameSession, state: QuienSoyState, won: boolean): GameTurnResult {
+    state.phase = 'done';
+    return {
+        prompt: won
+            ? `¡Sí! Adiviné tu animal. ¡Soy un gran detective!`
+            : '¡Me rindo! ¿Cuál era tu animal? La próxima te adivino.',
+        valid: won,
+        gameOver: true,
+        score: session.score,
+        animation: won ? 'Dance' : 'Idle',
+        emotion: won ? 'happy' : 'encouraging',
+    };
+}
+
+function turnFluGuessing(session: GameSession, state: QuienSoyState, normalized: string): GameTurnResult {
+    const affirmative = AFFIRMATIVE_FRAMES.some((token) => hasToken(normalized, token));
+    const negative = NEGATIVE_FRAMES.some((token) => hasToken(normalized, token));
+    const yes = affirmative && !negative;
+
+    if (state.fluGuess) {
+        if (yes) {
+            session.score += 1;
+            return finishFluGuessing(session, state, true);
+        }
+        state.candidatos = state.candidatos.filter(
+            (index) => QUIEN_SOY_BANK[index].nombre !== state.fluGuess,
+        );
+        state.fluGuess = null;
+        if (!state.candidatos.length) return finishFluGuessing(session, state, false);
+        return askNext(state, session);
+    }
+
+    const asked = state.asked[state.asked.length - 1];
+    if (asked) {
+        state.candidatos = state.candidatos.filter(
+            (index) => (QUIEN_SOY_BANK[index].atributos?.[asked] === true) === yes,
+        );
+        if (!state.candidatos.length) return finishFluGuessing(session, state, false);
+    }
+    return askNext(state, session);
+}
+
 const HINT_FRAMES: readonly string[] = Object.freeze([
     'pista', 'ayuda', 'ayudame', 'dame una pista', 'dame otra pista', 'otra pista', 'no se', 'no sé',
 ]);
@@ -145,6 +275,14 @@ interface QuienSoyState {
     phase: 'announce' | 'done';
     /** Índices del banco que el JUGADOR ya nombró: FLU no los reutiliza como objetivo. */
     mentioned: number[];
+    /** 'kid' = FLU piensa el animal (actual); 'flu' = rol invertido, FLU adivina. */
+    mode: 'kid' | 'flu';
+    /** Índices del banco aún posibles cuando FLU adivina (rol invertido). */
+    candidatos: number[];
+    /** Atributos ya preguntados en el rol invertido. */
+    asked: QuienSoyAttribute[];
+    /** Animal que FLU va a confirmar; null mientras hace preguntas. */
+    fluGuess: string | null;
 }
 
 type RandomSource = () => number;
@@ -207,6 +345,10 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             maxRounds: readRounds(cfg),
             phase: 'announce',
             mentioned: [],
+            mode: 'kid',
+            candidatos: [],
+            asked: [],
+            fluGuess: null,
         };
         session.state = state as unknown as Record<string, unknown>;
         session.score = 0;
@@ -228,6 +370,10 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                     maxRounds: readRounds(optionsConfig),
                     phase: 'announce',
                     mentioned: [],
+                    mode: 'kid',
+                    candidatos: [],
+                    asked: [],
+                    fluGuess: null,
                 },
                 score: 0,
                 round: 1,
@@ -276,6 +422,18 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             }
 
             const normalized = normalizeForMatch(text);
+
+            // Rol invertido: el niño pide pensar ÉL un animal → FLU pregunta sí/no.
+            if (state.mode === 'kid' && SWAP_FRAMES.some((frame) => normalized.includes(frame))) {
+                state.mode = 'flu';
+                state.candidatos = QUIEN_SOY_BANK.map((_, index) => index);
+                state.asked = [];
+                state.fluGuess = null;
+                return askNext(state, session);
+            }
+            if (state.mode === 'flu') {
+                return turnFluGuessing(session, state, normalized);
+            }
 
             // Recordar animales que el JUGADOR nombró (aunque falle): FLU no los
             // reutilizará como objetivo en los próximos turnos.
