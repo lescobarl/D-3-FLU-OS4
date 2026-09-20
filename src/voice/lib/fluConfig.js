@@ -381,6 +381,10 @@ export const FLU_CONFIG = {
     // (bug de Chrome), el watchdog libera el habla y la escucha no se bloquea.
     watchdogMs: 20000,
   },
+  /** Audio del motor de voz: sample rate de captura (fuente única, sin hardcode). */
+  audio: {
+    sampleRate: 48000,
+  },
   /** Escucha activa local (SpeechRecognition del navegador). */
   activeListen: {
     languages: {

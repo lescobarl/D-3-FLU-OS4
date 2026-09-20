@@ -148,6 +148,8 @@ import {
 } from '../lib/conversationDialogue.js'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
+// Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
+const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
 
 function flattenChunks(chunks) {
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
@@ -463,7 +465,7 @@ export function useFluVoiceAssistant({
   const pendingSpillRef = useRef('')
   const lastLoggedCaptureRef = useRef('')
   const finalizeGraceUsedRef = useRef(false)
-  const sampleRateRef = useRef(48000)
+  const sampleRateRef = useRef(AUDIO_SAMPLE_RATE)
   const chunksRef = useRef([])
   const sessionLoadedRef = useRef(false)
   // §9 ÚNICA FUENTE DE VERDAD: vistas de SOLO LECTURA derivadas del store
@@ -1441,7 +1443,7 @@ export function useFluVoiceAssistant({
   const getContinuousBufferAdapter = useCallback(() => ({
     getTurnStartSample: () => turnAudioStartSampleRef.current,
     snapshotTurnWindow: ({ turnAudioStartSample, atTurnBoundary = false } = {}) => {
-      const rate = sampleRateRef.current || 48000
+      const rate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary })
       const maxSamples = Math.floor(rate * (tailMs / 1000))
       const minVoiced = getConversationMinVoicedSamples(rate)
@@ -1460,7 +1462,7 @@ export function useFluVoiceAssistant({
     ({ atTurnBoundary = false, allowNewCluster = false, utterance = '' } = {}) =>
       createTurnSpeakerAudioResolver({
         getAudioBuffer: () => getContinuousBufferAdapter(),
-        getSampleRate: () => sampleRateRef.current || 48000,
+        getSampleRate: () => sampleRateRef.current || AUDIO_SAMPLE_RATE,
         getTurnStartSample: () => turnAudioStartSampleRef.current,
         getAudioStartSample: () => turnAudioStartSampleRef.current,
         getAudioStartedAtMs: () => turnSegmentStartedAtRef.current,
@@ -1515,7 +1517,7 @@ export function useFluVoiceAssistant({
         return fallbackSpeaker
       }
       const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary })
-      const sampleRate = sampleRateRef.current || 48000
+      const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const maxSamples = Math.floor(sampleRate * (tailMs / 1000))
       const minVoiced = getConversationMinVoicedSamples(sampleRate)
       let tail = flattenChunksTail(chunksRef.current, maxSamples)
@@ -2047,7 +2049,7 @@ export function useFluVoiceAssistant({
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
     const audioContext = new AudioContextClass()
     audioContextRef.current = audioContext
-    sampleRateRef.current = audioContext.sampleRate || 48000
+    sampleRateRef.current = audioContext.sampleRate || AUDIO_SAMPLE_RATE
 
     await audioContext.resume()
 
@@ -2080,14 +2082,14 @@ export function useFluVoiceAssistant({
     const micBridge = await wireMicCapturePipeline({
       audioContext,
       source: inputGain,
-      sampleRate: sampleRateRef.current || 48000,
+      sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
       processEvery,
       onPcmBlock: (input) => {
         chunksRef.current.push(new Float32Array(input))
         chunkTotalSamplesRef.current += input.length
         trimAudioChunkBuffer(
           chunksRef,
-          sampleRateRef.current || 48000,
+          sampleRateRef.current || AUDIO_SAMPLE_RATE,
           FLU_CONFIG.voiceIdentity?.capture?.passiveBufferMs,
           chunkTotalSamplesRef,
         )
@@ -2095,7 +2097,7 @@ export function useFluVoiceAssistant({
         // PCM del micrófono cuando es la instancia activa. Chrome SR no expone
         // `pushAudio`, así que el chequeo no afecta el flujo online (default).
         if (typeof recognitionRef.current?.pushAudio === 'function') {
-          recognitionRef.current.pushAudio(input, sampleRateRef.current || 48000)
+          recognitionRef.current.pushAudio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE)
         }
       },
     })
@@ -3211,7 +3213,7 @@ export function useFluVoiceAssistant({
       publishedLiveRef.current = ''
       setLiveTranscript('')
 
-      const sampleRate = sampleRateRef.current || 48000
+      const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const streamSamples = flattenChunks(chunksRef.current)
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
@@ -3698,7 +3700,7 @@ export function useFluVoiceAssistant({
         await commitAndResolveTurn({ capture: capturedTranscript, commitOnly: true })
       }
 
-      const sampleRate = sampleRateRef.current || 48000
+      const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const streamSamples = flattenChunks(chunksRef.current)
       const currentClock = formatClock()
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker

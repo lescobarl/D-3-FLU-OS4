@@ -1,16 +1,12 @@
 {
-  "id": "C24",
+  "id": "C29",
   "mode": "full",
-  "task": "Config — un solo default de modelo de texto",
-  "base": "5f1a157cf3dc3d12de9080c5e103188e4a19d282",
-  "objective": "El default del modelo de texto se define una vez (appConfig) y el resto lo importa; sin literales divergentes.",
+  "task": "Hardcode — sample rate desde config",
+  "base": "a523fd722227d72473255a6ba11edada309e6ed5",
+  "objective": "El sample rate del motor sale de FLU_CONFIG; sin literales 48000 en el hook.",
   "allow": [
-    "src/components/FluSettingsPanel.tsx",
-    "src/core/config/voiceConfigCatalog.ts",
-    "src/core/config/sharedConfig.ts",
-    "src/core/config/appConfig.ts",
-    "src/voice/lib/fluConfig.js",
-    "src/voice/lib/gemini.js"
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/voice/lib/fluConfig.js"
   ],
   "deny": [
     ".task/**",
@@ -24,20 +20,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 8,
-  "maxLines": 400,
-  "dod": "npx vitest run tests/modeloDefaultGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/modeloDefaultGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/sampleRateConfigGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/sampleRateConfigGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un único módulo define el default del modelo de texto",
+    "statement": "No hay literales de sample rate en el motor",
     "metric": {
-      "command": "node scripts/audit-metric.mjs modelo-default",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs sample-rate-literal",
+      "target": 0
     },
-    "base": "5f1a157cf3dc3d12de9080c5e103188e4a19d282",
+    "base": "a523fd722227d72473255a6ba11edada309e6ed5",
     "guardFiles": [
-      "tests/modeloDefaultGuard.test.ts"
+      "tests/sampleRateConfigGuard.test.ts"
     ]
   }
 }
