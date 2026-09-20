@@ -260,3 +260,62 @@ Además, para arrancar C1–C5:
 Sin puerta verde no hay commit ni cierre. El agente no decide si cumplió: lo
 decide `scripts/task-gate.mjs`. Cada hallazgo de este informe solo pasa a
 "ejecutado" cuando tiene contrato, guard rojo→verde y `npm run gate` en verde.
+
+---
+
+## Anexo A — Mapeo completo hallazgo → cobertura (sin filtros)
+
+| ID | Hallazgo | Cobertura | Estado |
+|---|---|---|---|
+| V1 | AsrLab instancia reconocimiento directo | C1 | cerrado (verde) |
+| V2 | Onboarding segunda instancia | Descartado: usa `acquireSpeechRecognition` + lock central | disposición |
+| V3 | Whisper reasigna recognitionRef | Descartado: fallback por diseño | disposición |
+| V4 | Consumidores re-normalizan | C25 (App) + C36 (3 consumidores) + C39 (motor) | rojo |
+| V5 | transcriptQuality muerto | C16 | rojo |
+| V6 | Doble commit de turno | C26 (commitUserTurnRow) + C37 (finalizeTurnCommit) | rojo |
+| V7 | Query derivada con fallback | C27 | rojo |
+| V8 | Cascada de display | Guard existente `voiceSingleSourceGuard` G5 | disposición |
+| V9 | Wake word runtime hardcodeada | C6 | rojo |
+| V10 | 5 implementaciones de strip | C28 | rojo |
+| H1 | 37 URLs en config | Descartado: módulos de configuración | disposición |
+| H2 | Base Pollinations duplicada | C7 | rojo |
+| H3 | Otros modelos | Descartado: solo config/placeholders | disposición |
+| H4 | 100+ magic numbers | C18 (timeouts) + C29 (sample rate) + C38 (umbrales) | rojo |
+| H5 | Allowlist duplicada | C2 | rojo |
+| H6 | Literal `flu-ai-provider` | C4 | rojo |
+| H7 | `VITE_OPENROUTER_API_KEY` directa | C5 | rojo |
+| H8 | `localhost` vs `127.0.0.1` | Descartado: tools usan env | disposición |
+| H9 | `fetch` directo | C19 (3 módulos); resto same-origin/config | rojo + disposición |
+| H10 | Puerto 5173 | Descartado: `process.env.PORT` con fallback | disposición |
+| H11 | `.env` con key real | Descartado: `git ls-files .env` vacío | disposición |
+| P1 | 3 escritores voiceProfiles | C3 | rojo |
+| P2 | Conversación en 3 rutas | C8 | rojo |
+| P3 | Sesión en 2 backends | C9 | rojo |
+| P4 | Minutas doble escritura | C10 | rojo |
+| P5 | Notas vs lista de compras | C11 | rojo |
+| P6 | Claves config duplicadas | Descartado: ya usan `STORAGE_KEYS` | disposición |
+| P7 | Memoria en IDB aparte | C30 | rojo |
+| P8 | 3 bases IndexedDB | C30 | rojo |
+| P9 | TTS doble | C21 | rojo |
+| P10 | Gemini 4 entradas | Subsumido: C4 + C5 + C12 | disposición |
+| P11 | Perfiles de voz en localStorage | C31 | rojo |
+| P12 | Defaults divergentes modelo/key | C12 + C24 | rojo |
+| A1 | `new` en raíz de composición | Descartado: es la raíz de composición | disposición |
+| A2 | 160 catch silenciosos | C13 | rojo |
+| A3 | Borrado físico | C14 (fluDb) + C32 (longTermMemory) | rojo |
+| A4 | IDs no-UUIDv4 | C15 | rojo |
+| A5 | `minutes.sequence` | Descartado: no es PK (PK UUID) | disposición |
+| A6 | Tailwind ausente | C23 (excepción documentada) | rojo |
+| A7 | Sin `src/modules/`, tipos inline | Descartado: decisión estructural | disposición |
+| A8 | Tupla de sync | Cumple | ok |
+| A9 | MemoryItem sin revision/updatedAt | C33 | rojo |
+| A10 | Stack real ≠ mandado | C23 | rojo |
+| J1 | 15 módulos muertos | C16 (14 lib + localTranslate) + C34 (fallbackResponses) | rojo |
+| J2 | 4 archivos raíz sin referencia | C17 | rojo |
+| J3 | Spec huérfano + live-check | C17 | rojo |
+| J4 | `.task` con rutas muertas | disposición: congelado, lo gestiona el usuario | disposición |
+| J5 | 12 `console.debug` | C35 | rojo |
+| J6 | `dist/` en disco | Descartado: `.gitignore` | disposición |
+| J7 | Backups/probes | Ninguno | ok |
+
+**Totales:** 37 contratos · 0 hallazgos sin disposición. (C1 cerrado; C2–C39 en rojo.)
