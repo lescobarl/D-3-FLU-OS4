@@ -3925,8 +3925,7 @@ function App() {
             : undefined;
         if (Array.isArray(roleAllowlist) && roleAllowlist.length) return roleAllowlist;
         const defaultAllowlist = FLU_CONFIG.browser?.defaultProfile?.allowlist;
-        if (Array.isArray(defaultAllowlist) && defaultAllowlist.length) return defaultAllowlist;
-        return ['wikipedia.org', 'educ.ar'];
+        return Array.isArray(defaultAllowlist) ? defaultAllowlist : [];
     }, [browserProfiles.profiles, activeParticipantId, activeParticipant]);
     // ---- Branding Inteligente por Temporalidad + Ecológico ----
     const branding = useEnhancedBranding();

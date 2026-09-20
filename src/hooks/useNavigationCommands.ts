@@ -442,7 +442,7 @@ export function useNavigationCommands(
                 const browserCfg = FLU_CONFIG.browser || {};
                 const allowlist = Array.isArray(browserCfg.defaultProfile?.allowlist)
                     ? browserCfg.defaultProfile.allowlist
-                    : ['wikipedia.org', 'educ.ar'];
+                    : [];
                 const siteStopwords = Array.isArray(browserCfg.siteStopwords)
                     ? browserCfg.siteStopwords
                     : [];

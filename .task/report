@@ -18,3 +18,18 @@ No validado (DoD-producto, pendiente del usuario):
 Notas fuera de alcance (deuda, no tocada):
 - src/hooks/useReminders.ts y src/hooks/useTemporalItems.ts quedaron sin consumidor (módulos vivos pero muertos). No se borraron porque el alcance pedía borrar solo los 4 paneles.
 - src/core/agenda/agendaService.ts conserva createReminderAgenda/createTemporalAgenda/createHorarioAgenda (usados por los hooks viejos), fuera del alcance de este swap.
+
+---
+
+## C2 — Búsqueda: allowlist solo desde FLU_CONFIG
+
+Cambios aplicados:
+- src/App.tsx:3929 — el fallback literal ['wikipedia.org','educ.ar'] se sustituye por la allowlist de FLU_CONFIG.browser.defaultProfile (array vacío si falta).
+- src/hooks/useNavigationCommands.ts:445 — mismo fallback literal eliminado; se usa browserCfg.defaultProfile.allowlist o [].
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: 4 archivos (2 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Navegación por voz real en el Navegador Curado.

@@ -1,11 +1,12 @@
 {
-  "id": "C1",
+  "id": "C2",
   "mode": "full",
-  "task": "Voz §9.1 — una sola puerta de instancia de reconocimiento",
-  "base": "ab8808a40f5e261791aba3e88be9b90e12e2dd4a",
-  "objective": "Toda instancia de reconocimiento se crea vía acquireSpeechRecognition; ninguna fuera de speechRecognitionLocal.js.",
+  "task": "Búsqueda — allowlist solo desde FLU_CONFIG",
+  "base": "dec2ed31f731ecc315f62b13e9a6f68a635fbee5",
+  "objective": "App y useNavigationCommands obtienen la allowlist de búsqueda de FLU_CONFIG; sin literales duplicados.",
   "allow": [
-    "src/dev/asrLab/AsrLab.tsx"
+    "src/App.tsx",
+    "src/hooks/useNavigationCommands.ts"
   ],
   "deny": [
     ".task/**",
@@ -18,20 +19,20 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 2,
-  "maxLines": 150,
-  "dod": "npx vitest run tests/vozInstanciaUnicaGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/vozInstanciaUnicaGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 120,
+  "dod": "npx vitest run tests/searchAllowlistFuenteUnicaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/searchAllowlistFuenteUnicaGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ninguna instancia de reconocimiento se crea fuera de la puerta única speechRecognitionLocal.js",
+    "statement": "La allowlist de búsqueda no se re-declara fuera de fluConfig.js",
     "metric": {
-      "command": "node scripts/audit-metric.mjs voz-instancia",
+      "command": "node scripts/audit-metric.mjs search-allowlist",
       "target": 0
     },
-    "base": "ab8808a40f5e261791aba3e88be9b90e12e2dd4a",
+    "base": "dec2ed31f731ecc315f62b13e9a6f68a635fbee5",
     "guardFiles": [
-      "tests/vozInstanciaUnicaGuard.test.ts"
+      "tests/searchAllowlistFuenteUnicaGuard.test.ts"
     ]
   }
 }
