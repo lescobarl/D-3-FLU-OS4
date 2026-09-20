@@ -141,9 +141,15 @@ describe('FluAvatarVoiceBridge — Uses appConfig [Rule #1]', () => {
 // ============================================================
 describe('Gemini Service — IAIService Implementation [Obligación #1]', () => {
 
-    it('gemini.ts must implement IAIService', async () => {
+    it('gemini.ts must implement IAIService (adapter de transporte)', async () => {
         const src = (await import('fs')).readFileSync('./src/services/gemini.ts', 'utf-8');
-        expect(src).toContain('class GeminiService implements IAIService');
+        // Arquitectura de implementación única: la orquestación vive en
+        // BaseAIService (src/core/ai/aiServiceBase.ts) y gemini.ts solo aporta
+        // el transporte. El adapter implementa IAIService vía la base.
+        const baseSrc = (await import('fs')).readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
+        expect(baseSrc).toContain('class BaseAIService implements IAIService');
+        expect(src).toContain('class GeminiService extends BaseAIService');
+        expect(src).toContain('IAIService');
         // Should use appConfig for configuration (2-API architecture:
         // texto vía resolveTextApiKey + proxy, imágenes vía Pollinations)
         expect(src).toContain("from '../core/config/appConfig'");

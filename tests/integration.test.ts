@@ -1167,23 +1167,26 @@ describe('🤖 Gemini Service — IAIService Interface', () => {
         expect(source).toContain('IAIService');
     });
 
-    it('GeminiService debe implementar generateMinute', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    // Implementación única: los 9 métodos de IAIService viven en
+    // src/core/ai/aiServiceBase.ts (BaseAIService). gemini.ts es adapter de
+    // transporte (hooks) y conserva generateFluContract (contrato de voz).
+    it('BaseAIService debe implementar generateMinute', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateMinute');
     });
 
-    it('GeminiService debe implementar generateResponse', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateResponse', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateResponse');
     });
 
-    it('GeminiService debe implementar generateParticipantEvaluation', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateParticipantEvaluation', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateParticipantEvaluation');
     });
 
-    it('GeminiService debe implementar generateConversationSummary', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateConversationSummary', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateConversationSummary');
     });
 
@@ -1192,8 +1195,8 @@ describe('🤖 Gemini Service — IAIService Interface', () => {
         expect(source).toContain('generateFluContract');
     });
 
-    it('GeminiService debe implementar generateWorkspaceImage', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateWorkspaceImage', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateWorkspaceImage');
     });
 

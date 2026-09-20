@@ -1,57 +1,39 @@
 // ============================================================
-// Text engine (deepseek.ts) — Motor de texto OpenAI-compatible
+// Text engine (deepseek.ts) — Adapter de transporte OpenAI-compatible
 // ============================================================
-// Implementa IAIService y enruta TODO el texto a través de un endpoint
-// OpenAI-compatible. Por defecto usa OpenRouter → Google Gemini 2.5 Flash:
+// ADAPTER: la orquestación común vive en src/core/ai/aiServiceBase.ts
+// (BaseAIService, implementación única de IAIService). Este archivo solo
+// aporta:
+//   - el transporte de red por operación: UNA ruta, el endpoint
+//     OpenAI-compatible (fetchTextEngine → buildTextApiUrl('/chat/completions'))
+//   - las variantes de normalización propias del motor de texto
+//
+// Por defecto usa OpenRouter → Google Gemini 2.5 Flash:
 //   https://openrouter.ai/api/v1/chat/completions  (model: google/gemini-2.5-flash)
-//
-// Arquitectura (SOLO 2 APIs):
-//   - Imágenes → Pollinations.ai (buildPollinationsUrl, sin clave)
-//   - Texto    → OpenRouter (Gemini 2.5 Flash Lite) vía buildTextApiUrl
-//
 // Configurable desde Ajustes → "Texto": modelo, clave y URL
 // (STORAGE_KEYS.TEXT_MODEL / TEXT_API_KEY / TEXT_API_URL).
-//
 // También soporta endpoints locales (Ollama / LM Studio / localhost) para
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { DEEPSEEK_CONFIG, GENERATION_TIMEOUT_MS, OPENROUTER_CONFIG, STORAGE_KEYS, VALID_VISUAL_TIPOS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
-import { buildMinuteSystemPrompt } from '../core/ai/prompts';
+import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { fetchTextEngine } from '../core/ai/httpClient';
-import { v4 as uuidv4 } from 'uuid';
 import type {
-    IAIService,
     AIRequestOptions,
     AIHistoryEntry,
-    AIMinuteResult,
-    AISummaryResult,
     AIParticipantEvaluation,
     AIWorkspaceImageResult,
-    DocumentAnalysisInput,
-    AppAnalysisInput,
-    GenerationInput,
-    GeneratedDocumentResult,
+    AISummaryResult,
 } from '../core/ai/IAIService';
-import type { DocumentContract, AppAnalysisContract } from '../types/documentContracts';
 import {
-    buildMapPrompt,
-    buildReducePrompt,
-    buildSingleAnalysisPrompt,
-    mergePartialSummaries,
-    applyReduceToContract,
-} from '../lib/documentChunker';
-import type { ChunkContext, PartialSummary } from '../lib/documentChunker';
-import { serializeDocument } from '../lib/formatAdapters';
-import { buildBaseDocumentContract, buildHeuristicAppAnalysis } from '../lib/analysisFallbacks';
-import {
-    buildGenerationPrompt,
-    buildGenerationSystemPrompt,
-    buildGenerationFallbackContent,
-} from '../lib/generationPrompts';
+    BaseAIService,
+    type AIVisionAnalysisResult,
+    type MinuteRequest,
+    type TextCompletionRequest,
+} from '../core/ai/aiServiceBase';
 
 // -----------------------------------------------------------
-// Helpers
+// Helpers específicos del transporte de texto
 // -----------------------------------------------------------
 
 /**
@@ -80,7 +62,7 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
 }
 
 /**
- * Resolve creativity temperature for DeepSeek requests.
+ * Resolve creativity temperature for the text engine requests.
  */
 function resolveCreativityTemperature(): number | undefined {
     try {
@@ -109,33 +91,6 @@ export function hasUsableTextBackend(): boolean {
     if (apiKey) return true;
     const url = buildTextApiUrl('/chat/completions');
     return isLocalTextEndpoint(url);
-}
-
-/**
- * Parsea JSON de forma segura; devuelve null si falla (nunca lanza).
- */
-function safeParseJson(text: string): Record<string, unknown> | null {
-    if (!text || !text.trim()) return null;
-    try {
-        const value = JSON.parse(text);
-        if (value && typeof value === 'object') return value;
-        // El LLM a veces envuelve el JSON en bloques ```json ... ```
-        const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (match) {
-            return JSON.parse(match[1]);
-        }
-        return null;
-    } catch {
-        console.warn('[catch] src/services/deepseek.ts');
-        try {
-            const match = text.match(/\{[\s\S]*\}/);
-            if (match) return JSON.parse(match[0]);
-        } catch {
-        console.warn('[catch] src/services/deepseek.ts');
-            return null;
-        }
-        return null;
-    }
 }
 
 /**
@@ -172,25 +127,46 @@ function buildPersonalizationRule(options: AIRequestOptions, isEnglish: boolean)
 }
 
 // -----------------------------------------------------------
-// DeepSeekService — Implementation of IAIService
+// DeepSeekService — Adapter de transporte (endpoint OpenAI-compatible)
 // -----------------------------------------------------------
 
 /**
- * Text engine implementing the IAIService interface.
- * Routes all text through an OpenAI-compatible endpoint (default:
- * OpenRouter → Google Gemini 2.5 Flash Lite). Provides all AI-powered
- * features: minutas, chat, contrato, evaluación, visión y F1/F2/F3.
+ * Adapter que implementa IAIService delegando la orquestación en
+ * BaseAIService y todo el transporte en el endpoint OpenAI-compatible
+ * (OpenRouter por defecto; Ollama/LM Studio admitidos).
  */
-class DeepSeekService implements IAIService {
+class DeepSeekService extends BaseAIService {
+    protected readonly engineLabel = 'DeepSeek';
+
+    protected canUseTextBackend(): boolean {
+        return hasUsableTextBackend();
+    }
+
+    protected documentAnalysisSystem(language: string): string {
+        return language === 'en'
+            ? 'You are a document analyst. Respond in English only.'
+            : 'Eres un analista de documentos. Responde únicamente en español.';
+    }
+
     /**
-     * Generate a minute from conversation history using the text engine.
+     * POST a chat completion y devuelve el contenido crudo.
+     * Ruta única de F1/F2/F3 de este adapter.
      */
-    async generateMinute(
-        options: AIRequestOptions,
-        history: AIHistoryEntry[],
-        emotionalState: string,
-    ): Promise<AIMinuteResult> {
-        const { apiKey } = resolveDeepSeekApiKey(options.apiKey);
+    protected async completeText(request: TextCompletionRequest): Promise<string> {
+        return this.postJson(
+            [
+                { role: 'system', content: request.system },
+                { role: 'user', content: request.prompt },
+            ],
+            { maxTokens: request.maxTokens, timeoutMs: request.timeoutMs, jsonMode: request.jsonMode },
+        );
+    }
+
+    /**
+     * Minuta desde el motor de texto. Devuelve el JSON OS2 ya parseado.
+     */
+    protected async fetchMinute(request: MinuteRequest): Promise<Record<string, unknown>> {
+        const { apiKey } = resolveDeepSeekApiKey(request.options.apiKey);
         if (!apiKey) {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
         }
@@ -198,24 +174,15 @@ class DeepSeekService implements IAIService {
         const temperature = resolveCreativityTemperature();
         const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
         const url = buildTextApiUrl('/chat/completions');
-        const isEnglish = options.language === 'en';
-
-        // Build conversation log
-        const conversationLog = history
-            .map((e) => `${e.speakerName || (e.role === 'user' ? (isEnglish ? 'User' : 'Usuario') : 'FLU')}: ${e.text}`)
-            .join('\n');
-
-        // Build system prompt (single source of truth — src/core/ai/prompts.ts, Rule #1)
-        const systemPrompt = buildMinuteSystemPrompt(isEnglish);
 
         const messages = [
             {
                 role: 'system',
-                content: systemPrompt
+                content: request.systemPrompt
             },
             {
                 role: 'user',
-                content: `Generate a minute from this conversation:\n${conversationLog}\n\nEmotional state: ${emotionalState}`
+                content: `Generate a minute from this conversation:\n${request.conversationLog}\n\nEmotional state: ${request.emotionalState}`
             }
         ];
 
@@ -241,28 +208,17 @@ class DeepSeekService implements IAIService {
 
             const data = await response.json();
             const responseText = data.choices[0]?.message?.content || '{}';
-            
+
             // Parse JSON response
             let parsed;
             try {
                 parsed = JSON.parse(responseText);
             } catch {
-        console.warn('[catch] src/services/deepseek.ts');
+                console.warn('[catch] src/services/deepseek.ts');
                 // Fallback if JSON parsing fails
                 parsed = {};
             }
-
-            // Return in OS2-compatible format
-            return {
-                titulo: String(parsed.titulo || '') || (isEnglish
-                    ? `Minutes - ${new Date().toLocaleDateString('en-US')}`
-                    : `Minuta - ${new Date().toLocaleDateString('es-MX')}`),
-                participantes: Array.isArray(parsed.participantes) ? parsed.participantes as string[] : [],
-                resumen: String(parsed.resumen || '') || conversationLog,
-                acuerdos: Array.isArray(parsed.acuerdos) ? parsed.acuerdos as string[] : [],
-                pendientes: Array.isArray(parsed.pendientes) ? parsed.pendientes as string[] : [],
-                siguientes_pasos: Array.isArray(parsed.siguientes_pasos) ? parsed.siguientes_pasos as string[] : [],
-            };
+            return parsed as Record<string, unknown>;
         } catch (error) {
             console.error('Text engine generateMinute error:', error);
             throw error;
@@ -270,9 +226,20 @@ class DeepSeekService implements IAIService {
     }
 
     /**
-     * Generate a contextual response using the text engine.
+     * Resumen de conversación: alias de generateMinute con estado neutral.
      */
-    async generateResponse(
+    protected async fetchSummary(
+        options: AIRequestOptions,
+        history: AIHistoryEntry[],
+    ): Promise<AISummaryResult> {
+        // Alias of generateMinute (same OS2 minute format)
+        return this.generateMinute(options, history, 'neutral');
+    }
+
+    /**
+     * Respuesta contextual desde el motor de texto.
+     */
+    protected async fetchResponse(
         options: AIRequestOptions,
         userText: string,
         botName: string,
@@ -332,9 +299,9 @@ class DeepSeekService implements IAIService {
     }
 
     /**
-     * Evaluate whether FLU should intervene.
+     * Evaluación de intervención de FLU desde el motor de texto.
      */
-    async generateParticipantEvaluation(
+    protected async fetchEvaluation(
         options: AIRequestOptions,
         conversationLog: string,
         maxDraftChars: number = 200,
@@ -400,12 +367,12 @@ Formato de respuesta (JSON):
 
             const data = await response.json();
             const responseText = data.choices[0]?.message?.content || '{}';
-            
+
             let parsed;
             try {
                 parsed = JSON.parse(responseText);
             } catch {
-        console.warn('[catch] src/services/deepseek.ts');
+                console.warn('[catch] src/services/deepseek.ts');
                 parsed = { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 };
             }
 
@@ -422,41 +389,14 @@ Formato de respuesta (JSON):
     }
 
     /**
-     * Generate a conversation summary (OS2 style).
+     * Imagen de workspace: Pollinations.ai directo (stateless, sin clave).
      */
-    async generateConversationSummary(
-        options: AIRequestOptions,
-        history: AIHistoryEntry[],
-    ): Promise<AISummaryResult> {
-        // Alias of generateMinute (same OS2 minute format)
-        return this.generateMinute(options, history, 'neutral');
-    }
-
-    /**
-     * Generate a workspace image from a prompt.
-     * Uses Pollinations.ai (free, no API key needed) as the stateless image service.
-     */
-    async generateWorkspaceImage(
+    protected async fetchImage(
         prompt: string,
-        tipo: string | null | undefined,
-        language: string = 'es',
+        tipoStr: string,
+        language: string,
     ): Promise<AIWorkspaceImageResult> {
-        if (!prompt) {
-            return {
-                image_url: '',
-                trace: { provider: 'none', hasImage: false, source: 'no_prompt' },
-            };
-        }
-
-        const tipoStr = String(tipo || '').trim().toLowerCase();
-        // (VALID_VISUAL_TIPOS centralized in appConfig — Rule #1: NO HARDCODE)
-        if (!VALID_VISUAL_TIPOS.includes(tipoStr)) {
-            return {
-                image_url: '',
-                trace: { provider: 'none', hasImage: false, source: 'not_visual_tipo', tipo: tipoStr },
-            };
-        }
-
+        void tipoStr;
         // Use Pollinations.ai directly (stateless, no API key needed)
         try {
             const imageUrl = buildPollinationsUrl(prompt);
@@ -489,20 +429,14 @@ Formato de respuesta (JSON):
     }
 
     /**
-     * Analyze an image via the multimodal text engine (Gemini 2.5 Flash Lite — OCR/digitalización).
+     * Visión multimodal desde el motor de texto (Gemini 2.5 Flash Lite — OCR).
      */
-    async generateVisionAnalysis(
+    protected async fetchVision(
         imageBase64: string,
         mimeType: string,
-        language: string = 'es',
-        profile: string = 'tutor',
-    ): Promise<{
-        materia: string;
-        problemas: string[];
-        instrucciones: string;
-        nivel: string;
-        texto_extraido: string;
-    }> {
+        language: string,
+        profile: string,
+    ): Promise<AIVisionAnalysisResult> {
         const { apiKey } = resolveDeepSeekApiKey();
         if (!apiKey) {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
@@ -555,12 +489,12 @@ Formato de respuesta (JSON):
 
             const data = await response.json();
             const responseText = data.choices[0]?.message?.content || '{}';
-            
+
             let parsed;
             try {
                 parsed = JSON.parse(responseText);
             } catch {
-        console.warn('[catch] src/services/deepseek.ts');
+                console.warn('[catch] src/services/deepseek.ts');
                 parsed = {
                     materia: 'Desconocida',
                     problemas: [],
@@ -584,7 +518,7 @@ Formato de respuesta (JSON):
     }
 
     /**
-     * POST a chat completion and return the raw content string (JSON-object mode).
+     * POST a chat completion y devuelve el contenido crudo (JSON-object mode).
      */
     private async postJson(
         messages: Array<{ role: string; content: string }>,
@@ -620,175 +554,6 @@ Formato de respuesta (JSON):
         }
         const data = await response.json();
         return String(data.choices?.[0]?.message?.content || '{}');
-    }
-
-    /**
-     * F1 — analizar un documento (map-reduce sobre los chunks).
-     * Degrada elegantemente al contrato heurístico si no hay API key o falla el LLM.
-     */
-    async analyzeDocument(
-        payload: DocumentAnalysisInput,
-        language = 'es',
-    ): Promise<DocumentContract> {
-        const base = buildBaseDocumentContract(payload);
-        const ctx: ChunkContext = {
-            tipo: base.tipo,
-            nombre: base.nombre,
-            hojas: base.hojas,
-            errores: base.errores,
-        };
-
-        if (!hasUsableTextBackend()) return base;
-
-        try {
-            const chunks = Array.isArray(payload.chunks) && payload.chunks.length
-                ? payload.chunks.filter(Boolean)
-                : (payload.rawText ? [payload.rawText] : []);
-
-            if (chunks.length <= 2) {
-                const singlePrompt = chunks.length
-                    ? buildSingleAnalysisPrompt(chunks.join('\n\n'), ctx, language)
-                    : buildSingleAnalysisPrompt('(documento sin texto extraído)', ctx, language);
-                const raw = await this.postJson([
-                    { role: 'system', content: language === 'en' ? 'You are a document analyst. Respond in English only.' : 'Eres un analista de documentos. Responde únicamente en español.' },
-                    { role: 'user', content: singlePrompt },
-                ], { maxTokens: 1800 });
-                const parsed = safeParseJson(raw);
-                return applyReduceToContract(base, {
-                    resumen: String(parsed?.resumen || base.resumen),
-                    puntos_clave: Array.isArray(parsed?.puntos_clave) ? parsed.puntos_clave.map(String) : [],
-                    escenarios: Array.isArray(parsed?.escenarios) ? parsed.escenarios : undefined,
-                });
-            }
-
-            // Fase map: una llamada por chunk (con degradación por chunk).
-            const partials: Array<PartialSummary & { indice: number }> = [];
-            for (let i = 0; i < chunks.length; i++) {
-                try {
-                    const raw = await this.postJson([
-                        { role: 'system', content: language === 'en' ? 'You are a document analyst. Respond in English only.' : 'Eres un analista de documentos. Responde únicamente en español.' },
-                        { role: 'user', content: buildMapPrompt(chunks[i], i + 1, chunks.length, ctx, language) },
-                    ], { maxTokens: 900 });
-                    const parsed = safeParseJson(raw);
-                    partials.push({
-                        indice: i + 1,
-                        resumen: String(parsed?.resumen || ''),
-                        puntos_clave: Array.isArray(parsed?.puntos_clave) ? parsed.puntos_clave.map(String) : [],
-                    });
-                } catch (e) {
-                    console.warn(`DeepSeek analyzeDocument map chunk ${i + 1} failed:`, e);
-                    partials.push({ indice: i + 1, resumen: '', puntos_clave: [] });
-                }
-            }
-
-            // Fase reduce: fusión con LLM; respaldo heurístico si falla.
-            let reduced: { resumen: string; puntos_clave: string[]; escenarios?: Record<string, unknown>[] };
-            try {
-                const raw = await this.postJson([
-                    { role: 'system', content: language === 'en' ? 'You are a document analyst. Respond in English only.' : 'Eres un analista de documentos. Responde únicamente en español.' },
-                    { role: 'user', content: buildReducePrompt(partials, ctx, language) },
-                ], { maxTokens: 1800 });
-                const parsed = safeParseJson(raw);
-                reduced = {
-                    resumen: String(parsed?.resumen || ''),
-                    puntos_clave: Array.isArray(parsed?.puntos_clave) ? parsed.puntos_clave.map(String) : [],
-                    escenarios: Array.isArray(parsed?.escenarios) ? parsed.escenarios : undefined,
-                };
-            } catch (e) {
-                console.warn('DeepSeek analyzeDocument reduce failed, using heuristic merge:', e);
-                reduced = mergePartialSummaries(partials);
-            }
-            return applyReduceToContract(base, reduced);
-        } catch (error) {
-            console.warn('DeepSeek analyzeDocument fallback to heuristic contract:', error);
-            return base;
-        }
-    }
-
-    /**
-     * F2 — analizar la funcionalidad de una app (fase estática → contrato).
-     * Degrada elegantemente al análisis heurístico si no hay API key.
-     */
-    async analyzeApp(
-        payload: AppAnalysisInput,
-        language = 'es',
-    ): Promise<AppAnalysisContract> {
-        if (!hasUsableTextBackend()) return buildHeuristicAppAnalysis(payload);
-
-        try {
-            const raw = await this.postJson([
-                { role: 'system', content: language === 'en' ? 'You are an app analyst. Respond in English only. Return valid JSON.' : 'Eres un analista de aplicaciones. Responde únicamente en español. Devuelve JSON válido.' },
-                { role: 'user', content: [
-                    'Analiza la funcionalidad de la siguiente aplicación (fase estática):',
-                    `Proyecto: ${payload.proyecto}`,
-                    `Framework: ${payload.framework}`,
-                    `Estructura:\n${payload.estructura || '(sin estructura)'}`,
-                    `Archivos relevantes (muestra):\n${(payload.archivos || []).join('\n')}`,
-                    `Errores detectados: ${(payload.errores_detectados || []).join('; ') || 'ninguno'}`,
-                    'Devuelve JSON válido con el formato:',
-                    '{"pantallas":[{"id":string,"nombre":string,"proposito":string,"entradas":string[],"acciones":string[],"salidas":string[]}],',
-                    '"flujos":[{"nombre":string,"pasos":string[]}],',
-                    '"errores_detectados":string[]}',
-                    'Solo usa información presente en la estructura proporcionada; no inventes.',
-                ].join('\n') },
-            ], { maxTokens: 2200 });
-            const parsed = safeParseJson(raw);
-            const screens: Record<string, unknown>[] = Array.isArray(parsed?.pantallas) ? parsed.pantallas : [];
-            const flows: Record<string, unknown>[] = Array.isArray(parsed?.flujos) ? parsed.flujos : [];
-            const llmErrors = Array.isArray(parsed?.errores_detectados) ? parsed.errores_detectados.map(String) : [];
-            const mergedErrors = Array.from(new Set([
-                ...(Array.isArray(payload.errores_detectados) ? payload.errores_detectados : []),
-                ...llmErrors,
-            ]));
-            return {
-                proyecto: payload.proyecto || 'Proyecto',
-                framework: payload.framework || 'other',
-                pantallas: screens.map((s) => ({
-                    id: String(s?.id || `screen-${uuidv4()}`),
-                    nombre: String(s?.nombre || 'Pantalla'),
-                    proposito: String(s?.proposito || ''),
-                    entradas: Array.isArray(s?.entradas) ? s.entradas.map(String) : [],
-                    acciones: Array.isArray(s?.acciones) ? s.acciones.map(String) : [],
-                    salidas: Array.isArray(s?.salidas) ? s.salidas.map(String) : [],
-                })),
-                flujos: flows.map((f) => ({
-                    nombre: String(f?.nombre || 'Flujo'),
-                    pasos: Array.isArray(f?.pasos) ? f.pasos.map(String) : [],
-                })),
-                errores_detectados: mergedErrors,
-            };
-        } catch (error) {
-            console.warn('DeepSeek analyzeApp fallback to heuristic analysis:', error);
-            return buildHeuristicAppAnalysis(payload);
-        }
-    }
-
-    /**
-     * F3 — generar un documento (contenido del LLM serializado por el adaptador).
-     * Si ya hay contenido analizado, se serializa directamente; degrada a contenido
-     * de respaldo si no hay API key o falla la llamada.
-     */
-    async generateDocument(
-        payload: GenerationInput,
-        language = 'es',
-    ): Promise<GeneratedDocumentResult> {
-        const nombre = payload.fuentes?.[0]?.ref || `flu-${payload.formato}`;
-        if (payload.contenido_analizado && payload.contenido_analizado.trim()) {
-            return serializeDocument(payload.formato, payload.contenido_analizado, nombre);
-        }
-        if (!hasUsableTextBackend()) {
-            return serializeDocument(payload.formato, buildGenerationFallbackContent(payload, language), nombre);
-        }
-        try {
-            const content = await this.postJson([
-                { role: 'system', content: buildGenerationSystemPrompt(language) },
-                { role: 'user', content: buildGenerationPrompt(payload, language) },
-            ], { maxTokens: 3000, timeoutMs: GENERATION_TIMEOUT_MS, jsonMode: false });
-            return serializeDocument(payload.formato, content, nombre);
-        } catch (error) {
-            console.warn('Text engine generateDocument fallback to fallback content:', error);
-            return serializeDocument(payload.formato, buildGenerationFallbackContent(payload, language), nombre);
-        }
     }
 }
 

@@ -28,23 +28,26 @@ function getParamList(fn: (...args: any[]) => any): string[] {
 
 describe('🧪 Language Regression — GeminiService methods accept language param', () => {
     const src = readFileSync('./src/services/gemini.ts', 'utf-8');
+    // La orquestación de generateMinute (log + normalización) vive en el motor
+    // único (BaseAIService); gemini.ts solo aporta el transporte.
+    const base = readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
 
     // ── generateMinute ──
     it('generateMinute debe usar isEnglish y delegar al system prompt compartido (Rule #1)', () => {
         // generateMinute usa isEnglish para el log de conversación (User/Usuario)
-        expect(src).toContain('isEnglish');
-        expect(src).toContain("isEnglish ? 'User' : 'Usuario'");
+        expect(base).toContain('isEnglish');
+        expect(base).toContain("isEnglish ? 'User' : 'Usuario'");
         // El system prompt vive en la única fuente de verdad: src/core/ai/prompts.ts
-        expect(src).toContain('buildMinuteSystemPrompt');
+        expect(base).toContain('buildMinuteSystemPrompt');
         const promptsSrc = readFileSync('./src/core/ai/prompts.ts', 'utf-8');
         expect(promptsSrc).toContain('? `You are FLU');
         expect(promptsSrc).toContain('Eres FLU');
     });
 
     it('generateMinute debe usar language-aware default title', () => {
-        expect(src).toContain('isEnglish');
-        expect(src).toContain('`Minutes -');
-        expect(src).toContain('`Minuta -');
+        expect(base).toContain('isEnglish');
+        expect(base).toContain('`Minutes -');
+        expect(base).toContain('`Minuta -');
     });
 
     // ── generateResponse (GeminiService) ──
