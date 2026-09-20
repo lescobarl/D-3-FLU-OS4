@@ -10,7 +10,6 @@
 
 import Dexie, { type EntityTable } from 'dexie';
 import { v4 as uuidv4 } from 'uuid';
-import type { MemoryItem } from '../../lib/longTermMemory';
 import type { EnvironmentDefinition } from '../environments/environmentRegistry';
 import type { PaletteDefinition } from '../branding/seasonalPalettes';
 import type { SearchSite } from '../search/searchSiteTypes';
@@ -557,7 +556,6 @@ export class FluDatabase extends Dexie {
     notes!: EntityTable<NoteRecord, 'id'>;
     documents!: EntityTable<DocumentRecord, 'id'>;
     agenda!: EntityTable<AgendaItem, 'id'>;
-    memories!: EntityTable<MemoryItem, 'id'>;
 
     constructor() {
         super('flu-os3');
@@ -669,12 +667,6 @@ export class FluDatabase extends Dexie {
             agenda: 'id, kind, status, personId',
         });
 
-        // v22: memoria de largo plazo en la MISMA base flu-os3 (C30). Antes
-        // longTermMemory abría su propia IndexedDB ('flu-long-term-memory').
-        this.version(22).stores({
-            memories: 'id, category, importance, createdAt, lastAccessedAt',
-        });
-
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
         this.minutes = this.table('minutes');
@@ -698,7 +690,6 @@ export class FluDatabase extends Dexie {
         this.notes = this.table('notes');
         this.documents = this.table('documents');
         this.agenda = this.table('agenda');
-        this.memories = this.table('memories');
     }
 }
 

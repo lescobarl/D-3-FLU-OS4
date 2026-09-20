@@ -2,7 +2,7 @@
  * C33 — memoryItemSync: MemoryItem cumple la tupla de sync (§3.7).
  * Nace ROJO (MemoryItem sin revision/updatedAt).
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -11,6 +11,8 @@ const TARGET = 'src/lib/longTermMemory.ts'
 
 describe('C33 memoryItemSync — tupla de sync en MemoryItem', () => {
   it('MemoryItem declara revision y updatedAt', () => {
+    // C16: el módulo murió (sin importador de producción) → invariante vacuo.
+    if (!existsSync(join(ROOT, TARGET))) return
     const src = readFileSync(join(ROOT, TARGET), 'utf8')
     const m = src.match(/interface MemoryItem\s*\{[\s\S]*?\n\}/)
     expect(m, 'Debe existir la interfaz MemoryItem').not.toBeNull()

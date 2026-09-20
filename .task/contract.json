@@ -1,11 +1,29 @@
 {
-  "id": "C13",
+  "id": "C16",
   "mode": "full",
-  "task": "Errores — ningún catch silencioso",
-  "base": "6e2752b5574d624c6815c1808a1bfff9bcb2610b",
-  "objective": "Todo bloque catch registra el error (log) o lo propaga (throw/reject); ninguno lo traga.",
+  "task": "Basura — eliminar módulos muertos de src/lib",
+  "base": "6e18d51dfd3d2f12aeaa5bc00cfef3ad1ac4971c",
+  "objective": "Se eliminan los 15 módulos sin importador de producción y sus tests huérfanos.",
   "allow": [
-    "src/**"
+    "src/lib/**",
+    "src/voice/lib/localTranslate.js",
+    "src/core/db/fluDatabase.ts",
+    "tests/conversationFlow.test.ts",
+    "tests/emotionalState.test.ts",
+    "tests/exportUtils.test.ts",
+    "tests/forgettingCurve.test.ts",
+    "tests/goalTracker.test.ts",
+    "tests/memoryConsolidation.test.ts",
+    "tests/minuteSuggester.test.ts",
+    "tests/participantProfiles.test.ts",
+    "tests/preferenceLearner.test.ts",
+    "tests/proactiveEngine.test.ts",
+    "tests/theoryOfMind.test.ts",
+    "tests/transcriptQuality.test.ts",
+    "tests/userEmotionDetector.test.ts",
+    "tests/localTranslate.test.ts",
+    "tests/longTermMemoryDeleteGuard.test.ts",
+    "tests/memoryItemSyncGuard.test.ts"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +37,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 140,
+  "maxFiles": 45,
   "maxLines": 6000,
-  "dod": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ningún bloque catch traga el error sin registrarlo",
+    "statement": "No quedan módulos muertos conocidos",
     "metric": {
-      "command": "node scripts/audit-metric.mjs catch-silencioso",
+      "command": "node scripts/audit-metric.mjs modulos-muertos",
       "target": 0
     },
-    "base": "6e2752b5574d624c6815c1808a1bfff9bcb2610b",
+    "base": "6e18d51dfd3d2f12aeaa5bc00cfef3ad1ac4971c",
     "guardFiles": [
-      "tests/catchSilenciosoGuard.test.ts"
+      "tests/modulosMuertosGuard.test.ts"
     ]
   }
 }

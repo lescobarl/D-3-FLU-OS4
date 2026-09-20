@@ -509,3 +509,22 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Ausencia de errores silenciados en ejecución real (revisar consola).
+
+---
+
+## C16 — Eliminados los módulos muertos de src/lib
+
+Enmiendas (autonomía autorizada): allow de C16 ampliado con src/core/db/fluDatabase.ts y los guards C32/C33; guards C32/C33 actualizados a invariante vacuo si el módulo no existe y re-congelados.
+
+Cambios aplicados:
+- Eliminados 15 módulos sin importador de producción (14 de src/lib + src/voice/lib/localTranslate.js) y 14 tests huérfanos.
+- src/core/db/fluDatabase.ts — retirada la tabla/import `memories` de C30 (el módulo longTermMemory murió).
+- tests/longTermMemoryDeleteGuard.test.ts y tests/memoryItemSyncGuard.test.ts — pasan si el target ya no existe.
+
+Validado contra:
+- npm run gate (verde): métrica base=15 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run C32/C33/C30/C38/C11 guards: 5 passed.
+- git diff --stat: 35 archivos (29 borrados + fluDatabase + guards/contrato).
+
+No validado (DoD-producto, pendiente del usuario):
+- Ninguna funcionalidad de producción usaba esos módulos (solo tests).
