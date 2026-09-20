@@ -61,7 +61,23 @@ const RE = {
   voiceProfilesKey: /STORAGE_KEYS\.VOICE_PROFILES/,
   longtermDelete: /store\.delete\s*\(/,
   consoleDebug: /console\.debug\s*\(/,
+  consumerNorm:
+    /(?:cleanForSpeech|normalizeTranscriptText|stripWakeWord|stripWakeWordAnywhere|collapseStutter|normalizeCommandForDeterministic)\s*\(/,
+  finalizeSites: /finalizeTurnCommit\(\)/,
+  umbralLiteral: /0\.[0-9]{2}/,
 }
+const CONSUMER_NORM_FILES = new Set([
+  'src/lib/generationTopic.ts',
+  'src/core/agenda/agendaCommandParser.ts',
+  'src/voice/lib/noteIntentParser.js',
+])
+const UMBRAL_FILES = new Set([
+  'src/voice/lib/speakerDiarization.js',
+  'src/core/autonomy/healthMonitor.ts',
+  'src/core/autonomy/decisionEngine.ts',
+  'src/core/autonomy/autoOptimization.ts',
+  'src/lib/participantProfiles.ts',
+])
 const FILES_IMPORT_PROXY = [
   'src/services/ocrService.ts',
   'src/core/autonomy/healthMonitor.ts',
@@ -243,6 +259,25 @@ const metrics = {
   },
   'fallback-responses': () => (existsSync(join(ROOT, 'src/services/fallbackResponses.ts')) ? 1 : 0),
   'console-debug': () => countLinesWhere((_r, l) => RE.consoleDebug.test(l)),
+  // ---- C36-C38 -----------------------------------------------------------
+  'consumidores-normalizan': () => {
+    let n = 0
+    for (const f of FILES) {
+      if (!CONSUMER_NORM_FILES.has(rel(f))) continue
+      for (const line of linesOf(f)) {
+        const s = stripComment(line)
+        if (/^\s*import/.test(s)) continue
+        if (RE.consumerNorm.test(s)) n += 1
+      }
+    }
+    return n
+  },
+  'finalize-sites': () =>
+    countLinesWhere(
+      (r, l) => r === 'src/voice/lib/conversationStreamCommit.js' && RE.finalizeSites.test(stripComment(l)),
+    ),
+  'umbrales-autonomy': () =>
+    countFilesWhere((r, f) => UMBRAL_FILES.has(r) && RE.umbralLiteral.test(read(f))),
 }
 
 const id = process.argv[2]
