@@ -1,13 +1,11 @@
 {
-  "id": "C30",
+  "id": "C31",
   "mode": "full",
-  "task": "Persistencia — una sola base IndexedDB propia",
-  "base": "88f8b2a3f07967e3f79c4f7a0fc4f3cdbd798b09",
-  "objective": "longTermMemory y fluStorage migran a la base Dexie flu-os3; nadie abre su propia DB.",
+  "task": "Persistencia — perfiles de voz solo en Dexie",
+  "base": "919d957730848f34424f397fb1339517c21d3da3",
+  "objective": "backupSystem deja de duplicar los perfiles de voz en localStorage.",
   "allow": [
-    "src/lib/longTermMemory.ts",
-    "src/voice/lib/fluStorage.js",
-    "src/core/db/fluDatabase.ts"
+    "src/core/autonomy/backupSystem.ts"
   ],
   "deny": [
     ".task/**",
@@ -21,20 +19,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 4,
-  "maxLines": 600,
-  "dod": "npx vitest run tests/indexedDbSingleGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/indexedDbSingleGuard.test.ts --reporter=dot",
+  "maxFiles": 2,
+  "maxLines": 200,
+  "dod": "npx vitest run tests/voiceProfilesLocalStorageGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/voiceProfilesLocalStorageGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ningún módulo fuera de la capa Dexie abre su propia IndexedDB",
+    "statement": "Ningún módulo duplica los perfiles de voz en localStorage",
     "metric": {
-      "command": "node scripts/audit-metric.mjs indexeddb-propias",
+      "command": "node scripts/audit-metric.mjs voiceprofiles-localstorage",
       "target": 0
     },
-    "base": "88f8b2a3f07967e3f79c4f7a0fc4f3cdbd798b09",
+    "base": "919d957730848f34424f397fb1339517c21d3da3",
     "guardFiles": [
-      "tests/indexedDbSingleGuard.test.ts"
+      "tests/voiceProfilesLocalStorageGuard.test.ts"
     ]
   }
 }

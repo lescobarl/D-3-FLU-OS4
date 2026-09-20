@@ -292,14 +292,9 @@ class DataExtractor {
     }
     
     extractVoiceProfiles(): unknown[] {
-        try {
-            const profilesJson = localStorage.getItem(STORAGE_KEYS.VOICE_PROFILES);
-            if (profilesJson) {
-                return JSON.parse(profilesJson);
-            }
-        } catch (error) {
-            console.error('Error extrayendo perfiles de voz:', error);
-        }
+        // C31 — Los perfiles de voz viven SOLO en la base Dexie flu-os3
+        // (fluDb.voiceProfiles). No se duplican en localStorage: el backup no
+        // los extrae de ahí (Dexie ya es persistente).
         return [];
     }
     
@@ -520,14 +515,9 @@ class DataRestorer {
     }
     
     restoreVoiceProfiles(data: unknown[] | null): boolean {
-        try {
-            if (!data) return false;
-            
-            localStorage.setItem(STORAGE_KEYS.VOICE_PROFILES, JSON.stringify(data));
-            return true;
-        } catch (error) {
-            console.error('Error restaurando perfiles de voz:', error);
-        }
+        // C31 — No se restauran desde localStorage: la fuente única es Dexie
+        // (flu-os3.voiceProfiles). El backup no duplica esa ruta.
+        void data;
         return false;
     }
     
