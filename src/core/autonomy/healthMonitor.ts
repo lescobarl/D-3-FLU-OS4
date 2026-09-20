@@ -23,6 +23,7 @@
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
 import { fetchTextEngine } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
+import { isSpeechSupported, getSpeechVoices } from '../../voice/lib/fluSpeech';
 
 // -----------------------------------------------------------
 // Tipos
@@ -134,8 +135,8 @@ const COMPONENT_THRESHOLDS: Record<string, ComponentThresholds> = {
     },
     'speech-synthesis': {
         responseTimeMax: 3000,     // 3 segundos máximo
-        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.speechSynthesisErrorRateMax,        // 15% máximo de errores
-        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.speechSynthesisAvailabilityMin,     // 98% mínimo de disponibilidad
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.ttsErrorRateMax,        // 15% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.ttsAvailabilityMin,     // 98% mínimo de disponibilidad
         checkInterval: 10000,      // Verificar cada 10 segundos
     },
     'indexed-db': {
@@ -384,16 +385,16 @@ async function checkSpeechSynthesis(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // Verificar si SpeechSynthesis está disponible
-        if (!('speechSynthesis' in window)) {
+        // Verificar si la síntesis de voz está disponible
+        if (!isSpeechSupported()) {
             hasError = true;
-            message = 'SpeechSynthesis API no disponible en este navegador';
+            message = 'Síntesis de voz no disponible en este navegador';
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;
             
             // Verificar voces disponibles
-            const voices = speechSynthesis.getVoices();
+            const voices = getSpeechVoices();
             metrics.voiceCount = voices.length;
             metrics.hasSpanishVoice = voices.some(voice => 
                 voice.lang.startsWith('es') || voice.lang.includes('es')

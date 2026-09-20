@@ -1,11 +1,20 @@
 {
-  "id": "C23",
+  "id": "C21",
   "mode": "full",
-  "task": "Docs — AGENTS.md alineado con el stack real",
-  "base": "bec691230ac08b878ecb1f7904121ac8064bfe4d",
-  "objective": "AGENTS.md deja de mandar React 18 / Vite 5 / Tailwind CSS 3 y declara el stack real (React 19 / Vite 8 / TypeScript 6) y la excepción de estilos.",
+  "task": "Voz — un solo punto de síntesis (TTS)",
+  "base": "3119ff1c5601ed109dfd760d90af71c8cd9513bd",
+  "objective": "Un único módulo encapsula speechSynthesis; el resto consume esa API.",
   "allow": [
-    "AGENTS.md"
+    "src/App.tsx",
+    "src/hooks/useConfigPersistence.ts",
+    "src/hooks/useFluParticipant.ts",
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/core/autonomy/healthMonitor.ts",
+    "src/voice/lib/fluSpeech.js",
+    "src/voice/components/FluParticipantSettingsPanel.jsx",
+    "src/services/localTts.ts",
+    "src/core/config/sharedConfig.ts",
+    "tests/localTts.test.ts"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +28,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 2,
-  "maxLines": 120,
-  "dod": "npx vitest run tests/stackDocGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/stackDocGuard.test.ts --reporter=dot",
+  "maxFiles": 10,
+  "maxLines": 500,
+  "dod": "npx vitest run tests/ttsPuntoUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/ttsPuntoUnicoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "AGENTS.md no contiene versiones/stack obsoletos",
+    "statement": "Un único módulo usa speechSynthesis",
     "metric": {
-      "command": "node scripts/audit-metric.mjs stack-doc",
-      "target": 0
+      "command": "node scripts/audit-metric.mjs tts-punto-unico",
+      "target": 1
     },
-    "base": "bec691230ac08b878ecb1f7904121ac8064bfe4d",
+    "base": "3119ff1c5601ed109dfd760d90af71c8cd9513bd",
     "guardFiles": [
-      "tests/stackDocGuard.test.ts"
+      "tests/ttsPuntoUnicoGuard.test.ts"
     ]
   }
 }

@@ -146,6 +146,37 @@ export function splitSpeechChunks(text = '', maxChars) {
   return chunks.filter(Boolean)
 }
 
+/**
+ * C21 — API ÚNICA del motor TTS del navegador. Este módulo es el único que
+ * toca el objeto global de síntesis; el resto de la app consume estas
+ * funciones (getSpeechEngine/getSpeechVoices/subscribeSpeechVoices).
+ */
+export function getSpeechEngine() {
+  return typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis : null
+}
+
+export function getSpeechVoices() {
+  const engine = getSpeechEngine()
+  return engine ? engine.getVoices() : []
+}
+
+export function subscribeSpeechVoices(listener) {
+  const engine = getSpeechEngine()
+  if (!engine) return () => {}
+  engine.addEventListener('voiceschanged', listener)
+  return () => engine.removeEventListener('voiceschanged', listener)
+}
+
+export function isSpeechSupported() {
+  return Boolean(getSpeechEngine())
+}
+
+/** Cancela la cola del motor TTS (fuente única del control de síntesis). */
+export function cancelSpeech() {
+  const engine = getSpeechEngine()
+  if (engine) engine.cancel()
+}
+
 export function isSpeechSynthesisSpeaking() {
   return typeof window !== 'undefined' && Boolean(window.speechSynthesis?.speaking)
 }

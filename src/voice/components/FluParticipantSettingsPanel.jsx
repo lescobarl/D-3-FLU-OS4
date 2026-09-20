@@ -108,7 +108,7 @@ export default function FluParticipantSettingsPanel({
                 style={{ whiteSpace: 'nowrap' }}
                 onClick={() => {
                   // §9: el preview de voz usa la ruta ÚNICA de TTS (speakResponse),
-                  // no `window.speechSynthesis.speak` directo. Así respeta el estado
+                  // sin tocar el motor de síntesis directo. Así respeta el estado
                   // de voz (eco/barge-in) y suspende la escucha como el resto de FLU.
                   speakResponse(
                     lang === 'en'

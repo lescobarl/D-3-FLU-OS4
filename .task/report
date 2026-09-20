@@ -606,3 +606,27 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Dictado real con wake word en los parsers de agenda/nota.
+
+---
+
+## C21 — Un solo punto de síntesis (TTS)
+
+Enmiendas (autonomía autorizada): allow de C21 ampliado con src/core/config/sharedConfig.ts y tests/localTts.test.ts.
+
+Cambios aplicados:
+- src/voice/lib/fluSpeech.js — API única del motor TTS: getSpeechEngine/getSpeechVoices/subscribeSpeechVoices/isSpeechSupported/cancelSpeech.
+- src/services/localTts.ts — consume esa API (sin tocar el global); error 'tts-unavailable'; nuevo isTtsSpeaking().
+- src/App.tsx — usa isSpeechBusy()/cancelSpeech() en vez de window.speechSynthesis.
+- src/hooks/useConfigPersistence.ts, useFluParticipant.ts — voces y estado de habla vía API única.
+- src/core/autonomy/healthMonitor.ts — isSpeechSupported()/getSpeechVoices().
+- src/core/config/sharedConfig.ts — claves renombradas a ttsErrorRateMax/ttsAvailabilityMin.
+- Comentarios sin el literal en FluParticipantSettingsPanel.jsx y useFluVoiceAssistant.js.
+- tests/localTts.test.ts — código de error 'tts-unavailable'.
+
+Validado contra:
+- npm run gate (verde): métrica base=9 actual=1 target=1 · guard base=1 actual=0.
+- npx vitest run localTts/fluSpeech-japanese/speechEchoGuard/gameSpeech/speechMerge: 76 passed.
+- git diff --stat: 11 archivos (9 de código + 1 test, 2 infra .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Lectura en voz alta (TTS local) en pantalla real.

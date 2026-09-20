@@ -214,9 +214,9 @@ describe('localTts — speakLocal / stopLocalSpeech', () => {
         expect(speak).not.toHaveBeenCalled();
     });
 
-    test('sin speechSynthesis devuelve speechSynthesis-unavailable', () => {
+    test('sin motor TTS devuelve tts-unavailable', () => {
         const result = speakLocal('Hola', { lang: 'es' });
-        expect(result).toEqual({ started: false, error: 'speechSynthesis-unavailable' });
+        expect(result).toEqual({ started: false, error: 'tts-unavailable' });
     });
 
     test('el error "canceled" no se reporta como fallo y dispara onEnd', () => {

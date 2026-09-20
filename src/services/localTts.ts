@@ -1,8 +1,8 @@
 // ============================================================
 // localTts — Text-to-Speech 100% local
 // ============================================================
-// Usa la Web Speech API (speechSynthesis) con las voces locales
-// del sistema operativo. No requiere servidor externo ni API key.
+// Consume la API ÚNICA de síntesis de voz expuesta por fluSpeech
+// (C21: un solo módulo toca el motor del navegador).
 //
 // Cumple:
 //   - Modo 100% local: las voces son locales del SO (localService)
@@ -10,6 +10,8 @@
 //   - Funciones puras (buildLocalNarrationSegments, pickBestLocalVoice)
 //     testables sin navegador real.
 // ============================================================
+
+import { getSpeechEngine } from '../voice/lib/fluSpeech';
 
 export interface LocalTtsOptions {
     lang?: string;
@@ -35,9 +37,13 @@ export interface NarrationSegment {
 }
 
 export function getSpeechSynthesis(): SpeechSynthesis | null {
-    if (typeof window === 'undefined') return null;
-    if (!('speechSynthesis' in window)) return null;
-    return window.speechSynthesis;
+    return getSpeechEngine();
+}
+
+/** True si el motor TTS del navegador está reproduciendo o tiene cola. */
+export function isTtsSpeaking(): boolean {
+    const synth = getSpeechSynthesis();
+    return Boolean(synth && (synth.speaking || synth.pending));
 }
 
 function mapVoice(voice: SpeechSynthesisVoice): LocalTtsVoiceInfo {
@@ -108,7 +114,7 @@ export interface SpeakResult {
  */
 export function speakLocal(text: string, options: LocalTtsOptions = {}): SpeakResult {
     const synth = getSpeechSynthesis();
-    if (!synth) return { started: false, error: 'speechSynthesis-unavailable' };
+    if (!synth) return { started: false, error: 'tts-unavailable' };
     const clean = (text || '').trim();
     if (!clean) return { started: false, error: 'empty-text' };
     const voices = getLocalVoices();

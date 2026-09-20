@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService } from '../services/aiServiceFactory';
 import { hasUsableTextBackend } from '../services/deepseek';
+import { isSpeechBusy } from '../voice/lib/fluSpeech';
 import {
     applyParticipantEvaluation,
     advanceParticipantTurnCounter,
@@ -341,8 +342,7 @@ export function useFluParticipant({
         // solo mirara `speaking`, el click/la orden cederían la palabra y el borrador se
         // consumiría SIN hablarse (intervención tragada). Bloquear la concesión mientras
         // pending evita ese hueco: el usuario reintenta cuando el TTS esté libre.
-        const synth = window.speechSynthesis;
-        const speechActive = Boolean(synth && (synth.speaking || synth.pending));
+        const speechActive = isSpeechBusy();
         return shouldIgnoreParticipantFloorGrant(stateRef.current, {
             speechActive,
             lastGrantAt: lastFloorGrantAtRef.current,

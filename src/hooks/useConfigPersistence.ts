@@ -16,6 +16,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
 
 // ============================================================
@@ -171,12 +172,11 @@ export function useConfigPersistence(): ConfigPersistence {
     const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
     useEffect(() => {
         const load = () => {
-            const available = window.speechSynthesis.getVoices();
+            const available = getSpeechVoices();
             if (available.length > 0) setVoices(available);
         };
         load();
-        window.speechSynthesis.onvoiceschanged = load;
-        return () => { window.speechSynthesis.onvoiceschanged = null; };
+        return subscribeSpeechVoices(load);
     }, []);
 
     // ---- Persist language changes ----

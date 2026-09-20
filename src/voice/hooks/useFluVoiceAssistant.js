@@ -2178,7 +2178,7 @@ export function useFluVoiceAssistant({
         // Supresión de eco: mientras FLU HABLA, ignorar resultados del
         // reconocedor para no capturar la propia voz y re-mandarla a la IA.
         // Se usa la promesa propia de FLU (`isFluSpeaking`, acotada por el
-        // watchdog), NUNCA el flag global `speechSynthesis.speaking`: ese
+        // watchdog), NUNCA el flag global del motor TTS: ese
         // quedaba pegado y silenciaba la escucha hasta recargar la página.
         if (isFluSpeaking()) {
           return

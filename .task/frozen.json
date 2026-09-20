@@ -51,5 +51,6 @@
   "tests/huerfanosGuard.test.ts": "d7a1b972538b5501ed0eb23c2c3b0b7209351ee3350e307f6efd272dc5c16bc7",
   "tests/fallbackResponsesGuard.test.ts": "e24a0557c57bf1144dd9b7ba158c32258c2e0a8c4cf064bd0653a3077bf5f58f",
   "tests/consoleDebugGuard.test.ts": "2a967e958e2f9b0c84a8a9835dc678cfd2d22f1d5fb8bdec54cc3fadb8b60d25",
-  "tests/stackDocGuard.test.ts": "64ef6a39d2032e1e0618af2efe2210c8ad79d0e10db324b5f935aafd7a052ef3"
+  "tests/stackDocGuard.test.ts": "64ef6a39d2032e1e0618af2efe2210c8ad79d0e10db324b5f935aafd7a052ef3",
+  "tests/ttsPuntoUnicoGuard.test.ts": "1ced2570801c1b8ff21930164e46c7fd86889341f2b8f740107ddb4d03da5af9"
 }

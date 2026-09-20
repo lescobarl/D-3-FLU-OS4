@@ -156,7 +156,7 @@ import { createWebAudioDriver, type AudioDriver, type SoundOptions } from './cor
 // OS2 Library Imports — local paths (formerly flu-voz alias)
 // ============================================================
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
-import { speakResponse, waitForSpeechIdle } from './voice/lib/fluSpeech';
+import { speakResponse, waitForSpeechIdle, isSpeechBusy, cancelSpeech } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import {
     isRecoverableRecognitionError,
@@ -4447,11 +4447,10 @@ const {
             conversationMode.exit();
             
             // Solo cancelar si realmente hay speech activo y es necesario
-            const synth = window.speechSynthesis;
-            if (synth && (synth.speaking || synth.pending)) {
+            if (isSpeechBusy()) {
                 // En lugar de cancelar inmediatamente, esperar un momento breve
                 // para permitir que la animación de boca termine naturalmente
-                synth.cancel();
+                cancelSpeech();
                 // Pequeña pausa para permitir transición de estado
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
@@ -4471,9 +4470,8 @@ const {
         // El modo conversación lo fija `conversationMode.open()` (dueño único).
         
         // Solo cancelar si realmente hay speech activo
-        const synth = window.speechSynthesis;
-        if (synth && (synth.speaking || synth.pending)) {
-            synth.cancel();
+        if (isSpeechBusy()) {
+            cancelSpeech();
             await new Promise(resolve => setTimeout(resolve, 100));
         }
         
@@ -4495,9 +4493,8 @@ const {
     const handleStartConversation = useCallback(async ({ announce = false }: { announce?: boolean } = {}) => {
         if (announce) {
             // Solo cancelar si realmente hay speech activo
-            const synth = window.speechSynthesis;
-            if (synth && (synth.speaking || synth.pending)) {
-                synth.cancel();
+            if (isSpeechBusy()) {
+                cancelSpeech();
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
             const commandSpeech = getCommandSpeech('INICIAR_CONVERSACION', language);

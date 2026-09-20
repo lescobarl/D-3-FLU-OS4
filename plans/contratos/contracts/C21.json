@@ -12,7 +12,9 @@
     "src/core/autonomy/healthMonitor.ts",
     "src/voice/lib/fluSpeech.js",
     "src/voice/components/FluParticipantSettingsPanel.jsx",
-    "src/services/localTts.ts"
+    "src/services/localTts.ts",
+    "src/core/config/sharedConfig.ts",
+    "tests/localTts.test.ts"
   ],
   "deny": [
     ".task/**",
