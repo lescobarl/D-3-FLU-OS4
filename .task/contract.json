@@ -1,12 +1,13 @@
 {
-  "id": "C2",
+  "id": "C3",
   "mode": "full",
-  "task": "Búsqueda — allowlist solo desde FLU_CONFIG",
-  "base": "dec2ed31f731ecc315f62b13e9a6f68a635fbee5",
-  "objective": "App y useNavigationCommands obtienen la allowlist de búsqueda de FLU_CONFIG; sin literales duplicados.",
+  "task": "Persistencia — un solo escritor de perfiles de voz",
+  "base": "1d2e8fa5d60d81b14fd5bf6895d55b6b915527b8",
+  "objective": "Solo useVoiceProfiles.ts escribe fluDb.voiceProfiles; App usa el hook y fluStorage deja de ser una segunda ruta de escritura.",
   "allow": [
     "src/App.tsx",
-    "src/hooks/useNavigationCommands.ts"
+    "src/hooks/useVoiceProfiles.ts",
+    "src/voice/lib/fluStorage.js"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +20,20 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 3,
-  "maxLines": 120,
-  "dod": "npx vitest run tests/searchAllowlistFuenteUnicaGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/searchAllowlistFuenteUnicaGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 260,
+  "dod": "npx vitest run tests/voiceProfilesEscritorUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/voiceProfilesEscritorUnicoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "La allowlist de búsqueda no se re-declara fuera de fluConfig.js",
+    "statement": "Un único archivo escribe fluDb.voiceProfiles (useVoiceProfiles.ts)",
     "metric": {
-      "command": "node scripts/audit-metric.mjs search-allowlist",
-      "target": 0
+      "command": "node scripts/audit-metric.mjs voiceprofiles-escritores",
+      "target": 1
     },
-    "base": "dec2ed31f731ecc315f62b13e9a6f68a635fbee5",
+    "base": "1d2e8fa5d60d81b14fd5bf6895d55b6b915527b8",
     "guardFiles": [
-      "tests/searchAllowlistFuenteUnicaGuard.test.ts"
+      "tests/voiceProfilesEscritorUnicoGuard.test.ts"
     ]
   }
 }

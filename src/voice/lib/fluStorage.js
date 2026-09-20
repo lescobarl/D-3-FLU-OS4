@@ -1,6 +1,7 @@
 import { normalizeConversationRow } from './conversationRow.js'
 import { fluDb } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
+import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
 
 const DB_NAME = 'flu-voz-local'
 const DB_VERSION = 4
@@ -142,7 +143,7 @@ async function migrateLegacyVoiceData() {
     const legacyProfiles = await listStoreRecords('voice_profiles')
     for (const row of legacyProfiles) {
       if (!row?.id || known.has(row.id)) continue
-      await fluDb.voiceProfiles.put(legacyToVoiceRecord(row))
+      await persistVoiceProfile(legacyToVoiceRecord(row))
     }
     if (!(await fluDb.sessionState.get('current'))) {
       const legacySessions = await listStoreRecords('session_state')
@@ -193,7 +194,7 @@ export async function saveVoiceProfile(profile = {}) {
     timestamp: Date.now(),
     sync: buildSyncTuple(existing?.sync, Date.now()),
   }
-  await fluDb.voiceProfiles.put(record)
+  await persistVoiceProfile(record)
   return voiceRecordToProfile(record)
 }
 
@@ -216,7 +217,7 @@ export async function deleteVoiceProfile(profileId) {
   if (!id) return false
   const existing = await fluDb.voiceProfiles.get(id)
   if (!existing) return false
-  await fluDb.voiceProfiles.put({
+  await persistVoiceProfile({
     ...existing,
     timestamp: Date.now(),
     sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },

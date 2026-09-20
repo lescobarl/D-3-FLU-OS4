@@ -4551,21 +4551,16 @@ const {
         const label = String(row?.label || '').trim();
         if (!label) return;
 
-        // 1) Perfil de voz (flu-os3 DB) — borrado físico, no solo lógico.
-        //    removeProfile() hace borrado lógico (sync.deleted=true); aquí lo
-        //    eliminamos de verdad para que no reaparezca tras un refresh.
+        // 1) Perfil de voz (flu-os3 DB) — borrado lógico vía el único escritor
+        //    (useVoiceProfiles). refresh() filtra sync.deleted, así que no
+        //    reaparece tras recargar.
         if (row.profileId) {
             await voiceProfiles.removeProfile(row.profileId);
-            await fluDb.voiceProfiles.delete(row.profileId).catch(console.error);
         } else {
             // Sin profileId (p.ej. "conejo" que nunca tuvo perfil): borrar por label.
-            const orphan = await fluDb.voiceProfiles
-                .where('label')
-                .equals(label)
-                .first()
-                .catch(() => undefined);
+            const orphan = await voiceProfiles.findProfileByLabel(label);
             if (orphan) {
-                await fluDb.voiceProfiles.delete(orphan.id).catch(console.error);
+                await voiceProfiles.removeProfile(orphan.id);
             }
         }
 

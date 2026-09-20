@@ -18,6 +18,19 @@ export interface VoiceProfileUI {
     timestamp: number;
 }
 
+/**
+ * Puerta ÚNICA de escritura de `fluDb.voiceProfiles` (C3).
+ * Ningún otro módulo toca la tabla: si necesita escribir, llama a estas
+ * funciones. Así el hook y el almacenamiento legacy comparten un solo escritor.
+ */
+export async function insertVoiceProfile(record: VoiceProfileRecord): Promise<void> {
+    await fluDb.voiceProfiles.add(record);
+}
+
+export async function persistVoiceProfile(record: VoiceProfileRecord): Promise<void> {
+    await fluDb.voiceProfiles.put(record);
+}
+
 function toUI(record: VoiceProfileRecord): VoiceProfileUI {
     return {
         id: record.id,
@@ -65,7 +78,7 @@ export function useVoiceProfiles() {
             timestamp: Date.now(),
             sync: newSyncTuple(),
         };
-        await fluDb.voiceProfiles.add(record);
+        await insertVoiceProfile(record);
         const ui = toUI(record);
         setProfiles((prev) => [ui, ...prev]);
         return ui;
@@ -81,7 +94,7 @@ export function useVoiceProfiles() {
             label: newLabel,
             sync: bumpSync(existing.sync),
         };
-        await fluDb.voiceProfiles.put(updated);
+        await persistVoiceProfile(updated);
         setProfiles((prev) => prev.map((p) => (p.id === id ? toUI(updated) : p)));
     }, []);
 
@@ -94,7 +107,7 @@ export function useVoiceProfiles() {
             ...existing,
             sync: { ...bumpSync(existing.sync), deleted: true },
         };
-        await fluDb.voiceProfiles.put(updated);
+        await persistVoiceProfile(updated);
         setProfiles((prev) => prev.filter((p) => p.id !== id));
     }, []);
 
