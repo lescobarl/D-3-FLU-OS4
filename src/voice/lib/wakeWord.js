@@ -49,7 +49,7 @@ function wakeLeadRegex() {
 }
 
 /** Quita el wake word configurado SOLO al inicio; resto de la frase intacto. */
-export function stripWakeWord(text = '') {
+export const stripWakeWord = (text = '') => {
     const clean = String(text || '').trim()
     const re = wakeLeadRegex()
     return re ? clean.replace(re, ' ').trim() : clean
@@ -60,7 +60,7 @@ export function stripWakeWord(text = '') {
  * medio de la frase). Mismo vocabulario que `stripWakeWord`: no duplica la lista
  * de wake words ni hardcodea variantes.
  */
-export function stripWakeWordAnywhere(text = '') {
+export const stripWakeWordAnywhere = (text = '') => {
     const clean = String(text || '')
     const base = buildWakeWordPattern(configuredWakeWords(), { anywhere: true })
     if (!base) return clean.trim()

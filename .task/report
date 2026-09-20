@@ -220,3 +220,19 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Consulta enviada a la IA idéntica a lo que muestra la transcripción.
+
+---
+
+## C28 — Una sola implementación de strip de wake word
+
+Cambios aplicados:
+- src/voice/lib/wakeWord.js — stripWakeWord / stripWakeWordAnywhere pasan a envoltorios `export const` sobre el patrón único buildWakeWordPattern (sin algoritmo propio).
+- src/voice/lib/audioMath.js — removeWakeWord / stripWakeWordForDisplay pasan a envoltorios `export const` que delegan en el splitter único splitTranscriptAtWakeWord / extractFluVoiceCommand.
+
+Validado contra:
+- npm run gate (verde): métrica base=5 actual=1 target=1 · guard base=1 actual=0.
+- npx vitest run tests/wakeWordDisplay.test.ts: 6 passed.
+- git diff --stat: 4 archivos (2 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Transcripción mostrada sin wake word en la barra y bitácora.

@@ -1257,7 +1257,12 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
   }
 }
 
-export function removeWakeWord(text = '', wakeWords = []) {
+/**
+ * Recorte de wake word para resolución determinista. Es un envoltorio del
+ * splitter ÚNICO (`splitTranscriptAtWakeWord`) vía `extractFluVoiceCommand`:
+ * no define un algoritmo propio de wake word (§9.5/§9.6).
+ */
+export const removeWakeWord = (text = '', wakeWords = []) => {
   const result = extractFluVoiceCommand(text, { requireWake: true, wakeWords })
   return result.accepted ? result.commandText : normalizeVoiceCommandText(text)
 }
@@ -1293,7 +1298,7 @@ export function spokenUtteranceRevision(lastText = '', nextText = '', wakeWords 
  * este helper recorta sobre el texto ORIGINAL para conservar la frase tal y como
  * la dijo el usuario (p. ej. "recuérdame" no pierde la tilde).
  */
-export function stripWakeWordForDisplay(text = '', wakeWords = []) {
+export const stripWakeWordForDisplay = (text = '', wakeWords = []) => {
   const source = typeof text === 'string' ? text : ''
   if (!source.trim() || !wakeWords.length) return source
 

@@ -29,5 +29,6 @@
   "tests/sampleRateConfigGuard.test.ts": "ee83cb03c23c97ad766bf83ceb9fcf72ffe03f4743674d5ad3b2a56d2386a348",
   "tests/appNormalizaGuard.test.ts": "54001654962c53a50fc57222b2f784401fe9254dfbf3254b4a9c84767aa7ac82",
   "tests/commitSingleSiteGuard.test.ts": "853ea6243d8a2e45b141742fddcf1d56bb516f3b428ecf9bd03c38bcf0d2fb6e",
-  "tests/queryDerivationSingleGuard.test.ts": "58d04deed9982d9b968e6a0bbf93daa57ae5e9cb52fa629f786be89e433b43f8"
+  "tests/queryDerivationSingleGuard.test.ts": "58d04deed9982d9b968e6a0bbf93daa57ae5e9cb52fa629f786be89e433b43f8",
+  "tests/wakeStripSingleGuard.test.ts": "ee1d5845eb4c3d4d8d5fd5a8ec895daf79a2fb84c7828b259b06f103e6cbeb5e"
 }

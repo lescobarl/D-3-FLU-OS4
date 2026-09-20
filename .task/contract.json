@@ -1,12 +1,12 @@
 {
-  "id": "C27",
+  "id": "C28",
   "mode": "full",
-  "task": "Voz §9.6 — una sola derivación de la query a la IA",
-  "base": "862781d6bdf698c46f5d7ed2c46bca8bac2c81f1",
-  "objective": "Un único sitio deriva la query de la fila canónica; sin fallbacks divergentes.",
+  "task": "Voz §9.2 — una sola implementación de strip de wake word",
+  "base": "5908d37ed711c71fd37738ff5dc04f3a1a8e8bdf",
+  "objective": "El recorte de wake word tiene una única implementación canónica.",
   "allow": [
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "src/voice/lib/audioMath.js"
+    "src/voice/lib/audioMath.js",
+    "src/voice/lib/wakeWord.js"
   ],
   "deny": [
     ".task/**",
@@ -21,19 +21,19 @@
     "plans/**"
   ],
   "maxFiles": 3,
-  "maxLines": 300,
-  "dod": "npx vitest run tests/queryDerivationSingleGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/queryDerivationSingleGuard.test.ts --reporter=dot",
+  "maxLines": 250,
+  "dod": "npx vitest run tests/wakeStripSingleGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/wakeStripSingleGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un único sitio deriva la query a la IA",
+    "statement": "Una única implementación de strip de wake word",
     "metric": {
-      "command": "node scripts/audit-metric.mjs derive-sites",
+      "command": "node scripts/audit-metric.mjs strip-implementaciones",
       "target": 1
     },
-    "base": "862781d6bdf698c46f5d7ed2c46bca8bac2c81f1",
+    "base": "5908d37ed711c71fd37738ff5dc04f3a1a8e8bdf",
     "guardFiles": [
-      "tests/queryDerivationSingleGuard.test.ts"
+      "tests/wakeStripSingleGuard.test.ts"
     ]
   }
 }
