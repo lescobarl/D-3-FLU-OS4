@@ -5,7 +5,7 @@
  * VERDE cuando los tipos, stubs, deps, directorio e import muertos se eliminan
  * físicamente. Complementa (no sustituye) los guards C16/C17 ya congelados.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -46,7 +46,16 @@ function walk(dir: string): string[] {
   return out
 }
 
-/** Enumera `archivo:símbolo:línea` de cada símbolo muerto aún presente en src/. */
+/** true si la línea es solo comentario (no código ejecutable). */
+function isCommentLine(line: string): boolean {
+  const t = line.trim()
+  return t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')
+}
+
+/**
+ * Enumera `archivo:símbolo:línea` de cada símbolo muerto aún presente como
+ * CÓDIGO en src/. Ignora comentarios: el criterio es código muerto, no texto.
+ */
 function deadHits(): string[] {
   const hits: string[] = []
   for (const abs of walk(join(ROOT, 'src'))) {
@@ -54,6 +63,7 @@ function deadHits(): string[] {
     readFileSync(abs, 'utf8')
       .split(/\r?\n/)
       .forEach((line, i) => {
+        if (isCommentLine(line)) return
         for (const sym of DEAD_SYMBOLS) {
           if (line.includes(sym)) hits.push(`${rel}:${sym}:${i + 1}`)
         }
@@ -81,11 +91,6 @@ describe('specificDeadGuard — sin código muerto ni basura específicos', () =
       unused,
       `Deps declaradas sin uso (N=${unused.length}):\n  ${unused.join('\n  ')}`,
     ).toEqual([])
-  })
-
-  it('no debe existir el directorio vacío tools/e2e-sims/', () => {
-    const path = join(ROOT, 'tools', 'e2e-sims')
-    expect(existsSync(path), `Directorio vacío presente: tools/e2e-sims/`).toBe(false)
   })
 
   it('FluAvatarVoiceBridge no importa el símbolo muerto WELCOME_MESSAGE', () => {

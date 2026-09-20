@@ -2287,7 +2287,7 @@ function App() {
                     // resuelven por sus propios fast-paths (configAction, juegos,
                     // navegacion) más abajo en este mismo callback.
                     // PUNTO ÚNICO DE PARSEO (Point B): el árbitro y el manejador
-                    // determinista de recordatorios deben usar LOS MISMOS options para no
+                    // __fluHandleReminderText deben usar LOS MISMOS options para no
                     // divergir. buildArbiterOptions() deriva las options desde la
                     // MISMA fuente que los manejadores (defaultOffsetMs, now,
                     // defaultAlarmTimeOfDay, defaultTimerMinutes) y se pasa al
