@@ -95,3 +95,17 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Ceder la palabra a Flu por voz en la barra de asistente.
+
+---
+
+## C7 — Base Pollinations única
+
+Cambios aplicados:
+- src/voice/lib/visualConfig.js — pollinations.baseUrl se deriva de POLLINATIONS_DEFAULTS.BASE_URL (sharedConfig), quitando /prompt.
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=1 target=1 · guard base=1 actual=0.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Generación de imagen Pollinations en pantalla real.

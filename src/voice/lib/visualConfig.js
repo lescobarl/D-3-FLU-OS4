@@ -1,3 +1,5 @@
+import { POLLINATIONS_DEFAULTS } from '../../core/config/sharedConfig'
+
 export const VISUAL_CONFIG = {
   image: {
     width: 1024,
@@ -28,7 +30,8 @@ export const VISUAL_CONFIG = {
       },
     },
     pollinations: {
-      baseUrl: 'https://image.pollinations.ai',
+      // Base única (sin la ruta /prompt) derivada de POLLINATIONS_DEFAULTS.
+      baseUrl: String(POLLINATIONS_DEFAULTS.BASE_URL).replace(/\/prompt\/?$/, ''),
       model: 'flux',
       nologo: true,
       enhance: true,

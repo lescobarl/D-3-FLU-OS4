@@ -1,12 +1,12 @@
 {
-  "id": "C6",
+  "id": "C7",
   "mode": "full",
-  "task": "Voz §9.4 — la wake word en runtime sale de FLU_CONFIG",
-  "base": "465e274797b7faa31302f8e008dad8efcf401dc6",
-  "objective": "Los prompts/etiquetas de runtime usan FLU_CONFIG.voiceCommands.wakeWords; sin literales 'ok flu' fuera de config.",
+  "task": "Hardcode — una sola base Pollinations",
+  "base": "7873bad7664173968eb9c80aa7bb80347809cb44",
+  "objective": "La base de Pollinations se define en un único módulo reutilizado por server-safe y visual.",
   "allow": [
-    "src/core/config/voiceConfigCatalog.ts",
-    "src/components/VoiceAssistantBarWrapper.tsx"
+    "src/core/config/sharedConfig.ts",
+    "src/voice/lib/visualConfig.js"
   ],
   "deny": [
     ".task/**",
@@ -21,18 +21,18 @@
   ],
   "maxFiles": 3,
   "maxLines": 120,
-  "dod": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/pollinationsFuenteUnicaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/pollinationsFuenteUnicaGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No hay wake words literales en código fuera de fluConfig.js",
+    "statement": "Un solo módulo define la base Pollinations",
     "metric": {
-      "command": "node scripts/audit-metric.mjs wake-runtime",
-      "target": 0
+      "command": "node scripts/audit-metric.mjs pollinations-fuentes",
+      "target": 1
     },
-    "base": "465e274797b7faa31302f8e008dad8efcf401dc6",
+    "base": "7873bad7664173968eb9c80aa7bb80347809cb44",
     "guardFiles": [
-      "tests/wakeWordRuntimeGuard.test.ts"
+      "tests/pollinationsFuenteUnicaGuard.test.ts"
     ]
   }
 }
