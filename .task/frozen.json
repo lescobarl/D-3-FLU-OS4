@@ -26,5 +26,6 @@
   "tests/textKeyLiteralesGuard.test.ts": "c4abf42ff36d69f5fd26329886a1a96b188a69045045f80961fd6202c9f4300a",
   "tests/uuidV4InsercionGuard.test.ts": "fddaa06da679d87e3bb95cf6f26e26eaf23ad1df4486cf56983fa75896eb8ae2",
   "tests/modeloDefaultGuard.test.ts": "43ddad4795910626addefa9ea87f3e9d34588c3cd121a1f146ad19e305a1cc6c",
-  "tests/sampleRateConfigGuard.test.ts": "ee83cb03c23c97ad766bf83ceb9fcf72ffe03f4743674d5ad3b2a56d2386a348"
+  "tests/sampleRateConfigGuard.test.ts": "ee83cb03c23c97ad766bf83ceb9fcf72ffe03f4743674d5ad3b2a56d2386a348",
+  "tests/appNormalizaGuard.test.ts": "54001654962c53a50fc57222b2f784401fe9254dfbf3254b4a9c84767aa7ac82"
 }

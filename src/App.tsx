@@ -159,8 +159,6 @@ import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
 import { speakResponse, waitForSpeechIdle } from './voice/lib/fluSpeech';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import {
-    normalizeCommandForDeterministic,
-    actionBelongsToTranscript,
     isRecoverableRecognitionError,
     isMinuteGenerationRequest,
 } from './voice/lib/audioMath';
@@ -2158,8 +2156,6 @@ function App() {
             // ============================================================
             if (hasAcciones && !rawOnly) {
                 try {
-                    const wakeWords: string[] =
-                        (FLU_CONFIG?.voiceCommands?.wakeWords as string[]) || [];
                     const arbiterOptions = buildArbiterOptions();
                     lastActionFailed = false;
                     // Paso 1 — RESOLVER: cada acción del turno se re-resuelve con el
@@ -2171,8 +2167,7 @@ function App() {
                     // el TURNO completo. El LLM solo clasifica (`accion.dominio`); la app
                     // estructura aquí (fecha/hora en agenda, título+body en nota). UNA
                     // sola rama estructura el panel — sin IA-estructura ni rescate.
-                    const turnCommandText = normalizeCommandForDeterministic(transcript, wakeWords);
-                    const turnResult: ArbiterResult = resolveDeterministicCommand(turnCommandText, arbiterOptions);
+                    const turnResult: ArbiterResult = resolveDeterministicCommand(transcript, arbiterOptions);
                     // El JUEGO ya lo despachó el fast-path determinista (llega en el
                     // contrato como `juego` o marcado `fastPathGame`): no re-despachar
                     // el turno o se reinicia la partida (nueva semilla → otra canción).
@@ -2194,7 +2189,7 @@ function App() {
                         if (!texto) continue;
                         // Guard anti-arrastre (Bug #5): accion.texto debe ser fragmento
                         // del mandato ACTUAL, no de turnos anteriores (historial).
-                        const belongsToTurn = actionBelongsToTranscript(texto, transcript, wakeWords);
+                        const belongsToTurn = transcript.includes(texto);
                         if (!belongsToTurn) {
                             relayLog(
                                 'WARN',
@@ -2203,7 +2198,7 @@ function App() {
                             );
                             continue;
                         }
-                        const commandText = normalizeCommandForDeterministic(texto, wakeWords);
+                        const commandText = texto;
                         const arbiterResult: ArbiterResult = resolveDeterministicCommand(commandText, arbiterOptions);
                         const effectiveResult: ArbiterResult | null = arbiterResult?.matched
                             ? arbiterResult
@@ -2267,29 +2262,11 @@ function App() {
             if (transcript && !rawOnly && !hasAcciones) {
                 try {
                     // ============================================================
-                    // PUNTO ÚNICO DE NORMALIZACIÓN DEL MANDATO (hub de integración)
+                    // La frase ya llega canónica desde el motor de voz (§9.2): aquí
+                    // NO se re-normaliza (sin quitar wake word ni colapsar eco); los
+                    // resolvers deterministas reciben el texto tal cual.
                     // ============================================================
-                    // El transcript crudo llega CON la wake word pegada ("Okay Blue
-                    // generame una cita...") y con fragmentos ASR duplicados ("Okay
-                    // Flow generame Una Okay flu genérame una nota..."). Los parsers
-                    // deterministas anclan sus regex al inicio del mandato, así que
-                    // aquí se limpia TODO el prefijo de wake word (una sola vez, para todos
-                    // los manejadores) y se colapsan los fragmentos duplicados antes de
-                    // despachar. Este es EL ÚNICO punto donde se separa la wake word
-                    // del mandato para la resolución determinista de intención.
-                    const wakeWords: string[] =
-                        (FLU_CONFIG?.voiceCommands?.wakeWords as string[]) || [];
-                    // PUNTO ÚNICO DE NORMALIZACIÓN: delega en la función pura
-                    // normalizeCommandForDeterministic (audioMath.js) que quita la
-                    // wake word y colapsa el eco ASR para TODOS los manejadores.
-                    const commandText = normalizeCommandForDeterministic(transcript, wakeWords);
-                    if (commandText !== transcript) {
-                        relayLog(
-                            'LOG',
-                            'App',
-                            `onContractResolved: mandato normalizado (wake word + eco ASR) → "${commandText}"`,
-                        );
-                    }
+                    const commandText = transcript;
                     // ============================================================
                     // DESPACHO UNIFICADO POR DOMINIO (árbitro determinista)
                     // ============================================================

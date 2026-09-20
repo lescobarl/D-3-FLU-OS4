@@ -172,3 +172,22 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Captura de audio del motor de voz en ejecución real.
+
+---
+
+## C25 — App no re-normaliza
+
+Cambios aplicados:
+- src/App.tsx — eliminadas las 4 llamadas a normalizeCommandForDeterministic/actionBelongsToTranscript; el árbitro determinista recibe la frase canónica del motor y los resolvers de dominio aplican su propio strip de wake word.
+- src/App.tsx — el guard anti-arrastre (Bug #5) pasa a comprobación de subcadena directa sobre el transcript del turno.
+
+Riesgo declarado:
+- La normalización de wake word/eco en App se retira antes de que C39 consolide el punto único en el motor; el anti-arrastre token-overlap queda reducido a subcadena. Pendiente de verificar en C39.
+
+Validado contra:
+- npm run gate (verde): métrica base=4 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/domainScopedIntent.test.ts tests/decideVoiceTurnDispatch.test.ts tests/voiceWakePerTurn.test.ts: 17 passed.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Despacho de comandos por voz con wake word en pantalla real.

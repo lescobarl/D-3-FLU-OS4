@@ -1,12 +1,11 @@
 {
-  "id": "C29",
+  "id": "C25",
   "mode": "full",
-  "task": "Hardcode — sample rate desde config",
-  "base": "a523fd722227d72473255a6ba11edada309e6ed5",
-  "objective": "El sample rate del motor sale de FLU_CONFIG; sin literales 48000 en el hook.",
+  "task": "Voz §9.2 — App no re-normaliza la frase canónica",
+  "base": "6acb6fee52fdf7143c15c32ebca6d9c1380b20ee",
+  "objective": "App deja de re-normalizar la transcripción; la normalización vive en el motor de voz.",
   "allow": [
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "src/voice/lib/fluConfig.js"
+    "src/App.tsx"
   ],
   "deny": [
     ".task/**",
@@ -20,20 +19,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 3,
+  "maxFiles": 2,
   "maxLines": 250,
-  "dod": "npx vitest run tests/sampleRateConfigGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/sampleRateConfigGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/appNormalizaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/appNormalizaGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No hay literales de sample rate en el motor",
+    "statement": "App no llama normalizadores sobre la frase canónica",
     "metric": {
-      "command": "node scripts/audit-metric.mjs sample-rate-literal",
+      "command": "node scripts/audit-metric.mjs app-normaliza",
       "target": 0
     },
-    "base": "a523fd722227d72473255a6ba11edada309e6ed5",
+    "base": "6acb6fee52fdf7143c15c32ebca6d9c1380b20ee",
     "guardFiles": [
-      "tests/sampleRateConfigGuard.test.ts"
+      "tests/appNormalizaGuard.test.ts"
     ]
   }
 }
