@@ -109,3 +109,17 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Generación de imagen Pollinations en pantalla real.
+
+---
+
+## C12 — Claves de texto desde STORAGE_KEYS
+
+Cambios aplicados:
+- src/voice/lib/gemini.js — las 7 lecturas de localStorage de flu-text-model/flu-text-api-key usan STORAGE_KEYS.
+
+Validado contra:
+- npm run gate (verde): métrica base=7 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Inferencia de texto del motor de voz en ejecución real.

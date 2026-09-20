@@ -1,12 +1,11 @@
 {
-  "id": "C7",
+  "id": "C12",
   "mode": "full",
-  "task": "Hardcode — una sola base Pollinations",
-  "base": "7873bad7664173968eb9c80aa7bb80347809cb44",
-  "objective": "La base de Pollinations se define en un único módulo reutilizado por server-safe y visual.",
+  "task": "Config — claves de texto desde STORAGE_KEYS",
+  "base": "67e8dc030bc1d79f8e886cfc6003c5a262ebf416",
+  "objective": "voice/lib/gemini.js deja de usar literales 'flu-text-model'/'flu-text-api-key' e importa STORAGE_KEYS.",
   "allow": [
-    "src/core/config/sharedConfig.ts",
-    "src/voice/lib/visualConfig.js"
+    "src/voice/lib/gemini.js"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +18,20 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 3,
+  "maxFiles": 2,
   "maxLines": 120,
-  "dod": "npx vitest run tests/pollinationsFuenteUnicaGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/pollinationsFuenteUnicaGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/textKeyLiteralesGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/textKeyLiteralesGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un solo módulo define la base Pollinations",
+    "statement": "No hay literales de claves de texto fuera de appConfig.ts",
     "metric": {
-      "command": "node scripts/audit-metric.mjs pollinations-fuentes",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs text-key-literales",
+      "target": 0
     },
-    "base": "7873bad7664173968eb9c80aa7bb80347809cb44",
+    "base": "67e8dc030bc1d79f8e886cfc6003c5a262ebf416",
     "guardFiles": [
-      "tests/pollinationsFuenteUnicaGuard.test.ts"
+      "tests/textKeyLiteralesGuard.test.ts"
     ]
   }
 }

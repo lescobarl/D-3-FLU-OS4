@@ -16,6 +16,7 @@ import {
   resolveServerTextApiUrl,
   resolveServerTextModel,
 } from '../../core/config/sharedConfig'
+import { STORAGE_KEYS } from '../../core/config/appConfig'
 
 import {
   buildBareVisualFallbackWorkspace,
@@ -1184,10 +1185,10 @@ export async function requestParticipantEvaluation(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
+    savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
+    savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch {
     // Sin acceso a localStorage
   }
@@ -1214,10 +1215,10 @@ export async function requestFluContract(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
+    savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
+    savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch {
     // Sin acceso a localStorage
   }
@@ -1237,8 +1238,8 @@ export async function requestConversationSummary(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
-    savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
+    savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
+    savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch (err) { console.debug('[flu] fallo de teardown ignorado:', err) }
   const body = {
     ...(params ?? {}),
@@ -1313,7 +1314,7 @@ export function resolveGeminiApiKey(apiKey = '') {
 export function resolveGeminiModel() {
   try {
     // Leer modelo guardado en localStorage por el configurador UI (OS3 parity)
-    const savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
+    const savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
   } catch {
     // Sin acceso a localStorage (SSR / Node)
