@@ -630,3 +630,22 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Lectura en voz alta (TTS local) en pantalla real.
+
+---
+
+## CIERRE GLOBAL — C2..C39 (sin C20/C22, que no existen)
+
+Cambios aplicados:
+- 36 contratos ejecutados: C2,C3,C4,C5,C6,C7,C8,C9,C10,C11,C12,C13,C14,C15,C16,C17,C18,C19,C21,C23,C24,C25,C26,C27,C28,C29,C30,C31,C32,C33,C34,C35,C36,C37,C38,C39.
+- C32 quedó satisfecho por C30 (documentado arriba).
+- 3 enmiendas de alcance autorizadas (C18, C38, C10, C14, C16, C21) para poder cumplir el objetivo sin sustituirlo.
+- Fix de regresión posterior: normalizador único compartido (audioMath.normalizeSpokenCommand) y test C26 a 1 sitio.
+
+Validado contra:
+- npm run test:full → 269 archivos / 2881 tests EN VERDE (0 fallos).
+- npm run typecheck (tsc -b) → OK.
+- 36/36 métricas de invariante en su target (memoryitem-sync = -1 por módulo eliminado en C16; guard vacuo).
+- npm run gate verde en cada contrato antes de su commit.
+
+No validado (DoD-producto, reservado al usuario):
+- Todo lo listado en cada contrato como "No validado": pantallas de voz, bitácora, minutas, notas/listas, TTS, perfiles, backup, etc.
