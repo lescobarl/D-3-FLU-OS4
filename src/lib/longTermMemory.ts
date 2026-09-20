@@ -37,6 +37,10 @@ export interface MemoryItem {
     accessCount: number;
     /** TTL in ms; null = permanent */
     ttl: number | null;
+    /** Tupla de sincronización (§3.7): revisión atómica. */
+    revision?: number;
+    /** Tupla de sincronización (§3.7): última actualización en UTC ISO. */
+    updatedAt?: string;
     /** Borrado lógico (§2.9): la fila permanece, las consultas la excluyen. */
     deleted?: boolean;
 }
@@ -64,6 +68,15 @@ export interface MemoryStats {
 const DEFAULT_MEMORY_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_RETURNED_ITEMS = 50;
 
+/** §3.7 — Bump de la tupla de sync (revision atómica + updatedAt UTC). */
+function bumpSync(item: MemoryItem): MemoryItem {
+    return {
+        ...item,
+        revision: (item.revision ?? 0) + 1,
+        updatedAt: new Date().toISOString(),
+    };
+}
+
 // -----------------------------------------------------------
 // CRUD Operations (Dexie: flu-os3.memories — C30)
 // -----------------------------------------------------------
@@ -73,14 +86,14 @@ const MAX_RETURNED_ITEMS = 50;
  * If an item with the same ID exists, it will be updated.
  */
 export async function saveMemory(item: MemoryItem): Promise<void> {
-    await fluDb.memories.put(item);
+    await fluDb.memories.put(bumpSync(item));
 }
 
 /**
  * Save multiple memory items in a single transaction.
  */
 export async function saveMemories(items: MemoryItem[]): Promise<void> {
-    await fluDb.memories.bulkPut(items);
+    await fluDb.memories.bulkPut(items.map(bumpSync));
 }
 
 /**
@@ -97,7 +110,7 @@ export async function getMemory(id: string): Promise<MemoryItem | null> {
 export async function deleteMemory(id: string): Promise<void> {
     const existing = await getMemory(id);
     if (!existing) return;
-    await fluDb.memories.put({ ...existing, deleted: true });
+    await fluDb.memories.put({ ...bumpSync(existing), deleted: true });
 }
 
 /**
@@ -179,7 +192,7 @@ export async function getExpiredMemories(): Promise<MemoryItem[]> {
 export async function cleanupExpiredMemories(): Promise<number> {
     const expired = await getExpiredMemories();
     if (expired.length === 0) return 0;
-    await fluDb.memories.bulkPut(expired.map((item) => ({ ...item, deleted: true })));
+    await fluDb.memories.bulkPut(expired.map((item) => ({ ...bumpSync(item), deleted: true })));
     return expired.length;
 }
 
@@ -217,6 +230,8 @@ export function createMemory(
         lastAccessedAt: now,
         accessCount: 0,
         ttl,
+        revision: 1,
+        updatedAt: new Date(now).toISOString(),
     };
 }
 

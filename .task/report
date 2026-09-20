@@ -479,3 +479,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Depuración de memorias expiradas sin borrado físico en pantalla real.
+
+---
+
+## C33 — Tupla de sync en MemoryItem
+
+Cambios aplicados:
+- src/lib/longTermMemory.ts — MemoryItem declara revision/updatedAt; createMemory inicializa la tupla y saveMemory/saveMemories/deleteMemory/cleanup la incrementan (bumpSync).
+
+Validado contra:
+- npm run gate (verde): métrica base=1 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/forgettingCurve.test.ts tests/memoryConsolidation.test.ts: 28 passed.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Sincronización de memorias con revisión en pantalla real.
