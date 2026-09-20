@@ -9,6 +9,9 @@ ejecutar **C2…C39**, todos, sin omitir ninguno.
 Ejecuta TODOS los contratos de plans/contratos/contracts (C2 a C39) en orden,
 sin omitir ninguno, siguiendo AGENTS.md §0/§10.
 
+OJO: la lista SALTA C20 y C22 — NO existen (están subsumidos). Son 36 contratos:
+C2-C19, C21 y C23-C39.
+
 Para cada contrato C<n>:
   1. node plans/contratos/promote.mjs C<n> activate
   2. npm run gate            # ROJO esperado al inicio (guard nace rojo)
@@ -27,10 +30,33 @@ Reglas obligatorias:
 - Sin filtros: NO omitas contratos, NO sustituyas el DoD por algo parcial, NO amplíes alcance.
   Si un DoD no se puede cumplir, DETENTE y dilo.
 - C1 ya está cerrado; empieza en C2 y termina en C39.
+- BASELINE: los guards de los contratos que aún no tocan están ROJOS a propósito. `npm run test:full`
+  mostrará ~36 fallos hasta que cada contrato cierre; eso es baseline, NO fallos nuevos. No los
+  "arregles" fuera de alcance.
 
 Al terminar, entrega: lista de contratos C2..C39 con su estado (verde/parado+motivo) y el
 `git log --oneline` de los commits de cierre.
 ```
+
+## Arranque (frase corta equivalente)
+
+Esta frase basta porque este archivo contiene las reglas completas:
+
+```text
+Trabaja con plans/contratos/EJECUCION.md. Ejecuta C2 a C39, todos, sin omitir
+ninguno. Un contrato por vez: activate → implementar en allow → npm run gate
+verde → commit --no-verify. Si un DoD no se puede cumplir, párate y me lo dices;
+no lo sustituyas.
+```
+
+## Aclaraciones que aplican a todos los contratos
+
+- Fuente única = `.task/contract.json` (no este documento ni el chat).
+- No existe `promote stage` que ejecutar: los guards ya están copiados. Solo `activate`.
+- `--no-verify` es obligatorio al commitear (el pre-commit no puede montar el worktree base).
+- Un commit por contrato, con `(C<n>)` en el mensaje: así se verifica que no se omitió ninguno.
+- Al terminar: `npm run test:full` + `npm run typecheck` una vez y reportar 0 fallos nuevos
+  (descontando los guards de contratos aún no cerrados).
 
 ## Nota de cierre (obligatoria)
 

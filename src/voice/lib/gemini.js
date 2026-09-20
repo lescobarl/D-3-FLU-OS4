@@ -1555,7 +1555,7 @@ export async function generateFluContract({
       : null
 
   // ── Fallback determinista para petición visual SIN sujeto ──────────────
-  // El modelo google/gemini-2.5-flash-lite tiene una fuerte tendencia a pedir
+  // El modelo de texto por defecto tiene una fuerte tendencia a pedir
   // aclaración ("¿sobre qué te gustaría la imagen?") cuando el usuario dice
   // "generame una imagen" sin nombrar el sujeto. Aunque el ancla del prompt lo
   // guía, no es fiable. Aquí, si el usuario hizo una petición visual sin sujeto

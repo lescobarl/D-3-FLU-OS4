@@ -15,7 +15,7 @@
 // ============================================================
 
 import { getPaletteKeys } from '../branding/seasonalPalettes';
-import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES } from './sharedConfig';
+import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig';
 import { FLU_CONFIG } from '../../voice/lib/fluConfig';
 
 // ------------------------------------------------------------
@@ -199,8 +199,8 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
         accion: 'set_config',
         handler: 'textModel',
         tipo: 'text',
-        descripcionEs: 'Modelo de texto (ej. gemini-2.5-flash-lite).',
-        descripcionEn: 'Text model (e.g. gemini-2.5-flash-lite).',
+        descripcionEs: `Modelo de texto (ej. ${OPENROUTER_DEFAULTS.MODEL}).`,
+        descripcionEn: `Text model (e.g. ${OPENROUTER_DEFAULTS.MODEL}).`,
     },
     {
         clave: 'textApiUrl',

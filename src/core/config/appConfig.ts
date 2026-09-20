@@ -180,7 +180,7 @@ export const APP_BRANDING = {
 // Gemini Configuration
 // -----------------------------------------------------------
 export const GEMINI_CONFIG = {
-    MODEL: import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite',
+    MODEL: import.meta.env.VITE_GEMINI_MODEL || OPENROUTER_DEFAULTS.MODEL.replace(/^.*\//, ''),
     API_URL: import.meta.env.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
     PREDICT_API_URL: import.meta.env.VITE_GEMINI_PREDICT_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:predict',
     DEFAULT_TEMPERATURE: 0.7,

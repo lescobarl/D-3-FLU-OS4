@@ -13,6 +13,7 @@
 import React from 'react';
 import type { FluProfile } from '../types/bridge';
 import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES } from '../core/config/appConfig';
+import { OPENROUTER_DEFAULTS } from '../core/config/sharedConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
@@ -248,7 +249,7 @@ export function FluSettingsPanel({
                                         type="text"
                                         className="flu-settings-image-config__input"
                                         style={{ fontFamily: 'monospace' }}
-                                        placeholder={language === 'en' ? 'google/gemini-2.5-flash-lite' : 'google/gemini-2.5-flash-lite'}
+                                        placeholder={OPENROUTER_DEFAULTS.MODEL}
                                         defaultValue={textModel}
                                         onChange={(e) => handleTextModelCommit(e.target.value)}
                                     />
@@ -560,7 +561,7 @@ export function FluSettingsPanel({
                                         type="text"
                                         className="flu-settings-image-config__input flu-settings-input-mono--small"
                                         style={{ fontFamily: 'monospace' }}
-                                        placeholder="google/gemini-2.5-flash-lite:online"
+                                        placeholder={`${OPENROUTER_DEFAULTS.MODEL}:online`}
                                         value={webDraft.openrouterModel}
                                         data-testid="search-web-openrouter-model"
                                         onChange={(e) => setWebField('openrouterModel', e.target.value)}
