@@ -191,3 +191,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Despacho de comandos por voz con wake word en pantalla real.
+
+---
+
+## C26 — Un solo commit de turno (commitUserTurnRow)
+
+Cambios aplicados:
+- src/App.tsx — los 3 sitios (commit temprano, commit final de comando, emisión cruda que crece) se unifican en UN punto que decide y llama commitUserTurnRow una sola vez.
+
+Validado contra:
+- npm run gate (verde): métrica base=3 actual=1 target=1 · guard base=1 actual=0.
+- npx vitest run tests/conversationHistoryCap.test.ts: 2 passed.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Una frase hablada ⇒ una fila visible en bitácora (sin duplicados).

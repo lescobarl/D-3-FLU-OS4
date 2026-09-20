@@ -2048,31 +2048,25 @@ function App() {
         // puedan disparar un contrato play_music de forma determinista. Se asigna
         // en CREACIÓN (expresión de asignación), disponible desde el montaje.
         onContractResolved: exposeContractHookDev(useCallback(async (resolved: ContractResolution) => {
-            // §9 — Fila del USUARIO inmediata: el motor la pide al terminar de
-            // capturar (antes de la IA). Aquí SOLO se agrega la fila y se sale;
-            // la resolución posterior deduplica y agrega la respuesta de FLU.
-            if (resolved?.userCommitOnly) {
-                // Commit temprano: agrega/reutiliza la fila del turno (sin
-                // hablante todavía). El commit final la completará.
-                commitUserTurnRow({
-                    text: String(resolved?.transcript || ''),
-                    speakerName: resolved?.speakerName,
-                });
-                return;
-            }
             const contract: Partial<ResolvedContract> = resolved?.contract || {};
             const transcript: string = resolved?.transcript || '';
             const rawOnly: boolean = resolved?.rawOnly === true;
             const speakerName: string = resolved?.speakerName || '';
             const phase: string = resolved?.phase || '';
+            const userCommitOnly: boolean = resolved?.userCommitOnly === true;
 
-            // §9: la frase canónica del usuario debe verse SIEMPRE, también en
-            // turnos de COMANDO (navegación/medios) que NO pasan por la ruta
-            // rawOnly. Commit único por turno: reutiliza la fila del commit
-            // temprano y completa su hablante (una frase ⇒ una fila).
-            if (!rawOnly && transcript) {
-                commitUserTurnRow({ text: transcript, speakerName });
+            // §9 — UN ÚNICO escritor de la fila del usuario: `commitUserTurnRow`
+            // (una frase ⇒ una fila). El commit temprano, el commit final de
+            // comando y la emisión cruda que crece pasan por ESTE punto único.
+            if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
+            if (userCommitOnly || (transcript && (!rawOnly || cleanForSpeech(transcript)))) {
+                commitUserTurnRow({
+                    text: transcript,
+                    speakerName,
+                    replaceLast: resolved?.replaceLastRawLog === true,
+                });
             }
+            if (userCommitOnly) return;
 
             // ============================================================
             // OS2 parity: raw transcript logging with dedup
@@ -2083,16 +2077,8 @@ function App() {
             if (rawOnly && transcript) {
                 if (!cleanForSpeech(transcript)) return;
 
-                // §9 — UN ÚNICO escritor de la fila del usuario: `commitUserTurnRow`.
-                // App NO escribe el historial por su cuenta: le pasa la señal del
-                // MOTOR (`replaceLastRawLog`) para el caso de la emisión que crece, y
-                // el módulo decide reemplazar/reutilizar/agregar. Así una frase ⇒ una
-                // fila, sin dedup heurístico por hablante en App.
-                commitUserTurnRow({
-                    text: transcript,
-                    speakerName,
-                    replaceLast: resolved?.replaceLastRawLog === true,
-                });
+                // §9 — La fila del usuario ya se registró arriba por el punto único
+                // `commitUserTurnRow` (incluida la señal `replaceLastRawLog`).
 
                 // OS2 parity: audit log for rawOnly entries (Gap 4)
                 // FluShell.jsx lines 430-438: addAuditLog after rawOnly entry
