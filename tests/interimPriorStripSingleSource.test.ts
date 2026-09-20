@@ -15,8 +15,11 @@ import {
 const SRC = path.resolve(__dirname, '../src/voice/lib/conversationStream.js');
 
 describe('recorte de turnos previos del interino — fuente única', () => {
-  it('existe un solo bucle de recorte en el módulo', () => {
-    const body = fs.readFileSync(SRC, 'utf-8');
+  it('existe un solo bucle de recorte en el módulo (ignorando comentarios)', () => {
+    const body = fs
+      .readFileSync(SRC, 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
     const matches = body.match(/while \(chunk !== prev && passes < 12\)/g) || [];
     expect(matches.length).toBe(1);
   });

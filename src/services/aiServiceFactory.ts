@@ -19,6 +19,7 @@ import { deepseekService } from './deepseek';
 import type { IAIService } from '../core/ai/IAIService';
 import { STORAGE_KEYS } from '../core/config/appConfig';
 import {
+    AI_PROVIDER_IDS,
     AI_PROVIDER_ROUTES,
     DEFAULT_AI_PROVIDER,
     isAIProvider,
@@ -142,21 +143,21 @@ function createIntelligentAIService(): IAIService {
  */
 export function getAIProviderStats() {
     return {
-        openrouter: {
+        [AI_PROVIDER_IDS.OPENROUTER]: {
             name: 'Gemini 2.5 Flash Lite (OpenRouter)',
             costPerMillionTokens: 0.30,
             speedTokensPerSec: '40-60',
             co2Emissions: 'Low',
             spanishSupport: 'Excellent'
         },
-        gemini: {
+        [AI_PROVIDER_IDS.GEMINI]: {
             name: 'Google Gemini (nativo)',
             costPerMillionTokens: 0.50,
             speedTokensPerSec: '15-30',
             co2Emissions: 'High',
             spanishSupport: 'Good'
         },
-        deepseek: {
+        [AI_PROVIDER_IDS.DEEPSEEK]: {
             name: 'DeepSeek-v3.2 (legacy)',
             costPerMillionTokens: 0.14,
             speedTokensPerSec: '40-60',
