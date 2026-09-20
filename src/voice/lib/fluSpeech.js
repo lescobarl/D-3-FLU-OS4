@@ -163,8 +163,18 @@ export function getSpeechVoices() {
 export function subscribeSpeechVoices(listener) {
   const engine = getSpeechEngine()
   if (!engine) return () => {}
-  engine.addEventListener('voiceschanged', listener)
-  return () => engine.removeEventListener('voiceschanged', listener)
+  if (typeof engine.addEventListener === 'function') {
+    engine.addEventListener('voiceschanged', listener)
+    return () => {
+      if (typeof engine.removeEventListener === 'function') {
+        engine.removeEventListener('voiceschanged', listener)
+      }
+    }
+  }
+  engine.onvoiceschanged = listener
+  return () => {
+    if (engine.onvoiceschanged === listener) engine.onvoiceschanged = null
+  }
 }
 
 export function isSpeechSupported() {
