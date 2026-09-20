@@ -9,7 +9,6 @@
 // "apunta/anota/añade/nota {texto}" (sin conectores de relleno).
 // ============================================================
 
-import { stripWakeWord } from './wakeWord.js'
 
 const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hazme|hazmelo|hacer|hagame|hágame|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?(?:nota|lista)\b\s*(.*)$/i
@@ -59,11 +58,6 @@ function stripAccentsEs(text = '') {
     .replace(/[ñ]/g, 'n')
 }
 
-/** Colapsa tartamudeo ASR: "bor borra" → "borra", "bo borra" → "borra". */
-function collapseStutter(text = '') {
-  return String(text || '').replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
-}
-
 // Verbos/conectores de relleno que pueden preceder al ítem cuando se enuncia
 // después del destino: "… la nota del súper QUE TAMBIÉN TRAIGA una computadora".
 const SUPER_ITEM_LEAD =
@@ -102,7 +96,8 @@ function cleanSuperItem(rest = '') {
  * Texto esperado SIN el "ok flu" (si llegara con wake, se limpia aquí).
  */
 export function parseNoteIntentText(rawText = '') {
-  let clean = stripWakeWord(rawText)
+  // §9.2: el consumidor no re-normaliza; la frase llega canónica del motor.
+  let clean = String(rawText || '').trim()
   // Artículo inicial antes de "nota": "una nota del super …" → "nota del super …".
   clean = clean.replace(/^(?:una|un|la|el|mi)\s+(?=notas?\b)/i, '').trim()
   if (!clean) return null
@@ -196,8 +191,8 @@ export function parseNoteIntentText(rawText = '') {
  * Fuente única del reconocimiento de "borra/elimina/quita la nota X".
  */
 export function parseNoteRemoveIntentText(rawText = '') {
-  let clean = stripWakeWord(rawText)
-  clean = collapseStutter(clean).replace(/\s+/g, ' ').trim()
+  // §9.2: el consumidor no re-normaliza; la frase llega canónica del motor.
+  const clean = String(rawText || '').replace(/\s+/g, ' ').trim()
   if (!clean) return null
   const m = NOTE_REMOVE.exec(clean)
   if (!m) return null

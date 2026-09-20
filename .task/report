@@ -236,3 +236,20 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Transcripción mostrada sin wake word en la barra y bitácora.
+
+---
+
+## C36 — Consumidores no re-normalizan
+
+Cambios aplicados:
+- src/lib/generationTopic.ts — cleanTopicFromCommand usa normalizeSpaces; sin cleanForSpeech/stripWakeWord.
+- src/core/agenda/agendaCommandParser.ts — eliminado collapseStutter local y los stripWakeWord/stripWakeWordAnywhere; el parser recibe texto canónico.
+- src/voice/lib/noteIntentParser.js — eliminado collapseStutter local y stripWakeWord; solo trim/espacios.
+
+Validado contra:
+- npm run gate (verde): métrica base=10 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/agendaSingleSource.test.ts tests/notesScope.test.ts: 5 passed.
+- git diff --stat: 5 archivos (3 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Alta/borrado de notas y citas por voz en pantalla real.

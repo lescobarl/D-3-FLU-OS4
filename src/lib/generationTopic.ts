@@ -8,9 +8,8 @@
 // …"); cuando hay un artefacto doc/video del contrato, se usa su
 // contenido/tema limpiado del verbo de mando.
 // ============================================================
-import { cleanForSpeech } from './textUtils';
+import { normalizeSpaces } from './textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { stripWakeWord } from '../voice/lib/wakeWord';
 
 export interface GenerationConversationSlice {
     conversationHistory?: Array<{
@@ -35,12 +34,12 @@ const GENERATION_LEAD =
  * saltando" → "un conejo saltando".
  */
 export function cleanTopicFromCommand(text = ''): string {
-    let value = cleanForSpeech(text);
+    // §9.2: el consumidor NO re-normaliza (sin cleanForSpeech/stripWakeWord):
+    // recibe la frase ya canónica del motor; solo colapsa espacios del mandato.
+    let value = normalizeSpaces(text);
     if (!value) return '';
-    value = stripWakeWord(value);
     value = value.replace(GENERATION_LEAD, ' ').trim();
-    value = cleanForSpeech(value);
-    return value;
+    return normalizeSpaces(value);
 }
 
 /** Campos título/contenido de un artefacto de documento del workspace. */

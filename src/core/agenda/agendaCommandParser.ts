@@ -16,7 +16,6 @@ import {
 } from '../reminders/nlDateParser';
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
-import { stripWakeWord, stripWakeWordAnywhere } from '../../voice/lib/wakeWord.js';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 
 export type AgendaCommandAction =
@@ -85,11 +84,6 @@ const COUNTDOWN_RE = /\b(?:en|de)\s+(\d+)\s+(segundos?|minutos?|horas?)\b/i;
 
 function normalize(text: string): string {
     return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
-
-/** Colapsa tartamudeo de prefijo: "bor borra" → "borra". */
-function collapseStutter(text: string): string {
-    return String(text || '').replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '');
 }
 
 /** Colapsa tartamudeo de cuantificador: "todo toda" → "toda", "todo todo" → "todo". */
@@ -275,8 +269,8 @@ function wordRe(alternation: string): RegExp {
 }
 
 function resolveLabel(text: string): string {
-    // 1) Wake word en CUALQUIER posición (el eco del ASR lo mete en medio).
-    const base = stripWakeWordAnywhere(text);
+    // §9.2: el consumidor no re-normaliza; la frase llega canónica del motor.
+    const base = text;
     // 2) Quitar la HORA con el MISMO selector único (pickTimeOfDay): maneja
     //    "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3", etc.
     // 3) Quitar la cláusula del recordatorio ("que me recuerde", "recuérdame"…).
@@ -314,7 +308,7 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     const text = String(input || '').trim();
     const cleaned = collapseRepeatedPhrase(
         collapseQuantifierStutter(
-            collapseStutter(stripWakeWord(text).replace(/^[¿¡]+/, '')),
+            text.replace(/^[¿¡]+/, ''),
         ),
     ).replace(/\s+/g, ' ').trim();
     if (!cleaned) return { handled: false, action: null, reply: '' };

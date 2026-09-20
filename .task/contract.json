@@ -1,12 +1,13 @@
 {
-  "id": "C28",
+  "id": "C36",
   "mode": "full",
-  "task": "Voz §9.2 — una sola implementación de strip de wake word",
-  "base": "5908d37ed711c71fd37738ff5dc04f3a1a8e8bdf",
-  "objective": "El recorte de wake word tiene una única implementación canónica.",
+  "task": "Voz §9.2 — consumidores no re-normalizan",
+  "base": "0eab4b1356ed90854dac7d6859cebbbf35217f24",
+  "objective": "generationTopic, agendaCommandParser y noteIntentParser dejan de normalizar; consumen la frase canónica.",
   "allow": [
-    "src/voice/lib/audioMath.js",
-    "src/voice/lib/wakeWord.js"
+    "src/lib/generationTopic.ts",
+    "src/core/agenda/agendaCommandParser.ts",
+    "src/voice/lib/noteIntentParser.js"
   ],
   "deny": [
     ".task/**",
@@ -20,20 +21,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 3,
-  "maxLines": 250,
-  "dod": "npx vitest run tests/wakeStripSingleGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/wakeStripSingleGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 300,
+  "dod": "npx vitest run tests/consumidoresNormGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/consumidoresNormGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Una única implementación de strip de wake word",
+    "statement": "Ningún consumidor llama normalizadores de la frase canónica",
     "metric": {
-      "command": "node scripts/audit-metric.mjs strip-implementaciones",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs consumidores-normalizan",
+      "target": 0
     },
-    "base": "5908d37ed711c71fd37738ff5dc04f3a1a8e8bdf",
+    "base": "0eab4b1356ed90854dac7d6859cebbbf35217f24",
     "guardFiles": [
-      "tests/wakeStripSingleGuard.test.ts"
+      "tests/consumidoresNormGuard.test.ts"
     ]
   }
 }
