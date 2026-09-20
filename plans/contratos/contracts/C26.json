@@ -1,0 +1,21 @@
+{
+  "id": "C26",
+  "mode": "full",
+  "task": "Voz §9.3 — un solo sitio de commit del turno",
+  "base": "__BASE__",
+  "objective": "Un único sitio llama a commitUserTurnRow; sin caminos paralelos de commit.",
+  "allow": ["src/App.tsx"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 2,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/commitSingleSiteGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/commitSingleSiteGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "Un único sitio de llamada a commitUserTurnRow",
+    "metric": { "command": "node scripts/audit-metric.mjs commit-sites", "target": 1 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/commitSingleSiteGuard.test.ts"]
+  }
+}

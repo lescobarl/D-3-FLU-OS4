@@ -1,0 +1,25 @@
+{
+  "id": "C34",
+  "mode": "full",
+  "task": "Basura — eliminar fallbackResponses muerto",
+  "base": "__BASE__",
+  "objective": "Se elimina src/services/fallbackResponses.ts y sus consumidores de test.",
+  "allow": [
+    "src/services/fallbackResponses.ts",
+    "tests/integration.test.ts",
+    "tests/language-regression.test.ts"
+  ],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 4,
+  "maxLines": 800,
+  "dod": "npx vitest run tests/fallbackResponsesGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/fallbackResponsesGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "El módulo fallbackResponses está eliminado",
+    "metric": { "command": "node scripts/audit-metric.mjs fallback-responses", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/fallbackResponsesGuard.test.ts"]
+  }
+}

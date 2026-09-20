@@ -149,7 +149,7 @@ Estado actual:
 
 ### 2.3 Estado de materialización
 
-**Materializados y verificados en rojo (22):** (C1 ya cerrado en verde)
+**Materializados y verificados en rojo (33):** (C1 ya cerrado en verde)
 
 | Contrato | Métrica HOY→META | Estado |
 |---|---|---|
@@ -175,6 +175,17 @@ Estado actual:
 | C19 | 3→0 | rojo |
 | C21 | 8→1 | rojo |
 | C24 | 6→1 | rojo |
+| C25 (V4) | 4→0 | rojo |
+| C26 (V6) | 3→1 | rojo |
+| C27 (V7) | 4→1 | rojo |
+| C28 (V10) | 5→1 | rojo |
+| C29 (H4) | 10→0 | rojo |
+| C30 (P7/P8) | 2→0 | rojo |
+| C31 (P11) | 1→0 | rojo |
+| C32 (A3) | 1→0 | rojo |
+| C33 (A9) | 1→0 | rojo |
+| C34 (J1) | 1→0 | rojo |
+| C35 (J5) | 12→0 | rojo |
 
 **Subsumidos (sin contrato propio, para no fabricar un guard débil):**
 
@@ -183,7 +194,19 @@ Estado actual:
 | C20 (Tailwind / `src/modules`) | El default aprobado (D4) es **no migrar** y dejar la excepción por escrito: eso lo cumple **C23**, que actualiza AGENTS.md. No hay cambio de código que medir |
 | C22 (Gemini 4 entradas) | La duplicación real (API key/resolución de texto) ya la cubren **C4, C5 y C12**; el endpoint vive solo en `appConfig.ts:184-185`. Un guard "4→1" sería un proxy, no una propiedad |
 
-Todo lo demás del informe está materializado. Cobertura: **22 contratos** con métrica, guard rojo verificado, `allow` cerrado, `base` y `frozen`.
+**Descartados por no ser defecto (con evidencia):**
+
+| Hallazgo | Evidencia de que no es defecto |
+|---|---|
+| H3 (otros modelos) | Solo en módulos de config (`appConfig`, `sharedConfig`, `fluConfig`) y placeholders de UI; fuera de config/dev = 0 |
+| H9 (fal/Openverse) | El endpoint vive en `sharedConfig.ts:88`; los demás fetch son same-origin por proxy |
+| H10 (puerto 5173) | Los 3 sitios leen `process.env.PORT` con fallback (`vite.config.ts:89`, `playwright.config.ts:4`, `tools/live-check.mjs:4`) — patrón correcto |
+| H11 (`.env`) | `git ls-files .env` = vacío: no está trackeada |
+| P6 (`flu-language`/`flu-session-role`) | 0 literales fuera de config; ya usan `STORAGE_KEYS` |
+| A5 (`minutes.sequence`) | No es PK (la PK es UUID); es un campo de orden |
+| V2/V3/A1/A6/A7/A8 | Ya documentados arriba como no-defecto / decisión |
+
+**Cobertura final:** todo hallazgo en **A (defecto)** está materializado como contrato; los **B** están materializados salvo los subsumidos; los **C** quedan descartados con evidencia. Total: **33 contratos** con métrica, guard rojo verificado, `allow` cerrado, `base` y `frozen`.
 
 Cada C8–C20 nace con: métrica nueva en `audit-metric.mjs`, guard rojo que lista
 `archivo:línea`, `allow` estrecho, `base` fijo y `frozen.json`.

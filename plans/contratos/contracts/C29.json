@@ -1,0 +1,21 @@
+{
+  "id": "C29",
+  "mode": "full",
+  "task": "Hardcode — sample rate desde config",
+  "base": "__BASE__",
+  "objective": "El sample rate del motor sale de FLU_CONFIG; sin literales 48000 en el hook.",
+  "allow": ["src/voice/hooks/useFluVoiceAssistant.js", "src/voice/lib/fluConfig.js"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 3,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/sampleRateConfigGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/sampleRateConfigGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "No hay literales de sample rate en el motor",
+    "metric": { "command": "node scripts/audit-metric.mjs sample-rate-literal", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/sampleRateConfigGuard.test.ts"]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "C33",
+  "mode": "full",
+  "task": "Arquitectura — tupla de sync en MemoryItem",
+  "base": "__BASE__",
+  "objective": "MemoryItem declara revision y updatedAt (tupla de sincronización §3.7).",
+  "allow": ["src/lib/longTermMemory.ts"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 2,
+  "maxLines": 150,
+  "dod": "npx vitest run tests/memoryItemSyncGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/memoryItemSyncGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "MemoryItem declara revision y updatedAt",
+    "metric": { "command": "node scripts/audit-metric.mjs memoryitem-sync", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/memoryItemSyncGuard.test.ts"]
+  }
+}

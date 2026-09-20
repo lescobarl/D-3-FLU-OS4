@@ -51,6 +51,16 @@ const RE = {
   timeoutsConfig: /\b[A-Z_]*TIMEOUT(?:_MS)?\s*=/,
   ttsPoint: /speechSynthesis/,
   modeloDefault: /gemini-2\.5-flash-lite/,
+  appNormaliza: /normalizeCommandForDeterministic\s*\(|actionBelongsToTranscript\s*\(/,
+  commitSites: /commitUserTurnRow\s*\(/,
+  deriveSites: /deriveQueryFromRow\s*\(/,
+  stripFns:
+    /export function (?:stripWakeWord|stripWakeWordAnywhere|removeWakeWord|splitTranscriptAtWakeWord|stripWakeWordForDisplay)\s*\(/,
+  sampleRateLiteral: /\b48000\b/,
+  ownIndexedDb: /indexedDB\.open\s*\(/,
+  voiceProfilesKey: /STORAGE_KEYS\.VOICE_PROFILES/,
+  longtermDelete: /store\.delete\s*\(/,
+  consoleDebug: /console\.debug\s*\(/,
 }
 const FILES_IMPORT_PROXY = [
   'src/services/ocrService.ts',
@@ -200,6 +210,39 @@ const metrics = {
       .length,
   'tts-punto-unico': () => countFilesWhere((_r, f) => RE.ttsPoint.test(read(f))),
   'modelo-default': () => countFilesWhere((_r, f) => RE.modeloDefault.test(read(f))),
+  // ---- C25-C35 -----------------------------------------------------------
+  'app-normaliza': () =>
+    countLinesWhere((r, l) => r === 'src/App.tsx' && RE.appNormaliza.test(stripComment(l))),
+  'commit-sites': () =>
+    countLinesWhere(
+      (r, l) => RE.commitSites.test(stripComment(l)) && !/export function/.test(l),
+    ),
+  'derive-sites': () =>
+    countLinesWhere((_r, l) => RE.deriveSites.test(stripComment(l)) && !/export function/.test(l)),
+  'strip-implementaciones': () => countLinesWhere((_r, l) => RE.stripFns.test(l)),
+  'sample-rate-literal': () =>
+    countLinesWhere(
+      (r, l) => r === 'src/voice/hooks/useFluVoiceAssistant.js' && RE.sampleRateLiteral.test(l),
+    ),
+  'indexeddb-propias': () =>
+    countFilesWhere((r, f) => r !== 'src/core/autonomy/healthMonitor.ts' && RE.ownIndexedDb.test(read(f))),
+  'voiceprofiles-localstorage': () =>
+    countFilesWhere(
+      (r, f) => r !== 'src/core/config/appConfig.ts' && RE.voiceProfilesKey.test(read(f)),
+    ),
+  'longterm-delete': () =>
+    countLinesWhere((r, l) => r === 'src/lib/longTermMemory.ts' && RE.longtermDelete.test(l)),
+  'memoryitem-sync': () => {
+    const p = join(ROOT, 'src/lib/longTermMemory.ts')
+    if (!existsSync(p)) return -1
+    const src = read(p)
+    const m = src.match(/interface MemoryItem\s*\{[\s\S]*?\n\}/)
+    if (!m) return -1
+    const block = m[0]
+    return /revision/.test(block) && /updatedAt/.test(block) ? 0 : 1
+  },
+  'fallback-responses': () => (existsSync(join(ROOT, 'src/services/fallbackResponses.ts')) ? 1 : 0),
+  'console-debug': () => countLinesWhere((_r, l) => RE.consoleDebug.test(l)),
 }
 
 const id = process.argv[2]
