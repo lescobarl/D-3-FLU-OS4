@@ -112,6 +112,10 @@ export function resolveDocumentTitle(titulo: string | undefined, fallback: strin
  * Normaliza el par título/contenido de un artefacto de documento. Si el cuerpo
  * llega en `titulo` y `contenido` viene vacío, devuelve el cuerpo en `contenido`
  * y un título corto. Si ya hay contenido, no lo toca.
+ *
+ * NO duplica `workspaceContract.normalizeWorkspaceContract` (voz): allí se
+ * normaliza el contrato completo (tipo/prompt_visual/puntos_clave); aquí solo
+ * el par título/contenido.
  */
 export function normalizeWorkspaceDocumentFields(
     fields: WorkspaceDocumentFields,

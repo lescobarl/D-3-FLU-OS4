@@ -255,7 +255,11 @@ export function recoverInterimAfterStrip(rawInterim = '', priorTexts = []) {
   return raw
 }
 
-/** Interino idéntico al último commit (Chrome repite tras isFinal). */
+/**
+ * Interino idéntico al último commit (Chrome repite tras isFinal).
+ * NO duplica `audioMath.spokenUtteranceRevision` (comparador de revisión):
+ * aquí la política es "eco de commit"; allí, el avance de la emisión hablada.
+ */
 export function isCommittedInterimEcho(interim = '', lastCommitted = '') {
   const chunk = cleanForSpeech(interim)
   const prior = cleanForSpeech(lastCommitted)
@@ -417,31 +421,15 @@ export function readTurnLive(state) {
 
 export const readStreamDisplay = readTurnLive
 
-/** Quita prefijos de filas ya cerradas en interinos acumulativos de Chrome. */
+/**
+ * Quita prefijos de filas ya cerradas en interinos acumulativos de Chrome
+ * (todas las filas). Fuente ÚNICA del recorte: delega en
+ * `stripRecentClosedTurnsFromInterim` con el total de turnos, para no
+ * reimplementar el bucle.
+ */
 export function stripPriorTurnsFromInterim(interim = '', priorTexts = []) {
-  let chunk = cleanForSpeech(interim)
-  if (!chunk || !priorTexts?.length) return chunk
-
-  const priors = priorTexts
-    .map((t) => cleanForSpeech(t))
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
-  if (!priors.length) return chunk
-
-  let prev = ''
-  let passes = 0
-  while (chunk !== prev && passes < 12) {
-    prev = chunk
-    passes += 1
-    for (const prior of priors) {
-      if (!prior) continue
-      if (chunk.toLowerCase().startsWith(prior.toLowerCase())) {
-        chunk = cleanForSpeech(chunk.slice(prior.length))
-        break
-      }
-    }
-  }
-  return chunk
+  const total = Array.isArray(priorTexts) ? priorTexts.length : 0
+  return stripRecentClosedTurnsFromInterim(interim, priorTexts, total)
 }
 
 /** Solo los últimos N turnos cerrados (no toda la sesión); evita vaciar interinos largos. */

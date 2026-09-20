@@ -184,6 +184,8 @@ export function shouldGenerateWorkspaceImage(workspace = null) {
 
 /**
  * Normaliza workspace devuelto por Gemini. Sin workspace de la IA → null (sin sintetizar desde voz).
+ * NO duplica `generationTopic.normalizeWorkspaceDocumentFields`: aquí se
+ * normaliza el contrato completo (tipo/prompt_visual/puntos_clave).
  * @param {object|null|undefined} workspace
  * @param {{ transcript?: string, voiceCommands?: object }} [options]
  */
