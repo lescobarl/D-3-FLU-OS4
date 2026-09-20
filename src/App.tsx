@@ -41,7 +41,7 @@ import { useMinuteKnowledge } from './hooks/useMinuteKnowledge';
 import { useVoiceProfiles } from './hooks/useVoiceProfiles';
 import { useConversationPersistence, bulkDeleteConversationRows } from './hooks/useConversationPersistence';
 import { useFluParticipant } from './hooks/useFluParticipant';
-import { useSessionPersistence, loadSessionState } from './hooks/useSessionPersistence';
+import { useSessionPersistence, loadSessionState, defaultSessionState } from './hooks/useSessionPersistence';
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
 import { useMinuteHandlers, type MinuteDraft } from './hooks/useMinuteHandlers';
 import { useNavigationCommands } from './hooks/useNavigationCommands';
@@ -1310,7 +1310,7 @@ function App() {
     }, []);
 
     // ---- OS2 parity: refs (FluShell.jsx lines 154-161) ----
-    const savedSession = useRef(loadSessionState());
+    const savedSession = useRef(defaultSessionState());
     const conversationActiveRef = useRef(false);
     const resumeListeningTimerRef = useRef<number | null>(null);
     const _lastRawLogRef = useRef<string>('');
@@ -1393,6 +1393,22 @@ function App() {
 
     // ---- Estado para la minuta seleccionada en el historial ----
     const [selectedMinuteId, setSelectedMinuteId] = useState<string | null>(savedSession.current.selectedMinuteId);
+
+    // C9 — Hidratación asíncrona del estado de sesión desde el backend Dexie
+    // (ya no hay lectura localStorage sincrónica).
+    useEffect(() => {
+        let cancelled = false;
+        loadSessionState()
+            .then((stored) => {
+                if (cancelled || !stored) return;
+                if (stored.expandedFrameId) setExpandedFrameId(stored.expandedFrameId);
+                if (stored.selectedMinuteId) setSelectedMinuteId(stored.selectedMinuteId);
+            })
+            .catch((err) => console.warn('[App] fallo al hidratar la sesión:', err));
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // ---- Sub-sección activa del panel de Ajustes (Fase A2: FLU / Mis datos / Gestión) ----
     const [settingsGroup, setSettingsGroup] = useState<SettingsGroupId>('flu');

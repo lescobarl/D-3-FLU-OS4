@@ -1,13 +1,14 @@
 {
-  "id": "C8",
+  "id": "C9",
   "mode": "full",
-  "task": "Persistencia — un solo escritor de conversación",
-  "base": "fbb9a22b1dde899801f26c70beecfdaa041b0906",
-  "objective": "Un único archivo escribe fluDb.conversations; App y la migración legacy dejan de escribir directo.",
+  "task": "Persistencia — un solo backend de sesión",
+  "base": "e8d89aa714177d409c8ecc49e599ff7ebbead70a",
+  "objective": "La sesión se persiste en un único backend (Dexie), eliminando la ruta localStorage duplicada.",
   "allow": [
+    "src/hooks/useSessionPersistence.ts",
+    "src/voice/lib/fluStorage.js",
     "src/App.tsx",
-    "src/hooks/useConversationPersistence.ts",
-    "src/voice/lib/fluStorage.js"
+    "src/voice/hooks/useFluVoiceAssistant.js"
   ],
   "deny": [
     ".task/**",
@@ -21,20 +22,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 4,
-  "maxLines": 350,
-  "dod": "npx vitest run tests/conversacionEscritorUnicoGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/conversacionEscritorUnicoGuard.test.ts --reporter=dot",
+  "maxFiles": 5,
+  "maxLines": 450,
+  "dod": "npx vitest run tests/sesionBackendUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/sesionBackendUnicoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un único archivo escribe fluDb.conversations",
+    "statement": "Un único archivo implementa la persistencia de sesión",
     "metric": {
-      "command": "node scripts/audit-metric.mjs conversacion-escritores",
+      "command": "node scripts/audit-metric.mjs sesion-backends",
       "target": 1
     },
-    "base": "fbb9a22b1dde899801f26c70beecfdaa041b0906",
+    "base": "e8d89aa714177d409c8ecc49e599ff7ebbead70a",
     "guardFiles": [
-      "tests/conversacionEscritorUnicoGuard.test.ts"
+      "tests/sesionBackendUnicoGuard.test.ts"
     ]
   }
 }

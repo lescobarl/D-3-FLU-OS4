@@ -284,6 +284,42 @@ export async function loadSessionState() {
   return { ...value, history: Array.isArray(value.history) ? value.history : [] }
 }
 
+/**
+ * UI session state (estado de interfaz: tab/idioma/frames) en el MISMO backend
+ * Dexie que la sesión de voz (C9: un solo backend; se elimina el localStorage
+ * duplicado). Fila propia `id: 'ui'` para no pisar la sesión de voz ('current').
+ */
+const UI_SESSION_ID = 'ui'
+
+export async function loadUiSessionState() {
+  await migrateLegacyVoiceData()
+  const record = await fluDb.sessionState.get(UI_SESSION_ID)
+  const value = record?.value
+  return value && typeof value === 'object' ? value : null
+}
+
+export async function saveUiSessionState(state = {}) {
+  await migrateLegacyVoiceData()
+  const existing = await fluDb.sessionState.get(UI_SESSION_ID)
+  await fluDb.sessionState.put({
+    id: UI_SESSION_ID,
+    key: UI_SESSION_ID,
+    value: state && typeof state === 'object' ? state : {},
+    timestamp: Date.now(),
+    sync: buildSyncTuple(existing?.sync, Date.now()),
+  })
+}
+
+export async function clearUiSessionState() {
+  const existing = await fluDb.sessionState.get(UI_SESSION_ID)
+  if (!existing) return
+  await fluDb.sessionState.put({
+    ...existing,
+    timestamp: Date.now(),
+    sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
+  })
+}
+
 export async function listStoreRecords(storeName) {
   return withStore(storeName, 'readonly', (store) => readAllFromStore(store))
 }

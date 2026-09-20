@@ -357,3 +357,20 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Historial de conversación persistido/restaurado en pantalla real.
+
+---
+
+## C9 — Un solo backend de sesión (Dexie)
+
+Cambios aplicados:
+- src/voice/lib/fluStorage.js — load/save/clearUiSessionState sobre fluDb.sessionState (fila 'ui'); mismo backend que la sesión de voz.
+- src/hooks/useSessionPersistence.ts — eliminada la ruta localStorage; load/save/clear async contra Dexie + defaultSessionState().
+- src/App.tsx — hidratación asíncrona de expandedFrameId/selectedMinuteId al montar.
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=1 target=1 · guard base=1 actual=0.
+- npx vitest run tests/fluStorage.test.ts tests/conversationHistoryCap.test.ts: 4 passed.
+- git diff --stat: 5 archivos (3 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Estado de sesión (tab/idioma/frames) restaurado tras recargar.
