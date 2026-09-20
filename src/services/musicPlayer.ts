@@ -14,7 +14,7 @@ import {
   probeStream,
 } from './musicSearch'
 import { MUSIC_CATALOG } from '../core/config/musicCatalog'
-import { normalizeForMatch } from '../lib/textUtils'
+import { normalizeForMatchExact as normalizeForMatch } from '../lib/textUtils'
 
 export interface MusicTrack {
   id: string

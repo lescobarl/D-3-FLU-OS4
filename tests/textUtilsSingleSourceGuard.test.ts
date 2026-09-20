@@ -155,4 +155,10 @@ describe('Contrato de comportamiento de las utilidades canónicas', () => {
         expect(clasificarDia('Miércoles')).toBe(3);
         expect(clasificarDia('SÁBADO')).toBe(6);
     });
+
+    it('musicPlayer.normalizeForMatch NO colapsa espacios internos (contrato histórico)', async () => {
+        const { normalizeForMatch: mpNormalize } = await import('../src/services/musicPlayer');
+        expect(mpNormalize('la   cancion')).toBe('la   cancion');
+        expect(mpNormalize('  Canción  ')).toBe('cancion');
+    });
 });

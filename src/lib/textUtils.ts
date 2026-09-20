@@ -42,7 +42,7 @@ export function stripDiacritics(s: string): string {
  * un solo paso. Vive aquí para que el algoritmo NFD exista una sola vez.
  */
 export function stripDiacriticsLower(s: string): string {
-    return stripDiacritics(String(s)).toLowerCase();
+    return stripDiacritics(String(s ?? '')).toLowerCase();
 }
 
 /**
@@ -51,6 +51,16 @@ export function stripDiacriticsLower(s: string): string {
  */
 export function normalizeForMatch(s = ''): string {
     return stripDiacritics(s).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Variante de {@link normalizeForMatch} que NO colapsa los espacios internos.
+ * Es el contrato histórico de `musicPlayer.normalizeForMatch` (matching de
+ * títulos por `includes`): colapsar espacios ampliaría los matches. Comparte
+ * el algoritmo NFD con `stripDiacritics`, así que no duplica implementación.
+ */
+export function normalizeForMatchExact(s = ''): string {
+    return stripDiacritics(String(s ?? '')).toLowerCase().trim();
 }
 
 /**
