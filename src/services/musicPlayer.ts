@@ -14,6 +14,7 @@ import {
   probeStream,
 } from './musicSearch'
 import { MUSIC_CATALOG } from '../core/config/musicCatalog'
+import { normalizeForMatch } from '../lib/textUtils'
 
 export interface MusicTrack {
   id: string
@@ -97,14 +98,8 @@ export function getPlaylist(): MusicTrack[] {
   return FLU_PLAYLIST.map((t) => ({ ...t }))
 }
 
-/** Normaliza texto para comparar insensible a acentos y mayúsculas. */
-export function normalizeForMatch(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-}
+// Fuente única: src/lib/textUtils.ts. Re-exportado para no duplicar el algoritmo.
+export { normalizeForMatch }
 
 /**
  * Busca una pista del catálogo por id o título (insensible a acentos y

@@ -7,6 +7,8 @@
 // Los CRUD viven en `agendaService.ts` (única fuente de mutación).
 // ============================================================
 
+import { stripDiacritics } from '../../lib/textUtils';
+
 // ------------------------------------------------------------
 // Tipos de entrada (estructuración OCR de horarios)
 // ------------------------------------------------------------
@@ -76,15 +78,9 @@ const DIA_MAP: Record<string, number> = {
     domingo: 7,
 };
 
-const stripDiacriticsHorario = (value: string): string =>
-    String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
-
 /** Detecta el día (1-7) a partir de un texto con nombre de día en español. */
 export function clasificarDia(value: string): number | null {
-    const norm = stripDiacriticsHorario(value).trim();
+    const norm = stripDiacritics(String(value || '')).toLowerCase().trim();
     if (!norm) return null;
     if (DIA_MAP[norm] != null) return DIA_MAP[norm];
     for (const [name, num] of Object.entries(DIA_MAP)) {
@@ -95,7 +91,7 @@ export function clasificarDia(value: string): number | null {
 
 /** true si TODO el texto son nombres de días (p. ej. "Lunes" o "Lunes martes"). */
 export function esNombreDeDia(value: string): boolean {
-    const norm = stripDiacriticsHorario(value).trim();
+    const norm = stripDiacritics(String(value || '')).toLowerCase().trim();
     if (!norm) return false;
     return norm
         .split(/\s+/)

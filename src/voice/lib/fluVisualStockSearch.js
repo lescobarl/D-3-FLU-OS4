@@ -4,12 +4,7 @@
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { getVisualPipelineConfig, resolveVisualBriefCore } from './fluVisualPipeline.js'
 import { fetchTextEngine } from '../../core/ai/httpClient'
-
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+import { normalizeSpaces } from '../../lib/textUtils'
 
 async function fetchJsonWithTimeout(url, timeoutMs) {
   try {
@@ -27,10 +22,10 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
 }
 
 function scoreOpenverseResult(result = {}, brief = '') {
-  const title = normalizeText(result.title || '').toLowerCase()
-  const creator = normalizeText(result.creator || '').toLowerCase()
+  const title = normalizeSpaces(result.title || '').toLowerCase()
+  const creator = normalizeSpaces(result.creator || '').toLowerCase()
   const haystack = `${title} ${creator}`
-  const briefNorm = normalizeText(brief).toLowerCase()
+  const briefNorm = normalizeSpaces(brief).toLowerCase()
   const briefTokens = briefNorm.split(/\s+/).filter((token) => token.length > 2)
 
   let score = 0
