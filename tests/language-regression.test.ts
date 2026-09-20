@@ -12,8 +12,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 
-import { generateResponse as fallbackGenerateResponse } from '../src/services/fallbackResponses';
-
 // ============================================================
 // Helper: extraer lista de parámetros de una función
 // ============================================================
@@ -90,36 +88,5 @@ describe('🧪 Language Regression — GeminiService methods accept language par
     // ── AIRequestOptions debe tener language ──
     it('AIRequestOptions debe incluir language', () => {
         expect(src).toContain('language');
-    });
-
-    // ── fallbackResponses generateResponse ──
-    it('fallbackResponses generateResponse debe aceptar language como 4to parámetro', () => {
-        const params = getParamList(fallbackGenerateResponse);
-        expect(params[3]).toContain('language');
-    });
-
-    it('fallbackResponses generateResponse debe tener respuestas en inglés', () => {
-        const fallbackSrc = fallbackGenerateResponse.toString();
-        expect(fallbackSrc).toContain('isEnglish');
-        expect(fallbackSrc).toContain('Hello again!');
-        expect(fallbackSrc).toContain('See you later!');
-        expect(fallbackSrc).toContain("You're welcome!");
-        expect(fallbackSrc).toContain("I'm great!");
-        expect(fallbackSrc).toContain("I'm really glad");
-        expect(fallbackSrc).toContain("I'm so sorry");
-        expect(fallbackSrc).toContain('Of course I can help');
-        expect(fallbackSrc).toContain('Good question.');
-    });
-
-    it('fallbackResponses generateResponse debe detectar patrones en inglés', () => {
-        const fallbackSrc = fallbackGenerateResponse.toString();
-        expect(fallbackSrc).toContain('hello');
-        expect(fallbackSrc).toContain('goodbye');
-        expect(fallbackSrc).toContain('thanks');
-        expect(fallbackSrc).toContain('happy');
-        expect(fallbackSrc).toContain('sad');
-        expect(fallbackSrc).toContain('help');
-        expect(fallbackSrc).toContain('what');
-        expect(fallbackSrc).toContain('how');
     });
 });

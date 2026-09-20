@@ -39,7 +39,6 @@ import type {
 import type { MinuteUIEntry } from '../src/hooks/useMinuteKnowledge';
 
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { generateResponse } from '../src/services/fallbackResponses';
 import { DEFAULT_PERSONALITY, DEFAULT_ADVANCED_CONFIG, UI_DEFAULTS, STORAGE_KEYS, GEMINI_CONFIG, WELCOME_MESSAGE } from '../src/core/config/appConfig';
 import { newSyncTuple, bumpSync, type SyncTuple } from '../src/core/db/fluDatabase';
 
@@ -609,97 +608,6 @@ describe('🎙️ Mic Active State', () => {
         expect(useIntegrationStore.getState().uiState.isMicActive).toBe(true);
         useIntegrationStore.getState().setMicActive(false);
         expect(useIntegrationStore.getState().uiState.isMicActive).toBe(false);
-    });
-});
-
-// -----------------------------------------------------------
-// 9. GENERADOR DE RESPUESTAS (fallbackResponses)
-// -----------------------------------------------------------
-describe('💡 Response Generator (fallbackResponses)', () => {
-    it('debe responder a saludo en español', () => {
-        const response = generateResponse('Hola', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe responder a saludo en inglés', () => {
-        const response = generateResponse('Hello', 'FLU', [], 'en');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe responder a despedida en español', () => {
-        const response = generateResponse('Adiós', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-        const matches = ['hasta', 'luego', 'vemos', 'Chao'].some(kw => response.includes(kw));
-        expect(matches).toBe(true);
-    });
-
-    it('debe responder a despedida en inglés', () => {
-        // generateResponse selecciona aleatoriamente entre varias respuestas
-        // Probamos múltiples veces para cubrir todas las variantes
-        const allResponses = Array.from({ length: 10 }, () =>
-            generateResponse('Goodbye', 'FLU', [], 'en')
-        );
-        allResponses.forEach(r => expect(r).toBeTruthy());
-        const hasFarewell = allResponses.some(r =>
-            ['later', 'bye', 'Goodbye', 'Take care', 'goodbye', 'see you', 'back'].some(kw => r.includes(kw))
-        );
-        expect(hasFarewell).toBe(true);
-    });
-
-    it('debe responder a agradecimiento en español', () => {
-        const responses = Array.from({ length: 10 }, () => generateResponse('Gracias', 'FLU', [], 'es'));
-        responses.forEach(r => expect(r).toBeTruthy());
-        const allMatch = responses.some(r =>
-            ['nada', 'gusto', 'placer', 'ayudar', 'cuenta', 'conmigo'].some(kw => r.includes(kw))
-        );
-        expect(allMatch).toBe(true);
-    });
-
-    it('debe responder a agradecimiento en inglés', () => {
-        const response = generateResponse('Thanks', 'FLU', [], 'en');
-        expect(response).toBeTruthy();
-        // Las respuestas de agradecimiento en inglés incluyen: "You're welcome", "With pleasure",
-        // "Don't mention it", "I'm glad I could help"
-        const matches = ['welcome', 'pleasure', 'mention', 'glad', 'help'].some(kw => response.includes(kw));
-        expect(matches).toBe(true);
-    });
-
-    it('debe responder a pregunta en español', () => {
-        const response = generateResponse('¿Qué es la IA?', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe responder a pregunta en inglés', () => {
-        const response = generateResponse('What is AI?', 'FLU', [], 'en');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe usar el nombre del bot en la respuesta', () => {
-        // Todas las opciones de saludo ahora incluyen el nombre del bot
-        // Probamos 5 iteraciones para confirmar que todas incluyen el nombre
-        const results = Array.from({ length: 5 }, () =>
-            generateResponse('Hola', 'FLU-Test', [], 'es')
-        );
-        results.forEach(r => {
-            expect(r).toContain('FLU-Test');
-        });
-    });
-
-    it('debe usar historial para respuestas contextuales', () => {
-        const history = [
-            { role: 'user' as const, text: 'Hola' },
-            { role: 'assistant' as const, text: '¡Hola! ¿Cómo estás?' },
-            { role: 'user' as const, text: 'Bien, gracias' },
-            { role: 'assistant' as const, text: 'Me alegra' },
-            { role: 'user' as const, text: '¿Qué opinas?' },
-        ];
-        const response = generateResponse('Sobre el proyecto', 'FLU', history, 'es');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
     });
 });
 
@@ -1402,40 +1310,6 @@ describe('📐 Bridge Types — Complete Type Definitions', () => {
         };
         expect(config.language).toBe('es');
         expect(config.idleTimeoutMs).toBe(2000);
-    });
-});
-
-// -----------------------------------------------------------
-// 🎬 Darle Vida — Animación y Emoción en FluContract
-// -----------------------------------------------------------
-describe('🔍 Fallback Responses — Edge Cases', () => {
-    it('debe manejar texto vacío', () => {
-        const response = generateResponse('', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-    });
-
-    it('debe manejar texto con solo espacios', () => {
-        const response = generateResponse('   ', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-    });
-
-    it('debe manejar historial vacío', () => {
-        const response = generateResponse('Hola', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-    });
-
-    it('debe manejar lenguaje no soportado (default a español)', () => {
-        const response = generateResponse('Hola', 'FLU', [], 'fr' as any);
-        expect(response).toBeTruthy();
-    });
-
-    it('debe responder a saludo con historial largo', () => {
-        const history = Array(10).fill(null).map((_, i) => ({
-            role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
-            text: `Mensaje ${i}`,
-        }));
-        const response = generateResponse('Hola', 'FLU', history, 'es');
-        expect(response).toBeTruthy();
     });
 });
 

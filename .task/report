@@ -542,3 +542,19 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Ninguna referencia rota (verificado por rg en package.json/.github/README).
+
+---
+
+## C34 — Eliminado fallbackResponses muerto
+
+Cambios aplicados:
+- Eliminado src/services/fallbackResponses.ts (sin importador de producción).
+- tests/integration.test.ts y tests/language-regression.test.ts — retirados import y casos del generador de fallback.
+
+Validado contra:
+- npm run gate (verde): métrica base=1 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/integration.test.ts tests/language-regression.test.ts: 240 passed.
+- git diff --stat: 5 archivos (1 borrado + 2 tests + contrato, 2 infra .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Respuestas IA siguen por GeminiService (el fallback no se usaba en producción).

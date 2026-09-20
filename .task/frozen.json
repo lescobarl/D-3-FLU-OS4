@@ -48,5 +48,6 @@
   "tests/memoryItemSyncGuard.test.ts": "a675790dc24612385315c610f72d8f992f1f0af3cf037fa1d2697c3e1d5dedfe",
   "tests/catchSilenciosoGuard.test.ts": "a6a889a8c8a897bdf1186f733256fe70db08956b98cfc0248a8ecb0c89d7e05b",
   "tests/modulosMuertosGuard.test.ts": "a5b33b05fb30f2e42c5a57f24499d1d7abbd56ef9e2592fbf35ecd617a47003d",
-  "tests/huerfanosGuard.test.ts": "d7a1b972538b5501ed0eb23c2c3b0b7209351ee3350e307f6efd272dc5c16bc7"
+  "tests/huerfanosGuard.test.ts": "d7a1b972538b5501ed0eb23c2c3b0b7209351ee3350e307f6efd272dc5c16bc7",
+  "tests/fallbackResponsesGuard.test.ts": "e24a0557c57bf1144dd9b7ba158c32258c2e0a8c4cf064bd0653a3077bf5f58f"
 }
