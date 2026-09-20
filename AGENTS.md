@@ -224,14 +224,14 @@ Núcleo anti-mentira. Cualquier otra regla se interpreta bajo esta sección.
 
 | Capa | Tecnología | Propósito |
 |------|-----------|-----------|
-| Lenguaje | TypeScript (estricto) | Tipado seguro |
-| Build | Vite 5 + React 18 | Rapidez, HMR, PWA |
+| Lenguaje | TypeScript 6 (estricto) | Tipado seguro |
+| Build | Vite 8 + React 19 | Rapidez, HMR, PWA |
 | Routing | React Router v6 | Navegación lazy |
-| Estado | Zustand | Ligero, persistencia selectiva |
-| DB Local | Dexie.js (IndexedDB) | Versioning, queries reactivas |
-| Estilos | Tailwind CSS 3 | Utility-first, purge automático |
-| PWA | vite-plugin-pwa | Service Worker, offline |
-| Testing | Vitest + React Testing Library | Tests de inmutabilidad |
+| Estado | Zustand 5 | Ligero, persistencia selectiva |
+| DB Local | Dexie.js 4 (IndexedDB) | Versioning, queries reactivas |
+| Estilos | CSS propio (sin Tailwind) | Excepción declarada: `src/index.css`, `src/styles/unified.css` y CSS por componente |
+| PWA | Service Worker/offline según `vite.config.ts` | Sin `vite-plugin-pwa` instalado |
+| Testing | Vitest 3 + React Testing Library | Tests de inmutabilidad |
 | 3D Avatar | Three.js + @react-three/fiber | Renderizado 3D offline |
 | IA Local | WebLLM + Orama + Whisper WASM + Piper TTS + Rhubarb WASM | Edge computing |
 

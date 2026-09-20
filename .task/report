@@ -572,3 +572,17 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Teardown de audio sin ruido de consola en ejecución real.
+
+---
+
+## C23 — AGENTS.md alineado con el stack real
+
+Cambios aplicados:
+- AGENTS.md — tabla de stack: TypeScript 6, Vite 8 + React 19, Zustand 5, Dexie 4, CSS propio (sin Tailwind, excepción declarada), PWA sin vite-plugin-pwa, Vitest 3.
+
+Validado contra:
+- npm run gate (verde): métrica base=3 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: AGENTS.md + infra .task.
+
+No validado (DoD-producto, pendiente del usuario):
+- Coincidencia de AGENTS.md con la pantalla/entorno real del usuario.
