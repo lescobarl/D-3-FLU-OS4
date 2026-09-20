@@ -9,7 +9,7 @@
 // se vacía al cambiar entre DOS usuarios reales distintos (aislamiento).
 // ============================================================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 const { convMock } = vi.hoisted(() => {
     const rows: unknown[] = [];
@@ -67,8 +67,12 @@ describe('persistencia de conversación — no borra lo vivo', () => {
         const { rerender } = renderHook(({ id }: { id: string }) => useConversationPersistence(id), {
             initialProps: { id: 'user-a' },
         });
-        useIntegrationStore.setState({ conversationHistory: [liveRow] });
-        rerender({ id: 'user-b' });
+        await act(async () => {
+            useIntegrationStore.setState({ conversationHistory: [liveRow] });
+        });
+        await act(async () => {
+            rerender({ id: 'user-b' });
+        });
         await waitFor(() => expect(useIntegrationStore.getState().conversationHistory.length).toBe(0));
     });
 });

@@ -52,5 +52,12 @@
   "tests/fallbackResponsesGuard.test.ts": "e24a0557c57bf1144dd9b7ba158c32258c2e0a8c4cf064bd0653a3077bf5f58f",
   "tests/consoleDebugGuard.test.ts": "2a967e958e2f9b0c84a8a9835dc678cfd2d22f1d5fb8bdec54cc3fadb8b60d25",
   "tests/stackDocGuard.test.ts": "64ef6a39d2032e1e0618af2efe2210c8ad79d0e10db324b5f935aafd7a052ef3",
-  "tests/ttsPuntoUnicoGuard.test.ts": "1ced2570801c1b8ff21930164e46c7fd86889341f2b8f740107ddb4d03da5af9"
+  "tests/ttsPuntoUnicoGuard.test.ts": "1ced2570801c1b8ff21930164e46c7fd86889341f2b8f740107ddb4d03da5af9",
+  "tests/syncTupleInlineGuard.test.ts": "6420fc80b3cfe4a77389bc6c36048e0c489b6f037557a21f88e598e7c365ac45",
+  "tests/providerLiteralGuard.test.ts": "304df593aae07b2222fcc07bf17f7ba31077e45334ba1c11eebc8813ff63e3da",
+  "tests/aiServiceSingleImplGuard.test.ts": "b8887586dd46e1ca852b080419457e9e8cf4c60f4e03015099390e25607aac7b",
+  "tests/specificDeadGuard.test.ts": "38ced6e29c7c70f831b4d38446fd7b058437d0dc28a5845487416bb1779bda8e",
+  "tests/textUtilsSingleSourceGuard.test.ts": "e6acf2c46167e02c2e87d0a41cc5fc8f1a5bb4ae501cc31835594f814056b083",
+  "tests/interimPriorStripSingleSource.test.ts": "a350281f7d23937dee615aff097de354f0a8830dcc36e1feeabb91fd687d2168",
+  "tests/geminiServiceFlow.test.ts": "8ea891dea81c4a89a9f0b9fa2f5369eb78217eb6d611115757305efd534eb897"
 }

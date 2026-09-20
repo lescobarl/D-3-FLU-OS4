@@ -53,4 +53,79 @@ describe('GeminiService — flujo real por proxy (motor único)', () => {
     const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
     expect(url).toContain('/api/gemini/contract');
   });
+
+  it('analyzeDocument (F1) usa el proxy /api/gemini/text con maxTokens 1800', async () => {
+    const fetchMock = vi.fn(async (_url: unknown, _init?: { body?: string }) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: JSON.stringify({ resumen: 'resumen-f1', puntos_clave: ['a'] }) }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { geminiService } = await import('../src/services/gemini');
+    const contract = await geminiService.analyzeDocument(
+      {
+        tipo: 'txt',
+        nombre: 'x.txt',
+        mime: 'text/plain',
+        errores: [],
+        chunks: ['contenido'],
+        rawText: 'contenido',
+        resumen_heuristico: '',
+        qa_context: '',
+      },
+      'es',
+    );
+
+    expect(contract.resumen).toBe('resumen-f1');
+    expect(contract.puntos_clave).toContain('a');
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    expect(String(url)).toContain('/api/gemini/text');
+    expect(JSON.parse(init.body).maxTokens).toBe(1800);
+  });
+
+  it('analyzeApp (F2) usa el proxy con maxTokens 2200', async () => {
+    const fetchMock = vi.fn(async (_url: unknown, _init?: { body?: string }) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        text: JSON.stringify({
+          pantallas: [{ id: 's1', nombre: 'Inicio', proposito: 'p', entradas: [], acciones: [], salidas: [] }],
+          flujos: [],
+          errores_detectados: [],
+        }),
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { geminiService } = await import('../src/services/gemini');
+    const contract = await geminiService.analyzeApp(
+      { proyecto: 'demo', framework: 'react', estructura: 'src/', archivos: ['App.tsx'], errores_detectados: [] },
+      'es',
+    );
+
+    expect(contract.proyecto).toBe('demo');
+    expect(contract.pantallas).toHaveLength(1);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    expect(JSON.parse(init.body).maxTokens).toBe(2200);
+  });
+
+  it('generateDocument (F3) usa el proxy con maxTokens 3000 y serializa el contenido', async () => {
+    const fetchMock = vi.fn(async (_url: unknown, _init?: { body?: string }) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: 'cuerpo-generado' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { geminiService } = await import('../src/services/gemini');
+    const result = await geminiService.generateDocument(
+      { formato: 'md', fuentes: [{ tipo: 'note', ref: 'doc' }] },
+      'es',
+    );
+
+    expect(result.content).toContain('cuerpo-generado');
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    expect(JSON.parse(init.body).maxTokens).toBe(3000);
+  });
 });
