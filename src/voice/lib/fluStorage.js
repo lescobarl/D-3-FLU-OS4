@@ -1,5 +1,5 @@
 import { normalizeConversationRow } from './conversationRow.js'
-import { fluDb } from '../../core/db/fluDatabase'
+import { fluDb, newId } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
 import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
 
@@ -183,7 +183,7 @@ export async function saveVoiceProfile(profile = {}) {
   let id = String(profile.id || '').trim()
   const existing = id ? await fluDb.voiceProfiles.get(id) : undefined
   if (!id) {
-    id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `voice-${Date.now()}`
+    id = newId()
   }
   const record = {
     id,
