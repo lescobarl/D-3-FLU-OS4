@@ -1246,7 +1246,7 @@ export async function requestConversationSummary(params) {
   try {
     savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
-  } catch (err) { console.debug('[flu] fallo de teardown ignorado:', err) }
+  } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
   const body = {
     ...(params ?? {}),
     model: savedModel || undefined,
