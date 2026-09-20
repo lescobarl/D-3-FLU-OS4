@@ -13,8 +13,9 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fluDb, newId, newSyncTuple, bumpSync } from '../db/fluDatabase';
+import { fluDb, newId } from '../db/fluDatabase';
 import { addAuditLog } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 import { getActiveSeason, type CustomEvent, type SeasonalEvent } from './seasonalCalendar';
 import { getPalette, applyPaletteToCSS, resetPaletteToDefault, type Palette } from './seasonalPalettes';
 
@@ -158,7 +159,7 @@ async function saveConfigToDB(key: string, value: string): Promise<void> {
             ...existing,
             value,
             timestamp: new Date().toISOString(),
-            sync: bumpSync(existing.sync),
+            sync: buildSyncTuple(existing.sync, Date.now()),
         });
     } else {
         await fluDb.brandingConfig.add({
@@ -166,7 +167,7 @@ async function saveConfigToDB(key: string, value: string): Promise<void> {
             key,
             value,
             timestamp: new Date().toISOString(),
-            sync: newSyncTuple(),
+            sync: buildSyncTuple(undefined, Date.now()),
         });
     }
 }

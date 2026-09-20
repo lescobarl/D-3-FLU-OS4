@@ -11,7 +11,8 @@
 // ============================================================
 
 import { useEffect, useRef } from 'react';
-import { fluDb, newSyncTuple, type ConversationRow } from '../core/db/fluDatabase';
+import { fluDb, type ConversationRow } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 
@@ -29,12 +30,7 @@ export async function putConversationRecord(record: ConversationRow): Promise<vo
 export async function softDeleteConversationRows(ids: string[]): Promise<number> {
     if (!ids.length) return 0;
     return fluDb.conversations.where('id').anyOf(ids).modify((row) => {
-        row.sync = {
-            ...row.sync,
-            deleted: true,
-            revision: (row.sync?.revision ?? 1) + 1,
-            updated_at: new Date().toISOString(),
-        };
+        row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
     });
 }
 
@@ -86,7 +82,7 @@ function entryToRow(entry: ConversationEntry, participantId: string) {
         phase: entry.phase || '',
         navigation: entry.navigation || null,
         participantId: entry.personId || participantId,
-        sync: newSyncTuple(),
+        sync: buildSyncTuple(undefined, Date.now()),
     };
 }
 
@@ -175,12 +171,7 @@ export function useConversationPersistence(participantId?: string) {
                                 .where('id')
                                 .anyOf(idsToRemove)
                                 .modify((row) => {
-                                    row.sync = {
-                                        ...row.sync,
-                                        deleted: true,
-                                        revision: (row.sync?.revision ?? 1) + 1,
-                                        updated_at: new Date().toISOString(),
-                                    };
+                                    row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
                                 })
                                 .catch((err) => {
                                     console.error('[ConversationPersistence] Error cleaning up system events from DB:', err);
@@ -243,12 +234,7 @@ export function useConversationPersistence(participantId?: string) {
                     .map((row) => row.id);
                 return ids.length
                     ? fluDb.conversations.where('id').anyOf(ids).modify((row) => {
-                          row.sync = {
-                              ...row.sync,
-                              deleted: true,
-                              revision: (row.sync?.revision ?? 1) + 1,
-                              updated_at: new Date().toISOString(),
-                          };
+                          row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
                       })
                     : undefined;
             })

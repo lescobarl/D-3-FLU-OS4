@@ -15,6 +15,7 @@ import type { PaletteDefinition } from '../branding/seasonalPalettes';
 import type { SearchSite } from '../search/searchSiteTypes';
 import type { AgendaItem } from '../agenda/agendaModel';
 import type { ConversationEntry } from '../../types/bridge';
+import { buildSyncTuple } from './syncTuple';
 
 // -----------------------------------------------------------
 // Sync Tuple — Obligación #7
@@ -707,23 +708,8 @@ export function newId(): string {
     return uuidv4();
 }
 
-/** Crear SyncTuple con valores iniciales — Obligación #7 */
-export function newSyncTuple(): SyncTuple {
-    return {
-        revision: 1,
-        updated_at: new Date().toISOString(),
-        deleted: false,
-    };
-}
-
-/** Incrementar revisión y actualizar timestamp */
-export function bumpSync(tuple: SyncTuple): SyncTuple {
-    return {
-        ...tuple,
-        revision: tuple.revision + 1,
-        updated_at: new Date().toISOString(),
-    };
-}
+// La tupla de sincronización se construye en `src/core/db/syncTuple.ts`
+// (fuente única): aquí no se redefine `newSyncTuple`/`bumpSync`.
 
 // -----------------------------------------------------------
 // Audit Log — Obligación #5
@@ -750,7 +736,7 @@ export async function addAuditLog(
         newValue,
         context,
         timestamp: new Date().toISOString(),
-        sync: newSyncTuple(),
+        sync: buildSyncTuple(undefined, Date.now()),
     };
     await fluDb.auditLog.add(entry);
     return entry;
@@ -773,11 +759,6 @@ export async function getAuditLogs(limit: number = 100): Promise<AuditLogEntry[]
  */
 export async function clearAuditLogs(): Promise<void> {
     await fluDb.auditLog.toCollection().modify((row) => {
-        row.sync = {
-            ...row.sync,
-            deleted: true,
-            revision: (row.sync?.revision ?? 1) + 1,
-            updated_at: new Date().toISOString(),
-        };
+        row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
     });
 }

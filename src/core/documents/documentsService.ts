@@ -6,7 +6,7 @@
 // alcance del usuario activo (`personId || 'global'`).
 // ============================================================
 import { v4 as uuidv4 } from 'uuid';
-import { newSyncTuple, type DocumentRecord } from '../db/fluDatabase';
+import { type DocumentRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
 
 export interface NewDocumentInput {
@@ -65,7 +65,7 @@ export function createDocumentsService({
         personId: input.personId,
         createdAt: t,
         updatedAt: t,
-        sync: newSyncTuple(),
+        sync: buildSyncTuple(undefined, t),
       };
       await db.add(record);
       return record;

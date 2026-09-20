@@ -208,11 +208,10 @@ describe('UUIDv4 Compliance [Obligación #6]', () => {
 // ============================================================
 describe('SyncTuple Compliance [Obligación #7]', () => {
 
-    it('fluDatabase must export SyncTuple interface with [revision, updated_at, deleted]', async () => {
-        const fluDb = await import('../src/core/db/fluDatabase');
-        const { newSyncTuple, bumpSync } = fluDb;
-        // Verify the interface structure via newSyncTuple
-        const tuple = newSyncTuple();
+    it('buildSyncTuple produce SyncTuple con [revision, updated_at, deleted]', async () => {
+        const { buildSyncTuple } = await import('../src/core/db/syncTuple');
+        // Verify the interface structure via the canonical builder
+        const tuple = buildSyncTuple(undefined, Date.now());
         expect(tuple).toHaveProperty('revision');
         expect(tuple).toHaveProperty('updated_at');
         expect(tuple).toHaveProperty('deleted');
@@ -220,8 +219,8 @@ describe('SyncTuple Compliance [Obligación #7]', () => {
         expect(tuple.deleted).toBe(false);
         expect(typeof tuple.updated_at).toBe('string');
 
-        // bumpSync must increment revision
-        const bumped = bumpSync(tuple);
+        // buildSyncTuple must increment revision
+        const bumped = buildSyncTuple(tuple, Date.now());
         expect(bumped.revision).toBe(2);
         expect(bumped.deleted).toBe(false);
     });

@@ -18,7 +18,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage';
 import { v4 as uuidv4 } from 'uuid';
 import { relayLog } from '../lib/clientLogRelay';
-import { newSyncTuple, type SyncTuple } from '../core/db/fluDatabase';
+import { type SyncTuple } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
 import {
     DEFAULT_PERSONALITY,
     UI_DEFAULTS,
@@ -386,7 +387,7 @@ const initialState: IntegrationState = {
     activePersonId: undefined,
     lastGeminiEmotion: '',
     _thinkingStart: 0,
-    sync: newSyncTuple(),
+    sync: buildSyncTuple(undefined, Date.now()),
     // FLU Configurator — estado inicial
     profile: defaultProfile.id,
     imageConfig: { ...defaultProfile.image },
@@ -724,7 +725,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 set({
                     ...initialState,
                     sessionStats: { ...initialState.sessionStats, sessionStartTime: Date.now() },
-                    sync: newSyncTuple(),
+                    sync: buildSyncTuple(undefined, Date.now()),
                 });
             },
 

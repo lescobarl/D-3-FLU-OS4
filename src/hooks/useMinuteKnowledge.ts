@@ -10,7 +10,8 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { fluDb, newId, newSyncTuple, bumpSync, type MinuteRecord, type MinuteSummarySnapshot, type KnowledgeKind } from '../core/db/fluDatabase';
+import { fluDb, newId, type MinuteRecord, type MinuteSummarySnapshot, type KnowledgeKind } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
 
 /**
@@ -243,7 +244,7 @@ export function useMinuteKnowledge(participantId?: string) {
                 sequence: maxSeq + 1,
                 createdAt: existingIndex >= 0 ? records[existingIndex].createdAt : now.toISOString(),
                 updatedAt: now.toISOString(),
-                sync: existingIndex >= 0 ? bumpSync(records[existingIndex].sync) : newSyncTuple(),
+                sync: existingIndex >= 0 ? buildSyncTuple(records[existingIndex].sync, Date.now()) : buildSyncTuple(undefined, Date.now()),
             };
 
             if (existingIndex >= 0) {
@@ -282,7 +283,7 @@ export function useMinuteKnowledge(participantId?: string) {
             description: (mergedSnapshot.titulo || existing.description || '').trim(),
             minuteKey: buildMinuteKey(mergedSnapshot),
             updatedAt: new Date().toISOString(),
-            sync: bumpSync(existing.sync),
+            sync: buildSyncTuple(existing.sync, Date.now()),
         };
         await fluDb.minutes.put(updated);
         setMinutes((prev) =>
@@ -299,7 +300,7 @@ export function useMinuteKnowledge(participantId?: string) {
 
         const updated: MinuteRecord = {
             ...existing,
-            sync: { ...bumpSync(existing.sync), deleted: true },
+            sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
         };
         await fluDb.minutes.put(updated);
         setMinutes((prev) => prev.filter((m) => m.id !== id));

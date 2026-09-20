@@ -40,7 +40,8 @@ import type { MinuteUIEntry } from '../src/hooks/useMinuteKnowledge';
 
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { DEFAULT_PERSONALITY, DEFAULT_ADVANCED_CONFIG, UI_DEFAULTS, STORAGE_KEYS, GEMINI_CONFIG, WELCOME_MESSAGE } from '../src/core/config/appConfig';
-import { newSyncTuple, bumpSync, type SyncTuple } from '../src/core/db/fluDatabase';
+import { type SyncTuple } from '../src/core/db/fluDatabase';
+import { buildSyncTuple } from '../src/core/db/syncTuple';
 
 // ---- Avatar Expression Map (data-driven validation) ----
 import { EXPRESSION_MAP } from '../src/avatar/index';
@@ -1004,30 +1005,30 @@ describe('👥 Multi-Speaker Conversations', () => {
 // 17. SESSION PERSISTENCE (SyncTuple)
 // -----------------------------------------------------------
 describe('💾 Session Persistence — SyncTuple', () => {
-    it('newSyncTuple debe crear tuple con revision=1', () => {
-        const sync = newSyncTuple();
+    it('buildSyncTuple debe crear tuple con revision=1', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
         expect(sync.revision).toBe(1);
         expect(sync.deleted).toBe(false);
         expect(sync.updated_at).toBeTruthy();
     });
 
-    it('bumpSync debe incrementar revision', () => {
-        const sync = newSyncTuple();
-        const bumped = bumpSync(sync);
+    it('buildSyncTuple debe incrementar revision', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
+        const bumped = buildSyncTuple(sync, Date.now());
         expect(bumped.revision).toBe(2);
     });
 
-    it('bumpSync debe mantener deleted=true', () => {
-        const sync: SyncTuple = { revision: 5, updated_at: new Date().toISOString(), deleted: true };
-        const bumped = bumpSync(sync);
+    it('buildSyncTuple debe mantener deleted=true', () => {
+        const sync: SyncTuple = { ...buildSyncTuple(undefined, Date.now()), revision: 5, deleted: true };
+        const bumped = buildSyncTuple(sync, Date.now());
         expect(bumped.revision).toBe(6);
         expect(bumped.deleted).toBe(true);
     });
 
-    it('bumpSync debe actualizar updated_at', () => {
-        const sync = newSyncTuple();
+    it('buildSyncTuple debe actualizar updated_at', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
         const before = new Date(sync.updated_at).getTime();
-        const bumped = bumpSync(sync);
+        const bumped = buildSyncTuple(sync, Date.now());
         const bumpedTime = new Date(bumped.updated_at).getTime();
         expect(bumpedTime).toBeGreaterThanOrEqual(before);
     });
@@ -1317,15 +1318,15 @@ describe('📐 Bridge Types — Complete Type Definitions', () => {
 // 26. FLU DATABASE HELPERS
 // -----------------------------------------------------------
 describe('🗄️ FLU Database Helpers', () => {
-    it('newSyncTuple debe crear ISO 8601 timestamp', () => {
-        const sync = newSyncTuple();
+    it('buildSyncTuple debe crear ISO 8601 timestamp', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
         expect(() => new Date(sync.updated_at)).not.toThrow();
         expect(new Date(sync.updated_at).toISOString()).toBe(sync.updated_at);
     });
 
-    it('bumpSync debe preservar estructura SyncTuple', () => {
-        const sync = newSyncTuple();
-        const bumped = bumpSync(sync);
+    it('buildSyncTuple debe preservar estructura SyncTuple', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
+        const bumped = buildSyncTuple(sync, Date.now());
         expect(bumped).toHaveProperty('revision');
         expect(bumped).toHaveProperty('updated_at');
         expect(bumped).toHaveProperty('deleted');
