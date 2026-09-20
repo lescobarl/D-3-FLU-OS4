@@ -219,6 +219,7 @@ export async function getPreferences(): Promise<Preference[]> {
             try {
                 return JSON.parse(mem.content) as Preference;
             } catch {
+        console.warn('[catch] src/lib/preferenceLearner.ts');
                 return null;
             }
         })

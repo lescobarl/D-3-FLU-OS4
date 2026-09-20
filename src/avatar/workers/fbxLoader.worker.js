@@ -26,6 +26,7 @@ self.onmessage = async (event) => {
     const group = parseFbxBuffer(buffer, url);
     self.postMessage({ id, ok: true, json: group.toJSON() });
   } catch (err) {
+        console.warn('[catch] src/avatar/workers/fbxLoader.worker.js:', err);
     self.postMessage({
       id,
       ok: false,

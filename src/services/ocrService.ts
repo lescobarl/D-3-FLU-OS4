@@ -89,10 +89,12 @@ export async function extractTextFromImage(dataUrl: string): Promise<OcrResult> 
             const text = await extractWithRemote(dataUrl, cfg);
             if (text) return { text, engine: 'remote', warnings: [] };
         } catch (err) {
+        console.warn('[catch] src/services/ocrService.ts:', err);
             const warnings = [`OCR remoto falló (${String(err)}); usando OCR local.`];
             try {
                 return { text: await extractWithLocal(dataUrl), engine: 'local', warnings };
             } catch (localErr) {
+        console.warn('[catch] src/services/ocrService.ts:', localErr);
                 return { text: '', engine: 'local', warnings: [...warnings, String(localErr)] };
             }
         }
@@ -100,6 +102,7 @@ export async function extractTextFromImage(dataUrl: string): Promise<OcrResult> 
     try {
         return { text: await extractWithLocal(dataUrl), engine: 'local', warnings: [] };
     } catch (err) {
+        console.warn('[catch] src/services/ocrService.ts:', err);
         return { text: '', engine: 'local', warnings: [String(err)] };
     }
 }
@@ -125,6 +128,7 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
                 import.meta.url,
             ).toString();
         } catch {
+        console.warn('[catch] src/services/ocrService.ts');
             /* sin worker configurado: se intenta igual; degradación si falla */
         }
     }

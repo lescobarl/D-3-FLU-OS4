@@ -43,6 +43,7 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
       try {
         worker.terminate()
       } catch {
+        console.warn('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
         // ignore
       }
       worker = null
@@ -90,6 +91,7 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
         try {
           worker.terminate()
         } catch {
+        console.warn('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
           // ignore
         }
         worker = null

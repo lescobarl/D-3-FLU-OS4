@@ -64,7 +64,8 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
     }
 
     const stored = (() => {
-        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY); } catch { return null; }
+        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY); } catch {
+        console.warn('[catch] src/services/deepseek.ts'); return null; }
     })();
     if (stored && stored.trim()) {
         return { apiKey: stored.trim(), apiKeySource: 'localStorage' };
@@ -91,6 +92,7 @@ function resolveCreativityTemperature(): number | undefined {
             }
         }
     } catch {
+        console.warn('[catch] src/services/deepseek.ts');
         // ignore
     }
     return OPENROUTER_CONFIG.DEFAULT_TEMPERATURE;
@@ -124,10 +126,12 @@ function safeParseJson(text: string): Record<string, unknown> | null {
         }
         return null;
     } catch {
+        console.warn('[catch] src/services/deepseek.ts');
         try {
             const match = text.match(/\{[\s\S]*\}/);
             if (match) return JSON.parse(match[0]);
         } catch {
+        console.warn('[catch] src/services/deepseek.ts');
             return null;
         }
         return null;
@@ -243,6 +247,7 @@ class DeepSeekService implements IAIService {
             try {
                 parsed = JSON.parse(responseText);
             } catch {
+        console.warn('[catch] src/services/deepseek.ts');
                 // Fallback if JSON parsing fails
                 parsed = {};
             }
@@ -400,6 +405,7 @@ Formato de respuesta (JSON):
             try {
                 parsed = JSON.parse(responseText);
             } catch {
+        console.warn('[catch] src/services/deepseek.ts');
                 parsed = { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 };
             }
 
@@ -554,6 +560,7 @@ Formato de respuesta (JSON):
             try {
                 parsed = JSON.parse(responseText);
             } catch {
+        console.warn('[catch] src/services/deepseek.ts');
                 parsed = {
                     materia: 'Desconocida',
                     problemas: [],

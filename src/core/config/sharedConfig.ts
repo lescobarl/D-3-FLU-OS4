@@ -229,6 +229,7 @@ export function isLocalTextEndpoint(url: string): boolean {
         const host = new URL(url).hostname.toLowerCase();
         return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
     } catch {
+        console.warn('[catch] src/core/config/sharedConfig.ts');
         return /localhost|127\.0\.0\.1|::1/i.test(url);
     }
 }

@@ -240,6 +240,7 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
     }
     return resolved
   } catch (error) {
+        console.warn('[catch] src/voice/lib/imageGeneration.js:', error);
     workspaceImageSourceCache.delete(cacheKey)
     return resolveErrorFallback(workspace, language, error?.message || 'unknown')
   }
@@ -318,6 +319,7 @@ export async function fetchOpenRouterImageFallback({
       },
     }
   } catch (error) {
+        console.warn('[catch] src/voice/lib/imageGeneration.js:', error);
     return {
       image_url: '',
       trace: {
@@ -376,6 +378,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
       trace: payload?.trace || { provider: 'falai', source: 'empty_response', hasVideo: false, prompt },
     }
   } catch (error) {
+        console.warn('[catch] src/voice/lib/imageGeneration.js:', error);
     return {
       video_url: '',
       trace: {

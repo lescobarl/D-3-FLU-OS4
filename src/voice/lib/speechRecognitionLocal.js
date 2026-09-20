@@ -73,6 +73,7 @@ export function startSpeechRecognition(recognition) {
     activeRecognition = recognition
     return true
   } catch (error) {
+        console.warn('[catch] src/voice/lib/speechRecognitionLocal.js:', error);
     const message = String(error?.message || error).toLowerCase()
     if (message.includes('already') && message.includes('start')) {
       activeRecognition = recognition

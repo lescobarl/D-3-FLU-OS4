@@ -559,6 +559,7 @@ export function fluDebugHot(action, payload = {}) {
         break
     }
   } catch (error) {
+        console.warn('[catch] src/voice/lib/fluDebug.js:', error);
     recordViolation('debug-hot-crash', {
       action,
       message: String(error?.message || error),

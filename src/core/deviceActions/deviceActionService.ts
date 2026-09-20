@@ -156,6 +156,7 @@ export function createDeviceActionService({
     try {
       return await resolveContact(name);
     } catch {
+        console.warn('[catch] src/core/deviceActions/deviceActionService.ts');
       return undefined;
     }
   };

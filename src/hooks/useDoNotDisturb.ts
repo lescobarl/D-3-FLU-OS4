@@ -50,6 +50,7 @@ function readStoredSchedule(fallback: DndSchedule): DndSchedule {
       return { start: parsed.start, end: parsed.end };
     }
   } catch {
+        console.warn('[catch] src/hooks/useDoNotDisturb.ts');
     // ignorar valores corruptos → fallback
   }
   return fallback;

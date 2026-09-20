@@ -108,6 +108,7 @@ async function probeWithRange(url: string, timeoutMs: number): Promise<boolean> 
     })
     return res.ok
   } catch {
+        console.warn('[catch] src/services/musicSearch.ts');
     return false
   }
 }

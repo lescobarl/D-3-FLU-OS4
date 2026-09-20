@@ -45,5 +45,6 @@
   "tests/indexedDbSingleGuard.test.ts": "9484d4762c3cd118b002a84bd601f66e1062ad8e1efa734df02e788a62d51256",
   "tests/voiceProfilesLocalStorageGuard.test.ts": "b0e5b8a1fad58b2acb9680041081df9aa52648f241e941e2c30111a322bae883",
   "tests/longTermMemoryDeleteGuard.test.ts": "3d97dbb2b055134ab1dce23dd918539f30b3a2e83f9e9b2e497380ac4b59923d",
-  "tests/memoryItemSyncGuard.test.ts": "5c11f43324348316f4c0e617d0903115d52e493b600f68e710df6fe91acc99e2"
+  "tests/memoryItemSyncGuard.test.ts": "5c11f43324348316f4c0e617d0903115d52e493b600f68e710df6fe91acc99e2",
+  "tests/catchSilenciosoGuard.test.ts": "a6a889a8c8a897bdf1186f733256fe70db08956b98cfc0248a8ecb0c89d7e05b"
 }

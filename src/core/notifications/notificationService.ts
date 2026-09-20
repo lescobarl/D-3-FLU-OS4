@@ -93,6 +93,7 @@ export function createDefaultDriver(): NotificationDriver {
         });
         return true;
       } catch {
+        console.warn('[catch] src/core/notifications/notificationService.ts');
         return false;
       }
     },

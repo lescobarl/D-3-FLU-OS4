@@ -81,6 +81,7 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
     }
     return new Blob([decodeURIComponent(m[3])], { type: mime });
   } catch {
+        console.warn('[catch] src/lib/formatAdapters.ts');
     return null;
   }
 }
@@ -93,6 +94,7 @@ function toBlobUrl(content: string, mime: string): string {
     const blob = new Blob([content], { type: mime });
     return URL.createObjectURL(blob);
   } catch {
+        console.warn('[catch] src/lib/formatAdapters.ts');
     return '';
   }
 }
@@ -210,6 +212,7 @@ async function serializeXlsx(content: string, nombre: string): Promise<Generated
     try {
       parsed = JSON.parse(String(content || '{}'));
     } catch {
+        console.warn('[catch] src/lib/formatAdapters.ts');
       parsed = { rows: String(content || '').split(/\r?\n/).map((l) => l.split('\t')) };
     }
     const wb = XLSX.utils.book_new();

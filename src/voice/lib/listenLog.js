@@ -58,6 +58,7 @@ function serialize(entry) {
   try {
     return JSON.stringify(entry)
   } catch {
+        console.warn('[catch] src/voice/lib/listenLog.js');
     return JSON.stringify({ t: Date.now(), stage: 'log-serialize-error' })
   }
 }

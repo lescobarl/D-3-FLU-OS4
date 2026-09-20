@@ -188,6 +188,7 @@ function parseBody<T = ProxyBody>(req: IncomingMessage): Promise<T | null> {
             try {
                 resolve(JSON.parse(body));
             } catch {
+        console.warn('[catch] src/server/geminiProxy.ts');
                 resolve(null);
             }
         });
@@ -655,7 +656,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch { /* ignore write errors after connection close */ }
+                    } catch {
+        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/openrouter-image — fallback de imagen por OpenRouter
@@ -669,7 +671,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch { /* ignore write errors after connection close */ }
+                    } catch {
+        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/fal-video — video real con fal.ai (text-to-video)
@@ -682,7 +685,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch { /* ignore write errors after connection close */ }
+                    } catch {
+        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/gemini/vision — OCR analysis of uploaded images
@@ -705,7 +709,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch { /* ignore write errors after connection close */ }
+                    } catch {
+        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /__flu_agent_trace — OS2's fluTrace.js agent sink (accepted, logged)

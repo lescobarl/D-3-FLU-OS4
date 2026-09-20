@@ -291,6 +291,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = 48000, match
       }
     }
   } catch (error) {
+        console.warn('[catch] src/voice/lib/voiceIdWorkerClient.js:', error);
     if (String(error?.message || error).includes('dropped-stale')) {
       return {
         speakerId: labelToSpeakerId(fallbackName),

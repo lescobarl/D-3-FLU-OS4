@@ -1,11 +1,11 @@
 {
-  "id": "C33",
+  "id": "C13",
   "mode": "full",
-  "task": "Arquitectura — tupla de sync en MemoryItem",
-  "base": "ab356dc9aa716f85c2ed7649462c533d6246d4cb",
-  "objective": "MemoryItem declara revision y updatedAt (tupla de sincronización §3.7).",
+  "task": "Errores — ningún catch silencioso",
+  "base": "6e2752b5574d624c6815c1808a1bfff9bcb2610b",
+  "objective": "Todo bloque catch registra el error (log) o lo propaga (throw/reject); ninguno lo traga.",
   "allow": [
-    "src/lib/longTermMemory.ts"
+    "src/**"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +19,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 2,
-  "maxLines": 150,
-  "dod": "npx vitest run tests/memoryItemSyncGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/memoryItemSyncGuard.test.ts --reporter=dot",
+  "maxFiles": 140,
+  "maxLines": 6000,
+  "dod": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "MemoryItem declara revision y updatedAt",
+    "statement": "Ningún bloque catch traga el error sin registrarlo",
     "metric": {
-      "command": "node scripts/audit-metric.mjs memoryitem-sync",
+      "command": "node scripts/audit-metric.mjs catch-silencioso",
       "target": 0
     },
-    "base": "ab356dc9aa716f85c2ed7649462c533d6246d4cb",
+    "base": "6e2752b5574d624c6815c1808a1bfff9bcb2610b",
     "guardFiles": [
-      "tests/memoryItemSyncGuard.test.ts"
+      "tests/catchSilenciosoGuard.test.ts"
     ]
   }
 }

@@ -786,6 +786,7 @@ class BackupManager implements IBackupManager {
                 const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
                 if (raw) total += raw.length * 2; // UTF-16
             } catch {
+        console.warn('[catch] src/core/autonomy/backupSystem.ts');
                 /* ignorar entradas ilegibles */
             }
         }
@@ -816,6 +817,7 @@ class BackupManager implements IBackupManager {
                     const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
                     if (raw) total -= raw.length * 2;
                 } catch {
+        console.warn('[catch] src/core/autonomy/backupSystem.ts');
                     /* ignorar */
                 }
                 this.deleteBackup(backup.id);

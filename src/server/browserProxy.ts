@@ -64,6 +64,7 @@ async function fetchSite(
     const html = await response.text();
     return { ok: true, url: response.url || url, html };
   } catch (err: unknown) {
+        console.warn('[catch] src/server/browserProxy.ts:', err);
     if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
       return { ok: false, reason: 'timeout' };
     }
@@ -80,6 +81,7 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   try {
     parsed = new URL(rawUrl, 'http://localhost');
   } catch {
+        console.warn('[catch] src/server/browserProxy.ts');
     sendJson(res, 400, { ok: false, reason: 'invalid' });
     return;
   }

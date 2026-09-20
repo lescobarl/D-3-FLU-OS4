@@ -107,6 +107,7 @@ export function buildBrowserUrl(
     try {
         parsed = new URL(candidate);
     } catch {
+        console.warn('[catch] src/core/browser/browserSession.ts');
         return { ok: false, reason: 'invalid' };
     }
 

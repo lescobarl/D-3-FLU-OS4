@@ -45,6 +45,7 @@ export function getPreferredAIProvider(): AIProvider {
             return stored;
         }
     } catch {
+        console.warn('[catch] src/services/aiServiceFactory.ts');
         // ignore
     }
 
@@ -65,6 +66,7 @@ export function setPreferredAIProvider(provider: AIProvider): void {
     try {
         localStorage.setItem(AI_PROVIDER_KEY, provider);
     } catch {
+        console.warn('[catch] src/services/aiServiceFactory.ts');
         // ignore
     }
 }

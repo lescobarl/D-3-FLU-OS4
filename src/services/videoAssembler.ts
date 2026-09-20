@@ -415,6 +415,7 @@ export async function assembleVideo(
             warnings,
         };
     } catch (e) {
+        console.warn('[catch] src/services/videoAssembler.ts:', e);
         warnings.push(`No se pudo ensamblar el mp4 (${e instanceof Error ? e.message : String(e)}). Se entrega guion/storyboard.`);
         return {
             script,

@@ -51,6 +51,7 @@ export function createConversationModeController({
         try {
             setConversationState?.(state);
         } catch {
+        console.warn('[catch] src/voice/lib/conversationMode.ts');
             // UI no disponible (tests/SSR): el modo y el ruteo siguen válidos.
         }
     };
@@ -58,6 +59,7 @@ export function createConversationModeController({
         try {
             onTransition?.({ event, active: Boolean(conversationActiveRef.current) });
         } catch {
+        console.warn('[catch] src/voice/lib/conversationMode.ts');
             // Traza no disponible: no afecta al modo.
         }
     };

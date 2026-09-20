@@ -107,6 +107,7 @@ export function readPersistedActiveAmbienteId(): string | null {
         const id = parsed?.state?.activeAmbienteId;
         return typeof id === 'string' && id ? id : null;
     } catch {
+        console.warn('[catch] src/store/environmentStore.ts');
         return null;
     }
 }

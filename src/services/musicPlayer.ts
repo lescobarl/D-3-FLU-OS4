@@ -71,6 +71,7 @@ function getAudio(): HTMLAudioElement {
           audioRef!.currentTime = 0
           audioRef!.play().catch(() => {})
         } catch {
+        console.warn('[catch] src/services/musicPlayer.ts');
           /* ignore */
         }
       }

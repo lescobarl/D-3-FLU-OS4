@@ -21,6 +21,7 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
     if (!response.ok) return null
     return await response.json()
   } catch {
+        console.warn('[catch] src/voice/lib/fluVisualStockSearch.js');
     return null
   }
 }

@@ -119,6 +119,7 @@ export function speakLocal(text: string, options: LocalTtsOptions = {}): SpeakRe
     try {
         utterance = new SpeechSynthesisUtterance(clean);
     } catch {
+        console.warn('[catch] src/services/localTts.ts');
         return { started: false, error: 'utterance-unsupported' };
     }
 

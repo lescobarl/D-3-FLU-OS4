@@ -3388,6 +3388,7 @@ function App() {
                         try {
                             await speakFluRef.current(ackText, currentLang);
                         } catch {
+        console.warn('[catch] src/App.tsx');
                             // Sin TTS disponible: continuar igual.
                         }
                     }
@@ -3400,6 +3401,7 @@ function App() {
                     // habla del asistente antes de intentar abrir el micrófono.
                     await waitForSpeechIdle();
                 } catch {
+        console.warn('[catch] src/App.tsx');
                     // Sin habla activa / timeout: continuar igual.
                 }
                 // Abre la escucha EN MODO CONVERSACIÓN (dueño único del modo):
@@ -4383,6 +4385,7 @@ const {
         try {
             lastSessionDay = window.localStorage.getItem(dayStorageKey) || '';
         } catch {
+        console.warn('[catch] src/App.tsx');
             lastSessionDay = '';
         }
         dayRolloverDoneRef.current = true;
@@ -4408,6 +4411,7 @@ const {
             try {
                 window.localStorage.setItem(dayStorageKey, dayKey(Date.now()));
             } catch {
+        console.warn('[catch] src/App.tsx');
                 /* ignorar */
             }
         })();

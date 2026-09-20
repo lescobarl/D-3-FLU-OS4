@@ -1268,6 +1268,7 @@ export function useFluVoiceAssistant({
           try {
             stopSpeechRecognition(recognitionRef.current)
           } catch {
+        console.warn('[catch] src/voice/hooks/useFluVoiceAssistant.js');
             // ignore
           }
           const retryCount = recognitionRetryCountRef.current + 1
@@ -1284,6 +1285,7 @@ export function useFluVoiceAssistant({
         try {
           stopSpeechRecognition(recognitionRef.current)
         } catch {
+        console.warn('[catch] src/voice/hooks/useFluVoiceAssistant.js');
           // ignore
         }
         const retryCount = recognitionRetryCountRef.current + 1
@@ -1360,6 +1362,7 @@ export function useFluVoiceAssistant({
         recognitionRef.current.stop()
       }
     } catch {
+        console.warn('[catch] src/voice/hooks/useFluVoiceAssistant.js');
       // ignore
     }
 
@@ -1919,6 +1922,7 @@ export function useFluVoiceAssistant({
       try {
         recognitionRef.current.stop()
       } catch {
+        console.warn('[catch] src/voice/hooks/useFluVoiceAssistant.js');
         // Ignore stop errors.
       }
       recognitionRef.current = null
@@ -2343,6 +2347,7 @@ export function useFluVoiceAssistant({
               if (typeof previous.abort === 'function') previous.abort()
               else previous.stop()
             } catch {
+        console.warn('[catch] src/voice/hooks/useFluVoiceAssistant.js');
               // ignore
             }
           }
@@ -2744,6 +2749,7 @@ export function useFluVoiceAssistant({
           setStatus('idle')
         }
       } catch {
+        console.warn('[catch] src/voice/hooks/useFluVoiceAssistant.js');
         if (closing) {
           isListeningRef.current = false
           await cleanupAudio().catch(fluAsyncErrorHandler('useFluVoiceAssistant'))

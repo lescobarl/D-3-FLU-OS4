@@ -217,6 +217,7 @@ export function createWhisperRecognitionEngine({
         }
       }
     } catch {
+        console.warn('[catch] src/voice/lib/asr/whisperRecognitionEngine.js');
       // Parcial descartable: no afecta el final.
     } finally {
       partialInFlight = false
@@ -252,6 +253,7 @@ export function createWhisperRecognitionEngine({
         if (!active || !text) return
         if (typeof engine.onresult === 'function') engine.onresult(buildResultEvent(text, isFinal))
       } catch (error) {
+        console.warn('[catch] src/voice/lib/asr/whisperRecognitionEngine.js:', error);
         // Falla del worker/WASM (p. ej. el modelo no cargó) o de red real al
         // descargar el modelo. Se reintenta al recrear el worker; NO se etiqueta
         // todo como 'network' (eso confundía con el error del motor Chrome y

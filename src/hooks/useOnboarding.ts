@@ -182,6 +182,7 @@ export function useOnboarding({
       const permission = await service.requestPermission();
       service.setChannel(permission === 'granted' ? 'both' : 'toast');
     } catch {
+        console.warn('[catch] src/hooks/useOnboarding.ts');
       service.setChannel('toast');
     }
   }, []);

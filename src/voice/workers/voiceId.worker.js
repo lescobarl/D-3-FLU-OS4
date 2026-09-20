@@ -139,6 +139,7 @@ self.onmessage = async (event) => {
 
     reply(false, null, new Error(`unknown worker message type: ${type}`))
   } catch (error) {
+        console.warn('[catch] src/voice/workers/voiceId.worker.js:', error);
     reply(false, null, error)
   }
 }

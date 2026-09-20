@@ -156,6 +156,7 @@ function envOpenRouterKey(): string {
   try {
     return resolveTextApiKey();
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     return '';
   }
 }
@@ -247,6 +248,7 @@ function safeGet(store: Storage | null | undefined, key: string): string | null 
   try {
     return store ? store.getItem(key) : null;
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     return null;
   }
 }
@@ -282,6 +284,7 @@ function writeRawOverrides(value: string): boolean {
     try {
       window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
     } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
       /* si tampoco se puede, la lectura usa sessionStorage */
     }
   }
@@ -289,6 +292,7 @@ function writeRawOverrides(value: string): boolean {
     window.sessionStorage.setItem(OVERRIDES_STORAGE_KEY, value);
     ok = true;
   } catch (error) {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts:', error);
     lastStorageError = `${lastStorageError}/${(error as Error)?.name || 'sessionStorage error'}`;
   }
   if (!ok) {
@@ -308,6 +312,7 @@ export function loadSearchConfigOverrides(): SearchConfigOverrides {
     const parsed = JSON.parse(raw) as SearchConfigOverrides;
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     return {};
   }
 }
@@ -326,11 +331,13 @@ export function clearSearchConfigOverrides(): void {
   try {
     window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     /* ignorar */
   }
   try {
     window.sessionStorage.removeItem(OVERRIDES_STORAGE_KEY);
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     /* ignorar */
   }
 }
@@ -346,6 +353,7 @@ export function loadDailyUsage(): DailyUsageRecord | null {
     }
     return parsed;
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     return null;
   }
 }
@@ -355,6 +363,7 @@ export function saveDailyUsage(record: DailyUsageRecord): void {
   try {
     window.localStorage.setItem(STORAGE_KEYS.SEARCH_DAILY_USAGE, JSON.stringify(record));
   } catch {
+        console.warn('[catch] src/core/search/searchConfigOverrides.ts');
     // ignorar
   }
 }

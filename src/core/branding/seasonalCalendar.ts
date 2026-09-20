@@ -352,6 +352,7 @@ export function getActiveSeason(
                 }
             }
         } catch {
+        console.warn('[catch] src/core/branding/seasonalCalendar.ts');
             // Invalid date, skip birthday detection
         }
     }

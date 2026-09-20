@@ -118,6 +118,7 @@ function readArrayBufferAsUtf8(data: ArrayBuffer): string {
   try {
     return new TextDecoder('utf-8').decode(data);
   } catch {
+        console.warn('[catch] src/lib/documentParser.ts');
     const bytes = new Uint8Array(data);
     let out = '';
     for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -273,6 +274,7 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
   try {
     XLSX = await import('xlsx');
   } catch {
+        console.warn('[catch] src/lib/documentParser.ts');
     return {
       rawText: '',
       errores: [],
@@ -307,6 +309,7 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
       warnings,
     };
   } catch (e) {
+        console.warn('[catch] src/lib/documentParser.ts:', e);
     return {
       rawText: '',
       errores: [],
@@ -329,6 +332,7 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
           import.meta.url
         ).toString();
       } catch {
+        console.warn('[catch] src/lib/documentParser.ts');
         /* sin worker configurado: se intenta igual; si falla, degradación */
       }
     }
@@ -347,6 +351,7 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
     await loadingTask.destroy().catch(() => undefined);
     return { rawText: pages.join('\n'), errores: [], qa_context: '', warnings: [] };
   } catch (e) {
+        console.warn('[catch] src/lib/documentParser.ts:', e);
     return {
       rawText: '',
       errores: [],
@@ -366,6 +371,7 @@ async function parseDocx(data: ArrayBuffer): Promise<ParsedPayload> {
     const rawText = (result && result.value) || '';
     return { rawText, errores: [], qa_context: '', warnings: [] };
   } catch (e) {
+        console.warn('[catch] src/lib/documentParser.ts:', e);
     return {
       rawText: '',
       errores: [],
@@ -414,6 +420,7 @@ async function parsePptx(data: ArrayBuffer): Promise<ParsedPayload> {
     });
     return { rawText: lines.join('\n'), errores: [], qa_context: '', warnings: [] };
   } catch (e) {
+        console.warn('[catch] src/lib/documentParser.ts:', e);
     return {
       rawText: '',
       errores: [],
@@ -428,6 +435,7 @@ async function parseText(data: ArrayBuffer, _mime: string): Promise<ParsedPayloa
     const text = readArrayBufferAsUtf8(data);
     return { rawText: text, errores: [], qa_context: '', warnings: [] };
   } catch (e) {
+        console.warn('[catch] src/lib/documentParser.ts:', e);
     return {
       rawText: '',
       errores: [],
@@ -456,6 +464,7 @@ export async function parseDocument(file: File): Promise<DocumentAnalysisResult>
   try {
     data = await file.arrayBuffer();
   } catch (e) {
+        console.warn('[catch] src/lib/documentParser.ts:', e);
     return {
       contract: {
         tipo,

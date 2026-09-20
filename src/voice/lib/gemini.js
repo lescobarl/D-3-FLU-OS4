@@ -90,6 +90,7 @@ function hasUsableVoiceBackend(apiKey) {
   try {
     return isLocalTextEndpoint(joinApiUrl(resolveServerTextApiUrl(), '/chat/completions'))
   } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
     return false
   }
 }
@@ -313,6 +314,7 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
       },
     }
   } catch (error) {
+        console.warn('[catch] src/voice/lib/gemini.js:', error);
     return {
       imageUrl: '',
       trace: {
@@ -459,11 +461,13 @@ function tryParseJsonCandidate(candidate) {
   try {
     return JSON.parse(text)
   } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
     // ignore
   }
   try {
     return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'))
   } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
     return undefined
   }
 }
@@ -1190,6 +1194,7 @@ export async function requestParticipantEvaluation(params) {
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
     // Sin acceso a localStorage
   }
   const body = {
@@ -1220,6 +1225,7 @@ export async function requestFluContract(params) {
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
     // Sin acceso a localStorage
   }
   const body = {
@@ -1317,6 +1323,7 @@ export function resolveGeminiModel() {
     const savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
   } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
     // Sin acceso a localStorage (SSR / Node)
   }
   return resolveServerTextModel()
@@ -1742,6 +1749,7 @@ try {
     texto_extraido: String(parsed.texto_extraido || parsed.extracted_text || '').trim(),
   }
 } catch {
+        console.warn('[catch] src/voice/lib/gemini.js');
   // Si no se puede parsear JSON, devolver el texto crudo
   return {
     materia: '',

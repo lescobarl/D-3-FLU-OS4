@@ -88,6 +88,7 @@ async function runChrome(ms: number): Promise<ProbeResult> {
       try {
         rec.stop()
       } catch {
+        console.warn('[catch] src/dev/asrLab/AsrLab.tsx');
         // ignore
       }
       // Latencia de "cola": último parcial → final (aprox. tras dejar de hablar).
@@ -127,6 +128,7 @@ async function runWhisper(modelId: string, pcm: Float32Array): Promise<ProbeResu
     transcriber.dispose()
     return { id, text, ms }
   } catch (error) {
+        console.warn('[catch] src/dev/asrLab/AsrLab.tsx:', error);
     return { id, text: '', ms: 0, error: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -201,6 +203,7 @@ async function runGemini(pcm: Float32Array): Promise<ProbeResult> {
     if (!res.ok) return { id: 'gemini', text: '', ms, error: String(json?.error?.message || res.status) }
     return { id: 'gemini', text: String(json?.choices?.[0]?.message?.content || '').trim(), ms }
   } catch (error) {
+        console.warn('[catch] src/dev/asrLab/AsrLab.tsx:', error);
     return { id: 'gemini', text: '', ms: 0, error: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -272,6 +275,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
     try {
       liveStopRef.current?.()
     } catch {
+        console.warn('[catch] src/dev/asrLab/AsrLab.tsx');
       // ignore
     }
     liveStopRef.current = null
@@ -301,6 +305,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
         try {
           rec.stop()
         } catch {
+        console.warn('[catch] src/dev/asrLab/AsrLab.tsx');
           // ignore
         }
       }

@@ -64,6 +64,7 @@ function parseProviders(raw: string | null): SearchConfig['providers'] {
     }
     return undefined;
   } catch {
+        console.warn('[catch] src/server/searchProxy.ts');
     return undefined;
   }
 }
@@ -116,6 +117,7 @@ async function fetchProviderJson(
       try {
         detail = (await response.text()).slice(0, 300);
       } catch {
+        console.warn('[catch] src/server/searchProxy.ts');
         detail = '';
       }
       return { ok: false, reason: 'fetch_error', status: response.status, detail };
@@ -123,6 +125,7 @@ async function fetchProviderJson(
     const json = await response.json();
     return { ok: true, json };
   } catch (err: unknown) {
+        console.warn('[catch] src/server/searchProxy.ts:', err);
     if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
       return { ok: false, reason: 'timeout' };
     }
@@ -143,6 +146,7 @@ async function handleSearch(
   try {
     parsed = new URL(rawUrl, 'http://localhost');
   } catch {
+        console.warn('[catch] src/server/searchProxy.ts');
     sendJson(res, 400, { ok: false, reason: 'invalid' });
     return;
   }

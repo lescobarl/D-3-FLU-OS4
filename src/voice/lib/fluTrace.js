@@ -31,6 +31,7 @@ function readStorageFlag() {
     if (value === '1') enabled = true
     if (value === '0') enabled = false
   } catch {
+        console.warn('[catch] src/voice/lib/fluTrace.js');
     /* ignore */
   }
 }
@@ -104,6 +105,7 @@ function scheduleAgentSink() {
         if (IS_DEV) console.warn('[Flu][trace] agent sink failed:', error?.message || error)
       })
     } catch {
+        console.warn('[catch] src/voice/lib/fluTrace.js');
       // ignore
     }
   }, AGENT_SINK_MS)
@@ -119,6 +121,7 @@ export function enableFluTrace() {
   try {
     localStorage.setItem('flu.trace', '1')
   } catch {
+        console.warn('[catch] src/voice/lib/fluTrace.js');
     /* ignore */
   }
   console.info('[Flu][trace] Encendido')
@@ -130,6 +133,7 @@ export function disableFluTrace() {
   try {
     localStorage.setItem('flu.trace', '0')
   } catch {
+        console.warn('[catch] src/voice/lib/fluTrace.js');
     /* ignore */
   }
   console.info('[Flu][trace] Apagado')
@@ -176,6 +180,7 @@ export function getFluTraceSnapshot() {
   try {
     session = sessionProvider?.() || {}
   } catch {
+        console.warn('[catch] src/voice/lib/fluTrace.js');
     session = { sessionError: true }
   }
   return {

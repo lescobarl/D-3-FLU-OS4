@@ -94,6 +94,7 @@ function resolveCreativityTemperature(): number | undefined {
             return state.advancedConfig.creativity;
         }
     } catch {
+        console.warn('[catch] src/services/gemini.ts');
         // Store not available (e.g. test environment)
     }
     return undefined;
@@ -111,10 +112,12 @@ function safeParseJson(text: string): Record<string, unknown> | null {
         if (match) return JSON.parse(match[1]);
         return null;
     } catch {
+        console.warn('[catch] src/services/gemini.ts');
         try {
             const match = text.match(/\{[\s\S]*\}/);
             if (match) return JSON.parse(match[0]);
         } catch {
+        console.warn('[catch] src/services/gemini.ts');
             return null;
         }
         return null;
@@ -605,6 +608,7 @@ Genera la minuta en formato JSON.`;
                     },
                 };
             } catch {
+        console.warn('[catch] src/services/gemini.ts');
                 return {
                     image_url: '',
                     trace: {

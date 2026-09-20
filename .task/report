@@ -494,3 +494,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Sincronización de memorias con revisión en pantalla real.
+
+---
+
+## C13 — Ningún catch silencioso
+
+Cambios aplicados:
+- 59 archivos de src/: los 160 bloques catch que tragaban el error ahora registran con console.warn('[catch] <archivo>', error) (o genérico si el catch no declara parámetro). Fix puntual de las 2 firmas `catch (err: unknown)`.
+
+Validado contra:
+- npm run gate (verde): métrica base=160 actual=0 target=0 · guard base=1 actual=0.
+- npm run typecheck: OK (tsc -b).
+- git diff --stat: 61 archivos.
+
+No validado (DoD-producto, pendiente del usuario):
+- Ausencia de errores silenciados en ejecución real (revisar consola).

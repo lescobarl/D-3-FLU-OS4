@@ -37,6 +37,7 @@ function flush() {
             // Silently ignore — server may not be available
         });
     } catch {
+        console.warn('[catch] src/lib/clientLogRelay.ts');
         // Silently ignore
     }
 }

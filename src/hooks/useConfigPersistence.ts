@@ -86,6 +86,7 @@ function loadString(key: string, fallback = ''): string {
         const val = localStorage.getItem(key);
         return val ?? fallback;
     } catch {
+        console.warn('[catch] src/hooks/useConfigPersistence.ts');
         return fallback;
     }
 }
@@ -97,6 +98,7 @@ function saveString(key: string, value: string): void {
     try {
         localStorage.setItem(key, value);
     } catch {
+        console.warn('[catch] src/hooks/useConfigPersistence.ts');
         // Silently ignore storage errors (quota exceeded, private mode, etc.)
     }
 }
@@ -138,7 +140,8 @@ export function useConfigPersistence(): ConfigPersistence {
         try {
             const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
             if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
-        } catch { /* ignore */ }
+        } catch {
+        console.warn('[catch] src/hooks/useConfigPersistence.ts'); /* ignore */ }
         return UI_DEFAULTS.LANGUAGE;
     });
 
@@ -342,7 +345,8 @@ export function useConfigPersistence(): ConfigPersistence {
                 if (key && !keep.has(key)) toRemove.push(key);
             }
             toRemove.forEach((k) => localStorage.removeItem(k));
-        } catch { /* ignore */ }
+        } catch {
+        console.warn('[catch] src/hooks/useConfigPersistence.ts'); /* ignore */ }
         // Rehidratar el estado desde la fuente de verdad (localStorage)
         setApiKey(resolveTextApiKey());
         window.location.reload();

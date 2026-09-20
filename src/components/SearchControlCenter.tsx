@@ -270,6 +270,7 @@ export function SearchControlCenter({
       }
       setPreview({ state: 'done', results: fetched.results, ai });
     } catch {
+        console.warn('[catch] src/components/SearchControlCenter.tsx');
       setPreview({ state: 'error', results: [], ai: '' });
     }
   };

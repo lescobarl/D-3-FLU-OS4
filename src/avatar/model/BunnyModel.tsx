@@ -133,6 +133,7 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                     try {
                         window.__bunnyPreloadDone = true;
                     } catch {
+        console.warn('[catch] src/avatar/model/BunnyModel.tsx');
                         /* ignore */
                     }
                 });

@@ -259,6 +259,7 @@ function extractHost(url: string): string {
     try {
         return new URL(url).hostname;
     } catch {
+        console.warn('[catch] src/core/search/searchSession.ts');
         return '';
     }
 }
@@ -293,6 +294,7 @@ function deriveOrigin(endpoint: string): string {
     try {
         return new URL(clean).origin;
     } catch {
+        console.warn('[catch] src/core/search/searchSession.ts');
         return '';
     }
 }
