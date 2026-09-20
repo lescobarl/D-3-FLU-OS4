@@ -6,7 +6,8 @@
   "objective": "Ninguna entidad Dexie se borra físicamente (deleted:true) y el log de auditoría no se limpia.",
   "allow": [
     "src/App.tsx",
-    "src/core/db/fluDatabase.ts"
+    "src/core/db/fluDatabase.ts",
+    "src/hooks/useConversationPersistence.ts"
   ],
   "deny": [
     ".task/**",

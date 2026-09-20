@@ -412,3 +412,22 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Notas y lista de compras creadas/borradas por voz en pantalla real.
+
+---
+
+## C14 — Sin borrado físico en Dexie (allow ampliado, autonomía autorizada)
+
+Enmienda: añadido src/hooks/useConversationPersistence.ts al allow de C14.json.
+
+Cambios aplicados:
+- src/hooks/useConversationPersistence.ts — eliminado bulkDeleteConversationRows (físico); queda softDeleteConversationRows (deleted:true).
+- src/App.tsx — el barrido de filas conversacionales del hablante usa borrado lógico vía softDeleteConversationRows.
+- src/core/db/fluDatabase.ts — clearAuditLogs marca deleted:true (no clear()); getAuditLogs filtra borrados.
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run fluStorage, conversationHistoryCap, executionRouteAudit, gamesAudit: 34 passed.
+- git diff --stat: 6 archivos (3 de código + 1 contrato, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Borrado lógico de participante y auditoría visible en pantalla real.

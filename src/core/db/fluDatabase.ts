@@ -760,16 +760,24 @@ export async function addAuditLog(
  * Obtener entradas del log de auditoría.
  */
 export async function getAuditLogs(limit: number = 100): Promise<AuditLogEntry[]> {
-    return fluDb.auditLog
+    const rows = await fluDb.auditLog
         .orderBy('timestamp')
         .reverse()
-        .limit(limit)
         .toArray();
+    return rows.filter((row) => !row.sync?.deleted).slice(0, limit);
 }
 
 /**
- * Limpiar todos los logs de auditoría (OS2 parity: clearAuditLogs).
+ * Marca como borrados (lógico) todos los logs de auditoría visibles.
+ * §2.9: nunca se borra físicamente; se conserva la fila con deleted:true.
  */
 export async function clearAuditLogs(): Promise<void> {
-    await fluDb.auditLog.clear();
+    await fluDb.auditLog.toCollection().modify((row) => {
+        row.sync = {
+            ...row.sync,
+            deleted: true,
+            revision: (row.sync?.revision ?? 1) + 1,
+            updated_at: new Date().toISOString(),
+        };
+    });
 }

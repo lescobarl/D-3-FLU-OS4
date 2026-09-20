@@ -25,12 +25,6 @@ export async function putConversationRecord(record: ConversationRow): Promise<vo
     await fluDb.conversations.put(record);
 }
 
-/** Borrado físico de filas de conversación por id (migración/limpieza). */
-export async function bulkDeleteConversationRows(ids: string[]): Promise<void> {
-    if (!ids.length) return;
-    await fluDb.conversations.bulkDelete(ids);
-}
-
 /** Borrado lógico de las filas indicadas (marca sync.deleted). */
 export async function softDeleteConversationRows(ids: string[]): Promise<number> {
     if (!ids.length) return 0;

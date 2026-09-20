@@ -39,7 +39,7 @@ import { useIntegrationStore, detectSentiment } from './store/integrationStore';
 import { useAuditLog } from './hooks/useAuditLog';
 import { useMinuteKnowledge } from './hooks/useMinuteKnowledge';
 import { useVoiceProfiles } from './hooks/useVoiceProfiles';
-import { useConversationPersistence, bulkDeleteConversationRows } from './hooks/useConversationPersistence';
+import { useConversationPersistence, softDeleteConversationRows } from './hooks/useConversationPersistence';
 import { useFluParticipant } from './hooks/useFluParticipant';
 import { useSessionPersistence, loadSessionState, defaultSessionState } from './hooks/useSessionPersistence';
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
@@ -4551,11 +4551,14 @@ const {
         //    useConversationPersistence las restaura vía batchLoadHistory.
         //    entryToRow mapea speakerId = speakerName para entradas de usuario,
         //    así que el índice 'speakerId' cubre las filas del hablante.
-        await fluDb.conversations
+        const speakerRows = await fluDb.conversations
             .where('speakerId')
             .equals(label)
-            .delete()
-            .catch(console.error);
+            .primaryKeys()
+            .catch(() => [] as string[]);
+        if (speakerRows.length > 0) {
+            await softDeleteConversationRows(speakerRows).catch(console.error);
+        }
         // Barrido defensivo para filas legacy cuyo speakerId quedó en 'usuario'
         // pero speakerName coincide con el label (speakerName no es índice).
         const legacyRows = await fluDb.conversations
@@ -4563,10 +4566,10 @@ const {
             .primaryKeys()
             .catch(() => [] as string[]);
         if (legacyRows.length > 0) {
-            await bulkDeleteConversationRows(legacyRows).catch(console.error);
+            await softDeleteConversationRows(legacyRows).catch(console.error);
         }
 
-        // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado físico.
+        // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado lógico.
         const localProfile = await findVoiceProfileByLabel(label).catch(() => null);
         if (localProfile?.id) {
             await deleteVoiceProfile(localProfile.id).catch(console.error);

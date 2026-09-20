@@ -1,17 +1,13 @@
 {
-  "id": "C11",
+  "id": "C14",
   "mode": "full",
-  "task": "Persistencia — una sola tabla/servicio para notas y listas",
-  "base": "1899430c99aac5c9dd39d98cb96ce1862a7f5ade",
-  "objective": "Notas y lista de compras comparten una única tabla y un único servicio; sin CRUD idéntico duplicado.",
+  "task": "Persistencia — borrado lógico y log de auditoría inmutable",
+  "base": "b2e7a72a40adf1358df29472facd4b3a547771ee",
+  "objective": "Ninguna entidad Dexie se borra físicamente (deleted:true) y el log de auditoría no se limpia.",
   "allow": [
-    "src/hooks/useNotes.ts",
-    "src/hooks/useShoppingList.ts",
-    "src/core/notes/notesService.ts",
-    "src/core/reminders/shoppingService.ts",
-    "src/core/db/fluDatabase.ts",
     "src/App.tsx",
-    "src/voice/lib/deterministicArbiter.js"
+    "src/core/db/fluDatabase.ts",
+    "src/hooks/useConversationPersistence.ts"
   ],
   "deny": [
     ".task/**",
@@ -25,20 +21,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 8,
-  "maxLines": 700,
-  "dod": "npx vitest run tests/notasComprasGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/notasComprasGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 300,
+  "dod": "npx vitest run tests/borradoLogicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/borradoLogicoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Una sola tabla almacena notas/listas",
+    "statement": "No hay borrado físico de entidades FluDb",
     "metric": {
-      "command": "node scripts/audit-metric.mjs notas-compras-tablas",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs borrado-fisico",
+      "target": 0
     },
-    "base": "1899430c99aac5c9dd39d98cb96ce1862a7f5ade",
+    "base": "b2e7a72a40adf1358df29472facd4b3a547771ee",
     "guardFiles": [
-      "tests/notasComprasGuard.test.ts"
+      "tests/borradoLogicoGuard.test.ts"
     ]
   }
 }
