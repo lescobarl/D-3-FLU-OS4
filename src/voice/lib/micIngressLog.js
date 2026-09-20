@@ -39,9 +39,6 @@ export function logMicProducerRaw({ source = 'browser', kind = 'interim', text =
   }
 }
 
-/** @deprecated Consumidor ya no escribe en el panel mic; usar logMicProducerRaw. */
-export function logMicIngress() {}
-
 export function resetMicIngressLogSeq() {
   producerSeq = 0
 }

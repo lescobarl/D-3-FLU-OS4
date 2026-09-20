@@ -298,7 +298,6 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
   }
 
   // Pollinations.ai (stateless, sin API key): única vía de generación de imágenes.
-  // Ya no se usa la generación de imágenes nativa de Gemini (predict/generateContent).
   try {
     const imageUrl = buildPollinationsImageUrl(resolveServerPollinationsUrl(), prompt)
     return {
