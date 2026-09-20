@@ -12,6 +12,19 @@
 //   I4  normalizeSpaces        → 1 implementación (textUtils.ts)
 //   I5  normalizeText (alias)  → 0 definiciones (se usa normalizeSpaces)
 //
+// NO unificados A PROPÓSITO (§D5 — parecidos-pero-distintos, NO duplicados):
+//   - normalizadores de comando (audioMath.normalizeVoiceCommandText /
+//     normalizeCommandForDeterministic / normalizeSpokenCommand): distinta
+//     firma y umbral; no comparten cuerpo.
+//   - normalización de transcripción (speechMerge.normalizeMicText vs
+//     turnTranscript.normalizeTranscriptText / normalizeTurnCapture):
+//     pipelines distintos (<48 chars vs collapse con minRepeatChars=24).
+//   - colapso ASR (collapseRepeatedSpeech / collapseAsrStutter /
+//     collapseEchoPhrase / collapseStutterRepeat / collapseInlineRepeat):
+//     algoritmos y parámetros distintos (bloque de palabras, eco, tail-inline).
+//   Unificarlos cambiaría el comportamiento del motor de voz (prohibido:
+//   no afectar lo validado). Se documentan aquí como decisión, no como deuda.
+//
 // Cubre también el CONTRATO de comportamiento (no solo conteo por nombre).
 // ============================================================
 
