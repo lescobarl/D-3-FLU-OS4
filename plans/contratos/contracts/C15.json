@@ -4,9 +4,21 @@
   "task": "Persistencia — IDs UUIDv4 al insertar",
   "base": "__BASE__",
   "objective": "fluStorage.js deja de generar IDs con Date.now() y usa uuidv4.",
-  "allow": ["src/voice/lib/fluStorage.js"],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "allow": [
+    "src/voice/lib/fluStorage.js"
+  ],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 2,
   "maxLines": 80,
   "dod": "npx vitest run tests/uuidV4InsercionGuard.test.ts --reporter=dot && npm run typecheck",
@@ -14,8 +26,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "No hay IDs derivados de Date.now()",
-    "metric": { "command": "node scripts/audit-metric.mjs uuid-no-v4", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs uuid-no-v4",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/uuidV4InsercionGuard.test.ts"]
+    "guardFiles": [
+      "tests/uuidV4InsercionGuard.test.ts"
+    ]
   }
 }

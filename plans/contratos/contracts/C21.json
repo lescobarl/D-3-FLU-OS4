@@ -14,8 +14,18 @@
     "src/voice/components/FluParticipantSettingsPanel.jsx",
     "src/services/localTts.ts"
   ],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 10,
   "maxLines": 500,
   "dod": "npx vitest run tests/ttsPuntoUnicoGuard.test.ts --reporter=dot && npm run typecheck",
@@ -23,8 +33,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "Un único módulo usa speechSynthesis",
-    "metric": { "command": "node scripts/audit-metric.mjs tts-punto-unico", "target": 1 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs tts-punto-unico",
+      "target": 1
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/ttsPuntoUnicoGuard.test.ts"]
+    "guardFiles": [
+      "tests/ttsPuntoUnicoGuard.test.ts"
+    ]
   }
 }

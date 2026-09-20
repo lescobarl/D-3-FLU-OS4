@@ -4,9 +4,22 @@
   "task": "Basura — sin console.debug residual",
   "base": "__BASE__",
   "objective": "Se eliminan los 12 console.debug residuales del proyecto.",
-  "allow": ["src/voice/hooks/useFluVoiceAssistant.js", "src/voice/lib/gemini.js"],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "allow": [
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/voice/lib/gemini.js"
+  ],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 3,
   "maxLines": 120,
   "dod": "npx vitest run tests/consoleDebugGuard.test.ts --reporter=dot && npm run typecheck",
@@ -14,8 +27,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "No hay console.debug residual",
-    "metric": { "command": "node scripts/audit-metric.mjs console-debug", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs console-debug",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/consoleDebugGuard.test.ts"]
+    "guardFiles": [
+      "tests/consoleDebugGuard.test.ts"
+    ]
   }
 }

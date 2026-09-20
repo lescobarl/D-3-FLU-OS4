@@ -4,9 +4,21 @@
   "task": "Errores — ningún catch silencioso",
   "base": "__BASE__",
   "objective": "Todo bloque catch registra el error (log) o lo propaga (throw/reject); ninguno lo traga.",
-  "allow": ["src/**"],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "allow": [
+    "src/**"
+  ],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 140,
   "maxLines": 6000,
   "dod": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot && npm run typecheck",
@@ -14,8 +26,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "Ningún bloque catch traga el error sin registrarlo",
-    "metric": { "command": "node scripts/audit-metric.mjs catch-silencioso", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs catch-silencioso",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/catchSilenciosoGuard.test.ts"]
+    "guardFiles": [
+      "tests/catchSilenciosoGuard.test.ts"
+    ]
   }
 }

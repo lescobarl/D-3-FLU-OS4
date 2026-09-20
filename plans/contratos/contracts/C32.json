@@ -4,9 +4,21 @@
   "task": "Arquitectura — borrado lógico en memoria a largo plazo",
   "base": "__BASE__",
   "objective": "longTermMemory usa borrado lógico (deleted:true), no store.delete físico.",
-  "allow": ["src/lib/longTermMemory.ts"],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "allow": [
+    "src/lib/longTermMemory.ts"
+  ],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 2,
   "maxLines": 150,
   "dod": "npx vitest run tests/longTermMemoryDeleteGuard.test.ts --reporter=dot && npm run typecheck",
@@ -14,8 +26,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "No hay borrado físico en longTermMemory",
-    "metric": { "command": "node scripts/audit-metric.mjs longterm-delete", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs longterm-delete",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/longTermMemoryDeleteGuard.test.ts"]
+    "guardFiles": [
+      "tests/longTermMemoryDeleteGuard.test.ts"
+    ]
   }
 }

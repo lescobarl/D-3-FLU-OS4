@@ -11,8 +11,18 @@
     "src/core/autonomy/autoOptimization.ts",
     "src/lib/participantProfiles.ts"
   ],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 7,
   "maxLines": 400,
   "dod": "npx vitest run tests/umbralesConfigGuard.test.ts --reporter=dot && npm run typecheck",
@@ -20,8 +30,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "Ningún módulo define umbrales numéricos inline",
-    "metric": { "command": "node scripts/audit-metric.mjs umbrales-autonomy", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs umbrales-autonomy",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/umbralesConfigGuard.test.ts"]
+    "guardFiles": [
+      "tests/umbralesConfigGuard.test.ts"
+    ]
   }
 }

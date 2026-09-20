@@ -9,8 +9,18 @@
     "tests/integration.test.ts",
     "tests/language-regression.test.ts"
   ],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 4,
   "maxLines": 800,
   "dod": "npx vitest run tests/fallbackResponsesGuard.test.ts --reporter=dot && npm run typecheck",
@@ -18,8 +28,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "El módulo fallbackResponses está eliminado",
-    "metric": { "command": "node scripts/audit-metric.mjs fallback-responses", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs fallback-responses",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/fallbackResponsesGuard.test.ts"]
+    "guardFiles": [
+      "tests/fallbackResponsesGuard.test.ts"
+    ]
   }
 }

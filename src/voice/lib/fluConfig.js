@@ -1,4 +1,5 @@
 /** Configuración central de FLU. */
+import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 
 const LISTENING_ACK_PHRASES = Object.freeze([
   'estas escuchando',
@@ -1191,7 +1192,7 @@ export const FLU_CONFIG = {
             headers: { Authorization: 'Bearer {key}', 'Content-Type': 'application/json' },
             body: { model: '{model}', messages: [{ role: 'user', content: '{q}' }] },
             key: null,
-            model: 'google/gemini-2.5-flash-lite:online',
+            model: `${OPENROUTER_DEFAULTS.MODEL}:online`,
             priority: 2,
             maxResults: 5,
             timeoutMs: 8000,

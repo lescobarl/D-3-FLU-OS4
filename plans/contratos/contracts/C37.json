@@ -4,9 +4,21 @@
   "task": "Voz §9.3 — una sola ruta de finalización de turno",
   "base": "__BASE__",
   "objective": "finalizeTurnCommit tiene un único punto de llamada; sin rutas paralelas.",
-  "allow": ["src/voice/lib/conversationStreamCommit.js"],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "allow": [
+    "src/voice/lib/conversationStreamCommit.js"
+  ],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 2,
   "maxLines": 250,
   "dod": "npx vitest run tests/finalizeSingleRouteGuard.test.ts --reporter=dot && npm run typecheck",
@@ -14,8 +26,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "Un único punto de llamada a finalizeTurnCommit",
-    "metric": { "command": "node scripts/audit-metric.mjs finalize-sites", "target": 1 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs finalize-sites",
+      "target": 1
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/finalizeSingleRouteGuard.test.ts"]
+    "guardFiles": [
+      "tests/finalizeSingleRouteGuard.test.ts"
+    ]
   }
 }

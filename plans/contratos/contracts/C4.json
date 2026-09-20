@@ -4,9 +4,22 @@
   "task": "Config — la clave del proveedor de IA sale de STORAGE_KEYS",
   "base": "__BASE__",
   "objective": "aiServiceFactory y decisionEngine importan STORAGE_KEYS.AI_PROVIDER en vez de re-declarar el literal.",
-  "allow": ["src/services/aiServiceFactory.ts", "src/core/autonomy/decisionEngine.ts"],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "allow": [
+    "src/services/aiServiceFactory.ts",
+    "src/core/autonomy/decisionEngine.ts"
+  ],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 3,
   "maxLines": 120,
   "dod": "npx vitest run tests/aiProviderStorageKeyUnicaGuard.test.ts --reporter=dot && npm run typecheck",
@@ -14,8 +27,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "No hay literales 'flu-ai-provider' fuera de appConfig.ts",
-    "metric": { "command": "node scripts/audit-metric.mjs ai-provider-literal", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs ai-provider-literal",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/aiProviderStorageKeyUnicaGuard.test.ts"]
+    "guardFiles": [
+      "tests/aiProviderStorageKeyUnicaGuard.test.ts"
+    ]
   }
 }

@@ -22,8 +22,18 @@
     "tests/userEmotionDetector.test.ts",
     "tests/localTranslate.test.ts"
   ],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 45,
   "maxLines": 6000,
   "dod": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot && npm run typecheck",
@@ -31,8 +41,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "No quedan módulos muertos conocidos",
-    "metric": { "command": "node scripts/audit-metric.mjs modulos-muertos", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs modulos-muertos",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/modulosMuertosGuard.test.ts"]
+    "guardFiles": [
+      "tests/modulosMuertosGuard.test.ts"
+    ]
   }
 }

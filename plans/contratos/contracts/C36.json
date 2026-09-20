@@ -9,8 +9,18 @@
     "src/core/agenda/agendaCommandParser.ts",
     "src/voice/lib/noteIntentParser.js"
   ],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 4,
   "maxLines": 300,
   "dod": "npx vitest run tests/consumidoresNormGuard.test.ts --reporter=dot && npm run typecheck",
@@ -18,8 +28,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "Ningún consumidor llama normalizadores de la frase canónica",
-    "metric": { "command": "node scripts/audit-metric.mjs consumidores-normalizan", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs consumidores-normalizan",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/consumidoresNormGuard.test.ts"]
+    "guardFiles": [
+      "tests/consumidoresNormGuard.test.ts"
+    ]
   }
 }

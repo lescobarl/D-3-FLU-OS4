@@ -9,8 +9,18 @@
     "src/core/autonomy/healthMonitor.ts",
     "src/voice/lib/fluVisualStockSearch.js"
   ],
-  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "deny": [
+    ".task/**",
+    "scripts/task-gate.mjs",
+    "scripts/audit-metric.mjs"
+  ],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json",
+    "plans/**"
+  ],
   "maxFiles": 5,
   "maxLines": 300,
   "dod": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot && npm run typecheck",
@@ -18,8 +28,13 @@
   "guardExpect": "green",
   "invariant": {
     "statement": "Los módulos de cliente no hacen fetch directo a proveedores",
-    "metric": { "command": "node scripts/audit-metric.mjs fetch-proveedor", "target": 0 },
+    "metric": {
+      "command": "node scripts/audit-metric.mjs fetch-proveedor",
+      "target": 0
+    },
     "base": "__BASE__",
-    "guardFiles": ["tests/fetchProveedorGuard.test.ts"]
+    "guardFiles": [
+      "tests/fetchProveedorGuard.test.ts"
+    ]
   }
 }

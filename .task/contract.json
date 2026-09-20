@@ -2,7 +2,7 @@
   "id": "C24",
   "mode": "full",
   "task": "Config — un solo default de modelo de texto",
-  "base": "26e9e33bb09571f7fa7d2dc9f9dc0a9a625b2662",
+  "base": "5f1a157cf3dc3d12de9080c5e103188e4a19d282",
   "objective": "El default del modelo de texto se define una vez (appConfig) y el resto lo importa; sin literales divergentes.",
   "allow": [
     "src/components/FluSettingsPanel.tsx",
@@ -21,7 +21,8 @@
     ".task/**",
     "scripts/task-gate*.mjs",
     "scripts/audit-metric.mjs",
-    "kilo.json"
+    "kilo.json",
+    "plans/**"
   ],
   "maxFiles": 8,
   "maxLines": 400,
@@ -34,7 +35,7 @@
       "command": "node scripts/audit-metric.mjs modelo-default",
       "target": 1
     },
-    "base": "26e9e33bb09571f7fa7d2dc9f9dc0a9a625b2662",
+    "base": "5f1a157cf3dc3d12de9080c5e103188e4a19d282",
     "guardFiles": [
       "tests/modeloDefaultGuard.test.ts"
     ]

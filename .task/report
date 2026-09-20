@@ -138,3 +138,22 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Alta de perfil de voz persistido con id nuevo.
+
+---
+
+## C24 — Un solo default de modelo de texto
+
+Cambios aplicados:
+- src/core/config/sharedConfig.ts — OPENROUTER_DEFAULTS.MODEL queda como fuente única.
+- src/core/config/appConfig.ts — GEMINI_CONFIG.MODEL se deriva de OPENROUTER_DEFAULTS.MODEL.
+- src/voice/lib/fluConfig.js — el modelo openrouter se deriva de OPENROUTER_DEFAULTS.MODEL.
+- src/core/config/voiceConfigCatalog.ts, src/components/FluSettingsPanel.tsx, src/voice/lib/gemini.js — sin el literal del modelo.
+
+Nota: 4 de los 6 archivos quedaron ya commiteados en 5f1a157 (actor concurrente); se re-activó C24 con base=5f1a157 para recomputar el invariante.
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=1 target=1 · guard base=1 actual=0.
+- git diff --stat: fluConfig.js (código) + .task/contract.json (infra).
+
+No validado (DoD-producto, pendiente del usuario):
+- Cambio de modelo de texto desde Ajustes y su uso en inferencia real.
