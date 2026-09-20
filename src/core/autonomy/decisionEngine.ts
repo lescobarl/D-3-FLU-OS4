@@ -19,6 +19,7 @@
 // ============================================================
 
 import { emitAutonomyEvent } from './autonomyEvents';
+import { STORAGE_KEYS } from '../config/appConfig';
 
 // -----------------------------------------------------------
 // Tipos
@@ -673,7 +674,7 @@ export class DecisionEngine {
         }
         
         // Obtener proveedor actual
-        const currentProvider = localStorage.getItem('flu-ai-provider') || 'openrouter';
+        const currentProvider = localStorage.getItem(STORAGE_KEYS.AI_PROVIDER) || 'openrouter';
         
         // Evaluar decisión de cambio de proveedor
         const decision = this.decisionMaker.evaluateAISwitchDecision(currentProvider);
@@ -740,7 +741,7 @@ export class DecisionEngine {
         const { newProvider, oldProvider } = params;
         
         // Actualizar configuración
-        localStorage.setItem('flu-ai-provider', newProvider);
+        localStorage.setItem(STORAGE_KEYS.AI_PROVIDER, newProvider);
         
         // Registrar cambio
         const changeHistory: ProviderChangeRecord[] = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');

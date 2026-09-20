@@ -17,9 +17,10 @@
 import { geminiService } from './gemini';
 import { deepseekService } from './deepseek';
 import type { IAIService } from '../core/ai/IAIService';
+import { STORAGE_KEYS } from '../core/config/appConfig';
 
-// Storage key for AI provider preference
-const AI_PROVIDER_KEY = 'flu-ai-provider';
+// Storage key for AI provider preference (fuente única: STORAGE_KEYS)
+const AI_PROVIDER_KEY = STORAGE_KEYS.AI_PROVIDER;
 
 // Available AI providers
 // 'openrouter' = default: OpenAI-compatible gateway → Google Gemini 2.5 Flash Lite
