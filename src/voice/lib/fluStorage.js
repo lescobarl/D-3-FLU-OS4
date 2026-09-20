@@ -2,6 +2,7 @@ import { normalizeConversationRow } from './conversationRow.js'
 import { fluDb, newId } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
 import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
+import { putConversationRecord } from '../../hooks/useConversationPersistence'
 
 const DB_NAME = 'flu-voz-local'
 const DB_VERSION = 4
@@ -157,7 +158,7 @@ async function migrateLegacyVoiceData() {
       if (!normalized?.id || normalized.deleted === true || knownConversations.has(normalized.id)) {
         continue
       }
-      await fluDb.conversations.put({
+      await putConversationRecord({
         id: normalized.id,
         role: 'user',
         text: String(normalized.text || ''),
@@ -242,7 +243,7 @@ export async function deleteAuditLogsBySpeaker(speaker, { speakerId } = {}) {
       ...row,
       sync: { ...buildSyncTuple(row.sync, Date.now()), deleted: true },
     }
-    await fluDb.conversations.put(next)
+    await putConversationRecord(next)
     updated.push(next)
   }
 

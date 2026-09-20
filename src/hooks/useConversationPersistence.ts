@@ -18,6 +18,33 @@ import type { ConversationEntry } from '../types/bridge';
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
 /**
+ * C8 — Puerta ÚNICA de escritura de `fluDb.conversations`. Ningún otro módulo
+ * toca la tabla: App y fluStorage delegan aquí (una sola fuente por intención).
+ */
+export async function putConversationRecord(record: ConversationRow): Promise<void> {
+    await fluDb.conversations.put(record);
+}
+
+/** Borrado físico de filas de conversación por id (migración/limpieza). */
+export async function bulkDeleteConversationRows(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    await fluDb.conversations.bulkDelete(ids);
+}
+
+/** Borrado lógico de las filas indicadas (marca sync.deleted). */
+export async function softDeleteConversationRows(ids: string[]): Promise<number> {
+    if (!ids.length) return 0;
+    return fluDb.conversations.where('id').anyOf(ids).modify((row) => {
+        row.sync = {
+            ...row.sync,
+            deleted: true,
+            revision: (row.sync?.revision ?? 1) + 1,
+            updated_at: new Date().toISOString(),
+        };
+    });
+}
+
+/**
  * Normaliza el campo `sentiment` persistido (string libre en la fila) al
  * conjunto cerrado que admite `ConversationEntry`.
  */

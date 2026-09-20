@@ -1,17 +1,13 @@
 {
-  "id": "C38",
+  "id": "C8",
   "mode": "full",
-  "task": "Hardcode — umbrales de autonomía y voz desde config",
-  "base": "6e140d1a03eee4410ef91aed341f3a0f4538a045",
-  "objective": "speakerDiarization, healthMonitor, decisionEngine, autoOptimization y participantProfiles toman sus umbrales de config.",
+  "task": "Persistencia — un solo escritor de conversación",
+  "base": "fbb9a22b1dde899801f26c70beecfdaa041b0906",
+  "objective": "Un único archivo escribe fluDb.conversations; App y la migración legacy dejan de escribir directo.",
   "allow": [
-    "src/voice/lib/speakerDiarization.js",
-    "src/core/autonomy/healthMonitor.ts",
-    "src/core/autonomy/decisionEngine.ts",
-    "src/core/autonomy/autoOptimization.ts",
-    "src/lib/participantProfiles.ts",
-    "src/core/config/appConfig.ts",
-    "src/core/config/sharedConfig.ts"
+    "src/App.tsx",
+    "src/hooks/useConversationPersistence.ts",
+    "src/voice/lib/fluStorage.js"
   ],
   "deny": [
     ".task/**",
@@ -25,20 +21,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 7,
-  "maxLines": 400,
-  "dod": "npx vitest run tests/umbralesConfigGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/umbralesConfigGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 350,
+  "dod": "npx vitest run tests/conversacionEscritorUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/conversacionEscritorUnicoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ningún módulo define umbrales numéricos inline",
+    "statement": "Un único archivo escribe fluDb.conversations",
     "metric": {
-      "command": "node scripts/audit-metric.mjs umbrales-autonomy",
-      "target": 0
+      "command": "node scripts/audit-metric.mjs conversacion-escritores",
+      "target": 1
     },
-    "base": "6e140d1a03eee4410ef91aed341f3a0f4538a045",
+    "base": "fbb9a22b1dde899801f26c70beecfdaa041b0906",
     "guardFiles": [
-      "tests/umbralesConfigGuard.test.ts"
+      "tests/conversacionEscritorUnicoGuard.test.ts"
     ]
   }
 }

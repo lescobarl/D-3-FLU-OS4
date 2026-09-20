@@ -340,3 +340,20 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Diarización de hablantes y decisiones autónomas en sesión real.
+
+---
+
+## C8 — Un solo escritor de conversación
+
+Cambios aplicados:
+- src/hooks/useConversationPersistence.ts — puerta única: putConversationRecord / bulkDeleteConversationRows / softDeleteConversationRows.
+- src/voice/lib/fluStorage.js — migración y borrado lógico escriben vía putConversationRecord.
+- src/App.tsx — borrado legacy vía bulkDeleteConversationRows.
+
+Validado contra:
+- npm run gate (verde): métrica base=3 actual=1 target=1 · guard base=1 actual=0.
+- npx vitest run tests/fluStorage.test.ts tests/conversationHistoryCap.test.ts: 4 passed.
+- git diff --stat: 5 archivos (3 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Historial de conversación persistido/restaurado en pantalla real.

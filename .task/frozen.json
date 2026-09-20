@@ -36,5 +36,6 @@
   "tests/motorNormalizaGuard.test.ts": "dd0cfa1bd3d24dc3008c886e917b94f9871330ac9023463588691dde4bbb8f63",
   "tests/timeoutsConfigGuard.test.ts": "4dfe2d567d9bf2a6cd15743a27fb9b607fc87077411e11c1d9e627314cc30cab",
   "tests/fetchProveedorGuard.test.ts": "346ac37dac209f9242dd0bffcebb205b7f9b48cd11993b252536a24b87b41746",
-  "tests/umbralesConfigGuard.test.ts": "c2c1c1dd6280242631baeba6c21f47ad3bd90d80a09083718269a7e276e29513"
+  "tests/umbralesConfigGuard.test.ts": "c2c1c1dd6280242631baeba6c21f47ad3bd90d80a09083718269a7e276e29513",
+  "tests/conversacionEscritorUnicoGuard.test.ts": "f06908dd4eff5de7d33455f78951aef105ab2486f53ae06010d5170d06cade0b"
 }

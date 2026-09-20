@@ -39,7 +39,7 @@ import { useIntegrationStore, detectSentiment } from './store/integrationStore';
 import { useAuditLog } from './hooks/useAuditLog';
 import { useMinuteKnowledge } from './hooks/useMinuteKnowledge';
 import { useVoiceProfiles } from './hooks/useVoiceProfiles';
-import { useConversationPersistence } from './hooks/useConversationPersistence';
+import { useConversationPersistence, bulkDeleteConversationRows } from './hooks/useConversationPersistence';
 import { useFluParticipant } from './hooks/useFluParticipant';
 import { useSessionPersistence, loadSessionState } from './hooks/useSessionPersistence';
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
@@ -4547,7 +4547,7 @@ const {
             .primaryKeys()
             .catch(() => [] as string[]);
         if (legacyRows.length > 0) {
-            await fluDb.conversations.bulkDelete(legacyRows).catch(console.error);
+            await bulkDeleteConversationRows(legacyRows).catch(console.error);
         }
 
         // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado físico.
