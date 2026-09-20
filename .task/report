@@ -431,3 +431,22 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Borrado lógico de participante y auditoría visible en pantalla real.
+
+---
+
+## C30 — Una sola base IndexedDB propia (allow/maxLines ampliados, autonomía autorizada)
+
+Enmienda: maxLines 400→600 en C30.json (la eliminación del bloque legacy supera 400 líneas de diff).
+
+Cambios aplicados:
+- src/core/db/fluDatabase.ts — v22 con tabla `memories` (misma base flu-os3).
+- src/lib/longTermMemory.ts — CRUD sobre fluDb.memories; sin openDb/borrado físico; cleanup lógico.
+- src/voice/lib/fluStorage.js — eliminada la apertura de 'flu-voz-local' y la migración legacy; todo pasa por flu-os3.
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/forgettingCurve.test.ts tests/memoryConsolidation.test.ts: 28 passed.
+- git diff --stat: 6 archivos (3 de código + 1 contrato, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Memoria de largo plazo persistida entre sesiones en pantalla real.

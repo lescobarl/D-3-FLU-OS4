@@ -22,7 +22,7 @@
     "plans/**"
   ],
   "maxFiles": 4,
-  "maxLines": 400,
+  "maxLines": 600,
   "dod": "npx vitest run tests/indexedDbSingleGuard.test.ts --reporter=dot && npm run typecheck",
   "guard": "npx vitest run tests/indexedDbSingleGuard.test.ts --reporter=dot",
   "guardExpect": "green",

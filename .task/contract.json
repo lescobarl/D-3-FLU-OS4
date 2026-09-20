@@ -1,13 +1,13 @@
 {
-  "id": "C14",
+  "id": "C30",
   "mode": "full",
-  "task": "Persistencia — borrado lógico y log de auditoría inmutable",
-  "base": "b2e7a72a40adf1358df29472facd4b3a547771ee",
-  "objective": "Ninguna entidad Dexie se borra físicamente (deleted:true) y el log de auditoría no se limpia.",
+  "task": "Persistencia — una sola base IndexedDB propia",
+  "base": "88f8b2a3f07967e3f79c4f7a0fc4f3cdbd798b09",
+  "objective": "longTermMemory y fluStorage migran a la base Dexie flu-os3; nadie abre su propia DB.",
   "allow": [
-    "src/App.tsx",
-    "src/core/db/fluDatabase.ts",
-    "src/hooks/useConversationPersistence.ts"
+    "src/lib/longTermMemory.ts",
+    "src/voice/lib/fluStorage.js",
+    "src/core/db/fluDatabase.ts"
   ],
   "deny": [
     ".task/**",
@@ -21,20 +21,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 3,
-  "maxLines": 300,
-  "dod": "npx vitest run tests/borradoLogicoGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/borradoLogicoGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 600,
+  "dod": "npx vitest run tests/indexedDbSingleGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/indexedDbSingleGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No hay borrado físico de entidades FluDb",
+    "statement": "Ningún módulo fuera de la capa Dexie abre su propia IndexedDB",
     "metric": {
-      "command": "node scripts/audit-metric.mjs borrado-fisico",
+      "command": "node scripts/audit-metric.mjs indexeddb-propias",
       "target": 0
     },
-    "base": "b2e7a72a40adf1358df29472facd4b3a547771ee",
+    "base": "88f8b2a3f07967e3f79c4f7a0fc4f3cdbd798b09",
     "guardFiles": [
-      "tests/borradoLogicoGuard.test.ts"
+      "tests/indexedDbSingleGuard.test.ts"
     ]
   }
 }

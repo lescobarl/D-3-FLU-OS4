@@ -11,6 +11,7 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
+import { fluDb } from '../core/db/fluDatabase';
 
 // -----------------------------------------------------------
 // Types
@@ -60,40 +61,11 @@ export interface MemoryStats {
 // Constants
 // -----------------------------------------------------------
 
-const DB_NAME = 'flu-long-term-memory';
-const DB_VERSION = 1;
-const STORE_NAME = 'memories';
-
 const DEFAULT_MEMORY_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_RETURNED_ITEMS = 50;
 
 // -----------------------------------------------------------
-// IndexedDB Helpers
-// -----------------------------------------------------------
-
-function openDb(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = (event) => {
-            const db = (event.target as IDBOpenDBRequest).result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                store.createIndex('category', 'category', { unique: false });
-                store.createIndex('tags', 'tags', { unique: false, multiEntry: true });
-                store.createIndex('importance', 'importance', { unique: false });
-                store.createIndex('createdAt', 'createdAt', { unique: false });
-                store.createIndex('lastAccessedAt', 'lastAccessedAt', { unique: false });
-            }
-        };
-
-        request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
-        request.onerror = () => reject(new Error('Failed to open IndexedDB'));
-    });
-}
-
-// -----------------------------------------------------------
-// CRUD Operations
+// CRUD Operations (Dexie: flu-os3.memories — C30)
 // -----------------------------------------------------------
 
 /**
@@ -101,125 +73,79 @@ function openDb(): Promise<IDBDatabase> {
  * If an item with the same ID exists, it will be updated.
  */
 export async function saveMemory(item: MemoryItem): Promise<void> {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put(item);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(new Error('Failed to save memory'));
-    });
+    await fluDb.memories.put(item);
 }
 
 /**
  * Save multiple memory items in a single transaction.
  */
 export async function saveMemories(items: MemoryItem[]): Promise<void> {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        for (const item of items) {
-            store.put(item);
-        }
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(new Error('Failed to save memories'));
-    });
+    await fluDb.memories.bulkPut(items);
 }
 
 /**
  * Retrieve a memory item by ID.
  */
 export async function getMemory(id: string): Promise<MemoryItem | null> {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.get(id);
-        request.onsuccess = () => {
-            const item = request.result || null;
-            resolve(item && item.deleted !== true ? item : null);
-        };
-        request.onerror = () => reject(new Error('Failed to get memory'));
-    });
+    const item = await fluDb.memories.get(id);
+    return item && item.deleted !== true ? item : null;
 }
 
 /**
- * Delete a memory item by ID.
+ * Delete a memory item by ID (§2.9: borrado lógico, la fila permanece).
  */
 export async function deleteMemory(id: string): Promise<void> {
     const existing = await getMemory(id);
     if (!existing) return;
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put({ ...existing, deleted: true });
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(new Error('Failed to delete memory'));
-    });
+    await fluDb.memories.put({ ...existing, deleted: true });
 }
 
 /**
  * Query memory items with filters.
  */
 export async function queryMemories(query: MemoryQuery = {}): Promise<MemoryItem[]> {
-    const db = await openDb();
     const now = Date.now();
+    let results: MemoryItem[] = (await fluDb.memories.toArray()).filter(
+        (item) => item.deleted !== true,
+    );
 
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.getAll();
+    // Filter by category
+    if (query.categories && query.categories.length > 0) {
+        results = results.filter((item) => query.categories!.includes(item.category));
+    }
 
-        request.onsuccess = () => {
-            let results: MemoryItem[] = (request.result || []).filter(
-                (item: MemoryItem) => item.deleted !== true,
-            );
+    // Filter by tags
+    if (query.tags && query.tags.length > 0) {
+        results = results.filter((item) =>
+            query.tags!.some((tag) => item.tags.includes(tag)),
+        );
+    }
 
-            // Filter by category
-            if (query.categories && query.categories.length > 0) {
-                results = results.filter((item) => query.categories!.includes(item.category));
-            }
+    // Filter by minimum importance
+    if (query.minImportance !== undefined) {
+        results = results.filter((item) => item.importance >= query.minImportance!);
+    }
 
-            // Filter by tags
-            if (query.tags && query.tags.length > 0) {
-                results = results.filter((item) =>
-                    query.tags!.some((tag) => item.tags.includes(tag)),
-                );
-            }
+    // Filter by max age (items not accessed within maxAge ms)
+    if (query.maxAge !== undefined) {
+        results = results.filter((item) => (now - item.lastAccessedAt) <= query.maxAge!);
+    }
 
-            // Filter by minimum importance
-            if (query.minImportance !== undefined) {
-                results = results.filter((item) => item.importance >= query.minImportance!);
-            }
-
-            // Filter by max age (items not accessed within maxAge ms)
-            if (query.maxAge !== undefined) {
-                results = results.filter((item) => (now - item.lastAccessedAt) <= query.maxAge!);
-            }
-
-            // Remove expired items
-            results = results.filter((item) => {
-                if (item.ttl === null) return true;
-                return (now - item.createdAt) < item.ttl;
-            });
-
-            // Sort by importance (descending), then by lastAccessedAt (descending)
-            results.sort((a, b) => {
-                if (b.importance !== a.importance) return b.importance - a.importance;
-                return b.lastAccessedAt - a.lastAccessedAt;
-            });
-
-            // Apply limit
-            const limit = query.limit || MAX_RETURNED_ITEMS;
-            results = results.slice(0, limit);
-
-            resolve(results);
-        };
-
-        request.onerror = () => reject(new Error('Failed to query memories'));
+    // Remove expired items
+    results = results.filter((item) => {
+        if (item.ttl === null) return true;
+        return (now - item.createdAt) < item.ttl;
     });
+
+    // Sort by importance (descending), then by lastAccessedAt (descending)
+    results.sort((a, b) => {
+        if (b.importance !== a.importance) return b.importance - a.importance;
+        return b.lastAccessedAt - a.lastAccessedAt;
+    });
+
+    // Apply limit
+    const limit = query.limit || MAX_RETURNED_ITEMS;
+    return results.slice(0, limit);
 }
 
 /**
@@ -238,44 +164,23 @@ export async function touchMemory(id: string): Promise<void> {
  * Get all expired memory items for cleanup.
  */
 export async function getExpiredMemories(): Promise<MemoryItem[]> {
-    const db = await openDb();
     const now = Date.now();
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.getAll();
-
-        request.onsuccess = () => {
-            const results: MemoryItem[] = (request.result || []).filter((item) => {
-                if (item.ttl === null) return false;
-                return (now - item.createdAt) >= item.ttl;
-            });
-            resolve(results);
-        };
-
-        request.onerror = () => reject(new Error('Failed to get expired memories'));
+    return (await fluDb.memories.toArray()).filter((item) => {
+        if (item.deleted === true) return false;
+        if (item.ttl === null) return false;
+        return (now - item.createdAt) >= item.ttl;
     });
 }
 
 /**
  * Clean up expired memory items.
- * Returns the number of items deleted.
+ * Returns the number of items marked as deleted (§2.9: borrado lógico).
  */
 export async function cleanupExpiredMemories(): Promise<number> {
     const expired = await getExpiredMemories();
     if (expired.length === 0) return 0;
-
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        for (const item of expired) {
-            store.delete(item.id);
-        }
-        tx.oncomplete = () => resolve(expired.length);
-        tx.onerror = () => reject(new Error('Failed to cleanup expired memories'));
-    });
+    await fluDb.memories.bulkPut(expired.map((item) => ({ ...item, deleted: true })));
+    return expired.length;
 }
 
 // -----------------------------------------------------------
@@ -323,40 +228,29 @@ export function createMemory(
  * Get memory statistics.
  */
 export async function getMemoryStats(): Promise<MemoryStats> {
-    const db = await openDb();
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.getAll();
-
-        request.onsuccess = () => {
-            const items: MemoryItem[] = request.result || [];
-            const now = Date.now();
-            const valid = items.filter((item) => {
-                if (item.ttl === null) return true;
-                return (now - item.createdAt) < item.ttl;
-            });
-
-            const byCategory: Record<string, number> = {};
-            let totalImportance = 0;
-
-            for (const item of valid) {
-                byCategory[item.category] = (byCategory[item.category] || 0) + 1;
-                totalImportance += item.importance;
-            }
-
-            resolve({
-                totalItems: valid.length,
-                byCategory,
-                oldestItem: valid.length > 0 ? Math.min(...valid.map((i) => i.createdAt)) : 0,
-                newestItem: valid.length > 0 ? Math.max(...valid.map((i) => i.createdAt)) : 0,
-                averageImportance: valid.length > 0 ? totalImportance / valid.length : 0,
-            });
-        };
-
-        request.onerror = () => reject(new Error('Failed to get memory stats'));
+    const items = await fluDb.memories.toArray();
+    const now = Date.now();
+    const valid = items.filter((item) => {
+        if (item.deleted === true) return false;
+        if (item.ttl === null) return true;
+        return (now - item.createdAt) < item.ttl;
     });
+
+    const byCategory: Record<string, number> = {};
+    let totalImportance = 0;
+
+    for (const item of valid) {
+        byCategory[item.category] = (byCategory[item.category] || 0) + 1;
+        totalImportance += item.importance;
+    }
+
+    return {
+        totalItems: valid.length,
+        byCategory,
+        oldestItem: valid.length > 0 ? Math.min(...valid.map((i) => i.createdAt)) : 0,
+        newestItem: valid.length > 0 ? Math.max(...valid.map((i) => i.createdAt)) : 0,
+        averageImportance: valid.length > 0 ? totalImportance / valid.length : 0,
+    };
 }
 
 /**
