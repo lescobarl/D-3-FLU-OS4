@@ -6,6 +6,7 @@
  * El Worker y el hilo principal consumen el mismo núcleo (speakerCore.js).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
 import { compareCosineSignatures, normalizeEmbeddingVector, getFallbackSpeaker } from './speakerCore.js'
 import {
   foldSpeakerKey,
@@ -70,14 +71,14 @@ function resolveProductionSpeakerAtBoundary({
   const normalized = normalizeEmbeddingVector(vector)
   const roomCfg = FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
   const classroom = roomCfg.classroomMultiSpeaker === true
-  const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', 0.74)
-  const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', 0.68)
-  const REUSE = cosineThreshold(thresholds, 'productionClusterReuseThreshold', 0.74)
+  const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', VOICE_DIARIZATION_DEFAULTS.cosineContinuity)
+  const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineNewVoice)
+  const REUSE = cosineThreshold(thresholds, 'productionClusterReuseThreshold', VOICE_DIARIZATION_DEFAULTS.productionClusterReuse)
   const HISTORICAL = cosineThreshold(thresholds, 'shortUtteranceHistoricalMatch', 0.7)
-  const REUSE_EFF = classroom ? REUSE - (Number(roomCfg.classroomReuseRelax) || 0.03) : REUSE
-  const NEW_VOICE_EFF = classroom ? NEW_VOICE + (Number(roomCfg.classroomNewVoiceRelax) || 0.04) : NEW_VOICE
+  const REUSE_EFF = classroom ? REUSE - (Number(roomCfg.classroomReuseRelax) || VOICE_DIARIZATION_DEFAULTS.classroomReuseRelax) : REUSE
+  const NEW_VOICE_EFF = classroom ? NEW_VOICE + (Number(roomCfg.classroomNewVoiceRelax) || VOICE_DIARIZATION_DEFAULTS.classroomNewVoiceRelax) : NEW_VOICE
   const SWITCH = classroom
-    ? Number(roomCfg.classroomLastSpeakerSwitchMargin) || 0.06
+    ? Number(roomCfg.classroomLastSpeakerSwitchMargin) || VOICE_DIARIZATION_DEFAULTS.classroomLastSpeakerSwitchMargin
     : Number(roomCfg.lastSpeakerSwitchMargin) || 0.1
   const multiMin = classroom
     ? Number(roomCfg.classroomMultiSpeakerRoomClusterMin) || 2
@@ -89,7 +90,7 @@ function resolveProductionSpeakerAtBoundary({
   const autoCount = speakerClusters.filter(
     (c) => isAutoSpeakerLabel(c?.label) && Array.isArray(c?.signature) && c.signature.length,
   ).length
-  const soloNewVoiceFactor = Number(roomCfg.soloNewVoiceFactor) || 0.82
+  const soloNewVoiceFactor = Number(roomCfg.soloNewVoiceFactor) || VOICE_DIARIZATION_DEFAULTS.soloNewVoiceFactor
   const soloSession = autoCount === 1
   const NEW_VOICE_OPEN = soloSession ? NEW_VOICE_EFF * soloNewVoiceFactor : NEW_VOICE_EFF
 
@@ -265,7 +266,7 @@ function resolveProductionSpeakerAtBoundary({
       bestLabel !== lastSpeaker &&
       bestSim >= REUSE_EFF &&
       bestSim > lastSim
-    if (preferHistorical && bestSim - lastSim >= SWITCH * 0.45) {
+    if (preferHistorical && bestSim - lastSim >= SWITCH * VOICE_DIARIZATION_DEFAULTS.switchRelax) {
       return adoptCluster(bestLabel, 'production-historical-reidentify', bestSim)
     }
     if (lastSpeaker && lastSim >= NEW_VOICE_EFF && !shortAfterOtherVoice) {
@@ -561,7 +562,7 @@ export function resolveConversationSpeaker({
   const allowNew = allowNewCluster && (!atTurnBoundary || boundaryAllowsNew)
   const preferIsRegistered = pinRegistered && isRegisteredSpeakerLabel(preferSpeaker)
   const boundaryRelax = Number(roomCfg.turnBoundaryMatchRelax) || 2.35
-  const reabsorbMargin = Number(roomCfg.turnBoundaryClusterReabsorbMargin) || 0.035
+  const reabsorbMargin = Number(roomCfg.turnBoundaryClusterReabsorbMargin) || VOICE_DIARIZATION_DEFAULTS.turnBoundaryClusterReabsorbMargin
   const autoClusterCount = speakerClusters.filter(
     (cluster) =>
       isAutoSpeakerLabel(cluster?.label) &&
@@ -578,7 +579,7 @@ export function resolveConversationSpeaker({
       : ''
     : preferSpeaker || lastSpeaker || getFallbackSpeaker()
   const effectiveSticky = sticky || lastSpeaker || preferSpeaker || getFallbackSpeaker()
-  const MATCH = cosineThreshold(thresholds, 'cosineMatchThreshold', 0.76)
+  const MATCH = cosineThreshold(thresholds, 'cosineMatchThreshold', VOICE_DIARIZATION_DEFAULTS.cosineMatch)
   const ROOM_REMATCH = resolveRoomRematchThreshold({
     thresholds,
     utteranceText,
@@ -592,9 +593,9 @@ export function resolveConversationSpeaker({
     sampleRate,
     thresholds,
   })
-  const REGISTERED_MATCH = cosineThreshold(thresholds, 'cosineRegisteredMatchThreshold', 0.72)
-  const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', 0.74)
-  const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', 0.68)
+  const REGISTERED_MATCH = cosineThreshold(thresholds, 'cosineRegisteredMatchThreshold', VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch)
+  const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', VOICE_DIARIZATION_DEFAULTS.cosineContinuity)
+  const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineNewVoice)
 
   if (!voicedSampleCount || voicedSampleCount < minVoicedSamples) {
     note({ reason: 'insufficient-voiced', voicedSampleCount, minVoicedSamples, speaker: effectiveSticky })
@@ -651,16 +652,16 @@ export function resolveConversationSpeaker({
     }
   })
   const continuityGate = atTurnBoundary
-    ? CONTINUITY * diarizationFactor(FLU_CONFIG, 'continuityBoundaryFactor', factors.continuityBoundaryFactor ?? 0.82)
+    ? CONTINUITY * diarizationFactor(FLU_CONFIG, 'continuityBoundaryFactor', factors.continuityBoundaryFactor ?? VOICE_DIARIZATION_DEFAULTS.continuityBoundaryFactor)
     : CONTINUITY
   let newVoiceGate = atTurnBoundary
-    ? NEW_VOICE * (thresholds.turnBoundaryNewVoiceFactor ?? diarizationFactor(FLU_CONFIG, 'newVoiceBoundaryFactor', factors.newVoiceBoundaryFactor ?? 0.88))
+    ? NEW_VOICE * (thresholds.turnBoundaryNewVoiceFactor ?? diarizationFactor(FLU_CONFIG, 'newVoiceBoundaryFactor', factors.newVoiceBoundaryFactor ?? VOICE_DIARIZATION_DEFAULTS.newVoiceBoundaryFactor))
     : NEW_VOICE
   if (atTurnBoundary && autoClusterCount >= 1) {
-    newVoiceGate *= Number(roomCfg.turnBoundaryNewVoiceMultiFactor) || 0.72
+    newVoiceGate *= Number(roomCfg.turnBoundaryNewVoiceMultiFactor) || VOICE_DIARIZATION_DEFAULTS.turnBoundaryNewVoiceMultiFactor
   }
   const minVoicedForNew = atTurnBoundary
-    ? Math.floor(minVoicedSamplesForNew * (thresholds.turnBoundaryVoicedFactor ?? 0.55))
+    ? Math.floor(minVoicedSamplesForNew * (thresholds.turnBoundaryVoicedFactor ?? VOICE_DIARIZATION_DEFAULTS.turnBoundaryVoicedFactor))
     : minVoicedSamplesForNew
   const boundaryDistinctFactor = Number(roomCfg.turnBoundaryDistinctFactor) || 1.18
   const distinctFromSticky =
@@ -672,7 +673,7 @@ export function resolveConversationSpeaker({
     Array.isArray(lastSignature) && lastSignature.length
       ? compareCosineSignatures(vector, lastSignature)
       : 0
-  const lastTurnFactor = Number(roomCfg.turnBoundaryLastTurnFactor) || 0.48
+  const lastTurnFactor = Number(roomCfg.turnBoundaryLastTurnFactor) || VOICE_DIARIZATION_DEFAULTS.turnBoundaryLastTurnFactor
   const distinctFromLastTurn =
     atTurnBoundary &&
     soloSticky &&
@@ -840,7 +841,7 @@ export function resolveConversationSpeaker({
     const stickySimilarity = stickyCluster
       ? compareCosineSignatures(vector, stickyCluster.signature)
       : 0
-    if (clusterSimilarity > stickySimilarity + diarizationFactor(FLU_CONFIG, 'stickyClusterReidentifyMargin', factors.stickyClusterReidentifyMargin ?? 0.025)) {
+    if (clusterSimilarity > stickySimilarity + diarizationFactor(FLU_CONFIG, 'stickyClusterReidentifyMargin', factors.stickyClusterReidentifyMargin ?? VOICE_DIARIZATION_DEFAULTS.stickyClusterReidentifyMargin)) {
       updateClusterSignature(clusterMatch, vector)
       return clusterMatch.label
     }
@@ -850,7 +851,7 @@ export function resolveConversationSpeaker({
     const stickyCluster = findClusterByLabel(speakerClusters, effectiveSticky)
     if (stickyCluster && Array.isArray(stickyCluster.signature) && stickyCluster.signature.length) {
       const stickySimilarity = compareCosineSignatures(vector, stickyCluster.signature)
-      if (stickySimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'stickyMatchFactor', factors.stickyMatchFactor ?? 0.92)) {
+      if (stickySimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'stickyMatchFactor', factors.stickyMatchFactor ?? VOICE_DIARIZATION_DEFAULTS.stickyMatchFactor)) {
         updateClusterSignature(stickyCluster, vector)
         return effectiveSticky
       }
@@ -861,7 +862,7 @@ export function resolveConversationSpeaker({
     const lastCluster = findClusterByLabel(speakerClusters, lastSpeaker)
     if (lastCluster && Array.isArray(lastCluster.signature) && lastCluster.signature.length) {
       const lastClusterSimilarity = compareCosineSignatures(vector, lastCluster.signature)
-      if (lastClusterSimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'lastClusterMatchFactor', factors.lastClusterMatchFactor ?? 0.95)) {
+      if (lastClusterSimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'lastClusterMatchFactor', factors.lastClusterMatchFactor ?? VOICE_DIARIZATION_DEFAULTS.lastClusterMatchFactor)) {
         updateClusterSignature(lastCluster, vector)
         return lastSpeaker
       }
@@ -916,10 +917,10 @@ export function resolveConversationSpeaker({
   const softCap = Number(roomCfg.maxAutoSpeakersSoftCap) || 0
   let strictNewVoice =
     maxAutoSpeakers > 0 && autoSpeakerCount >= maxAutoSpeakers
-      ? newVoiceGate * diarizationFactor(FLU_CONFIG, 'strictNewVoiceAtCapFactor', factors.strictNewVoiceAtCapFactor ?? 0.88)
+      ? newVoiceGate * diarizationFactor(FLU_CONFIG, 'strictNewVoiceAtCapFactor', factors.strictNewVoiceAtCapFactor ?? VOICE_DIARIZATION_DEFAULTS.strictNewVoiceAtCapFactor)
       : newVoiceGate
   if (roomCfg.stickySpeaker && softCap > 0 && autoSpeakerCount >= softCap) {
-    strictNewVoice *= diarizationFactor(FLU_CONFIG, 'strictNewVoiceStickySoftCapFactor', factors.strictNewVoiceStickySoftCapFactor ?? 0.82)
+    strictNewVoice *= diarizationFactor(FLU_CONFIG, 'strictNewVoiceStickySoftCapFactor', factors.strictNewVoiceStickySoftCapFactor ?? VOICE_DIARIZATION_DEFAULTS.strictNewVoiceStickySoftCapFactor)
   }
   const canCreateNewSpeaker =
     voicedSampleCount >= minVoicedForNew &&

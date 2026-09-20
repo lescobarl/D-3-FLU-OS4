@@ -319,3 +319,24 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - OCR remoto y monitor de salud con proveedor real.
+
+---
+
+## C38 — Umbrales de autonomía/voz desde config (allow ampliado por el usuario)
+
+Enmienda: se añadieron appConfig.ts y sharedConfig.ts al allow de C38.json (autorizado por el usuario) y se re-activó C38.
+
+Cambios aplicados:
+- src/core/config/sharedConfig.ts — AUTONOMY_THRESHOLD_DEFAULTS (salud/decisiones/optimización) y VOICE_DIARIZATION_DEFAULTS.
+- src/voice/lib/speakerDiarization.js — 23 umbrales referencian VOICE_DIARIZATION_DEFAULTS.
+- src/core/autonomy/healthMonitor.ts — umbrales de salud/componentes desde config.
+- src/core/autonomy/decisionEngine.ts — histéresis, pesos de factores, confianza y métricas de muestra desde config.
+- src/core/autonomy/autoOptimization.ts — minConfidence, step/max, mejora mínima y pesos desde config.
+
+Validado contra:
+- npm run gate (verde): métrica base=4 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/speakerDiarizationUnified.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerPinnedMismatch.test.ts: 9 passed.
+- git diff --stat: 8 archivos (6 de código/contrato, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Diarización de hablantes y decisiones autónomas en sesión real.

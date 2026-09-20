@@ -9,7 +9,9 @@
     "src/core/autonomy/healthMonitor.ts",
     "src/core/autonomy/decisionEngine.ts",
     "src/core/autonomy/autoOptimization.ts",
-    "src/lib/participantProfiles.ts"
+    "src/lib/participantProfiles.ts",
+    "src/core/config/appConfig.ts",
+    "src/core/config/sharedConfig.ts"
   ],
   "deny": [
     ".task/**",

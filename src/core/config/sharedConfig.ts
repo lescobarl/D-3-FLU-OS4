@@ -137,6 +137,85 @@ export const REQUEST_TIMEOUT_DEFAULTS = {
     MUSIC_PROBE_MS: 4_000,
 } as const;
 
+/**
+ * Umbrales de AUTONOMÍA (salud / decisiones / auto-optimización) — fuente
+ * única (C38). Ningún módulo de autonomía declara umbrales numéricos inline.
+ */
+export const AUTONOMY_THRESHOLD_DEFAULTS = {
+    health: {
+        degraded: 0.85,
+        critical: 0.60,
+        loadWarnRatio: 0.75,
+        weightDegraded: 0.85,
+        aiAvailabilityMin: 0.95,
+        speechRecognitionAvailabilityMin: 0.90,
+        speechSynthesisErrorRateMax: 0.15,
+        speechSynthesisAvailabilityMin: 0.98,
+        indexedDbAvailabilityMin: 0.99,
+        networkErrorRateMax: 0.25,
+        networkAvailabilityMin: 0.85,
+        memoryErrorRateMax: 0.05,
+        memoryAvailabilityMin: 0.95,
+        reactComponentsAvailabilityMin: 0.98,
+    },
+    decision: {
+        hysteresis: 0.15,
+        factorWeightResponseTime: 0.25,
+        factorWeightSuccessRate: 0.30,
+        factorWeightCost: 0.20,
+        factorWeightEcological: 0.15,
+        factorWeightResponseQuality: 0.10,
+        confidenceSupportPerFactor: 0.05,
+        confidenceRiskPenalty: 0.05,
+        sampleOpenrouterSuccessRate: 0.92,
+        sampleOpenrouterCostPer1k: 0.075,
+        sampleOpenrouterQuality: 0.90,
+        sampleGeminiSuccessRate: 0.85,
+        sampleGeminiCostPer1k: 0.50,
+        sampleGeminiQuality: 0.88,
+    },
+    optimization: {
+        minConfidence: 0.65,
+        confidenceMax: 0.95,
+        confidenceStep: 0.05,
+        minImprovement: 0.05,
+        weightSpeechSuccessRate: 0.2,
+        weightAiResponseTime: 0.15,
+        weightTimeoutRate: 0.15,
+        weightMemoryUsage: 0.1,
+        weightUserFeedback: 0.25,
+        weightSystemStability: 0.15,
+    },
+} as const;
+
+/**
+ * Umbrales de VOZ (diarización) — fuente única (C38). Reemplazan los literales
+ * de respaldo inline en speakerDiarization.js.
+ */
+export const VOICE_DIARIZATION_DEFAULTS = {
+    cosineContinuity: 0.74,
+    cosineNewVoice: 0.68,
+    productionClusterReuse: 0.74,
+    classroomReuseRelax: 0.03,
+    classroomNewVoiceRelax: 0.04,
+    classroomLastSpeakerSwitchMargin: 0.06,
+    soloNewVoiceFactor: 0.82,
+    switchRelax: 0.45,
+    turnBoundaryClusterReabsorbMargin: 0.035,
+    cosineMatch: 0.76,
+    cosineRegisteredMatch: 0.72,
+    continuityBoundaryFactor: 0.82,
+    newVoiceBoundaryFactor: 0.88,
+    turnBoundaryNewVoiceMultiFactor: 0.72,
+    turnBoundaryVoicedFactor: 0.55,
+    turnBoundaryLastTurnFactor: 0.48,
+    stickyClusterReidentifyMargin: 0.025,
+    stickyMatchFactor: 0.92,
+    lastClusterMatchFactor: 0.95,
+    strictNewVoiceAtCapFactor: 0.88,
+    strictNewVoiceStickySoftCapFactor: 0.82,
+} as const;
+
 // -----------------------------------------------------------
 // Helpers puros (compartidos cliente/servidor)
 // -----------------------------------------------------------

@@ -19,6 +19,7 @@
 // ============================================================
 
 import { emitAutonomyEvent } from './autonomyEvents';
+import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 
 // -----------------------------------------------------------
 // Tipos
@@ -114,7 +115,7 @@ export const DEFAULT_OPTIMIZATION_CONFIG: AutoOptimizationConfig = {
     maxChangePerAdjustment: 20, // 20%
     minSamples: 50,
     considerUserFeedback: true,
-    minConfidenceThreshold: 0.65,
+    minConfidenceThreshold: AUTONOMY_THRESHOLD_DEFAULTS.optimization.minConfidence,
     allowAutoRollback: true,
     evaluationPeriodAfterChange: 300000, // 5 minutos
     verboseLogging: false,
@@ -128,8 +129,8 @@ export const OPTIMIZABLE_PARAMETERS: Record<OptimizableParameter, ParameterValue
     'speech_recognition_confidence_threshold': {
         current: 0.7,
         min: 0.3,
-        max: 0.95,
-        step: 0.05,
+        max: AUTONOMY_THRESHOLD_DEFAULTS.optimization.confidenceMax,
+        step: AUTONOMY_THRESHOLD_DEFAULTS.optimization.confidenceStep,
         unit: 'confidence',
     },
     'ai_request_timeout': {
@@ -246,7 +247,7 @@ class ParameterOptimizer {
             relevantMetrics
         );
         
-        if (expectedImprovement < 0.05) { // Mejora mínima del 5%
+        if (expectedImprovement < AUTONOMY_THRESHOLD_DEFAULTS.optimization.minImprovement) { // Mejora mínima del 5%
             return null;
         }
         
@@ -639,12 +640,12 @@ class ParameterOptimizer {
         
         // Ponderar mejoras
         const weights = {
-            speechRecognitionSuccessRate: 0.2,
-            aiResponseTime: 0.15,
-            timeoutRate: 0.15,
-            memoryUsage: 0.1,
-            userFeedback: 0.25,
-            systemStability: 0.15,
+            speechRecognitionSuccessRate: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightSpeechSuccessRate,
+            aiResponseTime: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightAiResponseTime,
+            timeoutRate: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightTimeoutRate,
+            memoryUsage: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightMemoryUsage,
+            userFeedback: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightUserFeedback,
+            systemStability: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightSystemStability,
         };
         
         const overallImprovement = Object.entries(weights).reduce((sum, [metric, weight]) => {
@@ -674,7 +675,7 @@ class ParameterOptimizer {
             result.push({
                 name: 'ai_response_time',
                 value: 1 - Math.min(1, metrics.aiResponseTime / 60000), // Normalizar
-                weight: 0.15,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightAiResponseTime,
                 goal: 'maximize', // Queremos menor tiempo = mayor valor
             });
         }
@@ -683,7 +684,7 @@ class ParameterOptimizer {
             result.push({
                 name: 'user_feedback',
                 value: metrics.userFeedback,
-                weight: 0.25,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightUserFeedback,
                 goal: 'maximize',
             });
         }
@@ -692,7 +693,7 @@ class ParameterOptimizer {
             result.push({
                 name: 'system_stability',
                 value: metrics.systemStability,
-                weight: 0.15,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightSystemStability,
                 goal: 'maximize',
             });
         }

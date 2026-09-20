@@ -22,6 +22,7 @@
 
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
 import { fetchTextEngine } from '../ai/httpClient';
+import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 
 // -----------------------------------------------------------
 // Tipos
@@ -98,8 +99,8 @@ export interface HealthMonitorConfig {
 
 export const DEFAULT_HEALTH_CONFIG: HealthMonitorConfig = {
     monitoringInterval: 30000, // 30 segundos
-    degradedThreshold: 0.85,   // 85% de salud
-    criticalThreshold: 0.60,   // 60% de salud
+    degradedThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.degraded,   // 85% de salud
+    criticalThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.critical,   // 60% de salud
     autoRecoveryEnabled: false, // Deshabilitado por defecto - se habilita solo para componentes específicos
     monitoredComponents: [
         'ai-service',
@@ -122,43 +123,43 @@ const COMPONENT_THRESHOLDS: Record<string, ComponentThresholds> = {
     'ai-service': {
         responseTimeMax: 10000,    // 10 segundos máximo
         errorRateMax: 0.2,         // 20% máximo de errores
-        availabilityMin: 0.95,     // 95% mínimo de disponibilidad
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.aiAvailabilityMin,     // 95% mínimo de disponibilidad
         checkInterval: 15000,      // Verificar cada 15 segundos
     },
     'speech-recognition': {
         responseTimeMax: 5000,     // 5 segundos máximo
         errorRateMax: 0.3,         // 30% máximo de errores
-        availabilityMin: 0.90,     // 90% mínimo de disponibilidad
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.speechRecognitionAvailabilityMin,     // 90% mínimo de disponibilidad
         checkInterval: 10000,      // Verificar cada 10 segundos
     },
     'speech-synthesis': {
         responseTimeMax: 3000,     // 3 segundos máximo
-        errorRateMax: 0.15,        // 15% máximo de errores
-        availabilityMin: 0.98,     // 98% mínimo de disponibilidad
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.speechSynthesisErrorRateMax,        // 15% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.speechSynthesisAvailabilityMin,     // 98% mínimo de disponibilidad
         checkInterval: 10000,      // Verificar cada 10 segundos
     },
     'indexed-db': {
         responseTimeMax: 2000,     // 2 segundos máximo
         errorRateMax: 0.1,         // 10% máximo de errores
-        availabilityMin: 0.99,     // 99% mínimo de disponibilidad
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.indexedDbAvailabilityMin,     // 99% mínimo de disponibilidad
         checkInterval: 20000,      // Verificar cada 20 segundos
     },
     'network': {
         responseTimeMax: 3000,     // 3 segundos máximo
-        errorRateMax: 0.25,        // 25% máximo de errores
-        availabilityMin: 0.85,     // 85% mínimo de disponibilidad
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.networkErrorRateMax,        // 25% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.networkAvailabilityMin,     // 85% mínimo de disponibilidad
         checkInterval: 5000,       // Verificar cada 5 segundos
     },
     'memory': {
         responseTimeMax: 1000,     // 1 segundo máximo
-        errorRateMax: 0.05,        // 5% máximo de errores
-        availabilityMin: 0.95,     // 95% mínimo de disponibilidad
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.memoryErrorRateMax,        // 5% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.memoryAvailabilityMin,     // 95% mínimo de disponibilidad
         checkInterval: 30000,      // Verificar cada 30 segundos
     },
     'react-components': {
         responseTimeMax: 1000,     // 1 segundo máximo
         errorRateMax: 0.1,         // 10% máximo de errores
-        availabilityMin: 0.98,     // 98% mínimo de disponibilidad
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.reactComponentsAvailabilityMin,     // 98% mínimo de disponibilidad
         checkInterval: 30000,      // Verificar cada 30 segundos
     },
 };
@@ -582,7 +583,7 @@ async function checkMemory(): Promise<ComponentHealth> {
             if (usageRatio > 0.9) {
                 hasError = true;
                 message = 'Uso de memoria crítico (>90%)';
-            } else if (usageRatio > 0.75) {
+            } else if (usageRatio > AUTONOMY_THRESHOLD_DEFAULTS.health.loadWarnRatio) {
                 hasError = true;
                 message = 'Uso de memoria elevado (>75%)';
             }
@@ -701,7 +702,7 @@ function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
     
     if (averageWeight < 0.3) return 'critical';
     if (averageWeight < 0.6) return 'unhealthy';
-    if (averageWeight < 0.85) return 'degraded';
+    if (averageWeight < AUTONOMY_THRESHOLD_DEFAULTS.health.weightDegraded) return 'degraded';
     return 'healthy';
 }
 

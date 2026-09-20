@@ -1,13 +1,17 @@
 {
-  "id": "C19",
+  "id": "C38",
   "mode": "full",
-  "task": "Hardcode — el cliente no llama proveedores externos directo",
-  "base": "89242af0a4c7ed1ef5f0278f62490c0b2e31347c",
-  "objective": "ocrService, healthMonitor y fluVisualStockSearch usan el proxy/servidor en vez de fetch directo.",
+  "task": "Hardcode — umbrales de autonomía y voz desde config",
+  "base": "6e140d1a03eee4410ef91aed341f3a0f4538a045",
+  "objective": "speakerDiarization, healthMonitor, decisionEngine, autoOptimization y participantProfiles toman sus umbrales de config.",
   "allow": [
-    "src/services/ocrService.ts",
+    "src/voice/lib/speakerDiarization.js",
     "src/core/autonomy/healthMonitor.ts",
-    "src/voice/lib/fluVisualStockSearch.js"
+    "src/core/autonomy/decisionEngine.ts",
+    "src/core/autonomy/autoOptimization.ts",
+    "src/lib/participantProfiles.ts",
+    "src/core/config/appConfig.ts",
+    "src/core/config/sharedConfig.ts"
   ],
   "deny": [
     ".task/**",
@@ -21,20 +25,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 5,
-  "maxLines": 300,
-  "dod": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot",
+  "maxFiles": 7,
+  "maxLines": 400,
+  "dod": "npx vitest run tests/umbralesConfigGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/umbralesConfigGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Los módulos de cliente no hacen fetch directo a proveedores",
+    "statement": "Ningún módulo define umbrales numéricos inline",
     "metric": {
-      "command": "node scripts/audit-metric.mjs fetch-proveedor",
+      "command": "node scripts/audit-metric.mjs umbrales-autonomy",
       "target": 0
     },
-    "base": "89242af0a4c7ed1ef5f0278f62490c0b2e31347c",
+    "base": "6e140d1a03eee4410ef91aed341f3a0f4538a045",
     "guardFiles": [
-      "tests/fetchProveedorGuard.test.ts"
+      "tests/umbralesConfigGuard.test.ts"
     ]
   }
 }

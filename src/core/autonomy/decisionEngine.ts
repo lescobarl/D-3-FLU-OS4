@@ -20,6 +20,7 @@
 
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
+import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 
 // -----------------------------------------------------------
 // Tipos
@@ -146,7 +147,7 @@ export const DEFAULT_DECISION_CONFIG: DecisionEngineConfig = {
     minConfidenceThreshold: 0.7,
     considerEcologicalFactors: true,
     considerCostFactors: true,
-    hysteresisThreshold: 0.15, // 15% de mejora mínima para cambiar
+    hysteresisThreshold: AUTONOMY_THRESHOLD_DEFAULTS.decision.hysteresis, // 15% de mejora mínima para cambiar
     maxDecisionsPerDay: 10,
     verboseLogging: false,
 };
@@ -206,7 +207,7 @@ class FactorEvaluator {
         factors.push({
             name: 'response_time',
             value: 1 - responseTimeFactor, // Invertir: menor tiempo = mejor
-            weight: 0.25,
+            weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightResponseTime,
             trend: this.analyzeTrend(currentMetrics.provider, 'avgResponseTime'),
         });
         
@@ -214,7 +215,7 @@ class FactorEvaluator {
         factors.push({
             name: 'success_rate',
             value: currentMetrics.successRate,
-            weight: 0.30,
+            weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightSuccessRate,
             trend: this.analyzeTrend(currentMetrics.provider, 'successRate'),
         });
         
@@ -232,7 +233,7 @@ class FactorEvaluator {
             factors.push({
                 name: 'cost',
                 value: 1 - costFactor, // Invertir: menor costo = mejor
-                weight: 0.20,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightCost,
                 trend: this.analyzeTrend(currentMetrics.provider, 'costPer1kTokens'),
             });
         }
@@ -251,7 +252,7 @@ class FactorEvaluator {
             factors.push({
                 name: 'ecological_impact',
                 value: 1 - co2Factor, // Invertir: menor CO₂ = mejor
-                weight: 0.15,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightEcological,
                 trend: this.analyzeTrend(currentMetrics.provider, 'co2Emissions'),
             });
         }
@@ -260,7 +261,7 @@ class FactorEvaluator {
         factors.push({
             name: 'response_quality',
             value: currentMetrics.responseQuality,
-            weight: 0.10,
+            weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightResponseQuality,
             trend: this.analyzeTrend(currentMetrics.provider, 'responseQuality'),
         });
         
@@ -379,22 +380,22 @@ class FactorEvaluator {
             {
                 provider: 'openrouter',
                 avgResponseTime: 12000, // Gemini 2.5 Flash Lite — 12 segundos
-                successRate: 0.92,
-                costPer1kTokens: 0.075, // ~$0.30/M input + ~$0.50/M output
+                successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterSuccessRate,
+                costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterCostPer1k, // costo por 1k tokens (config)
                 co2Emissions: 1.0,
                 perceivedLatency: 15000,
-                responseQuality: 0.90,
+                responseQuality: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterQuality,
                 lastUpdated: Date.now(),
                 requestCount: 150,
             },
             {
                 provider: 'gemini',
                 avgResponseTime: 45000, // 45 segundos (nativo)
-                successRate: 0.85,
-                costPer1kTokens: 0.50,
+                successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiSuccessRate,
+                costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiCostPer1k,
                 co2Emissions: 2.5,
                 perceivedLatency: 50000,
-                responseQuality: 0.88,
+                responseQuality: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiQuality,
                 lastUpdated: Date.now(),
                 requestCount: 100,
             },
@@ -456,7 +457,7 @@ class DecisionMaker {
         const improvement = bestOption.expectedValue - currentOption.expectedValue;
         
         // Aplicar histéresis: solo cambiar si la mejora supera el umbral
-        if (improvement < 0.15) { // DEFAULT_DECISION_CONFIG.hysteresisThreshold
+        if (improvement < DEFAULT_DECISION_CONFIG.hysteresisThreshold) { // DEFAULT_DECISION_CONFIG.hysteresisThreshold
             return null;
         }
         
@@ -499,10 +500,10 @@ class DecisionMaker {
         
         // Aumentar confianza basado en factores de apoyo
         const strongSupport = bestOption.supportingFactors.filter(f => f.value > 0.8).length;
-        confidence += strongSupport * 0.05;
+        confidence += strongSupport * AUTONOMY_THRESHOLD_DEFAULTS.decision.confidenceSupportPerFactor;
         
         // Reducir confianza basado en riesgos
-        confidence -= bestOption.risks.length * 0.05;
+        confidence -= bestOption.risks.length * AUTONOMY_THRESHOLD_DEFAULTS.decision.confidenceRiskPenalty;
         
         // Aumentar confianza si hay tendencias claras
         const improvingTrends = factors.filter(f => f.trend === 'improving').length;
