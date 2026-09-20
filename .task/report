@@ -65,3 +65,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Cambio autónomo de proveedor de IA en ejecución real.
+
+---
+
+## C5 — API key de texto solo del resolver central
+
+Cambios aplicados:
+- src/core/search/searchConfigOverrides.ts — envOpenRouterKey() delega en resolveTextApiKey(); eliminada la lectura directa de import.meta.env.VITE_OPENROUTER_API_KEY.
+
+Validado contra:
+- npm run gate (verde): métrica base=1 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/searchConfigOverrides.test.ts tests/searchOverridesStorage.test.ts: 33 passed.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Búsqueda web con clave del usuario desde el Centro de Control del Buscador.

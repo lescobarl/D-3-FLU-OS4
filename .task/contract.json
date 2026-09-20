@@ -1,12 +1,11 @@
 {
-  "id": "C4",
+  "id": "C5",
   "mode": "full",
-  "task": "Config — la clave del proveedor de IA sale de STORAGE_KEYS",
-  "base": "8bbad001163bfb8d9cfc9eadd21677b67369e3ab",
-  "objective": "aiServiceFactory y decisionEngine importan STORAGE_KEYS.AI_PROVIDER en vez de re-declarar el literal.",
+  "task": "Secretos — la API key de texto sale del resolver central",
+  "base": "a3dfe79cc2785fd54b90ea49c761b3a77596ad4c",
+  "objective": "searchConfigOverrides deja de leer import.meta.env.VITE_OPENROUTER_API_KEY y usa resolveTextApiKey().",
   "allow": [
-    "src/services/aiServiceFactory.ts",
-    "src/core/autonomy/decisionEngine.ts"
+    "src/core/search/searchConfigOverrides.ts"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +18,20 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 3,
-  "maxLines": 120,
-  "dod": "npx vitest run tests/aiProviderStorageKeyUnicaGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/aiProviderStorageKeyUnicaGuard.test.ts --reporter=dot",
+  "maxFiles": 2,
+  "maxLines": 80,
+  "dod": "npx vitest run tests/textApiKeyResolverUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/textApiKeyResolverUnicoGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No hay literales 'flu-ai-provider' fuera de appConfig.ts",
+    "statement": "No hay lecturas directas de VITE_OPENROUTER_API_KEY fuera de appConfig/sharedConfig (y sin contar src/dev)",
     "metric": {
-      "command": "node scripts/audit-metric.mjs ai-provider-literal",
+      "command": "node scripts/audit-metric.mjs text-api-key-directa",
       "target": 0
     },
-    "base": "8bbad001163bfb8d9cfc9eadd21677b67369e3ab",
+    "base": "a3dfe79cc2785fd54b90ea49c761b3a77596ad4c",
     "guardFiles": [
-      "tests/aiProviderStorageKeyUnicaGuard.test.ts"
+      "tests/textApiKeyResolverUnicoGuard.test.ts"
     ]
   }
 }

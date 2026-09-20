@@ -10,7 +10,7 @@
 // helpers de persistencia en localStorage (patrón useConfigPersistence:
 // try/catch que ignora errores de almacenamiento). Sin hardcode de URLs.
 // ============================================================
-import { STORAGE_KEYS } from '../config/appConfig';
+import { STORAGE_KEYS, resolveTextApiKey } from '../config/appConfig';
 import type { SearchProviderConfig, SearchResultType } from './searchSession';
 
 /** Overrides de un proveedor individual (por id). */
@@ -148,14 +148,13 @@ export function applyProviderOverrides(
  * pueda filtrarlos después; así deshabilitar un proveedor es efectivo.
  */
 /**
- * Clave de OpenRouter tomada del `.env` (VITE_) como RESPALDO cuando la UI no
- * tiene una guardada. Es la misma variable que ya viaja en el bundle para el
- * chat/imagen, así que no agrega exposición. Se lee en cada llamada para que
- * los tests puedan stubbear el entorno.
+ * Clave de OpenRouter tomada del resolver central (localStorage > env). Es la
+ * misma fuente que el chat/imagen; se lee en cada llamada para que los tests
+ * puedan stubbear el entorno.
  */
 function envOpenRouterKey(): string {
   try {
-    return String(import.meta.env.VITE_OPENROUTER_API_KEY || '');
+    return resolveTextApiKey();
   } catch {
     return '';
   }
