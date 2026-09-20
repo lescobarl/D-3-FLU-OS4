@@ -21,6 +21,7 @@
 
 // Importar servicios de IA para cambio automático de proveedor
 import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
+import { DEFAULT_AI_FALLBACK_ORDER } from '../../core/config/sharedConfig';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { v4 as uuidv4 } from 'uuid';
 import type { ComponentHealth, HealthMonitor } from './healthMonitor';
@@ -171,7 +172,7 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         },
         action: 'switch_ai_provider',
         params: {
-            fallbackOrder: ['openrouter', 'gemini'],
+            fallbackOrder: [...DEFAULT_AI_FALLBACK_ORDER],
             maxSwitchAttempts: 3,
         },
         priority: 10,
@@ -331,7 +332,7 @@ class RecoveryActionExecutor {
     
     async executeSwitchAIProvider(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
-        const { fallbackOrder = ['openrouter', 'gemini'] } = params;
+        const { fallbackOrder = [...DEFAULT_AI_FALLBACK_ORDER] } = params;
         
         try {
             // Obtener proveedor actual usando la API oficial

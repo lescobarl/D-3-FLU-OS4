@@ -15,7 +15,7 @@
 // ============================================================
 
 import { getPaletteKeys } from '../branding/seasonalPalettes';
-import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig';
+import { AI_PROVIDERS, AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig';
 import { FLU_CONFIG } from '../../voice/lib/fluConfig';
 
 // ------------------------------------------------------------
@@ -120,8 +120,8 @@ export const BRANDING_MODES: readonly string[] = ['auto', 'manual', 'disabled'] 
 /** Idiomas de la interfaz. */
 export const UI_LANGUAGES: readonly string[] = ['es', 'en', 'both'] as const;
 
-/** Motores de IA disponibles (aiServiceFactory). */
-export const AI_PROVIDERS: readonly string[] = ['openrouter', 'gemini', 'deepseek', 'local'] as const;
+/** Motores de IA disponibles (fuente única: sharedConfig.ts). */
+export { AI_PROVIDERS };
 
 /** Estados emocionales válidos (PersonalityConfig.defaultEmotion). */
 export const PERSONALITY_EMOTIONS: readonly string[] = [

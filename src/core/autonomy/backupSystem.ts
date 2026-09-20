@@ -19,6 +19,7 @@
 // ============================================================
 
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
+import { DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { v4 as uuidv4 } from 'uuid';
 import type { ConversationEntry, ConversationState, VoiceBridgeEvent, WorkspaceEntry } from '../../types/bridge';
@@ -217,7 +218,7 @@ class DataExtractor {
     extractAIConfiguration(): AIConfigurationData | null {
         try {
             return {
-                provider: readStorage(STORAGE_KEYS.AI_PROVIDER, 'openrouter'),
+                provider: readStorage(STORAGE_KEYS.AI_PROVIDER, DEFAULT_AI_PROVIDER),
                 apiKeys: {
                     gemini: readStorage(STORAGE_KEYS.TEXT_API_KEY, ''),
                     deepseek: readStorage(STORAGE_KEYS.DEEPSEEK_API_KEY, ''),
@@ -384,7 +385,7 @@ class DataRestorer {
         try {
             if (!data) return false;
             
-            localStorage.setItem(STORAGE_KEYS.AI_PROVIDER, data.provider || 'openrouter');
+            localStorage.setItem(STORAGE_KEYS.AI_PROVIDER, data.provider || DEFAULT_AI_PROVIDER);
             
             if (data.apiKeys) {
                 if (data.apiKeys.gemini) {

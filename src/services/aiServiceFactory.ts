@@ -18,17 +18,22 @@ import { geminiService } from './gemini';
 import { deepseekService } from './deepseek';
 import type { IAIService } from '../core/ai/IAIService';
 import { STORAGE_KEYS } from '../core/config/appConfig';
+import {
+    AI_PROVIDER_ROUTES,
+    DEFAULT_AI_PROVIDER,
+    isAIProvider,
+    type AIProvider,
+} from '../core/config/sharedConfig';
+
+// Re-export del tipo canónico (fuente única: sharedConfig.ts) para no romper
+// a los importadores históricos de aiServiceFactory.
+export type { AIProvider };
 
 // Storage key for AI provider preference (fuente única: STORAGE_KEYS)
 const AI_PROVIDER_KEY = STORAGE_KEYS.AI_PROVIDER;
 
-// Available AI providers
-// 'openrouter' = default: OpenAI-compatible gateway → Google Gemini 2.5 Flash Lite
-// 'gemini'     = Google Gemini nativo (Generative Language API)
-// 'local'      = any OpenAI-compatible local endpoint (Ollama, LM Studio, localhost)
-//                that routes text operations through the same text engine (F1/F2/F3).
-// 'deepseek'   = legacy alias (mismo motor de texto; se conserva por compatibilidad)
-export type AIProvider = 'openrouter' | 'gemini' | 'deepseek' | 'local';
+// Available AI providers — identidad, default y rutas viven en
+// sharedConfig.ts (AI_PROVIDERS / AI_PROVIDER_ROUTES). No se repiten aquí.
 
 /**
  * Get the preferred AI provider from configuration.
@@ -41,7 +46,7 @@ export function getPreferredAIProvider(): AIProvider {
     try {
         // Check localStorage
         const stored = localStorage.getItem(AI_PROVIDER_KEY);
-        if (stored === 'openrouter' || stored === 'gemini' || stored === 'deepseek' || stored === 'local') {
+        if (isAIProvider(stored)) {
             return stored;
         }
     } catch {
@@ -51,12 +56,12 @@ export function getPreferredAIProvider(): AIProvider {
 
     // Check environment variable
     const envProvider = import.meta.env.VITE_PREFERRED_AI_PROVIDER;
-    if (envProvider === 'openrouter' || envProvider === 'gemini' || envProvider === 'deepseek' || envProvider === 'local') {
+    if (isAIProvider(envProvider)) {
         return envProvider;
     }
 
-    // Default: Gemini 2.5 Flash Lite via OpenRouter (motor de texto único)
-    return 'openrouter';
+    // Default desde la fuente única (sharedConfig.DEFAULT_AI_PROVIDER).
+    return DEFAULT_AI_PROVIDER;
 }
 
 /**
@@ -80,22 +85,12 @@ export function setPreferredAIProvider(provider: AIProvider): void {
  */
 export function getAIService(): IAIService {
     const provider = getPreferredAIProvider();
-    
-    switch (provider) {
-        case 'gemini':
-            // Gemini nativo (solo si el usuario elige la API directa de Google)
-            return geminiService;
-        case 'openrouter':
-        case 'deepseek':
-        case 'local':
-            // Motor de texto OpenAI-compatible (OpenRouter → Gemini 2.5 Flash Lite
-            // por defecto; 'local' enruta a Ollama / LM Studio / localhost).
-            // 'deepseek' es un alias legacy del mismo motor.
-            return createIntelligentAIService();
-        default:
-            // Fallback al motor de texto por defecto (provider siempre resuelve a un valor válido)
-            return createIntelligentAIService();
-    }
+
+    // Ruta de despacho declarada en config (AI_PROVIDER_ROUTES); el motor de
+    // texto OpenAI-compatible cubre openrouter/deepseek/local, y 'native'
+    // resuelve a Gemini nativo (API directa de Google).
+    const route = AI_PROVIDER_ROUTES[provider];
+    return route === 'native' ? geminiService : createIntelligentAIService();
 }
 
 /**
