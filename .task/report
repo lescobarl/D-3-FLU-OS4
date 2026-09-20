@@ -267,3 +267,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Cierre de turno con audio continuo en pantalla real.
+
+---
+
+## C39 — Motor no re-normaliza ni re-deriva
+
+Cambios aplicados:
+- src/voice/lib/turnTranscript.js — nuevo normalizeTurnCapture(): único punto que decide cleanForSpeech vs normalizeTranscriptText.
+- src/voice/hooks/useFluVoiceAssistant.js — la captura usa normalizeTurnCapture; el afterWake ya no se vuelve a limpiar (viene normalizado del análisis).
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: 4 archivos (2 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Transcripción y commit de turno en conversación real.

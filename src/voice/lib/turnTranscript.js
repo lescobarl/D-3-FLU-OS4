@@ -133,6 +133,15 @@ export function normalizeTranscriptText(text = '') {
   return collapseStutterRepeat(collapseInlineRepeat(text, 24), 2)
 }
 
+/**
+ * §9.2 — Captura canónica del turno para commit: UNA sola normalización.
+ * En conversación basta `cleanForSpeech`; fuera de conversación se colapsa
+ * además el eco/repetición. Único punto que decide la normalización del motor.
+ */
+export function normalizeTurnCapture(turnCapture = '', { conversationActive = false } = {}) {
+  return conversationActive ? cleanForSpeech(turnCapture) : normalizeTranscriptText(turnCapture)
+}
+
 /** Colapsa párrafos repetidos consecutivos (ASR tras pausa). */
 export function collapseInlineRepeat(text = '', minRepeatChars = 32) {
   const value = cleanForSpeech(text)

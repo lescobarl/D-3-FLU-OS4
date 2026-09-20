@@ -1,11 +1,12 @@
 {
-  "id": "C37",
+  "id": "C39",
   "mode": "full",
-  "task": "Voz §9.3 — una sola ruta de finalización de turno",
-  "base": "d4648add596c3d5dc941893ea889bf917f6a04ea",
-  "objective": "finalizeTurnCommit tiene un único punto de llamada; sin rutas paralelas.",
+  "task": "Voz §9.2/§9.3 — el motor no re-normaliza ni re-deriva",
+  "base": "a5c0aff406336cad8617242f968bbf27331ce7a5",
+  "objective": "El motor usa un único normalizador y deriva la query del valor commiteado, sin re-normalizar.",
   "allow": [
-    "src/voice/lib/conversationStreamCommit.js"
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/voice/lib/turnTranscript.js"
   ],
   "deny": [
     ".task/**",
@@ -19,20 +20,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 2,
-  "maxLines": 250,
-  "dod": "npx vitest run tests/finalizeSingleRouteGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/finalizeSingleRouteGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 300,
+  "dod": "npx vitest run tests/motorNormalizaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/motorNormalizaGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un único punto de llamada a finalizeTurnCommit",
+    "statement": "El motor no usa un segundo normalizador ni re-deriva la frase",
     "metric": {
-      "command": "node scripts/audit-metric.mjs finalize-sites",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs motor-normaliza",
+      "target": 0
     },
-    "base": "d4648add596c3d5dc941893ea889bf917f6a04ea",
+    "base": "a5c0aff406336cad8617242f968bbf27331ce7a5",
     "guardFiles": [
-      "tests/finalizeSingleRouteGuard.test.ts"
+      "tests/motorNormalizaGuard.test.ts"
     ]
   }
 }

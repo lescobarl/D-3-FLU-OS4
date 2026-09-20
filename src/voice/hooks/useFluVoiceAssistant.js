@@ -108,7 +108,7 @@ import {
   createTurnState,
   getTranscriptDelta,
   monotonicDisplay,
-  normalizeTranscriptText,
+  normalizeTurnCapture,
   resetTurnState,
   waitForCaptureSettle,
 } from '../lib/turnTranscript'
@@ -1701,9 +1701,9 @@ export function useFluVoiceAssistant({
         turnCommit = false,
       } = {},
     ) => {
-      const capture = conversationActiveRef?.current
-        ? cleanForSpeech(turnCapture)
-        : normalizeTranscriptText(turnCapture)
+      const capture = normalizeTurnCapture(turnCapture, {
+        conversationActive: Boolean(conversationActiveRef?.current),
+      })
       if (!capture) return false
       if (
         !replaceLastRawLog &&
@@ -3722,7 +3722,9 @@ export function useFluVoiceAssistant({
         })
         if (wakeAnalysis.hasInlineBoundary) {
           passivePrefix = wakeAnalysis.passiveOnly
-          capturedTranscript = cleanForSpeech(wakeAnalysis.afterWake || wakeAnalysis.question)
+          // §9.3: `afterWake`/`question` ya vienen normalizados por el análisis
+          // del turno; NO se vuelve a limpiar aquí (sin segundo normalizador).
+          capturedTranscript = wakeAnalysis.afterWake || wakeAnalysis.question
         }
       }
 
