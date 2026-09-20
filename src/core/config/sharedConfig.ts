@@ -83,6 +83,71 @@ export const OPENROUTER_DEFAULTS = {
     IMAGE_ASPECT_RATIO: '16:9',
 } as const;
 
+// -----------------------------------------------------------
+// Proveedores de IA (fuente ÚNICA — Rule #1: NO HARDCODE)
+// -----------------------------------------------------------
+// Identidad, default y orden de fallback de los proveedores de IA viven
+// AQUÍ. Ningún módulo de servicio/autonomía/branding/UI puede repetir la
+// lista ni quemar un proveedor por defecto: todos derivan de estos símbolos.
+// Guard: tests/providerLiteralGuard.test.ts.
+
+/** Identificadores de motor de IA disponibles (orden canónico). */
+export const AI_PROVIDERS = ['openrouter', 'gemini', 'deepseek', 'local'] as const;
+
+/** Tipo de un proveedor de IA válido. */
+export type AIProvider = (typeof AI_PROVIDERS)[number];
+
+/** Constantes nombradas: evitan literales de proveedor en los consumidores. */
+export const AI_PROVIDER_IDS = {
+    OPENROUTER: 'openrouter',
+    GEMINI: 'gemini',
+    DEEPSEEK: 'deepseek',
+    LOCAL: 'local',
+} as const satisfies Record<string, AIProvider>;
+
+/** Proveedor por defecto (motor de texto OpenRouter → Gemini 2.5 Flash Lite). */
+export const DEFAULT_AI_PROVIDER: AIProvider = 'openrouter';
+
+/**
+ * Orden de conmutación cuando el servicio de IA cae (auto-recovery y motor de
+ * decisiones). Un solo lugar para la política de fallback.
+ */
+export const DEFAULT_AI_FALLBACK_ORDER: readonly AIProvider[] = [
+    AI_PROVIDER_IDS.OPENROUTER,
+    AI_PROVIDER_IDS.GEMINI,
+];
+
+/**
+ * Proveedores que enrutan el texto por el motor OpenAI-compatible (branding
+ * "ecológico"). `local` se excluye: la política ecológica solo aplica a
+ * OpenRouter / DeepSeek legacy.
+ */
+export const TEXT_ENGINE_PROVIDERS: readonly AIProvider[] = [
+    AI_PROVIDER_IDS.OPENROUTER,
+    AI_PROVIDER_IDS.DEEPSEEK,
+];
+
+/** Ruta de despacho de cada proveedor en aiServiceFactory. */
+export type AIProviderRoute = 'native' | 'text-engine';
+
+/** Mapa proveedor → ruta de servicio (sustituye el `switch` con literales). */
+export const AI_PROVIDER_ROUTES: Readonly<Record<AIProvider, AIProviderRoute>> = {
+    openrouter: 'text-engine',
+    gemini: 'native',
+    deepseek: 'text-engine',
+    local: 'text-engine',
+};
+
+/** ¿El valor es un proveedor de IA válido? */
+export function isAIProvider(value: unknown): value is AIProvider {
+    return typeof value === 'string' && (AI_PROVIDERS as readonly string[]).includes(value);
+}
+
+/** ¿El proveedor enruta por el motor de texto OpenAI-compatible? */
+export function isTextEngineProvider(value: string | null | undefined): boolean {
+    return typeof value === 'string' && (TEXT_ENGINE_PROVIDERS as readonly string[]).includes(value);
+}
+
 /** Defaults de fal.ai (video text-to-video). */
 export const FALAI_DEFAULTS = {
     VIDEO_ENDPOINT: 'https://queue.fal.run',

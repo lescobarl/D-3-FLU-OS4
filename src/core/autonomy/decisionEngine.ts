@@ -20,7 +20,7 @@
 
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
-import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
+import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
 
 // -----------------------------------------------------------
 // Tipos
@@ -269,7 +269,7 @@ class FactorEvaluator {
     }
     
     evaluateSwitchAIOptions(currentProvider: string): DecisionOption[] {
-        const allProviders = ['openrouter', 'gemini'];
+        const allProviders = DEFAULT_AI_FALLBACK_ORDER;
         const options: DecisionOption[] = [];
         
         for (const provider of allProviders) {
@@ -378,7 +378,7 @@ class FactorEvaluator {
         
         return [
             {
-                provider: 'openrouter',
+                provider: AI_PROVIDER_IDS.OPENROUTER,
                 avgResponseTime: 12000, // Gemini 2.5 Flash Lite — 12 segundos
                 successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterSuccessRate,
                 costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterCostPer1k, // costo por 1k tokens (config)
@@ -389,7 +389,7 @@ class FactorEvaluator {
                 requestCount: 150,
             },
             {
-                provider: 'gemini',
+                provider: AI_PROVIDER_IDS.GEMINI,
                 avgResponseTime: 45000, // 45 segundos (nativo)
                 successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiSuccessRate,
                 costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiCostPer1k,
@@ -675,7 +675,7 @@ export class DecisionEngine {
         }
         
         // Obtener proveedor actual
-        const currentProvider = localStorage.getItem(STORAGE_KEYS.AI_PROVIDER) || 'openrouter';
+        const currentProvider = localStorage.getItem(STORAGE_KEYS.AI_PROVIDER) || DEFAULT_AI_PROVIDER;
         
         // Evaluar decisión de cambio de proveedor
         const decision = this.decisionMaker.evaluateAISwitchDecision(currentProvider);

@@ -13,7 +13,7 @@
 import React from 'react';
 import type { FluProfile } from '../types/bridge';
 import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES } from '../core/config/appConfig';
-import { OPENROUTER_DEFAULTS } from '../core/config/sharedConfig';
+import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER } from '../core/config/sharedConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
@@ -228,12 +228,12 @@ export function FluSettingsPanel({
                         <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                             <span>Proveedor de IA</span>
                             <select
-                                value={aiProvider === 'deepseek' ? 'openrouter' : (aiProvider || 'openrouter')}
+                                value={aiProvider === AI_PROVIDER_IDS.DEEPSEEK ? AI_PROVIDER_IDS.OPENROUTER : (aiProvider || DEFAULT_AI_PROVIDER)}
                                 onChange={(e) => setAiProvider?.(e.target.value)}
                                 className="flu-settings-image-config__input"
                             >
-                                <option value="openrouter">Gemini 2.5 Flash Lite (OpenRouter) — por defecto</option>
-                                <option value="local">Local (Ollama / LM Studio)</option>
+                                <option value={AI_PROVIDER_IDS.OPENROUTER}>Gemini 2.5 Flash Lite (OpenRouter) — por defecto</option>
+                                <option value={AI_PROVIDER_IDS.LOCAL}>Local (Ollama / LM Studio)</option>
                             </select>
                         </label>
 

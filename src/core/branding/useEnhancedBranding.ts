@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useSeasonalBranding, type SeasonalBrandingState } from './useSeasonalBranding';
 import { getPalette, applyPaletteToCSS, toggleBrandingClass } from './seasonalPalettes';
 import { getPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
+import { isTextEngineProvider } from '../../core/config/sharedConfig';
 
 // ============================================================
 // Types
@@ -64,7 +65,7 @@ export function useEnhancedBranding(): EnhancedBrandingState & EnhancedBrandingA
         const specialSeasons = ['navidad', 'halloween', 'muertos', 'patrio', 'infantil'];
         const isSpecialSeason = specialSeasons.includes(seasonalBranding.config.activeSeason);
         
-        return (aiProvider === 'openrouter' || aiProvider === 'deepseek') &&
+        return isTextEngineProvider(aiProvider) &&
                seasonalBranding.config.mode === 'auto' &&
                !isSpecialSeason;
     }, [aiProvider, seasonalBranding.config.mode, seasonalBranding.config.activeSeason]);
