@@ -1,5 +1,6 @@
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { TIMEOUT_POLICY_MS } from '../../core/config/appConfig'
+import { shortText } from '../../lib/textUtils'
 import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
 import {
   buildGenerationPrompt,
@@ -19,24 +20,12 @@ export {
 
 const workspaceImageSourceCache = new Map()
 
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 function escapeXml(value = '') {
   return String(value || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-}
-
-function shortText(value = '', max = 260) {
-  const text = normalizeText(value)
-  if (text.length <= max) return text
-  return `${text.slice(0, max)}…`
 }
 
 function buildLocalSvgDataUrl(subject = '') {

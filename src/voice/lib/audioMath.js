@@ -4,28 +4,12 @@ import { detectParticipantFloorCommand } from './participantFloor.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 import { buildWakeWordPattern } from './wakeWord.js'
-import { cleanForSpeech, normalizeSpaces } from '../../lib/textUtils'
+import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils'
 
-// Fuente única de normalización de espacios (src/lib/textUtils.ts).
-export { cleanForSpeech, normalizeSpaces }
-
-const ACCENT_MAP = {
-  á: 'a',
-  é: 'e',
-  í: 'i',
-  ó: 'o',
-  ú: 'u',
-  ü: 'u',
-  ñ: 'n',
-}
-
-export function stripDiacritics(text = '') {
-  return String(text)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[áéíóúüñ]/g, (char) => ACCENT_MAP[char] || char)
-}
+// Fuente única de normalización de espacios y del plegado NFD
+// (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
+// histórico de este módulo (minúsculas) sin definir algoritmo propio.
+export { cleanForSpeech, normalizeSpaces, stripDiacritics }
 
 export function detectTranscriptLanguage(text = '') {
   const normalized = stripDiacritics(text)

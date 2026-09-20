@@ -3,6 +3,7 @@
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
  */
 import { VISUAL_CONFIG } from './visualConfig.js'
+import { normalizeSpaces, shortText } from '../../lib/textUtils'
 
 export const VISUAL_PIPELINE_KEYS = [
   'primary',
@@ -65,23 +66,10 @@ export function listConfiguredVisualPipelineRules() {
   })
 }
 
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function shortText(value = '', max) {
-  const text = normalizeText(value)
-  const limit = Number.isFinite(max) && max > 0 ? max : text.length
-  if (text.length <= limit) return text
-  return `${text.slice(0, limit)}…`
-}
-
 /** Núcleo del brief: solo campos del workspace (decisión IA). */
 export function resolveVisualBriefCore(workspace = {}) {
   return shortText(
-    normalizeText(workspace.prompt_visual || workspace.contenido || workspace.titulo || ''),
+    normalizeSpaces(workspace.prompt_visual || workspace.contenido || workspace.titulo || ''),
     getVisualPipelineConfig().promptMaxSubjectChars,
   )
 }

@@ -37,11 +37,33 @@ export function stripDiacritics(s: string): string {
 }
 
 /**
+ * Variante en minúsculas de {@link stripDiacritics}. Es el contrato histórico
+ * del motor de voz (`audioMath.stripDiacritics`): plegado case-insensitive en
+ * un solo paso. Vive aquí para que el algoritmo NFD exista una sola vez.
+ */
+export function stripDiacriticsLower(s: string): string {
+    return stripDiacritics(String(s)).toLowerCase();
+}
+
+/**
  * Normaliza texto para comparación: sin diacríticos, minúsculas y espacios
- * colapsados. Fuente única (antes duplicada en 7 archivos).
+ * colapsados. Fuente única (antes duplicada en 7 archivos y en musicPlayer.ts).
  */
 export function normalizeForMatch(s = ''): string {
     return stripDiacritics(s).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Recorta `value` a `max` caracteres para prompts y etiquetas, colapsando
+ * primero los espacios. Un `max` no válido (undefined, NaN o ≤ 0) deja el
+ * texto completo sin recorte. Fuente única (antes duplicada en
+ * imageGeneration.js y fluVisualPipeline.js).
+ */
+export function shortText(value = '', max?: number): string {
+    const text = normalizeSpaces(value);
+    const limit = typeof max === 'number' && Number.isFinite(max) && max > 0 ? max : text.length;
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit)}…`;
 }
 
 /**
