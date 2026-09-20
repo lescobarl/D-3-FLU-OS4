@@ -1,11 +1,11 @@
 {
-  "id": "C31",
+  "id": "C32",
   "mode": "full",
-  "task": "Persistencia — perfiles de voz solo en Dexie",
-  "base": "919d957730848f34424f397fb1339517c21d3da3",
-  "objective": "backupSystem deja de duplicar los perfiles de voz en localStorage.",
+  "task": "Arquitectura — borrado lógico en memoria a largo plazo",
+  "base": "c3aabdad6435617854595a2349d9de04343f5a99",
+  "objective": "longTermMemory usa borrado lógico (deleted:true), no store.delete físico.",
   "allow": [
-    "src/core/autonomy/backupSystem.ts"
+    "src/lib/longTermMemory.ts"
   ],
   "deny": [
     ".task/**",
@@ -20,19 +20,19 @@
     "plans/**"
   ],
   "maxFiles": 2,
-  "maxLines": 200,
-  "dod": "npx vitest run tests/voiceProfilesLocalStorageGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/voiceProfilesLocalStorageGuard.test.ts --reporter=dot",
+  "maxLines": 150,
+  "dod": "npx vitest run tests/longTermMemoryDeleteGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/longTermMemoryDeleteGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ningún módulo duplica los perfiles de voz en localStorage",
+    "statement": "No hay borrado físico en longTermMemory",
     "metric": {
-      "command": "node scripts/audit-metric.mjs voiceprofiles-localstorage",
+      "command": "node scripts/audit-metric.mjs longterm-delete",
       "target": 0
     },
-    "base": "919d957730848f34424f397fb1339517c21d3da3",
+    "base": "c3aabdad6435617854595a2349d9de04343f5a99",
     "guardFiles": [
-      "tests/voiceProfilesLocalStorageGuard.test.ts"
+      "tests/longTermMemoryDeleteGuard.test.ts"
     ]
   }
 }

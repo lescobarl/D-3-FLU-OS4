@@ -43,5 +43,6 @@
   "tests/notasComprasGuard.test.ts": "9014f4517a38de920db345f7723fc8beaf298f67c8b80a7448663d0bdbc7f59f",
   "tests/borradoLogicoGuard.test.ts": "3412099a37c9202da640c484fbea8894e4da17303f694515e7792d6c03a05670",
   "tests/indexedDbSingleGuard.test.ts": "9484d4762c3cd118b002a84bd601f66e1062ad8e1efa734df02e788a62d51256",
-  "tests/voiceProfilesLocalStorageGuard.test.ts": "b0e5b8a1fad58b2acb9680041081df9aa52648f241e941e2c30111a322bae883"
+  "tests/voiceProfilesLocalStorageGuard.test.ts": "b0e5b8a1fad58b2acb9680041081df9aa52648f241e941e2c30111a322bae883",
+  "tests/longTermMemoryDeleteGuard.test.ts": "3d97dbb2b055134ab1dce23dd918539f30b3a2e83f9e9b2e497380ac4b59923d"
 }

@@ -464,3 +464,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Backup/restore sin duplicar perfiles de voz en pantalla real.
+
+---
+
+## C32 — Borrado lógico en longTermMemory (ya satisfecho por C30)
+
+Estado: el invariante de C32 (`longterm-delete = 0`, guard `longTermMemoryDeleteGuard` verde) quedó cerrado al ejecutar C30, que sustituyó el `store.delete(item.id)` del cleanup por borrado lógico (`bulkPut({...deleted:true})`).
+
+No se puede obtener gate rojo→verde porque la base (HEAD tras C30) ya está verde; forzar el gate daría "hito cosmético". Por eso NO se re-ejecuta el gate de C32 y se documenta el cierre por C30 (`919d957`).
+
+Validado contra:
+- node scripts/audit-metric.mjs longterm-delete → 0 (target 0).
+- npx vitest run tests/longTermMemoryDeleteGuard.test.ts → 1 passed.
+
+No validado (DoD-producto, pendiente del usuario):
+- Depuración de memorias expiradas sin borrado físico en pantalla real.
