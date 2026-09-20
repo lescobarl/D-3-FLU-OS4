@@ -10,9 +10,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson';
 import { buildBrowserUrl } from '../core/browser/browserSession';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
+import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
 
 
-const DEFAULT_TIMEOUT_MS = 10000;
+const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
 
 /** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
 const sendJson = (res: ServerResponse, status: number, data: unknown) =>
@@ -86,7 +87,7 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   const target = parsed.searchParams.get('url') || '';
   const allowlist = parseAllowlist(parsed.searchParams.get('allowlist'));
   const scheme = parsed.searchParams.get('scheme') || 'https';
-  const timeoutMs = Number(parsed.searchParams.get('timeout')) || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = Number(parsed.searchParams.get('timeout')) || defaultProxyMs;
   // F1 — Idioma: llega por query desde el comando de voz (NAVEGAR) y se
   // aplica como Accept-Language al sitio destino.
   const lang = parsed.searchParams.get('lang') || 'es';

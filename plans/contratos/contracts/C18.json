@@ -10,7 +10,9 @@
     "src/server/searchProxy.ts",
     "src/voice/lib/voiceIdWorkerClient.js",
     "src/server/browserProxy.ts",
-    "src/services/musicSearch.ts"
+    "src/services/musicSearch.ts",
+    "src/core/config/appConfig.ts",
+    "src/core/config/sharedConfig.ts"
   ],
   "deny": [
     ".task/**",

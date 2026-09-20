@@ -2,6 +2,7 @@
  * Cliente Web Worker: zero-copy (Transferable) + drop policy (solo el audio más reciente).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig'
 import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
@@ -9,7 +10,7 @@ import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
 let worker = null
 let seq = 0
 const pending = new Map()
-const WORKER_REQUEST_TIMEOUT_MS = 45000
+const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
 const EMBED_TYPES = new Set(['embed', 'embedAndMatch'])
 
 let embedInFlight = false
@@ -115,7 +116,7 @@ function postImmediate(type, payload = {}, transfer = []) {
       if (!pending.has(id)) return
       pending.delete(id)
       reject(new Error(`voiceId worker timeout (${type})`))
-    }, WORKER_REQUEST_TIMEOUT_MS)
+    }, workerRequestMs)
     entry.timer = timer
     w.postMessage({ id, type, payload }, transfer)
   })

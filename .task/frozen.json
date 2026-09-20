@@ -33,5 +33,6 @@
   "tests/wakeStripSingleGuard.test.ts": "ee1d5845eb4c3d4d8d5fd5a8ec895daf79a2fb84c7828b259b06f103e6cbeb5e",
   "tests/consumidoresNormGuard.test.ts": "e48b1ec582c6a6b61685f3127284a827c23043758dcc3879b54a5372c26c28f9",
   "tests/finalizeSingleRouteGuard.test.ts": "468a21a46066132e73808f74e9cfb6c6190a12fc7ce8fd846e72a3d417b0bfdc",
-  "tests/motorNormalizaGuard.test.ts": "dd0cfa1bd3d24dc3008c886e917b94f9871330ac9023463588691dde4bbb8f63"
+  "tests/motorNormalizaGuard.test.ts": "dd0cfa1bd3d24dc3008c886e917b94f9871330ac9023463588691dde4bbb8f63",
+  "tests/timeoutsConfigGuard.test.ts": "4dfe2d567d9bf2a6cd15743a27fb9b607fc87077411e11c1d9e627314cc30cab"
 }

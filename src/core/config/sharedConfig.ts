@@ -111,6 +111,32 @@ export const TIMEOUT_POLICY_MS = {
     falVideoFetchAbort: 200_000,
 } as const;
 
+/**
+ * Timeouts de RED por defecto (ms) — fuente ÚNICA (C18, Rule #1: NO HARDCODE).
+ * Los consumidores (httpClient, workers, proxies, musicSearch) importan de aquí;
+ * ningún módulo re-declara su propio literal de timeout.
+ */
+export const REQUEST_TIMEOUT_DEFAULTS = {
+    /** Petición de texto IA (motor por defecto). */
+    AI_TEXT_MS: 45_000,
+    /** Conversación / consulta general. */
+    CONVERSATION_MS: 15_000,
+    /** Consulta de minutas (lookup corto). */
+    MINUTES_MS: 10_000,
+    /** Generación de imagen nativa. */
+    IMAGE_MS: 90_000,
+    /** Petición a worker (fbx / voice id). */
+    WORKER_MS: 45_000,
+    /** Proxy de búsqueda. */
+    SEARCH_PROXY_MS: 8_000,
+    /** Proxy de navegador curado. */
+    BROWSER_PROXY_MS: 10_000,
+    /** Búsqueda de música (Deezer). */
+    MUSIC_SEARCH_MS: 8_000,
+    /** Sonda de transmisibilidad de audio. */
+    MUSIC_PROBE_MS: 4_000,
+} as const;
+
 // -----------------------------------------------------------
 // Helpers puros (compartidos cliente/servidor)
 // -----------------------------------------------------------

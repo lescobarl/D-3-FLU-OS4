@@ -1,12 +1,18 @@
 {
-  "id": "C39",
+  "id": "C18",
   "mode": "full",
-  "task": "Voz §9.2/§9.3 — el motor no re-normaliza ni re-deriva",
-  "base": "a5c0aff406336cad8617242f968bbf27331ce7a5",
-  "objective": "El motor usa un único normalizador y deriva la query del valor commiteado, sin re-normalizar.",
+  "task": "Hardcode — timeouts desde config central",
+  "base": "a089d786506cd536daff976b856e55cdd67722ca",
+  "objective": "Las constantes de timeout de red viven en appConfig/sharedConfig y se importan; sin literales locales.",
   "allow": [
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "src/voice/lib/turnTranscript.js"
+    "src/avatar/workers/fbxWorkerClient.ts",
+    "src/core/ai/httpClient.ts",
+    "src/server/searchProxy.ts",
+    "src/voice/lib/voiceIdWorkerClient.js",
+    "src/server/browserProxy.ts",
+    "src/services/musicSearch.ts",
+    "src/core/config/appConfig.ts",
+    "src/core/config/sharedConfig.ts"
   ],
   "deny": [
     ".task/**",
@@ -20,20 +26,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 3,
-  "maxLines": 300,
-  "dod": "npx vitest run tests/motorNormalizaGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/motorNormalizaGuard.test.ts --reporter=dot",
+  "maxFiles": 8,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/timeoutsConfigGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/timeoutsConfigGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "El motor no usa un segundo normalizador ni re-deriva la frase",
+    "statement": "No hay constantes de timeout fuera de la config",
     "metric": {
-      "command": "node scripts/audit-metric.mjs motor-normaliza",
+      "command": "node scripts/audit-metric.mjs timeouts-config",
       "target": 0
     },
-    "base": "a5c0aff406336cad8617242f968bbf27331ce7a5",
+    "base": "a089d786506cd536daff976b856e55cdd67722ca",
     "guardFiles": [
-      "tests/motorNormalizaGuard.test.ts"
+      "tests/timeoutsConfigGuard.test.ts"
     ]
   }
 }

@@ -26,9 +26,10 @@ import {
 } from '../core/search/searchSession';
 import type { ResolvedLanguage } from '../core/search/searchLanguage';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
+import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
 
 
-const DEFAULT_TIMEOUT_MS = 8000;
+const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.SEARCH_PROXY_MS;
 const DEFAULT_MAX_RESULTS = 8;
 const USER_AGENT = 'FLU-OS4-Curaduria/1.0 (modo lectura curada)';
 
@@ -149,7 +150,7 @@ async function handleSearch(
   const query = (parsed.searchParams.get('q') || '').trim();
   const lang = parsed.searchParams.get('lang') || 'es';
   const allowlist = parseAllowlist(parsed.searchParams.get('allowlist'));
-  const timeoutMs = Number(parsed.searchParams.get('timeout')) || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = Number(parsed.searchParams.get('timeout')) || defaultProxyMs;
   const maxResults = Number(parsed.searchParams.get('max')) || DEFAULT_MAX_RESULTS;
   const providersCfg = parseProviders(parsed.searchParams.get('providers'));
   // F5 — Modo seguro (safeSearch / supervisado): solo resultados permitidos.

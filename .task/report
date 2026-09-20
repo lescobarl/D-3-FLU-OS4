@@ -282,3 +282,24 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Transcripción y commit de turno en conversación real.
+
+---
+
+## C18 — Timeouts desde config (allow ampliado por el usuario)
+
+Enmienda: se añadieron `src/core/config/appConfig.ts` y `src/core/config/sharedConfig.ts` al allow de C18.json (autorizado por el usuario) y se re-activó C18.
+
+Cambios aplicados:
+- src/core/config/sharedConfig.ts — nuevo REQUEST_TIMEOUT_DEFAULTS (AI/reconversación/minutos/imagen/worker/proxies/música), fuente única.
+- src/core/ai/httpClient.ts — AI_REQUEST_DEADLINE_MS y presets derivados de config.
+- src/avatar/workers/fbxWorkerClient.ts, src/voice/lib/voiceIdWorkerClient.js — timeout de worker desde config.
+- src/server/browserProxy.ts, src/server/searchProxy.ts — timeout por defecto desde config.
+- src/services/musicSearch.ts — timeout de petición y de sonda desde config.
+
+Validado contra:
+- npm run gate (verde): métrica base=7 actual=0 target=0 · guard base=1 actual=0.
+- npx vitest run tests/httpClient.test.ts tests/musicSearch.test.ts: 11 passed.
+- git diff --stat: 10 archivos (8 de código/contrato, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Búsqueda de música/proxies con timeout real en pantalla.
