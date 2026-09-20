@@ -67,9 +67,6 @@ function createMapDb(initialMoods: MoodRecord[] = []): MoodDb {
         moodCheckIns.set(record.id, { ...record, sync: { ...record.sync } });
         return undefined;
       },
-      async delete(id: string): Promise<void> {
-        moodCheckIns.delete(id);
-      },
       async get(id: string): Promise<MoodRecord | undefined> {
         const row = moodCheckIns.get(id);
         return row ? { ...row, sync: { ...row.sync } } : undefined;
@@ -318,7 +315,10 @@ describe('moodService — borrado', () => {
 
     const result = await svc.removeMood('seed-1');
     expect(result).toEqual({ ok: true });
-    expect(await seeded.moodCheckIns.toArray()).toHaveLength(0);
+    const rows = await seeded.moodCheckIns.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sync?.deleted).toBe(true);
+    expect(await svc.listMoods()).toHaveLength(0);
 
     expect(addAuditLog).toHaveBeenCalledTimes(1);
     expect(addAuditLog).toHaveBeenCalledWith(
@@ -326,7 +326,7 @@ describe('moodService — borrado', () => {
       'moodCheckIns',
       'seed-1',
       { participantId: 'p1', date: TODAY, mood: 4 },
-      null,
+      { participantId: 'p1', date: TODAY, mood: 4 },
       'moodService',
     );
   });

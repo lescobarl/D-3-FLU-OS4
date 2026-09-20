@@ -1,0 +1,38 @@
+{
+  "id": "C16",
+  "mode": "full",
+  "task": "Basura — eliminar módulos muertos de src/lib",
+  "base": "__BASE__",
+  "objective": "Se eliminan los 15 módulos sin importador de producción y sus tests huérfanos.",
+  "allow": [
+    "src/lib/**",
+    "src/voice/lib/localTranslate.js",
+    "tests/conversationFlow.test.ts",
+    "tests/emotionalState.test.ts",
+    "tests/exportUtils.test.ts",
+    "tests/forgettingCurve.test.ts",
+    "tests/goalTracker.test.ts",
+    "tests/memoryConsolidation.test.ts",
+    "tests/minuteSuggester.test.ts",
+    "tests/participantProfiles.test.ts",
+    "tests/preferenceLearner.test.ts",
+    "tests/proactiveEngine.test.ts",
+    "tests/theoryOfMind.test.ts",
+    "tests/transcriptQuality.test.ts",
+    "tests/userEmotionDetector.test.ts",
+    "tests/localTranslate.test.ts"
+  ],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 45,
+  "maxLines": 6000,
+  "dod": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "No quedan módulos muertos conocidos",
+    "metric": { "command": "node scripts/audit-metric.mjs modulos-muertos", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/modulosMuertosGuard.test.ts"]
+  }
+}

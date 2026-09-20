@@ -1,0 +1,21 @@
+{
+  "id": "C7",
+  "mode": "full",
+  "task": "Hardcode — una sola base Pollinations",
+  "base": "__BASE__",
+  "objective": "La base de Pollinations se define en un único módulo reutilizado por server-safe y visual.",
+  "allow": ["src/core/config/sharedConfig.ts", "src/voice/lib/visualConfig.js"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 3,
+  "maxLines": 120,
+  "dod": "npx vitest run tests/pollinationsFuenteUnicaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/pollinationsFuenteUnicaGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "Un solo módulo define la base Pollinations",
+    "metric": { "command": "node scripts/audit-metric.mjs pollinations-fuentes", "target": 1 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/pollinationsFuenteUnicaGuard.test.ts"]
+  }
+}

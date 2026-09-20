@@ -732,9 +732,22 @@ export class AutoOptimizationSystem {
     private optimizer: ParameterOptimizer;
     private evaluationIntervalId: number | null = null;
     
-    constructor(config: Partial<AutoOptimizationConfig> = {}) {
+    /** Punto de composición de dependencias (§2.4). */
+    static create(
+        config: Partial<AutoOptimizationConfig> = {},
+        deps: { optimizer?: ParameterOptimizer } = {},
+    ): AutoOptimizationSystem {
+        return new AutoOptimizationSystem(config, {
+            optimizer: deps.optimizer ?? new ParameterOptimizer(),
+        });
+    }
+
+    constructor(
+        config: Partial<AutoOptimizationConfig> = {},
+        deps: { optimizer: ParameterOptimizer },
+    ) {
         this.config = { ...DEFAULT_OPTIMIZATION_CONFIG, ...config };
-        this.optimizer = new ParameterOptimizer();
+        this.optimizer = deps.optimizer;
     }
     
     start(): void {
@@ -867,7 +880,7 @@ let globalAutoOptimization: AutoOptimizationSystem | null = null;
 
 export function getAutoOptimizationSystem(config?: Partial<AutoOptimizationConfig>): AutoOptimizationSystem {
     if (!globalAutoOptimization) {
-        globalAutoOptimization = new AutoOptimizationSystem(config);
+        globalAutoOptimization = AutoOptimizationSystem.create(config);
     }
     return globalAutoOptimization;
 }

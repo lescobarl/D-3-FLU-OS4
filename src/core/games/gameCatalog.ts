@@ -12,6 +12,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameId } from './types';
+import { normalizeForMatch } from './gameUtils';
 import { createSimonDiceEngine } from './simonDice';
 import { createRiddlesEngine } from './riddles';
 import { createVeoVeoEngine } from './veoVeo';
@@ -58,15 +59,7 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
     'abecedario', 'loteria', 'respiracion', 'karaoke',
   ]);
 
-// --- Helpers locales de normalización (sin dependencias) ---
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
+// --- Tokenización local (sin dependencias) ---
 
 function findTokenIndex(normalized = '', phrase = ''): number | null {
     if (!phrase) return null;

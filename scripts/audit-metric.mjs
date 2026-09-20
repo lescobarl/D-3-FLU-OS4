@@ -1,0 +1,157 @@
+#!/usr/bin/env node
+/**
+ * audit-metric — métricas de los contratos de saneamiento (SOLO LECTURA).
+ *
+ * Imprime UN entero en stdout. El task-gate lo parsea con parseMetricValue.
+ * Uso: node scripts/audit-metric.mjs <id>
+ *
+ * Congelado por hash en .task/frozen.json (§B14): el agente que ejecuta la
+ * tarea NO puede editar este archivo ni la métrica que produce.
+ */
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
+import { join, relative } from 'node:path'
+
+const ROOT = process.cwd()
+const SRC = join(ROOT, 'src')
+
+function walk(dir, acc = []) {
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry)
+    if (statSync(p).isDirectory()) walk(p, acc)
+    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
+  }
+  return acc
+}
+
+const rel = (f) => relative(ROOT, f).replace(/\\/g, '/')
+const read = (f) => readFileSync(f, 'utf8')
+const linesOf = (f) => read(f).split(/\r?\n/)
+const stripComment = (line) => {
+  const t = line.trim()
+  if (t.startsWith('*') || t.startsWith('/*') || t.startsWith('//')) return ''
+  return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
+}
+
+const RE = {
+  vozInstancia: /new\s+Recognition\s*\(|new\s+(?:window\.)?(?:webkit)?SpeechRecognition\s*\(/,
+  allowlist: /\[\s*'wikipedia\.org'\s*,\s*'educ\.ar'\s*\]/,
+  voiceProfilesWriter: /fluDb\.voiceProfiles\.(?:put|add|delete|bulkDelete)\s*\(/,
+  aiProviderLiteral: /['"]flu-ai-provider['"]/,
+  textApiKeyDirecta: /import\.meta\.env\.VITE_OPENROUTER_API_KEY/,
+  wakeRuntime: /ok\s*flu|okay\s*flow/i,
+  pollinations: /image\.pollinations\.ai/,
+  conversationWriter: /fluDb\.conversations\.(?:put|add|delete|bulkDelete)\s*\(|fluDb\.conversations\.where\s*\(/,
+  sessionBackend: /flu-session-state|fluDb\.sessionState/,
+  minutesDoubleWrite: /integrationStore\.addMinute\s*\(/,
+  textKeyLiteral: /['"]flu-text-model['"]|['"]flu-text-api-key['"]/,
+  physicalDelete: /fluDb\.[A-Za-z]+\.(?:delete|bulkDelete|clear)\s*\(|\.where\([^)]*\)\s*\.delete\(/g,
+  nonV4Id: /voice-\$\{Date\.now\(\)\}/,
+  staleStack: /React 18|Vite 5|Tailwind CSS 3/g,
+}
+
+const FILES = walk(SRC)
+const DEAD_MODULES = [
+  'src/lib/conversationFlow.ts',
+  'src/lib/emotionalState.ts',
+  'src/lib/exportUtils.ts',
+  'src/lib/forgettingCurve.ts',
+  'src/lib/goalTracker.ts',
+  'src/lib/longTermMemory.ts',
+  'src/lib/memoryConsolidation.ts',
+  'src/lib/minuteSuggester.ts',
+  'src/lib/participantProfiles.ts',
+  'src/lib/preferenceLearner.ts',
+  'src/lib/proactiveEngine.ts',
+  'src/lib/theoryOfMind.ts',
+  'src/lib/transcriptQuality.ts',
+  'src/lib/userEmotionDetector.ts',
+  'src/voice/lib/localTranslate.js',
+]
+const ORPHANS = [
+  'plan_solucion_basura.md',
+  'CONTEXTO_FLU_OS2.md',
+  'ESTADO_SISTEMA.md',
+  'mermaid-diagrama1.png',
+  'tools/e2e-sims/sim-pollinations-caida-openrouter.spec.ts',
+  'tools/live-check.mjs',
+]
+
+function countFilesWhere(pred) {
+  let n = 0
+  for (const f of FILES) if (pred(rel(f), f)) n += 1
+  return n
+}
+function countLinesWhere(pred) {
+  let n = 0
+  for (const f of FILES) for (const line of linesOf(f)) if (pred(rel(f), line)) n += 1
+  return n
+}
+function countExisting(paths) {
+  let n = 0
+  for (const p of paths) if (existsSync(join(ROOT, p))) n += 1
+  return n
+}
+
+const metrics = {
+  // ---- C1-C5 -------------------------------------------------------------
+  'voz-instancia': () =>
+    countFilesWhere(
+      (r, f) =>
+        r !== 'src/voice/lib/speechRecognitionLocal.js' &&
+        linesOf(f).some((l) => RE.vozInstancia.test(l)),
+    ),
+  'search-allowlist': () =>
+    countLinesWhere((r, l) => r !== 'src/voice/lib/fluConfig.js' && RE.allowlist.test(l)),
+  'voiceprofiles-escritores': () => countFilesWhere((_r, f) => RE.voiceProfilesWriter.test(read(f))),
+  'ai-provider-literal': () =>
+    countLinesWhere((r, l) => r !== 'src/core/config/appConfig.ts' && RE.aiProviderLiteral.test(l)),
+  'text-api-key-directa': () =>
+    countLinesWhere(
+      (r, l) =>
+        !r.startsWith('src/dev/') &&
+        r !== 'src/core/config/appConfig.ts' &&
+        r !== 'src/core/config/sharedConfig.ts' &&
+        RE.textApiKeyDirecta.test(l),
+    ),
+  // ---- C6-C24 ------------------------------------------------------------
+  'wake-runtime': () =>
+    countLinesWhere(
+      (r, l) => r !== 'src/voice/lib/fluConfig.js' && RE.wakeRuntime.test(stripComment(l)),
+    ),
+  'pollinations-fuentes': () =>
+    countFilesWhere((r, f) => r !== 'src/components/FluSettingsPanel.tsx' && RE.pollinations.test(read(f))),
+  'conversacion-escritores': () => countFilesWhere((_r, f) => RE.conversationWriter.test(read(f))),
+  'sesion-backends': () => countFilesWhere((_r, f) => RE.sessionBackend.test(read(f))),
+  'minutos-doble-escritura': () =>
+    countLinesWhere(
+      (r, l) => r === 'src/hooks/useMinuteHandlers.ts' && RE.minutesDoubleWrite.test(stripComment(l)),
+    ),
+  'text-key-literales': () =>
+    countLinesWhere(
+      (r, l) => r !== 'src/core/config/appConfig.ts' && RE.textKeyLiteral.test(stripComment(l)),
+    ),
+  'borrado-fisico': () => {
+    let n = 0
+    for (const f of FILES) {
+      const m = read(f).match(RE.physicalDelete)
+      if (m) n += m.length
+    }
+    return n
+  },
+  'uuid-no-v4': () => countLinesWhere((_r, l) => RE.nonV4Id.test(l)),
+  'modulos-muertos': () => countExisting(DEAD_MODULES),
+  'huerfanos': () => countExisting(ORPHANS),
+  'stack-doc': () => {
+    const p = join(ROOT, 'AGENTS.md')
+    if (!existsSync(p)) return -1
+    const m = read(p).match(RE.staleStack)
+    return m ? m.length : 0
+  },
+}
+
+const id = process.argv[2]
+if (!metrics[id]) {
+  console.error(`audit-metric: id desconocido "${id}". Válidos: ${Object.keys(metrics).join(', ')}`)
+  process.exit(1)
+}
+process.stdout.write(String(metrics[id]()))

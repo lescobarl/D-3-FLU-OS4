@@ -39,7 +39,6 @@ export interface MoodConfig {
 export interface MoodTableDb {
   add(record: MoodRecord): Promise<unknown>;
   put(record: MoodRecord): Promise<unknown>;
-  delete(id: string): Promise<void>;
   get(id: string): Promise<MoodRecord | undefined>;
   toArray(): Promise<MoodRecord[]>;
 }
@@ -134,7 +133,7 @@ export function createMoodService({
 
     const all = await db.moodCheckIns.toArray();
     const existing = all.find(
-      (m) => m.participantId === input.participantId && m.date === input.date,
+      (m) => !m.sync?.deleted && m.participantId === input.participantId && m.date === input.date,
     );
 
     if (existing) {
@@ -159,7 +158,7 @@ export function createMoodService({
     }
 
     if (config.maxLogsPerParticipant !== undefined) {
-      const count = all.filter((m) => m.participantId === input.participantId).length;
+      const count = all.filter((m) => !m.sync?.deleted && m.participantId === input.participantId).length;
       if (count >= config.maxLogsPerParticipant) {
         return { ok: false, reason: 'limit-reached' };
       }
@@ -192,7 +191,9 @@ export function createMoodService({
 
   const listMoods = async (participantId?: string): Promise<MoodRecord[]> => {
     const all = await db.moodCheckIns.toArray();
-    const filtered = participantId ? all.filter((m) => m.participantId === participantId) : all;
+    const filtered = (participantId ? all.filter((m) => m.participantId === participantId) : all).filter(
+      (m) => !m.sync?.deleted,
+    );
     return filtered
       .slice()
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt))
@@ -205,7 +206,7 @@ export function createMoodService({
   ): Promise<MoodRecord | undefined> => {
     if (!participantId || !date || !DATE_KEY_RE.test(date)) return undefined;
     const all = await db.moodCheckIns.toArray();
-    const row = all.find((m) => m.participantId === participantId && m.date === date);
+    const row = all.find((m) => !m.sync?.deleted && m.participantId === participantId && m.date === date);
     return row ? copyRecord(row) : undefined;
   };
 
@@ -241,13 +242,18 @@ export function createMoodService({
     if (!id) return { ok: false, reason: 'invalid-input' };
     const mood = await db.moodCheckIns.get(id);
     if (!mood) return { ok: false, reason: 'mood-not-found' };
-    await db.moodCheckIns.delete(id);
+    const updated: MoodRecord = {
+      ...mood,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(mood.sync, timestamp()), deleted: true },
+    };
+    await db.moodCheckIns.put(updated);
     await addAuditLog(
       'mood.log.remove',
       'moodCheckIns',
       id,
       { participantId: mood.participantId, date: mood.date, mood: mood.mood },
-      null,
+      { participantId: mood.participantId, date: mood.date, mood: mood.mood },
       'moodService',
     );
     return { ok: true };

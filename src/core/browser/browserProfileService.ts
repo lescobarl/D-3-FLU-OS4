@@ -76,7 +76,6 @@ export interface BrowserProfileConfig {
 export interface BrowserProfilesDb {
   add(record: BrowserProfileRecord): Promise<unknown>;
   put(record: BrowserProfileRecord): Promise<unknown>;
-  delete(id: string): Promise<void>;
   get(id: string): Promise<BrowserProfileRecord | undefined>;
   toArray(): Promise<BrowserProfileRecord[]>;
 }
@@ -202,20 +201,26 @@ export function createBrowserProfileService({
   const reset = async (participantId: string): Promise<boolean> => {
     const row = await db.get(participantId);
     if (!row) return false;
-    await db.delete(participantId);
-    await addAuditLog('browser.profile.reset', 'browserProfile', participantId, row, null, 'browserProfileService');
+    const updated: BrowserProfileRecord = {
+      ...row,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
+    };
+    await db.put(updated);
+    await addAuditLog('browser.profile.reset', 'browserProfile', participantId, row, updated, 'browserProfileService');
     return true;
   };
 
   const getForParticipant = async (participantId: string): Promise<BrowserProfileRecord | undefined> => {
     if (!participantId) return undefined;
     const row = await db.get(participantId);
-    return row ? copyRecord(row) : undefined;
+    return row && !row.sync?.deleted ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<BrowserProfileRecord[]> => {
     const all = await db.toArray();
     return all
+      .filter((r) => !r.sync?.deleted)
       .slice()
       .sort((a, b) => (a.participantName ?? a.id).localeCompare(b.participantName ?? b.id, 'es'))
       .map(copyRecord);

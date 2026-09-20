@@ -350,7 +350,10 @@ describe('onboardingService — servicio con DI', () => {
 
     await svc.reset('papa-1');
 
-    expect(await seeded.toArray()).toHaveLength(0);
+    const rows = await seeded.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sync?.deleted).toBe(true);
+    expect((await svc.load('papa-1')).completed).toBe(false);
     expect(addAuditLog).toHaveBeenCalledWith(
       'onboarding.reset',
       'onboardingStates',

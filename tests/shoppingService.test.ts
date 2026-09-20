@@ -162,9 +162,13 @@ describe('shoppingService — borrado y limpieza', () => {
 
     const removed = await service.remove(added.id);
     expect(removed).toBe(true);
-    expect(await db.get(added.id)).toBeUndefined();
+    const row = await db.get(added.id);
+    expect(row?.sync.deleted).toBe(true);
+    expect(await service.get(added.id)).toBeUndefined();
     expect(vi.mocked(addAuditLog)).toHaveBeenCalledWith(
-      'shopping.remove', 'shoppingItem', added.id, added, null, 'shoppingService',
+      'shopping.remove', 'shoppingItem', added.id, added,
+      expect.objectContaining({ sync: expect.objectContaining({ deleted: true }) }),
+      'shoppingService',
     );
   });
 

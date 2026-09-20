@@ -67,9 +67,6 @@ function createMapDb(initial: CatalogRecord<SearchSite>[] = []): CatalogDb<Searc
       map.set(record.id, { ...record, data: structuredClone(record.data), sync: { ...record.sync } });
       return undefined;
     },
-    async delete(id) {
-      map.delete(id);
-    },
     async get(id) {
       const row = map.get(id);
       return row ? { ...row, data: structuredClone(row.data), sync: { ...row.sync } } : undefined;

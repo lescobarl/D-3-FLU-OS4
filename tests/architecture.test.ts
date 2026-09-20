@@ -2,7 +2,7 @@
 // FLU OS4 — Architecture & Compliance Tests
 // ============================================================
 // Validates that the refactored codebase complies with
-// CLAUDE.md constraints:
+// AGENTS.md constraints:
 //   - Rule #1: NO HARDCODE — centralized configuration
 //   - Rule #2: NO PARCHES — no external mutations
 //   - Obligación #1: DI via interfaces

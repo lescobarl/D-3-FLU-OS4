@@ -110,7 +110,7 @@ export function useConversationPersistence(participantId?: string) {
                     useIntegrationStore.getState().batchLoadHistory([]);
                 }
                 const rows = (await fluDb.conversations.toArray())
-                    .filter((row) => (row.participantId || 'global') === scope)
+                    .filter((row) => (row.participantId || 'global') === scope && !row.sync?.deleted)
                     .sort((a, b) => a.timestamp - b.timestamp)
                     .slice(-MAX_LOADED_ROWS);
 
@@ -150,9 +150,20 @@ export function useConversationPersistence(participantId?: string) {
                             .map((e) => e.id)
                             .filter(Boolean);
                         if (idsToRemove.length > 0) {
-                            fluDb.conversations.bulkDelete(idsToRemove).catch((err) => {
-                                console.error('[ConversationPersistence] Error cleaning up system events from DB:', err);
-                            });
+                            fluDb.conversations
+                                .where('id')
+                                .anyOf(idsToRemove)
+                                .modify((row) => {
+                                    row.sync = {
+                                        ...row.sync,
+                                        deleted: true,
+                                        revision: (row.sync?.revision ?? 1) + 1,
+                                        updated_at: new Date().toISOString(),
+                                    };
+                                })
+                                .catch((err) => {
+                                    console.error('[ConversationPersistence] Error cleaning up system events from DB:', err);
+                                });
                         }
                     }
 
@@ -205,12 +216,21 @@ export function useConversationPersistence(participantId?: string) {
         savedLengthRef.current = 0;
         fluDb.conversations
             .toArray()
-            .then((all) =>
-                all
-                    .filter((row) => (row.participantId || 'global') === scope)
-                    .map((row) => row.id),
-            )
-            .then((ids) => (ids.length ? fluDb.conversations.bulkDelete(ids) : undefined))
+            .then((all) => {
+                const ids = all
+                    .filter((row) => (row.participantId || 'global') === scope && !row.sync?.deleted)
+                    .map((row) => row.id);
+                return ids.length
+                    ? fluDb.conversations.where('id').anyOf(ids).modify((row) => {
+                          row.sync = {
+                              ...row.sync,
+                              deleted: true,
+                              revision: (row.sync?.revision ?? 1) + 1,
+                              updated_at: new Date().toISOString(),
+                          };
+                      })
+                    : undefined;
+            })
             .catch((err) => {
                 console.error('[ConversationPersistence] Error clearing persisted history:', err);
             });

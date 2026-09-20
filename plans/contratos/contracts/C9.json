@@ -1,0 +1,21 @@
+{
+  "id": "C9",
+  "mode": "full",
+  "task": "Persistencia — un solo backend de sesión",
+  "base": "__BASE__",
+  "objective": "La sesión se persiste en un único backend (Dexie), eliminando la ruta localStorage duplicada.",
+  "allow": ["src/hooks/useSessionPersistence.ts", "src/voice/lib/fluStorage.js", "src/App.tsx", "src/voice/hooks/useFluVoiceAssistant.js"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 5,
+  "maxLines": 450,
+  "dod": "npx vitest run tests/sesionBackendUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/sesionBackendUnicoGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "Un único archivo implementa la persistencia de sesión",
+    "metric": { "command": "node scripts/audit-metric.mjs sesion-backends", "target": 1 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/sesionBackendUnicoGuard.test.ts"]
+  }
+}

@@ -12,6 +12,7 @@
 // y FLU_CONFIG.browser.languageHosts (config-driven).
 // ============================================================
 import { normalizeHost } from '../browser/browserSession';
+import { stripDiacritics } from '../../lib/textUtils';
 
 export type ResolvedLanguage = 'es' | 'en';
 
@@ -23,10 +24,6 @@ export interface LanguageWordGroup {
 
 /** Mapeo idioma→subdominio por host: config-driven (browser.languageHosts). */
 export type LanguageHostMap = Record<string, Record<string, string>>;
-
-function stripDiacritics(value: string): string {
-    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
 
 function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

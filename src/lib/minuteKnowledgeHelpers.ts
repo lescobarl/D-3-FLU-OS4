@@ -151,19 +151,22 @@ export function findMinuteRecordBySequence<T extends { historyCode?: string }>(r
 // Tema: omitir placeholder genérico y duplicado del título
 // ------------------------------------------------------------
 
-function isGenericMinuteSessionTheme(theme: string = ''): boolean {
+export function isGenericMinuteSessionTheme(theme: string = '', defaultTheme: string = ''): boolean {
     const normalized = cleanForSpeech(theme).toLowerCase();
     if (!normalized) return true;
-    // Sin acceso a FLU_CONFIG aquí; el placeholder típico ("clase", "sesión activa", etc.) no es
-    // crítico porque resolveMinuteThemeForSpeech ya filtra duplicados con el título.
+    if (defaultTheme) return normalized === cleanForSpeech(defaultTheme).toLowerCase();
     return false;
 }
 
 /** Tema útil para voz/UI; omite placeholder genérico y duplicado del título. */
-export function resolveMinuteThemeForSpeech(snapshot: MinuteSnapshotLike = {}, record: MinuteRecordLike = {}): string {
+export function resolveMinuteThemeForSpeech(
+    snapshot: MinuteSnapshotLike = {},
+    record: MinuteRecordLike = {},
+    options: { defaultTheme?: string } = {},
+): string {
     const titulo = normalizeSpaces(snapshot?.titulo || record?.description || '');
     const tema = normalizeSpaces(snapshot?.tema_sesion || '');
-    if (!tema || isGenericMinuteSessionTheme(tema)) return '';
+    if (!tema || isGenericMinuteSessionTheme(tema, options.defaultTheme)) return '';
     if (titulo && cleanForSpeech(titulo).toLowerCase() === cleanForSpeech(tema).toLowerCase()) return '';
     return tema;
 }
@@ -198,7 +201,7 @@ export function createMinuteDraftFromSummary(summary: MinuteSnapshotLike = {}, t
         siguientes_pasos: Array.isArray(summary?.siguientes_pasos)
             ? summary.siguientes_pasos.map((item: string) => normalizeSpaces(item)).filter(Boolean)
             : [],
-        tema_sesion: normalizeSpaces(theme),
+        tema_sesion: normalizeSpaces(summary?.tema_sesion || theme),
     };
 }
 

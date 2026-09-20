@@ -198,7 +198,7 @@ por comportamiento, no por nombres fijos, y lista `archivo:línea:contenido`:
 
 ---
 
-## 5. Hitos (un contrato por turno, §10.6)
+## 5. Hitos (un contrato por hito)
 
 Cada hito: `tsc -b` + guard acotado + `git diff` real + conteo ANTES/DESPUÉS. Si el conteo no
 baja, el hito se revierte (§8.5).

@@ -5,7 +5,7 @@
 // (health monitor, auto-recovery, decision engine, auto-
 // optimization, backup system). Reemplaza los CustomEvent
 // 'flu-*' dispersos (que no tenían ningún listener) por un bus
-// tipado con suscriptores reales. Cumple CLAUDE.md §8.5
+// tipado con suscriptores reales. Cumple AGENTS.md
 // (eventos centralizados) y la Regla de capas: el bus es puro,
 // sin dependencias de window/DOM.
 // ============================================================

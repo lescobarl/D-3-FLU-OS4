@@ -241,6 +241,7 @@ export function createContactService({
   const listContacts = async (): Promise<ContactRecord[]> => {
     const all = await db.contacts.toArray();
     return all
+      .filter((row) => !row.sync?.deleted)
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name, 'es'))
       .map(copyRecord);
@@ -250,13 +251,18 @@ export function createContactService({
     if (!id) return { ok: false, reason: 'invalid-input' };
     const contact = await db.contacts.get(id);
     if (!contact) return { ok: false, reason: 'contact-not-found' };
-    await db.contacts.delete(id);
+    const updated: ContactRecord = {
+      ...contact,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(contact.sync, timestamp()), deleted: true },
+    };
+    await db.contacts.put(updated);
     await addAuditLog(
       'contact.remove',
       'contacts',
       id,
       { name: contact.name, birthday: contact.birthday },
-      null,
+      { name: updated.name, birthday: updated.birthday },
       'contactService',
     );
     return { ok: true };

@@ -82,7 +82,6 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
       db: {
         add: (record) => fluDb.browserProfiles.add(record),
         put: (record) => fluDb.browserProfiles.put(record),
-        delete: (id) => fluDb.browserProfiles.delete(id),
         get: (id) => fluDb.browserProfiles.get(id),
         toArray: () => fluDb.browserProfiles.toArray(),
       },

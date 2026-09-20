@@ -7,6 +7,7 @@
 // ============================================================
 import { v4 as uuidv4 } from 'uuid';
 import { newSyncTuple, type DocumentRecord } from '../db/fluDatabase';
+import { buildSyncTuple } from '../db/syncTuple';
 
 export interface NewDocumentInput {
   kind: DocumentRecord['kind'];
@@ -23,6 +24,8 @@ export interface NewDocumentInput {
 interface DocumentsTable {
   add(record: DocumentRecord): Promise<unknown>;
   toArray(): Promise<DocumentRecord[]>;
+  get(id: string): Promise<DocumentRecord | undefined>;
+  put(record: DocumentRecord): Promise<unknown>;
   delete(id: string): Promise<unknown>;
 }
 
@@ -74,9 +77,13 @@ export function createDocumentsService({
         .filter((row) => (row.personId || 'global') === scope && !row.sync?.deleted)
         .sort((a, b) => b.createdAt - a.createdAt);
     },
+    /** Borrado LÓGICO (§2.9): marca `sync.deleted`; `list` ya filtra borrados. */
     async remove(id: string): Promise<boolean> {
       if (!id) return false;
-      await db.delete(id);
+      const row = await db.get(id);
+      if (!row) return false;
+      const t = ts();
+      await db.put({ ...row, updatedAt: t, sync: { ...buildSyncTuple(row.sync, t), deleted: true } });
       return true;
     },
   };

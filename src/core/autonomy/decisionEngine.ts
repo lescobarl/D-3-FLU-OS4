@@ -421,8 +421,8 @@ class DecisionMaker {
     private lastDecisionTime: number = 0;
     private decisionsToday: number = 0;
     
-    constructor() {
-        this.factorEvaluator = new FactorEvaluator();
+    constructor(deps: { factorEvaluator: FactorEvaluator }) {
+        this.factorEvaluator = deps.factorEvaluator;
         this.loadDailyDecisionCount();
     }
     
@@ -623,14 +623,23 @@ export class DecisionEngine {
      * Fábrica por defecto del motor. Punto de composición del singleton:
      * permite inyectar otra fábrica vía setDecisionEngineFactory (§2.4).
      */
-    static create(config: Partial<DecisionEngineConfig> = {}): DecisionEngine {
-        return new this(config);
+    static create(
+        config: Partial<DecisionEngineConfig> = {},
+        deps: { decisionMaker?: DecisionMaker; factorEvaluator?: FactorEvaluator } = {},
+    ): DecisionEngine {
+        return new this(config, {
+            decisionMaker: deps.decisionMaker ?? new DecisionMaker({ factorEvaluator: new FactorEvaluator() }),
+            factorEvaluator: deps.factorEvaluator ?? new FactorEvaluator(),
+        });
     }
     
-    constructor(config: Partial<DecisionEngineConfig> = {}) {
+    constructor(
+        config: Partial<DecisionEngineConfig> = {},
+        deps: { decisionMaker: DecisionMaker; factorEvaluator: FactorEvaluator },
+    ) {
         this.config = { ...DEFAULT_DECISION_CONFIG, ...config };
-        this.decisionMaker = new DecisionMaker();
-        this.factorEvaluator = new FactorEvaluator();
+        this.decisionMaker = deps.decisionMaker;
+        this.factorEvaluator = deps.factorEvaluator;
     }
     
     start(): void {

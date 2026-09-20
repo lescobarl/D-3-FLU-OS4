@@ -696,10 +696,24 @@ export class AutoRecoverySystem {
     private incidentHistory: RecoveryIncident[] = [];
     private healthMonitor: HealthMonitor | null = null; // Referencia al Health Monitor
     
-    constructor(config: Partial<AutoRecoveryConfig> = {}) {
+    /** Punto de composición de dependencias (§2.4). */
+    static create(
+        config: Partial<AutoRecoveryConfig> = {},
+        deps: { actionExecutor?: RecoveryActionExecutor; conditionEvaluator?: ConditionEvaluator } = {},
+    ): AutoRecoverySystem {
+        return new AutoRecoverySystem(config, {
+            actionExecutor: deps.actionExecutor ?? new RecoveryActionExecutor(),
+            conditionEvaluator: deps.conditionEvaluator ?? new ConditionEvaluator(),
+        });
+    }
+
+    constructor(
+        config: Partial<AutoRecoveryConfig> = {},
+        deps: { actionExecutor: RecoveryActionExecutor; conditionEvaluator: ConditionEvaluator },
+    ) {
         this.config = { ...DEFAULT_RECOVERY_CONFIG, ...config };
-        this.actionExecutor = new RecoveryActionExecutor();
-        this.conditionEvaluator = new ConditionEvaluator();
+        this.actionExecutor = deps.actionExecutor;
+        this.conditionEvaluator = deps.conditionEvaluator;
     }
     
     setHealthMonitor(monitor: HealthMonitor): void {
@@ -913,7 +927,7 @@ export function createIntegratedAutonomySystem(
     healthConfig?: Partial<AutoRecoveryConfig>
 ): { healthMonitor: HealthMonitor | null; recoverySystem: AutoRecoverySystem } {
     // En una implementación real, esto integraría ambos sistemas
-    const recoverySystem = new AutoRecoverySystem(healthConfig);
+    const recoverySystem = AutoRecoverySystem.create(healthConfig);
     
     // El Health Monitor se crearía y conectaría aquí
     // Por ahora retornamos un objeto con ambos sistemas
@@ -931,7 +945,7 @@ let globalRecoverySystem: AutoRecoverySystem | null = null;
 
 export function getAutoRecoverySystem(config?: Partial<AutoRecoveryConfig>): AutoRecoverySystem {
     if (!globalRecoverySystem) {
-        globalRecoverySystem = new AutoRecoverySystem(config);
+        globalRecoverySystem = AutoRecoverySystem.create(config);
     }
     return globalRecoverySystem;
 }

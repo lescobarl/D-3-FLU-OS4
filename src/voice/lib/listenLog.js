@@ -22,7 +22,7 @@ const devPending = []
 let chromeRawSeq = 0
 
 function syncListenLogGlobals() {
-  if (typeof window === 'undefined') return
+  if (!IS_DEV || typeof window === 'undefined') return
   window.__fluListenLog = getListenLogRing()
   window.__fluListenLogStats = getListenStats()
 }

@@ -15,6 +15,10 @@ function makeDb() {
             map.set(record.id, record);
         },
         toArray: async () => Array.from(map.values()),
+        get: async (id: string) => map.get(id),
+        put: async (record: DocumentRecord) => {
+            map.set(record.id, record);
+        },
         delete: async (id: string) => {
             map.delete(id);
         },

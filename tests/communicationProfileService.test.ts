@@ -79,9 +79,6 @@ function createMapDb(initial: CommunicationProfileRecord[] = []): CommunicationP
       rows.set(record.id, { ...record, sync: { ...record.sync } });
       return undefined;
     },
-    async delete(id: string): Promise<void> {
-      rows.delete(id);
-    },
     async getByParticipant(participantId: string): Promise<CommunicationProfileRecord | undefined> {
       for (const r of rows.values()) {
         if (r.participantId === participantId) return { ...r, sync: { ...r.sync } };

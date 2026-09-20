@@ -1,14 +1,14 @@
 // ============================================================
 // protocolGuard.test.ts — Guard del PROTOCOLO DE ITERACIÓN RÁPIDA
 // ============================================================
-// Hace INAMOVIBLE la Regla #1 de la Sección 9 de CLAUDE.md:
+// Hace INAMOVIBLE la Regla #1 de la Sección 9 de AGENTS.md:
 //   "npm test" (comando por defecto) ejecuta SOLO los tests del
 //   cambio específico (--changed). La suite completa queda reservada
 //   a "npm run test:full", usada SOLO en cierre de hitos/entregas
 //   y pre-commit (Sección 6).
 //
 // Este test es la "regla de lint" estructural del protocolo: lee
-// package.json y CLAUDE.md y FALLA si alguien debilita la estructura.
+// package.json y AGENTS.md y FALLA si alguien debilita la estructura.
 // Como se ejecuta dentro de la suite completa (test:full), cualquier
 // intento de revertir el default a la suite completa o de eliminar
 // test:full rompe la puerta de cierre de hitos — el protocolo queda
@@ -29,7 +29,7 @@ function readRootFile(name: string): string {
 const pkg = JSON.parse(readRootFile('package.json')) as {
     scripts: Record<string, string>;
 };
-const claude = readRootFile('CLAUDE.md');
+const agents = readRootFile('AGENTS.md');
 
 describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', () => {
     it('npm test (default) debe ejecutar SOLO los tests del cambio (--changed)', () => {
@@ -53,21 +53,21 @@ describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', (
         ).toBe(true);
     });
 
-    it('CLAUDE.md debe conservar el protocolo de iteración mínima y referenciar test:full', () => {
-        expect(claude).toContain('Verificación por iteración mínima');
-        expect(claude).toContain('--changed');
-        expect(claude).toContain('test:full');
-        expect(claude).toContain('protocolGuard.test.ts');
+    it('AGENTS.md debe conservar el protocolo de iteración mínima y referenciar test:full', () => {
+        expect(agents).toContain('Iteración rápida');
+        expect(agents).toContain('--changed');
+        expect(agents).toContain('test:full');
+        expect(agents).toContain('protocolGuard.test.ts');
     });
 
-    it('CLAUDE.md pre-commit (Sección 6) es LIGERO y la suite completa se delega al gate CI', () => {
+    it('AGENTS.md pre-commit es LIGERO y la suite completa se delega al gate CI', () => {
         // El commit NO ejecuta la suite completa: se hace ligero (guards + typecheck).
-        expect(claude).toMatch(/VALIDACIÓN PRE-COMMIT \(LIGERA\)/);
-        expect(claude).toContain('npm run lint');
-        expect(claude).toContain('npm run typecheck');
+        expect(agents).toMatch(/Pre-commit LIGERO/);
+        expect(agents).toContain('npm run lint');
+        expect(agents).toContain('npm run typecheck');
         // Y la suite completa queda documentada en el gate CI (una vez por push/PR).
-        expect(claude).toContain('.github/workflows/ci.yml');
-        expect(claude).toContain('npm run test:full');
+        expect(agents).toContain('.github/workflows/ci.yml');
+        expect(agents).toContain('npm run test:full');
     });
 
     it('debe existir el workflow de CI con suite completa + build (gate de entrega)', () => {

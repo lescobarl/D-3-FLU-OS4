@@ -3,6 +3,7 @@
  */
 import { getActiveListenConfig } from './fluConfig'
 import { getRecognitionLanguage } from './activeListen'
+import { relayLog } from '../../lib/clientLogRelay'
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false
@@ -85,8 +86,8 @@ export function stopSpeechRecognition(recognition) {
   if (!recognition) return
   try {
     recognition.stop()
-  } catch {
-    // ignore
+  } catch (error) {
+    relayLog('INFO', 'SpeechRecognition', 'stop() falló al detener la escucha (ignorado)', error)
   }
   if (activeRecognition === recognition) {
     activeRecognition = null
@@ -99,8 +100,8 @@ export function abortSpeechRecognition(recognition) {
   try {
     if (typeof recognition.abort === 'function') recognition.abort()
     else recognition.stop()
-  } catch {
-    // ignore
+  } catch (error) {
+    relayLog('INFO', 'SpeechRecognition', 'abort() falló al liberar la escucha (ignorado)', error)
   }
   if (activeRecognition === recognition) {
     activeRecognition = null

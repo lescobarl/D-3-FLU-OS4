@@ -2,7 +2,7 @@
 # CI — Gate de entrega (suite completa + build + E2E)
 # ============================================================
 # La suite completa NO corre en cada commit (pre-commit ligero:
-# CLAUDE.md §6). Corre aquí, una vez por push/PR.
+# AGENTS.md §6). Corre aquí, una vez por push/PR.
 # ============================================================
 name: CI
 

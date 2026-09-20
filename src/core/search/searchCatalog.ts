@@ -45,9 +45,6 @@ const searchSitesDb: CatalogDb<SearchSite> = {
     async put(record) {
         await fluDb.searchSites.put(toSearchSiteRecord(record));
     },
-    async delete(id) {
-        await fluDb.searchSites.delete(id);
-    },
     async get(id) {
         const row = await fluDb.searchSites.get(id);
         return row ? toCatalogRecord(row) : undefined;

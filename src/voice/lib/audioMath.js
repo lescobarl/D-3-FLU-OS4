@@ -4,6 +4,10 @@ import { detectParticipantFloorCommand } from './participantFloor.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 import { buildWakeWordPattern } from './wakeWord.js'
+import { cleanForSpeech, normalizeSpaces } from '../../lib/textUtils'
+
+// Fuente única de normalización de espacios (src/lib/textUtils.ts).
+export { cleanForSpeech, normalizeSpaces }
 
 const ACCENT_MAP = {
   á: 'a',
@@ -21,10 +25,6 @@ export function stripDiacritics(text = '') {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[áéíóúüñ]/g, (char) => ACCENT_MAP[char] || char)
-}
-
-export function normalizeSpaces(text = '') {
-  return String(text).replace(/\s+/g, ' ').trim()
 }
 
 export function detectTranscriptLanguage(text = '') {
@@ -92,15 +92,6 @@ export function isVisualRequestText(text = '') {
   if (!normalized) return false
   return /\b(im[aá]gen(?:es)?|fotos?|images?|photos?|pictures?|image|visual|diagrama|diagram|illustration|ilustraci[oó]n|grafico|gr[aá]fico|dibuj\w*|render)\b/i.test(
     normalized,
-  )
-}
-
-export function cleanForSpeech(text = '') {
-  return normalizeSpaces(
-    String(text)
-      .replace(/[\n\r]+/g, ' ')
-      .replace(/[*_`~>#-]+/g, ' ')
-      .replace(/\s+/g, ' '),
   )
 }
 
@@ -1374,27 +1365,6 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
   return commandText
 }
 
-export function cosineDistance(vectorA = [], vectorB = []) {
-  const length = Math.min(vectorA.length, vectorB.length)
-  if (!length) return 1
-
-  let dot = 0
-  let magA = 0
-  let magB = 0
-
-  for (let index = 0; index < length; index += 1) {
-    const a = Number(vectorA[index] || 0)
-    const b = Number(vectorB[index] || 0)
-    dot += a * b
-    magA += a * a
-    magB += b * b
-  }
-
-  if (!magA || !magB) return 1
-  const cosineSimilarity = dot / (Math.sqrt(magA) * Math.sqrt(magB))
-  return 1 - Math.max(-1, Math.min(1, cosineSimilarity))
-}
-
 export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5) {
   const dim = Math.max(vectorA.length, vectorB.length)
   if (!dim) return []
@@ -1405,20 +1375,6 @@ export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5)
       Number(vectorA[index] || 0) * wa + Number(vectorB[index] || 0) * (1 - wa)
   }
   return normalizeEmbeddingVector(blended)
-}
-
-/** Similitud coseno pura [0, 1]; 1 = misma identidad de voz. Vectores L2-normalizados antes del producto punto. */
-export function cosineSimilarity(vectorA = [], vectorB = []) {
-  if (!vectorA.length || !vectorB.length) return 0
-  const a = normalizeEmbeddingVector(vectorA)
-  const b = normalizeEmbeddingVector(vectorB)
-  const dim = Math.min(a.length, b.length)
-  let dot = 0
-  for (let index = 0; index < dim; index += 1) {
-    dot += a[index] * b[index]
-  }
-  if (!Number.isFinite(dot)) return 0
-  return Math.max(0, Math.min(1, dot))
 }
 
 /**

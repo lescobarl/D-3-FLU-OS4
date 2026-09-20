@@ -1,6 +1,7 @@
 import { cleanForSpeech, detectTranscriptLanguage } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
+import { relayLog } from '../../lib/clientLogRelay'
 
 /**
  * Caché de la configuración de voz leída desde el integrationStore de OS3.
@@ -25,8 +26,9 @@ async function refreshVoiceConfigCache() {
         voiceURI: store.voiceConfig.voiceURI || '',
       }
     }
-  } catch {
+  } catch (error) {
     // Si falla el import (entorno test, standalone, etc.), usar defaults
+    relayLog('LOG', 'FluSpeech', 'integrationStore no disponible; defaults de voz', error)
     _cachedVoiceConfig = { rate: 1.0, pitch: 1.0, volume: 1.0, voiceURI: '' }
   }
 }

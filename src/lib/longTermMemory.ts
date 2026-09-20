@@ -36,6 +36,8 @@ export interface MemoryItem {
     accessCount: number;
     /** TTL in ms; null = permanent */
     ttl: number | null;
+    /** Borrado lógico (§2.9): la fila permanece, las consultas la excluyen. */
+    deleted?: boolean;
 }
 
 export interface MemoryQuery {
@@ -134,7 +136,10 @@ export async function getMemory(id: string): Promise<MemoryItem | null> {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
         const request = store.get(id);
-        request.onsuccess = () => resolve(request.result || null);
+        request.onsuccess = () => {
+            const item = request.result || null;
+            resolve(item && item.deleted !== true ? item : null);
+        };
         request.onerror = () => reject(new Error('Failed to get memory'));
     });
 }
@@ -143,11 +148,13 @@ export async function getMemory(id: string): Promise<MemoryItem | null> {
  * Delete a memory item by ID.
  */
 export async function deleteMemory(id: string): Promise<void> {
+    const existing = await getMemory(id);
+    if (!existing) return;
     const db = await openDb();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        store.delete(id);
+        store.put({ ...existing, deleted: true });
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(new Error('Failed to delete memory'));
     });
@@ -166,7 +173,9 @@ export async function queryMemories(query: MemoryQuery = {}): Promise<MemoryItem
         const request = store.getAll();
 
         request.onsuccess = () => {
-            let results: MemoryItem[] = request.result || [];
+            let results: MemoryItem[] = (request.result || []).filter(
+                (item: MemoryItem) => item.deleted !== true,
+            );
 
             // Filter by category
             if (query.categories && query.categories.length > 0) {

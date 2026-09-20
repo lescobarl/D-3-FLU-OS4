@@ -433,20 +433,25 @@ describe('habitService — estado y borrado', () => {
     await service.checkIn({ goalId, date: TODAY, done: true });
 
     expect(await service.removeGoal(goalId)).toEqual({ ok: true });
-    expect(await db.goals.get(goalId)).toBeUndefined();
-    expect(await db.checkIns.toArray()).toHaveLength(0);
+    const goalRow = await db.goals.get(goalId);
+    expect(goalRow?.sync.deleted).toBe(true);
+    expect(await service.getGoal(goalId)).toBeUndefined();
+    expect(await service.listGoals()).toHaveLength(0);
+    const checkInRows = await db.checkIns.toArray();
+    expect(checkInRows).toHaveLength(2);
+    expect(checkInRows.every((c) => c.sync.deleted)).toBe(true);
     // 1 alta + 2 check-ins + 2 borrados de check-in + 1 borrado de meta.
     expect(vi.mocked(addAuditLog)).toHaveBeenCalledTimes(6);
     expect(vi.mocked(addAuditLog)).toHaveBeenCalledWith(
       'habits.checkin.remove', 'goalCheckIns', 'hab-2',
       { goalId, date: YESTERDAY },
-      null,
+      { goalId, date: YESTERDAY },
       'habitService',
     );
     expect(vi.mocked(addAuditLog)).toHaveBeenCalledWith(
       'habits.goal.remove', 'goals', goalId,
       { participantId: 'p1', title: 'Leer' },
-      null,
+      { participantId: 'p1', title: 'Leer' },
       'habitService',
     );
   });

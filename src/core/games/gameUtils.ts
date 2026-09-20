@@ -14,13 +14,8 @@ export function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-export function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-export function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
+// Normalización de texto: fuente única en src/lib/textUtils.ts.
+export { stripDiacritics, normalizeForMatch } from '../../lib/textUtils';
 
 /**
  * Índice (en el texto normalizado) donde aparece la frase como palabra/token,

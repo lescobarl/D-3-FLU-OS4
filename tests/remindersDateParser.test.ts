@@ -230,10 +230,10 @@ describe('nlDateParser — relativos (pasado mañana / mañana / hoy)', () => {
     expect(result.label).toBe('mañana');
   });
 
-  it('interpreta "hoy" sin hora y salta al día siguiente si ya pasó la medianoche', () => {
+  it('interpreta "hoy" sin hora como hoy a medianoche (no rueda a mañana)', () => {
     const result = parsed(parseNlDateTime('hoy', { now }));
     expect(result.type).toBe('today');
-    expect(result.at).toBe(new Date(2026, 0, 16).getTime());
+    expect(result.at).toBe(new Date(2026, 0, 15).getTime());
     expect(result.label).toBe('hoy');
   });
 

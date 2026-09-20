@@ -214,9 +214,14 @@ describe('participantRegistry — actualización y borrado', () => {
     const added = (await service.register({ name: 'Mamá' })).record!;
     const removed = await service.remove(added.id);
     expect(removed).toBe(true);
-    expect(await db.get(added.id)).toBeUndefined();
+    const row = await db.get(added.id);
+    expect(row?.sync.deleted).toBe(true);
+    expect(await service.get(added.id)).toBeUndefined();
+    expect(await service.list()).toHaveLength(0);
     expect(vi.mocked(addAuditLog)).toHaveBeenCalledWith(
-      'participant.remove', 'participant', added.id, added, null, 'participantRegistry',
+      'participant.remove', 'participant', added.id, added,
+      expect.objectContaining({ sync: expect.objectContaining({ deleted: true }) }),
+      'participantRegistry',
     );
   });
 

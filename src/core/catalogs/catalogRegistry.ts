@@ -31,7 +31,6 @@ export interface CatalogRecord<T> {
 export interface CatalogDb<T> {
     add(record: CatalogRecord<T>): Promise<unknown>;
     put(record: CatalogRecord<T>): Promise<unknown>;
-    delete(id: string): Promise<void>;
     get(id: string): Promise<CatalogRecord<T> | undefined>;
     toArray(): Promise<CatalogRecord<T>[]>;
 }
@@ -145,22 +144,27 @@ export function createCatalogRegistry<T>({
     const get = async (canonicalId: string): Promise<T | undefined> => {
         if (!canonicalId) return undefined;
         const all = await db.toArray();
-        const found = all.find((r) => schema.idOf(r.data) === canonicalId);
+        const found = all.find((r) => !r.sync?.deleted && schema.idOf(r.data) === canonicalId);
         return found ? toRecord(found).data : undefined;
     };
 
     const list = async (): Promise<T[]> => {
         const all = await db.toArray();
-        return all.map((r) => toRecord(r).data);
+        return all.filter((r) => !r.sync?.deleted).map((r) => toRecord(r).data);
     };
 
     const remove = async (canonicalId: string): Promise<boolean> => {
         if (!canonicalId) return false;
         if (isReserved(canonicalId)) return false;
         const all = await db.toArray();
-        const found = all.find((r) => schema.idOf(r.data) === canonicalId);
+        const found = all.find((r) => !r.sync?.deleted && schema.idOf(r.data) === canonicalId);
         if (!found) return false;
-        await db.delete(found.id);
+        const updated: CatalogRecord<T> = {
+            ...found,
+            updatedAt: timestamp(),
+            sync: { ...buildSyncTuple(found.sync, timestamp()), deleted: true },
+        };
+        await db.put(updated);
         await addAuditLog(`${entity}.remove`, entity, canonicalId, toRecord(found).data, null, 'catalogRegistry');
         return true;
     };

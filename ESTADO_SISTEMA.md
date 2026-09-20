@@ -6,11 +6,11 @@
 ## Aplicación
 - **Dev server**: `npm run dev` → Vite en `http://localhost:5173` (auto-open solo en dev manual; no abre pestaña en corridas Playwright vía `PLAYWRIGHT_SERVER=1`).
 - **E2E (Playwright)**: servidor propio en el puerto `5175` (`playwright.config.ts`), spec en `tests/e2e/`.
-- **Stack real**: React 19, Vite 8, Zustand 5, Dexie (24 tablas, versioning v3→v17), TypeScript estricto. Sin React Router ni Tailwind (CLAUDE.md §3 describe el stack objetivo; la migración está pendiente).
+- **Stack real**: React 19, Vite 8, Zustand 5, Dexie (24 tablas, versioning v3→v17), TypeScript estricto. Sin React Router ni Tailwind (AGENTS.md §4 describe el stack objetivo; la migración está pendiente).
 
 ## Convenciones en vigor
 - `npm test` corre SOLO los tests afectados (`vitest run --changed`); `npm run test:full` la suite completa. Blindado por `tests/protocolGuard.test.ts`.
-- Config externa centralizada en `src/core/config/appConfig.ts` (guard en `tests/hardcodeGuard.test.ts`; allowlist real documentada en CLAUDE.md §8.3/8.4).
+- Config externa centralizada en `src/core/config/appConfig.ts` (guard en `tests/hardcodeGuard.test.ts`; allowlist real documentada en AGENTS.md).
 - Eventos de dominio por bus: `src/core/events/fluEvents.ts` (UI) y `src/core/autonomy/autonomyEvents.ts` (sistemas autónomos).
 - `.env.example` es la única fuente de verdad de variables; alineado con `appConfig` y cubierto por `tests/configEnv.test.ts`.
 

@@ -86,7 +86,7 @@ export default defineConfig(({ mode }) => {
             exclude: ['@huggingface/transformers'],
         },
         server: {
-            port: 5173,
+            port: Number(process.env.PORT) || 5173,
             // Auto-open SOLO en dev manual; Playwright levanta su propio server
             // (PLAYWRIGHT_SERVER=1) y no debe abrir pestañas del navegador.
             open: process.env.PLAYWRIGHT_SERVER === '1' ? false : true,

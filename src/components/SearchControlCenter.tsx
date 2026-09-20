@@ -180,7 +180,7 @@ export function SearchControlCenter({
       const providers = { ...(prev.providers || {}) };
       const group = { ...(providers[type] || {}) };
       const entry: SearchProviderOverride = { ...(group[id] || {}) };
-      (entry as unknown as Record<string, unknown>)[field] = value;
+      Reflect.set(entry, field, value);
       group[id] = entry;
       providers[type] = group;
       return { ...prev, providers };

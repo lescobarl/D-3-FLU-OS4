@@ -3,7 +3,7 @@
 // ============================================================
 // Antes estos helpers estaban duplicados (~150 líneas) en cada
 // spec (gotoClean/stubLocalSpeech/readStore/clearStore/capture).
-// Fuente única por intención (CLAUDE.md §10.4): se mantienen aquí
+// Fuente única por intención (AGENTS.md): se mantienen aquí
 // y cada spec los importa. La variante por spec que SÍ es distinta
 // (espera de workspace-hub, nombre de carpeta de capturas) se
 // expresa con parámetros, no con copias.

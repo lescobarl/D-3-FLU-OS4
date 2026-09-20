@@ -1,0 +1,21 @@
+{
+  "id": "C10",
+  "mode": "full",
+  "task": "Persistencia — sin doble escritura de minutas",
+  "base": "__BASE__",
+  "objective": "useMinuteHandlers no espeja en integrationStore; la minuta se persiste y el store deriva de la fuente.",
+  "allow": ["src/hooks/useMinuteHandlers.ts", "src/store/integrationStore.ts"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 3,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/minutosDobleEscrituraGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/minutosDobleEscrituraGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "useMinuteHandlers no escribe dos veces la misma minuta",
+    "metric": { "command": "node scripts/audit-metric.mjs minutos-doble-escritura", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/minutosDobleEscrituraGuard.test.ts"]
+  }
+}

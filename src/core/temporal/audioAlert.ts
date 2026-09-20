@@ -46,11 +46,9 @@ type AudioContextFactory = () => AudioContextLike | null;
 /** Factoría por defecto: crea un AudioContext real del navegador. */
 function defaultGetContext(): AudioContextLike | null {
   if (typeof window === 'undefined') return null;
-  const w = window as unknown as {
-    AudioContext?: new () => AudioContextLike;
-    webkitAudioContext?: new () => AudioContextLike;
-  };
-  const AC = w.AudioContext || w.webkitAudioContext;
+  const AC = (Reflect.get(window, 'AudioContext') || Reflect.get(window, 'webkitAudioContext')) as
+    | (new () => AudioContextLike)
+    | undefined;
   return AC ? new AC() : null;
 }
 

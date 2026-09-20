@@ -3,7 +3,7 @@
 // ------------------------------------------------------------
 // Módulo TS puro (sin React), testeable. Compila el registro de
 // capacidades de FLU desde las fuentes de datos reales (regla
-// anti-hardcode §10 de CLAUDE.md): NUNCA se escriben labels ni
+// anti-hardcode (§2 de AGENTS.md): NUNCA se escriben labels ni
 // frases a mano; se derivan de FLU_CONFIG / catálogos reales.
 //
 // CONTRATO PLAN §1.1 / §1.2 / §1.4:

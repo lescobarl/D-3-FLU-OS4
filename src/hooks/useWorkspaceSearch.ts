@@ -16,6 +16,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { relayLog } from '../lib/clientLogRelay';
 import type {
     SearchResult,
     SearchProviderConfig,
@@ -192,7 +193,8 @@ export async function fetchAiOverview(
         if (!response.ok) return '';
         const data = await response.json();
         return String(data.respuesta_voz || data.text || '').trim();
-    } catch {
+    } catch (error) {
+        relayLog('WARN', 'WorkspaceSearch', 'fallo al derivar el resumen de IA; se omite', error);
         return '';
     }
 }
@@ -245,7 +247,8 @@ export async function fetchTypeResults(
             };
         }
         return { ok: false, results: [], errors: [] };
-    } catch {
+    } catch (error) {
+        relayLog('WARN', 'WorkspaceSearch', 'fetchTypeResults falló; se devuelve vacío', error);
         return { ok: false, results: [], errors: [] };
     }
 }

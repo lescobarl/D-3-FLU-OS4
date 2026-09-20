@@ -195,7 +195,9 @@ export function createDiaryService({
 
   const listEntries = async (date?: string): Promise<DiaryEntryRecord[]> => {
     const all = await db.diaryEntries.toArray();
-    const filtered = date ? all.filter((e) => e.date === date) : all;
+    const filtered = (date ? all.filter((e) => e.date === date) : all).filter(
+      (e) => !e.sync?.deleted,
+    );
     return filtered
       .slice()
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt))
@@ -211,13 +213,18 @@ export function createDiaryService({
     if (!id) return { ok: false, reason: 'invalid-input' };
     const entry = await db.diaryEntries.get(id);
     if (!entry) return { ok: false, reason: 'diary-not-found' };
-    await db.diaryEntries.delete(id);
+    const updated: DiaryEntryRecord = {
+      ...entry,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(entry.sync, timestamp()), deleted: true },
+    };
+    await db.diaryEntries.put(updated);
     await addAuditLog(
       'diary.remove',
       'diaryEntries',
       id,
       { date: entry.date, content: entry.content },
-      null,
+      { date: entry.date, content: entry.content },
       'diaryService',
     );
     return { ok: true };

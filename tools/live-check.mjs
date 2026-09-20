@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 
 const PHRASE = 'okay flu busca en la web cómo saltan los conejos';
-const URL = process.env.FLU_URL || 'http://localhost:5173';
+const URL = process.env.FLU_URL || `http://localhost:${process.env.PORT || 5173}`;
 
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage();

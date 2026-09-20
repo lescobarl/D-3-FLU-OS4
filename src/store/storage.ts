@@ -4,7 +4,7 @@
 // localStorage en el navegador; fallback en memoria en entornos
 // sin almacenamiento (Node.js/vitest). Elimina el fallback
 // duplicado que existía en integrationStore y environmentStore
-// (fuente única por intención, CLAUDE.md §10.4).
+// (fuente única por intención, AGENTS.md).
 // ============================================================
 
 export interface SafeStorage {

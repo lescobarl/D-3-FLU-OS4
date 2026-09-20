@@ -5,7 +5,7 @@
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import {
-  assignSpeaker as assignSpeakerStrict,
+  assignSpeaker,
   compareCosineSignatures,
   getFallbackSpeaker,
   labelToSpeakerId,
@@ -68,10 +68,6 @@ async function embedAudio(payload = {}) {
   return raw.length ? normalizeVector(raw) : []
 }
 
-function assignSpeakerStrict(vector, options = {}) {
-  return assignSpeaker(vector, options)
-}
-
 self.onmessage = async (event) => {
   const { id, type, payload = {} } = event.data || {}
   const reply = createWorkerReply(id)
@@ -118,7 +114,7 @@ self.onmessage = async (event) => {
         return
       }
 
-      const assignment = assignSpeakerStrict(vector, {
+      const assignment = assignSpeaker(vector, {
         clusters: payload.clusters || [],
         matchThreshold,
         reservedLabels: payload.reservedLabels || [],

@@ -321,8 +321,8 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
         // §9 Motor de escucha: Chrome SpeechRecognition (Google, online).
         const hasSpeechRecognition =
             typeof window !== 'undefined' &&
-            Boolean((window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition ||
-                (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
+            Boolean((window as Window & { SpeechRecognition?: unknown }).SpeechRecognition ||
+                (window as Window & { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
         if (!hasSpeechRecognition) {
             hasError = true;
             message = 'SpeechRecognition no disponible en este navegador';
@@ -720,9 +720,22 @@ export class HealthMonitor {
     private listeners: Array<(health: SystemHealth) => void> = [];
     private componentCheckers: Record<string, () => Promise<ComponentHealth>>;
 
-    constructor(config: Partial<HealthMonitorConfig> = {}) {
+    /** Punto de composición de dependencias (§2.4). */
+    static create(
+        config: Partial<HealthMonitorConfig> = {},
+        deps: { metricTracker?: HealthMetricTracker } = {},
+    ): HealthMonitor {
+        return new HealthMonitor(config, {
+            metricTracker: deps.metricTracker ?? new HealthMetricTracker(),
+        });
+    }
+
+    constructor(
+        config: Partial<HealthMonitorConfig> = {},
+        deps: { metricTracker: HealthMetricTracker },
+    ) {
         this.config = { ...DEFAULT_HEALTH_CONFIG, ...config };
-        this.metricTracker = new HealthMetricTracker();
+        this.metricTracker = deps.metricTracker;
         
         this.componentCheckers = {
             'ai-service': checkAIService,
@@ -922,7 +935,7 @@ let globalHealthMonitor: HealthMonitor | null = null;
 
 export function getHealthMonitor(config?: Partial<HealthMonitorConfig>): HealthMonitor {
     if (!globalHealthMonitor) {
-        globalHealthMonitor = new HealthMonitor(config);
+        globalHealthMonitor = HealthMonitor.create(config);
     }
     return globalHealthMonitor;
 }

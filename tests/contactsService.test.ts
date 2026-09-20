@@ -339,7 +339,10 @@ describe('contactService — edición y borrado', () => {
 
     const result = await svc.removeContact('seed-1');
     expect(result).toEqual({ ok: true });
-    expect(await seeded.contacts.toArray()).toHaveLength(0);
+    const rows = await seeded.contacts.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sync?.deleted).toBe(true);
+    expect(await svc.listContacts()).toHaveLength(0);
 
     expect(addAuditLog).toHaveBeenCalledTimes(1);
     expect(addAuditLog).toHaveBeenCalledWith(
@@ -347,7 +350,7 @@ describe('contactService — edición y borrado', () => {
       'contacts',
       'seed-1',
       { name: 'Ana', birthday: '1990-05-20' },
-      null,
+      { name: 'Ana', birthday: '1990-05-20' },
       'contactService',
     );
   });

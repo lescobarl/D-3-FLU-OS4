@@ -1,4 +1,6 @@
 import { normalizeConversationRow } from './conversationRow.js'
+import { fluDb } from '../../core/db/fluDatabase'
+import { buildSyncTuple } from '../../core/db/syncTuple'
 
 const DB_NAME = 'flu-voz-local'
 const DB_VERSION = 4
@@ -41,13 +43,6 @@ function openDatabase() {
       }
 
       createObjectStoreIfNeeded(db, 'session_state', { keyPath: 'id' })
-      createObjectStoreIfNeeded(db, 'minute_knowledge', { keyPath: 'id' }, (store) => {
-        store.createIndex('profileId', 'profileId', { unique: false })
-        store.createIndex('userId', 'userId', { unique: false })
-        store.createIndex('minuteKey', 'minuteKey', { unique: false })
-        store.createIndex('updatedAt', 'updatedAt', { unique: false })
-      })
-      createObjectStoreIfNeeded(db, 'speaker_clusters', { keyPath: 'id' })
     }
 
     request.onsuccess = () => resolve(request.result)
@@ -92,40 +87,6 @@ function readAllFromStore(store) {
   })
 }
 
-function readAllFromIndex(store, indexName, value) {
-  return new Promise((resolve, reject) => {
-    const index = store.index(indexName)
-    const request = value === undefined ? index.getAll() : index.getAll(value)
-    request.onsuccess = () => resolve(request.result || [])
-    request.onerror = () => reject(request.error)
-  })
-}
-
-function readLatestFromIndex(store, indexName, limit) {
-  return new Promise((resolve, reject) => {
-    const index = store.index(indexName)
-    const rows = []
-    const request = index.openCursor(null, 'prev')
-
-    request.onsuccess = () => {
-      const cursor = request.result
-      if (!cursor) {
-        resolve(rows)
-        return
-      }
-      const row = cursor.value
-      if (row) rows.push(row)
-      if (rows.length >= limit) {
-        resolve(rows.reverse())
-        return
-      }
-      cursor.continue()
-    }
-
-    request.onerror = () => reject(request.error)
-  })
-}
-
 function migrateStoredRow(row = {}) {
   const normalized = normalizeConversationRow(row)
   if (!normalized) return null
@@ -142,26 +103,104 @@ function migrateStoredRow(row = {}) {
   }
 }
 
-function isStoredRowVisible(row = {}) {
-  return row?.deleted !== true
+let legacyMigrated = false
+
+function legacyToVoiceRecord(row = {}) {
+  const t = Number(row.timestamp) || Date.now()
+  return {
+    id: String(row.id),
+    label: String(row.label || ''),
+    speakerId: String(row.speakerId || ''),
+    signature: Array.isArray(row.signature) ? row.signature : null,
+    embedding: Array.isArray(row.embedding) ? row.embedding : null,
+    timestamp: t,
+    sync: buildSyncTuple(undefined, Date.now()),
+  }
 }
 
-export async function saveVoiceProfile(profile) {
-  const id = profile.id || crypto.randomUUID()
-  const payload = {
-    ...profile,
-    id,
-    updatedAt: new Date().toISOString(),
+function voiceRecordToProfile(record) {
+  return {
+    id: record.id,
+    label: record.label,
+    speakerId: record.speakerId,
+    signature: record.signature,
+    embedding: record.embedding,
+    updatedAt: new Date(record.timestamp).toISOString(),
   }
+}
 
-  return withStore('voice_profiles', 'readwrite', (store) => {
-    store.put(payload)
-    return payload
-  })
+/**
+ * Migración one-shot y NO destructiva desde `flu-voz-local` a `flu-os3` (F4).
+ * Copia solo filas cuyo id no exista ya; NUNCA borra la DB vieja.
+ */
+async function migrateLegacyVoiceData() {
+  if (legacyMigrated) return
+  legacyMigrated = true
+  try {
+    const existing = await fluDb.voiceProfiles.toArray()
+    const known = new Set(existing.map((row) => row.id))
+    const legacyProfiles = await listStoreRecords('voice_profiles')
+    for (const row of legacyProfiles) {
+      if (!row?.id || known.has(row.id)) continue
+      await fluDb.voiceProfiles.put(legacyToVoiceRecord(row))
+    }
+    if (!(await fluDb.sessionState.get('current'))) {
+      const legacySessions = await listStoreRecords('session_state')
+      const current = legacySessions.find((row) => row?.id === 'current')
+      if (current) await persistSessionState(current)
+    }
+    const knownConversations = new Set((await fluDb.conversations.toArray()).map((row) => row.id))
+    const legacyAudit = await listStoreRecords('audit_logs')
+    for (const row of legacyAudit) {
+      const normalized = migrateStoredRow(row)
+      if (!normalized?.id || normalized.deleted === true || knownConversations.has(normalized.id)) {
+        continue
+      }
+      await fluDb.conversations.put({
+        id: normalized.id,
+        role: 'user',
+        text: String(normalized.text || ''),
+        speakerId: String(normalized.speakerId || ''),
+        speakerName: String(normalized.speakerName || ''),
+        timestamp: Number(normalized.timestamp) || Date.now(),
+        signature: Array.isArray(normalized.signature) ? normalized.signature : null,
+        phase: normalized.phase,
+        response: normalized.response,
+        navigation: normalized.navigation,
+        meta: normalized.meta || null,
+        sync: buildSyncTuple(undefined, Date.now()),
+      })
+    }
+  } catch (error) {
+    console.warn('[fluStorage] migración legacy→flu-os3 omitida:', error)
+  }
+}
+
+export async function saveVoiceProfile(profile = {}) {
+  await migrateLegacyVoiceData()
+  const label = String(profile.label || '').trim()
+  let id = String(profile.id || '').trim()
+  const existing = id ? await fluDb.voiceProfiles.get(id) : undefined
+  if (!id) {
+    id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `voice-${Date.now()}`
+  }
+  const record = {
+    id,
+    label,
+    speakerId: String(profile.speakerId || existing?.speakerId || ''),
+    signature: Array.isArray(profile.signature) ? profile.signature : existing?.signature ?? null,
+    embedding: Array.isArray(profile.embedding) ? profile.embedding : existing?.embedding ?? null,
+    timestamp: Date.now(),
+    sync: buildSyncTuple(existing?.sync, Date.now()),
+  }
+  await fluDb.voiceProfiles.put(record)
+  return voiceRecordToProfile(record)
 }
 
 export async function listVoiceProfiles() {
-  return withStore('voice_profiles', 'readonly', (store) => readAllFromStore(store))
+  await migrateLegacyVoiceData()
+  const rows = await fluDb.voiceProfiles.toArray()
+  return rows.filter((row) => !row.sync?.deleted).map(voiceRecordToProfile)
 }
 
 export async function findVoiceProfileByLabel(label) {
@@ -172,92 +211,17 @@ export async function findVoiceProfileByLabel(label) {
 }
 
 export async function deleteVoiceProfile(profileId) {
+  await migrateLegacyVoiceData()
   const id = String(profileId || '').trim()
   if (!id) return false
-  return withStore('voice_profiles', 'readwrite', (store) => {
-    store.delete(id)
-    return true
+  const existing = await fluDb.voiceProfiles.get(id)
+  if (!existing) return false
+  await fluDb.voiceProfiles.put({
+    ...existing,
+    timestamp: Date.now(),
+    sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
   })
-}
-
-export async function renameVoiceProfile(profileId, label) {
-  const id = String(profileId || '').trim()
-  const nextLabel = String(label || '').trim()
-  if (!id || !nextLabel) return null
-
-  return withStore('voice_profiles', 'readwrite', async (store) => {
-    const current = await new Promise((resolve, reject) => {
-      const request = store.get(id)
-      request.onsuccess = () => resolve(request.result || null)
-      request.onerror = () => reject(request.error)
-    })
-    if (!current) return null
-
-    const payload = {
-      ...current,
-      label: nextLabel,
-      updatedAt: new Date().toISOString(),
-    }
-    store.put(payload)
-    return payload
-  })
-}
-
-/** Persiste fila con contrato estricto { id, text, speakerId, speakerName, timestamp, isFinal }. */
-export async function addConversationRow(row) {
-  const payload = migrateStoredRow(row)
-  if (!payload?.text) return null
-
-  return withStore('audit_logs', 'readwrite', (store) => {
-    store.put(payload)
-    return payload
-  })
-}
-
-export async function getLatestAuditLogs(limit = null) {
-  if (Number.isFinite(limit) && limit > 0) {
-    const rows = await withStore('audit_logs', 'readonly', (store) =>
-      readLatestFromIndex(store, 'timestamp', limit),
-    )
-    return rows.map(migrateStoredRow).filter(Boolean).filter(isStoredRowVisible)
-  }
-
-  const rows = await withStore('audit_logs', 'readonly', (store) => readAllFromStore(store))
-  return rows
-    .map(migrateStoredRow)
-    .filter(Boolean)
-    .filter(isStoredRowVisible)
-    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-}
-
-export async function renameAuditLogSpeaker(fromSpeaker, toSpeaker, { fromSpeakerId, toSpeakerId } = {}) {
-  const sourceName = String(fromSpeaker || '').trim()
-  const targetName = String(toSpeaker || '').trim()
-  const sourceId = String(fromSpeakerId || '').trim()
-  const targetId = String(toSpeakerId || '').trim()
-  if ((!sourceName && !sourceId) || (!targetName && !targetId)) return []
-
-  return withStore('audit_logs', 'readwrite', async (store) => {
-    const rows = await readAllFromStore(store)
-    const updated = rows.map((row) => {
-      const normalized = migrateStoredRow(row)
-      if (!normalized) return row
-      const nameMatch = sourceName && normalized.speakerName === sourceName
-      const idMatch = sourceId && normalized.speakerId === sourceId
-      if (!nameMatch && !idMatch) return normalized
-      return {
-        ...normalized,
-        speakerName: targetName || normalized.speakerName,
-        speakerId: targetId || normalized.speakerId,
-      }
-    })
-
-    updated.forEach((row) => {
-      if (row?.id) store.put(row)
-    })
-
-    return updated
-  })
+  return true
 }
 
 export async function deleteAuditLogsBySpeaker(speaker, { speakerId } = {}) {
@@ -265,79 +229,59 @@ export async function deleteAuditLogsBySpeaker(speaker, { speakerId } = {}) {
   const sid = String(speakerId || '').trim()
   if (!label && !sid) return []
 
-  const deletedAt = new Date().toISOString()
+  const rows = await fluDb.conversations.toArray()
+  const updated = []
 
-  return withStore('audit_logs', 'readwrite', async (store) => {
-    const rows = await readAllFromStore(store)
-    const visible = []
-
-    rows.forEach((row) => {
-      const normalized = migrateStoredRow(row)
-      if (!normalized?.id) return
-      const nameMatch = label && normalized.speakerName === label
-      const idMatch = sid && normalized.speakerId === sid
-      if (nameMatch || idMatch) {
-        store.put({
-          ...normalized,
-          deleted: true,
-          revision: (Number(normalized.revision) || 1) + 1,
-          updated_at: deletedAt,
-        })
-        return
-      }
-      if (isStoredRowVisible(normalized)) visible.push(normalized)
-    })
-
-    return visible
-  })
-}
-
-export async function saveSessionState(session) {
-  const payload = {
-    id: 'current',
-    ...session,
-    history: Array.isArray(session?.history) ? session.history : [],
-    updatedAt: new Date().toISOString(),
+  for (const row of rows) {
+    if (row.sync?.deleted) continue
+    const nameMatch = label && row.speakerName === label
+    const idMatch = sid && row.speakerId === sid
+    if (!nameMatch && !idMatch) continue
+    const next = {
+      ...row,
+      sync: { ...buildSyncTuple(row.sync, Date.now()), deleted: true },
+    }
+    await fluDb.conversations.put(next)
+    updated.push(next)
   }
 
-  return withStore('session_state', 'readwrite', (store) => {
-    store.put(payload)
-    return payload
-  })
+  return updated
 }
 
-export async function loadSessionState() {
-  return withStore('session_state', 'readonly', (store) =>
-    new Promise((resolve, reject) => {
-      const request = store.get('current')
-      request.onsuccess = () => {
-        const result = request.result || null
-        if (!result) {
-          resolve(null)
-          return
-        }
+async function persistSessionState(session = {}) {
+  const value = {
+    ...session,
+    history: Array.isArray(session?.history) ? session.history : [],
+  }
+  const existing = await fluDb.sessionState.get('current')
+  await fluDb.sessionState.put({
+    id: 'current',
+    key: 'current',
+    value,
+    timestamp: Date.now(),
+    sync: buildSyncTuple(existing?.sync, Date.now()),
+  })
+  return value
+}
 
-        resolve({
-          ...result,
-          history: Array.isArray(result.history) ? result.history : [],
-        })
-      }
-      request.onerror = () => reject(request.error)
-    }),
-  )
+export async function saveSessionState(session = {}) {
+  await migrateLegacyVoiceData()
+  const value = await persistSessionState(session)
+  return { id: 'current', ...value, updatedAt: new Date(Date.now()).toISOString() }
+}
+
+/**
+ * Recupera el estado de sesión persistido en `flu-os3`.
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+export async function loadSessionState() {
+  await migrateLegacyVoiceData()
+  const record = await fluDb.sessionState.get('current')
+  if (!record) return null
+  const value = record.value && typeof record.value === 'object' ? record.value : {}
+  return { ...value, history: Array.isArray(value.history) ? value.history : [] }
 }
 
 export async function listStoreRecords(storeName) {
   return withStore(storeName, 'readonly', (store) => readAllFromStore(store))
-}
-
-export async function listStoreRecordsByIndex(storeName, indexName, value) {
-  return withStore(storeName, 'readonly', (store) => readAllFromIndex(store, indexName, value))
-}
-
-export async function saveStoreRecord(storeName, payload) {
-  return withStore(storeName, 'readwrite', (store) => {
-    store.put(payload)
-    return payload
-  })
 }

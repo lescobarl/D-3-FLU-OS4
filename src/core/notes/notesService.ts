@@ -151,13 +151,8 @@ export function createNotesService({
     return copyRecord(updated);
   };
 
-  const remove = async (id: string): Promise<boolean> => {
-    const row = await db.get(id);
-    if (!row) return false;
-    await db.delete(id);
-    await addAuditLog('notes.remove', 'note', id, row, null, 'notesService');
-    return true;
-  };
+  /** Alias de borrado LÓGICO (§2.9): delega en `softRemove`, nunca borra la fila. */
+  const remove = async (id: string): Promise<boolean> => (await softRemove(id)) !== null;
 
   /** Borrado LÓGICO (§2.9): marca `sync.deleted` sin borrar la fila. */
   const softRemove = async (id: string): Promise<NoteRecord | null> => {
@@ -214,9 +209,14 @@ export function createNotesService({
   /** Elimina todas las notas marcadas como hechas; devuelve cuántas se quitaron. */
   const clearDone = async (): Promise<number> => {
     const all = await db.toArray();
-    const done = all.filter((note) => note.done);
+    const done = all.filter((note) => note.done && !note.sync?.deleted);
+    const t = timestamp();
     for (const note of done) {
-      await db.delete(note.id);
+      await db.put({
+        ...note,
+        updatedAt: t,
+        sync: { ...buildSyncTuple(note.sync, t), deleted: true },
+      });
     }
     if (done.length > 0) {
       await addAuditLog('notes.clearDone', 'note', '', done.length, 0, 'notesService');

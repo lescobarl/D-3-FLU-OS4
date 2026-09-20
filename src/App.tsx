@@ -1209,6 +1209,17 @@ async function dispatchArbiterIntent(
     return reply;
 }
 
+/**
+ * Expone el callback de contrato en `window` SOLO en desarrollo (e2e).
+ * En producción no publica el hook de prueba: sin superficie de test en runtime.
+ */
+function exposeContractHookDev<T>(callback: T): T {
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+        window.__fluOnContractResolved = callback as (resolved: unknown) => Promise<unknown>;
+    }
+    return callback;
+}
+
 function App() {
     const [_currentState, setCurrentState] = useState<ConversationState>('IDLE');
     // Foco del Pizarrón por turno (señal monotónica): garantiza que el feed
@@ -2038,7 +2049,7 @@ function App() {
         // (window.__fluOnContractResolved) para que las pruebas de verificación
         // puedan disparar un contrato play_music de forma determinista. Se asigna
         // en CREACIÓN (expresión de asignación), disponible desde el montaje.
-        onContractResolved: (window.__fluOnContractResolved = useCallback(async (resolved: ContractResolution) => {
+        onContractResolved: exposeContractHookDev(useCallback(async (resolved: ContractResolution) => {
             // §9 — Fila del USUARIO inmediata: el motor la pide al terminar de
             // capturar (antes de la IA). Aquí SOLO se agrega la fila y se sale;
             // la resolución posterior deduplica y agrega la respuesta de FLU.

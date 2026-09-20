@@ -252,7 +252,8 @@ Núcleo anti-mentira. Cualquier otra regla se interpreta bajo esta sección.
   diffs sobre bloques ya mapeados sin re-leer archivos.
 
 ### Gates
-- Pre-commit LIGERO: lint-staged + typecheck incremental. Nunca la suite completa.
+- Pre-commit LIGERO: `npm run lint` + `npm run typecheck` (lint-staged). Nunca la suite completa.
+- Gate CI: `.github/workflows/ci.yml` ejecuta `npm run test:full`, `npm run build` y `npm run typecheck`.
 - Push/PR = entrega: CI ejecuta suite completa frontend + backend (`pytest -n auto` con
   cobertura, workers con DB temporal propia). Antes de declarar entrega, el CI DEBE estar
   en verde (o suite completa corrida una vez en el cierre).
@@ -283,18 +284,16 @@ Núcleo anti-mentira. Cualquier otra regla se interpreta bajo esta sección.
    valida / ejecuta" sobre tarea descrita cuenta como aceptación.
 2. **Una sola tarea a la vez, sin desvíos.** Hallazgo fuera de alcance → se anota al final
    (`archivo:línea`) y se sigue la tarea. Correcciones extra solo tras aceptar la principal.
-3. **Tarea grande/riesgosa** → se parte en pasos escritos y se pide OK por paso. Nunca
-   reemplazar en silencio por una parte fácil ni abandonar la tarea ante la dificultad.
-4. **"No afectar lo validado" se demuestra con tests** que cubren el cambio; no es excusa
+3. **"No afectar lo validado" se demuestra con tests** que cubren el cambio; no es excusa
    para evitar el cambio ordenado.
-5. **"Ejecuta / hazlo" = primera tool call en esa misma respuesta, sin texto previo.**
+4. **"Ejecuta / hazlo" = primera tool call en esa misma respuesta, sin texto previo.**
    Antes: máximo 1 línea. La explicación va DESPUÉS. Prohibido en la respuesta de
    ejecución: análisis del error, mea culpa, "¿lo hago?". Excepción única: falta
    información real → una pregunta y stop.
-6. **No detenerse ante complejidad**: con diagnóstico + localización, se ejecuta completo
+5. **No detenerse ante complejidad**: con diagnóstico + localización, se ejecuta completo
    ahora; la validación visual la hace el usuario después. Prohibido "es delicado, ¿sigo?"
    o usar la regla 1.3 para no ejecutar. La regla 1.3 prohíbe DECLARAR listo, no ejecutar.
-7. **Cumplir el objetivo completo** (no basta "compila / pasan tests"). Cada cambio se
+6. **Cumplir el objetivo completo** (no basta "compila / pasan tests"). Cada cambio se
    anuncia ANTES (archivo + intención) y se muestra DESPUÉS con `git diff` real. Sin
    decisiones ocultas ni reverts silenciosos.
 
@@ -378,9 +377,6 @@ se empieza. El contrato tiene 4 campos obligatorios: objetivo único, DoD, alcan
 5. **Alcance cerrado.** El contrato fija los archivos que se PUEDEN tocar y prohíbe el resto.
    Todo hallazgo fuera de alcance se ANOTA al final (`archivo:línea`) y se sigue la tarea.
 
-6. **Una tarea por instrucción.** No se agrupan varios hitos en un turno; el lote es lo que
-   permite posponer lo importante. Un turno = un contrato.
-
 **Cierre obligatorio (salida cruda, sin resúmenes):**
 (a) `git diff --stat` · (b) comando DoD ANTES y DESPUÉS · (c) salida del guard ·
 (d) baseline de fallos preexistentes y confirmación de 0 nuevos.
@@ -427,32 +423,30 @@ que el usuario pida explícitamente lo contrario.
    listado entero si basta un fragmento (§2.17). Se lee la línea/bloque nuevo.
 3. **Ventana mínima de logs.** De un log se lee SOLO la marca o línea relevante
    (búsqueda dirigida por patrón); jamás el buffer completo ni el archivo entero.
-4. **Un objetivo por turno, una pasada.** No agrupar hitos no relacionados; cada
-   turno cierra un contrato (§10.6).
-5. **Verificación por niveles.** (a) test del archivo tocado; (b) typecheck
+4. **Verificación por niveles.** (a) test del archivo tocado; (b) typecheck
    incremental; (c) gate/suite completa SOLO al cierre. No correr todo por cada
    edición.
-6. **No re-verificar lo ya verde.** Prohibido repetir un comando ya ejecutado y
+5. **No re-verificar lo ya verde.** Prohibido repetir un comando ya ejecutado y
    verde en el mismo turno o sin que el código haya cambiado.
-7. **Delegar lo instrumental.** Búsquedas, exploración de símbolos y lectura de
+6. **Delegar lo instrumental.** Búsquedas, exploración de símbolos y lectura de
    logs se delegan a subagentes (en paralelo cuando son independientes); el
    agente principal solo sintetiza y decide.
-8. **Instrumentación puntual, no trazas masivas.** Usar marcas concretas y
+7. **Instrumentación puntual, no trazas masivas.** Usar marcas concretas y
    apagadas por defecto; el debug verboso se enciende solo para la medición y se
    apaga al terminar. Un log que inunda es un defecto.
-9. **Modelo/razonamiento proporcional a la tarea.** Ligero y directo para cambios
+8. **Modelo/razonamiento proporcional a la tarea.** Ligero y directo para cambios
    mecánicos; profundo solo para diagnóstico o diseño.
-10. **Salida corta y de formato fijo** (§E). Sin narrar el proceso, sin repetir el
-    diff en prosa, sin mea culpa.
-11. **Cerrar antes de abrir.** Ningún hito queda "pendiente de validar" mientras
+9. **Salida corta y de formato fijo** (§E). Sin narrar el proceso, sin repetir el
+   diff en prosa, sin mea culpa.
+10. **Cerrar antes de abrir.** Ningún hito queda "pendiente de validar" mientras
     se empieza otro; se cierra con su guard verde.
-12. **Ante ambigüedad costosa, decidir y avanzar** con el default declarado; el
+11. **Ante ambigüedad costosa, decidir y avanzar** con el default declarado; el
     usuario corrige después. Evitar el ping-pong de preguntas.
 
 ---
 
-**Última actualización**: 2026-09-18
-**Versión del documento**: 7.3
-**Cambio clave**: §12 Velocidad de interacción (evidencia en el primer mensaje,
-ventana mínima de logs, verificación por niveles, delegación de lo instrumental,
-instrumentación puntual). Refuerza §2.17 y §6.
+**Última actualización**: 2026-09-19
+**Versión del documento**: 7.4
+**Cambio clave**: eliminadas las reglas que forzaban un solo hito por turno y el
+"OK por paso" (§7.3, §10.6, §12.4). Ahora se permite ejecutar varios hitos en
+cadena dentro de una misma pasada, verificando cada uno con tests.

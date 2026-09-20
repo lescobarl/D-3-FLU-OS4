@@ -142,6 +142,7 @@ export function createOnboardingService({
 }: OnboardingServiceOptions): OnboardingService {
   const load = async (id: string): Promise<OnboardingState> => {
     const record = await db.get(id);
+    if (record?.sync?.deleted) return onboardingStateFromRecord(undefined);
     return onboardingStateFromRecord(record);
   };
 
@@ -161,7 +162,12 @@ export function createOnboardingService({
 
   const reset = async (id: string): Promise<void> => {
     const previous = await db.get(id);
-    await db.delete(id);
+    if (previous) {
+      await db.put({
+        ...previous,
+        sync: { ...buildSyncTuple(previous.sync, now()), deleted: true },
+      });
+    }
     await addAuditLog(
       'onboarding.reset',
       'onboardingStates',

@@ -11,6 +11,7 @@
  * No toca la unificación ni el flujo de producción.
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 
 const RATE = 16000
 
@@ -176,7 +177,7 @@ async function runGemini(pcm: Float32Array): Promise<ProbeResult> {
       import.meta.env.VITE_OPENROUTER_AUDIO_MODEL || 'google/gemini-2.5-flash'
     const data = encodeWav16(pcm, RATE)
     const started = Date.now()
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const res = await fetch(`${OPENROUTER_DEFAULTS.API_URL}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({

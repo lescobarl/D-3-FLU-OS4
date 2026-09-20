@@ -10,6 +10,7 @@
       "scripts/task-gate*.mjs": "deny",
       "scripts/hito.mjs": "deny",
       "scripts/corregir.mjs": "deny",
+      "scripts/audit-metric.mjs": "deny",
       "tests/*Guard*.test.ts": "deny",
       "tests/*guard*.test.ts": "deny",
       "tests/taskGateInvariant.test.ts": "deny",

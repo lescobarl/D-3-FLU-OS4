@@ -313,7 +313,10 @@ describe('diaryService — edición y borrado', () => {
 
     const result = await svc.removeEntry('seed-1');
     expect(result).toEqual({ ok: true });
-    expect(await seeded.diaryEntries.toArray()).toHaveLength(0);
+    const rows = await seeded.diaryEntries.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sync?.deleted).toBe(true);
+    expect(await svc.listEntries()).toHaveLength(0);
 
     expect(addAuditLog).toHaveBeenCalledTimes(1);
     expect(addAuditLog).toHaveBeenCalledWith(
@@ -321,7 +324,7 @@ describe('diaryService — edición y borrado', () => {
       'diaryEntries',
       'seed-1',
       { date: TODAY, content: 'C1' },
-      null,
+      { date: TODAY, content: 'C1' },
       'diaryService',
     );
   });

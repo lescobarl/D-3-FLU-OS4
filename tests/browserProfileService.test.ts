@@ -93,9 +93,6 @@ function createMapDb(initial: BrowserProfileRecord[] = []): BrowserProfilesDb {
       rows.set(record.id, { ...record });
       return record.id;
     },
-    async delete(id: string): Promise<void> {
-      rows.delete(id);
-    },
     async get(id: string): Promise<BrowserProfileRecord | undefined> {
       const row = rows.get(id);
       return row ? { ...row } : undefined;
@@ -261,13 +258,16 @@ describe('browserProfileService — reset, get y list', () => {
     const db = createMapDb([makeRecord()]);
     const service = createService(db);
     expect(await service.reset('hijo-1')).toBe(true);
-    expect(await db.toArray()).toHaveLength(0);
+    const rows = await db.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sync?.deleted).toBe(true);
+    expect(await service.getForParticipant('hijo-1')).toBeUndefined();
     expect(addAuditLog).toHaveBeenCalledWith(
       'browser.profile.reset',
       'browserProfile',
       'hijo-1',
       expect.objectContaining({ id: 'hijo-1' }),
-      null,
+      expect.objectContaining({ sync: expect.objectContaining({ deleted: true }) }),
       'browserProfileService',
     );
   });

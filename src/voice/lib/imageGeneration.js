@@ -107,10 +107,6 @@ export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es
     }
   }
 
-  if (c.primary === 'pollinations') {
-    return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
-  }
-
   return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
 }
 

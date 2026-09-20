@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
 import {
   createParticipantRegistry,
   resolveKindRole,
@@ -169,7 +170,13 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
         // ACTIVE_USER. Sin esto, en la siguiente carga el id eliminado seguía
         // activo y su onboarding completado hacía que el perfil reapareciera.
         try {
-          await fluDb.onboardingStates.delete(id);
+          const row = await fluDb.onboardingStates.get(id);
+          if (row) {
+            await fluDb.onboardingStates.put({
+              ...row,
+              sync: { ...buildSyncTuple(row.sync, Date.now()), deleted: true },
+            });
+          }
         } catch (err) {
           console.error('[useParticipants] onboarding cleanup error:', err);
         }

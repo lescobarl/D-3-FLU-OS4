@@ -1,0 +1,21 @@
+{
+  "id": "C2",
+  "mode": "full",
+  "task": "Búsqueda — allowlist solo desde FLU_CONFIG",
+  "base": "__BASE__",
+  "objective": "App y useNavigationCommands obtienen la allowlist de búsqueda de FLU_CONFIG; sin literales duplicados.",
+  "allow": ["src/App.tsx", "src/hooks/useNavigationCommands.ts"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 3,
+  "maxLines": 120,
+  "dod": "npx vitest run tests/searchAllowlistFuenteUnicaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/searchAllowlistFuenteUnicaGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "La allowlist de búsqueda no se re-declara fuera de fluConfig.js",
+    "metric": { "command": "node scripts/audit-metric.mjs search-allowlist", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/searchAllowlistFuenteUnicaGuard.test.ts"]
+  }
+}

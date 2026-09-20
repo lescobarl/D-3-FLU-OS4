@@ -44,9 +44,6 @@ const ambientesDb: CatalogDb<EnvironmentDefinition> = {
     async put(record) {
         await fluDb.ambientes.put(toAmbienteRecord(record));
     },
-    async delete(id) {
-        await fluDb.ambientes.delete(id);
-    },
     async get(id) {
         const row = await fluDb.ambientes.get(id);
         return row ? toCatalogRecord(row) : undefined;

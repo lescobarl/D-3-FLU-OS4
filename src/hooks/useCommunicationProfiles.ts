@@ -86,7 +86,6 @@ export function useCommunicationProfiles({
       db: {
         add: (record) => fluDb.communicationProfiles.add(record),
         put: (record) => fluDb.communicationProfiles.put(record),
-        delete: (id) => fluDb.communicationProfiles.delete(id),
         getByParticipant: (participantId) =>
           fluDb.communicationProfiles.where('participantId').equals(participantId).first(),
         toArray: () => fluDb.communicationProfiles.toArray(),

@@ -29,6 +29,22 @@ export function cleanForSpeech(s: string): string {
 }
 
 /**
+ * Quita diacríticos (descomposición NFD + marcas combinantes) sin alterar
+ * mayúsculas. Fuente única de la normalización de acentos del proyecto.
+ */
+export function stripDiacritics(s: string): string {
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Normaliza texto para comparación: sin diacríticos, minúsculas y espacios
+ * colapsados. Fuente única (antes duplicada en 7 archivos).
+ */
+export function normalizeForMatch(s = ''): string {
+    return stripDiacritics(s).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Resolver un rótulo bilingüe { es, en } según el idioma activo, con
  * fallback final. Fuente única de verdad: antes existían 4 copias
  * locales (App.tsx, WorkspaceHub, HoyPanel, ResultFeed).

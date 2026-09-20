@@ -13,19 +13,17 @@
 //   dispararse en conversación casual.
 // ============================================================
 
-import { stripDiacritics } from './audioMath.js'
 import { getFusedPalettes } from '../../core/branding/seasonalPalettes'
 import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
 import { isGameId } from '../../core/games/gameCatalog'
+import { normalizeForMatch } from '../../lib/textUtils'
 
 // ------------------------------------------------------------
 // Normalización de texto
 // ------------------------------------------------------------
 
 /** Normaliza un texto para comparación: minúsculas, sin acentos, espacios colapsados. */
-export function normalizeForMatch(text = '') {
-  return stripDiacritics(text).replace(/\s+/g, ' ').trim()
-}
+export { normalizeForMatch }
 
 /**
  * Localiza `phrase` como token independiente (con límites de palabra) dentro

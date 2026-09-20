@@ -168,9 +168,13 @@ describe('notesService — borrado y limpieza', () => {
 
     const removed = await service.remove(added.id);
     expect(removed).toBe(true);
-    expect(await db.get(added.id)).toBeUndefined();
+    const row = await db.get(added.id);
+    expect(row).toBeDefined();
+    expect(row?.sync.deleted).toBe(true);
     expect(vi.mocked(addAuditLog)).toHaveBeenCalledWith(
-      'notes.remove', 'note', added.id, added, null, 'notesService',
+      'notes.remove', 'note', added.id, added,
+      expect.objectContaining({ sync: expect.objectContaining({ deleted: true }) }),
+      'notesService',
     );
   });
 

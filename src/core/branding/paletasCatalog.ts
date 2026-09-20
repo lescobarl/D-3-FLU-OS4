@@ -44,9 +44,6 @@ const paletasDb: CatalogDb<PaletteDefinition> = {
     async put(record) {
         await fluDb.paletas.put(toPaletaRecord(record));
     },
-    async delete(id) {
-        await fluDb.paletas.delete(id);
-    },
     async get(id) {
         const row = await fluDb.paletas.get(id);
         return row ? toCatalogRecord(row) : undefined;

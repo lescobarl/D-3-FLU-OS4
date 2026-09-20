@@ -1,0 +1,28 @@
+{
+  "id": "C17",
+  "mode": "full",
+  "task": "Basura — eliminar docs/utilidades huérfanas",
+  "base": "__BASE__",
+  "objective": "Se eliminan los archivos raíz/tool sin referencia ni entrada en scripts.",
+  "allow": [
+    "plan_solucion_basura.md",
+    "CONTEXTO_FLU_OS2.md",
+    "ESTADO_SISTEMA.md",
+    "mermaid-diagrama1.png",
+    "tools/e2e-sims/**",
+    "tools/live-check.mjs"
+  ],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 8,
+  "maxLines": 3000,
+  "dod": "npx vitest run tests/huerfanosGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/huerfanosGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "No quedan docs/utilidades huérfanas conocidas",
+    "metric": { "command": "node scripts/audit-metric.mjs huerfanos", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/huerfanosGuard.test.ts"]
+  }
+}

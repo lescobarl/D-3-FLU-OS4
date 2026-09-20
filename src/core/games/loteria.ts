@@ -175,9 +175,13 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             // "¡Lotería!" → alguien completó su cartón: gana.
             if (hasToken(normalized, 'loteria')) {
                 state.phase = 'done';
-                // Nombre legible si viene; si no, el id del hablante (nunca vacío).
-                // App debe enviar `playerName` para no anunciar un UUID.
-                state.winner = String(context?.playerName || context?.playerId || '').trim() || null;
+                // Nombre legible si viene; si no, el id SOLO si no es un UUID crudo.
+                const rawName = String(context?.playerName || '').trim();
+                const rawId = String(context?.playerId || '').trim();
+                const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                    rawId,
+                );
+                state.winner = rawName || (rawId && !uuidLike ? rawId : '') || null;
                 return {
                     prompt: state.winner
                         ? `¡LOTERÍA! ¡Ganó ${state.winner}! ¡A celebrar!`

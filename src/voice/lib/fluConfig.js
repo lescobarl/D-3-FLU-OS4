@@ -13,6 +13,30 @@ const LISTENING_ACK_PHRASES = Object.freeze([
   'hey flu are you listening',
 ])
 
+/**
+ * Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
+ * Fuente ÚNICA del wake word (§9.4): `voiceCommands.wakeWords` y el sesgo del
+ * decoder (`initialPrompt`) derivan de aquí. Configurable en Ajustes.
+ */
+const FLU_WAKE_WORDS = Object.freeze([
+  'oye flu',
+  'oye flow',
+  'oye blue',
+  'oye flo',
+  'ok flu',
+  'ok flow',
+  'ok blue',
+  'ok flo',
+  'okay flu',
+  'okay flow',
+  'okay blue',
+  'okay flo',
+  'hey flu',
+  'hey flow',
+  'hey blue',
+  'hey flo',
+])
+
 export const FLU_CONFIG = {
   sessionDefaults: {
     role: 'Asistente del Maestro',
@@ -2134,7 +2158,8 @@ export const FLU_CONFIG = {
        * correctamente en vez de alucinar en audios cortos.
        */
       initialPrompt:
-        'Conversación en español con el asistente. Palabras clave: ok flu, oye flu, ' +
+        'Conversación en español con el asistente. Palabras clave: ' +
+        `${FLU_WAKE_WORDS.filter((word) => word.endsWith(' flu')).join(', ')}, ` +
         'estás ahí, cuéntame, busca en la web, recuérdame, anota.',
       /** Parciales en vivo (interim): la "última frase" se escribe mientras se
        *  escucha. El COMMIT de la conversación sigue siendo solo con el final. */
@@ -2279,26 +2304,9 @@ export const FLU_CONFIG = {
     turnAudioOverlapMs: 800,
   },
   voiceCommands: {
- /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo). Un solo punto de verdad.
-  *  Configurable en Ajustes (wakeWords). NO existe "flu" suelto como wake word. */
- wakeWords: [
-   'oye flu',
-   'oye flow',
-   'oye blue',
-   'oye flo',
-   'ok flu',
-   'ok flow',
-   'ok blue',
-   'ok flo',
-   'okay flu',
-   'okay flow',
-   'okay blue',
-   'okay flo',
-   'hey flu',
-   'hey flow',
-   'hey blue',
-   'hey flo',
- ],
+ /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
+  *  Fuente única: FLU_WAKE_WORDS (§9.4). Configurable en Ajustes. */
+ wakeWords: [...FLU_WAKE_WORDS],
  resetAvatarColors: [
    'restablecer colores del avatar',
    'reset avatar colors',

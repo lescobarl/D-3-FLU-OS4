@@ -59,9 +59,6 @@ function createMapDb(initial: CatalogRecord<Item>[] = []): CatalogDb<Item> {
       map.set(record.id, { ...record, data: structuredClone(record.data), sync: { ...record.sync } });
       return undefined;
     },
-    async delete(id) {
-      map.delete(id);
-    },
     async get(id) {
       const row = map.get(id);
       return row ? { ...row, data: structuredClone(row.data), sync: { ...row.sync } } : undefined;
@@ -241,7 +238,11 @@ describe('catalogRegistry — borrado (remove)', () => {
     await service.register({ id: 'selva', label: 'Selva' });
     const removed = await service.remove('selva');
     expect(removed).toBe(true);
-    expect(await db.toArray()).toHaveLength(0);
+    const rows = await db.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sync?.deleted).toBe(true);
+    expect(await service.get('selva')).toBeUndefined();
+    expect(await service.list()).toHaveLength(0);
     expect(addAuditLog).toHaveBeenCalledWith(
       'item.remove',
       'item',

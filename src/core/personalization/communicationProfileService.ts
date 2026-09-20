@@ -60,7 +60,6 @@ export interface CommunicationProfileConfig {
 export interface CommunicationProfilesDb {
   add(record: CommunicationProfileRecord): Promise<unknown>;
   put(record: CommunicationProfileRecord): Promise<unknown>;
-  delete(id: string): Promise<void>;
   getByParticipant(participantId: string): Promise<CommunicationProfileRecord | undefined>;
   toArray(): Promise<CommunicationProfileRecord[]>;
 }
@@ -475,6 +474,7 @@ export function createCommunicationProfileService({
   const list = async (): Promise<CommunicationProfileRecord[]> => {
     const all = await db.toArray();
     return all
+      .filter((r) => !r.sync?.deleted)
       .slice()
       .sort((a, b) => (a.participantName || '').localeCompare(b.participantName || '', 'es'))
       .map(copyRecord);

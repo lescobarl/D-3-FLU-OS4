@@ -176,7 +176,7 @@ export function createHabitsService({
     if (config.maxGoalsPerParticipant !== undefined) {
       const all = await db.goals.toArray();
       const count = all.filter(
-        (g) => g.participantId === input.participantId && g.status === 'active',
+        (g) => !g.sync?.deleted && g.participantId === input.participantId && g.status === 'active',
       ).length;
       if (count >= config.maxGoalsPerParticipant) {
         return { ok: false, reason: 'limit-reached' };
@@ -212,7 +212,9 @@ export function createHabitsService({
 
   const listGoals = async (participantId?: string): Promise<GoalRecord[]> => {
     const all = await db.goals.toArray();
-    const filtered = participantId ? all.filter((g) => g.participantId === participantId) : all;
+    const filtered = (participantId ? all.filter((g) => g.participantId === participantId) : all).filter(
+      (g) => !g.sync?.deleted,
+    );
     return filtered
       .slice()
       .sort((a, b) => {
@@ -225,7 +227,7 @@ export function createHabitsService({
   const getGoal = async (id: string): Promise<GoalRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.goals.get(id);
-    return row ? toGoal(row) : undefined;
+    return row && !row.sync?.deleted ? toGoal(row) : undefined;
   };
 
   /** Días consecutivos completados (done=true) hasta la fecha de referencia. */
@@ -233,10 +235,10 @@ export function createHabitsService({
     if (!goalId) return 0;
     const all = await db.checkIns.toArray();
     const doneDates = new Set(
-      all.filter((c) => c.goalId === goalId && c.done).map((c) => c.date),
+      all.filter((c) => c.goalId === goalId && c.done && !c.sync?.deleted).map((c) => c.date),
     );
     const today = toDateKey(reference ?? timestamp());
-    const todayCheck = all.find((c) => c.goalId === goalId && c.date === today);
+    const todayCheck = all.find((c) => c.goalId === goalId && c.date === today && !c.sync?.deleted);
     // Si hoy tiene check-in y NO está completado, la racha está rota hoy.
     if (todayCheck && !todayCheck.done) return 0;
     let cursor = doneDates.has(today) ? today : previousDayKey(today);
@@ -253,7 +255,7 @@ export function createHabitsService({
     const all = await db.checkIns.toArray();
     const today = toDateKey(reference ?? timestamp());
     return goals.map((goal) => {
-      const entries = all.filter((c) => c.goalId === goal.id);
+      const entries = all.filter((c) => c.goalId === goal.id && !c.sync?.deleted);
       const completedDays = entries.filter((c) => c.done).length;
       const streak = (() => {
         const doneDates = new Set(entries.filter((c) => c.done).map((c) => c.date));
@@ -290,7 +292,7 @@ export function createHabitsService({
 
     const all = await db.checkIns.toArray();
     const existing = all.find(
-      (c) => c.goalId === input.goalId && c.date === input.date,
+      (c) => c.goalId === input.goalId && c.date === input.date && !c.sync?.deleted,
     );
 
     if (existing) {
@@ -373,25 +375,35 @@ export function createHabitsService({
     if (!goal) return { ok: false, reason: 'goal-not-found' };
     // Borra también sus check-ins (integridad del histórico).
     const all = await db.checkIns.toArray();
-    const checkIns = all.filter((c) => c.goalId === id);
+    const checkIns = all.filter((c) => c.goalId === id && !c.sync?.deleted);
     for (const c of checkIns) {
-      await db.checkIns.delete(c.id);
+      const updatedCheckIn: GoalCheckInRecord = {
+        ...c,
+        updatedAt: timestamp(),
+        sync: { ...buildSyncTuple(c.sync, timestamp()), deleted: true },
+      };
+      await db.checkIns.put(updatedCheckIn);
       await addAuditLog(
         'habits.checkin.remove',
         'goalCheckIns',
         c.id,
         { goalId: c.goalId, date: c.date },
-        null,
+        { goalId: c.goalId, date: c.date },
         'habitService',
       );
     }
-    await db.goals.delete(id);
+    const updatedGoal: GoalRecord = {
+      ...goal,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(goal.sync, timestamp()), deleted: true },
+    };
+    await db.goals.put(updatedGoal);
     await addAuditLog(
       'habits.goal.remove',
       'goals',
       id,
       { participantId: goal.participantId, title: goal.title },
-      null,
+      { participantId: goal.participantId, title: goal.title },
       'habitService',
     );
     return { ok: true };

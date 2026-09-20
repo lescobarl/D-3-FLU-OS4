@@ -618,14 +618,19 @@ class BackupManager implements IBackupManager {
     private dataRestorer: DataRestorer;
     private backups: BackupMetadata[] = [];
     
-    /** Fábrica por defecto del gestor (punto de composición del default). */
-    static create(): BackupManager {
-        return new this();
+    /** Fábrica por defecto del gestor (punto de composición del default, §2.4). */
+    static create(
+        deps: { dataExtractor?: DataExtractor; dataRestorer?: DataRestorer } = {},
+    ): BackupManager {
+        return new this({
+            dataExtractor: deps.dataExtractor ?? new DataExtractor(),
+            dataRestorer: deps.dataRestorer ?? new DataRestorer(),
+        });
     }
     
-    constructor() {
-        this.dataExtractor = new DataExtractor();
-        this.dataRestorer = new DataRestorer();
+    constructor(deps: { dataExtractor: DataExtractor; dataRestorer: DataRestorer }) {
+        this.dataExtractor = deps.dataExtractor;
+        this.dataRestorer = deps.dataRestorer;
         this.loadBackupList();
     }
     

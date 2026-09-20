@@ -85,16 +85,16 @@ export function createShoppingService({
   const get = async (id: string): Promise<ShoppingItemRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? copyRecord(row) : undefined;
+    return row && !row.sync?.deleted ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<ShoppingItemRecord[]> => {
     const all = await db.toArray();
-    return all.map(copyRecord);
+    return all.filter((row) => !row.sync?.deleted).map(copyRecord);
   };
 
   const listFiltered = async (filter: ShoppingListFilter = 'all'): Promise<ShoppingItemRecord[]> => {
-    const all = await db.toArray();
+    const all = (await db.toArray()).filter((row) => !row.sync?.deleted);
     return filterItems(all, filter).map(copyRecord);
   };
 
@@ -131,8 +131,13 @@ export function createShoppingService({
   const remove = async (id: string): Promise<boolean> => {
     const row = await db.get(id);
     if (!row) return false;
-    await db.delete(id);
-    await addAuditLog('shopping.remove', 'shoppingItem', id, row, null, 'shoppingService');
+    const updated: ShoppingItemRecord = {
+      ...row,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
+    };
+    await db.put(updated);
+    await addAuditLog('shopping.remove', 'shoppingItem', id, row, updated, 'shoppingService');
     return true;
   };
 
@@ -159,9 +164,14 @@ export function createShoppingService({
   /** Elimina todos los ítems marcados; devuelve cuántos se quitaron. */
   const clearChecked = async (): Promise<number> => {
     const all = await db.toArray();
-    const checked = all.filter((item) => item.checked);
+    const checked = all.filter((item) => item.checked && !item.sync?.deleted);
+    const t = timestamp();
     for (const item of checked) {
-      await db.delete(item.id);
+      await db.put({
+        ...item,
+        updatedAt: t,
+        sync: { ...buildSyncTuple(item.sync, t), deleted: true },
+      });
     }
     if (checked.length > 0) {
       await addAuditLog('shopping.clearChecked', 'shoppingItem', '', checked.length, 0, 'shoppingService');
@@ -170,7 +180,7 @@ export function createShoppingService({
   };
 
   const remaining = async (): Promise<number> => {
-    const all = await db.toArray();
+    const all = (await db.toArray()).filter((row) => !row.sync?.deleted);
     return itemsRemaining(all);
   };
 

@@ -198,7 +198,7 @@ export function createParticipantRegistry({
     if (!name) return { ok: false, reason: 'invalid-input' };
 
     const all = await db.toArray();
-    const duplicate = all.some((p) => p.name.toLowerCase() === name.toLowerCase());
+    const duplicate = all.some((p) => !p.sync?.deleted && p.name.toLowerCase() === name.toLowerCase());
     if (duplicate) return { ok: false, reason: 'duplicate' };
 
     const id = newId();
@@ -232,7 +232,7 @@ export function createParticipantRegistry({
     if (!anon?.name) return undefined;
     const needle = anon.name.toLowerCase();
     const all = await db.toArray();
-    const found = all.find((p) => p.name.toLowerCase() === needle);
+    const found = all.find((p) => !p.sync?.deleted && p.name.toLowerCase() === needle);
     return found ? copyRecord(found) : undefined;
   };
 
@@ -250,7 +250,12 @@ export function createParticipantRegistry({
     const sorted = duplicates.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
     const keep = sorted[0];
     for (const dup of sorted.slice(1)) {
-      await db.delete(dup.id);
+      const updated: ParticipantRecord = {
+        ...dup,
+        updatedAt: timestamp(),
+        sync: { ...buildSyncTuple(dup.sync, timestamp()), deleted: true },
+      };
+      await db.put(updated);
       await addAuditLog('participant.seed-anonymous-dedup', 'participant', dup.id, dup, { name: dup.name }, 'participantRegistry');
     }
     // Si el canónico quedó sin rol, se lo repara.
@@ -342,12 +347,13 @@ export function createParticipantRegistry({
   const get = async (id: string): Promise<ParticipantRecord | undefined> => {
     if (!id) return undefined;
     const row = await db.get(id);
-    return row ? copyRecord(row) : undefined;
+    return row && !row.sync?.deleted ? copyRecord(row) : undefined;
   };
 
   const list = async (): Promise<ParticipantRecord[]> => {
     const all = await db.toArray();
     return all
+      .filter((p) => !p.sync?.deleted)
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name, 'es'))
       .map(copyRecord);
@@ -360,8 +366,13 @@ export function createParticipantRegistry({
     // activo y la red de seguridad del dispositivo compartido.
     const anon = config.anonymous;
     if (anon?.name && row.name.toLowerCase() === anon.name.toLowerCase()) return false;
-    await db.delete(id);
-    await addAuditLog('participant.remove', 'participant', id, row, null, 'participantRegistry');
+    const updated: ParticipantRecord = {
+      ...row,
+      updatedAt: timestamp(),
+      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
+    };
+    await db.put(updated);
+    await addAuditLog('participant.remove', 'participant', id, row, updated, 'participantRegistry');
     return true;
   };
 
@@ -373,7 +384,7 @@ export function createParticipantRegistry({
     const needle = speakerLabel.trim().toLowerCase();
     const all = await db.toArray();
     const found = all.find(
-      (p) => p.speakerLabel && p.speakerLabel.trim().toLowerCase() === needle,
+      (p) => !p.sync?.deleted && p.speakerLabel && p.speakerLabel.trim().toLowerCase() === needle,
     );
     return found ? copyRecord(found) : undefined;
   };
@@ -384,7 +395,7 @@ export function createParticipantRegistry({
     const key = reference.length >= 5 ? reference.slice(5) : '';
     const all = await db.toArray();
     return all
-      .filter((p) => p.birthday && p.birthday.slice(5) === key)
+      .filter((p) => !p.sync?.deleted && p.birthday && p.birthday.slice(5) === key)
       .map(copyRecord);
   };
 
@@ -415,6 +426,7 @@ export function createParticipantRegistry({
     const all = await db.toArray();
     const results: ParticipantRecord[] = [];
     for (const p of all) {
+      if (p.sync?.deleted) continue;
       const next = nextBirthday(p.birthday, reference);
       if (next && next.daysUntil <= config.birthdayAdvanceDays) results.push(copyRecord(p));
     }

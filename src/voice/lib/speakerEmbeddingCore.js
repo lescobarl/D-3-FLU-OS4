@@ -5,6 +5,7 @@
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from './fluConfig.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from './embeddingFrames.js'
+import { normalizeEmbeddingVector } from './speakerCore.js'
 
 let modelBundlePromise = null
 let preloadError = null
@@ -32,16 +33,6 @@ function getMinSamples(cfg = getEmbeddingConfig()) {
   const ratio = Number(cfg.minSampleRatio)
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.35
   return Math.floor(getTargetSampleRate(cfg) * safeRatio)
-}
-
-function normalizeVector(vector = []) {
-  if (!vector.length) return []
-  let norm = 0
-  for (let i = 0; i < vector.length; i += 1) {
-    norm += vector[i] * vector[i]
-  }
-  norm = Math.sqrt(norm) || 1
-  return vector.map((v) => Number(v || 0) / norm)
 }
 
 async function createModelBundle(cfg) {
@@ -103,5 +94,5 @@ export async function computeSpeakerEmbedding(samples = [], sampleRate = 48000, 
   const inputs = await processor(frame)
   const output = await model(inputs)
   const vector = tensorToEmbeddingVector(output)
-  return vector.length ? normalizeVector(vector) : []
+  return vector.length ? normalizeEmbeddingVector(vector) : []
 }

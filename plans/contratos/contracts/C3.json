@@ -1,0 +1,21 @@
+{
+  "id": "C3",
+  "mode": "full",
+  "task": "Persistencia — un solo escritor de perfiles de voz",
+  "base": "__BASE__",
+  "objective": "Solo useVoiceProfiles.ts escribe fluDb.voiceProfiles; App usa el hook y fluStorage deja de ser una segunda ruta de escritura.",
+  "allow": ["src/App.tsx", "src/hooks/useVoiceProfiles.ts", "src/voice/lib/fluStorage.js"],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 4,
+  "maxLines": 260,
+  "dod": "npx vitest run tests/voiceProfilesEscritorUnicoGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/voiceProfilesEscritorUnicoGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "Un único archivo escribe fluDb.voiceProfiles (useVoiceProfiles.ts)",
+    "metric": { "command": "node scripts/audit-metric.mjs voiceprofiles-escritores", "target": 1 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/voiceProfilesEscritorUnicoGuard.test.ts"]
+  }
+}
