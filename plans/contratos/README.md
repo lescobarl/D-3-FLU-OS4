@@ -53,6 +53,28 @@ npm run gate
 - Al cerrar, `npm run gate` sale **VERDE** y la sesión B reporta
   `git diff --stat` + salida cruda del gate en `.task/report` (append-only).
 
+### Ciclo de cierre real (verificado con C1)
+
+```powershell
+npm run gate                       # VERDE: aquí corre el invariante (worktree base)
+git add -A
+git commit --no-verify -m "fix(...): ... (C1)"
+```
+
+**Known issue (medido):** el hook pre-commit **no puede** ejecutar el invariante:
+durante el commit, `git worktree add` del `base` falla con
+`index.lock: No such file or directory`. Por eso el commit de cierre usa
+`--no-verify`, y la evidencia del invariante es la corrida manual de
+`npm run gate` (verde) + CI, que sí lo ejecuta completo. El pre-commit sigue
+sirviendo para DoD/guard/alcance, pero no para el worktree base.
+
+### Probar la cadena sin implementar (ensayo)
+
+```powershell
+node plans/contratos/promote.mjs C6 activate
+npm run gate        # ROJO en DoD = el guard de C6 falla (correcto)
+```
+
 ## Por qué no se puede desviar
 
 1. `allow` estrecho: tocar otro archivo ⇒ la puerta falla.

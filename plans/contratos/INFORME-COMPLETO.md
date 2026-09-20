@@ -152,7 +152,7 @@ Estado actual:
 
 | Contrato | Métrica HOY→META | Estado |
 |---|---|---|
-| C1 | 1→0 | rojo |
+| C1 | 1→0 | **verde (cerrado c343af4)** |
 | C2 | 2→0 | rojo |
 | C3 | 3→1 | rojo |
 | C4 | 3→0 | rojo |
