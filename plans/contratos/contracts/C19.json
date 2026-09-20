@@ -1,0 +1,25 @@
+{
+  "id": "C19",
+  "mode": "full",
+  "task": "Hardcode — el cliente no llama proveedores externos directo",
+  "base": "__BASE__",
+  "objective": "ocrService, healthMonitor y fluVisualStockSearch usan el proxy/servidor en vez de fetch directo.",
+  "allow": [
+    "src/services/ocrService.ts",
+    "src/core/autonomy/healthMonitor.ts",
+    "src/voice/lib/fluVisualStockSearch.js"
+  ],
+  "deny": [".task/**", "scripts/task-gate.mjs", "scripts/audit-metric.mjs"],
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "scripts/audit-metric.mjs", "kilo.json"],
+  "maxFiles": 5,
+  "maxLines": 300,
+  "dod": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "Los módulos de cliente no hacen fetch directo a proveedores",
+    "metric": { "command": "node scripts/audit-metric.mjs fetch-proveedor", "target": 0 },
+    "base": "__BASE__",
+    "guardFiles": ["tests/fetchProveedorGuard.test.ts"]
+  }
+}

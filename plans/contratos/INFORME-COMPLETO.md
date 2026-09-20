@@ -22,8 +22,9 @@ Estado actual:
 
 | Bloque | Estado |
 |---|---|
-| C1–C5 (abajo) | Contratos escritos, guards **rojos verificados**, staged en `tests/` |
-| C6–C20 | Propuestos en este documento; se materializan tras tu decisión |
+| C1 | Cerrado en verde (`c343af4`) |
+| C2–C19, C21, C23, C24 | Materializados: guard **rojo verificado**, `allow` cerrado, `base`/`frozen` |
+| C20, C22 | Subsumidos (ver §2.3) |
 | A / B / C | Inventario completo en §1 |
 
 ---
@@ -148,7 +149,7 @@ Estado actual:
 
 ### 2.3 Estado de materialización
 
-**Materializados con guard rojo verificado (16):**
+**Materializados y verificados en rojo (22):** (C1 ya cerrado en verde)
 
 | Contrato | Métrica HOY→META | Estado |
 |---|---|---|
@@ -168,19 +169,21 @@ Estado actual:
 | C16 | 15→0 | rojo |
 | C17 | 6→0 | rojo |
 | C23 | 3→0 | rojo |
+| C11 | 2→1 | rojo |
+| C13 | 160→0 | rojo |
+| C18 | 7→0 | rojo |
+| C19 | 3→0 | rojo |
+| C21 | 8→1 | rojo |
+| C24 | 6→1 | rojo |
 
-**Pendientes de diseño (no materializados, y por qué):**
+**Subsumidos (sin contrato propio, para no fabricar un guard débil):**
 
-| Contrato | Motivo |
+| Contrato | Por qué |
 |---|---|
-| C11 (notas vs compras) | Unificar elimina una feature visible (lista de compras): requiere decisión de producto, no de persistencia |
-| C13 (catch silenciosos) | 172 casos en ~50 archivos; un guard regex no distingue `catch` legítimo de silencioso → necesita lint AST, no este instrumento |
-| C18 (magic numbers) | Igual: extracción por dominio con diseño previo |
-| C19 (fetch directo) | Varios son directos por diseño (Openverse, fal.ai); hay que decidir cuáles van por proxy |
-| C20 (Tailwind / `src/modules`) | Rediseño estructural; contradice "no afectar lo validado" |
-| C21 (TTS doble) | Consolidar puede eliminar un módulo en uso; requiere decisión |
-| C22 (Gemini 4 entradas) | El proxy es server-side; "una sola entrada" no es un invariante claro sin diseño |
-| C24 (perfiles/modelo) | Solapa con C3 y C12; se resuelve cuando esos cierren |
+| C20 (Tailwind / `src/modules`) | El default aprobado (D4) es **no migrar** y dejar la excepción por escrito: eso lo cumple **C23**, que actualiza AGENTS.md. No hay cambio de código que medir |
+| C22 (Gemini 4 entradas) | La duplicación real (API key/resolución de texto) ya la cubren **C4, C5 y C12**; el endpoint vive solo en `appConfig.ts:184-185`. Un guard "4→1" sería un proxy, no una propiedad |
+
+Todo lo demás del informe está materializado. Cobertura: **22 contratos** con métrica, guard rojo verificado, `allow` cerrado, `base` y `frozen`.
 
 Cada C8–C20 nace con: métrica nueva en `audit-metric.mjs`, guard rojo que lista
 `archivo:línea`, `allow` estrecho, `base` fijo y `frozen.json`.

@@ -47,6 +47,44 @@ const RE = {
   physicalDelete: /fluDb\.[A-Za-z]+\.(?:delete|bulkDelete|clear)\s*\(|\.where\([^)]*\)\s*\.delete\(/g,
   nonV4Id: /voice-\$\{Date\.now\(\)\}/,
   staleStack: /React 18|Vite 5|Tailwind CSS 3/g,
+  notasCompras: /fluDb\.(?:notes|shoppingItems)/,
+  timeoutsConfig: /\b[A-Z_]*TIMEOUT(?:_MS)?\s*=/,
+  ttsPoint: /speechSynthesis/,
+  modeloDefault: /gemini-2\.5-flash-lite/,
+}
+const FILES_IMPORT_PROXY = [
+  'src/services/ocrService.ts',
+  'src/core/autonomy/healthMonitor.ts',
+  'src/voice/lib/fluVisualStockSearch.js',
+]
+
+/** Cuenta bloques catch cuyo cuerpo no registra ni propaga el error. */
+function countSilentCatches() {
+  let n = 0
+  for (const f of FILES) {
+    const src = read(f)
+    const re = /catch\s*(?:\([^)]*\))?\s*\{/g
+    let m
+    while ((m = re.exec(src)) !== null) {
+      const open = src.indexOf('{', m.index)
+      let depth = 0
+      let i = open
+      for (; i < src.length; i += 1) {
+        if (src[i] === '{') depth += 1
+        else if (src[i] === '}') {
+          depth -= 1
+          if (depth === 0) break
+        }
+      }
+      const body = src.slice(open + 1, i)
+      const handled =
+        /\b(throw|console\.|relayLog|logger|log\w*\s*\(|report\w*\s*\(|reject\s*\(|notification|setError|onError|emit\w*\s*\()/.test(
+          body,
+        )
+      if (!handled) n += 1
+    }
+  }
+  return n
 }
 
 const FILES = walk(SRC)
@@ -147,6 +185,21 @@ const metrics = {
     const m = read(p).match(RE.staleStack)
     return m ? m.length : 0
   },
+  // ---- C11-C24 -----------------------------------------------------------
+  'notas-compras-tablas': () => countFilesWhere((_r, f) => RE.notasCompras.test(read(f))),
+  'timeouts-config': () =>
+    countLinesWhere(
+      (r, l) =>
+        r !== 'src/core/config/appConfig.ts' &&
+        r !== 'src/core/config/sharedConfig.ts' &&
+        RE.timeoutsConfig.test(stripComment(l)),
+    ),
+  'catch-silencioso': countSilentCatches,
+  'fetch-proveedor': () =>
+    FILES_IMPORT_PROXY.filter((p) => existsSync(join(ROOT, p)) && /fetch\s*\(/.test(read(join(ROOT, p))))
+      .length,
+  'tts-punto-unico': () => countFilesWhere((_r, f) => RE.ttsPoint.test(read(f))),
+  'modelo-default': () => countFilesWhere((_r, f) => RE.modeloDefault.test(read(f))),
 }
 
 const id = process.argv[2]
