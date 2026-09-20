@@ -528,3 +528,17 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Ninguna funcionalidad de producción usaba esos módulos (solo tests).
+
+---
+
+## C17 — Eliminados docs/utilidades huérfanas
+
+Cambios aplicados:
+- Eliminados plan_solucion_basura.md, CONTEXTO_FLU_OS2.md, ESTADO_SISTEMA.md, mermaid-diagrama1.png, tools/e2e-sims/sim-pollinations-caida-openrouter.spec.ts, tools/live-check.mjs (sin referencia en package.json/CI/README).
+
+Validado contra:
+- npm run gate (verde): métrica base=6 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: 6 archivos borrados + infra .task.
+
+No validado (DoD-producto, pendiente del usuario):
+- Ninguna referencia rota (verificado por rg en package.json/.github/README).

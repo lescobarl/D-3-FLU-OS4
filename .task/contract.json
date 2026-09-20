@@ -1,29 +1,16 @@
 {
-  "id": "C16",
+  "id": "C17",
   "mode": "full",
-  "task": "Basura — eliminar módulos muertos de src/lib",
-  "base": "6e18d51dfd3d2f12aeaa5bc00cfef3ad1ac4971c",
-  "objective": "Se eliminan los 15 módulos sin importador de producción y sus tests huérfanos.",
+  "task": "Basura — eliminar docs/utilidades huérfanas",
+  "base": "555d698f0952430113a48de2414abfa10235b004",
+  "objective": "Se eliminan los archivos raíz/tool sin referencia ni entrada en scripts.",
   "allow": [
-    "src/lib/**",
-    "src/voice/lib/localTranslate.js",
-    "src/core/db/fluDatabase.ts",
-    "tests/conversationFlow.test.ts",
-    "tests/emotionalState.test.ts",
-    "tests/exportUtils.test.ts",
-    "tests/forgettingCurve.test.ts",
-    "tests/goalTracker.test.ts",
-    "tests/memoryConsolidation.test.ts",
-    "tests/minuteSuggester.test.ts",
-    "tests/participantProfiles.test.ts",
-    "tests/preferenceLearner.test.ts",
-    "tests/proactiveEngine.test.ts",
-    "tests/theoryOfMind.test.ts",
-    "tests/transcriptQuality.test.ts",
-    "tests/userEmotionDetector.test.ts",
-    "tests/localTranslate.test.ts",
-    "tests/longTermMemoryDeleteGuard.test.ts",
-    "tests/memoryItemSyncGuard.test.ts"
+    "plan_solucion_basura.md",
+    "CONTEXTO_FLU_OS2.md",
+    "ESTADO_SISTEMA.md",
+    "mermaid-diagrama1.png",
+    "tools/e2e-sims/**",
+    "tools/live-check.mjs"
   ],
   "deny": [
     ".task/**",
@@ -37,20 +24,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 45,
-  "maxLines": 6000,
-  "dod": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/modulosMuertosGuard.test.ts --reporter=dot",
+  "maxFiles": 8,
+  "maxLines": 3000,
+  "dod": "npx vitest run tests/huerfanosGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/huerfanosGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No quedan módulos muertos conocidos",
+    "statement": "No quedan docs/utilidades huérfanas conocidas",
     "metric": {
-      "command": "node scripts/audit-metric.mjs modulos-muertos",
+      "command": "node scripts/audit-metric.mjs huerfanos",
       "target": 0
     },
-    "base": "6e18d51dfd3d2f12aeaa5bc00cfef3ad1ac4971c",
+    "base": "555d698f0952430113a48de2414abfa10235b004",
     "guardFiles": [
-      "tests/modulosMuertosGuard.test.ts"
+      "tests/huerfanosGuard.test.ts"
     ]
   }
 }
