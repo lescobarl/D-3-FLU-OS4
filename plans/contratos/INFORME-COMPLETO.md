@@ -318,4 +318,49 @@ decide `scripts/task-gate.mjs`. Cada hallazgo de este informe solo pasa a
 | J6 | `dist/` en disco | Descartado: `.gitignore` | disposición |
 | J7 | Backups/probes | Ninguno | ok |
 
-**Totales:** 37 contratos · 0 hallazgos sin disposición. (C1 cerrado; C2–C39 en rojo.)
+**Totales:** 37 contratos · 0 hallazgos sin disposición. (C1–C39 ejecutados.)
+
+---
+
+## Enmiendas ratificadas (2026-09-20)
+
+### Alcance (auto-aplicadas por el ejecutante, ratificadas a posteriori)
+
+El ejecutante amplió `allow` para poder cumplir el objetivo. No se autorizaron de
+forma previa; **el usuario las ratifica ahora**. Regla para próximas veces: PARAR y
+pedir enmienda **antes** de ampliar `allow`.
+
+| Contrato | `allow` ampliado con | Motivo |
+|---|---|---|
+| C10 | `src/hooks/useMinuteKnowledge.ts` | la escritura única vive en ese hook |
+| C14 | `src/hooks/useConversationPersistence.ts` | el punto de borrado real está ahí |
+| C16 | `src/core/db/fluDatabase.ts` + `tests/longTermMemoryDeleteGuard.test.ts` + `tests/memoryItemSyncGuard.test.ts` | borrar el módulo rozó la tabla y sus guards |
+| C18 | `src/core/config/appConfig.ts` + `src/core/config/sharedConfig.ts` | los timeouts centrales viven ahí |
+| C38 | `src/core/config/appConfig.ts` + `src/core/config/sharedConfig.ts` | los umbrales centrales viven ahí |
+| C21 | `src/core/config/sharedConfig.ts` + `tests/localTts.test.ts` | config de TTS + test del módulo |
+| C30 | `maxLines` 400 → 600 | el refactor de IndexedDB excedió 400 líneas |
+
+### Criterio / instrumento
+
+- **C32 y C33 quedan SUBSUMIDOS por C16**: `src/lib/longTermMemory.ts` se eliminó por no
+  tener importador de producción; su guard pasa de forma vacua
+  (`if (!existsSync(TARGET)) return`). Ratificado. No revertir.
+- **Métrica `memoryitem-sync` alineada**: devuelve `0` (no `-1`) cuando el módulo no
+  existe, para que instrumento y guard digan lo mismo.
+- **`tests/conversationTurnRowSingleWriter.test.ts`**: pasó de ">= 3 sitios" a "== 1
+  sitio" porque C26 dejó un único punto `commitUserTurnRow`. Aceptado como parte de C26.
+- **Commit `3119ff1` (regresión)**: fix cross-contrato del normalizador único
+  (`audioMath.normalizeSpokenCommand`). Aceptado.
+- **Guards extra** `deviationGuard`, `voiceSingleEngineGuard`, `speechEchoGuard`:
+  aditivos y verdes. Se conservan.
+- **Commit `5f1a157` del orquestador**: mixto (doc + 4 archivos del ejecutante);
+  contenido válido. Aceptado.
+
+---
+
+## Deuda abierta
+
+- **C13 (logging sin contexto)**: los 160 `catch` registran `console.warn('[catch] <archivo>')`
+  sin el error ni contexto descriptivo (§2.6). Pendiente logging con contexto. Candidato a **C40**.
+- **Contrato activo obsoleto**: `.task/contract.json` quedó en **C21** (base `3119ff1`)
+  tras el cierre; no se reactiva.

@@ -250,7 +250,7 @@ const metrics = {
     countLinesWhere((r, l) => r === 'src/lib/longTermMemory.ts' && RE.longtermDelete.test(l)),
   'memoryitem-sync': () => {
     const p = join(ROOT, 'src/lib/longTermMemory.ts')
-    if (!existsSync(p)) return -1
+    if (!existsSync(p)) return 0
     const src = read(p)
     const m = src.match(/interface MemoryItem\s*\{[\s\S]*?\n\}/)
     if (!m) return -1

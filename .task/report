@@ -649,3 +649,20 @@ Validado contra:
 
 No validado (DoD-producto, reservado al usuario):
 - Todo lo listado en cada contrato como "No validado": pantallas de voz, bitácora, minutas, notas/listas, TTS, perfiles, backup, etc.
+
+---
+
+## CIERRE DE AUDITORIA - ratificacion de enmiendas (2026-09-20)
+
+Cambios aplicados:
+- scripts/audit-metric.mjs: 'memoryitem-sync' devuelve 0 cuando no existe src/lib/longTermMemory.ts (alineado con guard vacuo).
+- plans/contratos/INFORME-COMPLETO.md: 'Enmiendas ratificadas' (7 ampliaciones de allow + C30 maxLines) y 'Deuda abierta' (C13 logging sin contexto; contrato C21 obsoleto).
+- .task/frozen.json: re-congelado scripts/audit-metric.mjs.
+
+Validado contra:
+- node scripts/audit-metric.mjs memoryitem-sync -> 0
+- npx vitest run tests/memoryItemSyncGuard.test.ts tests/longTermMemoryDeleteGuard.test.ts -> 2 passed
+- npm run test:full -> 269/2881 verde; npm run typecheck -> 0 errores
+
+No validado (DoD-producto, reservado al usuario): pantallas reales.
+
