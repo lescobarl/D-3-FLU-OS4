@@ -14,5 +14,7 @@
   "tests/speakerDiarizationSeparation.test.ts": "f2c5c0d1516f80d689d91429f9611f48a78b0b2f53c36695d3dcaabf8dfe5c57",
   "tests/agendaSingleSource.test.ts": "aa95a7511a0d49751e13226c35ba0d0b4f30a5f91a685cf64ae9cef9eb192113",
   "tests/agendaUiSwap.test.ts": "7f9974edc34fe79d87d70bb7f9ca39709a427fba1b5bc8fe77350afa12a1263b",
-  "tests/voiceOfflineFallback.test.ts": "71201f7fe29d6b01be7663732d11fc06cfae795d35e05fecea5a3c97723d9cf1"
+  "tests/voiceOfflineFallback.test.ts": "71201f7fe29d6b01be7663732d11fc06cfae795d35e05fecea5a3c97723d9cf1",
+  "scripts/audit-metric.mjs": "18f36e9ae9a54dcc38cd7bb946fd51952beef301140a9c5532c59cf95e7d6ce3",
+  "tests/vozInstanciaUnicaGuard.test.ts": "aa86e1e89175d4ae7962aad71c0d0bb161e370d6f6de968d1024d1c6e47b1eb5"
 }

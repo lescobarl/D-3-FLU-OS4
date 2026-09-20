@@ -1,171 +1,37 @@
 {
-  "id": "T-MULTIUSER-WORKSPACE-ISOLATION",
+  "id": "C1",
   "mode": "full",
-  "maxFiles": 60,
-  "maxLines": 4000,
-  "objective": "Aislar por usuario activo el pizarrón (workspaceArtifact, conversationHistory, búsqueda/imagen/video) y NO exponer datos per-usuario durante el onboarding; dejando además 'hoy' correcto en agenda, el seed DEMO idempotente, el commit de transcripción sin re-emisión, UN ÚNICO escritor de la fila del usuario (commitUserTurnRow) y el PANEL DERECHO (agenda + notas) con UN ÚNICO resolutor (árbitro determinista), con sus guards.",
-  "dod": "npx vitest run tests/panelScenarios.test.ts tests/contractFilesExist.test.ts tests/turnMultiItem.test.ts tests/injectedValues.test.ts tests/reportedScenariosSimulation.test.ts tests/gameCommandsPassThrough.test.ts tests/loteriaAdvance.test.ts tests/audioAlertRepeat.test.ts tests/agendaReminderLabel.test.ts tests/responseGateWindow.test.ts tests/panelUnifiedResolution.test.ts tests/noteParserBindings.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts tests/demoSeed.test.ts tests/agendaCommandParser.test.ts tests/voiceTurnRefireDedup.test.ts tests/workspacePersonIsolation.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/useWorkspaceSearchPersonReset.test.ts tests/ingressScenarios.test.ts tests/ingressSimulation.test.ts tests/agendaRootFix.test.ts tests/notesClearEndToEnd.test.ts tests/conversationModeSingleSource.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/panelScenarios.test.ts tests/contractFilesExist.test.ts tests/turnMultiItem.test.ts tests/injectedValues.test.ts tests/reportedScenariosSimulation.test.ts tests/gameCommandsPassThrough.test.ts tests/loteriaAdvance.test.ts tests/audioAlertRepeat.test.ts tests/responseGateWindow.test.ts tests/panelUnifiedResolution.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/notesUserScope.test.ts tests/useAgendaScope.test.ts tests/ingressScenarios.test.ts tests/agendaRootFix.test.ts tests/notesClearEndToEnd.test.ts tests/conversationModeSingleSource.test.ts --reporter=dot",
-  "guardExpect": "green",
-  "groundTruth": {
-    "command": "npm run typecheck && npm run test:full",
-    "expect": "0 errores de tipos; suite completa en verde (0 fallos nuevos)"
-  },
-  "baseline": {
-    "command": "npm run test:full",
-    "failPattern": "\\bFAIL\\b"
-  },
-  "invariants": [
-    {
-      "id": "I1",
-      "statement": "Sin usuario elegido en esta entrada (onboarding en pantalla) NO se muestra ni se escribe ningún dato per-usuario",
-      "count": "rg -n \"sessionReady\" src/App.tsx | wc -l",
-      "today": 0,
-      "target": 3,
-      "guard": "tests/notesUserScope.test.ts"
-    },
-    {
-      "id": "I2",
-      "statement": "Las notas son por usuario: sin usuario real la lista es vacía y add/addMany no crean filas globales",
-      "count": "rg -n \"participantId\" src/hooks/useNotes.ts | wc -l",
-      "today": 0,
-      "target": 1,
-      "guard": "tests/notesUserScope.test.ts"
-    },
-    {
-      "id": "I3",
-      "statement": "La agenda es por usuario: sin usuario real no lee ni dispara",
-      "count": "rg -n \"personId\" src/hooks/useAgenda.ts | wc -l",
-      "today": 0,
-      "target": 1,
-      "guard": "tests/useAgendaScope.test.ts"
-    }
-  ],
+  "task": "Voz §9.1 — una sola puerta de instancia de reconocimiento",
+  "base": "ab8808a40f5e261791aba3e88be9b90e12e2dd4a",
+  "objective": "Toda instancia de reconocimiento se crea vía acquireSpeechRecognition; ninguna fuera de speechRecognitionLocal.js.",
   "allow": [
-    "src/types/bridge.ts",
-    "src/store/integrationStore.ts",
-    "src/hooks/useConversationPersistence.ts",
-    "src/hooks/useWorkspaceSearch.ts",
-    "src/components/WorkspaceHub.tsx",
-    "src/App.tsx",
-    "tests/workspacePersonIsolation.test.ts",
-    "tests/workspaceArtifactPersonIsolation.test.ts",
-    "tests/useWorkspaceSearchPersonReset.test.ts",
-    "src/core/agenda/agendaCommandParser.ts",
-    "src/core/agenda/demoSeed.ts",
-    "src/core/reminders/nlDateParser.ts",
-    "src/hooks/useAgenda.ts",
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "src/voice/lib/conversationStreamCommit.js",
-    "src/voice/lib/turnStream.js",
-    "tests/agendaCommandParser.test.ts",
-    "tests/demoSeed.test.ts",
-    "tests/notesUserScope.test.ts",
-    "tests/useAgendaScope.test.ts",
-    "tests/voiceTurnRefireDedup.test.ts",
-    "plans/estado-sesion-2026-09-17.md",
-    "plans/estado-sesion-2026-09-18.md",
-    "src/voice/lib/conversationTurnRow.ts",
-    "src/voice/lib/rawCommitPlan.js",
-    "tests/conversationTurnRowSingleWriter.test.ts",
-    "tests/agendaReminderLabel.test.ts",
-    "tests/responseGateWindow.test.ts",
-    "tests/panelScenarios.test.ts tests/contractFilesExist.test.ts tests/turnMultiItem.test.ts tests/injectedValues.test.ts",
-    "tests/contractFilesExist.test.ts",
-    "tests/turnMultiItem.test.ts tests/injectedValues.test.ts",
-    "tests/injectedValues.test.ts",
-    "tests/minuteOnboardingGate.test.ts",
-    "tests/resolvedActionIdentity.test.ts",
-    "src/voice/lib/resolvedActionIdentity.ts",
-    "src/core/voice/responseGate.ts",
-    "src/core/agenda/agendaService.ts",
-    "src/core/notes/notesService.ts",
-    "src/core/temporal/audioAlert.ts",
-    "src/components/NotificationCenterBell.tsx",
-    "tests/audioAlertRepeat.test.ts",
-    "tests/gameCommandsPassThrough.test.ts",
-    "tests/reportedScenariosSimulation.test.ts",
-    "tests/loteriaAdvance.test.ts",
-    "src/voice/lib/gameCommands.js",
-    "src/core/games/loteria.ts",
-    "src/core/games/gameCatalog.ts",
-    "src/core/games/types.ts",
-    "tests/misrouteGuards.test.ts",
-    "src/core/agenda/describeTriggerText.ts",
-    "tests/describeTriggerText.test.ts",
-    "src/core/games/quienSoy.ts",
-    "tests/quienSoyMention.test.ts",
-    "tests/conversationLiveNotWiped.test.ts",
-    "src/voice/lib/noteRescue.js",
-    "src/voice/lib/noteIntentParser.js",
-    "src/voice/lib/gemini.js",
-    "tests/panelUnifiedResolution.test.ts",
-    "tests/noteRescue.test.ts",
-    "tests/noteParserBindings.test.ts",
-    "src/voice/lib/speechMerge.js",
-    "src/voice/lib/conversationStream.js",
-    "src/voice/lib/transcriptIngress.js",
-    "src/voice/lib/activeListen.js",
-    "tests/speechMerge.test.ts",
-    "tests/ingressScenarios.test.ts",
-    "tests/ingressSimulation.test.ts",
-    "src/voice/lib/listenLog.js",
-    "src/voice/lib/fluConfig.js",
-    "src/server/geminiProxy.ts",
-    "src/core/agenda/agendaCommandParser.ts",
-    "src/core/agenda/agendaService.ts",
-    "src/hooks/useAgenda.ts",
-    "tests/agendaRootFix.test.ts",
-    "src/voice/lib/wakeWord.js",
-    "tests/notesClearEndToEnd.test.ts",
-    "src/voice/lib/conversationMode.ts",
-    "tests/conversationModeSingleSource.test.ts",
-    "src/core/games/**",
-    "src/lib/**",
-    "src/types/fluWindow.d.ts",
-    "src/core/agenda/agendaIntentParser.ts",
-    "tests/agendaPhraseDimeQueHay.test.ts",
-    "tests/agendaQueryScenarios.test.ts",
-    "tests/gamesAudit.test.ts",
-    "tests/panelScenarios.test.ts",
-    "src/components/**",
-    "src/services/**",
-    "src/voice/**",
-    "tests/palabrasEncadenadas.test.ts"
+    "src/dev/asrLab/AsrLab.tsx"
   ],
-  "amendment": {
-    "date": "2026-09-18",
-    "reason": "Enmienda autorizada por el usuario (\"termina de implementar para ir a validar\"): ampliar `allow` a la ruta unica de texto mic->UI para eliminar la perdida de la primera palabra cuando coincide con la ultima (invariante: no eliminar una palabra cuya repeticion no es contigua). Archivos: src/voice/lib/speechMerge.js, src/voice/lib/conversationStream.js, src/voice/lib/transcriptIngress.js, src/voice/lib/activeListen.js, tests/speechMerge.test.ts. Se conserva la enmienda previa: (a) ampliar `allow` a los archivos del panel derecho (agenda+notas) unificado en el arbitro determinista, ademas de los fixes previos de onboarding/datos per-usuario, 'hoy', seed DEMO, dedup de turno y unificacion del escritor de la fila; (b) alinear `dod`/`guard` al esquema del gate (string), conservando y ampliando la verificacion; (c) el documento de estado plans/estado-sesion-2026-09-18.md.",
-    "authorizedBy": "usuario",
-    "date2": "2026-09-19",
-    "reason2": "Enmienda autorizada por el usuario (\"dale commit y actualiza el respaldo\") para consolidar la sesion en un commit: se amplia `allow` a src/core/games/**, src/lib/**, src/types/fluWindow.d.ts, src/core/agenda/agendaIntentParser.ts y los tests de la sesion; se suben maxFiles/maxLines por ser una consolidacion de hitos ya validados (juegos 457 tests verdes, typecheck 0).",
-    "date3": "2026-09-19",
-    "reason3": "Enmienda autorizada por el usuario (\"toma la decision correcta y continua a terminar\"): limpieza de codigo muerto y artefactos regenerables. allow ampliado a src/components/**, src/services/** y src/voice/** para eliminar 12 archivos sin referencias y dist/reports/test-results.",
-    "date4": "2026-09-19",
-    "reason4": "Enmienda autorizada por el usuario (\"continua hasta terminar\"): cierre de deuda de juegos. allow + tests/palabrasEncadenadas.test.ts. Cambios: ahorcado (palabra fallida consume intento; homografas no gastan intento), loteria (nombre legible del ganador via App), palabras encadenadas (tildes correctas), quien soy (rol invertido: el niño piensa y FLU adivina por si/no)."
-  },
   "deny": [
-    "scripts/auditoria.mjs",
+    ".task/**",
     "scripts/task-gate.mjs",
-    ".task/frozen.json"
+    "scripts/audit-metric.mjs"
   ],
-  "frozen": {
-    "contractHash": "no-congelado",
-    "guardHash": "no-congelado"
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "scripts/audit-metric.mjs",
+    "kilo.json"
+  ],
+  "maxFiles": 2,
+  "maxLines": 150,
+  "dod": "npx vitest run tests/vozInstanciaUnicaGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/vozInstanciaUnicaGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "Ninguna instancia de reconocimiento se crea fuera de la puerta única speechRecognitionLocal.js",
+    "metric": {
+      "command": "node scripts/audit-metric.mjs voz-instancia",
+      "target": 0
+    },
+    "base": "ab8808a40f5e261791aba3e88be9b90e12e2dd4a",
+    "guardFiles": [
+      "tests/vozInstanciaUnicaGuard.test.ts"
+    ]
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
