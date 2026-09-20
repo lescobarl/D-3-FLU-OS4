@@ -303,3 +303,19 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Búsqueda de música/proxies con timeout real en pantalla.
+
+---
+
+## C19 — Cliente sin fetch directo a proveedor
+
+Cambios aplicados:
+- src/services/ocrService.ts — OCR remoto vía fetchTextEngine (transporte único con timeout).
+- src/core/autonomy/healthMonitor.ts — sondas HEAD (IA y red) vía fetchTextEngine con TIMEOUT_POLICY_MS.
+- src/voice/lib/fluVisualStockSearch.js — stock Openverse vía fetchTextEngine (sin AbortController local).
+
+Validado contra:
+- npm run gate (verde): métrica base=3 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: 5 archivos (3 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- OCR remoto y monitor de salud con proveedor real.

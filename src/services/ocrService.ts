@@ -18,6 +18,7 @@
 // ============================================================
 
 import { STORAGE_KEYS, readStorage } from '../core/config/appConfig';
+import { fetchTextEngine } from '../core/ai/httpClient';
 
 export interface OcrResult {
     text: string;
@@ -60,7 +61,7 @@ export async function extractWithLocal(dataUrl: string): Promise<string> {
  * Contrato documentado para que cualquier proxy/backend compatible pueda servir OCR.
  */
 async function extractWithRemote(dataUrl: string, cfg: OcrConfig): Promise<string> {
-    const res = await fetch(cfg.apiUrl, {
+    const res = await fetchTextEngine(cfg.apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

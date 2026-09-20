@@ -21,6 +21,7 @@
 // ============================================================
 
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
+import { fetchTextEngine } from '../ai/httpClient';
 
 // -----------------------------------------------------------
 // Tipos
@@ -266,15 +267,15 @@ async function checkAIService(): Promise<ComponentHealth> {
             message = 'No hay API key configurada para servicios de IA remotos';
         } else {
             // Verificar conectividad real enviando la credencial (HEAD autorizado)
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.healthProbeAbort);
-
             try {
-                const response = await fetch(testUrl, {
-                    method: 'HEAD',
-                    signal: controller.signal,
-                    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
-                });
+                const response = await fetchTextEngine(
+                    testUrl,
+                    {
+                        method: 'HEAD',
+                        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+                    },
+                    TIMEOUT_POLICY_MS.healthProbeAbort,
+                );
                 metrics.networkReachable = response.ok;
                 if (!response.ok) {
                     hasError = true;
@@ -284,8 +285,6 @@ async function checkAIService(): Promise<ComponentHealth> {
                 hasError = true;
                 message = 'Error de conexión con servicio de IA';
                 metrics.networkReachable = false;
-            } finally {
-                clearTimeout(timeoutId);
             }
         }
     } catch (error) {
@@ -502,16 +501,15 @@ async function checkNetwork(): Promise<ComponentHealth> {
         for (const url of testUrls) {
             const pingStart = Date.now();
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.networkPingAbort);
+                await fetchTextEngine(
+                    url,
+                    {
+                        method: 'HEAD',
+                        mode: 'no-cors',
+                    },
+                    TIMEOUT_POLICY_MS.networkPingAbort,
+                );
                 
-                await fetch(url, {
-                    method: 'HEAD',
-                    signal: controller.signal,
-                    mode: 'no-cors',
-                });
-                
-                clearTimeout(timeoutId);
                 successfulPings++;
                 pingResults.push(Date.now() - pingStart);
             } catch {

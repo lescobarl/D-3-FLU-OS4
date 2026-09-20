@@ -3,6 +3,7 @@
  */
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { getVisualPipelineConfig, resolveVisualBriefCore } from './fluVisualPipeline.js'
+import { fetchTextEngine } from '../../core/ai/httpClient'
 
 function normalizeText(value = '') {
   return String(value || '')
@@ -11,19 +12,16 @@ function normalizeText(value = '') {
 }
 
 async function fetchJsonWithTimeout(url, timeoutMs) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    })
+    const response = await fetchTextEngine(
+      url,
+      { headers: { Accept: 'application/json' } },
+      timeoutMs,
+    )
     if (!response.ok) return null
     return await response.json()
   } catch {
     return null
-  } finally {
-    clearTimeout(timer)
   }
 }
 

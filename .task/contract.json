@@ -1,18 +1,13 @@
 {
-  "id": "C18",
+  "id": "C19",
   "mode": "full",
-  "task": "Hardcode — timeouts desde config central",
-  "base": "a089d786506cd536daff976b856e55cdd67722ca",
-  "objective": "Las constantes de timeout de red viven en appConfig/sharedConfig y se importan; sin literales locales.",
+  "task": "Hardcode — el cliente no llama proveedores externos directo",
+  "base": "89242af0a4c7ed1ef5f0278f62490c0b2e31347c",
+  "objective": "ocrService, healthMonitor y fluVisualStockSearch usan el proxy/servidor en vez de fetch directo.",
   "allow": [
-    "src/avatar/workers/fbxWorkerClient.ts",
-    "src/core/ai/httpClient.ts",
-    "src/server/searchProxy.ts",
-    "src/voice/lib/voiceIdWorkerClient.js",
-    "src/server/browserProxy.ts",
-    "src/services/musicSearch.ts",
-    "src/core/config/appConfig.ts",
-    "src/core/config/sharedConfig.ts"
+    "src/services/ocrService.ts",
+    "src/core/autonomy/healthMonitor.ts",
+    "src/voice/lib/fluVisualStockSearch.js"
   ],
   "deny": [
     ".task/**",
@@ -26,20 +21,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 8,
-  "maxLines": 250,
-  "dod": "npx vitest run tests/timeoutsConfigGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/timeoutsConfigGuard.test.ts --reporter=dot",
+  "maxFiles": 5,
+  "maxLines": 300,
+  "dod": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/fetchProveedorGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No hay constantes de timeout fuera de la config",
+    "statement": "Los módulos de cliente no hacen fetch directo a proveedores",
     "metric": {
-      "command": "node scripts/audit-metric.mjs timeouts-config",
+      "command": "node scripts/audit-metric.mjs fetch-proveedor",
       "target": 0
     },
-    "base": "a089d786506cd536daff976b856e55cdd67722ca",
+    "base": "89242af0a4c7ed1ef5f0278f62490c0b2e31347c",
     "guardFiles": [
-      "tests/timeoutsConfigGuard.test.ts"
+      "tests/fetchProveedorGuard.test.ts"
     ]
   }
 }
