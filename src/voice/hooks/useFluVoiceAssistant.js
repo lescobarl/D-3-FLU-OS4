@@ -19,7 +19,6 @@ import {
   isMinuteKnowledgeRequest,
   isPlausiblePersonName,
   pickRichestVoiceCommandCapture,
-  deriveQueryFromRow,
 } from '../lib/audioMath'
 import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
@@ -3207,9 +3206,8 @@ export function useFluVoiceAssistant({
         capture: fullTranscript || question,
         commitOnly: true,
       })
-      // §9: la query se deriva de la MISMA fila canónica por el derivador único.
-      question =
-        deriveQueryFromRow(canonicalPhrase, FLU_CONFIG.voiceCommands).question || question
+      // §9: la query ya viene derivada por el derivador único
+      // (`planConversationDispatch` → action.question); NO se re-deriva aquí.
       publishedLiveRef.current = ''
       setLiveTranscript('')
 
@@ -3932,11 +3930,9 @@ export function useFluVoiceAssistant({
         // despachó (para que la resolución determinista gane sobre la del modelo).
         const lateStateful = resolveStatefulDomains(capturedTranscript, { language: detectedLanguage })
 
-        // §9: la IA recibe la query DERIVADA por el derivador único a partir de la
-        // frase canónica del turno; nunca el texto propio de la captura.
-        const turnQuery =
-          deriveQueryFromRow(capturedTranscript, FLU_CONFIG.voiceCommands).question ||
-          capturedTranscript
+        // §9: la IA recibe la query ya derivada por el derivador único
+        // (`planConversationDispatch`) — el texto normalizado del turno.
+        const turnQuery = bufferedTranscript || capturedTranscript
 
         let contract
         try {
@@ -4095,11 +4091,9 @@ export function useFluVoiceAssistant({
       // despachó (para que la resolución determinista gane sobre la del modelo).
       const lateStateful = resolveStatefulDomains(capturedTranscript, { language: detectedLanguage })
 
-      // §9: la IA recibe la query DERIVADA por el derivador único a partir de la
-      // frase canónica del turno; nunca el texto propio de la captura.
-      const turnQuery =
-        deriveQueryFromRow(capturedTranscript, FLU_CONFIG.voiceCommands).question ||
-        capturedTranscript
+      // §9: la IA recibe la query ya derivada por el derivador único
+      // (`planConversationDispatch`) — el texto normalizado del turno.
+      const turnQuery = bufferedTranscript || capturedTranscript
 
       let contract
       try {

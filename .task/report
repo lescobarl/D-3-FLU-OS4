@@ -206,3 +206,17 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Una frase hablada ⇒ una fila visible en bitácora (sin duplicados).
+
+---
+
+## C27 — Una sola derivación de query
+
+Cambios aplicados:
+- src/voice/hooks/useFluVoiceAssistant.js — eliminadas las 3 derivaciones locales; la query de conversación es la ya derivada (action.question del plan) y en captura se usa bufferedTranscript. Único sitio: planConversationDispatch (audioMath.js:1066).
+
+Validado contra:
+- npm run gate (verde): métrica base=4 actual=1 target=1 · guard base=1 actual=0.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Consulta enviada a la IA idéntica a lo que muestra la transcripción.
