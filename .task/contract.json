@@ -1,13 +1,11 @@
 {
-  "id": "C36",
+  "id": "C37",
   "mode": "full",
-  "task": "Voz §9.2 — consumidores no re-normalizan",
-  "base": "0eab4b1356ed90854dac7d6859cebbbf35217f24",
-  "objective": "generationTopic, agendaCommandParser y noteIntentParser dejan de normalizar; consumen la frase canónica.",
+  "task": "Voz §9.3 — una sola ruta de finalización de turno",
+  "base": "d4648add596c3d5dc941893ea889bf917f6a04ea",
+  "objective": "finalizeTurnCommit tiene un único punto de llamada; sin rutas paralelas.",
   "allow": [
-    "src/lib/generationTopic.ts",
-    "src/core/agenda/agendaCommandParser.ts",
-    "src/voice/lib/noteIntentParser.js"
+    "src/voice/lib/conversationStreamCommit.js"
   ],
   "deny": [
     ".task/**",
@@ -21,20 +19,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 4,
-  "maxLines": 300,
-  "dod": "npx vitest run tests/consumidoresNormGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/consumidoresNormGuard.test.ts --reporter=dot",
+  "maxFiles": 2,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/finalizeSingleRouteGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/finalizeSingleRouteGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ningún consumidor llama normalizadores de la frase canónica",
+    "statement": "Un único punto de llamada a finalizeTurnCommit",
     "metric": {
-      "command": "node scripts/audit-metric.mjs consumidores-normalizan",
-      "target": 0
+      "command": "node scripts/audit-metric.mjs finalize-sites",
+      "target": 1
     },
-    "base": "0eab4b1356ed90854dac7d6859cebbbf35217f24",
+    "base": "d4648add596c3d5dc941893ea889bf917f6a04ea",
     "guardFiles": [
-      "tests/consumidoresNormGuard.test.ts"
+      "tests/finalizeSingleRouteGuard.test.ts"
     ]
   }
 }

@@ -231,6 +231,14 @@ export function handleConversationStreamSync(
     }
   }
 
+  // §9.5 — RUTA ÚNICA de cierre de turno: finalize + aviso al participante.
+  // Las dos ramas (segmentada y simple) cierran por aquí; no se invoca
+  // `finalizeTurnCommit` en más de un punto.
+  const finalizeAndNotify = () => {
+    finalizeTurnCommit()
+    fluParticipantRef.current?.onTurnCommitted?.()
+  }
+
   const {
     replaceLast,
     forcedReplacePrefix,
@@ -402,8 +410,7 @@ export function handleConversationStreamSync(
     }
 
     lastEmittedTranscriptRef.current = capture
-    finalizeTurnCommit()
-    fluParticipantRef.current?.onTurnCommitted?.()
+    finalizeAndNotify()
 
     if (import.meta.env.DEV && debugHotPath) {
       fluDebugHot('stream-commit-segmented', {
@@ -451,8 +458,7 @@ export function handleConversationStreamSync(
   if (!delivered) {
     lastEmittedTranscriptRef.current = capture
   }
-  finalizeTurnCommit()
-  fluParticipantRef.current?.onTurnCommitted?.()
+  finalizeAndNotify()
 
   if (import.meta.env.DEV && debugHotPath) {
     fluDebugHot('stream-commit', {

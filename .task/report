@@ -253,3 +253,17 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Alta/borrado de notas y citas por voz en pantalla real.
+
+---
+
+## C37 — Una sola ruta de finalizeTurnCommit
+
+Cambios aplicados:
+- src/voice/lib/conversationStreamCommit.js — las dos ramas cierran por finalizeAndNotify(), que contiene la única invocación de finalizeTurnCommit() + aviso al participante.
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=1 target=1 · guard base=1 actual=0.
+- git diff --stat: 3 archivos (1 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Cierre de turno con audio continuo en pantalla real.
