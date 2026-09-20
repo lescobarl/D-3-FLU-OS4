@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { fluDb, newId, newSyncTuple, bumpSync, type MinuteRecord, type MinuteSummarySnapshot, type KnowledgeKind } from '../core/db/fluDatabase';
+import { useIntegrationStore } from '../store/integrationStore';
 
 /**
  * Minuta en formato de UI (compatible con OS2 normalizeMinuteKnowledgeRecord).
@@ -256,6 +257,10 @@ export function useMinuteKnowledge(participantId?: string) {
                 const filtered = prev.filter((m) => m.id !== record.id);
                 return [ui, ...filtered].sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode));
             });
+            // C10 — Escritura ÚNICA hacia el store: el dueño de la minuta
+            // (persistencia) es quien publica en integrationStore; los
+            // consumidores NO espejan por su cuenta.
+            useIntegrationStore.getState().addMinute(ui);
             return ui;
         },
         [],

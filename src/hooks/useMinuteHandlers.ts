@@ -102,9 +102,9 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     tema_sesion: result.tema_sesion || '',
                 };
                 // Add to IndexedDB via minuteKnowledge (expects MinuteSummarySnapshot)
+                // C10: la publicación en integrationStore la hace el dueño de la
+                // minuta (useMinuteKnowledge.addMinute); aquí NO se espeja.
                 const persisted = await minuteKnowledge.addMinute(snapshot);
-                // Add to integration store (expects MinuteUIEntry)
-                integrationStore.addMinute(persisted);
                 // OS2 parity: speak the minute title after generation
                 const speechText = getCommandSpeech('GUARDAR_MINUTA', language);
                 if (speechText) {
@@ -184,7 +184,6 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                         tema_sesion: String(sessionRole || '').trim(),
                     };
                     const persisted = await minuteKnowledge.addMinute(snapshot);
-                    integrationStore.addMinute(persisted);
                     setSelectedMinuteId(persisted.id);
                     saved = true;
                 }
@@ -315,7 +314,6 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 tema_sesion: String(sessionRole || '').trim(),
             };
             const persisted = await minuteKnowledge.addMinute(snapshot, { kind: 'conversacion' });
-            integrationStore.addMinute(persisted);
 
             if (announce) {
                 const speechText = getCommandSpeech('GUARDAR_MINUTA', language);

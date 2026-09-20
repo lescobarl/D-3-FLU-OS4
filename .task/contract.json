@@ -1,14 +1,13 @@
 {
-  "id": "C9",
+  "id": "C10",
   "mode": "full",
-  "task": "Persistencia — un solo backend de sesión",
-  "base": "e8d89aa714177d409c8ecc49e599ff7ebbead70a",
-  "objective": "La sesión se persiste en un único backend (Dexie), eliminando la ruta localStorage duplicada.",
+  "task": "Persistencia — sin doble escritura de minutas",
+  "base": "1a0f9974d80fbc196e1985733736093ae9b4294d",
+  "objective": "useMinuteHandlers no espeja en integrationStore; la minuta se persiste y el store deriva de la fuente.",
   "allow": [
-    "src/hooks/useSessionPersistence.ts",
-    "src/voice/lib/fluStorage.js",
-    "src/App.tsx",
-    "src/voice/hooks/useFluVoiceAssistant.js"
+    "src/hooks/useMinuteHandlers.ts",
+    "src/store/integrationStore.ts",
+    "src/hooks/useMinuteKnowledge.ts"
   ],
   "deny": [
     ".task/**",
@@ -22,20 +21,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 5,
-  "maxLines": 450,
-  "dod": "npx vitest run tests/sesionBackendUnicoGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/sesionBackendUnicoGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/minutosDobleEscrituraGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/minutosDobleEscrituraGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un único archivo implementa la persistencia de sesión",
+    "statement": "useMinuteHandlers no escribe dos veces la misma minuta",
     "metric": {
-      "command": "node scripts/audit-metric.mjs sesion-backends",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs minutos-doble-escritura",
+      "target": 0
     },
-    "base": "e8d89aa714177d409c8ecc49e599ff7ebbead70a",
+    "base": "1a0f9974d80fbc196e1985733736093ae9b4294d",
     "guardFiles": [
-      "tests/sesionBackendUnicoGuard.test.ts"
+      "tests/minutosDobleEscrituraGuard.test.ts"
     ]
   }
 }

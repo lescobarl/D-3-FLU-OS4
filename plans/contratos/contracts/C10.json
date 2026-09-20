@@ -6,7 +6,8 @@
   "objective": "useMinuteHandlers no espeja en integrationStore; la minuta se persiste y el store deriva de la fuente.",
   "allow": [
     "src/hooks/useMinuteHandlers.ts",
-    "src/store/integrationStore.ts"
+    "src/store/integrationStore.ts",
+    "src/hooks/useMinuteKnowledge.ts"
   ],
   "deny": [
     ".task/**",
