@@ -66,17 +66,6 @@ export function resetActiveListenState(state) {
   state.speakerIndex = 1
 }
 
-/** @deprecated Usar mergeSpeechText */
-export const appendNewHeard = (base, incoming) => mergeSpeechText(base, incoming)
-
-export function readSessionTranscript(state) {
-  return cleanForSpeech(state?.transcript || '')
-}
-
-export function readDisplayText(state) {
-  return cleanForSpeech(state?.openLine || '')
-}
-
 export function resolveActiveSpeaker(state, utterance = '') {
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const introduced = detectWakeIntroducedName(utterance, wakeWords)
@@ -249,16 +238,6 @@ export function phrasesRelate(lastLine = '', nextPhrase = '') {
   const next = foldSpeechKey(nextPhrase)
   if (!last || !next) return false
   return next.startsWith(last) || last.startsWith(next)
-}
-
-/** @deprecated Usar shouldRefreshStream */
-export function shouldEmitLog(previousEmitted = '', nextText = '') {
-  const prev = foldSpeechKey(previousEmitted)
-  const next = foldSpeechKey(nextText)
-  if (!next) return false
-  if (!prev) return true
-  if (prev === next) return false
-  return next.startsWith(prev) && next.length > prev.length
 }
 
 export function getRecognitionLanguage(language = 'es', activeLocale = '') {

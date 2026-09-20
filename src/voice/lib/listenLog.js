@@ -43,11 +43,6 @@ export function isChromeRawConsoleEnabled() {
   return FLU_CONFIG.debug?.chromeRawConsole !== false
 }
 
-/** @deprecated Usar isChromeRawConsoleEnabled */
-export function isMicRawConsoleEnabled() {
-  return isChromeRawConsoleEnabled()
-}
-
 function shouldRecord(stage) {
   if (!IS_DEV || typeof window === 'undefined') return false
   if (SIM_STAGES.has(stage)) return true
@@ -132,14 +127,6 @@ export function logMicRaw(event) {
   logChromeSpeechResult(event)
 }
 
-export function logMicPacket() {}
-
-export function logStreamPublish() {}
-
-export function resetMicConsole() {
-  chromeRawSeq = 0
-}
-
 export function getListenLogRing() {
   if (!ringCount) return []
   if (ringCount < RING_MAX) return ring.slice(0, ringCount)
@@ -154,8 +141,4 @@ export function clearListenLogRing() {
 
 export function getListenStats() {
   return { chromeRawSeq }
-}
-
-export function printListenSummary() {
-  return {}
 }

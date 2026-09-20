@@ -131,8 +131,3 @@ export function getCommandSpeech(
   }
   return text
 }
-
-/** @deprecated Usar getCommandSpeech */
-export function getNavigationCommandSpeech(comando = '', language = 'es') {
-  return getCommandSpeech(comando, language)
-}

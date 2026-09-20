@@ -31,11 +31,6 @@ declare global {
         __fluOnContractResolved?(resolved: unknown): Promise<unknown>;
 
         /** Manejadores deterministas por dominio (E2E + integración). */
-        __fluHandleReminderText?(
-            input: unknown,
-            opts?: { personId?: string; personName?: string },
-        ): Promise<string>;
-        __fluHandleTemporalText?(input: unknown): Promise<string>;
         __fluHandleConocerFluText?(text: string): Promise<string>;
         __fluHandleDeviceActionText?(text: string): Promise<string>;
         __fluHandleNoteText?(
@@ -46,7 +41,6 @@ declare global {
             input: unknown,
             opts?: { personId?: string; personName?: string },
         ): Promise<string>;
-        __fluHandleHorarioText?(input: unknown): Promise<string>;
         __fluHandleAgendaCommandText?(
             input: unknown,
             opts?: { personId?: string; personName?: string },

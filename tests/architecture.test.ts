@@ -123,20 +123,6 @@ describe('IntegrationStore — Uses appConfig [Rule #1]', () => {
 });
 
 // ============================================================
-// 5. FluAvatarVoiceBridge — Uses WELCOME_MESSAGE from appConfig
-// ============================================================
-describe('FluAvatarVoiceBridge — Uses appConfig [Rule #1]', () => {
-
-    it('FluAvatarVoiceBridge must import WELCOME_MESSAGE from appConfig', async () => {
-        const src = (await import('fs')).readFileSync('./src/components/FluAvatarVoiceBridge.tsx', 'utf-8');
-        expect(src).toContain("import { WELCOME_MESSAGE } from '../core/config/appConfig'");
-        // welcomeMessage comes from FluBridgeContext (Fase 6 refactor), not as a default prop.
-        // The import is kept for reference/fallback usage.
-        expect(src).toContain('WELCOME_MESSAGE');
-    });
-});
-
-// ============================================================
 // 6. Gemini Service — Implements IAIService (Obligación #1)
 // ============================================================
 describe('Gemini Service — IAIService Implementation [Obligación #1]', () => {

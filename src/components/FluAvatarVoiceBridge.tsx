@@ -27,9 +27,6 @@ import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
-// Import conservado como referencia/fallback exigido por tests/architecture.test.ts.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { WELCOME_MESSAGE } from '../core/config/appConfig';
 import { useFluBridge } from '../context/FluBridgeContext';
 import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
 import { useEnvironmentStore } from '../store/environmentStore';
