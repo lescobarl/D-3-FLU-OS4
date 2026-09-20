@@ -149,7 +149,7 @@ Estado actual:
 
 ### 2.3 Estado de materialización
 
-**Materializados y verificados en rojo (36):** (C1 ya cerrado en verde)
+**Materializados y verificados en rojo (37):** (C1 ya cerrado en verde)
 
 | Contrato | Métrica HOY→META | Estado |
 |---|---|---|
@@ -189,6 +189,7 @@ Estado actual:
 | C36 (V4 resto) | 10→0 | rojo |
 | C37 (V6 resto) | 2→1 | rojo |
 | C38 (H4 resto) | 4→0 | rojo |
+| C39 (V4 motor) | 2→0 | rojo |
 
 **Subsumidos (sin contrato propio, para no fabricar un guard débil):**
 
@@ -209,7 +210,7 @@ Estado actual:
 | A5 (`minutes.sequence`) | No es PK (la PK es UUID); es un campo de orden |
 | V2/V3/A1/A6/A7/A8 | Ya documentados arriba como no-defecto / decisión |
 
-**Cobertura final:** todo hallazgo en **A (defecto)** está materializado como contrato; los **B** están materializados salvo los subsumidos; los **C** quedan descartados con evidencia. Total: **36 contratos** con métrica, guard rojo verificado, `allow` cerrado, `base` y `frozen`.
+**Cobertura final:** todo hallazgo en **A (defecto)** está materializado como contrato; los **B** están materializados salvo los subsumidos; los **C** quedan descartados con evidencia. Total: **37 contratos** con métrica, guard rojo verificado, `allow` cerrado, `base` y `frozen`.
 
 Cada C8–C20 nace con: métrica nueva en `audit-metric.mjs`, guard rojo que lista
 `archivo:línea`, `allow` estrecho, `base` fijo y `frozen.json`.

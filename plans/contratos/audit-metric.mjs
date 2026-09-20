@@ -278,6 +278,18 @@ const metrics = {
     ),
   'umbrales-autonomy': () =>
     countFilesWhere((r, f) => UMBRAL_FILES.has(r) && RE.umbralLiteral.test(read(f))),
+  // ---- C39 ---------------------------------------------------------------
+  'motor-normaliza': () => {
+    const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')
+    if (!existsSync(p)) return -1
+    let n = 0
+    for (const line of linesOf(p)) {
+      const s = stripComment(line)
+      if (/normalizeTranscriptText\s*\(/.test(s)) n += 1
+      if (/cleanForSpeech\(\s*wakeAnalysis\.afterWake/.test(s)) n += 1
+    }
+    return n
+  },
 }
 
 const id = process.argv[2]
