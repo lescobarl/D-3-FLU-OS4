@@ -26,23 +26,13 @@ import { resolveEnvironmentIntent } from '../../core/environments/environmentInt
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
-import { cleanForSpeech, splitTranscriptAtWakeWord, normalizeCommandForDeterministic } from './audioMath.js'
-import { FLU_CONFIG } from './fluConfig.js'
+import { cleanForSpeech, splitTranscriptAtWakeWord, normalizeSpokenCommand } from './audioMath.js'
 
 /**
- * C36 — Punto ÚNICO de normalización para la resolución determinista: quita la
- * wake word (todas las apariciones) y colapsa el tartamudeo de prefijo del ASR
- * ("bor Borra" → "Borra"). Los resolvers de dominio reciben el texto ya
- * canónico y NO re-normalizan.
+ * C36 — La normalización (wake word + tartamudeo ASR) es la MISMA función
+ * compartida `normalizeSpokenCommand` (audioMath.js): el árbitro y los parsers
+ * la aplican en su entrada; no hay implementación duplicada.
  */
-function normalizeArbiterInput(raw = '') {
-  const wakeWords = ((FLU_CONFIG?.voiceCommands?.wakeWords) || []).map((w) => String(w || ''))
-  const withoutWake = normalizeCommandForDeterministic(String(raw || ''), wakeWords)
-  return String(withoutWake || '')
-    .replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 /**
  * Dominios deterministas soportados por el árbitro.
@@ -161,9 +151,9 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     defaultTimerMinutes,
   } = options || {}
   const normalizedTexts = Array.isArray(texts) && texts.length
-    ? texts.map((t) => normalizeArbiterInput(t))
+    ? texts.map((t) => normalizeSpokenCommand(t))
     : null
-  const transcript = normalizeArbiterInput(text)
+  const transcript = normalizeSpokenCommand(text)
   if (!transcript && !(normalizedTexts && normalizedTexts.some((t) => String(t || '').trim()))) {
     return { matched: false, domain: null, action: null, channel: null }
   }

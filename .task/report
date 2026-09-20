@@ -586,3 +586,23 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Coincidencia de AGENTS.md con la pantalla/entorno real del usuario.
+
+---
+
+## Fix de regresión — normalizador ÚNICO compartido (C36/C25/C26)
+
+Motivo: la suite completa reveló 8 tests nuevos en rojo porque los parsers/generationTopic dejaron de tolerar wake word al llamarse directos (C36) y un test esperaba ≥3 llamadas a commitUserTurnRow (C26 movió a 1).
+
+Cambios aplicados:
+- src/voice/lib/audioMath.js — nuevo `normalizeSpokenCommand` (wake + tartamudeo ASR), implementación ÚNICA compartida.
+- src/voice/lib/deterministicArbiter.js — usa normalizeSpokenCommand (sin función local duplicada).
+- src/core/agenda/agendaCommandParser.ts, src/voice/lib/noteIntentParser.js, src/lib/generationTopic.ts — aplican normalizeSpokenCommand en su entrada pública (idempotente).
+- tests/conversationTurnRowSingleWriter.test.ts — espera 1 sitio de commitUserTurnRow (invariante C26).
+
+Validado contra:
+- npx vitest run (8 archivos de regresión): 56 passed.
+- npm run typecheck: OK.
+- node scripts/audit-metric.mjs consumidores-normalizan → 0 (C36 sigue verde).
+
+No validado (DoD-producto, pendiente del usuario):
+- Dictado real con wake word en los parsers de agenda/nota.

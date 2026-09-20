@@ -16,6 +16,7 @@ import {
 } from '../reminders/nlDateParser';
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
+import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 
 export type AgendaCommandAction =
@@ -305,7 +306,7 @@ function resolveLabel(text: string): string {
 export function parseAgendaCommand(input: string, options?: { now?: number | (() => number) }): AgendaCommand {
     const rawNow = options?.now;
     const now = typeof rawNow === 'function' ? rawNow() : typeof rawNow === 'number' ? rawNow : Date.now();
-    const text = String(input || '').trim();
+    const text = normalizeSpokenCommand(input);
     const cleaned = collapseRepeatedPhrase(
         collapseQuantifierStutter(
             text.replace(/^[¿¡]+/, ''),

@@ -78,8 +78,8 @@ describe('unificación — un solo escritor de la fila del usuario', () => {
         expect(existsSync(join(process.cwd(), 'src', 'voice', 'lib', 'rawCommitPlan.js'))).toBe(false);
     });
 
-    it('App delega la fila del usuario en commitUserTurnRow (temprano + cruda + final)', () => {
+    it('App delega la fila del usuario en commitUserTurnRow (un solo sitio)', () => {
         const calls = appSource().match(/commitUserTurnRow\(/g) || [];
-        expect(calls.length).toBeGreaterThanOrEqual(3);
+        expect(calls.length).toBe(1);
     });
 });

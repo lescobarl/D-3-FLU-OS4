@@ -1370,6 +1370,22 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
   return commandText
 }
 
+/**
+ * Normalización ÚNICA del texto hablado para resolución determinista:
+ * quita la wake word (todas las apariciones) y colapsa el tartamudeo de
+ * prefijo del ASR ("bor Borra" → "Borra"). Es idempotente y la usan el
+ * árbitro y los parsers de dominio, de modo que un dictado con wake funcione
+ * igual se llame por donde se llame (una sola implementación).
+ */
+export function normalizeSpokenCommand(text = '') {
+  const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
+  const withoutWake = normalizeCommandForDeterministic(String(text || ''), wakeWords)
+  return String(withoutWake || '')
+    .replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5) {
   const dim = Math.max(vectorA.length, vectorB.length)
   if (!dim) return []

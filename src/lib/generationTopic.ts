@@ -10,6 +10,7 @@
 // ============================================================
 import { normalizeSpaces } from './textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { normalizeSpokenCommand } from '../voice/lib/audioMath';
 
 export interface GenerationConversationSlice {
     conversationHistory?: Array<{
@@ -34,9 +35,8 @@ const GENERATION_LEAD =
  * saltando" → "un conejo saltando".
  */
 export function cleanTopicFromCommand(text = ''): string {
-    // §9.2: el consumidor NO re-normaliza (sin cleanForSpeech/stripWakeWord):
-    // recibe la frase ya canónica del motor; solo colapsa espacios del mandato.
-    let value = normalizeSpaces(text);
+    // §9.2: normalización compartida (wake + tartamudeo) en la entrada.
+    let value = normalizeSpokenCommand(text);
     if (!value) return '';
     value = value.replace(GENERATION_LEAD, ' ').trim();
     return normalizeSpaces(value);
