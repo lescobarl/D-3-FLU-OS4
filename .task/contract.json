@@ -1,11 +1,12 @@
 {
-  "id": "C5",
+  "id": "C6",
   "mode": "full",
-  "task": "Secretos — la API key de texto sale del resolver central",
-  "base": "a3dfe79cc2785fd54b90ea49c761b3a77596ad4c",
-  "objective": "searchConfigOverrides deja de leer import.meta.env.VITE_OPENROUTER_API_KEY y usa resolveTextApiKey().",
+  "task": "Voz §9.4 — la wake word en runtime sale de FLU_CONFIG",
+  "base": "465e274797b7faa31302f8e008dad8efcf401dc6",
+  "objective": "Los prompts/etiquetas de runtime usan FLU_CONFIG.voiceCommands.wakeWords; sin literales 'ok flu' fuera de config.",
   "allow": [
-    "src/core/search/searchConfigOverrides.ts"
+    "src/core/config/voiceConfigCatalog.ts",
+    "src/components/VoiceAssistantBarWrapper.tsx"
   ],
   "deny": [
     ".task/**",
@@ -18,20 +19,20 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 2,
-  "maxLines": 80,
-  "dod": "npx vitest run tests/textApiKeyResolverUnicoGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/textApiKeyResolverUnicoGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 120,
+  "dod": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "No hay lecturas directas de VITE_OPENROUTER_API_KEY fuera de appConfig/sharedConfig (y sin contar src/dev)",
+    "statement": "No hay wake words literales en código fuera de fluConfig.js",
     "metric": {
-      "command": "node scripts/audit-metric.mjs text-api-key-directa",
+      "command": "node scripts/audit-metric.mjs wake-runtime",
       "target": 0
     },
-    "base": "a3dfe79cc2785fd54b90ea49c761b3a77596ad4c",
+    "base": "465e274797b7faa31302f8e008dad8efcf401dc6",
     "guardFiles": [
-      "tests/textApiKeyResolverUnicoGuard.test.ts"
+      "tests/wakeWordRuntimeGuard.test.ts"
     ]
   }
 }

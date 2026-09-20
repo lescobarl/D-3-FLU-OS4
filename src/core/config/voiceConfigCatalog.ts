@@ -16,6 +16,7 @@
 
 import { getPaletteKeys } from '../branding/seasonalPalettes';
 import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES } from './sharedConfig';
+import { FLU_CONFIG } from '../../voice/lib/fluConfig';
 
 // ------------------------------------------------------------
 // Tipos del catálogo
@@ -771,6 +772,8 @@ function formatValueEn(entry: ConfigCatalogEntry): string {
  */
 export function buildConfiguracionPrompt(language: 'es' | 'en' = 'es'): string {
     const isEnglish = language === 'en';
+    // Wake word canónica desde config (§9.4): nunca un literal en runtime.
+    const wakeWord = FLU_CONFIG.voiceCommands?.wakeWords?.[0] || 'FLU';
     const brandingEntries = VOICE_CONFIG_CATALOG.filter(
         (e) => e.accion === 'set_branding' && e.handler !== 'unsupported',
     );
@@ -798,8 +801,8 @@ export function buildConfiguracionPrompt(language: 'es' | 'en' = 'es'): string {
             ? 'You can also use the "configuracion" field when the user explicitly asks to change settings.'
             : 'Tambien puedes usar el campo "configuracion" cuando el usuario pida explicitamente cambiar ajustes.',
         isEnglish
-            ? 'Use configuracion ONLY for explicit configuration commands like: "OK FLU set...", "FLU change...", "set theme to...", "activate...", "configure...".'
-            : 'Usa configuracion SOLO para comandos explicitos de configuracion como: "OK FLU configura...", "FLU cambia...", "pon tema de...", "activa...", "configura...".',
+            ? `Use configuracion ONLY for explicit configuration commands like: "${wakeWord} set...", "FLU change...", "set theme to...", "activate...", "configure...".`
+            : `Usa configuracion SOLO para comandos explicitos de configuracion como: "${wakeWord} configura...", "FLU cambia...", "pon tema de...", "activa...", "configura...".`,
         isEnglish
             ? 'Available actions: "set_branding" (change visual theme/season), "set_config" (change any other setting).'
             : 'Acciones disponibles: "set_branding" (cambiar tema visual/temporada), "set_config" (cambiar cualquier otro ajuste).',

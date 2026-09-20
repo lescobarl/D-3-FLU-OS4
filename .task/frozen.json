@@ -20,5 +20,6 @@
   "tests/searchAllowlistFuenteUnicaGuard.test.ts": "b8b37b17b5f37e1f8c5758107cfcece2b6405b8606ec2bcfc8b75778ee1b316c",
   "tests/voiceProfilesEscritorUnicoGuard.test.ts": "59289c85abc3e3c855a84a77f93f85f041f5197e039d2e7f5a7b5cd066a5d989",
   "tests/aiProviderStorageKeyUnicaGuard.test.ts": "09f9ab7db621b548f1adfc4e776744defa09e800a148b979f58be5a785a574f4",
-  "tests/textApiKeyResolverUnicoGuard.test.ts": "c7a58becb516c4c0b719ea31f31a6c77e439b36fd15178ea4cdf908e64657374"
+  "tests/textApiKeyResolverUnicoGuard.test.ts": "c7a58becb516c4c0b719ea31f31a6c77e439b36fd15178ea4cdf908e64657374",
+  "tests/wakeWordRuntimeGuard.test.ts": "4a236d539a414957f07d4d81973843e900793f23e309e0bae8c88f0e3dce2a5d"
 }

@@ -80,3 +80,18 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Búsqueda web con clave del usuario desde el Centro de Control del Buscador.
+
+---
+
+## C6 — Wake word runtime desde FLU_CONFIG
+
+Cambios aplicados:
+- src/core/config/voiceConfigCatalog.ts — buildConfiguracionPrompt deriva wakeWord de FLU_CONFIG.voiceCommands.wakeWords.
+- src/components/VoiceAssistantBarWrapper.tsx — tooltip de participación usa la wake word de config.
+
+Validado contra:
+- npm run gate (verde): métrica base=3 actual=0 target=0 · guard base=1 actual=0.
+- git diff --stat: 4 archivos (2 de código, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Ceder la palabra a Flu por voz en la barra de asistente.
