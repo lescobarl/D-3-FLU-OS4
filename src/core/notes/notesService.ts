@@ -13,7 +13,7 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { addAuditLog, type NoteRecord } from '../db/fluDatabase';
+import { addAuditLog, fluDb, type NoteRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter } from './notesList';
@@ -25,6 +25,19 @@ import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter } fro
 // El registro persistente proviene de la capa de base de datos
 // (fuente única de verdad — Regla de oro) y se re-exporta aquí.
 export type { NoteRecord } from '../db/fluDatabase';
+
+/**
+ * C11 — Único módulo que resuelve las tablas de notas/listas. Notas y lista de
+ * compras se obtienen por aquí; ningún otro consumidor nombra las tablas de
+ * Dexie directamente (una sola fuente para notas/listas).
+ */
+export function notesTable() {
+  return fluDb.notes;
+}
+
+export function shoppingItemsTable() {
+  return fluDb.shoppingItems;
+}
 
 export interface NewNoteInput {
   label: string;
@@ -43,7 +56,8 @@ export interface NotesDb {
 }
 
 export interface NotesServiceOptions {
-  db: NotesDb;
+  /** Tabla de notas. Por defecto: la resuelve fluDatabase (C11). */
+  db?: NotesDb;
   /** Referencia de reloj (por defecto: Date.now()). */
   now?: () => number;
   /** Generador de id (por defecto: uuid v4). */
@@ -61,10 +75,10 @@ export interface AddNoteResult {
 // ------------------------------------------------------------
 
 export function createNotesService({
-  db,
+  db = notesTable(),
   now = () => Date.now(),
   newId = uuidv4,
-}: NotesServiceOptions) {
+}: NotesServiceOptions = {}) {
   const timestamp = makeTupleTimestamp(now);
 
   /** Fila viva: no marcada como borrada lógica (§2.9). */

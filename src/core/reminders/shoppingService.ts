@@ -12,6 +12,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
+import { shoppingItemsTable } from '../notes/notesService';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import { filterItems, itemsRemaining, type ShoppingListFilter } from './shoppingList';
@@ -39,7 +40,8 @@ export interface ShoppingDb {
 }
 
 export interface ShoppingServiceOptions {
-  db: ShoppingDb;
+  /** Tabla de lista de compras. Por defecto: la resuelve fluDatabase (C11). */
+  db?: ShoppingDb;
   /** Referencia de reloj (por defecto: Date.now()). */
   now?: () => number;
   /** Generador de id (por defecto: uuid v4). */
@@ -57,10 +59,10 @@ export interface AddShoppingItemResult {
 // ------------------------------------------------------------
 
 export function createShoppingService({
-  db,
+  db = shoppingItemsTable(),
   now = () => Date.now(),
   newId = uuidv4,
-}: ShoppingServiceOptions) {
+}: ShoppingServiceOptions = {}) {
   const timestamp = makeTupleTimestamp(now);
 
   const add = async (input: NewShoppingItemInput): Promise<AddShoppingItemResult> => {

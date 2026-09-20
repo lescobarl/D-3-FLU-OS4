@@ -2,7 +2,7 @@
 // useShoppingList — Lista de la compra (Fase 2, B7)
 // ------------------------------------------------------------
 // Hook que gestiona la lista de la compra sobre Dexie
-// (fluDb.shoppingItems) vía shoppingService. Es un hook de
+// (vía shoppingService). Es un hook de estado + acciones:
 // estado + acciones: no lleva scheduler ni notificaciones
 // (la lista no vence), sólo persistencia y UI en vivo.
 //
@@ -15,7 +15,7 @@
 //   - DI: `now` inyectable para pruebas deterministas
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fluDb, type ShoppingItemRecord } from '../core/db/fluDatabase';
+import { type ShoppingItemRecord } from '../core/db/fluDatabase';
 import {
   createShoppingService,
   type AddShoppingItemResult,
@@ -69,7 +69,6 @@ export function useShoppingList({
   const serviceRef = useRef<ShoppingService | null>(null);
   if (!serviceRef.current) {
     serviceRef.current = createShoppingService({
-      db: fluDb.shoppingItems,
       now: now || (() => Date.now()),
     });
   }

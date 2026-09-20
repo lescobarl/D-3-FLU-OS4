@@ -1,13 +1,17 @@
 {
-  "id": "C10",
+  "id": "C11",
   "mode": "full",
-  "task": "Persistencia — sin doble escritura de minutas",
-  "base": "1a0f9974d80fbc196e1985733736093ae9b4294d",
-  "objective": "useMinuteHandlers no espeja en integrationStore; la minuta se persiste y el store deriva de la fuente.",
+  "task": "Persistencia — una sola tabla/servicio para notas y listas",
+  "base": "1899430c99aac5c9dd39d98cb96ce1862a7f5ade",
+  "objective": "Notas y lista de compras comparten una única tabla y un único servicio; sin CRUD idéntico duplicado.",
   "allow": [
-    "src/hooks/useMinuteHandlers.ts",
-    "src/store/integrationStore.ts",
-    "src/hooks/useMinuteKnowledge.ts"
+    "src/hooks/useNotes.ts",
+    "src/hooks/useShoppingList.ts",
+    "src/core/notes/notesService.ts",
+    "src/core/reminders/shoppingService.ts",
+    "src/core/db/fluDatabase.ts",
+    "src/App.tsx",
+    "src/voice/lib/deterministicArbiter.js"
   ],
   "deny": [
     ".task/**",
@@ -21,20 +25,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 3,
-  "maxLines": 250,
-  "dod": "npx vitest run tests/minutosDobleEscrituraGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/minutosDobleEscrituraGuard.test.ts --reporter=dot",
+  "maxFiles": 8,
+  "maxLines": 700,
+  "dod": "npx vitest run tests/notasComprasGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/notasComprasGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "useMinuteHandlers no escribe dos veces la misma minuta",
+    "statement": "Una sola tabla almacena notas/listas",
     "metric": {
-      "command": "node scripts/audit-metric.mjs minutos-doble-escritura",
-      "target": 0
+      "command": "node scripts/audit-metric.mjs notas-compras-tablas",
+      "target": 1
     },
-    "base": "1a0f9974d80fbc196e1985733736093ae9b4294d",
+    "base": "1899430c99aac5c9dd39d98cb96ce1862a7f5ade",
     "guardFiles": [
-      "tests/minutosDobleEscrituraGuard.test.ts"
+      "tests/notasComprasGuard.test.ts"
     ]
   }
 }

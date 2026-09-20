@@ -1,10 +1,9 @@
 // ============================================================
 // useNotes — Listado de notas (Pizarrón consolidado)
 // ------------------------------------------------------------
-// Hook que gestiona el listado de notas sobre Dexie
-// (fluDb.notes) vía notesService. Es un hook de estado + acciones:
-// no lleva scheduler ni notificaciones (las notas no vencen), sólo
-// persistencia y UI en vivo.
+// Hook que gestiona el listado de notas sobre Dexie vía notesService. Es un
+// hook de estado + acciones: no lleva scheduler ni notificaciones (las notas
+// no vencen), sólo persistencia y UI en vivo.
 //
 // Cumple:
 //   - Rule #1: NO HARDCODE — texto/etiquetas vienen de
@@ -14,7 +13,7 @@
 //   - DI: `now` inyectable para pruebas deterministas
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fluDb, type NoteRecord } from '../core/db/fluDatabase';
+import { type NoteRecord } from '../core/db/fluDatabase';
 import {
   createNotesService,
   type AddNoteResult,
@@ -76,7 +75,6 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
   const serviceRef = useRef<NotesService | null>(null);
   if (!serviceRef.current) {
     serviceRef.current = createNotesService({
-      db: fluDb.notes,
       now: now || (() => Date.now()),
     });
   }

@@ -39,5 +39,6 @@
   "tests/umbralesConfigGuard.test.ts": "c2c1c1dd6280242631baeba6c21f47ad3bd90d80a09083718269a7e276e29513",
   "tests/conversacionEscritorUnicoGuard.test.ts": "f06908dd4eff5de7d33455f78951aef105ab2486f53ae06010d5170d06cade0b",
   "tests/sesionBackendUnicoGuard.test.ts": "929348090d371804a147af97869e9612e513f4bacfcda038760a76964e30ab83",
-  "tests/minutosDobleEscrituraGuard.test.ts": "2b848efb56fb4f2ef67471e230eff30f2e4a384879b8ff860597db32626aa955"
+  "tests/minutosDobleEscrituraGuard.test.ts": "2b848efb56fb4f2ef67471e230eff30f2e4a384879b8ff860597db32626aa955",
+  "tests/notasComprasGuard.test.ts": "9014f4517a38de920db345f7723fc8beaf298f67c8b80a7448663d0bdbc7f59f"
 }

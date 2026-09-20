@@ -26,7 +26,23 @@ import { resolveEnvironmentIntent } from '../../core/environments/environmentInt
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
-import { cleanForSpeech, splitTranscriptAtWakeWord } from './audioMath.js'
+import { cleanForSpeech, splitTranscriptAtWakeWord, normalizeCommandForDeterministic } from './audioMath.js'
+import { FLU_CONFIG } from './fluConfig.js'
+
+/**
+ * C36 — Punto ÚNICO de normalización para la resolución determinista: quita la
+ * wake word (todas las apariciones) y colapsa el tartamudeo de prefijo del ASR
+ * ("bor Borra" → "Borra"). Los resolvers de dominio reciben el texto ya
+ * canónico y NO re-normalizan.
+ */
+function normalizeArbiterInput(raw = '') {
+  const wakeWords = ((FLU_CONFIG?.voiceCommands?.wakeWords) || []).map((w) => String(w || ''))
+  const withoutWake = normalizeCommandForDeterministic(String(raw || ''), wakeWords)
+  return String(withoutWake || '')
+    .replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 /**
  * Dominios deterministas soportados por el árbitro.
@@ -144,8 +160,11 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     defaultAlarmTimeOfDay,
     defaultTimerMinutes,
   } = options || {}
-  const transcript = String(text || '').trim()
-  if (!transcript && !(Array.isArray(texts) && texts.some((t) => String(t || '').trim()))) {
+  const normalizedTexts = Array.isArray(texts) && texts.length
+    ? texts.map((t) => normalizeArbiterInput(t))
+    : null
+  const transcript = normalizeArbiterInput(text)
+  if (!transcript && !(normalizedTexts && normalizedTexts.some((t) => String(t || '').trim()))) {
     return { matched: false, domain: null, action: null, channel: null }
   }
 
@@ -209,7 +228,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
 
   // 9. Navegación (voiceCommands): comandos de UI/navegación directos. El canal
   //    se deriva del comando (web/video/documento/app/flu).
-  const navTexts = Array.isArray(texts) && texts.length ? texts : [transcript]
+  const navTexts = normalizedTexts && normalizedTexts.length ? normalizedTexts : [transcript]
   const nav = resolveNavigationCommandFromTexts(navTexts)
   if (nav) {
     return {

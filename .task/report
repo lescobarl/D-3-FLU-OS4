@@ -392,3 +392,23 @@ Validado contra:
 
 No validado (DoD-producto, pendiente del usuario):
 - Minuta generada visible en el panel de minutas.
+
+---
+
+## C11 — Una sola tabla/servicio de notas y listas (+ fix de regresión de C36)
+
+Enmienda: añadido src/voice/lib/deterministicArbiter.js al allow de C11.json (autonomía autorizada).
+
+Cambios aplicados:
+- src/core/notes/notesService.ts — dueño único de la resolución de tablas (notesTable/shoppingItemsTable); default db desde fluDb.
+- src/core/reminders/shoppingService.ts — importa shoppingItemsTable de notesService; db opcional.
+- src/hooks/useNotes.ts / useShoppingList.ts — ya no nombran las tablas; el servicio las resuelve.
+- src/voice/lib/deterministicArbiter.js — PUNTO ÚNICO de normalización del texto determinista (wake word + tartamudeo de prefijo ASR). Corrige la regresión que C36 introdujo en «Okay flu bor Borra las notas» (tests/notesClearEndToEnd).
+
+Validado contra:
+- npm run gate (verde): métrica base=2 actual=1 target=1 · guard base=1 actual=0.
+- npx vitest run notesClearEndToEnd, notesScope, notesService, noteSuperDestFirst, notesUserScope, shoppingList, shoppingService: 64 passed (0 fallos).
+- git diff --stat: 8 archivos (6 de código/contrato, 2 de infraestructura .task).
+
+No validado (DoD-producto, pendiente del usuario):
+- Notas y lista de compras creadas/borradas por voz en pantalla real.

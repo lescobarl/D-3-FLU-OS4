@@ -10,7 +10,8 @@
     "src/core/notes/notesService.ts",
     "src/core/reminders/shoppingService.ts",
     "src/core/db/fluDatabase.ts",
-    "src/App.tsx"
+    "src/App.tsx",
+    "src/voice/lib/deterministicArbiter.js"
   ],
   "deny": [
     ".task/**",
