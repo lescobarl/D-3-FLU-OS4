@@ -195,7 +195,7 @@ function sceneResult(state: StorytellerState, scene: StoryScene, titlePrefix = '
     };
 }
 
-export function createCuentacuentosEngine(options?: { random?: RandomSource }): GameEngine {
+export function createCuentacuentosEngine(options?: { random?: RandomSource }): GameEngine<StorytellerState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const buildState = (cfg: Record<string, unknown> | undefined): StorytellerState => {
@@ -217,7 +217,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): StorytellerState => {
         const state = buildState(cfg);
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -226,11 +226,11 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
     return {
         id: 'cuentacuentos',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<StorytellerState> {
             const state = buildState(optionsConfig);
             return {
                 id: 'cuentacuentos',
-                state: state as unknown as Record<string, unknown>,
+                state,
                 score: 0,
                 round: 1,
             };
@@ -238,7 +238,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as StorytellerState;
+            const state = session.state as StorytellerState;
             const scene = state.escenas[0];
             if (!scene) {
                 state.phase = 'done';
@@ -263,7 +263,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as StorytellerState;
+            const state = session.state as StorytellerState;
 
             if (state.phase === 'done') {
                 return {
@@ -332,7 +332,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
                 titulo: 'un cuento especial',
                 source: 'external',
             };
-            session.state = state as unknown as Record<string, unknown>;
+            session.state = state;
             session.score = 0;
             session.round = 1;
             const scene = state.escenas[0];

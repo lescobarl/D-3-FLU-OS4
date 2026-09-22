@@ -21,7 +21,7 @@
 // se reciben a través de FluBridgeContext en lugar de prop drilling.
 // ============================================================
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { BunnyViewer } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
@@ -182,7 +182,6 @@ export function FluAvatarVoiceBridge({
     // Keep storeRef current without triggering re-renders
     storeRef.current = integrationStore;
     const [isListening, setIsListening] = useState(false);
-    const _welcomeSpokenRef = useRef(false);
     // Ref para detectar transiciones de voiceError (evitar re-disparar en cada re-render)
     const prevVoiceErrorRef = useRef<string | null | undefined>(null);
     // Usar el hook de sincronización avatar-voz

@@ -128,10 +128,6 @@ import {
 import { useParticipants } from './hooks/useParticipants';
 import { resolveKindRole } from './core/multiuser/participantRegistry';
 import { useMateriaGris } from './hooks/useMateriaGris';
-// ---- Fase 4 — Módulo G: hábitos y metas ----
-import { useHabits } from './hooks/useHabits';
-// ---- Fase 5 — Módulo H: bienestar y ánimo ----
-import { useMood } from './hooks/useMood';
 // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
 import { useContacts } from './hooks/useContacts';
 import { useDiary } from './hooks/useDiary';
@@ -149,7 +145,6 @@ import { resolvedActionIdentity } from './voice/lib/resolvedActionIdentity';
 import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
 import { MS_DAY } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
-import { AgendaPanel } from './components/AgendaPanel';
 import { createWebAudioDriver, type AudioDriver, type SoundOptions } from './core/temporal/audioAlert';
 
 // ============================================================
@@ -186,7 +181,6 @@ import { formatStreamSttUiStatus } from './voice/lib/transcriptConfig';
 import {
     getFluParticipantConfig,
     setFluParticipantOverrides,
-    resetFluParticipantOverrides,
     isFluParticipantEnabled,
 } from './voice/lib/fluParticipantConfig';
 import {
@@ -1103,7 +1097,7 @@ function readStringProp(value: unknown, key: string): string | undefined {
 function resolveDomainScopedIntent(
     domain: string | null | undefined,
     text: string,
-    opts: { defaultOffsetMs?: number; now?: number; language?: 'es' | 'en' },
+    _opts: { defaultOffsetMs?: number; now?: number; language?: 'es' | 'en' },
 ): ArbiterResult | null {
     if (!domain || !text) return null;
     if (domain === 'note') {
@@ -1314,7 +1308,6 @@ function App() {
     const savedSession = useRef(defaultSessionState());
     const conversationActiveRef = useRef(false);
     const resumeListeningTimerRef = useRef<number | null>(null);
-    const _lastRawLogRef = useRef<string>('');
     // Indica si FLU ya produjo una respuesta sustantiva en ESTA carga de página.
     // Se usa para que latestResponse NO resucite una respuesta vieja del historial
     // persistido (IndexedDB) al recargar, antes de que FLU responda de nuevo.
@@ -1568,7 +1561,7 @@ function App() {
     // acción sobre el servicio único de agenda (tabla `agenda`).
     // (describeTriggerWhen vive en src/core/agenda/describeTriggerText.ts)
     window.__fluHandleAgendaCommandText = useCallback(
-        async (input: AgendaCommand | string, opts?: { personId?: string; personName?: string }) => {
+        async (input: AgendaCommand | string, _opts?: { personId?: string; personName?: string }) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const cmd = typeof input === 'object' && input?.action
                 ? input
@@ -1722,9 +1715,7 @@ function App() {
     // ---- Punto 2 — Catálogo de sitios: catálogo fusionado del buscador ----
     const searchSites = useSearchSites();
     // ---- Fase 4 — Módulo G: hábitos y metas por participante ----
-    const _habits = useHabits({});
     // ---- Fase 5 — Módulo H: bienestar y ánimo por participante ----
-    const _mood = useMood({});
     // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
     const contacts = useContacts({});
     const diary = useDiary({});
@@ -1941,7 +1932,6 @@ function App() {
         removeSessionSpeaker: os2RemoveSessionSpeaker,
         renameSessionSpeaker: os2RenameSessionSpeaker,
         // OS2 parity: additional actions from useFluVoiceAssistant (FluShell.jsx lines 3444-3457)
-        resetConversationSession: os2ResetConversationSession,
         resetVoiceDisplay: os2ResetVoiceDisplay,
         suspendRecognitionForAssistantSpeech: os2SuspendRecognition,
         /** Set recent memory text that gets injected into the system prompt on next contract request. */
@@ -4116,7 +4106,7 @@ function App() {
             return false;
         }
         prepare?.();
-        const state = useIntegrationStore.getState() as unknown as GenerationConversationSlice;
+        const state = useIntegrationStore.getState() as GenerationConversationSlice;
         const { tema, contenido } = buildGenerationTopic(state);
         const formato = tipo === 'doc' ? 'pdf' : 'video';
         // TÍTULO del documento ≠ TEMA de generación: el título sale del artifact
@@ -4304,34 +4294,6 @@ function App() {
         // Audit log
         auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch(console.error);
     }, [auditLog]);
-
-    const _handleParticipantReset = useCallback(() => {
-        const prev = participantConfig;
-        const defaults = resetFluParticipantOverrides();
-        setParticipantConfig(defaults);
-        // Audit log
-        auditLog.logChange('config', 'flu-participant', prev, defaults, 'Participant config reset to defaults').catch(console.error);
-    }, [participantConfig, auditLog]);
-
-    const _handleToggleAutoCycle = useCallback(() => {
-        integrationStore.setConfig({ autoCycle: !integrationStore.config.autoCycle });
-    }, [integrationStore]);
-
-    const _handleTogglePushToTalk = useCallback(() => {
-        integrationStore.setConfig({ pushToTalk: !integrationStore.config.pushToTalk });
-    }, [integrationStore]);
-
-    const _handleReset = useCallback(() => {
-        integrationStore.reset();
-        setMinuteDraft(null);
-        setSelectedMinuteId(null);
-        fluParticipant.resetParticipant();
-        // OS2 parity: clear workspace image URL
-        workspaceImage.clear();
-        setGeminiError({ show: false, message: '', hint: '', detail: '' });
-        // OS2 parity: reset conversation session (FluShell.jsx line 1154-1176)
-        os2ResetConversationSession?.();
-    }, [integrationStore, os2ResetConversationSession, fluParticipant, workspaceImage]);
 // ---- Minute handlers (extraído a hook) ----
 const minuteHandlers = useMinuteHandlers({
     integrationStore,

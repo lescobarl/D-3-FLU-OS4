@@ -112,7 +112,7 @@ function continuationFor(playerWord: string, rng: RandomSource): string {
     return pickRandom(pool, rng);
 }
 
-export function createPalabrasEncadenadasEngine(options?: { random?: RandomSource }): GameEngine {
+export function createPalabrasEncadenadasEngine(options?: { random?: RandomSource }): GameEngine<PalabrasEncadenadasState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
@@ -135,7 +135,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
             maxRounds: readRounds(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -144,7 +144,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
     return {
         id: 'palabras_encadenadas',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<PalabrasEncadenadasState> {
             adoptRandom(optionsConfig);
             const startWord = pickRandom(WORD_BANK, rng);
             return {
@@ -162,7 +162,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as PalabrasEncadenadasState;
+            const state = session.state as PalabrasEncadenadasState;
             return {
                 prompt: `¡Vamos a jugar a palabras encadenadas! Empiezo yo con ${state.word}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
                 valid: false,
@@ -174,7 +174,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as PalabrasEncadenadasState;
+            const state = session.state as PalabrasEncadenadasState;
 
             if (state.phase === 'done') {
                 return {

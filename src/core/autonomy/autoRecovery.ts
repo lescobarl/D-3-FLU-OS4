@@ -702,7 +702,6 @@ export class AutoRecoverySystem {
     private conditionEvaluator: ConditionEvaluator;
     private activeIncidents: Map<string, RecoveryIncident> = new Map();
     private incidentHistory: RecoveryIncident[] = [];
-    private healthMonitor: HealthMonitor | null = null; // Referencia al Health Monitor
     
     /** Punto de composición de dependencias (§2.4). */
     static create(
@@ -724,8 +723,8 @@ export class AutoRecoverySystem {
         this.conditionEvaluator = deps.conditionEvaluator;
     }
     
-    setHealthMonitor(monitor: HealthMonitor): void {
-        this.healthMonitor = monitor;
+    setHealthMonitor(_monitor: HealthMonitor): void {
+        // Retenido por compatibilidad de API; AutoRecoverySystem no consulta el monitor hoy.
     }
     
     async evaluateAndRecover(componentHealth: ComponentHealth): Promise<RecoveryResult | null> {

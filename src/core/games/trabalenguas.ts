@@ -73,7 +73,7 @@ function currentPrompt(state: TrabalenguasState): string {
     return `${item.texto} Repítelo después de mí.`;
 }
 
-export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine {
+export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -99,7 +99,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
             const j = Math.floor(rng() * (i + 1));
             [state.order[i], state.order[j]] = [state.order[j], state.order[i]];
         }
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -108,7 +108,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
     return {
         id: 'trabalenguas',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TrabalenguasState> {
             adoptRandom(optionsConfig);
             const order = TRABALENGUAS_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
@@ -130,7 +130,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as TrabalenguasState;
+            const state = session.state as TrabalenguasState;
             return {
                 prompt: `¡Vamos a jugar con trabalenguas! ${currentPrompt(state)}`,
                 valid: false,
@@ -142,7 +142,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as TrabalenguasState;
+            const state = session.state as TrabalenguasState;
 
             if (state.phase === 'done') {
                 return {

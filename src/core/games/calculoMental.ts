@@ -92,7 +92,7 @@ function operationPrompt(state: CalculoMentalState): string {
     return `¿Cuánto es ${state.a} ${OP_WORD[state.op]} ${state.b}?`;
 }
 
-export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine {
+export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine<CalculoMentalState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): CalculoMentalConfig => {
@@ -128,7 +128,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
             maxRounds: readRounds(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -137,7 +137,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
     return {
         id: 'calculo_mental',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CalculoMentalState> {
             adoptRandom(optionsConfig);
             const config = readConfig(optionsConfig);
             return {
@@ -156,7 +156,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as CalculoMentalState;
+            const state = session.state as CalculoMentalState;
             return {
                 prompt: `¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`,
                 valid: false,
@@ -168,7 +168,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as CalculoMentalState;
+            const state = session.state as CalculoMentalState;
 
             if (state.phase === 'done') {
                 return {

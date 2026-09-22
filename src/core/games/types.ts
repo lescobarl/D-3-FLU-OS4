@@ -32,9 +32,9 @@ export interface GameTurnResult {
     won?: boolean;
 }
 
-export interface GameSession {
+export interface GameSession<TState = unknown> {
     id: GameId;
-    state: Record<string, unknown>; // estado específico del juego (serializable)
+    state: TState; // estado específico del juego (serializable)
     score: number;
     round: number;
     /**

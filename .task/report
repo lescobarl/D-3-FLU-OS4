@@ -828,3 +828,48 @@ BASELINE / REGRESION:
 
 CONGELADO (0.14): scripts/audit-metric.mjs y tests/localeConfigGuard.test.ts.
 NO VALIDADO (usuario): que la voz del SO use el locale correcto en pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C49 (TS estricto / sin doble cast)
+================================================================
+OBJETIVO UNICO: eliminar el doble cast `as unknown as` y exigir TS estricto real.
+
+ANTES:  node scripts/audit-metric.mjs ts-escapes   ->  67   (todos en src)
+        noUnusedLocals=false, noUnusedParameters=false  ->  56 avisos latentes
+DESPUES: node scripts/audit-metric.mjs ts-escapes  ->  0
+        guard tests/tsStrictGuard.test.ts -> VERDE (5 tests)
+        noUnusedLocals=true, noUnusedParameters=true -> tsc -b 0 errores
+
+CAUSA RAIZ (no parche): `GameSession.state` estaba tipado `Record<string, unknown>`,
+lo que obligaba a `state as unknown as XState` en cada juego (61 casts en 21
+archivos de src/core/games). Se tipa el estado como opaco y generico:
+  - GameSession<TState = unknown> { state: TState }
+  - GameEngine<TState = unknown> y las fabricas devuelven GameEngine<XState>
+  - los juegos leen `session.state as XState` (un solo cast, honesto)
+Resto puntual: readStorage (appConfig), normalizeParticipantEvaluation (acepta
+unknown y normaliza con un unico narrowing), getState() de la tienda, y 3 juegos.
+
+CODIGO MUERTO DESTAPADO por noUnused* (56 casos) y retirado:
+  - imports sin uso (AgendaPanel en App, React en 2 componentes, etc.)
+  - locales y funciones muertas (_habits/_mood/_lastRawLogRef/_welcomeSpokenRef,
+    _handle* en App, PROVIDER_NAMES, SAMPLE_WORKSPACE_VISUAL, COMMONS_VIDEO_PROVIDER,
+    getParamList, cleanAula, etc.)
+  - campos write-only (AutoRecoverySystem.healthMonitor: nunca leido; setter queda
+    como API sin efecto, documentado).
+  - parametros sin uso renombrados a `_x`.
+
+ENMIENDA FORMAL (0.14) - guard congelado tests/agendaUiSwap.test.ts:
+  La asercion B medía `App.tsx` contains 'AgendaPanel'; pasaba SOLO por un import
+  muerto (TS6133). El render real vive en el host lateral (WorkspaceHub.tsx:835,
+  FluSettingsTabView.tsx:165). Se ENDURECE a: AgendaPanel importado Y renderizado
+  en src. Nuevo hash `d4dcc689...` (antes 7f9974ed...). Requiere tu OK por ser
+  criterio congelado.
+
+BASELINE / REGRESION:
+  antes:   277 archivos / 2920 tests / 0 fallos
+  despues: 277 archivos / 2920 tests / 0 fallos (sin cambios de comportamiento)
+
+NO VALIDADO (usuario): que la UI siga igual en pantalla (los hooks _habits/_mood
+  estaban desactivados; se retiraron sus llamadas).
+DEUDA DECLARADA: `allowJs: true` se mantiene (el proyecto tiene librerias .js de
+  voz); pasar a false exigiria migrarlas a .ts (fuera de este hito).

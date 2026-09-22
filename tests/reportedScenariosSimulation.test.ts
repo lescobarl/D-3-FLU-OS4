@@ -7,7 +7,7 @@
 // 2) JUNTA:   etiqueta limpia ("hazme …" fuera) + hoy 22:00.
 // 3) JUEGO:   ciclo (avanza), salir, y NO secuestra comandos de agenda.
 // ============================================================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { splitSpeechChunks } from '../src/voice/lib/fluSpeech';

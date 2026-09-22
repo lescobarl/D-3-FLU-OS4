@@ -99,7 +99,7 @@ function isOrderedMatch(sub: readonly string[], seq: readonly string[]): boolean
     return cursor >= seq.length;
 }
 
-export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource }): GameEngine {
+export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource }): GameEngine<MemoriaSecuenciasState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -127,7 +127,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
             longMax: readLongMax(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -136,7 +136,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
     return {
         id: 'memoria_secuencias',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<MemoriaSecuenciasState> {
             adoptRandom(optionsConfig);
             return {
                 id: 'memoria_secuencias',
@@ -154,7 +154,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as MemoriaSecuenciasState;
+            const state = session.state as MemoriaSecuenciasState;
             return {
                 prompt: `¡Vamos a entrenar la memoria! Memoriza esta secuencia: ${sequencePrompt(state.sequence)}. Repítela en orden.`,
                 valid: false,
@@ -166,7 +166,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as MemoriaSecuenciasState;
+            const state = session.state as MemoriaSecuenciasState;
 
             if (state.phase === 'done') {
                 return {

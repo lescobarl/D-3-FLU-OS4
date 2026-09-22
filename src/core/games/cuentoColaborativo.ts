@@ -97,7 +97,7 @@ function closePrompt(state: CuentoColaborativoState, _score: number): string {
     return `¡Nuestro cuento está completo! ${historia} ${state.cierre} Fin de nuestro cuento. ¿Te gustó cómo quedó?`;
 }
 
-export function createCuentoColaborativoEngine(options?: { random?: RandomSource }): GameEngine {
+export function createCuentoColaborativoEngine(options?: { random?: RandomSource }): GameEngine<CuentoColaborativoState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -121,7 +121,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
             maxTurnos: readTurnos(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -130,7 +130,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
     return {
         id: 'cuento_colaborativo',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentoColaborativoState> {
             adoptRandom(optionsConfig);
             const item = CUENTO_BANK[Math.floor(rng() * CUENTO_BANK.length)];
             return {
@@ -149,7 +149,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as CuentoColaborativoState;
+            const state = session.state as CuentoColaborativoState;
             return {
                 prompt: `¡Vamos a inventar un cuento juntos! Yo empiezo: "${state.cuento[0]}" ¿Qué pasa después?`,
                 valid: false,
@@ -161,7 +161,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as CuentoColaborativoState;
+            const state = session.state as CuentoColaborativoState;
 
             if (state.phase === 'done') {
                 return {

@@ -3,7 +3,6 @@
 // ============================================================
 import { describe, expect, it } from 'vitest';
 import {
-  MS_DAY,
   MS_HOUR,
   MS_MINUTE,
   collectDueOrdered,

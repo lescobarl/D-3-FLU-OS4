@@ -519,7 +519,7 @@ class DecisionMaker {
     
     private generateJustification(
         bestOption: DecisionOption,
-        currentOption: DecisionOption,
+        _currentOption: DecisionOption,
         improvement: number,
         factors: DecisionFactor[]
     ): string {

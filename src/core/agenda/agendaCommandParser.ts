@@ -349,7 +349,7 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
     };
 }
 
-export function describeAgendaTrigger(trigger: AgendaTrigger, now: number): string {
+export function describeAgendaTrigger(trigger: AgendaTrigger, _now: number): string {
     switch (trigger.type) {
         case 'countdown':
             return `${Math.round(trigger.durationMs / 60000)} min`;

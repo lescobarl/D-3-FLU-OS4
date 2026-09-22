@@ -28,7 +28,6 @@ const SRC = join(ROOT, 'src')
 const CONFIG_DIR = 'src/core/config/'
 
 /** Nombres canónicos de proveedor cuya identidad no debe quemarse. */
-const PROVIDER_NAMES = ['openrouter', 'gemini', 'deepseek', 'local'] as const
 const PROVIDER_LITERAL_RE = /['"](openrouter|gemini|deepseek|local)['"]/g
 const ARRAY_RE = /\[[^\]]*\]/gs
 

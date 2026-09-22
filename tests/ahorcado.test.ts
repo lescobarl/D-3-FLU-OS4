@@ -49,7 +49,7 @@ describe('ahorcado — inicio de partida', () => {
     test('createSession devuelve una sesión serializable y plana', () => {
         const engine = createAhorcadoEngine({ random: () => 0 });
         const session = engine.createSession({});
-        const state = session.state as Record<string, unknown>;
+        const state = session.state;
         expect(state.palabra).toBe('agua');
         expect(state.pista).toBe('La bebes cuando tienes sed.');
         expect(state.adivinadas).toEqual([]);

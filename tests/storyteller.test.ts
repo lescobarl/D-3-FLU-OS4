@@ -69,7 +69,7 @@ describe('cuentacuentos — inicio de partida', () => {
     test('createSession devuelve una sesión serializable y plana', () => {
         const engine = createCuentacuentosEngine({ random: () => 0 });
         const session = engine.createSession({});
-        const state = session.state as Record<string, unknown>;
+        const state = session.state;
         expect(state.escenas).toHaveLength(4);
         expect(state.cursor).toBe(0);
         expect(state.maxEscenas).toBe(DEFAULT_ESCENAS_MAX);

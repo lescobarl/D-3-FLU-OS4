@@ -47,7 +47,7 @@ describe('memoria_secuencias — inicio de partida', () => {
     test('createSession devuelve una sesión serializable y plana', () => {
         const engine = createMemoriaSecuenciasEngine({ random: () => 0 });
         const session = engine.createSession({});
-        const state = session.state as Record<string, unknown>;
+        const state = session.state;
         expect(state.sequence).toEqual(['A', 'A']);
         expect(state.cursor).toBe(0);
         expect(state.maxRounds).toBe(3);

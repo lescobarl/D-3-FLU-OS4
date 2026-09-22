@@ -207,7 +207,7 @@ export function useFluParticipant({
 
             if (generation !== evalGenerationRef.current) return false;
 
-            const normalized = normalizeParticipantEvaluation(result as unknown as Record<string, unknown>, cfg);
+            const normalized = normalizeParticipantEvaluation(result, cfg);
             stateRef.current = applyParticipantEvaluation(stateRef.current, normalized);
 
             if (stateRef.current.phase === 'raised') {

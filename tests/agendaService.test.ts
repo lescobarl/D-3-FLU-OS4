@@ -6,7 +6,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { createAgendaService, type AgendaDb } from '../src/core/agenda/agendaService';
-import type { AgendaItem, AgendaKind, AgendaTrigger } from '../src/core/agenda/agendaModel';
+import type { AgendaItem, AgendaTrigger } from '../src/core/agenda/agendaModel';
 
 function makeDb(): AgendaDb {
     const map = new Map<string, AgendaItem>();

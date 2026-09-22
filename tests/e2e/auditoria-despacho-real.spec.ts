@@ -139,7 +139,7 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
         await gotoClean(page);
         await clearStore(page, 'diaryEntries');
 
-        const reply = await driveTranscript(page, 'escribe en el diario hoy fue un gran día');
+        await driveTranscript(page, 'escribe en el diario hoy fue un gran día');
 
         const records = await readStore(page, 'diaryEntries');
         expect(records.length).toBeGreaterThan(0);
@@ -154,7 +154,7 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
         await gotoClean(page);
         await clearStore(page, 'notes');
 
-        const reply = await driveTranscript(page, 'apunta comprar pan');
+        await driveTranscript(page, 'apunta comprar pan');
 
         const records = await readStore(page, 'notes');
         expect(records.length).toBeGreaterThan(0);

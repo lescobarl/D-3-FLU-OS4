@@ -12,15 +12,7 @@ import {
     getPlaylist,
     resolveTrack,
     findTrack,
-    playMusic,
-    playMusicUrl,
-    pauseMusic,
-    resumeMusic,
-    stopMusic,
-    isMusicPlaying,
-    setMusicVolume,
     normalizeForMatch,
-    playSong,
 } from '../src/services/musicPlayer';
 import type { MusicSearchClient } from '../src/services/musicSearch';
 import {

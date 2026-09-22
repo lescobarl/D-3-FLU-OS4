@@ -114,7 +114,7 @@ function isComplete(state: AhorcadoState): boolean {
     return state.palabra.split('').every((ch) => state.adivinadas.includes(ch));
 }
 
-export function createAhorcadoEngine(options?: { random?: RandomSource }): GameEngine {
+export function createAhorcadoEngine(options?: { random?: RandomSource }): GameEngine<AhorcadoState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -139,7 +139,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
             maxIntentos: readIntentos(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -148,7 +148,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
     return {
         id: 'ahorcado',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AhorcadoState> {
             adoptRandom(optionsConfig);
             const word = pickRandom(AHORCADO_BANK, rng);
             return {
@@ -168,7 +168,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as AhorcadoState;
+            const state = session.state as AhorcadoState;
             return {
                 prompt: `¡Vamos a jugar al ahorcado! La palabra tiene ${state.palabra.length} letras: ${displayWord(state)}. Dime una letra.`,
                 valid: false,
@@ -180,7 +180,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as AhorcadoState;
+            const state = session.state as AhorcadoState;
 
             if (state.phase === 'done') {
                 return {

@@ -7,7 +7,7 @@
 //   B) existe una ruta que degrada a motor local ante error 'network'/'no-speech'.
 // ============================================================
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()

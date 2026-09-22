@@ -15,12 +15,6 @@ import { readFileSync } from 'fs';
 // ============================================================
 // Helper: extraer lista de parámetros de una función
 // ============================================================
-function getParamList(fn: (...args: any[]) => any): string[] {
-    const fnStr = fn.toString();
-    const match = fnStr.match(/\(([^)]*)\)/);
-    if (!match) return [];
-    return match[1].split(',').map((p: string) => p.trim());
-}
 
 // ============================================================
 // Tests — GeminiService source code inspection

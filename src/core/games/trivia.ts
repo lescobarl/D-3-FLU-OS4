@@ -130,7 +130,7 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
     return null;
 }
 
-export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine {
+export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine<TriviaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -161,7 +161,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
             maxRounds: readRounds(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -170,7 +170,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
     return {
         id: 'trivia',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TriviaState> {
             adoptRandom(optionsConfig);
             return {
                 id: 'trivia',
@@ -187,7 +187,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as TriviaState;
+            const state = session.state as TriviaState;
             return {
                 prompt: `¡Vamos a jugar a la trivia! ${currentPrompt(state)}`,
                 valid: false,
@@ -199,7 +199,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as TriviaState;
+            const state = session.state as TriviaState;
 
             if (state.phase === 'done') {
                 return {

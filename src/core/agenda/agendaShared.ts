@@ -125,11 +125,6 @@ const cleanMateria = (value: string): string =>
         .replace(/\s{2,}/g, ' ')
         .trim();
 
-/** Normaliza el aula opcional: undefined si está vacía o solo contiene espacios. */
-const cleanAula = (value: unknown): string | undefined => {
-    const trimmed = String(value ?? '').trim();
-    return trimmed ? trimmed : undefined;
-};
 
 const AULA_RE = /\b(?:aula|sal[oó]n|salon|lab|laboratorio|taller)\s+([\wÁÉÍÓÚáéíóúÑñ.-]+)/i;
 

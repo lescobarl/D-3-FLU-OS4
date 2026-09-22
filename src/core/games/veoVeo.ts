@@ -163,7 +163,7 @@ function itemPrompt(item: VeoVeoItem): string {
     return `Veo una cosita que empieza con la letra ${itemLetter(item)} y es ${item.categoria}. ¿Qué es?`;
 }
 
-export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine {
+export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine<VeoVeoState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
@@ -185,7 +185,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
             maxRounds: readRounds(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -194,7 +194,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
     return {
         id: 'veo_veo',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<VeoVeoState> {
             adoptRandom(optionsConfig);
             return {
                 id: 'veo_veo',
@@ -211,7 +211,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as VeoVeoState;
+            const state = session.state as VeoVeoState;
             const item = itemAt(state);
             return {
                 prompt: `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`,
@@ -224,7 +224,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as VeoVeoState;
+            const state = session.state as VeoVeoState;
 
             if (state.phase === 'done') {
                 return {

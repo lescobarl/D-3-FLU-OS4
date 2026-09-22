@@ -612,7 +612,7 @@ export function readStorage<T>(key: string, defaultValue: T): T {
     try {
         const raw = localStorage.getItem(key);
         if (raw === null) return defaultValue;
-        return raw as unknown as T;
+        return raw as T;
     } catch {
         logCaughtError('[catch] src/core/config/appConfig.ts');
         return defaultValue;

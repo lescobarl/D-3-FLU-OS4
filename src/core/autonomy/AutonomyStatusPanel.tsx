@@ -5,7 +5,6 @@
 // y permite interacción con ellos.
 // ============================================================
 
-import React from 'react';
 import type { AutonomyState, AutonomyActions } from './useAutonomyIntegration';
 
 export function AutonomyStatusPanel({

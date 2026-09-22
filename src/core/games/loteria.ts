@@ -81,7 +81,7 @@ function cantarPrompt(state: LoteriaState, intro = 'Siguiente carta: '): string 
     return `${intro}${card.copla}`;
 }
 
-export function createLoteriaEngine(options?: { random?: RandomSource }): GameEngine {
+export function createLoteriaEngine(options?: { random?: RandomSource }): GameEngine<LoteriaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const buildState = (cfg: Record<string, unknown> | undefined): LoteriaState => {
@@ -123,10 +123,10 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
     return {
         id: 'loteria',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<LoteriaState> {
             return {
                 id: 'loteria',
-                state: buildState(optionsConfig) as unknown as Record<string, unknown>,
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };
@@ -134,7 +134,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             const state = buildState(optionsConfig);
-            session.state = state as unknown as Record<string, unknown>;
+            session.state = state;
             session.score = 0;
             session.round = 1;
             const first = cardAt(state);
@@ -149,7 +149,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         },
 
         turn(session: GameSession, text = '', context?: GameTurnContext): GameTurnResult {
-            const state = session.state as unknown as LoteriaState;
+            const state = session.state as LoteriaState;
 
             if (state.phase === 'done') {
                 return {

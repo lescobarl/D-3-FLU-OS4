@@ -7,7 +7,7 @@
 // Puro, sin I/O: recibe los items y el reloj. La UI y el handler de voz
 // consumen ESTO (fuente única de la consulta hablable).
 // ============================================================
-import { itemsInView, agendaWindow, type AgendaView } from './agendaQuery';
+import { itemsInView, type AgendaView } from './agendaQuery';
 import { nextAgendaDue, colorForKind, type AgendaColorMap, type AgendaItem } from './agendaModel';
 
 export interface AgendaSummaryLine {

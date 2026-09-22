@@ -77,7 +77,7 @@ function pickNumber(min: number, max: number, rng: RandomSource): number {
  * (dígitos, palabras 0-100 y compuestos "treinta y cinco").
  */
 
-export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): GameEngine {
+export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): GameEngine<AdivinaNumeroState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): AdivinaNumeroConfig => {
@@ -100,7 +100,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
     return {
         id: 'adivina_numero',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaNumeroState> {
             adoptRandom(optionsConfig);
             const cfg = readConfig(optionsConfig);
             return {
@@ -123,7 +123,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             adoptRandom(optionsConfig);
             const cfg = readConfig(optionsConfig);
-            const state = session.state as unknown as AdivinaNumeroState;
+            const state = session.state as AdivinaNumeroState;
             state.number = pickNumber(cfg.min, cfg.max, rng);
             state.min = cfg.min;
             state.max = cfg.max;
@@ -145,7 +145,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as AdivinaNumeroState;
+            const state = session.state as AdivinaNumeroState;
 
             if (state.phase === 'done') {
                 return {

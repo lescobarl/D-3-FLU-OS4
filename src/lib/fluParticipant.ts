@@ -261,7 +261,8 @@ export function canScheduleParticipantEvaluation(
 // Normalize Gemini evaluation response
 // -----------------------------------------------------------
 
-export function normalizeParticipantEvaluation(raw: Record<string, unknown>, cfg: ParticipantConfig): ParticipantEvaluation {
+export function normalizeParticipantEvaluation(input: unknown, cfg: ParticipantConfig): ParticipantEvaluation {
+    const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
     const minConf = Number(cfg.minConfidence);
     const minChars = Number(cfg.minDraftChars);
     const maxChars = Number(cfg.maxDraftChars);

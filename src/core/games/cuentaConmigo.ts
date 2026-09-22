@@ -46,7 +46,7 @@ interface CuentaConmigoState {
     phase: 'announce' | 'done';
 }
 
-export function createCuentaConmigoEngine(_options?: { random?: RandomSource }): GameEngine {
+export function createCuentaConmigoEngine(_options?: { random?: RandomSource }): GameEngine<CuentaConmigoState> {
     const readHasta = (cfg: Record<string, unknown> | undefined): number => {
         const hasta = Number(cfg?.hasta) || DEFAULT_HASTA;
         return clamp(hasta, 3, MAX_HASTA);
@@ -58,7 +58,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
             hasta: readHasta(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -67,7 +67,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
     return {
         id: 'cuenta_conmigo',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentaConmigoState> {
             return {
                 id: 'cuenta_conmigo',
                 state: {
@@ -82,7 +82,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as CuentaConmigoState;
+            const state = session.state as CuentaConmigoState;
             return {
                 prompt: `¡Vamos a contar juntos del 1 al ${state.hasta}! Yo digo 1. ¿Qué número sigue?`,
                 valid: false,
@@ -94,7 +94,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as CuentaConmigoState;
+            const state = session.state as CuentaConmigoState;
 
             if (state.phase === 'done') {
                 return {

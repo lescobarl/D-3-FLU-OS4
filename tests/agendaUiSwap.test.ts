@@ -4,11 +4,15 @@
 // Invariantes (nace ROJO):
 //   A) los paneles viejos de agenda (RemindersPanel/TemporalItemsPanel/HoyPanel)
 //      ya no se importan en NINGÚN lado (se retiran).
-//   B) el panel único AgendaPanel está CONECTADO en App.tsx.
+//   B) el panel UNICO AgendaPanel esta CONECTADO (importado Y renderizado) en la app.
 // ============================================================
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+
+// Enmienda 2026-09-22 (C49): la asercion B media presencia del texto 'AgendaPanel'
+// en App.tsx y solo pasaba por un import MUERTO (TS6133). El diseno real monta el
+// panel en el host lateral (WorkspaceHub). Se endurece a import + render en src.
 
 const ROOT = process.cwd()
 
@@ -41,8 +45,10 @@ describe('agenda — swap de UI a un solo panel', () => {
     expect(imports, `imports de paneles viejos (N=${imports.length}); deben ser 0:\n  ${imports.join('\n  ')}`).toHaveLength(0)
   })
 
-  it('B: AgendaPanel está conectado en App.tsx', () => {
-    const app = readFileSync(join(ROOT, 'src', 'App.tsx'), 'utf8')
-    expect(app).toContain('AgendaPanel')
+  it('B: AgendaPanel esta conectado (importado y renderizado) en la app', () => {
+    const imports = grep(/import\s*\{[^}]*\bAgendaPanel\b[^}]*\}\s*from\s*['"][^'"]*AgendaPanel['"]/)
+    const renders = grep(/<\s*AgendaPanel\b/)
+    expect(imports.length, 'AgendaPanel debe importarse al menos una vez').toBeGreaterThan(0)
+    expect(renders.length, 'AgendaPanel debe renderizarse al menos una vez (<AgendaPanel .../>)').toBeGreaterThan(0)
   })
 })

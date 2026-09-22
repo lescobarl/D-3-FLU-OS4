@@ -104,17 +104,6 @@ const SAMPLE_WORKSPACE_TEXT = {
     timestamp: Date.now(),
 };
 
-const SAMPLE_WORKSPACE_VISUAL = {
-    id: 'ws-e2e-visual-001',
-    titulo: 'Ecosistema marino',
-    tipo: 'image_prompt',
-    contenido: 'Un arrecife de coral con peces de colores.',
-    respuesta: 'Imagen de un ecosistema marino',
-    prompt_visual: 'Un arrecife de coral colorido con peces tropicales nadando entre algas',
-    puntos_clave: ['Arrecife de coral', 'Peces tropicales'],
-    origen: 'ia',
-    timestamp: Date.now(),
-};
 
 // ============================================================
 // SUITE PRINCIPAL

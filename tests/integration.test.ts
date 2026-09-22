@@ -31,10 +31,8 @@ import type {
     VoiceBridgeEvent,
     BridgeConfig,
     PersonalityConfig,
-    SessionStats,
     WorkspaceEntry,
     FluContract,
-    StateMapping,
 } from '../src/types/bridge';
 import type { MinuteUIEntry } from '../src/hooks/useMinuteKnowledge';
 
@@ -660,7 +658,6 @@ describe('🖐️ EmotionEngine — Mapeo DATA-DRIVEN', () => {
 describe('👤 State-to-Avatar Mapping (EmotionEngine)', () => {
     it('resolveStateExpression debe manejar todos los estados', () => {
         const source = require('fs').readFileSync('./src/core/anim/emotionEngine.ts', 'utf-8');
-        const states: ConversationState[] = ['IDLE', 'LISTENING', 'THINKING', 'SPEAKING', 'ERROR', 'CELEBRATING'];
         // Verificar que STATE_TO_AVATAR_STATE mapea todos los estados
         expect(source).toContain('IDLE:');
         expect(source).toContain('LISTENING:');
@@ -861,7 +858,6 @@ describe('🔑 Key Points Extraction', () => {
         const points = useIntegrationStore.getState().extractKeyPoints();
         // La duración puede ser 0 minutos si el test corre muy rápido
         // Verificamos que el campo exista en los puntos clave
-        const hasDuration = points.some(p => p.includes('Duración') || p.includes('min') || p.includes('intercambios'));
         // Si no hay duración (porque minutes=0), al menos debe tener total de intercambios
         expect(points.length).toBeGreaterThan(0);
     });
@@ -1041,7 +1037,6 @@ describe('💾 Session Persistence — SyncTuple', () => {
     });
 
     it('reset debe crear nuevo sync tuple', () => {
-        const oldSync = useIntegrationStore.getState().sync;
         useIntegrationStore.getState().reset();
         const newSync = useIntegrationStore.getState().sync;
         expect(newSync.revision).toBe(1);
@@ -1494,7 +1489,6 @@ describe('🎨 Creatividad → Temperature (Phase 2)', () => {
 
     it('resolveCreativityTemperature debe retornar undefined cuando creativity es undefined', () => {
         useIntegrationStore.getState().reset();
-        const state = useIntegrationStore.getState();
         const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
         expect(source).toContain('resolveCreativityTemperature');
     });
@@ -2115,7 +2109,7 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
 
     it('EXPRESSION_MAP debe estar alineado con expressionRegistry (todas las animaciones existen en ANIMATION_PATHS)', () => {
         const validAnims = getValidAnimations();
-        for (const [expr, anims] of Object.entries(EXPRESSION_MAP)) {
+        for (const [, anims] of Object.entries(EXPRESSION_MAP)) {
             const animList = anims as string[];
             for (const anim of animList) {
                 expect(validAnims).toContain(anim);
@@ -2282,7 +2276,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // (LISTENING_ALTERNATIVES contiene esos strings como datos, no como lógica hardcodeada)
         // Extraer solo líneas de código (sin comentarios) para validar ausencia de hardcode
         const codeLines: string[] = listeningSection.split('\n').filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-        const codeBlock = codeLines.join('\n');
         // Permitir 'atencion'/'atencion2' solo si aparecen como parte de LISTENING_ALTERNATIVES (data-driven)
         // Verificar que NO hay asignaciones directas como store.setExpression('atencion')
         const assignmentLines = codeLines.filter((l: string) => l.includes("setExpression('atencion'") || l.includes("setExpression('atencion2'"));
@@ -2298,7 +2291,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // (SPEAKING_ALTERNATIVES contiene esos strings como datos, no como lógica hardcodeada)
         // Se permite un fallback defensivo 'hablando' cuando SPEAKING_ALTERNATIVES está vacío
         const codeLines: string[] = speakingSection.split('\n').filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-        const codeBlock = codeLines.join('\n');
         // Verificar que NO hay asignaciones directas como store.setExpression('hablando') sin alt check
         // El único 'hablando' permitido es el fallback defensivo dentro del else branch
         const directAssignments = codeLines.filter((l: string) =>
@@ -2316,7 +2308,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // NO debe tener strings hardcodeadas 'palabra' / 'Palabra2' en asignaciones directas
         // (PARTICIPANT_ALTERNATIVES contiene esos strings como datos, no como lógica hardcodeada)
         const codeLines: string[] = participantSection.split('\n').filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-        const codeBlock = codeLines.join('\n');
         // Verificar que NO hay asignaciones directas como store.setExpression('palabra')
         const assignmentLines = codeLines.filter((l: string) => l.includes("setExpression('palabra'") || l.includes("setExpression('Palabra2'"));
         expect(assignmentLines.length).toBe(0);
@@ -2376,7 +2367,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // _thinkingStart debe haberse usado para calcular responseTime
         // Nota: averageResponseTime se calcula en setConversationState al entrar a SPEAKING
         // usando current._thinkingStart. Verificar que el cálculo ocurrió.
-        const stats = useIntegrationStore.getState().sessionStats;
         // averageResponseTime puede ser 0 si _thinkingStart no se propagó aún,
         // pero _thinkingStart debe estar en 0 después de la transición (consumido)
         // Verificamos que la transición fue exitosa y el estado es correcto

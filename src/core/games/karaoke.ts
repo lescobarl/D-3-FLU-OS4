@@ -153,7 +153,7 @@ interface KaraokeState {
     phase: 'announce' | 'singing' | 'done';
 }
 
-export function createKaraokeEngine(options?: { random?: RandomSource }): GameEngine {
+export function createKaraokeEngine(options?: { random?: RandomSource }): GameEngine<KaraokeState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -172,7 +172,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
             cursor: 0,
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -181,7 +181,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
     return {
         id: 'karaoke',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<KaraokeState> {
             adoptRandom(optionsConfig);
             const song = KARAOKE_SONG_BANK[Math.floor(rng() * KARAOKE_SONG_BANK.length)];
             return {
@@ -200,7 +200,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as KaraokeState;
+            const state = session.state as KaraokeState;
             state.phase = 'singing';
             return {
                 prompt: `¡Hora de cantar! Vamos a cantar "${state.titulo}" juntos. La pista ya suena. Escucha la primera línea: "${state.lineas[0]}" Cántala conmigo y dime "sigue" para la siguiente.`,
@@ -213,7 +213,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as KaraokeState;
+            const state = session.state as KaraokeState;
 
             if (state.phase === 'done') {
                 return {

@@ -33,7 +33,6 @@ const CONFIG: ContactConfig = {
 };
 
 // 'YYYY-MM-DD' locales alrededor de la referencia (2026-01-15).
-const YESTERDAY = '2026-01-14';
 const TODAY = '2026-01-15';
 const TOMORROW = '2026-01-16';
 

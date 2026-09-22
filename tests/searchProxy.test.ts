@@ -63,14 +63,6 @@ const COMMONS_PROVIDER = {
 };
 
 // F4 — Wikimedia Commons (vídeo, keyless): generator=search + videoinfo.
-const COMMONS_VIDEO_PROVIDER = {
-    id: 'commons-video',
-    label: 'Wikimedia Commons (vídeo)',
-    enabled: true,
-    endpoint:
-        'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={q}%20filetype:video&gsrnamespace=6&prop=videoinfo&viprop=url|size&viurlwidth=320&format=json',
-    maxResults: 4,
-};
 
 // F4 — YouTube Data v3 (con key configurable). Plantillas embed/watch {id}.
 const YOUTUBE_PROVIDER = {

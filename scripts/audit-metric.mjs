@@ -71,6 +71,8 @@ const RE = {
   umbralLiteral: /0\.[0-9]{2}/,
   // C47: locales BCP-47 de la familia es/en declarados como literal.
   localeLiteral: /['"`](?:es|en)-(?:MX|US|ES|GB)['"`]/,
+  // C49: doble cast que evade el tipado (`as unknown as`).
+  tsDoubleCast: /as unknown as/,
 }
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
@@ -293,6 +295,8 @@ const metrics = {
     countLinesWhere(
       (r, l) => r !== 'src/core/config/localeConfig.ts' && RE.localeLiteral.test(stripComment(l)),
     ),
+  // ---- C49 ---------------------------------------------------------------
+  'ts-escapes': () => countLinesWhere((_r, l) => RE.tsDoubleCast.test(stripComment(l))),
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')

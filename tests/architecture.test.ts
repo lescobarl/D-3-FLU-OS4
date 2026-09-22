@@ -315,7 +315,6 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
         }
 
         if (invalid.length > 0) {
-            const details = invalid.map((i) => `  ${i.expression} → '${i.anim}'`).join('\n');
             expect(invalid).toEqual([]);
         }
     }, 60_000);
@@ -338,7 +337,6 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
         }
 
         if (stale.length > 0) {
-            const details = stale.map((s) => `  '${s}'`).join('\n');
             expect(stale).toEqual([]);
         }
     }, 60_000);

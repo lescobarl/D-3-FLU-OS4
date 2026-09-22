@@ -76,7 +76,7 @@ function currentPrompt(state: RepiteTraduceState): string {
     return `¿Cómo se dice "${item.es}" en inglés?`;
 }
 
-export function createRepiteTraduceEngine(options?: { random?: RandomSource }): GameEngine {
+export function createRepiteTraduceEngine(options?: { random?: RandomSource }): GameEngine<RepiteTraduceState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -102,7 +102,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
             const j = Math.floor(rng() * (i + 1));
             [state.order[i], state.order[j]] = [state.order[j], state.order[i]];
         }
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -111,7 +111,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
     return {
         id: 'repite_traduce',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RepiteTraduceState> {
             adoptRandom(optionsConfig);
             const order = REPITE_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
@@ -133,7 +133,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as RepiteTraduceState;
+            const state = session.state as RepiteTraduceState;
             return {
                 prompt: `¡Vamos a practicar inglés! ${currentPrompt(state)}`,
                 valid: false,
@@ -145,7 +145,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as RepiteTraduceState;
+            const state = session.state as RepiteTraduceState;
 
             if (state.phase === 'done') {
                 return {

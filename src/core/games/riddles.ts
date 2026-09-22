@@ -136,7 +136,7 @@ function currentPrompt(state: RiddlesState): string {
     return `${riddle.pregunta} ¿Qué soy?`;
 }
 
-export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine {
+export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
@@ -158,7 +158,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
             maxRounds: readRounds(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -167,7 +167,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
     return {
         id: 'adivinanzas',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RiddlesState> {
             adoptRandom(optionsConfig);
             return {
                 id: 'adivinanzas',
@@ -185,7 +185,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             return {
-                prompt: `¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as unknown as RiddlesState)}`,
+                prompt: `¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as RiddlesState)}`,
                 valid: false,
                 gameOver: false,
                 score: session.score,
@@ -195,7 +195,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as RiddlesState;
+            const state = session.state as RiddlesState;
 
             if (state.phase === 'done') {
                 return {

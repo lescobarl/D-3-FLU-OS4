@@ -5,7 +5,6 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { agendaWindow, itemsInView, nextAgendaTick, isRecurring } from '../src/core/agenda/agendaQuery';
-import { nextAgendaDue } from '../src/core/agenda/agendaModel';
 import type { AgendaItem } from '../src/core/agenda/agendaModel';
 import { startOfLocalDay, dayOfWeek, MS_DAY } from '../src/core/temporal/scheduleEngine';
 

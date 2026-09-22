@@ -23,7 +23,6 @@ import type {
     IAIService,
     AIRequestOptions,
     AIHistoryEntry,
-    AIMinuteResult,
     AISummaryResult,
     AIParticipantEvaluation,
     AIWorkspaceImageResult,

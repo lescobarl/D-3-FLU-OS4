@@ -175,7 +175,7 @@ function countRecognized(normalized: string, item: OrdenaSecuenciaItem): number 
     );
 }
 
-export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine {
+export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine<OrdenaSecuenciaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -201,7 +201,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
             const j = Math.floor(rng() * (i + 1));
             [state.order[i], state.order[j]] = [state.order[j], state.order[i]];
         }
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -210,7 +210,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
     return {
         id: 'ordena_secuencia',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<OrdenaSecuenciaState> {
             adoptRandom(optionsConfig);
             const order = ORDENA_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
@@ -232,7 +232,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as OrdenaSecuenciaState;
+            const state = session.state as OrdenaSecuenciaState;
             const item = itemAt(state);
             if (!item) {
                 return {
@@ -255,7 +255,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as OrdenaSecuenciaState;
+            const state = session.state as OrdenaSecuenciaState;
 
             if (state.phase === 'done') {
                 return {

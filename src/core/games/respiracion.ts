@@ -53,7 +53,7 @@ function stepPrompt(step: number): string {
         : 'Exhala por la boca contando hasta 4. Suelta todo el aire poco a poco.';
 }
 
-export function createRespiracionEngine(_options?: { random?: RandomSource }): GameEngine {
+export function createRespiracionEngine(_options?: { random?: RandomSource }): GameEngine<RespiracionState> {
     const readRondas = (cfg: Record<string, unknown> | undefined): number => {
         const rondas = Number(cfg?.rondas) || Number(cfg?.defaultRondas) || DEFAULT_RONDAS;
         return clamp(rondas, 1, MAX_RONDAS);
@@ -65,7 +65,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
             totalSteps: readRondas(cfg) * 2,
             phase: 'breathing',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -74,7 +74,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
     return {
         id: 'respiracion',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RespiracionState> {
             return {
                 id: 'respiracion',
                 state: {
@@ -89,7 +89,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as RespiracionState;
+            const state = session.state as RespiracionState;
             return {
                 prompt: `Vamos a calmarnos respirando juntos. ${stepPrompt(state.step)} Dime "listo" cuando termines.`,
                 valid: false,
@@ -101,7 +101,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as RespiracionState;
+            const state = session.state as RespiracionState;
 
             if (state.phase === 'done') {
                 return {

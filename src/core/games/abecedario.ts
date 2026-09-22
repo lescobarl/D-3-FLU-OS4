@@ -16,7 +16,7 @@
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
-    clamp, normalizeForMatch, hasToken, hasAnyToken,
+    clamp, normalizeForMatch, hasAnyToken,
 } from './gameUtils';
 
 export interface AbecedarioItem {
@@ -97,7 +97,7 @@ function matchedWord(normalized: string, letra: string): string | null {
     return null;
 }
 
-export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine {
+export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine<AbecedarioState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
@@ -124,7 +124,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
             maxRounds: readRounds(cfg),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -133,7 +133,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
     return {
         id: 'abecedario',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AbecedarioState> {
             adoptRandom(optionsConfig);
             const order = ABECEDARIO_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
@@ -155,7 +155,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as AbecedarioState;
+            const state = session.state as AbecedarioState;
             const item = itemAt(state);
             return {
                 prompt: `¡Vamos a jugar con el abecedario! Dime una palabra que empiece con la letra "${item ? item.letra : ''}".`,
@@ -168,7 +168,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as AbecedarioState;
+            const state = session.state as AbecedarioState;
 
             if (state.phase === 'done') {
                 return {

@@ -143,7 +143,7 @@ function matchesAnyOption(normalized: string, options: readonly SongOption[]): S
     return null;
 }
 
-export function createAdivinaCancionEngine(options?: { random?: RandomSource }): GameEngine {
+export function createAdivinaCancionEngine(options?: { random?: RandomSource }): GameEngine<AdivinaCancionState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): number => {
@@ -171,13 +171,13 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AdivinaCancionState => {
         const state = buildState(cfg);
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
     };
 
-    const advance = (session: GameSession, state: AdivinaCancionState): void => {
+    const advance = (_session: GameSession, state: AdivinaCancionState): void => {
         state.cursor += 1;
         const targetIndex = state.order[state.cursor];
         const target = SONG_BANK[targetIndex];
@@ -188,11 +188,11 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
     return {
         id: 'adivina_cancion',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaCancionState> {
             const state = buildState(optionsConfig);
             return {
                 id: 'adivina_cancion',
-                state: state as unknown as Record<string, unknown>,
+                state,
                 score: 0,
                 round: 1,
             };
@@ -200,7 +200,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as AdivinaCancionState;
+            const state = session.state as AdivinaCancionState;
             return {
                 prompt: `¡Vamos a adivinar canciones! Escucha con atención. ${songPrompt(state)}`,
                 valid: false,
@@ -212,7 +212,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as AdivinaCancionState;
+            const state = session.state as AdivinaCancionState;
 
             if (state.phase === 'done') {
                 return {

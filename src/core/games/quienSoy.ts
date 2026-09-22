@@ -322,7 +322,7 @@ function advanceSkippingMentioned(state: QuienSoyState): void {
     state.clueIndex = 0;
 }
 
-export function createQuienSoyEngine(options?: { random?: RandomSource }): GameEngine {
+export function createQuienSoyEngine(options?: { random?: RandomSource }): GameEngine<QuienSoyState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
@@ -350,7 +350,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             asked: [],
             fluGuess: null,
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -359,7 +359,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
     return {
         id: 'quien_soy',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<QuienSoyState> {
             adoptRandom(optionsConfig);
             return {
                 id: 'quien_soy',
@@ -382,7 +382,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as QuienSoyState;
+            const state = session.state as QuienSoyState;
             const item = itemAt(state);
             return {
                 prompt: `¡Vamos a jugar a ¿Quién soy?! Soy un animal. ${item ? cluePrompt(state, item) : ''}`,
@@ -395,7 +395,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as QuienSoyState;
+            const state = session.state as QuienSoyState;
 
             if (state.phase === 'done') {
                 return {
