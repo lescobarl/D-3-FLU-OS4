@@ -15,12 +15,12 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     RandomSource,
-    clamp,
     normalizeForMatch,
     hasToken,
     hasAnyToken,
     shuffleOrder,
     adoptRandom,
+    readRounds,
 } from './gameUtils';
 
 export interface SongOption {
@@ -146,12 +146,6 @@ function matchesAnyOption(normalized: string, options: readonly SongOption[]): S
 
 export function createAdivinaCancionEngine(options?: { random?: RandomSource }): GameEngine<AdivinaCancionState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readConfig = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
     const buildState = (cfg: Record<string, unknown> | undefined): AdivinaCancionState => {
         rng = adoptRandom(rng, cfg);
         const order = shuffleOrder(rng, SONG_BANK.length);
@@ -161,7 +155,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
         return {
             order,
             cursor: 0,
-            maxRounds: readConfig(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
             songId: target.id,
             options,

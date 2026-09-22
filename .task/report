@@ -1049,3 +1049,28 @@ REGRESION:
 
 NO VALIDADO (usuario): que los 19 juegos mantengan su aleatoriedad/determinismo
 esperado al jugar en su pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C60 (lectura de rounds unica)
+================================================================
+OBJETIVO UNICO: ninguna copia local de la lectura de rounds con clamps.
+
+ANTES: node scripts/audit-metric.mjs game-rounds -> 12
+  11 motores con readRounds + adivinaCancion con readConfig (mismo cuerpo).
+  guard tests/gameRoundsGuard.test.ts (nace ROJO): lista los 12.
+DESPUES: game-rounds -> 0 ; guard -> VERDE (5 tests).
+
+FIX: los 12 motores usan gameUtils.readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS)
+  (semantica identica: Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT,
+  clamp [1, MAX]). Se eliminan las defs locales y los import/defs de clamp que
+  quedaron huerfanos (8 imports + 2 clamps locales en palabrasEncadenadas y veoVeo).
+
+NO unificado A PROPOSITO: respiracion.readRondas usa las claves rondas/defaultRondas
+  (contrato de config distinto); unificarlo cambiaria su comportamiento. Decision.
+
+REGRESION:
+  antes:   284 archivos / 2954 tests / 0 fallos
+  despues: 285 archivos / 2959 tests / 0 fallos ; typecheck 0 ; lint limpio.
+
+NO VALIDADO (usuario): que los 12 juegos respeten su numero de rondas configurado
+al jugar en su pantalla.

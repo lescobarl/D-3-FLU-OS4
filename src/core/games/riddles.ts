@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { clamp, normalizeForMatch, hasAnyToken, hasToken, adoptRandom } from './gameUtils';
+import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -138,18 +138,12 @@ function currentPrompt(state: RiddlesState): string {
 
 export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
         rng = adoptRandom(rng, cfg);
         const state: RiddlesState = {
             order: shuffleOrder(rng),
             cursor: 0,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
         session.state = state;
@@ -168,7 +162,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
                 state: {
                     order: shuffleOrder(rng),
                     cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,

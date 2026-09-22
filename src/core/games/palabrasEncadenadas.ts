@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -59,11 +59,6 @@ interface PalabrasEncadenadasState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
 
 function hasToken(normalized = '', phrase = ''): boolean {
     if (!phrase) return false;
@@ -114,19 +109,13 @@ function continuationFor(playerWord: string, rng: RandomSource): string {
 
 export function createPalabrasEncadenadasEngine(options?: { random?: RandomSource }): GameEngine<PalabrasEncadenadasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState => {
         rng = adoptRandom(rng, cfg);
         const startWord = pickRandom(WORD_BANK, rng);
         const state: PalabrasEncadenadasState = {
             word: startWord,
             nextLetter: lastLetter(startWord),
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
         session.state = state;
@@ -146,7 +135,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 state: {
                     word: startWord,
                     nextLetter: lastLetter(startWord),
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,

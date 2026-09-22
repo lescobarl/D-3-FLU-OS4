@@ -17,6 +17,7 @@ import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasToken, hasAnyToken,
     adoptRandom,
+    readRounds,
 } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
@@ -102,12 +103,6 @@ function isOrderedMatch(sub: readonly string[], seq: readonly string[]): boolean
 
 export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource }): GameEngine<MemoriaSecuenciasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
     const readLongMax = (cfg: Record<string, unknown> | undefined): number => {
         const longMax = Number(cfg?.longMax) || Number(cfg?.longitudMax) || DEFAULT_LONG_MAX;
         return clamp(longMax, 1, MAX_LONG_MAX);
@@ -118,7 +113,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         const state: MemoriaSecuenciasState = {
             sequence: buildSequence(2, rng),
             cursor: 0,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             longMax: readLongMax(cfg),
             phase: 'announce',
         };
@@ -138,7 +133,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
                 state: {
                     sequence: buildSequence(2, rng),
                     cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     longMax: readLongMax(optionsConfig),
                     phase: 'announce',
                 },

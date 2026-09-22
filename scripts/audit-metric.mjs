@@ -241,6 +241,20 @@ function adoptRandomImpls() {
   return hits.sort()
 }
 
+// ---- C60: una sola lectura de `rounds` con clamps ------------------------
+const ROUNDS_COPY =
+  /Number\(cfg\?\.rounds\)\s*\|\|\s*Number\(cfg\?\.defaultRounds\)\s*\|\|\s*DEFAULT_ROUNDS/
+/** Archivos que reimplementan la lectura local de rounds (cfg.rounds/defaultRounds). */
+function roundsCopies() {
+  const hits = []
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (!/\.(ts|tsx|js|jsx)$/.test(r)) continue
+    if (ROUNDS_COPY.test(readFileSync(f, 'utf8'))) hits.push(r)
+  }
+  return hits.sort()
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -478,6 +492,8 @@ const metrics = {
   'daykey-impls': () => dateKeyImpls().length,
   // ---- C59 ---------------------------------------------------------------
   'game-adopt-random': () => adoptRandomImpls().length,
+  // ---- C60 ---------------------------------------------------------------
+  'game-rounds': () => roundsCopies().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')

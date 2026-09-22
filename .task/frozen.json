@@ -15,7 +15,7 @@
   "tests/agendaSingleSource.test.ts": "aa95a7511a0d49751e13226c35ba0d0b4f30a5f91a685cf64ae9cef9eb192113",
   "tests/agendaUiSwap.test.ts": "d4dcc689dcd50cc64e957acf9d182d185833dce9e791c3f57750cb92cf4fa2e1",
   "tests/voiceOfflineFallback.test.ts": "71201f7fe29d6b01be7663732d11fc06cfae795d35e05fecea5a3c97723d9cf1",
-  "scripts/audit-metric.mjs": "6121450e4aa0e2b3c4682f10801d4740fbf13428d9a947935c52b2baec5ca0e3",
+  "scripts/audit-metric.mjs": "229181bdfa2a3d09b31127965e08619dc603c7124b3316f9a5f390c2039bf507",
   "tests/vozInstanciaUnicaGuard.test.ts": "aa86e1e89175d4ae7962aad71c0d0bb161e370d6f6de968d1024d1c6e47b1eb5",
   "tests/searchAllowlistFuenteUnicaGuard.test.ts": "b8b37b17b5f37e1f8c5758107cfcece2b6405b8606ec2bcfc8b75778ee1b316c",
   "tests/voiceProfilesEscritorUnicoGuard.test.ts": "59289c85abc3e3c855a84a77f93f85f041f5197e039d2e7f5a7b5cd066a5d989",
@@ -67,5 +67,6 @@
   "tests/wakeInternalGuard.test.ts": "29da81aa96afe9c90b17adc72904333827b22894a8df83bda7a00fb0ed18b2c9",
   "tests/onboardingWriterGuard.test.ts": "f8ec6b198cd382537a962fda044f7c088280358c4cd41f6df590eba5f1d7bbd3",
   "tests/dateKeyGuard.test.ts": "6d2723d7291f762a34ab480590319586108412e8ea020368019c2d233d5ca005",
-  "tests/gameAdoptRandomGuard.test.ts": "9c630640c3f7d4edb38d2502aa53dd730b289b642663f75d9136646633276d54"
+  "tests/gameAdoptRandomGuard.test.ts": "9c630640c3f7d4edb38d2502aa53dd730b289b642663f75d9136646633276d54",
+  "tests/gameRoundsGuard.test.ts": "6addf4307d517adafc6edcce39d01c9a2eebfab2c9bbdbb5f1c928b3768b6529"
 }

@@ -1,31 +1,24 @@
 {
-  "id": "C59",
+  "id": "C60",
   "mode": "full",
-  "task": "Fuente única de la adopción del RNG en motores de juego",
-  "base": "1e407f8416f805e8cdba1382b1714edf2f8f5f67",
-  "objective": "Una única función (gameUtils.adoptRandom) adopta cfg.random; los 19 motores la consumen.",
+  "task": "Fuente unica de la lectura de rounds en motores de juego",
+  "base": "bbc90394b8a6b1daa6028a1ffa11eb0897fff934",
+  "objective": "Una unica funcion (gameUtils.readRounds) lee cfg.rounds/defaultRounds; los 12 motores la consumen.",
   "allow": [
     "src/core/games/gameUtils.ts",
     "src/core/games/abecedario.ts",
     "src/core/games/adivinaCancion.ts",
-    "src/core/games/adivinaNumero.ts",
-    "src/core/games/ahorcado.ts",
     "src/core/games/calculoMental.ts",
-    "src/core/games/cuentoColaborativo.ts",
-    "src/core/games/karaoke.ts",
-    "src/core/games/loteria.ts",
     "src/core/games/memoriaSecuencias.ts",
     "src/core/games/ordenaSecuencia.ts",
     "src/core/games/palabrasEncadenadas.ts",
     "src/core/games/quienSoy.ts",
     "src/core/games/repiteTraduce.ts",
     "src/core/games/riddles.ts",
-    "src/core/games/simonDice.ts",
-    "src/core/games/storyteller.ts",
     "src/core/games/trabalenguas.ts",
     "src/core/games/trivia.ts",
     "src/core/games/veoVeo.ts",
-    "tests/gameAdoptRandomGuard.test.ts"
+    "tests/gameRoundsGuard.test.ts"
   ],
   "deny": [
     ".task/**",
@@ -39,20 +32,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 25,
+  "maxFiles": 20,
   "maxLines": 500,
-  "dod": "npx vitest run tests/gameAdoptRandomGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/gameAdoptRandomGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/gameRoundsGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/gameRoundsGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Una sola implementación de la adopción del RNG (cfg.random)",
+    "statement": "Ninguna copia local de la lectura de rounds (cfg.rounds/defaultRounds)",
     "metric": {
-      "command": "node scripts/audit-metric.mjs game-adopt-random",
-      "target": 1
+      "command": "node scripts/audit-metric.mjs game-rounds",
+      "target": 0
     },
-    "base": "1e407f8416f805e8cdba1382b1714edf2f8f5f67",
+    "base": "bbc90394b8a6b1daa6028a1ffa11eb0897fff934",
     "guardFiles": [
-      "tests/gameAdoptRandomGuard.test.ts"
+      "tests/gameRoundsGuard.test.ts"
     ]
   }
 }

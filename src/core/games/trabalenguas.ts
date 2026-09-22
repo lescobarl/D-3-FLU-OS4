@@ -14,8 +14,9 @@
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
-    clamp, normalizeForMatch, hasToken, hasAnyToken,
+    normalizeForMatch, hasToken, hasAnyToken,
     adoptRandom,
+    readRounds,
 } from './gameUtils';
 
 export interface TrabalenguasItem {
@@ -76,18 +77,12 @@ function currentPrompt(state: TrabalenguasState): string {
 
 export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState => {
         rng = adoptRandom(rng, cfg);
         const state: TrabalenguasState = {
             order: TRABALENGUAS_BANK.map((_, index) => index),
             cursor: 0,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
         for (let i = state.order.length - 1; i > 0; i -= 1) {
@@ -115,7 +110,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
                 state: {
                     order,
                     cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,

@@ -16,8 +16,9 @@
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
-    clamp, normalizeForMatch, hasToken, hasAnyToken, resolveNumericAnswer,
+    normalizeForMatch, hasToken, hasAnyToken, resolveNumericAnswer,
     adoptRandom,
+    readRounds,
 } from './gameUtils';
 
 export interface TriviaQuestion {
@@ -133,12 +134,6 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
 
 export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine<TriviaState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
     const shuffledOrder = (): number[] => {
         const order = TRIVIA_BANK.map((_, index) => index);
         for (let i = order.length - 1; i > 0; i -= 1) {
@@ -153,7 +148,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
         const state: TriviaState = {
             order: shuffledOrder(),
             cursor: 0,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
         session.state = state;
@@ -172,7 +167,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
                 state: {
                     order: shuffledOrder(),
                     cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,
