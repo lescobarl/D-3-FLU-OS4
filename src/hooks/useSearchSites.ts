@@ -30,6 +30,7 @@ import {
 } from '../core/search/searchCatalog';
 import type { SearchSite, SearchSiteTile } from '../core/search/searchSiteTypes';
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
+import { logCaughtError } from '../lib/caughtError';
 
 // ------------------------------------------------------------
 // Tipos
@@ -78,7 +79,7 @@ export function useSearchSites(): UseSearchSitesResult {
       setSites(getSearchSites());
       setDynamic(await listDynamicSearchSites());
     } catch (err) {
-      console.error('[useSearchSites] refresh error:', err);
+      logCaughtError('[useSearchSites] refresh error', err);
     } finally {
       setLoading(false);
     }

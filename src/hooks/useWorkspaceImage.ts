@@ -16,6 +16,7 @@ import { aiService } from '../services/aiServiceFactory';
 import { fetchOpenRouterImageFallback } from '../voice/lib/imageGeneration';
 import { resolveTextApiKey } from '../core/config/appConfig';
 import { relayLog } from '../lib/clientLogRelay';
+import { logCaughtError } from '../lib/caughtError';
 
 /** Traza visible en el dev server (relayLog) para diagnosticar el eslabón de imagen. */
 function traceImage(label: string, extra: Record<string, unknown>) {
@@ -184,7 +185,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             }
         } catch (err) {
             if (requestRef.current !== requestId) return;
-            console.warn('[useWorkspaceImage] OpenRouter fallback failed:', err);
+            logCaughtError('[useWorkspaceImage] OpenRouter fallback failed', err);
             setIsLoading(false);
             setIsFailed(true);
         }
@@ -245,7 +246,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             }
         } catch (err) {
             if (requestRef.current !== requestId) return;
-            console.warn('[useWorkspaceImage] Generation failed:', err);
+            logCaughtError('[useWorkspaceImage] Generation failed', err);
             setIsLoading(false);
             setIsFailed(true);
         }

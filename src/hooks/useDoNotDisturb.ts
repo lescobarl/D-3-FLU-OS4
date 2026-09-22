@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { STORAGE_KEYS } from '../core/config/appConfig';
 import { describeDndSchedule, isDoNotDisturbActive } from '../core/dnd/dndPolicy';
+import { logCaughtError } from '../lib/caughtError';
 
 export interface DndSchedule {
   start: string;
@@ -50,7 +51,7 @@ function readStoredSchedule(fallback: DndSchedule): DndSchedule {
       return { start: parsed.start, end: parsed.end };
     }
   } catch {
-        console.warn('[catch] src/hooks/useDoNotDisturb.ts');
+        logCaughtError('[catch] src/hooks/useDoNotDisturb.ts');
     // ignorar valores corruptos → fallback
   }
   return fallback;

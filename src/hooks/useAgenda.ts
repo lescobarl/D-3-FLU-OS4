@@ -22,6 +22,7 @@ import type { AgendaService, AgendaCreateInput, AgendaTargetSelector } from '../
 import type { AgendaItem, AgendaKind, AgendaStatus } from '../core/agenda/agendaModel';
 import { createWebAudioDriver, type AudioDriver } from '../core/temporal/audioAlert';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { logCaughtError } from '../lib/caughtError';
 
 export type AgendaFireAction = 'sonar' | 'avisar' | 'marcar';
 
@@ -158,7 +159,7 @@ export function useAgenda({
                     }, autoStopMs);
                 }
             } catch (err) {
-                console.error('[useAgenda] scheduler tick error:', err);
+                logCaughtError('[useAgenda] scheduler tick error', err);
             } finally {
                 runningRef.current = false;
             }

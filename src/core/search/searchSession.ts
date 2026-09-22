@@ -13,6 +13,7 @@
 // ============================================================
 import { isDomainAllowed, normalizeHost } from '../browser/browserSession';
 import type { ResolvedLanguage } from './searchLanguage';
+import { logCaughtError } from '../../lib/caughtError';
 
 /** Resultado unificado de búsqueda (cualquier proveedor). */
 export interface SearchResult {
@@ -259,7 +260,7 @@ function extractHost(url: string): string {
     try {
         return new URL(url).hostname;
     } catch {
-        console.warn('[catch] src/core/search/searchSession.ts');
+        logCaughtError('[catch] src/core/search/searchSession.ts');
         return '';
     }
 }
@@ -294,7 +295,7 @@ function deriveOrigin(endpoint: string): string {
     try {
         return new URL(clean).origin;
     } catch {
-        console.warn('[catch] src/core/search/searchSession.ts');
+        logCaughtError('[catch] src/core/search/searchSession.ts');
         return '';
     }
 }

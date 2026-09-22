@@ -107,8 +107,12 @@ function countSilentCatches() {
         }
       }
       const body = src.slice(open + 1, i)
+      // Un catch esta "manejado" si PROPAGA o REGISTRA. `console.*` NO cuenta:
+      // un warn por consola no es registro (AGENTS.md 2.6). Vias validas:
+      // throw/reject/emit, setError/onError, el registro central
+      // (logCaughtError/relayLog/auditLog/...) o la marca explicita `ignorado:`.
       const handled =
-        /\b(throw|console\.|relayLog|logger|log\w*\s*\(|report\w*\s*\(|reject\s*\(|notification|setError|onError|emit\w*\s*\()/.test(
+        /\b(throw|relayLog|logCaughtError|systemEventLog|auditLog|logAudit|reportError|reject\s*\(|setError|onError|emit\w*\s*\()|ignorado:/.test(
           body,
         )
       if (!handled) n += 1

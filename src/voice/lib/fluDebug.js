@@ -10,6 +10,7 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { rowDuplicatesPrior, utterancesRelate, validateLogRowsNoPrefixDup } from './conversationStream.js'
 import { sortSessionSpeakers } from './voiceIdentity.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const VIOLATION_RING = 40
@@ -559,7 +560,7 @@ export function fluDebugHot(action, payload = {}) {
         break
     }
   } catch (error) {
-        console.warn('[catch] src/voice/lib/fluDebug.js:', error);
+        logCaughtError('[catch] src/voice/lib/fluDebug.js', error);
     recordViolation('debug-hot-crash', {
       action,
       message: String(error?.message || error),

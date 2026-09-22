@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type MateriaGrisRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createMateriaGrisService,
   type AwardInput,
@@ -90,7 +91,7 @@ export function useMateriaGris({ now }: UseMateriaGrisOptions = {}): UseMateriaG
       setLeaderboard(rows);
       setHistory(entries);
     } catch (err) {
-      console.error('[useMateriaGris] refresh error:', err);
+      logCaughtError('[useMateriaGris] refresh error', err);
     } finally {
       setLoading(false);
     }

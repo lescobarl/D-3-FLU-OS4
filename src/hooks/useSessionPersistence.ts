@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useEffect, useRef } from 'react';
+import { logCaughtError } from '../lib/caughtError';
 import {
     loadUiSessionState,
     saveUiSessionState,
@@ -48,7 +49,7 @@ export async function loadSessionState(): Promise<SessionState> {
         const stored = await loadUiSessionState();
         if (stored) return { ...DEFAULT_SESSION, ...stored };
     } catch (err) {
-        console.warn('[SessionPersistence] loadSessionState failed:', err);
+        logCaughtError('[SessionPersistence] loadSessionState failed', err);
     }
     return { ...DEFAULT_SESSION };
 }
@@ -62,7 +63,7 @@ export async function saveSessionState(state: Partial<SessionState>): Promise<vo
         const merged = { ...DEFAULT_SESSION, ...(current || {}), ...state };
         await saveUiSessionState(merged);
     } catch (err) {
-        console.warn('[SessionPersistence] saveSessionState failed:', err);
+        logCaughtError('[SessionPersistence] saveSessionState failed', err);
     }
 }
 
@@ -73,7 +74,7 @@ export async function clearSessionState(): Promise<void> {
     try {
         await clearUiSessionState();
     } catch (err) {
-        console.warn('[SessionPersistence] clearSessionState failed:', err);
+        logCaughtError('[SessionPersistence] clearSessionState failed', err);
     }
 }
 

@@ -20,6 +20,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage';
 import { DEFAULT_AMBIENTE_ID, isAmbienteId } from '../core/environments/environmentRegistry';
+import { logCaughtError } from '../lib/caughtError';
 
 // -----------------------------------------------------------
 // Clave de persistencia (única fuente de verdad del formato)
@@ -107,7 +108,7 @@ export function readPersistedActiveAmbienteId(): string | null {
         const id = parsed?.state?.activeAmbienteId;
         return typeof id === 'string' && id ? id : null;
     } catch {
-        console.warn('[catch] src/store/environmentStore.ts');
+        logCaughtError('[catch] src/store/environmentStore.ts');
         return null;
     }
 }

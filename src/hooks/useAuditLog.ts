@@ -6,6 +6,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
+import { logCaughtError } from '../lib/caughtError';
 import {
     addAuditLog,
     getAuditLogs,
@@ -28,7 +29,7 @@ export function useAuditLog() {
             const entries = await getAuditLogs(200);
             setLogs(entries);
         } catch (err) {
-            console.error('[useAuditLog] Error loading logs:', err);
+            logCaughtError('[useAuditLog] Error loading logs', err);
         } finally {
             setLoading(false);
         }

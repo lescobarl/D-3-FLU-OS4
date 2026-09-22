@@ -25,6 +25,7 @@ import { DEFAULT_AI_FALLBACK_ORDER } from '../../core/config/sharedConfig';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { v4 as uuidv4 } from 'uuid';
 import type { ComponentHealth, HealthMonitor } from './healthMonitor';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -358,7 +359,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-        console.warn('[catch] src/core/autonomy/autoRecovery.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'switch_ai_provider',
@@ -408,7 +409,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-        console.warn('[catch] src/core/autonomy/autoRecovery.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'restart_component',
@@ -445,7 +446,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-        console.warn('[catch] src/core/autonomy/autoRecovery.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'enable_degraded_mode',
@@ -486,7 +487,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-        console.warn('[catch] src/core/autonomy/autoRecovery.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'restore_from_backup',
@@ -519,7 +520,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-        console.warn('[catch] src/core/autonomy/autoRecovery.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'notify_user',
@@ -562,7 +563,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-        console.warn('[catch] src/core/autonomy/autoRecovery.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'escalate_to_admin',

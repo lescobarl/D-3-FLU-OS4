@@ -30,6 +30,7 @@ import type {
 } from '../core/ai/IAIService';
 import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import { postGeminiContract } from './geminiContractClient';
+import { logCaughtError } from '../lib/caughtError';
 import {
     BaseAIService,
     type AIVisionAnalysisResult,
@@ -81,7 +82,7 @@ function resolveCreativityTemperature(): number | undefined {
             return state.advancedConfig.creativity;
         }
     } catch {
-        console.warn('[catch] src/services/gemini.ts');
+        logCaughtError('[catch] src/services/gemini.ts');
         // Store not available (e.g. test environment)
     }
     return undefined;
@@ -400,7 +401,7 @@ Responde como ${botName}:`;
             };
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
-            console.warn('[Gemini] Workspace image generation failed:', detail || error);
+            logCaughtError('[Gemini] Workspace image generation failed', detail || error);
             // Fallback: build URL directly (Pollinations is stateless, no API key needed)
             try {
                 const imageUrl = buildPollinationsUrl(prompt);
@@ -415,7 +416,7 @@ Responde como ${botName}:`;
                     },
                 };
             } catch {
-                console.warn('[catch] src/services/gemini.ts');
+                logCaughtError('[catch] src/services/gemini.ts');
                 return {
                     image_url: '',
                     trace: {
@@ -463,7 +464,7 @@ Responde como ${botName}:`;
             return await response.json();
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
-            console.warn('[Gemini] Vision analysis failed:', detail || error);
+            logCaughtError('[Gemini] Vision analysis failed', detail || error);
             return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' };
         }
     }

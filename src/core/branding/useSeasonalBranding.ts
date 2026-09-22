@@ -18,6 +18,7 @@ import { addAuditLog } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
 import { getActiveSeason, type CustomEvent, type SeasonalEvent } from './seasonalCalendar';
 import { getPalette, applyPaletteToCSS, resetPaletteToDefault, type Palette } from './seasonalPalettes';
+import { logCaughtError } from '../../lib/caughtError';
 
 // ============================================================
 // Types
@@ -116,7 +117,7 @@ async function loadConfigFromDB(): Promise<BrandingConfig> {
                             config.customEvents = parsed;
                         }
                     } catch {
-        console.warn('[catch] src/core/branding/useSeasonalBranding.ts'); /* ignore */ }
+        logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts'); /* ignore */ }
                     break;
                 case CONFIG_KEYS.CELEBRATE_ACHIEVEMENTS:
                     config.celebrateAchievements = record.value === 'true';
@@ -143,7 +144,7 @@ async function loadConfigFromDB(): Promise<BrandingConfig> {
 
         return config;
     } catch {
-        console.warn('[catch] src/core/branding/useSeasonalBranding.ts');
+        logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts');
         return { ...DEFAULT_CONFIG };
     }
 }

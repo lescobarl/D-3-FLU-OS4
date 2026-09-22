@@ -17,6 +17,7 @@
 
 import type { ContactRecord } from '../db/fluDatabase';
 import { DEVICE_ACTIONS_CONFIG } from '../config/appConfig';
+import { logCaughtError } from '../../lib/caughtError';
 
 // ------------------------------------------------------------
 // Tipos
@@ -156,7 +157,7 @@ export function createDeviceActionService({
     try {
       return await resolveContact(name);
     } catch {
-        console.warn('[catch] src/core/deviceActions/deviceActionService.ts');
+        logCaughtError('[catch] src/core/deviceActions/deviceActionService.ts');
       return undefined;
     }
   };

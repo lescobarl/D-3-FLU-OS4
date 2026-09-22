@@ -28,6 +28,7 @@ export interface MusicSearchClient {
 export type StreamProbe = (url: string, timeoutMs?: number) => Promise<boolean>
 
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig'
+import { logCaughtError } from '../lib/caughtError';
 
 const SEARCH_ROWS = 5
 
@@ -108,7 +109,7 @@ async function probeWithRange(url: string, timeoutMs: number): Promise<boolean> 
     })
     return res.ok
   } catch {
-        console.warn('[catch] src/services/musicSearch.ts');
+        logCaughtError('[catch] src/services/musicSearch.ts');
     return false
   }
 }

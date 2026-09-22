@@ -29,6 +29,7 @@ import {
   type UpsertResult,
 } from '../core/multiuser/participantRegistry';
 import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
+import { logCaughtError } from '../lib/caughtError';
 
 // ------------------------------------------------------------
 // Tipos
@@ -109,7 +110,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
       const all = await service.list();
       setParticipants(all);
     } catch (err) {
-      console.error('[useParticipants] refresh error:', err);
+      logCaughtError('[useParticipants] refresh error', err);
     } finally {
       setLoading(false);
     }
@@ -178,7 +179,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
             });
           }
         } catch (err) {
-          console.error('[useParticipants] onboarding cleanup error:', err);
+          logCaughtError('[useParticipants] onboarding cleanup error', err);
         }
         try {
           if (typeof window !== 'undefined') {
@@ -186,7 +187,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
             if (active === id) window.localStorage.removeItem(STORAGE_KEYS.ACTIVE_USER);
           }
         } catch (err) {
-          console.error('[useParticipants] active-user cleanup error:', err);
+          logCaughtError('[useParticipants] active-user cleanup error', err);
         }
         await refresh();
       }

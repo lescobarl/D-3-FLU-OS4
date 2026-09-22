@@ -16,6 +16,7 @@ import type {
 } from '../types/bunny';
 import { EXPRESSION_MAP } from '../expressionMap';
 import { relayLog } from '../../lib/clientLogRelay';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Helpers
@@ -408,7 +409,7 @@ export function ensureAvatarPantsVisible(): void {
             }
         }
     } catch (error) {
-        console.warn('[Avatar Init] Could not check avatar pants:', error);
+        logCaughtError('[Avatar Init] Could not check avatar pants', error);
     }
 }
 

@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // AppConfig — Centralized Application Configuration
 // ============================================================
@@ -612,7 +614,7 @@ export function readStorage<T>(key: string, defaultValue: T): T {
         if (raw === null) return defaultValue;
         return raw as unknown as T;
     } catch {
-        console.warn('[catch] src/core/config/appConfig.ts');
+        logCaughtError('[catch] src/core/config/appConfig.ts');
         return defaultValue;
     }
 }
@@ -625,7 +627,7 @@ export function writeStorage(key: string, value: string): void {
     try {
         localStorage.setItem(key, value);
     } catch {
-        console.warn('[catch] src/core/config/appConfig.ts');
+        logCaughtError('[catch] src/core/config/appConfig.ts');
         // Silencioso: el storage puede no estar disponible (privacidad/quota)
     }
 }
@@ -709,7 +711,7 @@ export function resolveFalApiKey(): string {
     try {
         return String(import.meta.env.VITE_FALAI_API_KEY ?? '').trim();
     } catch {
-        console.warn('[catch] src/core/config/appConfig.ts');
+        logCaughtError('[catch] src/core/config/appConfig.ts');
         return '';
     }
 }

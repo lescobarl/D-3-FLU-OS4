@@ -51,6 +51,7 @@ import type { SearchSite } from '../core/search/searchSiteTypes';
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
 import { SearchCatalogPanel } from './SearchCatalogPanel';
 import { useSettingsSaveRegistration } from './SettingsSaveContext';
+import { logCaughtError } from '../lib/caughtError';
 
 export interface SearchControlCenterProps {
   /** Overrides persistidos vigentes (cargados en App). */
@@ -270,7 +271,7 @@ export function SearchControlCenter({
       }
       setPreview({ state: 'done', results: fetched.results, ai });
     } catch {
-        console.warn('[catch] src/components/SearchControlCenter.tsx');
+        logCaughtError('[catch] src/components/SearchControlCenter.tsx');
       setPreview({ state: 'error', results: [], ai: '' });
     }
   };

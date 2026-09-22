@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fluDb, newId, type MinuteRecord, type MinuteSummarySnapshot, type KnowledgeKind } from '../core/db/fluDatabase';
 import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
+import { logCaughtError } from '../lib/caughtError';
 
 /**
  * Minuta en formato de UI (compatible con OS2 normalizeMinuteKnowledgeRecord).
@@ -203,7 +204,7 @@ export function useMinuteKnowledge(participantId?: string) {
                     .map(toUI),
             );
         } catch (err) {
-            console.error('[useMinuteKnowledge] Error loading minutes:', err);
+            logCaughtError('[useMinuteKnowledge] Error loading minutes', err);
         } finally {
             setLoading(false);
         }

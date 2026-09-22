@@ -3,6 +3,7 @@
  */
 import { encodePcmChunk } from './pcmAudio.js'
 import { nowPerf } from './audioSegmentClock.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const WORKLET_NAME = 'flu-mic-capture'
 
@@ -83,13 +84,13 @@ export async function wireMicCapturePipeline({
         workletNode.port.onmessage = null
         workletNode.disconnect()
       } catch {
-        console.warn('[catch] src/voice/lib/micCaptureBridge.js');
+        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js');
         // ignore
       }
       try {
         zeroGain.disconnect()
       } catch {
-        console.warn('[catch] src/voice/lib/micCaptureBridge.js');
+        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js');
         // ignore
       }
     },

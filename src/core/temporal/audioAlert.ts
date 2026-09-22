@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // Audio Alert — Tono de alarma con WebAudio (degradación elegante)
 // ------------------------------------------------------------
@@ -72,7 +74,7 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
     try {
       return Boolean(getContext());
     } catch {
-        console.warn('[catch] src/core/temporal/audioAlert.ts');
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
       return false;
     }
   };
@@ -132,7 +134,7 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
         repeatTimers.push(timer);
       }
     } catch {
-        console.warn('[catch] src/core/temporal/audioAlert.ts');
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
       // Degradación elegante: el hook avisa con toast + voz.
     }
   };
@@ -150,19 +152,19 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
       try {
         node?.osc?.stop(0);
       } catch {
-        console.warn('[catch] src/core/temporal/audioAlert.ts');
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
         /* ya detenido */
       }
       try {
         node?.osc?.disconnect?.();
       } catch {
-        console.warn('[catch] src/core/temporal/audioAlert.ts');
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
         /* ignorar */
       }
       try {
         node?.gain?.disconnect?.();
       } catch {
-        console.warn('[catch] src/core/temporal/audioAlert.ts');
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
         /* ignorar */
       }
     }

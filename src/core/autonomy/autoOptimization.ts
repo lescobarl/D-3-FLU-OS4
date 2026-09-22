@@ -20,6 +20,7 @@
 
 import { emitAutonomyEvent } from './autonomyEvents';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -801,7 +802,7 @@ export class AutoOptimizationSystem {
                     this.optimizer.applyOptimization(result);
                 }
             } catch (error) {
-                console.error(`Error evaluando parámetro ${parameter}:`, error);
+                logCaughtError(`Error evaluando parámetro ${parameter}:`, error);
             }
         }
     }

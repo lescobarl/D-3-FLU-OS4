@@ -208,6 +208,7 @@ import { buildFluSpeechAuditRows, deriveUserLastText, selectVisiblePhrase } from
 import { evaluateListenParity } from './voice/lib/listenParity';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
+import { logCaughtError } from './lib/caughtError';
 
 // ============================================================
 // Tipo para las pestañas del panel derecho
@@ -750,7 +751,7 @@ async function speakGameText(text: string, ctx: ApplyGameContext, opts?: GameSpe
         try {
             await speakPromise;
         } catch (speechErr) {
-            console.warn('[Juego] speakFlu failed:', speechErr);
+            logCaughtError('[Juego] speakFlu failed', speechErr);
         }
     }
     const nextResumeState = ctx.conversationActiveRef.current ? 'LISTENING' : 'IDLE';
@@ -1754,7 +1755,7 @@ function App() {
                 }
                 if (!cancelled) void notes.refresh();
             } catch (err) {
-                console.error('[App] demo seed error:', err);
+                logCaughtError('[App] demo seed error', err);
             }
         })();
         return () => {
@@ -2877,7 +2878,7 @@ function App() {
                     try {
                         await speakPromise;
                     } catch (speechErr) {
-                        console.warn('[App] speakFlu failed:', speechErr);
+                        logCaughtError('[App] speakFlu failed', speechErr);
                     }
                 }
                 // Continuous mode: SPEAKING → LISTENING directly (no frozen IDLE
@@ -2985,7 +2986,7 @@ function App() {
                         participantIdRef: realParticipantIdRef,
                     });
                 } catch (err) {
-                    console.error('[App] applyGameAction failed (non-critical):', err);
+                    logCaughtError('[App] applyGameAction failed (non-critical)', err);
                 }
             }
 
@@ -3026,7 +3027,7 @@ function App() {
                         await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
                     }
                 } catch (err) {
-                    console.error('[App] applyEnvironment failed (non-critical):', err);
+                    logCaughtError('[App] applyEnvironment failed (non-critical)', err);
                 }
             }
 
@@ -3073,7 +3074,7 @@ function App() {
                         setDebugLogsEnabled,
                     });
                 } catch (err) {
-                    console.error('[App] applyConfigAction failed (non-critical):', err);
+                    logCaughtError('[App] applyConfigAction failed (non-critical)', err);
                     // No relanzar — el contrato ya se procesó exitosamente
                 }
             }
@@ -3388,7 +3389,7 @@ function App() {
                         try {
                             await speakFluRef.current(ackText, currentLang);
                         } catch {
-        console.warn('[catch] src/App.tsx');
+        logCaughtError('[catch] src/App.tsx');
                             // Sin TTS disponible: continuar igual.
                         }
                     }
@@ -3401,7 +3402,7 @@ function App() {
                     // habla del asistente antes de intentar abrir el micrófono.
                     await waitForSpeechIdle();
                 } catch {
-        console.warn('[catch] src/App.tsx');
+        logCaughtError('[catch] src/App.tsx');
                     // Sin habla activa / timeout: continuar igual.
                 }
                 // Abre la escucha EN MODO CONVERSACIÓN (dueño único del modo):
@@ -3503,7 +3504,7 @@ function App() {
                     return;
                 }
             } catch (err) {
-                console.error('[App] error al resolver el completado del onboarding:', err);
+                logCaughtError('[App] error al resolver el completado del onboarding', err);
             }
         },
         [onboarding, participants, activateParticipant],
@@ -3964,7 +3965,7 @@ function App() {
                             result.texto_extraido = ocr.text;
                         }
                     } catch (ocrErr) {
-                        console.warn('[App] OCR fallback failed:', ocrErr);
+                        logCaughtError('[App] OCR fallback failed', ocrErr);
                     }
                 }
 
@@ -4033,7 +4034,7 @@ function App() {
                     speakFlu(greeting, language);
                 }
             } catch (err) {
-                console.warn('[App] Vision analysis failed:', err);
+                logCaughtError('[App] Vision analysis failed', err);
                 setUploadError(
                     pickLabel(
                         FLU_CONFIG.ui?.workspace?.uploadErrorImage,
@@ -4385,7 +4386,7 @@ const {
         try {
             lastSessionDay = window.localStorage.getItem(dayStorageKey) || '';
         } catch {
-        console.warn('[catch] src/App.tsx');
+        logCaughtError('[catch] src/App.tsx');
             lastSessionDay = '';
         }
         dayRolloverDoneRef.current = true;
@@ -4411,7 +4412,7 @@ const {
             try {
                 window.localStorage.setItem(dayStorageKey, dayKey(Date.now()));
             } catch {
-        console.warn('[catch] src/App.tsx');
+        logCaughtError('[catch] src/App.tsx');
                 /* ignorar */
             }
         })();
@@ -4460,7 +4461,7 @@ const {
                 try {
                     await speakResponse(commandSpeech, language);
                 } catch (speechErr) {
-                    console.warn('[App] CERRAR_ESCUCHA speech failed:', speechErr);
+                    logCaughtError('[App] CERRAR_ESCUCHA speech failed', speechErr);
                 }
             }
             await os2StopListening({ closing: true });
@@ -4480,7 +4481,7 @@ const {
             try {
                 await speakResponse(commandSpeech, language);
             } catch (speechErr) {
-                console.warn('[App] ABRIR_ESCUCHA speech failed:', speechErr);
+                logCaughtError('[App] ABRIR_ESCUCHA speech failed', speechErr);
             }
         }
         await conversationMode.open({ resume: true });
@@ -4502,7 +4503,7 @@ const {
                 try {
                     await speakResponse(commandSpeech, language);
                 } catch (speechErr) {
-                    console.warn('[App] INICIAR_CONVERSACION speech failed:', speechErr);
+                    logCaughtError('[App] INICIAR_CONVERSACION speech failed', speechErr);
                 }
             }
         }
@@ -4959,7 +4960,7 @@ const {
                             try {
                                 await speakResponse(draft, language);
                             } catch (err) {
-                                console.warn('[App] speakResponse failed for participant draft:', err);
+                                logCaughtError('[App] speakResponse failed for participant draft', err);
                             }
                             fluParticipant.endFloorDelivery();
                             fluParticipant.recordInterventionDelivered();

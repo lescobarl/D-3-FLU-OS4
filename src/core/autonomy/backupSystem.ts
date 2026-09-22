@@ -24,6 +24,7 @@ import { useIntegrationStore } from '../../store/integrationStore';
 import { v4 as uuidv4 } from 'uuid';
 import type { ConversationEntry, ConversationState, VoiceBridgeEvent, WorkspaceEntry } from '../../types/bridge';
 import type { MinuteUIEntry } from '../../hooks/useMinuteKnowledge';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -210,7 +211,7 @@ class DataExtractor {
                 lastUpdated: Date.now(),
             };
         } catch (error) {
-            console.error('Error extrayendo estado de conversación:', error);
+            logCaughtError('Error extrayendo estado de conversación', error);
         }
         return null;
     }
@@ -231,7 +232,7 @@ class DataExtractor {
                 maxTokens: readStorage(STORAGE_KEYS.AI_MAX_TOKENS, String(DEEPSEEK_CONFIG.DEFAULT_MAX_TOKENS)),
             };
         } catch (error) {
-            console.error('Error extrayendo configuración de IA:', error);
+            logCaughtError('Error extrayendo configuración de IA', error);
         }
         return null;
     }
@@ -259,7 +260,7 @@ class DataExtractor {
                 },
             };
         } catch (error) {
-            console.error('Error extrayendo preferencias de usuario:', error);
+            logCaughtError('Error extrayendo preferencias de usuario', error);
         }
         return null;
     }
@@ -275,7 +276,7 @@ class DataExtractor {
             // Fallback: leer desde integrationStore (minuteHistory)
             return useIntegrationStore.getState().minuteHistory || [];
         } catch (error) {
-            console.error('Error extrayendo historial de minutos:', error);
+            logCaughtError('Error extrayendo historial de minutos', error);
         }
         return [];
     }
@@ -287,7 +288,7 @@ class DataExtractor {
                 workspaceArtifact: state.workspaceArtifact || null,
             };
         } catch (error) {
-            console.error('Error extrayendo datos de workspace:', error);
+            logCaughtError('Error extrayendo datos de workspace', error);
         }
         return null;
     }
@@ -321,7 +322,7 @@ class DataExtractor {
                 backupCount: parseInt(readStorage(STORAGE_KEYS.BACKUP_COUNT, '0')),
             };
         } catch (error) {
-            console.error('Error extrayendo configuración del sistema:', error);
+            logCaughtError('Error extrayendo configuración del sistema', error);
         }
         return null;
     }
@@ -376,7 +377,7 @@ class DataRestorer {
             }));
             return true;
         } catch (error) {
-            console.error('Error restaurando estado de conversación:', error);
+            logCaughtError('Error restaurando estado de conversación', error);
         }
         return false;
     }
@@ -415,7 +416,7 @@ class DataRestorer {
             
             return true;
         } catch (error) {
-            console.error('Error restaurando configuración de IA:', error);
+            logCaughtError('Error restaurando configuración de IA', error);
         }
         return false;
     }
@@ -473,7 +474,7 @@ class DataRestorer {
             
             return true;
         } catch (error) {
-            console.error('Error restaurando preferencias de usuario:', error);
+            logCaughtError('Error restaurando preferencias de usuario', error);
         }
         return false;
     }
@@ -494,7 +495,7 @@ class DataRestorer {
             
             return true;
         } catch (error) {
-            console.error('Error restaurando historial de minutos:', error);
+            logCaughtError('Error restaurando historial de minutos', error);
         }
         return false;
     }
@@ -510,7 +511,7 @@ class DataRestorer {
             
             return true;
         } catch (error) {
-            console.error('Error restaurando datos de workspace:', error);
+            logCaughtError('Error restaurando datos de workspace', error);
         }
         return false;
     }
@@ -564,7 +565,7 @@ class DataRestorer {
             
             return true;
         } catch (error) {
-            console.error('Error restaurando configuración del sistema:', error);
+            logCaughtError('Error restaurando configuración del sistema', error);
         }
         return false;
     }
@@ -679,7 +680,7 @@ class BackupManager implements IBackupManager {
             
             return metadata;
         } catch (error) {
-            console.error('Error creando backup:', error);
+            logCaughtError('Error creando backup', error);
             return null;
         }
     }
@@ -740,7 +741,7 @@ class BackupManager implements IBackupManager {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
-            console.error('Error restaurando backup:', error);
+            logCaughtError('Error restaurando backup', error);
             return {
                 success: false,
                 restoredComponents,
@@ -774,7 +775,7 @@ class BackupManager implements IBackupManager {
             
             return true;
         } catch (error) {
-            console.error('Error eliminando backup:', error);
+            logCaughtError('Error eliminando backup', error);
             return false;
         }
     }
@@ -787,7 +788,7 @@ class BackupManager implements IBackupManager {
                 const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
                 if (raw) total += raw.length * 2; // UTF-16
             } catch {
-        console.warn('[catch] src/core/autonomy/backupSystem.ts');
+        logCaughtError('[catch] src/core/autonomy/backupSystem.ts');
                 /* ignorar entradas ilegibles */
             }
         }
@@ -818,14 +819,14 @@ class BackupManager implements IBackupManager {
                     const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
                     if (raw) total -= raw.length * 2;
                 } catch {
-        console.warn('[catch] src/core/autonomy/backupSystem.ts');
+        logCaughtError('[catch] src/core/autonomy/backupSystem.ts');
                     /* ignorar */
                 }
                 this.deleteBackup(backup.id);
                 deletedCount++;
             }
         } catch (error) {
-            console.error('Error limpiando backups antiguos:', error);
+            logCaughtError('Error limpiando backups antiguos', error);
         }
 
         return deletedCount;
@@ -842,7 +843,7 @@ class BackupManager implements IBackupManager {
             // Comparar con checksum almacenado
             return currentChecksum === backup.metadata.checksum;
         } catch (error) {
-            console.error('Error verificando integridad del backup:', error);
+            logCaughtError('Error verificando integridad del backup', error);
             return false;
         }
     }
@@ -854,7 +855,7 @@ class BackupManager implements IBackupManager {
             return true;
         } catch (error) {
             if ((error as DOMException)?.name !== 'QuotaExceededError') {
-                console.error('Error guardando backup:', error);
+                logCaughtError('Error guardando backup', error);
             }
             return false;
         }
@@ -899,7 +900,7 @@ class BackupManager implements IBackupManager {
             
             return backup;
         } catch (error) {
-            console.error('Error cargando backup:', error);
+            logCaughtError('Error cargando backup', error);
             return null;
         }
     }
@@ -911,7 +912,7 @@ class BackupManager implements IBackupManager {
                 this.backups = JSON.parse(listJson);
             }
         } catch (error) {
-            console.error('Error cargando lista de backups:', error);
+            logCaughtError('Error cargando lista de backups', error);
             this.backups = [];
         }
     }
@@ -920,7 +921,7 @@ class BackupManager implements IBackupManager {
         try {
             localStorage.setItem(STORAGE_KEYS.BACKUP_LIST, JSON.stringify(this.backups));
         } catch (error) {
-            console.error('Error guardando lista de backups:', error);
+            logCaughtError('Error guardando lista de backups', error);
         }
     }
     
@@ -968,7 +969,7 @@ class BackupManager implements IBackupManager {
             sizeStats.average = sizeStats.total / sizeStats.count;
             localStorage.setItem(STORAGE_KEYS.BACKUP_SIZE_STATS, JSON.stringify(sizeStats));
         } catch (error) {
-            console.error('Error actualizando estadísticas de backup:', error);
+            logCaughtError('Error actualizando estadísticas de backup', error);
         }
     }
 }

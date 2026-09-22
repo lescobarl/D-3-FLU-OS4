@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type DiaryEntryRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createDiaryService,
   type AddDiaryResult,
@@ -84,7 +85,7 @@ export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
       const rows = await service.listEntries();
       setEntries(rows);
     } catch (err) {
-      console.error('[useDiary] refresh error:', err);
+      logCaughtError('[useDiary] refresh error', err);
     } finally {
       setLoading(false);
     }

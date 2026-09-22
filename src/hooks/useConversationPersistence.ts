@@ -15,6 +15,7 @@ import { fluDb, type ConversationRow } from '../core/db/fluDatabase';
 import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
+import { logCaughtError } from '../lib/caughtError';
 
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
@@ -187,7 +188,7 @@ export function useConversationPersistence(participantId?: string) {
                     }
                 }
             } catch (err) {
-                console.error('[ConversationPersistence] Error loading history:', err);
+                logCaughtError('[ConversationPersistence] Error loading history', err);
             }
         })();
     }, [scope]);

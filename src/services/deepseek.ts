@@ -18,6 +18,7 @@
 
 import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { fetchTextEngine } from '../core/ai/httpClient';
+import { logCaughtError } from '../lib/caughtError';
 import type {
     AIRequestOptions,
     AIHistoryEntry,
@@ -47,7 +48,7 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
 
     const stored = (() => {
         try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY); } catch {
-        console.warn('[catch] src/services/deepseek.ts'); return null; }
+        logCaughtError('[catch] src/services/deepseek.ts'); return null; }
     })();
     if (stored && stored.trim()) {
         return { apiKey: stored.trim(), apiKeySource: 'localStorage' };
@@ -74,7 +75,7 @@ function resolveCreativityTemperature(): number | undefined {
             }
         }
     } catch {
-        console.warn('[catch] src/services/deepseek.ts');
+        logCaughtError('[catch] src/services/deepseek.ts');
         // ignore
     }
     return OPENROUTER_CONFIG.DEFAULT_TEMPERATURE;
@@ -214,7 +215,7 @@ class DeepSeekService extends BaseAIService {
             try {
                 parsed = JSON.parse(responseText);
             } catch {
-                console.warn('[catch] src/services/deepseek.ts');
+                logCaughtError('[catch] src/services/deepseek.ts');
                 // Fallback if JSON parsing fails
                 parsed = {};
             }
@@ -372,7 +373,7 @@ Formato de respuesta (JSON):
             try {
                 parsed = JSON.parse(responseText);
             } catch {
-                console.warn('[catch] src/services/deepseek.ts');
+                logCaughtError('[catch] src/services/deepseek.ts');
                 parsed = { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 };
             }
 
@@ -414,7 +415,7 @@ Formato de respuesta (JSON):
             };
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
-            console.warn('[Text engine] Workspace image generation failed:', detail || error);
+            logCaughtError('[Text engine] Workspace image generation failed', detail || error);
             return {
                 image_url: '',
                 trace: {
@@ -494,7 +495,7 @@ Formato de respuesta (JSON):
             try {
                 parsed = JSON.parse(responseText);
             } catch {
-                console.warn('[catch] src/services/deepseek.ts');
+                logCaughtError('[catch] src/services/deepseek.ts');
                 parsed = {
                     materia: 'Desconocida',
                     problemas: [],

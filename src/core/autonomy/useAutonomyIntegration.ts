@@ -50,6 +50,7 @@ import {
     type BackupSystemConfig
 } from './backupSystem';
 import { onAutonomyEvent, emitAutonomyEvent, type AutonomyEvent } from './autonomyEvents';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -285,7 +286,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
                 }
 
             } catch (error) {
-                console.error('Error inicializando sistemas de autonomía:', error);
+                logCaughtError('Error inicializando sistemas de autonomía', error);
                 setState(prev => ({
                     ...prev,
                     status: 'degraded',
@@ -480,7 +481,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
             });
         } catch (err) {
             // No debe poder tumbar la app aunque el componente esté desmontándose
-            console.warn('[Autonomy] stopAllSystems: actualización de estado omitida durante unmount:', err);
+            logCaughtError('[Autonomy] stopAllSystems: actualización de estado omitida durante unmount', err);
         }
     }, [addNotification]);
 

@@ -28,6 +28,7 @@ import {
 import type { IntegrationStore } from '../store/integrationStore';
 import { buildSelfManifesto } from '../core/selfKnowledge/selfKnowledge';
 import type { AuditLogEntry } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
@@ -261,7 +262,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] ANALIZAR_DOCUMENTO command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] ANALIZAR_DOCUMENTO command speech failed', speechErr);
                     }
                 }
                 scheduleResumeListening(commandSpeech?.length ?? 0);
@@ -282,7 +283,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] ANALIZAR_APP command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] ANALIZAR_APP command speech failed', speechErr);
                     }
                 }
                 scheduleResumeListening(commandSpeech?.length ?? 0);
@@ -304,7 +305,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] GENERAR_DOCUMENTO command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] GENERAR_DOCUMENTO command speech failed', speechErr);
                     }
                 }
                 scheduleResumeListening(commandSpeech?.length ?? 0);
@@ -326,7 +327,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] GENERAR_VIDEO command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] GENERAR_VIDEO command speech failed', speechErr);
                     }
                 }
                 scheduleResumeListening(commandSpeech?.length ?? 0);
@@ -338,7 +339,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] FLU_WAKE command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] FLU_WAKE command speech failed', speechErr);
                     }
                 }
                 if (transcript) {
@@ -366,7 +367,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] INICIAR_CONVERSACION command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] INICIAR_CONVERSACION command speech failed', speechErr);
                     }
                 }
                 if (transcript) {
@@ -394,7 +395,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(commandSpeech, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] CERRAR_ESCUCHA command speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] CERRAR_ESCUCHA command speech failed', speechErr);
                     }
                 }
                 if (transcript) {
@@ -547,7 +548,7 @@ export function useNavigationCommands(
                         try {
                             await speakFlu(noQuerySpeech, resolvedLanguage);
                         } catch (speechErr) {
-                            console.warn('[useNavigationCommands] BUSCAR no-query speech failed:', speechErr);
+                            logCaughtError('[useNavigationCommands] BUSCAR no-query speech failed', speechErr);
                         }
                     }
                     scheduleResumeListening(noQuerySpeech?.length ?? 0);
@@ -604,7 +605,7 @@ export function useNavigationCommands(
                     try {
                         await speakFlu(manifesto, resolvedLanguage);
                     } catch (speechErr) {
-                        console.warn('[useNavigationCommands] CONOCER_FLU speech failed:', speechErr);
+                        logCaughtError('[useNavigationCommands] CONOCER_FLU speech failed', speechErr);
                     }
                 }
                 auditLog.logEvent(

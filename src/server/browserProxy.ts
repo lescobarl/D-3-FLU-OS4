@@ -11,6 +11,7 @@ import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson';
 import { buildBrowserUrl } from '../core/browser/browserSession';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
+import { logCaughtError } from '../lib/caughtError';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
@@ -64,7 +65,7 @@ async function fetchSite(
     const html = await response.text();
     return { ok: true, url: response.url || url, html };
   } catch (err: unknown) {
-        console.warn('[catch] src/server/browserProxy.ts:', err);
+        logCaughtError('[catch] src/server/browserProxy.ts', err);
     if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
       return { ok: false, reason: 'timeout' };
     }
@@ -81,7 +82,7 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   try {
     parsed = new URL(rawUrl, 'http://localhost');
   } catch {
-        console.warn('[catch] src/server/browserProxy.ts');
+        logCaughtError('[catch] src/server/browserProxy.ts');
     sendJson(res, 400, { ok: false, reason: 'invalid' });
     return;
   }
@@ -127,7 +128,7 @@ export function createBrowserProxy({ env: _env = {} }: { env?: Record<string, st
         try {
           await handleBrowserFetch(req, res);
         } catch (err: unknown) {
-          console.error('[browserProxy] /api/browser/fetch failed:', err);
+          logCaughtError('[browserProxy] /api/browser/fetch failed', err);
           const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
           sendJson(res, 500, { ok: false, reason: 'internal_error', detail: String(message || 'Unknown error') });
         }

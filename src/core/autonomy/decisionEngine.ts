@@ -21,6 +21,7 @@
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -708,7 +709,7 @@ export class DecisionEngine {
             try {
                 await this.executeSingleAction(action, decision);
             } catch (error) {
-                console.error(`Error ejecutando acción ${action.action}:`, error);
+                logCaughtError(`Error ejecutando acción ${action.action}:`, error);
                 // Continuar con siguientes acciones si es posible
             }
         }

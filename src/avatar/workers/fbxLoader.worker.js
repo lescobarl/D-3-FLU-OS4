@@ -14,6 +14,7 @@
  * evita que tsc (lib DOM-only) tipifique el contexto de worker.
  */
 import { parseFbxBuffer } from '../lib/fbxParse';
+import { logCaughtError } from '../../lib/caughtError';
 
 self.onmessage = async (event) => {
   const { id, url } = event.data || {};
@@ -26,7 +27,7 @@ self.onmessage = async (event) => {
     const group = parseFbxBuffer(buffer, url);
     self.postMessage({ id, ok: true, json: group.toJSON() });
   } catch (err) {
-        console.warn('[catch] src/avatar/workers/fbxLoader.worker.js:', err);
+        logCaughtError('[catch] src/avatar/workers/fbxLoader.worker.js', err);
     self.postMessage({
       id,
       ok: false,

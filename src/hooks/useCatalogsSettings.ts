@@ -38,6 +38,7 @@ import {
     type PaletteDefinition,
 } from '../core/branding/seasonalPalettes';
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
+import { logCaughtError } from '../lib/caughtError';
 
 /** Dependencias externas que el hook necesita para activar/rebrandear. */
 export interface CatalogsSettingsDeps {
@@ -149,7 +150,7 @@ export function useCatalogsSettings({
                     applyEnvironment(persistedId);
                 }
             } catch (err) {
-                console.error('[App] hydrate catalogs failed (non-critical):', err);
+                logCaughtError('[App] hydrate catalogs failed (non-critical)', err);
             }
         })();
         return () => {
@@ -165,7 +166,7 @@ export function useCatalogsSettings({
                 const envLang = languageRef.current === 'en' ? 'en' : 'es';
                 await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
             } catch (err) {
-                console.error('[App] applyEnvironment failed (non-critical):', err);
+                logCaughtError('[App] applyEnvironment failed (non-critical)', err);
             }
         },
         [languageRef, speakFluRef]

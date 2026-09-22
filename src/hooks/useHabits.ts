@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type GoalRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createHabitsService,
   type AddGoalResult,
@@ -99,7 +100,7 @@ export function useHabits({ now }: UseHabitsOptions = {}): UseHabitsResult {
       setGoals(goalRows);
       setStats(statRows);
     } catch (err) {
-      console.error('[useHabits] refresh error:', err);
+      logCaughtError('[useHabits] refresh error', err);
     } finally {
       setLoading(false);
     }

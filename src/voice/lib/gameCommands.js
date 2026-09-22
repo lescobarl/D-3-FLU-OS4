@@ -25,6 +25,7 @@ import {
   suppressesAmbient,
 } from '../../core/games/gameCatalog'
 import { getActiveGameSession } from '../../core/games/gameSessionStore'
+import { logCaughtError } from '../../lib/caughtError';
 
 // ------------------------------------------------------------
 // Sonda de audio en reproducción (dueño único: la capa de App la conecta a
@@ -96,14 +97,14 @@ function isNonGameActionableCommand(text) {
     const agenda = parseAgendaCommand(text)
     if (agenda?.handled && agenda.action) return true
   } catch {
-        console.warn('[catch] src/voice/lib/gameCommands.js');
+        logCaughtError('[catch] src/voice/lib/gameCommands.js');
     /* parser sin match no debe romper el juego */
   }
   try {
     const note = parseNoteIntentText(text)
     if (note?.label) return true
   } catch {
-        console.warn('[catch] src/voice/lib/gameCommands.js');
+        logCaughtError('[catch] src/voice/lib/gameCommands.js');
     /* idem */
   }
   return false

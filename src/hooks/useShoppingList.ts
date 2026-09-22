@@ -23,6 +23,7 @@ import {
   type ShoppingService,
 } from '../core/reminders/shoppingService';
 import { itemsRemaining } from '../core/reminders/shoppingList';
+import { logCaughtError } from '../lib/caughtError';
 
 // ------------------------------------------------------------
 // Tipos
@@ -89,7 +90,7 @@ export function useShoppingList({
       setItems(sorted);
       setRemainingCount(itemsRemaining(sorted));
     } catch (err) {
-      console.error('[useShoppingList] refresh error:', err);
+      logCaughtError('[useShoppingList] refresh error', err);
     } finally {
       setLoading(false);
     }

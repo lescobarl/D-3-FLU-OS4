@@ -21,6 +21,7 @@ import { createInitialState, type OnboardingState } from './onboardingFlow';
 
 export type { OnboardingStateRecord } from '../db/fluDatabase';
 export type { OnboardingState } from './onboardingFlow';
+import { logCaughtError } from '../../lib/caughtError';
 
 /** Id del usuario legacy basado en localStorage (sin participante). */
 export const DEFAULT_ONBOARDING_USER = 'default';
@@ -125,7 +126,7 @@ export function readLegacyOnboarding(storage: Storage | undefined = getLocalStor
       }
       return { stepIndex, completed, captured, startedAt: Date.now() };
     } catch {
-        console.warn('[catch] src/core/onboarding/onboardingService.ts');
+        logCaughtError('[catch] src/core/onboarding/onboardingService.ts');
       // estado corrupto → reiniciar
     }
   }

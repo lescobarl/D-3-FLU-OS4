@@ -24,6 +24,7 @@ import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextAp
 import { fetchTextEngine } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 import { isSpeechSupported, getSpeechVoices } from '../../voice/lib/fluSpeech';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -284,14 +285,14 @@ async function checkAIService(): Promise<ComponentHealth> {
                     message = `Servicio de IA no responde correctamente (HTTP ${response.status})`;
                 }
             } catch {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts');
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts');
                 hasError = true;
                 message = 'Error de conexión con servicio de IA';
                 metrics.networkReachable = false;
             }
         }
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando servicio de IA: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -348,14 +349,14 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
                     message = 'Permiso de micrófono no concedido';
                 }
             } catch {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts');
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts');
                 metrics.microphonePermission = 'unknown';
             }
         } else {
             metrics.microphonePermission = 'unknown';
         }
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando reconocimiento de voz: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -406,7 +407,7 @@ async function checkSpeechSynthesis(): Promise<ComponentHealth> {
             }
         }
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando síntesis de voz: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -470,7 +471,7 @@ async function checkIndexedDB(): Promise<ComponentHealth> {
             });
         }
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando IndexedDB: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -521,7 +522,7 @@ async function checkNetwork(): Promise<ComponentHealth> {
                 successfulPings++;
                 pingResults.push(Date.now() - pingStart);
             } catch {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts');
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts');
                 // Ignorar errores individuales
             }
         }
@@ -542,7 +543,7 @@ async function checkNetwork(): Promise<ComponentHealth> {
             message = 'Conectividad de red limitada';
         }
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando red: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -604,7 +605,7 @@ async function checkMemory(): Promise<ComponentHealth> {
         metrics.navigationTiming = performance.timing.loadEventEnd - performance.timing.navigationStart;
         metrics.nowPerformance = performance.now();
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando memoria: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -648,7 +649,7 @@ async function checkReactComponents(): Promise<ComponentHealth> {
             message = 'Demasiados errores en consola';
         }
     } catch (error) {
-        console.warn('[catch] src/core/autonomy/healthMonitor.ts:', error);
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando componentes React: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
@@ -832,7 +833,7 @@ export class HealthMonitor {
                     recommendations.push(`[${componentName}] ${health.message}`);
                 }
             } catch (error) {
-                console.error(`Error verificando componente ${componentName}:`, error);
+                logCaughtError(`Error verificando componente ${componentName}:`, error);
                 
                 const errorHealth: ComponentHealth = {
                     name: componentName,

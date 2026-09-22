@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ContactRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createContactService,
   type AddContactResult,
@@ -92,7 +93,7 @@ export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult
       setContacts(contactRows);
       setBirthdayNear(birthdayRows);
     } catch (err) {
-      console.error('[useContacts] refresh error:', err);
+      logCaughtError('[useContacts] refresh error', err);
     } finally {
       setLoading(false);
     }

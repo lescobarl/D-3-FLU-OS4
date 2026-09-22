@@ -1,3 +1,5 @@
+import { logCaughtError } from '../lib/caughtError';
+
 // ============================================================
 // storage.ts — Resolución segura del almacenamiento Zustand
 // ============================================================
@@ -24,7 +26,7 @@ export function resolveSafeStorage(): SafeStorage {
             return window.localStorage;
         }
     } catch {
-        console.warn('[catch] src/store/storage.ts');
+        logCaughtError('[catch] src/store/storage.ts');
         // localStorage no disponible (Node.js, SSR, etc.)
     }
     const store = new Map<string, string>();

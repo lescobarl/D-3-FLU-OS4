@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type MoodRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createMoodService,
   type LogMoodInput,
@@ -94,7 +95,7 @@ export function useMood({ now }: UseMoodOptions = {}): UseMoodResult {
       setMoods(moodRows);
       setSummary(summaryRows);
     } catch (err) {
-      console.error('[useMood] refresh error:', err);
+      logCaughtError('[useMood] refresh error', err);
     } finally {
       setLoading(false);
     }

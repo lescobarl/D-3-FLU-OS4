@@ -26,6 +26,7 @@ import {
 } from '../core/onboarding/onboardingFlow';
 import { createNotificationService, type NotificationChannel } from '../core/notifications/notificationService';
 import { fluDb } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createOnboardingService,
   DEFAULT_ONBOARDING_USER,
@@ -182,7 +183,7 @@ export function useOnboarding({
       const permission = await service.requestPermission();
       service.setChannel(permission === 'granted' ? 'both' : 'toast');
     } catch {
-        console.warn('[catch] src/hooks/useOnboarding.ts');
+        logCaughtError('[catch] src/hooks/useOnboarding.ts');
       service.setChannel('toast');
     }
   }, []);

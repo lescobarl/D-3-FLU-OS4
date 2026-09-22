@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fluDb, newId, type VoiceProfileRecord } from '../core/db/fluDatabase';
 import { buildSyncTuple } from '../core/db/syncTuple';
+import { logCaughtError } from '../lib/caughtError';
 
 /**
  * Perfil de voz en formato de UI.
@@ -58,7 +59,7 @@ export function useVoiceProfiles() {
                 .toArray();
             setProfiles(records.filter((r) => !r.sync.deleted).map(toUI));
         } catch (err) {
-            console.error('[useVoiceProfiles] Error loading profiles:', err);
+            logCaughtError('[useVoiceProfiles] Error loading profiles', err);
         } finally {
             setLoading(false);
         }

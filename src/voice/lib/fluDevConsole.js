@@ -2,6 +2,7 @@
  * Panel dev: log mic ingress (texto publicado completo, reciente arriba).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const PANEL_ID = 'flu-dev-mic-log'
@@ -38,7 +39,7 @@ function loadPanelPosition(panel) {
     if (Number.isFinite(width) && width >= 240) panel.style.width = `${width}px`
     if (Number.isFinite(height) && height >= 120) panel.style.height = `${height}px`
   } catch {
-        console.warn('[catch] src/voice/lib/fluDevConsole.js');
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js');
     // ignore
   }
 }
@@ -56,7 +57,7 @@ function savePanelPosition(panel) {
       }),
     )
   } catch {
-        console.warn('[catch] src/voice/lib/fluDevConsole.js');
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js');
     // ignore
   }
 }
@@ -103,7 +104,7 @@ function enablePanelDrag(panel, handle) {
     try {
       handle.releasePointerCapture(pointerId)
     } catch {
-        console.warn('[catch] src/voice/lib/fluDevConsole.js');
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js');
       // ignore
     }
     pointerId = null

@@ -6,6 +6,7 @@
 // implementación DEFAULT, mismo patrón que src/services/musicSearch.ts.
 // ============================================================
 import { STORAGE_KEYS } from '../config/appConfig';
+import { logCaughtError } from '../../lib/caughtError';
 
 /** Canal de notificación elegido por el usuario. */
 export type NotificationChannel = 'none' | 'toast' | 'voice' | 'both';
@@ -93,7 +94,7 @@ export function createDefaultDriver(): NotificationDriver {
         });
         return true;
       } catch {
-        console.warn('[catch] src/core/notifications/notificationService.ts');
+        logCaughtError('[catch] src/core/notifications/notificationService.ts');
         return false;
       }
     },

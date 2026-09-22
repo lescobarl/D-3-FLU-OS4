@@ -3,6 +3,7 @@
  * Defaults en fluConfig.fluParticipant; overrides en localStorage (flu-participant-settings).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 export const FLU_PARTICIPANT_STORAGE_KEY = 'flu-participant-settings'
 const LEGACY_ENABLED_KEY = 'flu-participant-enabled'
@@ -73,7 +74,7 @@ function readStorageOverrides() {
     const parsed = JSON.parse(raw)
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
-        console.warn('[catch] src/voice/lib/fluParticipantConfig.js');
+        logCaughtError('[catch] src/voice/lib/fluParticipantConfig.js');
     return {}
   }
 }

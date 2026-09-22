@@ -4,6 +4,7 @@
 import { getActiveListenConfig } from './fluConfig'
 import { getRecognitionLanguage } from './activeListen'
 import { relayLog } from '../../lib/clientLogRelay'
+import { logCaughtError } from '../../lib/caughtError';
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false
@@ -73,7 +74,7 @@ export function startSpeechRecognition(recognition) {
     activeRecognition = recognition
     return true
   } catch (error) {
-        console.warn('[catch] src/voice/lib/speechRecognitionLocal.js:', error);
+        logCaughtError('[catch] src/voice/lib/speechRecognitionLocal.js', error);
     const message = String(error?.message || error).toLowerCase()
     if (message.includes('already') && message.includes('start')) {
       activeRecognition = recognition

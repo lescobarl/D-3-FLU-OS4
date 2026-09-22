@@ -38,6 +38,7 @@ import { buildConfiguracionPrompt } from '../../core/config/voiceConfigCatalog'
 import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
 import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
 import { postGeminiContractResilient } from '../../services/geminiContractClient'
+import { logCaughtError } from '../../lib/caughtError';
 
 export {
   buildVisualAnchorBlock,
@@ -90,7 +91,7 @@ function hasUsableVoiceBackend(apiKey) {
   try {
     return isLocalTextEndpoint(joinApiUrl(resolveServerTextApiUrl(), '/chat/completions'))
   } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
     return false
   }
 }
@@ -313,7 +314,7 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
       },
     }
   } catch (error) {
-        console.warn('[catch] src/voice/lib/gemini.js:', error);
+        logCaughtError('[catch] src/voice/lib/gemini.js', error);
     return {
       imageUrl: '',
       trace: {
@@ -436,7 +437,7 @@ export async function generateOpenRouterImage({
     }
   } catch (error) {
     const message = error?.message || 'unknown'
-    console.error('[gemini] OpenRouter image fallback error:', message)
+    logCaughtError('[gemini] OpenRouter image fallback error', message)
     return {
       imageUrl: '',
       trace: {
@@ -460,13 +461,13 @@ function tryParseJsonCandidate(candidate) {
   try {
     return JSON.parse(text)
   } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
     // ignore
   }
   try {
     return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'))
   } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
     return undefined
   }
 }
@@ -1193,7 +1194,7 @@ export async function requestParticipantEvaluation(params) {
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
     // Sin acceso a localStorage
   }
   const body = {
@@ -1224,7 +1225,7 @@ export async function requestFluContract(params) {
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
     // Sin acceso a localStorage
   }
   const body = {
@@ -1322,7 +1323,7 @@ export function resolveGeminiModel() {
     const savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
   } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
     // Sin acceso a localStorage (SSR / Node)
   }
   return resolveServerTextModel()
@@ -1731,7 +1732,7 @@ try {
     jsonMode: false,
   })
 } catch (error) {
-  console.warn('[analyzeImage] LLM error:', error?.status || error?.message)
+  logCaughtError('[analyzeImage] LLM error', error?.status || error?.message)
   return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' }
 }
 
@@ -1748,7 +1749,7 @@ try {
     texto_extraido: String(parsed.texto_extraido || parsed.extracted_text || '').trim(),
   }
 } catch {
-        console.warn('[catch] src/voice/lib/gemini.js');
+        logCaughtError('[catch] src/voice/lib/gemini.js');
   // Si no se puede parsear JSON, devolver el texto crudo
   return {
     materia: '',
@@ -1849,7 +1850,7 @@ export async function generateVideoViaFal({
     return { videoUrl: '', trace: { provider: 'falai', model, source: 'poll_timeout', hasVideo: false, prompt } }
   } catch (error) {
     const message = error?.message || 'unknown'
-    console.error('[falai] generateVideoViaFal error:', message)
+    logCaughtError('[falai] generateVideoViaFal error', message)
     return { videoUrl: '', trace: { provider: 'falai', model, source: 'error', hasVideo: false, error: message, prompt } }
   }
 }

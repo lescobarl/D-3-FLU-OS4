@@ -6,6 +6,7 @@ import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig'
 import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 let worker = null
 let seq = 0
@@ -291,7 +292,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = 48000, match
       }
     }
   } catch (error) {
-        console.warn('[catch] src/voice/lib/voiceIdWorkerClient.js:', error);
+        logCaughtError('[catch] src/voice/lib/voiceIdWorkerClient.js', error);
     if (String(error?.message || error).includes('dropped-stale')) {
       return {
         speakerId: labelToSpeakerId(fallbackName),

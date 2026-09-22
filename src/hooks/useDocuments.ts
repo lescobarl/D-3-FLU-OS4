@@ -6,6 +6,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fluDb, type DocumentRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createDocumentsService,
   type DocumentsService,
@@ -47,7 +48,7 @@ export function useDocuments({ participantId }: UseDocumentsOptions = {}): UseDo
     try {
       setDocuments(await service.list(scope));
     } catch (err) {
-      console.error('[useDocuments] refresh error:', err);
+      logCaughtError('[useDocuments] refresh error', err);
     } finally {
       setLoading(false);
     }

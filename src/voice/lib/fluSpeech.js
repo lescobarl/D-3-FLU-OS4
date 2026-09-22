@@ -2,6 +2,7 @@ import { cleanForSpeech, detectTranscriptLanguage } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { relayLog } from '../../lib/clientLogRelay'
+import { logCaughtError } from '../../lib/caughtError';
 
 /**
  * Caché de la configuración de voz leída desde el integrationStore de OS3.
@@ -63,7 +64,7 @@ async function enterSpeakingState() {
       }
     }
   } catch {
-        console.warn('[catch] src/voice/lib/fluSpeech.js');
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
     return null
   }
 }
@@ -214,7 +215,7 @@ export async function waitForSpeechIdle() {
     try {
       await activeSpeechPromise
     } catch {
-        console.warn('[catch] src/voice/lib/fluSpeech.js');
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
       // ignore
     }
   }
@@ -284,7 +285,7 @@ function speakSingleChunk(spoken, language, overrides = {}) {
       speechWatchdogTimer = setTimeout(finish, watchdogMs)
       synth.speak(utterance)
     } catch {
-        console.warn('[catch] src/voice/lib/fluSpeech.js');
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
       finish()
     }
   })
@@ -345,7 +346,7 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
     try {
       synth.cancel()
     } catch {
-        console.warn('[catch] src/voice/lib/fluSpeech.js');
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
       // ignore
     }
   }

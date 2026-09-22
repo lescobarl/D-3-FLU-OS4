@@ -13,6 +13,7 @@ import {
 } from '../lib/speakerCore.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from '../lib/embeddingFrames.js'
 import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const DEFAULT_MATCH_THRESHOLD = 0.85
 
@@ -139,7 +140,7 @@ self.onmessage = async (event) => {
 
     reply(false, null, new Error(`unknown worker message type: ${type}`))
   } catch (error) {
-        console.warn('[catch] src/voice/workers/voiceId.worker.js:', error);
+        logCaughtError('[catch] src/voice/workers/voiceId.worker.js', error);
     reply(false, null, error)
   }
 }

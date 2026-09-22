@@ -4,6 +4,7 @@
  * Modelo y opciones desde `FLU_CONFIG.transcript.asr` (sin hardcode).
  */
 import { getAsrConfig } from './voiceActivitySegmenter.js'
+import { logCaughtError } from '../../../lib/caughtError';
 
 /**
  * @param {{ workerFactory?: () => Worker, modelId?: string, dtype?: string }} [options]
@@ -43,7 +44,7 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
       try {
         worker.terminate()
       } catch {
-        console.warn('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
+        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
         // ignore
       }
       worker = null
@@ -91,7 +92,7 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
         try {
           worker.terminate()
         } catch {
-        console.warn('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
+        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
           // ignore
         }
         worker = null

@@ -751,3 +751,51 @@ NO VALIDADO (reservado al usuario): la escucha real en pantalla (voz del SO).
 PENDIENTE POR DISENO: la metrica catch-silencioso sigue con la regla laxa
 ('console.*' cuenta). Su ajuste va junto con los 296 bloques en el bloque B3
 (metrica + guard + correccion, en el mismo hito) para no dejar la suite roja.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque B3 (catch silencioso: 296 -> 0)
+================================================================
+OBJETIVO UNICO: ningun catch traga el error; el registro vive en UN solo punto.
+
+ANTES (medido con la regla endurecida):
+  node scripts/audit-metric.mjs catch-silencioso  ->  296
+  (con la regla vieja daba 0 porque 'console.' contaba como manejo.)
+  De los 296: 156 con el patron automatico console.warn('[catch] <ruta>')
+  y 140 con mensaje propio; repartidos en 90 archivos.
+
+DESPUES (medido):
+  node scripts/audit-metric.mjs catch-silencioso  ->  0
+  guard tests/catchSilenciosoGuard.test.ts        ->  VERDE (5 tests)
+
+CAMBIO:
+  - src/lib/caughtError.ts (NUEVO): registro UNICO de excepciones capturadas.
+    Firma variadica logCaughtError(contexto, ...detalles). Doble destino: relay
+    central (auditoria) + console (visibilidad). SIN imports estaticos:
+    clientLogRelay importa fluConfig y varios modulos de configuracion capturan
+    errores, asi que un import estatico cerraba el ciclo
+    fluConfig -> sharedConfig -> caughtError -> clientLogRelay -> fluConfig y
+    dejaba FLU_CONFIG indefinido en el arranque. Fallo real detectado (20
+    archivos de test sin cargar) y corregido con carga diferida del relay.
+  - 283 sitios en 90 archivos: console.warn/error dentro de catch -> logCaughtError.
+  - src/lib/clientLogRelay.ts: su propio catch usa relayLog directo (no puede
+    importarse a si mismo a traves del helper).
+  - scripts/audit-metric.mjs + tests/catchSilenciosoGuard.test.ts: la regla pasa
+    a ser PROPAGA o REGISTRA (logCaughtError/relayLog/auditLog/systemEventLog,
+    setError/onError, throw/reject/emit) o marca explicita 'ignorado:';
+    'console.*' ya NO cuenta (AGENTS.md 2.6).
+  - tests/catchSilenciosoGuard.test.ts: el detector se extrae a findSilent() y se
+    anaden 4 tests que comprueban que marca de verdad (0.12).
+
+REGLA DE CONTEOS: la invariante se midio ANTES y DESPUES con el mismo comando.
+
+BASELINE / REGRESION:
+  antes:   276 archivos / 2911 tests / 0 fallos
+  despues: 276 archivos / 2914 tests / 0 fallos (+3 tests del detector)
+
+CONGELADO (0.14):
+  scripts/audit-metric.mjs           re-congelado
+  tests/catchSilenciosoGuard.test.ts re-congelado
+  verificacion: 61/61 archivos congelados con hash correcto.
+
+NO VALIDADO (reservado al usuario): la pantalla. Los errores capturados no se
+ven en la UI; llegan al relay de logs del servidor y a la consola del navegador.

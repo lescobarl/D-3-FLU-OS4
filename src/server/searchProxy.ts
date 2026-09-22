@@ -27,6 +27,7 @@ import {
 import type { ResolvedLanguage } from '../core/search/searchLanguage';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
+import { logCaughtError } from '../lib/caughtError';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.SEARCH_PROXY_MS;
@@ -64,7 +65,7 @@ function parseProviders(raw: string | null): SearchConfig['providers'] {
     }
     return undefined;
   } catch {
-        console.warn('[catch] src/server/searchProxy.ts');
+        logCaughtError('[catch] src/server/searchProxy.ts');
     return undefined;
   }
 }
@@ -117,7 +118,7 @@ async function fetchProviderJson(
       try {
         detail = (await response.text()).slice(0, 300);
       } catch {
-        console.warn('[catch] src/server/searchProxy.ts');
+        logCaughtError('[catch] src/server/searchProxy.ts');
         detail = '';
       }
       return { ok: false, reason: 'fetch_error', status: response.status, detail };
@@ -125,7 +126,7 @@ async function fetchProviderJson(
     const json = await response.json();
     return { ok: true, json };
   } catch (err: unknown) {
-        console.warn('[catch] src/server/searchProxy.ts:', err);
+        logCaughtError('[catch] src/server/searchProxy.ts', err);
     if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
       return { ok: false, reason: 'timeout' };
     }
@@ -146,7 +147,7 @@ async function handleSearch(
   try {
     parsed = new URL(rawUrl, 'http://localhost');
   } catch {
-        console.warn('[catch] src/server/searchProxy.ts');
+        logCaughtError('[catch] src/server/searchProxy.ts');
     sendJson(res, 400, { ok: false, reason: 'invalid' });
     return;
   }
@@ -268,7 +269,7 @@ export function createSearchProxy({ env = {} }: { env?: Record<string, string> }
           try {
             await handleSearch(req, res, type);
           } catch (err: unknown) {
-            console.error(`[searchProxy] ${path} failed:`, err);
+            logCaughtError(`[searchProxy] ${path} failed:`, err);
             const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
             sendJson(res, 500, {
               ok: false,

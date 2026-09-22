@@ -18,6 +18,7 @@ import { createMinuteDraftFromSummary } from '../lib/minuteKnowledgeHelpers';
 import type { IntegrationStore } from '../store/integrationStore';
 import type { MinuteUIEntry } from './useMinuteKnowledge';
 import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 
 /** Draft de minuta producido por `createMinuteDraftFromSummary`. */
 export type MinuteDraft = ReturnType<typeof createMinuteDraftFromSummary>;
@@ -111,7 +112,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     try {
                         await speakResponse(`${speechText} ${snapshot.titulo || ''}`, language);
                     } catch (speechErr) {
-                        console.warn('[useMinuteHandlers] Minute generation speech failed:', speechErr);
+                        logCaughtError('[useMinuteHandlers] Minute generation speech failed', speechErr);
                     }
                 }
                 auditLog.logEvent('minute:generated', 'minute', persisted.id, {
@@ -148,7 +149,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     await speakResponse(speechText, language);
                 }
             } catch (speechErr) {
-                console.warn('[useMinuteHandlers] GENERAR_RESUMEN command speech failed:', speechErr);
+                logCaughtError('[useMinuteHandlers] GENERAR_RESUMEN command speech failed', speechErr);
             }
         }
 
@@ -200,7 +201,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     try {
                         await speakResponse(speechText, language);
                     } catch (speechErr) {
-                        console.warn('[useMinuteHandlers] Summary speech failed:', speechErr);
+                        logCaughtError('[useMinuteHandlers] Summary speech failed', speechErr);
                     }
                 }
 
@@ -276,7 +277,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 try {
                     await speakResponse(speechText, language);
                 } catch (speechErr) {
-                    console.warn('[useMinuteHandlers] GUARDAR_MINUTA speech failed:', speechErr);
+                    logCaughtError('[useMinuteHandlers] GUARDAR_MINUTA speech failed', speechErr);
                 }
             }
 
@@ -322,7 +323,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     try {
                         await speakResponse(savedTitle ? `${speechText} ${savedTitle}` : speechText, language);
                     } catch (speechErr) {
-                        console.warn('[useMinuteHandlers] Conversation summary speech failed:', speechErr);
+                        logCaughtError('[useMinuteHandlers] Conversation summary speech failed', speechErr);
                     }
                 }
             }

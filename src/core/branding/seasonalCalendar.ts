@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // FLU OS4 — Calendario General de Temporalidades (Branding Inteligente)
 // ============================================================
@@ -352,7 +354,7 @@ export function getActiveSeason(
                 }
             }
         } catch {
-        console.warn('[catch] src/core/branding/seasonalCalendar.ts');
+        logCaughtError('[catch] src/core/branding/seasonalCalendar.ts');
             // Invalid date, skip birthday detection
         }
     }

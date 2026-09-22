@@ -6,6 +6,7 @@
 // ============================================================
 
 import * as THREE from 'three';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Mapa de texturas: asocia nombre de malla a texturas
@@ -119,7 +120,7 @@ export function applyTextures(material: THREE.MeshStandardMaterial, meshName: st
         material.needsUpdate = true;
         return true;
     } catch (e) {
-        console.warn(`[Textures] Error loading textures for ${meshName}:`, e);
+        logCaughtError(`[Textures] Error loading textures for ${meshName}:`, e);
         return false;
     }
 }

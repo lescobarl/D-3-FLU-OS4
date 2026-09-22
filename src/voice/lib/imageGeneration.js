@@ -2,6 +2,7 @@ import { VISUAL_CONFIG } from './visualConfig.js'
 import { TIMEOUT_POLICY_MS } from '../../core/config/appConfig'
 import { shortText } from '../../lib/textUtils'
 import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
+import { logCaughtError } from '../../lib/caughtError';
 import {
   buildGenerationPrompt,
   buildPollinationsArtifact,
@@ -229,7 +230,7 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
     }
     return resolved
   } catch (error) {
-        console.warn('[catch] src/voice/lib/imageGeneration.js:', error);
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
     workspaceImageSourceCache.delete(cacheKey)
     return resolveErrorFallback(workspace, language, error?.message || 'unknown')
   }
@@ -308,7 +309,7 @@ export async function fetchOpenRouterImageFallback({
       },
     }
   } catch (error) {
-        console.warn('[catch] src/voice/lib/imageGeneration.js:', error);
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
     return {
       image_url: '',
       trace: {
@@ -367,7 +368,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
       trace: payload?.trace || { provider: 'falai', source: 'empty_response', hasVideo: false, prompt },
     }
   } catch (error) {
-        console.warn('[catch] src/voice/lib/imageGeneration.js:', error);
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
     return {
       video_url: '',
       trace: {

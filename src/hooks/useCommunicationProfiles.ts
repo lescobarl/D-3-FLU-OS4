@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type CommunicationProfileRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createCommunicationProfileService,
   type CommunicationProfileConfig,
@@ -105,7 +106,7 @@ export function useCommunicationProfiles({
       const all = await service.list();
       setProfiles(all);
     } catch (err) {
-      console.error('[useCommunicationProfiles] refresh error:', err);
+      logCaughtError('[useCommunicationProfiles] refresh error', err);
     } finally {
       setLoading(false);
     }

@@ -34,6 +34,7 @@ import { applyComponentVisibility, applyComponentColor } from './bunnyComponents
 import { loadFbx } from '../workers/fbxWorkerClient';
 import { DecorationsRenderer } from '../decorations/DecorationsRenderer';
 import type { BunnyAnimation } from '../types/bunny';
+import { logCaughtError } from '../../lib/caughtError';
 
 export default function BunnyModel({ orientation = 0.525 }: { orientation?: number }) {
     // ---- Refs (no causan re-render) ----
@@ -133,7 +134,7 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                     try {
                         window.__bunnyPreloadDone = true;
                     } catch {
-        console.warn('[catch] src/avatar/model/BunnyModel.tsx');
+        logCaughtError('[catch] src/avatar/model/BunnyModel.tsx');
                         /* ignore */
                     }
                 });

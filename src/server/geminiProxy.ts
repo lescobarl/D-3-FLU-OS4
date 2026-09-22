@@ -17,6 +17,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { MiddlewareHost } from './httpJson';
+import { logCaughtError } from '../lib/caughtError';
 import {
     OPENROUTER_DEFAULTS,
     isLocalTextEndpoint,
@@ -188,7 +189,7 @@ function parseBody<T = ProxyBody>(req: IncomingMessage): Promise<T | null> {
             try {
                 resolve(JSON.parse(body));
             } catch {
-        console.warn('[catch] src/server/geminiProxy.ts');
+        logCaughtError('[catch] src/server/geminiProxy.ts');
                 resolve(null);
             }
         });
@@ -221,7 +222,7 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
         res.end(JSON.stringify(data));
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn('[geminiProxy] sendJson: respuesta no entregada (socket cerrado):', message);
+        logCaughtError('[geminiProxy] sendJson: respuesta no entregada (socket cerrado)', message);
     }
 }
 
@@ -359,7 +360,7 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
     } catch (caught: unknown) {
         const error = { status: Number(errorField(caught, 'status')) || 500 };
         const message = errorField(caught, 'message');
-        console.error('[geminiProxy] handleContract ERROR:', message, {
+        logCaughtError('[geminiProxy] handleContract ERROR', message, {
             code: errorField(caught, 'code'),
             status: error.status,
             apiKeySource: errorField(caught, 'apiKeySource'),
@@ -401,7 +402,7 @@ async function handleSummary(req: IncomingMessage, res: ServerResponse) {
 
         sendJson(res, 200, normalized);
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/gemini/summary error:', errorField(error, 'message'));
+        logCaughtError('[geminiProxy] /api/gemini/summary error', errorField(error, 'message'));
         sendJson(res, Number(errorField(error, 'status')) || 500, {
             error: errorField(error, 'message'),
             code: errorField(error, 'code') || 'unknown',
@@ -456,7 +457,7 @@ async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) 
 
         sendJson(res, 200, normalized);
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/gemini/participant-eval error:', errorField(error, 'message'));
+        logCaughtError('[geminiProxy] /api/gemini/participant-eval error', errorField(error, 'message'));
         sendJson(res, Number(errorField(error, 'status')) || 500, {
             error: errorField(error, 'message'),
             code: errorField(error, 'code') || 'unknown',
@@ -475,7 +476,7 @@ async function handleWorkspaceImage(req: IncomingMessage, res: ServerResponse) {
         const result = await generateWorkspaceImage({ workspace: body?.workspace, language: body?.language });
         sendJson(res, 200, result);
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/workspace-image error:', errorField(error, 'message'));
+        logCaughtError('[geminiProxy] /api/workspace-image error', errorField(error, 'message'));
         sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
     }
 }
@@ -490,7 +491,7 @@ async function handleOpenRouterImage(req: IncomingMessage, res: ServerResponse) 
         const result = await generateOpenRouterImage(body || {});
         sendJson(res, 200, result);
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/openrouter-image error:', errorField(error, 'message'));
+        logCaughtError('[geminiProxy] /api/openrouter-image error', errorField(error, 'message'));
         sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
     }
 }
@@ -503,7 +504,7 @@ async function handleFalVideo(req: IncomingMessage, res: ServerResponse) {
         const result = await generateVideoViaFal(body || {});
         sendJson(res, 200, result);
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/fal-video error:', errorField(error, 'message'));
+        logCaughtError('[geminiProxy] /api/fal-video error', errorField(error, 'message'));
         sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
     }
 }
@@ -533,7 +534,7 @@ async function handleVisionAnalysis(req: IncomingMessage, res: ServerResponse) {
         setCachedResponse(VISION_CACHE, cacheKey, result, VISION_CACHE_MAX);
         sendJson(res, 200, result);
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/gemini/vision error:', errorField(error, 'message'));
+        logCaughtError('[geminiProxy] /api/gemini/vision error', errorField(error, 'message'));
         sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
     }
 }
@@ -601,7 +602,7 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
         const text = String(data?.choices?.[0]?.message?.content || '');
         return sendJson(res, 200, { text });
     } catch (error: unknown) {
-        console.error('[geminiProxy] /api/gemini/text ERROR:', errorField(error, 'message') || error);
+        logCaughtError('[geminiProxy] /api/gemini/text ERROR', errorField(error, 'message') || error);
         return sendJson(res, 500, { error: 'internal_error', detail: errorField(error, 'message') || 'Unknown error' });
     }
 }
@@ -622,7 +623,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleContract(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/contract:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/contract', errorField(err, 'message') || err);
                     sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
@@ -632,7 +633,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleSummary(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/summary:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/summary', errorField(err, 'message') || err);
                     sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
@@ -642,7 +643,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleParticipantEval(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/participant-eval:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/participant-eval', errorField(err, 'message') || err);
                     sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
@@ -652,12 +653,12 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleWorkspaceImage(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/workspace-image:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/workspace-image', errorField(err, 'message') || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
                     } catch {
-        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/openrouter-image — fallback de imagen por OpenRouter
@@ -667,12 +668,12 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleOpenRouterImage(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/openrouter-image:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/openrouter-image', errorField(err, 'message') || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
                     } catch {
-        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/fal-video — video real con fal.ai (text-to-video)
@@ -681,12 +682,12 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleFalVideo(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/fal-video:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/fal-video', errorField(err, 'message') || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
                     } catch {
-        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/gemini/vision — OCR analysis of uploaded images
@@ -695,7 +696,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleVisionAnalysis(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/vision:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/vision', errorField(err, 'message') || err);
                     sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
@@ -705,12 +706,12 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 try {
                     await handleText(req, res);
                 } catch (err: unknown) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/text:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/text', errorField(err, 'message') || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
                     } catch {
-        console.warn('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
                 }
             });
             // POST /__flu_agent_trace — OS2's fluTrace.js agent sink (accepted, logged)
@@ -725,7 +726,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 } catch (err: unknown) {
                     // El sink es de diagnóstico: un body ilegible no debe romper la app,
                     // pero tampoco se silencia (queda contexto en el log del servidor).
-                    console.warn('[geminiProxy] agent trace: body ilegible, se acepta igual:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] agent trace: body ilegible, se acepta igual', errorField(err, 'message') || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'trace logged but not persisted' }));
@@ -743,7 +744,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     }
                     console.info(`[geminiProxy] listen log aceptado (no persistido): ${lines.length} línea(s)`);
                 } catch (err: unknown) {
-                    console.warn('[geminiProxy] listen log: body ilegible, se acepta igual:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] listen log: body ilegible, se acepta igual', errorField(err, 'message') || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'listen log logged but not persisted' }));
@@ -771,7 +772,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     }
                 } catch (err: unknown) {
                     // Relay de diagnóstico: no se silencia el fallo de parseo.
-                    console.warn('[geminiProxy] client log: body ilegible, se acepta igual:', errorField(err, 'message') || err);
+                    logCaughtError('[geminiProxy] client log: body ilegible, se acepta igual', errorField(err, 'message') || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true }));

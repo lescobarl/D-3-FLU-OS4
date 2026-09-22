@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // Autonomy Events — Bus central de eventos de autonomía
 // ============================================================
@@ -50,7 +52,7 @@ export function emitAutonomyEvent(event: AutonomyEvent): void {
         try {
             listener(event);
         } catch (err) {
-            console.error('[autonomyEvents] error en listener de evento de autonomía:', err);
+            logCaughtError('[autonomyEvents] error en listener de evento de autonomía', err);
         }
     });
 }

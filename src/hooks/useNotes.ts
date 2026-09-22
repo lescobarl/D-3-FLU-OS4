@@ -21,6 +21,7 @@ import {
   type NotesService,
 } from '../core/notes/notesService';
 import { filterNotesByScope, notesRemaining } from '../core/notes/notesList';
+import { logCaughtError } from '../lib/caughtError';
 
 // ------------------------------------------------------------
 // Tipos
@@ -106,7 +107,7 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
       setNotes(sorted);
       setRemainingCount(notesRemaining(sorted));
     } catch (err) {
-      console.error('[useNotes] refresh error:', err);
+      logCaughtError('[useNotes] refresh error', err);
     } finally {
       setLoading(false);
     }

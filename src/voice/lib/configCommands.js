@@ -17,6 +17,7 @@ import { getFusedPalettes } from '../../core/branding/seasonalPalettes'
 import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
 import { isGameId } from '../../core/games/gameCatalog'
 import { normalizeForMatch } from '../../lib/textUtils'
+import { logCaughtError } from '../../lib/caughtError';
 
 // ------------------------------------------------------------
 // Normalización de texto
@@ -738,7 +739,7 @@ export function normalizeConfiguracion(raw = null) {
     try {
       parsed = JSON.parse(trimmed)
     } catch {
-        console.warn('[catch] src/voice/lib/configCommands.js');
+        logCaughtError('[catch] src/voice/lib/configCommands.js');
       return null
     }
   }
@@ -797,7 +798,7 @@ export function normalizeJuego(raw = null) {
     try {
       parsed = JSON.parse(trimmed)
     } catch {
-        console.warn('[catch] src/voice/lib/configCommands.js');
+        logCaughtError('[catch] src/voice/lib/configCommands.js');
       return null
     }
   }

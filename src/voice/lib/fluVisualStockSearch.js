@@ -5,6 +5,7 @@ import { VISUAL_CONFIG } from './visualConfig.js'
 import { getVisualPipelineConfig, resolveVisualBriefCore } from './fluVisualPipeline.js'
 import { fetchTextEngine } from '../../core/ai/httpClient'
 import { normalizeSpaces } from '../../lib/textUtils'
+import { logCaughtError } from '../../lib/caughtError';
 
 async function fetchJsonWithTimeout(url, timeoutMs) {
   try {
@@ -16,7 +17,7 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
     if (!response.ok) return null
     return await response.json()
   } catch {
-        console.warn('[catch] src/voice/lib/fluVisualStockSearch.js');
+        logCaughtError('[catch] src/voice/lib/fluVisualStockSearch.js');
     return null
   }
 }

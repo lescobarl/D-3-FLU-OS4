@@ -8,6 +8,7 @@
 // propagamos errores de escritura.
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { logCaughtError } from '../lib/caughtError';
 
 /** Handler de middleware (forma mínima que necesitan los proxies). */
 export type ProxyMiddlewareHandler = (
@@ -49,6 +50,6 @@ export function sendJson(
         const message = err && typeof err === 'object' && 'message' in err
             ? (err.message || err)
             : err;
-        console.warn(label, message);
+        logCaughtError(label, message);
     }
 }

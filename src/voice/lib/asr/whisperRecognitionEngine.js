@@ -18,6 +18,7 @@
 import { createVoiceSegmenter, getAsrConfig, getAsrSampleRate } from './voiceActivitySegmenter.js'
 import { createWhisperWasmTranscriber } from './whisperWasmTranscriber.js'
 import { isSpeechSynthesisSpeaking } from '../fluSpeech.js'
+import { logCaughtError } from '../../../lib/caughtError';
 
 function downsample(samples, fromRate, toRate) {
   const input = samples instanceof Float32Array ? samples : new Float32Array(samples || [])
@@ -217,7 +218,7 @@ export function createWhisperRecognitionEngine({
         }
       }
     } catch {
-        console.warn('[catch] src/voice/lib/asr/whisperRecognitionEngine.js');
+        logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js');
       // Parcial descartable: no afecta el final.
     } finally {
       partialInFlight = false
@@ -253,7 +254,7 @@ export function createWhisperRecognitionEngine({
         if (!active || !text) return
         if (typeof engine.onresult === 'function') engine.onresult(buildResultEvent(text, isFinal))
       } catch (error) {
-        console.warn('[catch] src/voice/lib/asr/whisperRecognitionEngine.js:', error);
+        logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', error);
         // Falla del worker/WASM (p. ej. el modelo no cargó) o de red real al
         // descargar el modelo. Se reintenta al recrear el worker; NO se etiqueta
         // todo como 'network' (eso confundía con el error del motor Chrome y

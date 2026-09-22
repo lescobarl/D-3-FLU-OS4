@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService } from '../services/aiServiceFactory';
 import { hasUsableTextBackend } from '../services/deepseek';
 import { isSpeechBusy } from '../voice/lib/fluSpeech';
+import { logCaughtError } from '../lib/caughtError';
 import {
     applyParticipantEvaluation,
     advanceParticipantTurnCounter,
@@ -220,7 +221,7 @@ export function useFluParticipant({
             if (generation !== evalGenerationRef.current) return false;
             stateRef.current = { ...stateRef.current, phase: 'idle' };
             if (import.meta.env.DEV) {
-                console.warn('[Flu][participant] evaluation failed', error);
+                logCaughtError('[Flu][participant] evaluation failed', error);
             }
         } finally {
             bumpUi();

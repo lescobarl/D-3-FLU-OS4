@@ -18,6 +18,7 @@ import { geminiService } from './gemini';
 import { deepseekService } from './deepseek';
 import type { IAIService } from '../core/ai/IAIService';
 import { STORAGE_KEYS } from '../core/config/appConfig';
+import { logCaughtError } from '../lib/caughtError';
 import {
     AI_PROVIDER_IDS,
     AI_PROVIDER_ROUTES,
@@ -51,7 +52,7 @@ export function getPreferredAIProvider(): AIProvider {
             return stored;
         }
     } catch {
-        console.warn('[catch] src/services/aiServiceFactory.ts');
+        logCaughtError('[catch] src/services/aiServiceFactory.ts');
         // ignore
     }
 
@@ -72,7 +73,7 @@ export function setPreferredAIProvider(provider: AIProvider): void {
     try {
         localStorage.setItem(AI_PROVIDER_KEY, provider);
     } catch {
-        console.warn('[catch] src/services/aiServiceFactory.ts');
+        logCaughtError('[catch] src/services/aiServiceFactory.ts');
         // ignore
     }
 }

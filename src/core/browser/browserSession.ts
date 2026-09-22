@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // browserSession.ts — Lógica pura del Navegador curado (panel)
 // ============================================================
@@ -107,7 +109,7 @@ export function buildBrowserUrl(
     try {
         parsed = new URL(candidate);
     } catch {
-        console.warn('[catch] src/core/browser/browserSession.ts');
+        logCaughtError('[catch] src/core/browser/browserSession.ts');
         return { ok: false, reason: 'invalid' };
     }
 

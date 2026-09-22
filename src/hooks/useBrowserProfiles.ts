@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type BrowserProfileRecord } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createBrowserProfileService,
   type BrowserProfileConfig,
@@ -100,7 +101,7 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
       const all = await service.list();
       setProfiles(all);
     } catch (err) {
-      console.error('[useBrowserProfiles] refresh error:', err);
+      logCaughtError('[useBrowserProfiles] refresh error', err);
     } finally {
       setLoading(false);
     }

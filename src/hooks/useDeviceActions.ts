@@ -19,6 +19,7 @@ import { useMemo } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { ContactRecord } from '../core/db/fluDatabase';
 import type { ContactService } from '../core/contacts/contactService';
+import { logCaughtError } from '../lib/caughtError';
 import {
   createDeviceActionService,
   matchContactName,
@@ -72,7 +73,7 @@ export function useDeviceActions({
             const fresh = await service.listContacts();
             if (fresh.length > 0) return matchContactName(fresh, name);
           } catch (err) {
-            console.error('[useDeviceActions] listContacts error:', err);
+            logCaughtError('[useDeviceActions] listContacts error', err);
           }
           return matchContactName(contacts, name);
         },

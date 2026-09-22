@@ -48,6 +48,7 @@ import type {
     GeneratedDocumentResult,
 } from './IAIService';
 import type { DocumentContract, AppAnalysisContract } from '../../types/documentContracts';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Helpers compartidos (exportados para tests/adapters)
@@ -104,12 +105,12 @@ export function safeParseJson(text: string): Record<string, unknown> | null {
         if (match) return JSON.parse(match[1]);
         return null;
     } catch {
-        console.warn('[catch] src/core/ai/aiServiceBase.ts');
+        logCaughtError('[catch] src/core/ai/aiServiceBase.ts');
         try {
             const match = text.match(/\{[\s\S]*\}/);
             if (match) return JSON.parse(match[0]);
         } catch {
-            console.warn('[catch] src/core/ai/aiServiceBase.ts');
+            logCaughtError('[catch] src/core/ai/aiServiceBase.ts');
             return null;
         }
         return null;
@@ -369,7 +370,7 @@ export abstract class BaseAIService implements IAIService {
                         puntos_clave: Array.isArray(parsed?.puntos_clave) ? parsed.puntos_clave.map(String) : [],
                     });
                 } catch (e) {
-                    console.warn(`${this.engineLabel} analyzeDocument map chunk ${i + 1} failed:`, e);
+                    logCaughtError(`${this.engineLabel} analyzeDocument map chunk ${i + 1} failed:`, e);
                     partials.push({ indice: i + 1, resumen: '', puntos_clave: [] });
                 }
             }
@@ -389,12 +390,12 @@ export abstract class BaseAIService implements IAIService {
                     escenarios: Array.isArray(parsed?.escenarios) ? parsed.escenarios : undefined,
                 };
             } catch (e) {
-                console.warn(`${this.engineLabel} analyzeDocument reduce failed, using heuristic merge:`, e);
+                logCaughtError(`${this.engineLabel} analyzeDocument reduce failed, using heuristic merge:`, e);
                 reduced = mergePartialSummaries(partials);
             }
             return applyReduceToContract(base, reduced);
         } catch (error) {
-            console.warn(`${this.engineLabel} analyzeDocument fallback to heuristic contract:`, error);
+            logCaughtError(`${this.engineLabel} analyzeDocument fallback to heuristic contract:`, error);
             return base;
         }
     }
@@ -452,7 +453,7 @@ export abstract class BaseAIService implements IAIService {
                 errores_detectados: mergedErrors,
             };
         } catch (error) {
-            console.warn(`${this.engineLabel} analyzeApp fallback to heuristic analysis:`, error);
+            logCaughtError(`${this.engineLabel} analyzeApp fallback to heuristic analysis:`, error);
             return buildHeuristicAppAnalysis(payload);
         }
     }
@@ -483,7 +484,7 @@ export abstract class BaseAIService implements IAIService {
             });
             return serializeDocument(payload.formato, raw, nombre);
         } catch (error) {
-            console.warn(`${this.engineLabel} generateDocument fallback to fallback content:`, error);
+            logCaughtError(`${this.engineLabel} generateDocument fallback to fallback content:`, error);
             return serializeDocument(payload.formato, buildGenerationFallbackContent(payload, language), nombre);
         }
     }

@@ -6,6 +6,7 @@
 import { pipeline, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 env.allowLocalModels = false
 env.allowRemoteModels = true
@@ -62,7 +63,7 @@ self.onmessage = async (event) => {
 
     reply(false, null, new Error(`unknown worker message type: ${type}`))
   } catch (error) {
-        console.warn('[catch] src/voice/workers/whisperAsr.worker.js:', error);
+        logCaughtError('[catch] src/voice/workers/whisperAsr.worker.js', error);
     reply(false, null, error)
   }
 }

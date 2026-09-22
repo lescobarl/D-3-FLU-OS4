@@ -8,6 +8,7 @@ import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 
 export { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const IS_DEV = import.meta.env.DEV
 const RING_MAX = 200
@@ -53,7 +54,7 @@ function serialize(entry) {
   try {
     return JSON.stringify(entry)
   } catch {
-        console.warn('[catch] src/voice/lib/listenLog.js');
+        logCaughtError('[catch] src/voice/lib/listenLog.js');
     return JSON.stringify({ t: Date.now(), stage: 'log-serialize-error' })
   }
 }
