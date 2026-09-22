@@ -5,6 +5,7 @@ import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 import { buildWakeWordPattern } from './wakeWord.js'
 import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils'
+import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -1649,7 +1650,7 @@ export function extractTheme(text = '', role = '', wakeWords = []) {
 }
 
 export function formatClock(date = new Date()) {
-  return date.toLocaleTimeString('es-MX', {
+  return date.toLocaleTimeString(SPEECH_LOCALES.es, {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',

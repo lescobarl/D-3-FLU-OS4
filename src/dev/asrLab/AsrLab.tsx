@@ -14,6 +14,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 import { acquireSpeechRecognition } from '../../voice/lib/speechRecognitionLocal'
 import { logCaughtError } from '../../lib/caughtError';
+import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 
 const RATE = 16000
 
@@ -73,10 +74,10 @@ async function capturePcm(ms: number): Promise<Float32Array> {
 }
 
 async function runChrome(ms: number): Promise<ProbeResult> {
-  const rec = acquireSpeechRecognition('es', 'es-MX')
+  const rec = acquireSpeechRecognition('es', SPEECH_LOCALES.es)
   if (!rec) return { id: 'chrome', text: '', ms: 0, error: 'no soportado' }
   return new Promise((resolve) => {
-    rec.lang = 'es-MX'
+    rec.lang = SPEECH_LOCALES.es
     rec.continuous = true
     rec.interimResults = true
     let done = false
@@ -287,13 +288,13 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
     setLiveText('')
     setLiveOn(true)
     if (liveEngine === 'chrome') {
-      const rec = acquireSpeechRecognition('es', 'es-MX')
+      const rec = acquireSpeechRecognition('es', SPEECH_LOCALES.es)
       if (!rec) {
         setLiveText('Chrome SR no soportado')
         setLiveOn(false)
         return
       }
-      rec.lang = 'es-MX'
+      rec.lang = SPEECH_LOCALES.es
       rec.continuous = true
       rec.interimResults = true
       rec.onresult = (event: any) => {

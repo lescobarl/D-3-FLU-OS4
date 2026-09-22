@@ -3,6 +3,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { logCaughtError } from '../../lib/caughtError';
+import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 
 /**
  * Caché de la configuración de voz leída desde el integrationStore de OS3.
@@ -118,11 +119,11 @@ function resolveSpeechLocale(language = 'es', text = '') {
   // (p.ej. japonés), el idioma de la voz lo decide el propio texto.
   const scriptLocale = detectSpeechScriptLocale(text)
   if (scriptLocale) return scriptLocale
-  if (language === 'en') return 'en-US'
+  if (language === 'en') return SPEECH_LOCALES.en
   if (language === 'both') {
-    return detectTranscriptLanguage(text) === 'en' ? 'en-US' : 'es-MX'
+    return detectTranscriptLanguage(text) === 'en' ? SPEECH_LOCALES.en : SPEECH_LOCALES.es
   }
-  return 'es-MX'
+  return SPEECH_LOCALES.es
 }
 
 /** Trocea respuestas largas (Chrome falla en silencio con utterances largos). */

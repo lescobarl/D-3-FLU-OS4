@@ -1,5 +1,6 @@
 /** Configuración central de FLU. */
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
+import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 
 const LISTENING_ACK_PHRASES = Object.freeze([
   'estas escuchando',
@@ -387,19 +388,11 @@ export const FLU_CONFIG = {
   },
   /** Escucha activa local (SpeechRecognition del navegador). */
   activeListen: {
-    languages: {
-      es: 'es-MX',
-      en: 'en-US',
-      // Lenguas indígenas mexicanas (OS3 parity)
-      nah: 'es-MX',   // Náhuatl — fallback a es-MX (SR no tiene locale nativo)
-      yua: 'es-MX',   // Maya (yucateco) — fallback a es-MX
-      mix: 'es-MX',   // Mixteco — fallback a es-MX
-      zap: 'es-MX',   // Zapoteco — fallback a es-MX
-    },
+    languages: { ...SPEECH_LOCALES },
     /** Escucha bilingüe: alterna locale SR según detectTranscriptLanguage. */
     bilingual: {
-      defaultLocale: 'es-MX',
-      locales: ['es-MX', 'en-US'],
+      defaultLocale: DEFAULT_SPEECH_LOCALE,
+      locales: [...BILINGUAL_LOCALES],
       /** Interinos consecutivos en otro idioma antes de cambiar SR. */
       stableInterims: 2,
       minCharsToSwitch: 10,

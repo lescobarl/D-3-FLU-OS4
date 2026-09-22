@@ -69,6 +69,8 @@ const RE = {
     /(?:cleanForSpeech|normalizeTranscriptText|stripWakeWord|stripWakeWordAnywhere|collapseStutter|normalizeCommandForDeterministic)\s*\(/,
   finalizeSites: /finalizeTurnCommit\(\)/,
   umbralLiteral: /0\.[0-9]{2}/,
+  // C47: locales BCP-47 de la familia es/en declarados como literal.
+  localeLiteral: /['"`](?:es|en)-(?:MX|US|ES|GB)['"`]/,
 }
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
@@ -286,6 +288,11 @@ const metrics = {
     ),
   'umbrales-autonomy': () =>
     countFilesWhere((r, f) => UMBRAL_FILES.has(r) && RE.umbralLiteral.test(read(f))),
+  // ---- C47 ---------------------------------------------------------------
+  'locale-literales': () =>
+    countLinesWhere(
+      (r, l) => r !== 'src/core/config/localeConfig.ts' && RE.localeLiteral.test(stripComment(l)),
+    ),
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')

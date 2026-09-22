@@ -799,3 +799,32 @@ CONGELADO (0.14):
 
 NO VALIDADO (reservado al usuario): la pantalla. Los errores capturados no se
 ven en la UI; llegan al relay de logs del servidor y a la consola del navegador.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C47 (locales: fuente unica)
+================================================================
+OBJETIVO UNICO: los locales de voz/escucha salen de UN solo modulo.
+
+ANTES: node scripts/audit-metric.mjs locale-literales  ->  21
+  (8 en la definicion de fluConfig.activeListen + 13 literales 'es-MX'/'en-US'
+   repartidos en 7 archivos: describeTriggerText, aiServiceBase, nlDateParser,
+   audioMath, fluDevConsole, fluSpeech, AsrLab.)
+
+DESPUES: node scripts/audit-metric.mjs locale-literales  ->  0
+  guard tests/localeConfigGuard.test.ts -> VERDE (6 tests)
+
+CAMBIO:
+  - NUEVO src/core/config/localeConfig.ts (modulo HOJA, sin imports):
+    SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES.
+  - fluConfig.activeListen.languages/bilingual pasan a referenciar el modulo
+    (mismos valores; el guard comprueba que no cambian).
+  - Los 7 archivos con literales leen SPEECH_LOCALES en lugar del literal.
+  - audit-metric: nueva metrica locale-literales (exenta localeConfig.ts).
+  - El guard incluye detector + 4 pruebas de mutacion (0.12).
+
+BASELINE / REGRESION:
+  antes:   276 archivos / 2914 tests / 0 fallos
+  despues: 277 archivos / 2920 tests / 0 fallos (+1 archivo, +6 tests del guard)
+
+CONGELADO (0.14): scripts/audit-metric.mjs y tests/localeConfigGuard.test.ts.
+NO VALIDADO (usuario): que la voz del SO use el locale correcto en pantalla.

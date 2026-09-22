@@ -49,6 +49,7 @@ import type {
 } from './IAIService';
 import type { DocumentContract, AppAnalysisContract } from '../../types/documentContracts';
 import { logCaughtError } from '../../lib/caughtError';
+import { SPEECH_LOCALES } from '../config/localeConfig';
 
 // -----------------------------------------------------------
 // Helpers compartidos (exportados para tests/adapters)
@@ -80,8 +81,8 @@ export function normalizeMinute(
 ): AIMinuteResult {
     return {
         titulo: String(raw.titulo || '') || (isEnglish
-            ? `Minutes - ${new Date().toLocaleDateString('en-US')}`
-            : `Minuta - ${new Date().toLocaleDateString('es-MX')}`),
+            ? `Minutes - ${new Date().toLocaleDateString(SPEECH_LOCALES.en)}`
+            : `Minuta - ${new Date().toLocaleDateString(SPEECH_LOCALES.es)}`),
         participantes: Array.isArray(raw.participantes) ? raw.participantes as string[] : [],
         resumen: String(raw.resumen || '') || conversationLog,
         acuerdos: Array.isArray(raw.acuerdos) ? raw.acuerdos as string[] : [],

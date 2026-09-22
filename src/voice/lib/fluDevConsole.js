@@ -3,6 +3,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const PANEL_ID = 'flu-dev-mic-log'
@@ -193,7 +194,7 @@ export function appendFluMicLogLine({ seq, source, kind, published, raw = '', no
   if (!body) return
 
   const line = document.createElement('div')
-  const clock = new Date().toLocaleTimeString('es-MX', { hour12: false })
+  const clock = new Date().toLocaleTimeString(SPEECH_LOCALES.es, { hour12: false })
   const head = `${clock} #${seq} [${source}] ${kind}`
   const text = published || raw || note
   line.textContent = note && published ? `${head} ${published} (${note})` : `${head} ${text}`

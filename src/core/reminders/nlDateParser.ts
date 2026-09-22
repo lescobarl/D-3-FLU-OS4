@@ -12,6 +12,7 @@
 // ============================================================
 
 import { pickTimeOfDay } from '../temporal/timeOfDay';
+import { SPEECH_LOCALES } from '../config/localeConfig';
 
 export interface NlDateTimeResult {
   /** Cómo se interpretó la expresión (para trazas/mensajes). */
@@ -148,7 +149,7 @@ function applyHourMinute(base: Date, hour: number, minute: number): Date {
 
 function formatLabelDate(at: number): string {
   const d = new Date(at);
-  return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  return d.toLocaleDateString(SPEECH_LOCALES.es, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /** Siguiente ocurrencia de un día de la semana, estrictamente futura (+7 si hoy). */

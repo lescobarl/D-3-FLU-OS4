@@ -15,7 +15,7 @@
   "tests/agendaSingleSource.test.ts": "aa95a7511a0d49751e13226c35ba0d0b4f30a5f91a685cf64ae9cef9eb192113",
   "tests/agendaUiSwap.test.ts": "7f9974edc34fe79d87d70bb7f9ca39709a427fba1b5bc8fe77350afa12a1263b",
   "tests/voiceOfflineFallback.test.ts": "71201f7fe29d6b01be7663732d11fc06cfae795d35e05fecea5a3c97723d9cf1",
-  "scripts/audit-metric.mjs": "a0de8c5f132ef3056e7c657b78565a6531dfba0c31f894ab9cf66830b7c7b59a",
+  "scripts/audit-metric.mjs": "44f42cbfc1cf892f84008504159992ce2fc1044e85faba0dd2d85dcf01b54391",
   "tests/vozInstanciaUnicaGuard.test.ts": "aa86e1e89175d4ae7962aad71c0d0bb161e370d6f6de968d1024d1c6e47b1eb5",
   "tests/searchAllowlistFuenteUnicaGuard.test.ts": "b8b37b17b5f37e1f8c5758107cfcece2b6405b8606ec2bcfc8b75778ee1b316c",
   "tests/voiceProfilesEscritorUnicoGuard.test.ts": "59289c85abc3e3c855a84a77f93f85f041f5197e039d2e7f5a7b5cd066a5d989",
@@ -59,5 +59,6 @@
   "tests/specificDeadGuard.test.ts": "38ced6e29c7c70f831b4d38446fd7b058437d0dc28a5845487416bb1779bda8e",
   "tests/textUtilsSingleSourceGuard.test.ts": "e6acf2c46167e02c2e87d0a41cc5fc8f1a5bb4ae501cc31835594f814056b083",
   "tests/interimPriorStripSingleSource.test.ts": "a350281f7d23937dee615aff097de354f0a8830dcc36e1feeabb91fd687d2168",
-  "tests/geminiServiceFlow.test.ts": "8ea891dea81c4a89a9f0b9fa2f5369eb78217eb6d611115757305efd534eb897"
+  "tests/geminiServiceFlow.test.ts": "8ea891dea81c4a89a9f0b9fa2f5369eb78217eb6d611115757305efd534eb897",
+  "tests/localeConfigGuard.test.ts": "c0448d87781c9654d82da699e29633e3a46af36bcd86395fb54a0cb76da0a685"
 }
