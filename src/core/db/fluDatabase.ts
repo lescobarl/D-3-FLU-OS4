@@ -668,6 +668,14 @@ export class FluDatabase extends Dexie {
             agenda: 'id, kind, status, personId',
         });
 
+        // v22: ELIMINAR las tablas legacy. La agenda unificada (v21) es la unica
+        // fuente; reminders/horario/temporalItems quedaban declaradas y sin uso.
+        this.version(22).stores({
+            reminders: null,
+            horario: null,
+            temporalItems: null,
+        });
+
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
         this.minutes = this.table('minutes');

@@ -873,3 +873,28 @@ NO VALIDADO (usuario): que la UI siga igual en pantalla (los hooks _habits/_mood
   estaban desactivados; se retiraron sus llamadas).
 DEUDA DECLARADA: `allowJs: true` se mantiene (el proyecto tiene librerias .js de
   voz); pasar a false exigiria migrarlas a .ts (fuera de este hito).
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C46 (esquema Dexie sin tablas muertas)
+================================================================
+OBJETIVO UNICO: el esquema Dexie no declara tablas legacy vivas.
+
+ANTES:  node scripts/audit-metric.mjs legacy-tables  ->  3
+        guard tests/dexieSchemaGuard.test.ts (nace ROJO): lista reminders, horario, temporalItems
+DESPUES: node scripts/audit-metric.mjs legacy-tables ->  0
+        guard tests/dexieSchemaGuard.test.ts -> VERDE (5 tests)
+
+CAUSA RAIZ: `reminders` (v5), `horario` (v11) y `temporalItems` (v12/v19) seguian
+declaradas en el esquema, pero la agenda unificada (v21) es la fuente unica y
+nadie las lee/escribe. Se borran con una version nueva:
+  this.version(22).stores({ reminders: null, horario: null, temporalItems: null })
+(se preserva la historia de versiones; no se editan versiones ya publicadas).
+
+METRICA: 'legacy-tables' en scripts/audit-metric.mjs (parsea TODAS las .stores()
+en orden; `: null` marca borrada; cuenta legacy aun 'declared').
+
+BASELINE / REGRESION:
+  antes:   277 archivos / 2920 tests / 0 fallos
+  despues: 279 archivos / 2930 tests / 0 fallos
+
+NO VALIDADO (usuario): que una BD real existente migre a v22 sin error en pantalla.

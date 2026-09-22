@@ -74,6 +74,29 @@ const RE = {
   // C49: doble cast que evade el tipado (`as unknown as`).
   tsDoubleCast: /as unknown as/,
 }
+
+// ---- C46: estado efectivo del esquema Dexie -------------------------------
+const LEGACY_TABLES = ['reminders', 'horario', 'temporalItems']
+const DEXIE_SCHEMA_FILE = join(ROOT, 'src/core/db/fluDatabase.ts')
+
+/** Estado efectivo por tabla ('declared' | 'deleted') segun los `.stores()`. */
+function dexieSchemaState(src = existsSync(DEXIE_SCHEMA_FILE) ? read(DEXIE_SCHEMA_FILE) : '') {
+  const state = new Map()
+  for (const block of src.matchAll(/\.stores\(\{([\s\S]*?)\}\)/g)) {
+    for (const line of block[1].split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_$][\w$]*)\s*:\s*(null|['"])/)
+      if (m) state.set(m[1], m[2] === 'null' ? 'deleted' : 'declared')
+    }
+  }
+  return state
+}
+
+/** Tablas legacy que siguen VIVAS (declaradas y nunca borradas con `: null`). */
+function liveLegacyTables(src) {
+  const state = dexieSchemaState(src)
+  return LEGACY_TABLES.filter((t) => state.get(t) === 'declared')
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -297,6 +320,10 @@ const metrics = {
     ),
   // ---- C49 ---------------------------------------------------------------
   'ts-escapes': () => countLinesWhere((_r, l) => RE.tsDoubleCast.test(stripComment(l))),
+  // ---- C46 ---------------------------------------------------------------
+  // Tablas legacy que siguen VIVAS en el esquema Dexie efectivo (declaradas y
+  // no borradas con `: null` en alguna version posterior).
+  'legacy-tables': () => liveLegacyTables().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')
