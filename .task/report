@@ -932,3 +932,34 @@ BASELINE / REGRESION:
 
 NO VALIDADO (usuario): que la busqueda Openverse y el hint de API key sigan
 mostrandose igual en pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C56 (wake words solo desde config)
+================================================================
+OBJETIVO UNICO: en fluConfig.js no hay wake literales fuera de FLU_WAKE_WORDS.
+
+ANTES:  node scripts/audit-metric.mjs wake-internal -> 3  (lineas 12, 15, 2649)
+        - 12: 'oye flu estas escuchando'   (LISTENING_ACK_PHRASES)
+        - 15: 'hey flu are you listening'  (LISTENING_ACK_PHRASES)
+        - 2649: passiveMustExclude: ['inmobiliarias', 'okay flu', 'platicame']
+        guard tests/wakeInternalGuard.test.ts (nace ROJO): lista [12,15,2649].
+DESPUES: wake-internal -> 0 ; guard -> VERDE (5 tests).
+
+FIX (src/voice/lib/fluConfig.js):
+- FLU_WAKE_WORDS se mueve ANTES de LISTENING_ACK_PHRASES (evita TDZ).
+- firstWakeWith(prefix) deriva el alias canonico de FLU_WAKE_WORDS.
+- ack phrases se componen: `${firstWakeWith('oye ')} estas escuchando` /
+  `${firstWakeWith('hey ')} are you listening` -> MISMO valor que antes
+  ('oye flu...', 'hey flu...'), ahora config-driven.
+- passiveMustExclude usa firstWakeWith('okay ') en vez de 'okay flu'.
+
+METRICA 'wake-internal': lineas de fluConfig.js con wake literal en datos de
+decision, excluyendo el bloque canonico, comentarios, copy localizada
+(es:/en:, texto de UI) y utterance capturada/fixture
+(capture:/phrase:/userPhrase:/fluParticipa:). NO se tocan cadenas legitimas.
+
+BASELINE / REGRESION:
+  antes:   280 archivos / 2936 tests / 0 fallos
+  despues: 281 archivos / 2941 tests / 0 fallos
+
+NO VALIDADO (usuario): que la escucha por voz siga reconociendo la wake en pantalla.

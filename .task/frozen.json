@@ -15,7 +15,7 @@
   "tests/agendaSingleSource.test.ts": "aa95a7511a0d49751e13226c35ba0d0b4f30a5f91a685cf64ae9cef9eb192113",
   "tests/agendaUiSwap.test.ts": "d4dcc689dcd50cc64e957acf9d182d185833dce9e791c3f57750cb92cf4fa2e1",
   "tests/voiceOfflineFallback.test.ts": "71201f7fe29d6b01be7663732d11fc06cfae795d35e05fecea5a3c97723d9cf1",
-  "scripts/audit-metric.mjs": "adbfaa6c9b2099270325615033f8595a73d25678cec8d114fa7c5d89af6bd874",
+  "scripts/audit-metric.mjs": "01d28c53989b4a295d4fc315dcc1ac8dd020b3384547a4bc67fbb5c8c0790603",
   "tests/vozInstanciaUnicaGuard.test.ts": "aa86e1e89175d4ae7962aad71c0d0bb161e370d6f6de968d1024d1c6e47b1eb5",
   "tests/searchAllowlistFuenteUnicaGuard.test.ts": "b8b37b17b5f37e1f8c5758107cfcece2b6405b8606ec2bcfc8b75778ee1b316c",
   "tests/voiceProfilesEscritorUnicoGuard.test.ts": "59289c85abc3e3c855a84a77f93f85f041f5197e039d2e7f5a7b5cd066a5d989",
@@ -63,5 +63,6 @@
   "tests/localeConfigGuard.test.ts": "c0448d87781c9654d82da699e29633e3a46af36bcd86395fb54a0cb76da0a685",
   "tests/tsStrictGuard.test.ts": "2dd2f20bfc972164022ede553d529e4e090c34d862df757ddff960b7d548fad9",
   "tests/dexieSchemaGuard.test.ts": "52d1da0aff736841ac2acee2e1adeea7b5934a28da67e79c6ca586b81c3e98c1",
-  "tests/remoteResourceGuard.test.ts": "776bac80370434e94d58ebb7a38da7474ad53b26d2bbb59a96c76b3b37a3851f"
+  "tests/remoteResourceGuard.test.ts": "776bac80370434e94d58ebb7a38da7474ad53b26d2bbb59a96c76b3b37a3851f",
+  "tests/wakeInternalGuard.test.ts": "29da81aa96afe9c90b17adc72904333827b22894a8df83bda7a00fb0ed18b2c9"
 }

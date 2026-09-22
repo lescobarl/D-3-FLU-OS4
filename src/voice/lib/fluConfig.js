@@ -2,19 +2,6 @@
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 
-const LISTENING_ACK_PHRASES = Object.freeze([
-  'estas escuchando',
-  'me escuchas',
-  'estas ahi',
-  'estas ahí',
-  'estas por ahi',
-  'estas por ahí',
-  'oye flu estas escuchando',
-  'are you listening',
-  'can you hear me',
-  'hey flu are you listening',
-])
-
 /**
  * Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
  * Fuente ÚNICA del wake word (§9.4): `voiceCommands.wakeWords` y el sesgo del
@@ -37,6 +24,22 @@ const FLU_WAKE_WORDS = Object.freeze([
   'hey flow',
   'hey blue',
   'hey flo',
+])
+
+/** Primer alias de wake para un prefijo dado (deriva de FLU_WAKE_WORDS). */
+const firstWakeWith = (prefix) => FLU_WAKE_WORDS.find((w) => w.startsWith(prefix)) || ''
+
+const LISTENING_ACK_PHRASES = Object.freeze([
+  'estas escuchando',
+  'me escuchas',
+  'estas ahi',
+  'estas ahí',
+  'estas por ahi',
+  'estas por ahí',
+  `${firstWakeWith('oye ')} estas escuchando`,
+  'are you listening',
+  'can you hear me',
+  `${firstWakeWith('hey ')} are you listening`,
 ])
 
 export const FLU_CONFIG = {
@@ -2646,7 +2649,7 @@ export const FLU_CONFIG = {
           capture:
             'muy intensos con una presion muy alta un partido muy cerrado equipo ecuatoriano le gano a alemania okay flu platicame de las inmobiliarias sin imagenes',
           passiveMustInclude: ['ecuatoriano', 'alemania'],
-          passiveMustExclude: ['inmobiliarias', 'okay flu', 'platicame'],
+          passiveMustExclude: ['inmobiliarias', firstWakeWith('okay '), 'platicame'],
           questionMustInclude: ['inmobiliarias'],
         },
         autos: {

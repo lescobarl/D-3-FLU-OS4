@@ -136,6 +136,51 @@ function remoteHardcodeFiles() {
   return [...hits].sort()
 }
 
+// ---- C56: wake words internas fuera de la fuente unica ---------------------
+const WAKE_CONFIG_FILE = join(ROOT, 'src/voice/lib/fluConfig.js')
+const WAKE_TOKEN = /\b(?:oye|ok|okay|hey)\s+(?:flu|flow|blue|flo)\b/i
+
+/**
+ * Lineas de fluConfig.js con un wake literal en DATOS de decision (fuera de
+ * `FLU_WAKE_WORDS`). Excluye: comentarios, el bloque canonico, transcripciones
+ * capturadas (`capture:`) y copy localizada (`es:`/`en:`, texto de UI).
+ */
+function wakeInternalOccurrences(src = existsSync(WAKE_CONFIG_FILE) ? read(WAKE_CONFIG_FILE) : '') {
+  const lines = src.split(/\r?\n/)
+  const out = []
+  let inBlock = false
+  let prevCapture = false
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    const t = raw.trim()
+    if (/const FLU_WAKE_WORDS\b/.test(t)) {
+      inBlock = true
+      prevCapture = false
+      continue
+    }
+    if (inBlock) {
+      if (/^\s*\]\)/.test(raw)) inBlock = false
+      continue
+    }
+    if (isCommentLine(raw)) {
+      prevCapture = false
+      continue
+    }
+    if (prevCapture) {
+      prevCapture = false
+      continue
+    }
+    // Claves cuyos valores son utterance capturada / fixture, no decision.
+    if (/\b(?:capture|phrase|userPhrase|fluParticipa)\s*:/.test(t)) {
+      prevCapture = /capture\s*:\s*$/.test(t)
+      continue
+    }
+    if (/^(?:es|en):/.test(t)) continue
+    if (WAKE_TOKEN.test(t)) out.push(i + 1)
+  }
+  return out
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -365,6 +410,8 @@ const metrics = {
   'legacy-tables': () => liveLegacyTables().length,
   // ---- C48 ---------------------------------------------------------------
   'remote-hardcode': () => remoteHardcodeFiles().length,
+  // ---- C56 ---------------------------------------------------------------
+  'wake-internal': () => wakeInternalOccurrences().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')
