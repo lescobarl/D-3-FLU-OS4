@@ -14,6 +14,7 @@
 // Inyección de dependencias: { db, config, now, newId }.
 // ============================================================
 
+import { dayKey } from '../../lib/dateKey'
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
@@ -109,14 +110,6 @@ export interface BirthdayContact {
 // Helpers de fecha (día local 'YYYY-MM-DD')
 // ------------------------------------------------------------
 
-const toDateKey = (value: number): string => {
-  const d = new Date(value);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const parseDateKey = (key: string): Date => {
@@ -132,7 +125,7 @@ const daysBetween = (fromKey: string, toKey: string): number => {
 
 /** Próxima ocurrencia del cumpleaños (este año o el siguiente). */
 const nextBirthdayKey = (birthday: string, reference: number): string => {
-  const refKey = toDateKey(reference);
+  const refKey = dayKey(reference);
   const refYear = Number(refKey.slice(0, 4));
   const md = birthday.slice(5); // 'MM-DD'
   const candidate = `${refYear}-${md}`;
@@ -272,7 +265,7 @@ export function createContactService({
     const ref = reference ?? timestamp();
     const windowDays =
       typeof config.birthdayWindowDays === 'number' ? config.birthdayWindowDays : 7;
-    const refKey = toDateKey(ref);
+    const refKey = dayKey(ref);
     const all = await db.contacts.toArray();
     return all
       .filter((c) => c.birthday !== undefined && DATE_KEY_RE.test(c.birthday!))

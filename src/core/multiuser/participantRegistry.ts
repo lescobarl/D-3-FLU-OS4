@@ -14,6 +14,7 @@
 // Inyección de dependencias: { db, config, now, newId }.
 // ============================================================
 
+import { dayKey } from '../../lib/dateKey'
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
@@ -184,13 +185,6 @@ export function createParticipantRegistry({
     const value = birthday.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
     return value;
-  };
-
-  const pad = (value: number): string => String(value).padStart(2, '0');
-
-  const toDateKey = (value: number): string => {
-    const d = new Date(value);
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
 
   const register = async (input: ParticipantInput): Promise<RegisterResult> => {
@@ -391,7 +385,7 @@ export function createParticipantRegistry({
 
   // B9: participantes cuyo cumpleaños cae en la fecha indicada (MM-DD).
   const participantsWithBirthdayOn = async (date?: string): Promise<ParticipantRecord[]> => {
-    const reference = date || toDateKey(timestamp());
+    const reference = date || dayKey(timestamp());
     const key = reference.length >= 5 ? reference.slice(5) : '';
     const all = await db.toArray();
     return all
@@ -418,7 +412,7 @@ export function createParticipantRegistry({
       candidate = new Date(today.getFullYear() + 1, birthMonth - 1, birthDay).getTime();
     }
     const daysUntil = Math.round((candidate - todayMs) / (24 * 60 * 60 * 1000));
-    return { date: toDateKey(candidate), daysUntil };
+    return { date: dayKey(candidate), daysUntil };
   };
 
   // B9: participantes cuyo próximo cumpleaños ocurre dentro de la antelación configurada.

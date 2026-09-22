@@ -993,3 +993,33 @@ BASELINE / REGRESION:
   despues: 282 archivos / 2945 tests / 0 fallos ; typecheck 0
 
 NO VALIDADO (usuario): que al borrar un usuario su onboarding no reaparezca.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C58 (clave de dia local unica)
+================================================================
+OBJETIVO UNICO: una sola implementacion de la clave de dia local YYYY-MM-DD.
+
+ANTES: node scripts/audit-metric.mjs daykey-impls -> 9
+  8 duplicados: src/App.tsx (inline), src/components/panelUtils.ts (todayLocalDate),
+  src/core/agenda/agendaSummary.ts (localDayKey), src/core/browser/browserSession.ts (dayKey),
+  src/core/contacts/contactService.ts (toDateKey), src/core/days/dayRollover.ts (dayKey),
+  src/core/habits/habitService.ts (toDateKey), src/core/multiuser/participantRegistry.ts (toDateKey).
+  guard tests/dateKeyGuard.test.ts (nace ROJO): lista los 9 (8 + canonica).
+DESPUES: daykey-impls -> 1 (solo src/lib/dateKey.ts); guard -> VERDE (5 tests).
+
+FIX: se crea src/lib/dateKey.ts dayKey(input?: Date|number) (fuente unica, semantica
+identica: dia local). Los 8 sitios lo importan:
+ - panelUtils.todayLocalDate delega (conserva API).
+ - App.tsx usa dayKey(); dayRollover/contactService/habitService/participantRegistry/
+   agendaSummary importan y renombran su uso. browserSession deja de exportarlo.
+
+DETECTOR: cuenta solo el formateador YYYY-MM-DD (template con 3 interpolaciones
+separadas por '-' + getMonth()+1 + getDate(), sin getHours/getDay). Excluye datetime-local
+(AgendaPanel.toDateTimeLocal) y codigos YYYYMMDD-secuencia (formatMinuteHistoryCode).
+
+REGRESION:
+  antes:   282 archivos / 2945 tests / 0 fallos
+  despues: 283 archivos / 2950 tests / 0 fallos ; typecheck 0 ; lint limpio.
+
+NO VALIDADO (usuario): que diario/habitos/contactos/cumpleanos y el rollover de dia
+sigan mostrando la MISMA fecha local que antes en su pantalla.

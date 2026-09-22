@@ -6,7 +6,8 @@
 // conversación NO disparan.
 // ============================================================
 import { describe, expect, it } from 'vitest';
-import { dayKey, shouldRolloverDay } from '../src/core/days/dayRollover';
+import { shouldRolloverDay } from '../src/core/days/dayRollover';
+import { dayKey } from '../src/lib/dateKey';
 
 const T = (y: number, m: number, d: number, h = 12): number => new Date(y, m - 1, d, h).getTime();
 

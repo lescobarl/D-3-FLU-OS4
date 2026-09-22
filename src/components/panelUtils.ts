@@ -17,6 +17,8 @@
  * @param action Acción asíncrona a ejecutar.
  * @returns Promesa que resuelve cuando la acción termina.
  */
+import { dayKey } from '../lib/dateKey'
+
 export async function runBusyAction(
     busy: boolean,
     setBusy: (value: boolean) => void,
@@ -36,9 +38,5 @@ export async function runBusyAction(
  * @returns La fecha del sistema en hora local, sin desfase de zona.
  */
 export function todayLocalDate(): string {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return dayKey();
 }

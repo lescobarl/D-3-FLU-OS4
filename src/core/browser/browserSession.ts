@@ -129,11 +129,3 @@ export function buildBrowserUrl(
 
     return { ok: true, url: parsed.toString(), host };
 }
-
-/** Clave de día local (YYYY-MM-DD) para el contador diario. */
-export function dayKey(date: Date = new Date()): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}

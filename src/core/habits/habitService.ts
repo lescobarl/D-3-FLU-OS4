@@ -13,6 +13,7 @@
 // Inyección de dependencias: { db, config, now, newId }.
 // ============================================================
 
+import { dayKey } from '../../lib/dateKey'
 import { v4 as uuidv4 } from 'uuid';
 import {
   addAuditLog,
@@ -126,14 +127,6 @@ export interface GoalStats {
 // Helpers de fecha (día local 'YYYY-MM-DD' a partir de un timestamp)
 // ------------------------------------------------------------
 
-const toDateKey = (value: number): string => {
-  const d = new Date(value);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 const previousDayKey = (dateKey: string): string => {
   const [y, m, d] = dateKey.split('-').map(Number);
   const prev = new Date(y, m - 1, d - 1);
@@ -237,7 +230,7 @@ export function createHabitsService({
     const doneDates = new Set(
       all.filter((c) => c.goalId === goalId && c.done && !c.sync?.deleted).map((c) => c.date),
     );
-    const today = toDateKey(reference ?? timestamp());
+    const today = dayKey(reference ?? timestamp());
     const todayCheck = all.find((c) => c.goalId === goalId && c.date === today && !c.sync?.deleted);
     // Si hoy tiene check-in y NO está completado, la racha está rota hoy.
     if (todayCheck && !todayCheck.done) return 0;
@@ -253,7 +246,7 @@ export function createHabitsService({
   const getStats = async (participantId?: string, reference?: number): Promise<GoalStats[]> => {
     const goals = await listGoals(participantId);
     const all = await db.checkIns.toArray();
-    const today = toDateKey(reference ?? timestamp());
+    const today = dayKey(reference ?? timestamp());
     return goals.map((goal) => {
       const entries = all.filter((c) => c.goalId === goal.id && !c.sync?.deleted);
       const completedDays = entries.filter((c) => c.done).length;

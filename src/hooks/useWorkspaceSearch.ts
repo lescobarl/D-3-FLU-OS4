@@ -30,7 +30,7 @@ import {
     type SearchConfigOverrides,
     type SearchRuntimeConfig,
 } from '../core/search/searchConfigOverrides';
-import { dayKey } from '../core/browser/browserSession';
+import { dayKey } from '../lib/dateKey';
 import { postGeminiContract } from '../services/geminiContractClient';
 
 export type SearchLevel = 'simple' | 'detallado' | 'avanzado';

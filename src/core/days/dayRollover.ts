@@ -6,14 +6,7 @@
 // mezclar días. Este módulo concentra el criterio (puro y testeable).
 // ============================================================
 
-/** Clave de día local `YYYY-MM-DD` para un timestamp. */
-export function dayKey(ts: number): string {
-  const d = new Date(ts);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+import { dayKey } from '../../lib/dateKey'
 
 /**
  * true si hay que cerrar el día anterior:

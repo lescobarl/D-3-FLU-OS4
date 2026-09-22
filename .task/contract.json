@@ -1,20 +1,23 @@
 {
-  "id": "C21",
+  "id": "C58",
   "mode": "full",
-  "task": "Voz — un solo punto de síntesis (TTS)",
-  "base": "3119ff1c5601ed109dfd760d90af71c8cd9513bd",
-  "objective": "Un único módulo encapsula speechSynthesis; el resto consume esa API.",
+  "task": "Fuente única de la clave de día local (YYYY-MM-DD)",
+  "base": "d4c5c603fae600ce4cde38ee698e8729cf977504",
+  "objective": "Un único módulo (src/lib/dateKey.ts) implementa la clave de día local; el resto la importa.",
   "allow": [
+    "src/lib/dateKey.ts",
     "src/App.tsx",
-    "src/hooks/useConfigPersistence.ts",
-    "src/hooks/useFluParticipant.ts",
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "src/core/autonomy/healthMonitor.ts",
-    "src/voice/lib/fluSpeech.js",
-    "src/voice/components/FluParticipantSettingsPanel.jsx",
-    "src/services/localTts.ts",
-    "src/core/config/sharedConfig.ts",
-    "tests/localTts.test.ts"
+    "src/components/panelUtils.ts",
+    "src/core/agenda/agendaSummary.ts",
+    "src/core/browser/browserSession.ts",
+    "src/core/contacts/contactService.ts",
+    "src/core/days/dayRollover.ts",
+    "src/core/habits/habitService.ts",
+    "src/core/multiuser/participantRegistry.ts",
+    "src/hooks/useWorkspaceSearch.ts",
+    "tests/dateKeyGuard.test.ts",
+    "tests/browserSession.test.ts",
+    "tests/dayRollover.test.ts"
   ],
   "deny": [
     ".task/**",
@@ -28,20 +31,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 10,
+  "maxFiles": 20,
   "maxLines": 500,
-  "dod": "npx vitest run tests/ttsPuntoUnicoGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/ttsPuntoUnicoGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/dateKeyGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/dateKeyGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un único módulo usa speechSynthesis",
+    "statement": "Una sola implementación de la clave de día local (YYYY-MM-DD)",
     "metric": {
-      "command": "node scripts/audit-metric.mjs tts-punto-unico",
+      "command": "node scripts/audit-metric.mjs daykey-impls",
       "target": 1
     },
-    "base": "3119ff1c5601ed109dfd760d90af71c8cd9513bd",
+    "base": "d4c5c603fae600ce4cde38ee698e8729cf977504",
     "guardFiles": [
-      "tests/ttsPuntoUnicoGuard.test.ts"
+      "tests/dateKeyGuard.test.ts"
     ]
   }
 }

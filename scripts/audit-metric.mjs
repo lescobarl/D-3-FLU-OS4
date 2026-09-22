@@ -202,6 +202,32 @@ function onboardingDirectWriters() {
   return [...hits].sort()
 }
 
+// ---- C58: fuente unica de la clave de dia local (YYYY-MM-DD) --------------
+/** Implementaciones del formateador de dia local (getFullYear/getMonth/getDate). */
+function dateKeyImpls() {
+  const hits = []
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (!/\.(ts|tsx|js|jsx)$/.test(r)) continue
+    const ls = linesOf(f)
+    for (let i = 0; i < ls.length; i++) {
+      if (isCommentLine(ls[i])) continue
+      if (!/getFullYear\s*\(/.test(ls[i])) continue
+      const win = ls.slice(i, i + 6).join('\n')
+      const ok =
+        /`[^`]*\$\{[^}`]*\}-\$\{[^}`]*\}-\$\{[^}`]*\}[^`]*`/.test(win) &&
+        /getMonth\(\)\s*\+\s*1/.test(win) &&
+        /getDate\(\)/.test(win) &&
+        !/getHours\(|getMinutes\(|getDay\(/.test(win)
+      if (ok) {
+        hits.push(`${r}:${i + 1}`)
+        i += 5
+      }
+    }
+  }
+  return hits
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -435,6 +461,8 @@ const metrics = {
   'wake-internal': () => wakeInternalOccurrences().length,
   // ---- C44 ---------------------------------------------------------------
   'onboarding-writers': () => onboardingDirectWriters().length,
+  // ---- C58 ---------------------------------------------------------------
+  'daykey-impls': () => dateKeyImpls().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')

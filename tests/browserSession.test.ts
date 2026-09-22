@@ -8,10 +8,10 @@
 //   - dayKey (clave diaria del límite de tiempo)
 // ============================================================
 import { describe, expect, it } from 'vitest';
+import { dayKey } from '../src/lib/dateKey';
 
 import {
     buildBrowserUrl,
-    dayKey,
     extractSiteFromPhrase,
     isDomainAllowed,
     normalizeHost,

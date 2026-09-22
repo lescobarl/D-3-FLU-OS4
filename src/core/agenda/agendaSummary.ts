@@ -7,6 +7,7 @@
 // Puro, sin I/O: recibe los items y el reloj. La UI y el handler de voz
 // consumen ESTO (fuente única de la consulta hablable).
 // ============================================================
+import { dayKey } from '../../lib/dateKey'
 import { itemsInView, type AgendaView } from './agendaQuery';
 import { nextAgendaDue, colorForKind, type AgendaColorMap, type AgendaItem } from './agendaModel';
 
@@ -24,11 +25,6 @@ export interface AgendaSummaryLine {
 function localHHMM(at: number): string {
     const d = new Date(at);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function localDayKey(at: number): string {
-    const d = new Date(at);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export interface AgendaSummaryResult {
@@ -62,7 +58,7 @@ export function summarizeAgenda(
             };
         })
         .sort((a, b) => {
-            const dk = localDayKey(a.dueAt).localeCompare(localDayKey(b.dueAt));
+            const dk = dayKey(a.dueAt).localeCompare(dayKey(b.dueAt));
             return dk !== 0 ? dk : a.time.localeCompare(b.time);
         });
 

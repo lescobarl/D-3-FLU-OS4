@@ -51,7 +51,8 @@ import { useSearchSites } from './hooks/useSearchSites';
 import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
 import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
 import { STORAGE_KEYS, WELCOME_MESSAGE, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
-import { dayKey, shouldRolloverDay } from './core/days/dayRollover';
+import { shouldRolloverDay } from './core/days/dayRollover';
+import { dayKey } from './lib/dateKey';
 import type { ConversationState, FluContract, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
 import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
@@ -3808,8 +3809,7 @@ function App() {
             }
 
             if (!content) return '';
-            const today = new Date();
-            const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const dateKey = dayKey();
             const result = await diary.addEntry({
                 date: dateKey,
                 content,
