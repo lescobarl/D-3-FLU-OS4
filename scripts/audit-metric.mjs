@@ -49,7 +49,11 @@ const RE = {
   staleStack: /React 18|Vite 5|Tailwind CSS 3/g,
   notasCompras: /fluDb\.(?:notes|shoppingItems)/,
   timeoutsConfig: /\b[A-Z_]*TIMEOUT(?:_MS)?\s*=/,
-  ttsPoint: /speechSynthesis/,
+  // Mide IMPLEMENTACION de sintesis (no el literal): construccion del utterance,
+  // acceso al motor y llamadas al motor. Case-insensitive a proposito: el literal
+  // /speechSynthesis/ dejaba invisible `SpeechSynthesisUtterance` y `getSpeechEngine`.
+  ttsPoint:
+    /new\s+SpeechSynthesisUtterance\s*\(|getSpeechEngine\s*\(|getSpeechSynthesis\s*\(|speechSynthesis\.(?:speak|cancel|getVoices|resume)\s*\(/i,
   modeloDefault: /gemini-2\.5-flash-lite/,
   appNormaliza: /normalizeCommandForDeterministic\s*\(|actionBelongsToTranscript\s*\(/,
   commitSites: /commitUserTurnRow\s*\(/,

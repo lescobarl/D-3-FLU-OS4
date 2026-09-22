@@ -8,7 +8,11 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
-const RE = /speechSynthesis/
+// Mide IMPLEMENTACION, no el literal (AGENTS.md 7.7.d): construccion del
+// utterance, acceso al motor y llamadas al motor. Case-insensitive: el literal
+// /speechSynthesis/ era ciego a `SpeechSynthesisUtterance` y `getSpeechEngine`.
+const RE =
+  /new\s+SpeechSynthesisUtterance\s*\(|getSpeechEngine\s*\(|getSpeechSynthesis\s*\(|speechSynthesis\.(?:speak|cancel|getVoices|resume)\s*\(/i
 function walk(dir: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
     const p = join(dir, e)

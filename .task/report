@@ -700,3 +700,54 @@ CAMBIO APLICADO (B1):
 
 NOTA DE ALCANCE: .task/contract.json sigue describiendo C21 (TTS). Con la
 metrica corregida, C21 nace ROJO (2 -> 1), que es el estado exigido por 0.11.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque B1 (metrica) + B2 (TTS punto unico)
+================================================================
+OBJETIVO UNICO: un solo modulo ejecuta la sintesis de voz (C21) y la
+metrica/guard lo miden de verdad.
+
+ANTES (medido, no supuesto):
+  node scripts/audit-metric.mjs tts-punto-unico            -> 2
+  npx vitest run tests/ttsPuntoUnicoGuard.test.ts          -> ROJO, N=2
+      src/services/localTts.ts
+      src/voice/lib/fluSpeech.js
+  (Antes de esta enmienda la metrica daba 1 y el guard VERDE: media el
+   literal /speechSynthesis/ case-sensitive, ciego a SpeechSynthesisUtterance.)
+
+DESPUES (medido):
+  node scripts/audit-metric.mjs tts-punto-unico            -> 1
+  npx vitest run tests/ttsPuntoUnicoGuard.test.ts          -> VERDE (N=1)
+
+CAMBIO:
+  - scripts/audit-metric.mjs (RE.ttsPoint): mide IMPLEMENTACION
+    (new SpeechSynthesisUtterance | getSpeechEngine | getSpeechSynthesis |
+     speechSynthesis.speak|cancel|getVoices|resume), case-insensitive.
+  - tests/ttsPuntoUnicoGuard.test.ts: mismo criterio.
+  - src/services/localTts.ts: deja de construir utterances; consume la API
+    unica de fluSpeech (speakResponse/cancelSpeech/getSpeechVoices/isSpeechBusy).
+    Se elimina el export getSpeechSynthesis (sin consumidores fuera del modulo).
+  - tests/localTts.test.ts: pasa a verificar el adaptador con el modulo de voz
+    mockeado (determinista, entorno node). Los assert sobre el utterance interno
+    pertenecen a fluSpeech, que ya cubre locale y el "no forzar voz extranjera"
+    (tests/fluSpeech-japanese.test.ts).
+
+GUARD DE COMPORTAMIENTO (seccion 0.12): el adaptador se ejecuta de verdad
+(enqueue, onEnd, onError, guards de error) con el motor mockeado; no es un
+guard de conteo.
+
+BASELINE / REGRESION:
+  suite completa antes: 276 archivos / 2911 tests / 0 fallos
+  suite completa despues: 276 archivos / 2910 tests / 0 fallos
+  (-1 test: se retira un assert que verificaba la implementacion duplicada;
+   el caso real queda cubierto en fluSpeech-japanese.)
+
+CONGELADO (0.14): re-congelados por hash
+  scripts/audit-metric.mjs        sha256=61fe8b12a2ed0ba8d8e18304113165e78169f0929ce1243913b613f81daa7f24
+  tests/ttsPuntoUnicoGuard.test.ts sha256=7564f0a6ef53efea8a5fe864be2775297ecdad390de80cadb66286d1b81561c1
+
+NO VALIDADO (reservado al usuario): la escucha real en pantalla (voz del SO).
+
+PENDIENTE POR DISENO: la metrica catch-silencioso sigue con la regla laxa
+('console.*' cuenta). Su ajuste va junto con los 296 bloques en el bloque B3
+(metrica + guard + correccion, en el mismo hito) para no dejar la suite roja.

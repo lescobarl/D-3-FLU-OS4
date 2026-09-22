@@ -11,7 +11,13 @@
 //     testables sin navegador real.
 // ============================================================
 
-import { getSpeechEngine } from '../voice/lib/fluSpeech';
+import {
+    cancelSpeech,
+    getSpeechVoices,
+    isSpeechBusy,
+    isSpeechSupported,
+    speakResponse,
+} from '../voice/lib/fluSpeech';
 
 export interface LocalTtsOptions {
     lang?: string;
@@ -36,14 +42,9 @@ export interface NarrationSegment {
     text: string;
 }
 
-export function getSpeechSynthesis(): SpeechSynthesis | null {
-    return getSpeechEngine();
-}
-
-/** True si el motor TTS del navegador está reproduciendo o tiene cola. */
+/** True si el motor TTS del navegador esta reproduciendo o tiene cola. */
 export function isTtsSpeaking(): boolean {
-    const synth = getSpeechSynthesis();
-    return Boolean(synth && (synth.speaking || synth.pending));
+    return isSpeechBusy();
 }
 
 function mapVoice(voice: SpeechSynthesisVoice): LocalTtsVoiceInfo {
@@ -62,9 +63,7 @@ function mapVoice(voice: SpeechSynthesisVoice): LocalTtsVoiceInfo {
  * flag, devuelve todas las voces como fallback.
  */
 export function getLocalVoices(): LocalTtsVoiceInfo[] {
-    const synth = getSpeechSynthesis();
-    if (!synth) return [];
-    const voices = synth.getVoices();
+    const voices = getSpeechVoices();
     if (!Array.isArray(voices) || voices.length === 0) return [];
     const mapped = voices.map(mapVoice);
     const local = mapped.filter((v) => v.localService);
@@ -113,59 +112,28 @@ export interface SpeakResult {
  * un código de error legible (sin excepciones).
  */
 export function speakLocal(text: string, options: LocalTtsOptions = {}): SpeakResult {
-    const synth = getSpeechSynthesis();
-    if (!synth) return { started: false, error: 'tts-unavailable' };
+    // Motor UNICO: esta capa NO construye utterances; delega en fluSpeech.
+    if (!isSpeechSupported()) return { started: false, error: 'tts-unavailable' };
     const clean = (text || '').trim();
     if (!clean) return { started: false, error: 'empty-text' };
-    const voices = getLocalVoices();
-    const voice = pickBestLocalVoice(voices, options.lang || 'es');
+    const voice = pickBestLocalVoice(getLocalVoices(), options.lang || 'es');
     if (!voice) return { started: false, error: 'no-local-voice' };
 
-    let utterance: SpeechSynthesisUtterance;
-    try {
-        utterance = new SpeechSynthesisUtterance(clean);
-    } catch {
-        console.warn('[catch] src/services/localTts.ts');
-        return { started: false, error: 'utterance-unsupported' };
-    }
-
-    const matched = synth.getVoices().find((v) => v.voiceURI === voice.voiceURI);
-    // No forzar una voz de OTRO idioma (leería el texto en inglés): si la voz
-    // elegida no comparte idioma con el solicitado, se deja sin voz para que el
-    // motor use el `lang` pedido (evita "narración en inglés").
-    const requested = (options.lang || 'es').trim().toLowerCase();
-    const requestedFamily = requested.split('-')[0];
-    const voiceLang = String(voice.lang || '').toLowerCase();
-    const sameLanguage =
-        voiceLang === requested || (!!requestedFamily && voiceLang.startsWith(requestedFamily));
-    if (matched && sameLanguage) utterance.voice = matched;
-    utterance.lang = sameLanguage ? voice.lang : (options.lang || 'es');
-    if (typeof options.rate === 'number') utterance.rate = options.rate;
-    if (typeof options.pitch === 'number') utterance.pitch = options.pitch;
-
-    utterance.onstart = () => options.onStart?.();
-    utterance.onend = () => options.onEnd?.();
-    utterance.onerror = (event) => {
-        // cancel() dispara un evento 'canceled' que no debe tratarse como error.
-        if (event && event.error === 'canceled') {
-            options.onEnd?.();
-            return;
-        }
-        options.onError?.(event);
-    };
-
-    // Evita solapamiento con reproducciones anteriores.
-    synth.cancel();
-    synth.speak(utterance);
+    options.onStart?.();
+    speakResponse(clean, options.lang || 'es', {
+        rate: options.rate,
+        pitch: options.pitch,
+    }).then(
+        () => options.onEnd?.(),
+        (error: unknown) => options.onError?.(error),
+    );
     return { started: true };
 }
 
 /** Detiene cualquier reproducción de voz local en curso. */
 export function stopLocalSpeech(): void {
-    const synth = getSpeechSynthesis();
-    if (synth) {
-        synth.cancel();
-    }
+    // Motor UNICO: delega en fluSpeech (C21).
+    cancelSpeech();
 }
 
 /**
