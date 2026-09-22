@@ -45,6 +45,13 @@
 `test:full`, `build`, `e2e`. `npm run gate` es de **cierre de tarea** (valida UN contrato contra
 su base), NO un gate de repo: no se ejecuta en CI ni en cada commit.
 
+**Registro único de excepciones capturadas:** todo `catch` registra por
+`logCaughtError(contexto, ...detalles)` (`src/lib/caughtError.ts`). Es la vía por
+la que un `catch` deja de ser silencioso (§2.6). `console.*` **no** cuenta como
+registro; `catchSilenciosoGuard` lo verifica. El helper no importa nada de forma
+estática (carga el relay de forma diferida) para no cerrar el ciclo
+`fluConfig -> sharedConfig -> caughtError -> clientLogRelay -> fluConfig`.
+
 ---
 
 ## 0. PROTOCOLO DE VERDAD Y EJECUCIÓN
