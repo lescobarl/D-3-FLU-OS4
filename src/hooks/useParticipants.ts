@@ -17,7 +17,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
-import { buildSyncTuple } from '../core/db/syncTuple';
 import {
   createParticipantRegistry,
   resolveKindRole,
@@ -29,7 +28,11 @@ import {
   type UpsertResult,
 } from '../core/multiuser/participantRegistry';
 import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
+import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { logCaughtError } from '../lib/caughtError';
+
+/** Gateway único de la tabla onboardingStates (C44: un solo escritor). */
+const onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates });
 
 // ------------------------------------------------------------
 // Tipos
@@ -171,13 +174,8 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
         // ACTIVE_USER. Sin esto, en la siguiente carga el id eliminado seguía
         // activo y su onboarding completado hacía que el perfil reapareciera.
         try {
-          const row = await fluDb.onboardingStates.get(id);
-          if (row) {
-            await fluDb.onboardingStates.put({
-              ...row,
-              sync: { ...buildSyncTuple(row.sync, Date.now()), deleted: true },
-            });
-          }
+          // Borrado lógico vía gateway (C44: un solo escritor de onboardingStates).
+          await onboardingGateway.reset(id);
         } catch (err) {
           logCaughtError('[useParticipants] onboarding cleanup error', err);
         }

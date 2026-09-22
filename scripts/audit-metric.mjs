@@ -181,6 +181,27 @@ function wakeInternalOccurrences(src = existsSync(WAKE_CONFIG_FILE) ? read(WAKE_
   return out
 }
 
+// ---- C44: un solo escritor de onboardingStates ----------------------------
+const ONBOARDING_WRITE =
+  /fluDb\.onboardingStates\.(?:put|add|update|modify|delete|bulkDelete|clear)\s*\(/
+
+/** Archivos con escritura DIRECTA a la tabla onboardingStates (fuera del gateway). */
+function onboardingDirectWriters() {
+  const hits = new Set()
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (!/\.(ts|tsx|js|jsx)$/.test(r)) continue
+    for (const line of linesOf(f)) {
+      if (isCommentLine(line)) continue
+      if (ONBOARDING_WRITE.test(line)) {
+        hits.add(r)
+        break
+      }
+    }
+  }
+  return [...hits].sort()
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -412,6 +433,8 @@ const metrics = {
   'remote-hardcode': () => remoteHardcodeFiles().length,
   // ---- C56 ---------------------------------------------------------------
   'wake-internal': () => wakeInternalOccurrences().length,
+  // ---- C44 ---------------------------------------------------------------
+  'onboarding-writers': () => onboardingDirectWriters().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')

@@ -963,3 +963,33 @@ BASELINE / REGRESION:
   despues: 281 archivos / 2941 tests / 0 fallos
 
 NO VALIDADO (usuario): que la escucha por voz siga reconociendo la wake en pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C44 (un solo escritor de onboardingStates)
+================================================================
+OBJETIVO UNICO: toda escritura de `onboardingStates` pasa por el gateway.
+
+ANTES:  node scripts/audit-metric.mjs onboarding-writers -> 1
+        src/hooks/useParticipants.ts:177 (put directo reimplementando el borrado
+        logico que el gateway ya hace en createOnboardingService().reset()).
+        guard tests/onboardingWriterGuard.test.ts (nace ROJO): lista useParticipants.
+DESPUES: onboarding-writers -> 0 ; guard -> VERDE (4 tests).
+
+FIX (src/hooks/useParticipants.ts): se crea una instancia del gateway
+(`onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates })`) y
+el borrado logico se hace con `onboardingGateway.reset(id)` en vez del put
+directo. Se elimina el import ya no usado `buildSyncTuple`. Efecto neto igual
+(borrado logico) + ahora queda registro de auditoria (reset lo emite).
+
+METRICA 'onboarding-writers': archivos (excluye comentarios) con
+`fluDb.onboardingStates.(put|add|update|modify|delete|bulkDelete|clear)`.
+
+DESVIACION HONESTA: el plan daba "2->1"; medido con comando el valor real HOY
+era 1 (useParticipants) y la meta correcta es 0 escritores directos (el gateway
+recibe la tabla por DI y no usa `fluDb.`). No se fuerza el numero del plan.
+
+BASELINE / REGRESION:
+  antes:   281 archivos / 2941 tests / 0 fallos
+  despues: 282 archivos / 2945 tests / 0 fallos ; typecheck 0
+
+NO VALIDADO (usuario): que al borrar un usuario su onboarding no reaparezca.
