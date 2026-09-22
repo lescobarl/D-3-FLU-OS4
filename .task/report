@@ -898,3 +898,37 @@ BASELINE / REGRESION:
   despues: 279 archivos / 2930 tests / 0 fallos
 
 NO VALIDADO (usuario): que una BD real existente migre a v22 sin error en pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C48 (hosts remotos solo desde config)
+================================================================
+OBJETIVO UNICO: ningun modulo fuera de config quema un host remoto.
+
+ANTES:  node scripts/audit-metric.mjs remote-hardcode -> 2
+        - src/voice/lib/geminiDiagnostics.js: https://aistudio.google.com/apikey
+        - src/voice/lib/visualConfig.js:      https://api.openverse.org/v1/images/
+        guard tests/remoteResourceGuard.test.ts (nace ROJO): lista ambos.
+DESPUES: node scripts/audit-metric.mjs remote-hardcode -> 0
+        guard tests/remoteResourceGuard.test.ts -> VERDE (6 tests)
+
+FIX: nueva fuente unica `REMOTE_RESOURCE_URLS` en src/core/config/sharedConfig.ts
+(config ya existente de endpoints remotos; no se crea una segunda config).
+Consumidores: geminiDiagnostics.js y visualConfig.js importan de ahi.
+
+METRICA 'remote-hardcode' (audit-metric.mjs): cuenta ARCHIVOS fuera de
+src/core/config/** y fluConfig.js con un host remoto en posicion de codigo.
+Excluye: hosts locales (localhost/127.0.0.1/::1), namespace XML www.w3.org y
+URLs que son solo texto de UI (placeholder=..., hints). Un fallo real detectado
+al instrumentar: stripComment cortaba el `//` de la propia URL; se usa un filtro
+que solo descarta lineas-comentario.
+
+NOTA DE REALIDAD: la cifra provisional del plan era 4; el detalle D33-D36 no
+existe en el repo. Medido con comando el valor real HOY = 2 (los otros literales
+son texto de UI, namespaces XML o comentarios). No se inventa el numero.
+
+BASELINE / REGRESION:
+  antes:   279 archivos / 2930 tests / 0 fallos
+  despues: 280 archivos / 2936 tests / 0 fallos
+
+NO VALIDADO (usuario): que la busqueda Openverse y el hint de API key sigan
+mostrandose igual en pantalla.

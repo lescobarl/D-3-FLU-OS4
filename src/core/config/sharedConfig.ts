@@ -165,6 +165,17 @@ export const POLLINATIONS_DEFAULTS = {
     DEFAULT_PARAMS: 'nologo=true',
 } as const;
 
+/**
+ * URLs de recursos remotos de terceros (fuente ÚNICA, C48).
+ * Ningún módulo fuera de `src/core/config/**` debe quemar un host remoto.
+ */
+export const REMOTE_RESOURCE_URLS = {
+    /** Página oficial para crear/gestionar la API key de Gemini. */
+    GEMINI_API_KEY_PAGE: 'https://aistudio.google.com/apikey',
+    /** Catálogo abierto de imágenes con licencia (Openverse). */
+    OPENVERSE_IMAGES_API: 'https://api.openverse.org/v1/images/',
+} as const;
+
 /** Timeout Policy (V12 — delays de política). */
 export const TIMEOUT_POLICY_MS = {
     onboardingGestureCleanup: 10_000,

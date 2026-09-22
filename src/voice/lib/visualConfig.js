@@ -1,4 +1,4 @@
-import { POLLINATIONS_DEFAULTS } from '../../core/config/sharedConfig'
+import { POLLINATIONS_DEFAULTS, REMOTE_RESOURCE_URLS } from '../../core/config/sharedConfig'
 
 export const VISUAL_CONFIG = {
   image: {
@@ -37,7 +37,7 @@ export const VISUAL_CONFIG = {
       enhance: true,
     },
     openverse: {
-      apiBase: 'https://api.openverse.org/v1/images/',
+      apiBase: REMOTE_RESOURCE_URLS.OPENVERSE_IMAGES_API,
     },
     prompt: {
       maxSubjectChars: 320,

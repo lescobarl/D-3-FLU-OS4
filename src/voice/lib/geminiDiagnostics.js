@@ -1,9 +1,10 @@
 /**
  * Mensajes de error Gemini legibles para la UI (es/en).
  */
-// URL oficial para crear/gestionar la Gemini API key. Centralizada para no
-// repetir la ruta hardcodeada en los mensajes (Rule #1: NO HARDCODE).
-const GEMINI_API_KEY_URL = 'https://aistudio.google.com/apikey'
+import { REMOTE_RESOURCE_URLS } from '../../core/config/sharedConfig'
+
+// URL oficial para crear/gestionar la Gemini API key (Rule #1: NO HARDCODE).
+const GEMINI_API_KEY_URL = REMOTE_RESOURCE_URLS.GEMINI_API_KEY_PAGE
 
 const HINTS = {
   missing_api_key: {

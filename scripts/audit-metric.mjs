@@ -31,6 +31,8 @@ const stripComment = (line) => {
   if (t.startsWith('*') || t.startsWith('/*') || t.startsWith('//')) return ''
   return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
 }
+/** Solo descarta lineas que SON comentario (no corta `//` dentro de strings/URLs). */
+const isCommentLine = (line) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
 
 const RE = {
   vozInstancia: /new\s+Recognition\s*\(|new\s+(?:window\.)?(?:webkit)?SpeechRecognition\s*\(/,
@@ -95,6 +97,43 @@ function dexieSchemaState(src = existsSync(DEXIE_SCHEMA_FILE) ? read(DEXIE_SCHEM
 function liveLegacyTables(src) {
   const state = dexieSchemaState(src)
   return LEGACY_TABLES.filter((t) => state.get(t) === 'declared')
+}
+
+// ---- C48: hosts remotos quemados fuera de config --------------------------
+// Fuentes que YA son config (pueden declarar URLs).
+const REMOTE_CONFIG_OWNED = (r) => r.startsWith('src/core/config/') || r === 'src/voice/lib/fluConfig.js'
+// Hosts locales o namespaces XML: no son recursos remotos.
+const REMOTE_HOST_EXCLUDE = new Set(['localhost', '127.0.0.1', '::1', 'www.w3.org'])
+
+/** Host remoto de un literal URL en posicion de codigo (asignacion/propiedad/arg). */
+function remoteHostOf(line) {
+  if (!/(?:[:,(]\s*|=\s+)['"`]https?:\/\//.test(line)) return null
+  const m = line.match(/['"`](https?:\/\/[^'"`\s]+)['"`]/)
+  if (!m) return null
+  try {
+    const host = new URL(m[1]).hostname
+    return REMOTE_HOST_EXCLUDE.has(host) ? null : host
+  } catch {
+    return null
+  }
+}
+
+/** Archivos fuera de config con al menos un host remoto quemado. */
+function remoteHardcodeFiles() {
+  const hits = new Set()
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (!/\.(ts|tsx|js|jsx)$/.test(r) || REMOTE_CONFIG_OWNED(r)) continue
+    for (const line of linesOf(f)) {
+      // OJO: no usar stripComment (corta el `//` de la propia URL).
+      if (isCommentLine(line)) continue
+      if (remoteHostOf(line)) {
+        hits.add(r)
+        break
+      }
+    }
+  }
+  return [...hits].sort()
 }
 
 const CONSUMER_NORM_FILES = new Set([
@@ -324,6 +363,8 @@ const metrics = {
   // Tablas legacy que siguen VIVAS en el esquema Dexie efectivo (declaradas y
   // no borradas con `: null` en alguna version posterior).
   'legacy-tables': () => liveLegacyTables().length,
+  // ---- C48 ---------------------------------------------------------------
+  'remote-hardcode': () => remoteHardcodeFiles().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')
