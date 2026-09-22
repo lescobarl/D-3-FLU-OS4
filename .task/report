@@ -666,3 +666,37 @@ Validado contra:
 
 No validado (DoD-producto, reservado al usuario): pantallas reales.
 
+
+
+================================================================
+[ENMIENDA FORMAL] 2026-09-22 - Bloque B1 (reparacion de la barrera)
+Autorizada por el usuario: "adelante ... puedes ejecutar de acuerdo a tu criterio"
+================================================================
+MOTIVO (defectos medidos, no supuestos):
+ 1. El pre-commit ejecutaba `npm run gate`, que valida UN contrato de tarea
+    (.task/contract.json, base 3119ff1) contra su base. Con el arbol avanzado,
+    el gate SIEMPRE falla -> bloquea cualquier commit legitimo. Medido:
+    "Archivos FUERA de alcance" (18+ archivos) con el arbol en verde (2911 tests).
+ 2. Lo mismo ocurre en CI: el paso "Gate ... OBLIGATORIO" hace el CI
+    estructuralmente rojo. AGENTS.md seccion 5 prescribe pre-commit LIGERO.
+ 3. .task/baseline.json NO es baseline de fallos: es una lista de 113 rutas de
+    archivo (git diff --name-only). El "0 fallos nuevos" (seccion 0.15) era
+    inverificable.
+ 4. La metrica tts-punto-unico y el guard ttsPuntoUnicoGuard median el literal
+    /speechSynthesis/ (case-sensitive) -> 1 archivo, VERDE, mientras existian
+    2 puntos de sintesis reales. Igual en catchSilenciosoGuard/audit-metric:
+    `console.` contaba como "manejado".
+
+BASELINE DE FALLOS (seccion 0.15), medido ANTES de tocar codigo:
+  npm run test:full -> 276 archivos / 2911 tests, 0 fallos. Deuda preexistente: 0.
+
+CAMBIO APLICADO (B1):
+ - .git/hooks/pre-commit -> npm run lint && npm run typecheck  (LIGHT, seccion 5)
+ - .github/workflows/ci.yml -> se retira el paso de gate de tarea (queda lint,
+   typecheck, test:full, build, e2e)
+ - AGENTS.md Anexo 0 -> "Barrera real" corregida
+ - (pendiente en B1) audit-metric.mjs + ttsPuntoUnicoGuard + catchSilenciosoGuard
+   pasan a medir IMPLEMENTACION, no literal; se re-congelan por hash.
+
+NOTA DE ALCANCE: .task/contract.json sigue describiendo C21 (TTS). Con la
+metrica corregida, C21 nace ROJO (2 -> 1), que es el estado exigido por 0.11.

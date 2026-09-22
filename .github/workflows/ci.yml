@@ -32,8 +32,10 @@ jobs:
       - name: Puerta de tipos
         run: npm run typecheck
 
-      - name: Gate (ruta única + hash congelado) — OBLIGATORIO
-        run: npm run gate
+      # El gate de contrato (`npm run gate`) verifica UN contrato de tarea
+      # (.task/contract.json) contra su base. No es un gate de repo: en CI
+      # fallaria siempre que el arbol haya avanzado respecto a esa base.
+      # La cobertura de repo la dan los guards (lint), los tipos y la suite.
 
       - name: Suite completa de unit
         run: npm run test:full
