@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { clamp, normalizeForMatch, hasToken, hasAnyToken } from './gameUtils';
+import { clamp, normalizeForMatch, hasToken, hasAnyToken, adoptRandom } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -330,14 +330,8 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): QuienSoyState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: QuienSoyState = {
             order: shuffleOrder(rng),
             cursor: 0,
@@ -360,7 +354,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         id: 'quien_soy',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<QuienSoyState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'quien_soy',
                 state: {

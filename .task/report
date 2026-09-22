@@ -1023,3 +1023,29 @@ REGRESION:
 
 NO VALIDADO (usuario): que diario/habitos/contactos/cumpleanos y el rollover de dia
 sigan mostrando la MISMA fecha local que antes en su pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C59 (adopcion del RNG unica)
+================================================================
+OBJETIVO UNICO: una sola implementacion de "adoptar cfg.random si es funcion".
+
+ANTES: node scripts/audit-metric.mjs game-adopt-random -> 20
+  19 motores + gameUtils con el patron typeof cfg.random === 'function'.
+  guard tests/gameAdoptRandomGuard.test.ts (nace ROJO): lista los 20.
+DESPUES: game-adopt-random -> 1 (solo src/core/games/gameUtils.ts); guard -> VERDE (4 tests).
+
+FIX: gameUtils.adoptRandom pasa a firma PURA (current, cfg) => RandomSource
+  (antes recibia un ref { current }); los 19 motores asignan rng = adoptRandom(rng, cfg)
+  - 16 con helper/llamadas locales (abecedario, adivinaNumero, ahorcado, calculoMental,
+    cuentoColaborativo, karaoke, memoriaSecuencias, ordenaSecuencia, palabrasEncadenadas,
+    quienSoy, repiteTraduce, riddles, simonDice, trabalenguas, trivia, veoVeo): se elimina
+    el helper local y se importa el canonico.
+  - 3 con el bloque inline en buildState (adivinaCancion, loteria, storyteller): idem.
+
+REGRESION:
+  antes:   283 archivos / 2950 tests / 0 fallos
+  despues: 284 archivos / 2954 tests / 0 fallos ; typecheck 0 ; lint limpio.
+  (el test gameEngine sigue verde: el RNG inyectado via options.random se adopta igual)
+
+NO VALIDADO (usuario): que los 19 juegos mantengan su aleatoriedad/determinismo
+esperado al jugar en su pantalla.

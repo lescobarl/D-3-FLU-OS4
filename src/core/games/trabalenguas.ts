@@ -15,6 +15,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasToken, hasAnyToken,
+    adoptRandom,
 } from './gameUtils';
 
 export interface TrabalenguasItem {
@@ -76,19 +77,13 @@ function currentPrompt(state: TrabalenguasState): string {
 export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
         const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: TrabalenguasState = {
             order: TRABALENGUAS_BANK.map((_, index) => index),
             cursor: 0,
@@ -109,7 +104,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
         id: 'trabalenguas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TrabalenguasState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const order = TRABALENGUAS_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
                 const j = Math.floor(rng() * (i + 1));

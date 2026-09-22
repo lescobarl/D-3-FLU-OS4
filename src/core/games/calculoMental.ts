@@ -22,6 +22,7 @@ import {
     hasAnyToken,
     pickRandom,
     resolveNumericAnswer,
+    adoptRandom,
 } from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
@@ -112,14 +113,8 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CalculoMentalState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const config = readConfig(cfg);
         const state: CalculoMentalState = {
             ...generateOperation(config.operaciones, config.maxSuma, rng),
@@ -138,7 +133,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         id: 'calculo_mental',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CalculoMentalState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const config = readConfig(optionsConfig);
             return {
                 id: 'calculo_mental',

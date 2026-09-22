@@ -16,6 +16,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasToken, hasAnyToken,
+    adoptRandom,
 } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
@@ -102,12 +103,6 @@ function isOrderedMatch(sub: readonly string[], seq: readonly string[]): boolean
 export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource }): GameEngine<MemoriaSecuenciasState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
         const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
         return clamp(rounds, 1, MAX_ROUNDS);
@@ -119,7 +114,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: MemoriaSecuenciasState = {
             sequence: buildSequence(2, rng),
             cursor: 0,
@@ -137,7 +132,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         id: 'memoria_secuencias',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<MemoriaSecuenciasState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'memoria_secuencias',
                 state: {

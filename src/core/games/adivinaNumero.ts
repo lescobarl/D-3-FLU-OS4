@@ -23,6 +23,7 @@ import {
     hasToken,
     hasAnyToken,
     resolveNumericAnswer,
+    adoptRandom,
 } from './gameUtils';
 
 const DEFAULT_MIN = 1;
@@ -91,17 +92,11 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         };
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     return {
         id: 'adivina_numero',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaNumeroState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
             return {
                 id: 'adivina_numero',
@@ -121,7 +116,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
             const state = session.state as AdivinaNumeroState;
             state.number = pickNumber(cfg.min, cfg.max, rng);

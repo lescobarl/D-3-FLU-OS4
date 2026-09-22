@@ -22,6 +22,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasAnyToken,
+    adoptRandom,
 } from './gameUtils';
 
 export interface CuentoItem {
@@ -100,19 +101,13 @@ function closePrompt(state: CuentoColaborativoState, _score: number): string {
 export function createCuentoColaborativoEngine(options?: { random?: RandomSource }): GameEngine<CuentoColaborativoState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readTurnos = (cfg: Record<string, unknown> | undefined): number => {
         const turnos = Number(cfg?.turnos) || Number(cfg?.defaultTurnos) || DEFAULT_TURNOS;
         return clamp(turnos, 2, MAX_TURNOS);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentoColaborativoState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const item = CUENTO_BANK[Math.floor(rng() * CUENTO_BANK.length)];
         const state: CuentoColaborativoState = {
             cuento: [item.inicio],
@@ -131,7 +126,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         id: 'cuento_colaborativo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentoColaborativoState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const item = CUENTO_BANK[Math.floor(rng() * CUENTO_BANK.length)];
             return {
                 id: 'cuento_colaborativo',

@@ -15,6 +15,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasToken, hasAnyToken, pickRandom,
+    adoptRandom,
 } from './gameUtils';
 
 export interface AhorcadoWord {
@@ -117,19 +118,13 @@ function isComplete(state: AhorcadoState): boolean {
 export function createAhorcadoEngine(options?: { random?: RandomSource }): GameEngine<AhorcadoState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readIntentos = (cfg: Record<string, unknown> | undefined): number => {
         const intentos = Number(cfg?.intentos) || Number(cfg?.maxIntentos) || DEFAULT_INTENTOS;
         return clamp(intentos, 3, MAX_INTENTOS);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AhorcadoState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const word = pickRandom(AHORCADO_BANK, rng);
         const state: AhorcadoState = {
             palabra: word.palabra,
@@ -149,7 +144,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         id: 'ahorcado',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AhorcadoState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const word = pickRandom(AHORCADO_BANK, rng);
             return {
                 id: 'ahorcado',

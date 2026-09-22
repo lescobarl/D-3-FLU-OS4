@@ -20,6 +20,7 @@ import {
     hasToken,
     hasAnyToken,
     shuffleOrder,
+    adoptRandom,
 } from './gameUtils';
 
 export interface SongOption {
@@ -152,9 +153,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
     };
 
     const buildState = (cfg: Record<string, unknown> | undefined): AdivinaCancionState => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
+        rng = adoptRandom(rng, cfg);
         const order = shuffleOrder(rng, SONG_BANK.length);
         const targetIndex = order[0];
         const target = SONG_BANK[targetIndex];

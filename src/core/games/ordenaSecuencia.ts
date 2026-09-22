@@ -16,6 +16,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasToken, hasAnyToken, findTokenIndex,
+    adoptRandom,
 } from './gameUtils';
 
 export interface OrdenaPaso {
@@ -178,19 +179,13 @@ function countRecognized(normalized: string, item: OrdenaSecuenciaItem): number 
 export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine<OrdenaSecuenciaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
         const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: OrdenaSecuenciaState = {
             order: ORDENA_BANK.map((_, index) => index),
             cursor: 0,
@@ -211,7 +206,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
         id: 'ordena_secuencia',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<OrdenaSecuenciaState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const order = ORDENA_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
                 const j = Math.floor(rng() * (i + 1));

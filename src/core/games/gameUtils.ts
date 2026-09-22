@@ -146,12 +146,13 @@ export function readRounds(
     return clamp(rounds, 1, maxRounds);
 }
 
-/** Si el cfg trae una `random` función, la adopta como RNG del motor. */
+/**
+ * Devuelve el RNG a adoptar: el de `cfg.random` si es una función, o `current`.
+ * Fuente única (C59): antes 16 motores reimplementaban esta lógica.
+ */
 export function adoptRandom(
-    cfg: Record<string, unknown> | undefined,
-    rngRef: { current: RandomSource },
-): void {
-    if (cfg && typeof cfg.random === 'function') {
-        rngRef.current = cfg.random as RandomSource;
-    }
+    current: RandomSource,
+    cfg?: Record<string, unknown>,
+): RandomSource {
+    return cfg && typeof cfg.random === 'function' ? (cfg.random as RandomSource) : current;
 }

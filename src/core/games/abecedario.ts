@@ -17,6 +17,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasAnyToken,
+    adoptRandom,
 } from './gameUtils';
 
 export interface AbecedarioItem {
@@ -100,19 +101,13 @@ function matchedWord(normalized: string, letra: string): string | null {
 export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine<AbecedarioState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
         const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AbecedarioState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const order = ABECEDARIO_BANK.map((_, index) => index);
         for (let i = order.length - 1; i > 0; i -= 1) {
             const j = Math.floor(rng() * (i + 1));
@@ -134,7 +129,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
         id: 'abecedario',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AbecedarioState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const order = ABECEDARIO_BANK.map((_, index) => index);
             for (let i = order.length - 1; i > 0; i -= 1) {
                 const j = Math.floor(rng() * (i + 1));

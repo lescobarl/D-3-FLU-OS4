@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -120,14 +120,8 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const startWord = pickRandom(WORD_BANK, rng);
         const state: PalabrasEncadenadasState = {
             word: startWord,
@@ -145,7 +139,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         id: 'palabras_encadenadas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<PalabrasEncadenadasState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const startWord = pickRandom(WORD_BANK, rng);
             return {
                 id: 'palabras_encadenadas',

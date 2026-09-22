@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, shuffleOrder } from './gameUtils';
+import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, shuffleOrder, adoptRandom } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -85,9 +85,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
     let rng: RandomSource = options?.random ?? Math.random;
 
     const buildState = (cfg: Record<string, unknown> | undefined): LoteriaState => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
+        rng = adoptRandom(rng, cfg);
         return {
             order: shuffleOrder(rng, LOTERIA_BANK.length),
             cursor: 0,

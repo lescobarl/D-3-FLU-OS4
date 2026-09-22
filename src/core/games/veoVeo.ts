@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -171,14 +171,8 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: VeoVeoState = {
             order: shuffleOrder(rng),
             cursor: 0,
@@ -195,7 +189,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         id: 'veo_veo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<VeoVeoState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'veo_veo',
                 state: {

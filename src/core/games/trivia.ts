@@ -17,6 +17,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasToken, hasAnyToken, resolveNumericAnswer,
+    adoptRandom,
 } from './gameUtils';
 
 export interface TriviaQuestion {
@@ -133,12 +134,6 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
 export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine<TriviaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const readRounds = (cfg: Record<string, unknown> | undefined): number => {
         const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
         return clamp(rounds, 1, MAX_ROUNDS);
@@ -154,7 +149,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
     };
 
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TriviaState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: TriviaState = {
             order: shuffledOrder(),
             cursor: 0,
@@ -171,7 +166,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
         id: 'trivia',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TriviaState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'trivia',
                 state: {

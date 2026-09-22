@@ -20,6 +20,7 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     normalizeForMatch, hasAnyToken,
+    adoptRandom,
 } from './gameUtils';
 
 export interface KaraokeSong {
@@ -156,14 +157,8 @@ interface KaraokeState {
 export function createKaraokeEngine(options?: { random?: RandomSource }): GameEngine<KaraokeState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): KaraokeState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const song = KARAOKE_SONG_BANK[Math.floor(rng() * KARAOKE_SONG_BANK.length)];
         const state: KaraokeState = {
             songId: song.id,
@@ -182,7 +177,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
         id: 'karaoke',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<KaraokeState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const song = KARAOKE_SONG_BANK[Math.floor(rng() * KARAOKE_SONG_BANK.length)];
             return {
                 id: 'karaoke',

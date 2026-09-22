@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { normalizeForMatch } from './gameUtils';
+import { normalizeForMatch, adoptRandom } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -145,17 +145,11 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         };
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     return {
         id: 'simon_dice',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<SimonDiceState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
             return {
                 id: 'simon_dice',
@@ -172,7 +166,7 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         },
 
         start(session: GameSession<SimonDiceState>, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
             const state = session.state as SimonDiceState;
             state.verbos = cfg.verbos;

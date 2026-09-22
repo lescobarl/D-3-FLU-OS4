@@ -228,6 +228,19 @@ function dateKeyImpls() {
   return hits
 }
 
+// ---- C59: una sola implementacion de la adopcion del RNG -----------------
+const ADOPT_RNG = /typeof\s+cfg\.random\s*===\s*'function'/
+/** Archivos que reimplementan "adoptar cfg.random si es funcion". */
+function adoptRandomImpls() {
+  const hits = []
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (!/\.(ts|tsx|js|jsx)$/.test(r)) continue
+    if (ADOPT_RNG.test(readFileSync(f, 'utf8'))) hits.push(r)
+  }
+  return hits.sort()
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -463,6 +476,8 @@ const metrics = {
   'onboarding-writers': () => onboardingDirectWriters().length,
   // ---- C58 ---------------------------------------------------------------
   'daykey-impls': () => dateKeyImpls().length,
+  // ---- C59 ---------------------------------------------------------------
+  'game-adopt-random': () => adoptRandomImpls().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')

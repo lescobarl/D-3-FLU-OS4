@@ -24,6 +24,7 @@ import {
     hasToken,
     hasAnyToken,
     pickRandom,
+    adoptRandom,
 } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
@@ -199,9 +200,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
     let rng: RandomSource = options?.random ?? Math.random;
 
     const buildState = (cfg: Record<string, unknown> | undefined): StorytellerState => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
+        rng = adoptRandom(rng, cfg);
         const raw = pickRandom(STORY_BANK, rng);
         const participantName = typeof cfg?.participantName === 'string' ? cfg.participantName : '';
         const story = personalizeStory(raw, participantName);

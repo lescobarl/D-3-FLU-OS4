@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { clamp, normalizeForMatch, hasAnyToken, hasToken } from './gameUtils';
+import { clamp, normalizeForMatch, hasAnyToken, hasToken, adoptRandom } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -144,14 +144,8 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         return clamp(rounds, 1, MAX_ROUNDS);
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: RiddlesState = {
             order: shuffleOrder(rng),
             cursor: 0,
@@ -168,7 +162,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         id: 'adivinanzas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RiddlesState> {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'adivinanzas',
                 state: {
