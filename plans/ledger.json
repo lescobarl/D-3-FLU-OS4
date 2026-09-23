@@ -157,21 +157,21 @@
     {
       "id": "P4.3",
       "titulo": "parseAllowlist identica x2",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/server/searchProxy.ts:41 = src/server/browserProxy.ts:23",
       "origen": "auditoria"
     },
     {
       "id": "P4.4",
       "titulo": "slugifyPalette = slugifyAmbiente",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/branding/paletaFactory.ts:28",
       "origen": "auditoria"
     },
     {
       "id": "P4.5",
       "titulo": "strip NFD reimplementado en 10 archivos",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/lib/textUtils.ts:36 (+9)",
       "origen": "auditoria"
     },
@@ -201,7 +201,7 @@
     {
       "id": "P4.9",
       "titulo": "allowlist wikipedia/educ.ar repetida x3",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/fluConfig.js:1061,1069,1076",
       "origen": "auditoria"
     },
@@ -229,7 +229,7 @@
     {
       "id": "P4.13",
       "titulo": "PROVIDER_SYNONYMS re-declara catalogo",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/configCommands.js:277",
       "origen": "auditoria"
     },
@@ -848,6 +848,31 @@
       "id": "P5.7",
       "commit": "01d1d31",
       "titulo": "Defaults magicos 2048/0.3/1024"
+    },
+    {
+      "id": "P4.3",
+      "commit": "62c57a0",
+      "titulo": "parseAllowlist identica x2"
+    },
+    {
+      "id": "P4.4",
+      "commit": "62c57a0",
+      "titulo": "slugifyPalette = slugifyAmbiente"
+    },
+    {
+      "id": "P4.5",
+      "commit": "62c57a0",
+      "titulo": "strip NFD reimplementado en 10 archivos"
+    },
+    {
+      "id": "P4.9",
+      "commit": "62c57a0",
+      "titulo": "allowlist wikipedia/educ.ar repetida x3"
+    },
+    {
+      "id": "P4.13",
+      "commit": "62c57a0",
+      "titulo": "PROVIDER_SYNONYMS re-declara catalogo"
     }
   ]
 }
