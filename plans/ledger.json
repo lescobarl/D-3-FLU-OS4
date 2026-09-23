@@ -78,10 +78,9 @@
     {
       "id": "P1.7",
       "titulo": "indexedDB.open/deleteDatabase crudo fuera del singleton",
-      "estado": "todo",
-      "evidencia": "src/core/autonomy/healthMonitor.ts:441,450,463",
-      "origen": "auditoria",
-      "noVerificado": true
+      "estado": "done",
+      "evidencia": "CERRADO commit 06b249c. ANTES 1 archivo con acceso manual a indexedDB (healthMonitor.ts:450 open + :463 deleteDatabase; invisible al guard C30 por EXCLUDE nominal y patron solo-open) -> DESPUES 0. Sonda movida a la capa de datos: probeIndexedDb() en src/core/db/fluDatabase.ts (Dexie, base real). Guard nuevo tests/indexedDbRawOutsideSingletonGuard.test.ts (sin exclusiones, cubre open+deleteDatabase, detector probado) en lint:guards; el C30 congelado no se toca. Gate: metrica base=1 actual=0 target=0, guard base=ROJO actual=VERDE, exit 0.",
+      "origen": "auditoria"
     },
     {
       "id": "P1.8",
@@ -904,6 +903,11 @@
       "id": "P6.4",
       "commit": "601fdec",
       "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)"
+    },
+    {
+      "id": "P1.7",
+      "commit": "06b249c",
+      "titulo": "indexedDB crudo fuera del singleton (sonda via Dexie)"
     }
   ]
 }
