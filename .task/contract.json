@@ -1,11 +1,10 @@
 {
-  "id": "P7.3",
+  "id": "P1.4",
   "mode": "full",
-  "task": "P7.3",
-  "base": "a4336b7060fd0109cc7cf56466f80aecb31beed0",
-  "objective": "TS estricto: desaparece el ultimo doble cast (as unknown as) de src y su guard (C49) entra en la barrera, para que no vuelva en silencio.",
+  "task": "C46",
+  "base": "086f73dbd4818b075dd49bc082156cfbad96a06c",
+  "objective": "El guard C46 (dexieSchema) vuelve a medir el esquema real: estaba sordo desde que P1.4 movio el esquema a DEXIE_VERSIONS, vivia fuera de lint:guards y en ROJO.",
   "allow": [
-    "src/core/db/fluDatabase.ts",
     "tests/**",
     "package.json",
     ".task/frozen.json",
@@ -17,19 +16,9 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 12,
-  "maxLines": 300,
-  "dod": "npx tsc -b && npx vitest run tests/tsStrictGuard.test.ts tests/dexieSingleSourceGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/tsStrictGuard.test.ts --reporter=dot",
-  "guardExpect": "green",
-  "invariant": {
-    "statement": "Doble cast (as unknown as) en src: 1 -> 0.",
-    "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));let n=0;for(const f of walk('src')){for(const line of fs.readFileSync(f,'utf8').split(/\\r?\\n/)){const t=line.trim();if(t.startsWith('*')||t.startsWith('/*')||t.startsWith('//'))continue;if(/as unknown as/.test(line))n++;}}console.log(n)\"",
-      "target": 0
-    },
-    "guardFiles": [
-      "tests/tsStrictGuard.test.ts"
-    ]
-  }
+  "maxFiles": 8,
+  "maxLines": 400,
+  "dod": "npx vitest run tests/dexieSchemaGuard.test.ts tests/eolGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/dexieSchemaGuard.test.ts --reporter=dot",
+  "guardExpect": "green"
 }

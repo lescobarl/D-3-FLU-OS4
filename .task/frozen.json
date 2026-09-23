@@ -62,7 +62,7 @@
   "tests/geminiServiceFlow.test.ts": "8ea891dea81c4a89a9f0b9fa2f5369eb78217eb6d611115757305efd534eb897",
   "tests/localeConfigGuard.test.ts": "c0448d87781c9654d82da699e29633e3a46af36bcd86395fb54a0cb76da0a685",
   "tests/tsStrictGuard.test.ts": "2dd2f20bfc972164022ede553d529e4e090c34d862df757ddff960b7d548fad9",
-  "tests/dexieSchemaGuard.test.ts": "52d1da0aff736841ac2acee2e1adeea7b5934a28da67e79c6ca586b81c3e98c1",
+  "tests/dexieSchemaGuard.test.ts": "640deba11bf19034f263e5c7aa6c66e3480aeed9b43b0b26eee0e1fd6aa83ee9",
   "tests/remoteResourceGuard.test.ts": "776bac80370434e94d58ebb7a38da7474ad53b26d2bbb59a96c76b3b37a3851f",
   "tests/wakeInternalGuard.test.ts": "7a27807da28fff3555b1746e76c52fe0001faaaf628d8ddf5d609db3b3ca2ce0",
   "tests/onboardingWriterGuard.test.ts": "f8ec6b198cd382537a962fda044f7c088280358c4cd41f6df590eba5f1d7bbd3",
