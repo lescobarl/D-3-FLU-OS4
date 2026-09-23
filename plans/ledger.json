@@ -143,7 +143,7 @@
     {
       "id": "P4.1",
       "titulo": "Dos clientes HTTP al mismo endpoint (participant-eval, workspace-image)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/services/gemini.ts:320 vs src/voice/lib/gemini.js:1205",
       "origen": "propio"
     },
@@ -178,14 +178,14 @@
     {
       "id": "P4.6",
       "titulo": "resolveGeminiApiKey near-dupes x2 (contrato distinto en appConfig)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/services/gemini.ts:61 vs src/voice/lib/gemini.js:1296",
       "origen": "auditoria"
     },
     {
       "id": "P4.7",
       "titulo": "buildPollinationsArtifact/ImageUrl/Url x3",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/fluVisualPipeline.js:120",
       "origen": "auditoria",
       "noVerificado": true
@@ -873,6 +873,21 @@
       "id": "P4.13",
       "commit": "62c57a0",
       "titulo": "PROVIDER_SYNONYMS re-declara catalogo"
+    },
+    {
+      "id": "P4.1",
+      "commit": "a5c4490",
+      "titulo": "Dos clientes HTTP al mismo endpoint (participant-eval, workspace-image)"
+    },
+    {
+      "id": "P4.6",
+      "commit": "a5c4490",
+      "titulo": "resolveGeminiApiKey near-dupes x2 (contrato distinto en appConfig)"
+    },
+    {
+      "id": "P4.7",
+      "commit": "a5c4490",
+      "titulo": "buildPollinationsArtifact/ImageUrl/Url x3"
     }
   ]
 }
