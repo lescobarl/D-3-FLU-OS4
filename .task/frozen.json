@@ -64,7 +64,7 @@
   "tests/tsStrictGuard.test.ts": "2dd2f20bfc972164022ede553d529e4e090c34d862df757ddff960b7d548fad9",
   "tests/dexieSchemaGuard.test.ts": "52d1da0aff736841ac2acee2e1adeea7b5934a28da67e79c6ca586b81c3e98c1",
   "tests/remoteResourceGuard.test.ts": "776bac80370434e94d58ebb7a38da7474ad53b26d2bbb59a96c76b3b37a3851f",
-  "tests/wakeInternalGuard.test.ts": "29da81aa96afe9c90b17adc72904333827b22894a8df83bda7a00fb0ed18b2c9",
+  "tests/wakeInternalGuard.test.ts": "7a27807da28fff3555b1746e76c52fe0001faaaf628d8ddf5d609db3b3ca2ce0",
   "tests/onboardingWriterGuard.test.ts": "f8ec6b198cd382537a962fda044f7c088280358c4cd41f6df590eba5f1d7bbd3",
   "tests/dateKeyGuard.test.ts": "6d2723d7291f762a34ab480590319586108412e8ea020368019c2d233d5ca005",
   "tests/gameAdoptRandomGuard.test.ts": "9c630640c3f7d4edb38d2502aa53dd730b289b642663f75d9136646633276d54",

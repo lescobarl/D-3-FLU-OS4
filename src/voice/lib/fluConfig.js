@@ -7,7 +7,7 @@ import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../
  * Fuente ÚNICA del wake word (§9.4): `voiceCommands.wakeWords` y el sesgo del
  * decoder (`initialPrompt`) derivan de aquí. Configurable en Ajustes.
  */
-const FLU_WAKE_WORDS = Object.freeze([
+export const FLU_WAKE_WORDS = Object.freeze([
   'oye flu',
   'oye flow',
   'oye blue',
@@ -2749,4 +2749,14 @@ export function getConversationRestartConfig(conversationActive = false) {
 
 export function getConversationConfig() {
   return FLU_CONFIG.activeListen
+}
+
+/**
+ * Wake word canonica para copy y prompts: la configurada en Ajustes, o la primera
+ * del catalogo si el usuario vacio la lista. Fuente unica (┬º9.4): en runtime nunca
+ * se escribe un literal de wake.
+ */
+export function getCanonicalWakeWord() {
+  const configured = FLU_CONFIG?.voiceCommands?.wakeWords?.[0]
+  return configured || FLU_WAKE_WORDS[0]
 }

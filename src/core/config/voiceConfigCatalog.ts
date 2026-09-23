@@ -16,7 +16,7 @@
 
 import { getPaletteKeys } from '../branding/seasonalPalettes';
 import { AI_PROVIDERS, AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig';
-import { FLU_CONFIG } from '../../voice/lib/fluConfig';
+import { getCanonicalWakeWord } from '../../voice/lib/fluConfig';
 
 // ------------------------------------------------------------
 // Tipos del catálogo
@@ -773,7 +773,7 @@ function formatValueEn(entry: ConfigCatalogEntry): string {
 export function buildConfiguracionPrompt(language: 'es' | 'en' = 'es'): string {
     const isEnglish = language === 'en';
     // Wake word canónica desde config (§9.4): nunca un literal en runtime.
-    const wakeWord = FLU_CONFIG.voiceCommands?.wakeWords?.[0] || 'FLU';
+    const wakeWord = getCanonicalWakeWord();
     const brandingEntries = VOICE_CONFIG_CATALOG.filter(
         (e) => e.accion === 'set_branding' && e.handler !== 'unsupported',
     );

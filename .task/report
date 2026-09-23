@@ -1318,4 +1318,48 @@ REGRESION:
   despues: 288 archivos / 2978 tests / 0 fallos ; tsc -b 0 ; eslint . --max-warnings=0 0
            npm run gate 0 ; lint:guards 12/52 0.
 NO VALIDADO (usuario): que su editor no reescriba EOL al guardar. El guard ahora lo
-  detecta en el pre-commit en lugar de dejarlo pasar, pero no puede impedir la escritura.
+  detecta en el pre-commit en lugar de dejarlo pasar, pero no puede impedir la escritura.================================================================
+[CIERRE TECNICO] 2026-09-22 - P5.1 (fallback del wake word fuera de la config)
+================================================================
+OBJETIVO: el wake word canonico (┬º9.4) no puede aparecer como literal en runtime.
+HALLAZGO (2 sitios, ambos con el MISMO literal):
+  - src/core/config/voiceConfigCatalog.ts:776
+      const wakeWord = FLU_CONFIG.voiceCommands?.wakeWords?.[0] || 'FLU'
+      (y el comentario afirmaba "nunca un literal en runtime")
+  - src/components/VoiceAssistantBarWrapper.tsx:111
+      `...equivalente a ┬½${FLU_CONFIG.voiceCommands?.wakeWords?.[0] ?? 'FLU'} adelante┬╗`
+  No era solo cosm├⌐tico: el fallback 'FLU' NO es una wake valida del catalogo (las 16
+  son "oye|ok|okay|hey + flu|flow|blue|flo"), asi que con la lista vac├¡a el prompt y el
+  copy anunciaban una wake que el reconocedor nunca acepta. El primario real es 'oye flu'.
+POR QUE NINGUN GUARD LO VEIA: C56 (wakeInternalGuard) usa
+  /\b(?:oye|ok|okay|hey)\s+(?:flu|flow|blue|flo)\b/, que exige una wake COMPLETA.
+  Un 'FLU' desnudo no casa, asi que los dos sitios pasaban en verde.
+FIX:
+  - fluConfig.js: FLU_WAKE_WORDS pasa a exportarse y se anade el accesor unico
+    getCanonicalWakeWord(): devuelve la wake configurada o FLU_WAKE_WORDS[0].
+  - los dos sitios llaman a getCanonicalWakeWord(). Cero literales de wake en runtime.
+  - en voiceConfigCatalog se retiro tambien el import de FLU_CONFIG, que quedo sin uso
+    (lo caza noUnusedLocals: el compilador estricto de P7.3 haciendo su trabajo).
+GUARD (endurecido, enmienda formal): C56 gana bareWakeFallbackLines(), que detecta un
+  literal de wake usado como SUSTITUTO de voiceCommands.wakeWords, en todo src/:
+    /wakeWords[\\s\\S]{0,120}?(?:\\|\\||\\?\\?)\\s*['"`]?\\s*(?:(?:oye|ok|okay|hey)\\s+)?(?:flu|flow|blue|flo)['"`]?\\b/i
+  Deliberadamente NO marca `wakeWords || []` (default vacio legitimo) ni
+  `wakeWords?.[0]` sin fallback, ni comentarios. Ademas el guard pasa a lint:guards,
+  de modo que corre tambien en el pre-commit.
+INVARIANTE (falsable, prueba de mutacion): restaurado el fallback en
+  voiceConfigCatalog.ts:776 -> guard ROJO nombrando
+  "src/core/config/voiceConfigCatalog.ts:776". Restaurado el fix -> 11/11 VERDE.
+  Escaneo de src/ completo: 0 falsos positivos.
+EL GATE FRENO EL CAMBIO (evidencia de que la barrera sirve): el primer intento dio
+  exit 1 con "Archivos CONGELADOS modificados: tests/wakeInternalGuard.test.ts".
+  C56 estaba congelado (se me paso comprobarlo) -> enmienda formal: re-congelado con
+  sha256 7a27807da28fff3555b1746e76c52fe0001faaaf628d8ddf5d609db3b3ca2ce0 y hito
+  reiniciado. El criterio nuevo es ESTRICTAMENTE mas amplio: antes solo miraba
+  fluConfig.js y solo wakes completas; ahora tambien todo src/ y wakes desnudas.
+REGRESION:
+  antes:   288 archivos / 2978 tests / 0 fallos
+  despues: 288 archivos / 2984 tests / 0 fallos ; tsc -b 0 ; eslint . --max-warnings=0 0
+           npm run gate 0 (tras la enmienda).
+NO VALIDADO (usuario): el copy visible del boton "Ceder la palabra" y el texto del
+  prompt de configuracion en pantalla; ambos cambian de 'FLU' a 'oye flu' cuando la
+  lista de wakes esta vacia. Es el comportamiento correcto, pero no se ejercita en tests.

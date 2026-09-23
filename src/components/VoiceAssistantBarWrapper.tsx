@@ -7,7 +7,7 @@
 // fluParticipant, listeningAck, listenParity.
 // ============================================================
 
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG, getCanonicalWakeWord } from '../voice/lib/fluConfig';
 
 interface VoiceAssistantBarWrapperProps {
     status: string;
@@ -108,7 +108,7 @@ export function VoiceAssistantBarWrapper({
                                 disabled={!isSupported || typeof onFluParticipa !== 'function'}
                                 title={
                                     fluParticipantCanGrant
-                                        ? `Ceder la palabra a Flu (equivalente a «${FLU_CONFIG.voiceCommands?.wakeWords?.[0] ?? 'FLU'} adelante»)`
+                                        ? `Ceder la palabra a Flu (equivalente a «${getCanonicalWakeWord()} adelante»)`
                                         : 'Flu evaluará la conversación y hablará si tiene un aporte válido'
                                 }
                             >
