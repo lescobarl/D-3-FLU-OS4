@@ -30,6 +30,8 @@ import type {
 import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import { postGeminiContract } from './geminiContractClient';
 import { logCaughtError } from '../lib/caughtError';
+import { resolveApiKey } from '../core/config/sharedConfig';
+import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
 import {
     BaseAIService,
     type AIVisionAnalysisResult,
@@ -59,16 +61,7 @@ function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics 
  *   localStorage (flu-text-api-key) > env var > empty. Sin legado.
  */
 function resolveGeminiApiKey(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
-    const direct = String(apiKey ?? '').trim();
-    if (direct) {
-        return { apiKey: direct, apiKeySource: 'localStorage' };
-    }
-    // Delegar a resolveTextApiKey() centralizado (Rule #1: NO HARDCODE)
-    const textApiKey = resolveTextApiKey();
-    if (textApiKey) {
-        return { apiKey: textApiKey, apiKeySource: 'textConfig' };
-    }
-    return { apiKey: '', apiKeySource: 'missing' };
+    return resolveApiKey(apiKey, resolveTextApiKey);
 }
 
 /**
@@ -113,7 +106,7 @@ class GeminiService extends BaseAIService implements IAIService {
      * Mantiene el invariante "todas las llamadas Gemini pasan por el proxy".
      */
     protected async completeText(request: TextCompletionRequest): Promise<string> {
-        const response = await fetch('/api/gemini/text', {
+        const response = await fetchTextEngineResilient('/api/gemini/text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -122,7 +115,7 @@ class GeminiService extends BaseAIService implements IAIService {
                 prompt: request.prompt,
                 maxTokens: request.maxTokens,
             }),
-        });
+        }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.conversation });
         if (!response.ok) {
             throw new Error(`Proxy returned ${response.status}`);
         }
@@ -317,7 +310,7 @@ Responde como ${botName}:`;
         maxDraftChars: number = 420,
     ): Promise<AIParticipantEvaluation> {
         // Delegate to proxy
-        const response = await fetch('/api/gemini/participant-eval', {
+        const response = await fetchTextEngineResilient('/api/gemini/participant-eval', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -328,7 +321,7 @@ Responde como ${botName}:`;
                 conversationLog,
                 maxDraftChars,
             }),
-        });
+        }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.conversation });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
@@ -356,7 +349,7 @@ Responde como ${botName}:`;
         language: string,
     ): Promise<AIWorkspaceImageResult> {
         try {
-            const response = await fetch('/api/workspace-image', {
+            const response = await fetchTextEngineResilient('/api/workspace-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -364,7 +357,7 @@ Responde como ${botName}:`;
                     language,
                     workspace: { prompt_visual: prompt, tipo: tipoStr },
                 }),
-            });
+            }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.image });
 
             if (!response.ok) {
                 throw new Error(`Proxy returned ${response.status}`);
@@ -444,7 +437,7 @@ Responde como ${botName}:`;
         }
 
         try {
-            const response = await fetch('/api/gemini/vision', {
+            const response = await fetchTextEngineResilient('/api/gemini/vision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -454,7 +447,7 @@ Responde como ${botName}:`;
                     language,
                     profile,
                 }),
-            });
+            }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.image });
 
             if (!response.ok) {
                 throw new Error(`Proxy returned ${response.status}`);

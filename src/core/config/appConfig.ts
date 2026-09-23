@@ -275,10 +275,8 @@ export const DEVICE_ACTIONS_CONFIG = {
 // Pollinations.ai Image Generation
 // -----------------------------------------------------------
 export const POLLINATIONS_CONFIG = {
+    ...POLLINATIONS_DEFAULTS,
     BASE_URL: import.meta.env.VITE_POLLINATIONS_URL || POLLINATIONS_DEFAULTS.BASE_URL,
-    DEFAULT_WIDTH: POLLINATIONS_DEFAULTS.DEFAULT_WIDTH,
-    DEFAULT_HEIGHT: POLLINATIONS_DEFAULTS.DEFAULT_HEIGHT,
-    DEFAULT_PARAMS: POLLINATIONS_DEFAULTS.DEFAULT_PARAMS,
 } as const;
 
 // -----------------------------------------------------------
@@ -636,9 +634,12 @@ export function writeStorage(key: string, value: string): void {
  * Build the image API URL from a prompt.
  * Reads localStorage override for image API URL; falls back to POLLINATIONS_CONFIG.
  */
-export function buildPollinationsUrl(prompt: string): string {
+export function buildPollinationsUrl(
+    prompt: string,
+    overrides: { width?: number; height?: number; seed?: number } = {},
+): string {
     const baseUrl = readStorage(STORAGE_KEYS.IMAGE_API_URL, POLLINATIONS_CONFIG.BASE_URL);
-    return buildPollinationsImageUrl(baseUrl, prompt);
+    return buildPollinationsImageUrl(baseUrl, prompt, overrides);
 }
 
 /**

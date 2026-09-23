@@ -175,6 +175,8 @@ export const POLLINATIONS_DEFAULTS = {
     DEFAULT_WIDTH: 1024,
     DEFAULT_HEIGHT: 768,
     DEFAULT_PARAMS: 'nologo=true',
+    /** Lado de la imagen cuadrada del sujeto de video. */
+    VIDEO_SUBJECT_SIZE: 1024,
 } as const;
 
 /**
@@ -335,9 +337,19 @@ export function joinApiUrl(baseUrl: string, endpoint: string): string {
 /**
  * Construye la URL de generación de imagen de Pollinations.
  */
-export function buildPollinationsImageUrl(baseUrl: string, prompt: string): string {
+export function buildPollinationsImageUrl(
+    baseUrl: string,
+    prompt: string,
+    overrides: { width?: number; height?: number; seed?: number } = {},
+): string {
     const encoded = encodeURIComponent(prompt);
-    return `${baseUrl}/${encoded}?width=${POLLINATIONS_DEFAULTS.DEFAULT_WIDTH}&height=${POLLINATIONS_DEFAULTS.DEFAULT_HEIGHT}&${POLLINATIONS_DEFAULTS.DEFAULT_PARAMS}`;
+    const width = overrides.width ?? POLLINATIONS_DEFAULTS.DEFAULT_WIDTH;
+    const height = overrides.height ?? POLLINATIONS_DEFAULTS.DEFAULT_HEIGHT;
+    const seed = overrides.seed === undefined ? '' : '&seed=' + overrides.seed;
+    return (
+        baseUrl + '/' + encoded + '?width=' + width + '&height=' + height + '&' +
+        POLLINATIONS_DEFAULTS.DEFAULT_PARAMS + seed
+    );
 }
 
 /**
@@ -345,6 +357,21 @@ export function buildPollinationsImageUrl(baseUrl: string, prompt: string): stri
  * El cliente pasa `import.meta.env` (estático); el servidor pasa el env
  * inyectado/process.env. Una sola fuente para la prioridad.
  */
+/**
+ * Resolucion de una API key: directa > fuente central > ausente.
+ * El orden y las etiquetas son contrato. Lo unico que cambia entre cliente y
+ * servidor es de donde sale la clave central, asi que se recibe por parametro
+ * en vez de copiar esta logica en cada lado.
+ */
+export function resolveApiKey(
+    apiKey: string,
+    resolveCentralKey: () => string,
+): { apiKey: string; apiKeySource: 'localStorage' | 'textConfig' | 'missing' } {
+    const direct = String(apiKey ?? '').trim();
+    if (direct) return { apiKey: direct, apiKeySource: 'localStorage' };
+    if (resolveCentralKey()) return { apiKey: resolveCentralKey(), apiKeySource: 'textConfig' };
+    return { apiKey: '', apiKeySource: 'missing' };
+}
 export function resolveTextApiKeyFromEnv(env: EnvRecord): string {
     return String(
         env.VITE_OPENROUTER_API_KEY || env.VITE_GEMINI_API_KEY || env.VITE_DEEPSEEK_API_KEY || '',

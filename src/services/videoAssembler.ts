@@ -60,15 +60,19 @@ export interface VideoAssemblyParams {
 }
 
 // Imagen del sujeto (Bug #5): base de Pollinations desde appConfig (sin hardcode).
-import { POLLINATIONS_CONFIG } from '../core/config/appConfig';
+import { POLLINATIONS_CONFIG, buildPollinationsUrl } from '../core/config/appConfig';
 import { logCaughtError } from '../lib/caughtError';
 
 /** URL de imagen del sujeto pedido por el usuario (p. ej. "un conejo saltando").
  *  Sin hardcode: la base sale de appConfig (POLLINATIONS_CONFIG.BASE_URL). */
 function buildSubjectImageUrl(prompt: string): string {
-    const base = String(POLLINATIONS_CONFIG?.BASE_URL || '');
-    if (!base) return '';
-    return `${base}/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 999999)}`;
+    if (!String(POLLINATIONS_CONFIG?.BASE_URL || '')) return '';
+    const side = POLLINATIONS_CONFIG.VIDEO_SUBJECT_SIZE;
+    return buildPollinationsUrl(prompt, {
+        width: side,
+        height: side,
+        seed: Math.floor(Math.random() * 999999),
+    });
 }
 
 /** Precarga la imagen del sujeto con timeout; null si no se pudo generar. */

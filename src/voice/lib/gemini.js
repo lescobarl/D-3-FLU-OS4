@@ -12,6 +12,7 @@ import {
   isLocalTextEndpoint,
   joinApiUrl,
   resolveServerPollinationsUrl,
+  resolveApiKey,
   resolveServerTextApiKey,
   resolveServerTextApiUrl,
   resolveServerTextModel,
@@ -1295,20 +1296,8 @@ export function mapChatMessagesToGemini(messages) {
 }
 
 export function resolveGeminiApiKey(apiKey = '') {
-  const direct = String(apiKey ?? '').trim()
-  if (direct) {
-    return { apiKey: direct, apiKeySource: 'localStorage' }
-  }
-
-  // Delegar a resolveServerTextApiKey() (sharedConfig): prioridad única
-  // VITE_OPENROUTER_API_KEY > VITE_GEMINI_API_KEY > VITE_DEEPSEEK_API_KEY
-  // (env inyectado/process.env). Sin legado.
-  const textApiKey = resolveServerTextApiKey()
-  if (textApiKey) {
-    return { apiKey: textApiKey, apiKeySource: 'textConfig' }
-  }
-
-  return { apiKey: '', apiKeySource: 'missing' }
+  // Prioridad de la key central server-side: resolveServerTextApiKey().
+  return resolveApiKey(apiKey, resolveServerTextApiKey)
 }
 
 /**

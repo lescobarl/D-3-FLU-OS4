@@ -1598,4 +1598,43 @@ VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 292 arch
   3030 tests / 0 fallos ; lint:guards 17 archivos OK ; gate -> exit 0.
 NO VALIDADO: no se ejercitaron los flujos reales de busqueda, agenda o voz (solo tests);
   los valores efectivos no cambian (mismo plegado, mismo slug, misma allowlist, mismos
-  sinonimos).
+  sinonimos).================================================================
+[CIERRE TECNICO] 2026-09-22 - P4.1 + P4.6 + P4.7 (transporte y config, un origen por dato)
+================================================================
+P4.1 (dos clientes HTTP a los mismos endpoints): el adaptador tipado
+  (src/services/gemini.ts) llamaba a /api/gemini/text, /api/gemini/participant-eval,
+  /api/workspace-image y /api/gemini/vision con fetch crudo, SIN timeout ni reintento ni
+  normalizacion de errores, mientras el cliente de voz (src/voice/lib/gemini.js) usaba
+  fetchTextEngineResilient para los mismos endpoints. Los 4 sitios pasan al cliente
+  resiliente con timeout explicito: conversation para texto y participant-eval, image para
+  workspace-image y vision (antes no habia deadline alguno: una peticion colgada colgaba la
+  operacion). Los 4 sitios siguen comprobando response.ok igual que antes.
+P4.6 (resolveGeminiApiKey x2): las dos copias eran la misma cascada de 3 ramas
+  (directa -> localStorage | fuente central -> textConfig | ausente -> missing) y solo
+  cambiaba de donde sale la clave central: resolveTextApiKey() en cliente,
+  resolveServerTextApiKey() en servidor. Se extrae resolveApiKey(apiKey, resolveCentralKey)
+  a sharedConfig, que es la unica implementacion. El contrato (orden y etiquetas) es
+  identico.
+P4.7 (URL de Pollinations a mano): videoAssembler construia la URL del sujeto con
+  template + width=1024&height=1024&nologo=true&seed=... Todo eso eran numeros magicos
+  fuera del constructor canonico. buildPollinationsImageUrl acepta overrides explicitos
+  (width/height/seed) y VIDEO_SUBJECT_SIZE entra en POLLINATIONS_DEFAULTS. La URL
+  resultante es BYTE A BYTE la misma que antes (mismo orden de parametros), por eso se
+  extiende el constructor en vez de "unificar" a 768: cambiar la relacion de aspecto del
+  sujeto de video habria sido un cambio de comportamiento silencioso, no una deduplicacion.
+  De paso, POLLINATIONS_CONFIG re-declaraba campo a campo POLLINATIONS_DEFAULTS; ahora
+  deriva con spread y solo sobreescribe BASE_URL.
+HALLAZGO QUE REFUERZA P6.7: al sustituir la cascada en src/voice/lib/gemini.js quedo una
+  referencia a resolveApiKey SIN importar, y tsc -b siguio en verde porque allowJs esta
+  activo y checkJs NO: los .js no se verifican. Se detecto a mano y se corrigio. Es
+  evidencia directa de P6.7, no teoria.
+GUARD: tests/transportSingleOwnerGuard.test.ts, registrado en lint:guards y congelado.
+  4 reglas (resolucion de API key solo en su dueno; URL de Pollinations solo en el
+  constructor; el adaptador no usa fetch crudo; POLLINATIONS_CONFIG deriva del catalogo) +
+  detector.
+INVARIANTE (falsable): reintroducido un fetch crudo en services/gemini.ts -> guard ROJO;
+  restaurado -> 7/7 VERDE.
+VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 293 archivos /
+  3037 tests / 0 fallos.
+NO VALIDADO: no se ejercito el flujo real contra el proxy (solo tests); los endpoints y las
+  respuestas son los mismos, lo que cambia es que ahora hay deadline y reintento.
