@@ -198,7 +198,10 @@ export function familiaDe(id) {
  */
 export function justificaCierre(entry, subject, archivosDelCommit, evidencia) {
   const id = String(entry.id || '');
-  if (id && (subject.includes(id) || new RegExp(`\\b${familiaDe(id)}\\b`).test(subject))) return true;
+  // El id casa como PALABRA, no como subcadena: sin `\b` la entrada
+  // `C2` quedaba justificada por un commit que solo menciona `C21`
+  // (C2..C6 son prefijo de C21..C60). La rama de familia ya usaba `\b`.
+  if (id && new RegExp(`\\b${familiaDe(id)}\\b`).test(subject)) return true;
   const ruta = String(evidencia || '').split(':')[0].trim();
   return Boolean(ruta && archivosDelCommit && archivosDelCommit.has(ruta));
 }

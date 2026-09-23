@@ -1,12 +1,25 @@
 {
-  "base": "dc404cfa52d3df667795d3a9d2399952179ac9bc",
-  "task": "Cierre de P6.14 y P6.15 en el ledger",
-  "objective": "Registrar en plans/ledger.json el cierre de los dos items, con evidencia de lo medido y del cambio de rumbo sobre el estado decision. Solo datos del ledger y contrato.",
+  "base": "2031615",
+  "task": "P6.16 - I5 del ledger: el id casa como palabra, no como subcadena",
+  "objective": "Que justificaCierre() no acepte una entrada cuyo commit solo mencione su id como SUBCADENA (hoy C2 queda justificado por un commit que dice C21).",
   "allow": [
-    "plans/ledger.json",
-    ".task/**"
+    "scripts/task-ledger.mjs",
+    "tests/taskLedgerGuard.test.ts",
+    "plans/ledger.json"
   ],
   "maxFiles": 4,
+  "maxLines": 70,
   "dod": "node scripts/task-ledger.mjs check",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot"
+  "guard": "npx vitest run --no-file-parallelism --testTimeout=30000 --reporter=dot tests/taskLedgerGuard.test.ts",
+  "invariant": {
+    "statement": "Ninguna entrada done se justifica porque el asunto del commit mencione su id como SUBCADENA (C2 por C21).",
+    "metric": {
+      "command": "node -e \"const s=require('fs').readFileSync('scripts/task-ledger.mjs','utf8');console.log((s.match(/subject\\.includes\\(id\\)/g)||[]).length)\"",
+      "target": 0
+    },
+    "base": "2031615",
+    "guardFiles": [
+      "tests/taskLedgerGuard.test.ts"
+    ]
+  }
 }

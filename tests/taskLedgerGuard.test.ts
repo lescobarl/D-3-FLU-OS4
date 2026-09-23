@@ -130,6 +130,19 @@ describe('validateLedger - el detector discrimina (no aprueba por nombre)', () =
     const { ok } = validateLedger(base(), { closures: [], exists: () => true })
     expect(ok).toBe(true)
   })
+
+  it('RECHAZA un cierre justificado solo por SUBCADENA del id (I5)', () => {
+    // C2 es prefijo de C21: `subject.includes('C2')` casaba con un asunto que
+    // solo menciona C21. Medido: C2..C6 son prefijo de C21..C60.
+    const l = {
+      items: [{ id: 'C2', titulo: 'x', estado: 'done', evidencia: 'sin-ruta' }],
+      done: [{ id: 'C2', commit: '7ddc6a5', titulo: 'y' }],
+    }
+    const subjects = new Map([['7ddc6a5', 'fix(C21): un solo punto de sintesis TTS (fluSpeech)']])
+    const { ok, failures } = validateLedger(l, { exists: () => true, subjects })
+    expect(ok).toBe(false)
+    expect(failures.join('\n')).toContain('no justificado')
+  })
 })
 
 describe('parseClosureCommits - leer el codigo donde git lo escribe', () => {

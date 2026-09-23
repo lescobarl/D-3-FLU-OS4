@@ -2052,3 +2052,39 @@ HALLAZGOS DERIVADOS (fuera de alcance; decision del usuario):
      helpers get* (getEmbeddingConfig, getMinSamples, getModelId,
      getTargetSampleRate) repetidos entre speakerEmbeddingCore.js y
      voiceId.worker.js.
+---
+
+## P6.16 - I5: el id de cierre casa como palabra, no como subcadena
+
+Hallazgo de la auditoria del ledger (3a pasada). I5 justificaba una entrada si el asunto del
+commit mencionaba su id como SUBCADENA: `subject.includes(id)`. Con ids de 1 digito eso es un
+agujero real: la entrada `C2` quedaba justificada por un commit que solo dice `C21` (C2..C6 son
+prefijo de C21..C60). Ningun caso explotado hoy; el fallo era latente.
+
+ENMIENDA FORMAL (AGENTS.md B14): el contrato de esta tarea lo escribio el agente, no el usuario.
+El usuario lo autorizo expresamente en el chat y ha leido el contenido exacto. Se declara aqui
+porque la regla exige declarar el cambio. Precedente del repo, medido: 138 commits tocan
+.task/contract.json y 82 .task/report, varios con Co-authored-by: openhands.
+
+Cambios aplicados:
+- scripts/task-ledger.mjs: justificaCierre() retira la rama `subject.includes(id)` y deja solo la
+  de familia, que YA usaba \b. familiaDe('C41') === 'C41', asi que el id exacto sigue cubierto y
+  no se pierde ninguna justificacion legitima.
+- tests/taskLedgerGuard.test.ts: caso nuevo en el describe del detector (C2 justificado por C21).
+
+Validado contra:
+- Metrica del contrato (recomputada por el gate en el worktree base): 1 -> 0.
+- Guard: FALLA en base (exit 1) y PASA ahora (exit 0) -> distingue el defecto, no aprueba por nombre.
+- npm run gate -> exit 0 (alcance, tamano, DoD, guard, invariante).
+- node scripts/task-ledger.mjs check -> exit 0, 121 cierres, sin cambio de cifras.
+- Las 121 entradas reales siguen justificadas: el arreglo no rompe ninguna.
+
+No validado:
+- DoD-producto: n/a (no hay UI en este cambio).
+
+Notas fuera de alcance (deuda, no tocada):
+- Hallazgo 4.2 de la auditoria (I6 cierra con la marca literal VEREDICTO en texto libre) NO se
+  toca: tests/decisionVerdictGuard.test.ts esta congelado en .task/frozen.json.
+- Hallazgo 4.3 (numeros desfasados dentro del campo evidencia: 117/119/12 en vez de 121/17):
+  cosmetico, merece un contrato aparte (un contrato = un objetivo).
+
