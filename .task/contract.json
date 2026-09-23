@@ -1,34 +1,20 @@
 {
   "id": "P7.3",
   "mode": "full",
-  "task": "P7.3 paso 2/2 - tipar el laboratorio ASR y endurecer C49",
-  "base": "9d86307916a84ca5410e1235888956b7ee205ef3",
-  "objective": "Cerrar P7.3 quitando los 8 `any` de tipo, con su causa raiz resuelta: los tres modulos .js sin tipos que importaba el laboratorio. Los dos whisper (whisperWasmTranscriber.js y whisperRecognitionEngine.js) estrenan .d.ts hermamas que el propio TS prefiere al .js (probado: sin ellas tsc falla con TS2322/TS7006 en AsrLab). Los eventos de Chrome y el AudioProcessingEvent usan los tipos de lib.dom. C49/tsStrictGuard se endurece con el mismo criterio de `any` de tipo que mide la metrica ts-any, con prueba por los dos lados.",
+  "task": "cierre-ledger-P7.3",
+  "base": "295034311052824f07d74d8759f2593aef530bcc",
+  "objective": "Cerrar P7.3 en el ledger tras 2950343: sale de items y entra en done con el commit de codigo. La evidencia (metrica ts-any 8 -> 0, .d.ts load-bearing probadas con y sin ellas, guard C49 rojo en base) queda en los mensajes de 9d86307 y 2950343.",
   "allow": [
-    "src/dev/asrLab/**",
-    "src/voice/lib/asr/**",
-    "tests/tsStrictGuard.test.ts",
-    "scripts/audit-metric.mjs",
+    "plans/ledger.json",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 200,
-  "dod": "npx vitest run tests/tsStrictGuard.test.ts tests/voiceAsrEventShape.test.ts tests/voiceOfflineFallback.test.ts tests/eolGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/tsStrictGuard.test.ts --reporter=dot",
-  "guardExpect": "green",
-  "invariant": {
-    "statement": "ningun `any` en posicion de tipo en src: los modulos .js que lo forzaban quedan tipados por .d.ts propias, y el invariante nace rojo en base (8)",
-    "metric": {
-      "command": "node scripts/audit-metric.mjs ts-any",
-      "target": 0
-    },
-    "base": "9d86307916a84ca5410e1235888956b7ee205ef3",
-    "guardFiles": [
-      "tests/tsStrictGuard.test.ts"
-    ]
-  }
+  "maxFiles": 6,
+  "maxLines": 120,
+  "dod": "npx vitest run tests/taskLedgerGuard.test.ts tests/tsStrictGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts --reporter=dot",
+  "guardExpect": "green"
 }

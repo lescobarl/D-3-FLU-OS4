@@ -391,13 +391,6 @@
       "origen": "auditoria"
     },
     {
-      "id": "P7.3",
-      "titulo": "T8 - TS estricto: 67 as unknown as, 17 any, noUnused*",
-      "estado": "todo",
-      "evidencia": "conteo -> 0 [MEDIDO 086f73d] `as unknown as` en src: 1 -> 0. El ultimo vivia en src/core/db/fluDatabase.ts:711 (los handles derivados del esquema, que P1.4 introdujo): se sustituyo por Object.assign(this, Object.fromEntries(schemaTableNames()...)), que conserva la derivacion sin volver a las llamadas this.table('...') que prohibe dexieSingleSourceGuard; verificado en runtime que los 22 handles existen y son tablas. C49/tsStrictGuard entra en lint:guards: la regresion de P1.4 vivio en ROJO porque el guard no estaba en la barrera. strict/noUnusedLocals/noUnusedParameters ya eran true. QUEDA (medido hoy): 8 `any` en src/dev/asrLab/AsrLab.tsx, todos por importar tres modulos .js SIN tipos (src/voice/lib/asr/whisperWasmTranscriber.js, .../whisperRecognitionEngine.js y src/voice/lib/speechRecognitionLocal.js): tiparlos de verdad pide .d.ts para esos modulos (o checkJs, que hoy da miles de errores). No se cierra el item con un 0 cosmetico.",
-      "origen": "plan-T"
-    },
-    {
       "id": "P0.5",
       "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md",
       "estado": "done",
@@ -993,6 +986,11 @@
       "id": "P6.9",
       "commit": "268e0c7",
       "titulo": "Higiene medida: TODO y audit-metric eran falso positivo; LFS aplazado con VEREDICTO; 130 mojibakes UTF-8 reparados (guard C53)"
+    },
+    {
+      "id": "P7.3",
+      "commit": "2950343",
+      "titulo": "Sin `any` de tipo en src: 8 -> 0 (los .js del ASR tipados por .d.ts hermana; guard C49 endurecido)"
     }
   ]
 }
