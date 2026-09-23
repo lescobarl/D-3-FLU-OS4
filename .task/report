@@ -2004,4 +2004,51 @@ y storageKeysAliveGuard verdes ; tests de onboarding 56 -> verdes ; npm run gate
 LIMITE: los e2e NO se pudieron ejecutar en esta maquina: el dev server de vite falla
 al cargar vite.config.ts ("Cannot read properties of undefined (reading DEV)"), fallo
 PREEXISTENTE (vite.config.ts no se toco en esta tarea). El ajuste de los helpers e2e
-queda pendiente de corrida en un entorno con vite operativo.
+queda pendiente de corrida en un entorno con vite operativo.================================================================
+[CIERRE] 2026-09-22 - P4.10: clasificar los simbolos repetidos (┬º7.7)
+================================================================
+NO se cambio codigo, y es deliberado. El item pedia "clasificar los 16 simbolos
+repetidos con seccion 7.7" y esa clasificacion YA estaba hecha: vive en
+ALLOW_COLLISION/KNOWN_GROUPS de scripts/auditoria.mjs, llenada por los commits
+chore(criterio) y rematada en ee75233 ("catalogo 28/28").
+MEDICION (por simbolo, recomputada hoy):
+  universo = 15 simbolos exportados definidos en >1 archivo en src/ (el item decia 16;
+  uno se unifico despues). Todas colision, ninguna ruta doble:
+   1 buildGenerationPrompt      generationPrompts.ts       vs fluVisualPipeline.js
+   2 buildMinuteKnowledgeBase2  minuteKnowledgeHelpers.ts  vs minuteKnowledge.js
+   3 editableFieldsOf           paletaFactory.ts          vs ambienteFactory.ts
+   4 emptyEditableFields        paletaFactory.ts          vs ambienteFactory.ts
+   5 formatMinuteHistoryLabel   useMinuteKnowledge.ts     vs minuteKnowledge.js
+   6 formatSpeakerLabel         activeListen.js           vs speakerLabels.js
+   7 getAsrSegmentationCfg      asrTurnSegmentation.js    vs fluTranscriptMotor.js
+   8 hasToken                   gameUtils.ts              vs configCommands.js
+   9 labelToSpeakerId           conversationRow.js        vs speakerCore.js
+  10 loadSessionState           useSessionPersistence.ts  vs fluStorage.js
+  11 resolveFluParticipantLabel fluParticipant.ts         vs participantFloor.js
+  12 resolveGeminiApiKey        appConfig.ts              vs gemini.js
+  13 saveSessionState           useSessionPersistence.ts  vs fluStorage.js
+  14 uncheckAll                 notesList.ts              vs shoppingList.ts
+  15 wouldShrinkLog             activeListen.js           vs speechMerge.js
+  no clasificados (catch-all D0): 0 en TODOS los commits muestreados
+  (16e3df8, ab0490b, 2fc1484, 44c2490, bbcb8e5, 5c2fb93, d5a3f17) y hoy.
+  total de exportados duplicados: 49 (16e3df8) -> 25 (d5a3f17) -> 15 (hoy).
+VERIFICACION INDEPENDIENTE (no acepte el comentario como prueba):
+  comparacion de cuerpos normalizados de los 15 pares -> ningun par identico;
+  inspeccion directa de labelToSpeakerId, uncheckAll y formatSpeakerLabel confirma
+  logica distinta en los tres (fallbacks y dominios distintos).
+POR QUE NO HAY HITO DE CODIGO: no queda ruta doble que unificar y la metrica
+(no clasificados) ya esta en 0. Empujarla por el gate daria "hito cosmetico",
+que ┬º7.2/┬º7.5 prohiben. Se intento antes el camino de "guard con los veredictos
+dentro" y el propio gate lo rechazo, con razon: copia los guardFiles al worktree
+base, asi que un veredicto que vive en el guard no distingue base de actual
+(metric base=0 actual=0, y el guard pasaba en base). Aprendido y anotado.
+HALLAZGOS DERIVADOS (fuera de alcance; decision del usuario):
+ (a) la clasificacion NO la corre el gate: scripts/auditoria.mjs no esta en
+     lint:guards -> es prosa, no barrera.
+ (b) punto ciego declarado por el propio auditor ("duplicados NO exportados no se
+     cuentan"): medidos 51 nombres de nivel superior duplicados con al menos una
+     definicion interna. Ruta doble REAL visible: DATE_KEY_RE copiado en 4
+     servicios (contactService, diaryService, habitService, moodService) y 4
+     helpers get* (getEmbeddingConfig, getMinSamples, getModelId,
+     getTargetSampleRate) repetidos entre speakerEmbeddingCore.js y
+     voiceId.worker.js.

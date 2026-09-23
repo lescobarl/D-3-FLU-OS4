@@ -203,8 +203,8 @@
     {
       "id": "P4.10",
       "titulo": "T3 - Clasificar los 16 simbolos repetidos con seccion 7.7",
-      "estado": "todo",
-      "evidencia": "conteo por simbolo ANTES/DESPUES",
+      "estado": "done",
+      "evidencia": "Ya satisfecho (item fantasma): la clasificacion se completo en los commits chore(criterio) que llenaron ALLOW_COLLISION/KNOWN_GROUPS de scripts/auditoria.mjs, y el catch-all D0 (simbolos exportados definidos en >1 archivo SIN clasificar) esta en 0 en todos los commits muestreados (16e3df8, ab0490b, 2fc1484, 44c2490, bbcb8e5, 5c2fb93, d5a3f17) y hoy. Universo recomputado hoy = 15 simbolos exportados duplicados (el item decia 16: uno se unifico despues), TODOS con veredicto ┬º7.7 declarado: buildGenerationPrompt, buildMinuteKnowledgeBase2, editableFieldsOf, emptyEditableFields, formatMinuteHistoryLabel, formatSpeakerLabel, getAsrSegmentationCfg, hasToken, labelToSpeakerId, loadSessionState, resolveFluParticipantLabel, resolveGeminiApiKey, saveSessionState, uncheckAll, wouldShrinkLog. Los 15 son COLISION (mismo nombre, distinto dominio o forma del dato); 0 ruta doble. Comprobacion independiente (no me fie del comentario): comparacion de cuerpos normalizados de los 15 pares -> ningun par identico; inspeccion directa de labelToSpeakerId (conversationRow normaliza+parsea indice y cae a SPEAKER_ID_CALCULATING vs speakerCore regex + fallback speaker_1), uncheckAll (Note.done vs ShoppingItem.checked) y formatSpeakerLabel ((index,cfg) vs (label,confidence,config)) confirma logica distinta en los tres. Progresion medida del total de exportados duplicados en src/: 49 (16e3df8) -> 25 (d5a3f17) -> 15 (hoy). Las unificaciones reales de este dominio YA se hicieron (V18 12->0 en 5c2fb93, D1 scheduler, allowlists D2/D3/D4). Cierre SIN cambio de codigo, a proposito: no hay ruta doble que unificar, la metrica (no clasificados) ya esta en 0 y empujarla por el gate daria un hito cosmetico que ┬º7.2/┬º7.5 prohiben. Evidencia reproducible: node scripts/auditoria.mjs --only D0 -> HOY=0. HALLAZGOS derivados (fuera de alcance; requieren decision del usuario): (a) la clasificacion la corre el auditor a mano, NO el gate (scripts/auditoria.mjs no esta en lint:guards): es prosa, no barrera; (b) el propio auditor declara su punto ciego \"duplicados NO exportados no se cuentan\": medidos 51 nombres de nivel superior duplicados con al menos una definicion interna, entre ellos ruta doble real visible: DATE_KEY_RE copiado en 4 servicios (contact/diary/habit/mood) y 4 helpers get* (getEmbeddingConfig/getMinSamples/getModelId/getTargetSampleRate) repetidos entre speakerEmbeddingCore.js y voiceId.worker.js.",
       "origen": "plan-T"
     },
     {
@@ -981,6 +981,11 @@
       "id": "P1.3",
       "commit": "3d3542e",
       "titulo": "Onboarding: un solo almacen (Dexie)"
+    },
+    {
+      "id": "P4.10",
+      "commit": "ee75233",
+      "titulo": "Clasificacion ┬º7.7 de los simbolos repetidos (ya aterrizada en chore(criterio))"
     }
   ]
 }
