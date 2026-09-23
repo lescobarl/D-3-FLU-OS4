@@ -158,7 +158,7 @@ export function useConfigPersistence(): ConfigPersistence {
     );
     const [debugLogsEnabled, setDebugLogsEnabledState] = useState<boolean>(() => {
         const saved = loadString(STORAGE_KEYS.DEBUG_LOGS_ENABLED);
-        return saved === '' ? (FLU_CONFIG.debug.enabled ?? true) : saved === 'true';
+        return saved === '' ? (FLU_CONFIG.debug.enabled ?? false) : saved === 'true';
     });
     const wakeWordsRef = useRef(wakeWords);
     wakeWordsRef.current = wakeWords;

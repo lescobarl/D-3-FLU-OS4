@@ -56,7 +56,7 @@
   "tests/syncTupleInlineGuard.test.ts": "6420fc80b3cfe4a77389bc6c36048e0c489b6f037557a21f88e598e7c365ac45",
   "tests/providerLiteralGuard.test.ts": "bab7ad64a519960166afa4a8e61f4a3682a64fbb9b0b2c7423bf007157ee7b06",
   "tests/aiServiceSingleImplGuard.test.ts": "b8887586dd46e1ca852b080419457e9e8cf4c60f4e03015099390e25607aac7b",
-  "tests/specificDeadGuard.test.ts": "709a433961dd3ab9478800045cc5a039513bb4cd258d7013cf34db4a097012eb",
+  "tests/specificDeadGuard.test.ts": "7ca29cc7a8a4815b140624ca17f60fd6d5636d4f0bfe5b1ec89a3a41274b9b33",
   "tests/textUtilsSingleSourceGuard.test.ts": "e6acf2c46167e02c2e87d0a41cc5fc8f1a5bb4ae501cc31835594f814056b083",
   "tests/interimPriorStripSingleSource.test.ts": "a350281f7d23937dee615aff097de354f0a8830dcc36e1feeabb91fd687d2168",
   "tests/geminiServiceFlow.test.ts": "8ea891dea81c4a89a9f0b9fa2f5369eb78217eb6d611115757305efd534eb897",
@@ -73,5 +73,6 @@
   "tests/configSingleSourceGuard.test.ts": "0b4f7f7aeffcaf745662ccc2981c153c19a5c82273496e13e517be72e1802156",
   "tests/duplicationGuard.test.ts": "5800cc37cc63686c52f9f2a5c54b6fcab68fa55779ae156cbad31a79f97c20da",
   "tests/transportSingleOwnerGuard.test.ts": "fd8ee1ac6f5f8f7e4e0573e82c9221b88ee41dc0e7b3b195a9e1951e88a253da",
-  "tests/cascadeSingleOrderGuard.test.ts": "69e131567ff1c295034c34a62da0c2d56507f656abaf8f935c7f0d691335ee51"
+  "tests/cascadeSingleOrderGuard.test.ts": "69e131567ff1c295034c34a62da0c2d56507f656abaf8f935c7f0d691335ee51",
+  "tests/prodDefaultsGuard.test.ts": "0dcb29d03e3a0c670ba620dbc81049273977173bf5b0547d181cb4c240b463bb"
 }

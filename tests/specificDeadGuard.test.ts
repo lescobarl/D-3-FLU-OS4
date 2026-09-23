@@ -23,8 +23,12 @@ const DEAD_SYMBOLS = [
   'logStreamPublish',
   'resetMicConsole',
   'printListenSummary',
-  // src/voice/lib/listenLog.js — alias @deprecated retirado en P2.3.
+  // src/voice/lib/listenLog.js - alias @deprecated retirado en P2.3.
   'logMicRaw',
+  // OJO: el alias listenLog (retirado en P6.4) NO va en esta lista: su nombre sigue
+  // apareciendo como etiqueta de diagnostico y como ruta de import, asi que el detector
+  // por nombre daria falso positivo. Se vigila con la asercion de API ('listenLog' in m).
+
   // src/voice/lib/micIngressLog.js — stub sin consumidor.
   'logMicIngress',
   // src/voice/lib/activeListen.js — deprecados/lectores sin consumidor.
@@ -113,6 +117,7 @@ describe('specificDeadGuard — sin código muerto ni basura específicos', () =
   it('la API viva de los módulos de voz sigue intacta (comportamiento)', async () => {
     const listen = await import('../src/voice/lib/listenLog.js')
     expect(typeof listen.fluEvent).toBe('function')
+    expect('listenLog' in listen, 'el alias listenLog volvio').toBe(false)
     expect('logMicRaw' in listen).toBe(false)
     expect('logMicPacket' in listen).toBe(false)
     expect('logStreamPublish' in listen).toBe(false)

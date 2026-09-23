@@ -3,6 +3,9 @@ import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
+/** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
+const IS_DEV = import.meta.env.DEV
+
 /**
  * Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
  * Fuente ÚNICA del wake word (§9.4): `voiceCommands.wakeWords` y el sesgo del
@@ -2099,7 +2102,7 @@ export const FLU_CONFIG = {
    * Apagar (enabled: false) cuando la app esté lista para producción.
    */
   debug: {
-    enabled: true,
+    enabled: IS_DEV,
     /** `[Flu][chrome-raw]` — evento SpeechRecognition sin procesar (solo dev). */
     chromeRawConsole: true,
     /** Panel flotante: log ingress (texto publicado completo). */
@@ -2120,7 +2123,7 @@ export const FLU_CONFIG = {
     /** Vectores de embedding en filas del log de conversación (solo diagnóstico). */
     showEmbeddingPreview: false,
     /** Reenviar logs del frontend al servidor (terminal) para que Roo pueda verlos. */
-    relayToServer: true,
+    relayToServer: IS_DEV,
   },
   /**
    * Árbitro determinista (§1A/§2A/§2B del plan de afinado estructural).

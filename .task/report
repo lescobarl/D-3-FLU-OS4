@@ -1671,3 +1671,38 @@ NO VALIDADO: no se ejercito la UI real de imagen (los 3 caminos se validan por t
   funciono. La enmienda AMPLIA el alcance a los guards de tests (tests/**) para no repetir
   el mismo descuido en cada lote; no retira ni debilita ninguna comprobacion. Se registra
   aqui en vez de reescribir la historia: el commit 12da3ea ya contiene el guard.
+================================================================
+[CIERRE TECNICO] 2026-09-22 - P6.2 + P6.4
+================================================================
+P6.2 (defaults de diagnostico encendidos en build): FLU_CONFIG.debug.enabled estaba fijado a
+  true ("apagar cuando la app este lista para produccion", decia el propio comentario) y
+  debug.relayToServer tambien: la build de produccion salia con la consola de diagnostico
+  encendida y reenviando logs del cliente al servidor (syncEnabled() de clientLogRelay solo
+  comprobaba !== false, asi que el default mandaba). Ahora ambos son IS_DEV, con IS_DEV
+  derivado de import.meta.env.DEV como ya hace listenLog.js. En DEV nada cambia; en PROD el
+  default es off y sigue siendo el usuario quien puede encenderlo en runtime (Ajustes ->
+  FLU_CONFIG.debug). El default de la persistencia (useConfigPersistence) pasa de ?? true a
+  ?? false para no reintroducir el encendido si el campo desapareciera.
+P6.4 (codigo muerto/aliases): verificado UNO POR UNO, y dos de las tres afirmaciones del audit
+  son FALSOS POSITIVOS:
+    - listenLog(): alias puro de fluEvent, 0 consumidores en src y en tests (comprobado con
+      busqueda literal). RETIRADO.
+    - turnTranscript: VIVO, lo importan useFluVoiceAssistant.js y conversationSession.js.
+    - ControlsPanel: VIVO, lo usa BunnyControlCenter.tsx; su cabecera dice "placeholders para
+      futura implementacion" pero es un componente real cableado a bunnyStore, no un stub
+      muerto.
+  Se anota en el guard por que listenLog NO entra en DEAD_SYMBOLS aunque este retirado: su
+  nombre sigue apareciendo como etiqueta de diagnostico (fluAsyncErrorHandler('listenLog')) y
+  como ruta de import ('. /lib/listenLog'), asi que el detector por nombre daria falso
+  positivo; se vigila con la asercion de API ('listenLog' in modulo === false). Eso fue
+  exactamente lo que el guard existente me enseno al intentarlo al reves.
+GUARD: tests/prodDefaultsGuard.test.ts (2 reglas + detector con recorte del bloque debug por
+  llaves, para no confundir con games.enabled). specificDeadGuard ampliado con la asercion
+  de API. Ambos congelados.
+INVARIANTE (falsable): relayToServer devuelto a literal true -> prodDefaultsGuard ROJO;
+  restaurado -> 9/9 VERDE.
+VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 295 archivos / 3045
+  tests / 0 fallos.
+NO VALIDADO: no se construyo la build de produccion real (import.meta.env.DEV es falso en
+  prod por definicion de Vite, pero no se ejecuto 'vite build' para comprobarlo en el bundle).
+  Queda como comprobacion pendiente si alguien quiere evidencia del bundle final.

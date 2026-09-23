@@ -90,9 +90,6 @@ export function fluEvent(stage, data = {}) {
   pushRing({ t: Date.now(), stage: String(stage || ''), ...data })
 }
 
-export function listenLog(stage, data = {}) {
-  return fluEvent(stage, data)
-}
 
 function logChromeRawConsole(channel, kind, text, seq) {
   console.info(`[Flu][chrome-raw] #${seq} ${kind} ${text}`)
