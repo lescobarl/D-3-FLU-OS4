@@ -35,8 +35,8 @@
     {
       "id": "P1.1",
       "titulo": "T5 - Minutas a un solo almacen (Dexie registro; retirar integrationStore/flu-minute-history; backup real)",
-      "estado": "todo",
-      "evidencia": "src/hooks/useMinuteKnowledge.ts:265",
+      "estado": "done",
+      "evidencia": "Las minutas viven SOLO en Dexie (doctrina C31, la misma que voiceProfiles y branding). backupSystem las trataba como localStorage: extractMinuteHistory leia localStorage[MINUTE_HISTORY] (clave que NINGUN otro modulo escribia, luego el backup salia siempre vacio) con fallback al espejo de integrationStore, y restoreMinuteHistory escribia esa clave muerta y ademas espejaba el resultado en el store (setState({minuteHistory})), un SEGUNDO publicador contra la doctrina de P1.2. Ahora extractMinuteHistory -> [] y restoreMinuteHistory -> false+void data, y se retira la clave muerta STORAGE_KEYS.MINUTE_HISTORY de appConfig.ts. Guard tests/minutesDexieOnlyGuard.test.ts (5 tests): prohibe la clave en todo src/, prohibe el espejo en el store fuera del store, y verifica que el backup aplica C31 analizando el cuerpo de los metodos con codeOnly (un comentario que nombra lo prohibido no lo comete). Metrica: sitios con la clave de minutas o el espejo fuera del store 5 -> 0, recomputada por el gate en el worktree base; gate exit 0.",
       "origen": "plan-T"
     },
     {
@@ -971,6 +971,11 @@
       "id": "P1.4",
       "commit": "40d8f04",
       "titulo": "Dexie: una sola fuente de la lista de tablas"
+    },
+    {
+      "id": "P1.1",
+      "commit": "c73eacd",
+      "titulo": "Minutas: un solo almacen (Dexie), backup real"
     }
   ]
 }
