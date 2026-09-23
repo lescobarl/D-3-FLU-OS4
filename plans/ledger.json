@@ -355,13 +355,6 @@
       "origen": "auditoria"
     },
     {
-      "id": "P6.9",
-      "titulo": "T10 - Higiene: audit-metric duplicado, 91 TODO, LFS texturas",
-      "estado": "todo",
-      "evidencia": "git ls-files",
-      "origen": "plan-T"
-    },
-    {
       "id": "P6.10",
       "titulo": "plans/** 30+ artefactos de proceso versionados",
       "estado": "done",
@@ -995,6 +988,11 @@
       "id": "P6.10",
       "commit": "38a097e",
       "titulo": "plans/: 50 artefactos de proceso fuera, con guard C52"
+    },
+    {
+      "id": "P6.9",
+      "commit": "268e0c7",
+      "titulo": "Higiene medida: TODO y audit-metric eran falso positivo; LFS aplazado con VEREDICTO; 130 mojibakes UTF-8 reparados (guard C53)"
     }
   ]
 }

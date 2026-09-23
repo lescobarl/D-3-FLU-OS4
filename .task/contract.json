@@ -1,25 +1,22 @@
 {
   "id": "P6.9",
   "mode": "full",
-  "task": "higiene-C53",
-  "base": "6bd174959596a55e1e2ed3f7140784906037bc2a",
-  "objective": "Cerrar la auditoria de higiene del repo: (1) los 91 TODO del audit eran falso positivo (palabra espanola); (2) audit-metric.mjs NO duplica a auditoria.mjs (medidor congelado de literales vs catalogo de clases), demostrado con taller sintetico; (3) LFS aplazado por decision con barrera de peso; (4) el mojibake UTF-8 preexistente se repara: 130 sustituciones en 12 ficheros, incluidas 4 cadenas que FLU pronuncia (\"Navegacion curada\", \"No pude entender la direccion\", \"Busqueda: \", \"Que queres que busque?\"). Guard C53 fija los cuatro indicadores.",
+  "task": "cierre-ledger-P6.9",
+  "base": "268e0c78b7337e3f39cd26b2b31a7948a120626e",
+  "objective": "Cierre de P6.9 en el ledger tras el commit 268e0c7: se retira de items y se anota en done con el commit de codigo. La evidencia completa (cuatro indicadores medidos, decision de LFS y reparacion de mojibake) queda en el mensaje de 268e0c7 y en el guard C53.",
   "allow": [
-    "tests/**",
-    "src/**",
     "plans/ledger.json",
-    "package.json",
-    ".task/frozen.json",
     ".task/contract.json",
+    ".task/frozen.json",
     ".task/report"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 22,
-  "maxLines": 1200,
-  "dod": "npx vitest run tests/hygieneIndicatorsGuard.test.ts tests/eolGuard.test.ts tests/protocolGuard.test.ts tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
+  "maxFiles": 6,
+  "maxLines": 200,
+  "dod": "npx vitest run tests/decisionVerdictGuard.test.ts tests/taskLedgerGuard.test.ts tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
