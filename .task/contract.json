@@ -1,35 +1,23 @@
 {
   "id": "P6.10",
   "mode": "full",
-  "task": "P6.10",
-  "base": "697630658bcaf81186864d9d60f64e8c0ed70c85",
-  "objective": "plans/ deja de arrastrar artefactos de proceso: los 50 ficheros de contratos viejos e informes de sesion/entrega salen del arbol, y un guard impide que vuelvan. Limite de tamano declarado en 3400 lineas a proposito: son 50 ficheros BORRADOS (2364 lineas de contratos + 799 de informes). Trocear no ayuda aqui ΓÇö el invariante es todo-o-nada sobre plans/, asi que un trozo deja el guard en rojo y el cierre seria teatro; y la regla de tamano existe para CODIGO autorado, no para sacar del arbol ficheros obsoletos, que se revisan por lista de bajas, no por linea.",
+  "task": "fix-utf8-C52",
+  "base": "40c8c39a53fa90631d83d8c58ebd360c1b9a6d02",
+  "objective": "Corregir el mojibake que introdujo el guard C52: el heredoc de PowerShell destrozo las tildes al escribirlo (5 marcas). Se reescribe con UTF-8 correcto y se actualiza su hash en frozen.json en el mismo commit.",
   "allow": [
-    "plans/**",
     "tests/**",
-    "package.json",
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
-    "plans/ledger.json"
+    "package.json"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 70,
-  "maxLines": 3400,
-  "dod": "npx vitest run tests/plansProcessArtifactsGuard.test.ts tests/eolGuard.test.ts tests/taskLedgerGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
+  "maxFiles": 10,
+  "maxLines": 900,
+  "dod": "npx vitest run tests/plansProcessArtifactsGuard.test.ts tests/eolGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
   "guard": "npx vitest run tests/plansProcessArtifactsGuard.test.ts --reporter=dot",
-  "guardExpect": "green",
-  "invariant": {
-    "statement": "Artefactos de proceso en plans/ (contratos/** y estado-sesion|entrega-*): 50 -> 0, conservando el ledger y los documentos de diseno.",
-    "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');const isPA=p=>{p=p.replace(/\\\\/g,'/');if(/(^|\\/)contratos\\//.test(p))return true;return /(^|\\/)(estado-sesion|estado-entrega)-[^/]*[.]md$/.test(p);};const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);const r=walk('plans').map(p=>p.slice('plans'.length+1)).filter(isPA);console.log(r.length)\"",
-      "target": 0
-    },
-    "guardFiles": [
-      "tests/plansProcessArtifactsGuard.test.ts"
-    ]
-  }
+  "guardExpect": "green"
 }
