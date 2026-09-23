@@ -1767,4 +1767,5 @@ PENDIENTE DE P4.2 (por eso el item NO se cierra, queda in_progress):
   - "Three duplicada": 'three' entra al bundle por el worker y por el main thread; ver si
     Vite duplica la libreria y si conviene un chunk compartido. Toca config de build
     (vite.config), con riesgo de romper el worker: merece su propio contrato.
-  Ambas quedan anotadas; no se declaran hechas.
+  Ambas quedan anotadas; no se declaran hechas.[GATE] npm run gate -> exit 0. El gate RECOMPUTO por su cuenta: metrica base=2 actual=1
+  target 1, y falsacion del guard: guard base=1 (ROJO) actual=0 (VERDE). No depende de mi nota.

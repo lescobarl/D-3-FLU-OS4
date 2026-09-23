@@ -150,8 +150,8 @@
     {
       "id": "P4.2",
       "titulo": "T4 - FBX parseFbxBuffer 2->1 + medir bloqueo + Three duplicada",
-      "estado": "todo",
-      "evidencia": "src/avatar/workers/fbxLoader.worker.js:16-27",
+      "estado": "in_progress",
+      "evidencia": "PARTE 1/3 HECHA (commit f99661f): orquestacion FBX 2->1. ANTES 2 lineas con el literal de error (fbxLoader.worker.js:24, fbxWorkerClient.ts:103) -> DESPUES 1 (fbxParse.ts, fetchFbxJson). Guard tests/fbxSingleOrchestrationGuard.test.ts (4/4; nace rojo en base; mutacion probada). Gate: metrica base=2 actual=1 target=1, guard base=ROJO actual=VERDE, exit 0. FALTAN: (a) medir bloqueo del parse sincrono en main thread = banco de rendimiento, no test CI, sin disenar; (b) Three duplicada en bundle = chunk compartido en vite.config, riesgo de romper el worker, requiere contrato propio.",
       "origen": "plan-T"
     },
     {
