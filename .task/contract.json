@@ -1,20 +1,20 @@
 {
-  "id": "P7.3",
+  "id": "P4.2",
   "mode": "full",
-  "task": "cierre-ledger-P7.3",
-  "base": "295034311052824f07d74d8759f2593aef530bcc",
-  "objective": "Cerrar P7.3 en el ledger tras 2950343: sale de items y entra en done con el commit de codigo. La evidencia (metrica ts-any 8 -> 0, .d.ts load-bearing probadas con y sin ellas, guard C49 rojo en base) queda en los mensajes de 9d86307 y 2950343.",
+  "task": "P4.2 (a) banco del bloqueo del parse FBX + veredicto medido de (b) Three en bundle",
+  "base": "2a0b41749d8073e7a4a2f0cd539fe50113f7e29f",
+  "objective": "Cerrar la parte (a) con un banco EJECUTABLE (no un test de CI: vitest solo recoge tests/**/*.test.ts) que mide el bloqueo del parse sincrono en el hilo principal por la ruta real (fbxParse.ts, dueno unico). Cambio aditivo: no elimina duplicacion nueva, por eso no lleva invariante; el invariante de la unificacion 2->1 de P4.2 ya lo puso el commit f99661f con su metrica base=2 actual=1. La parte (b) queda como VEREDICTO medido en el mensaje y en el ledger: three instalada es UNA copia, three es external en el build (no hay bundle que partir) y el build no arranca por un defecto preexistente que se registra como P6.13.",
   "allow": [
-    "plans/ledger.json",
+    "tests/bench/**",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 6,
-  "maxLines": 120,
-  "dod": "npx vitest run tests/taskLedgerGuard.test.ts tests/tsStrictGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 130,
+  "dod": "npx vitest bench tests/bench/fbxParse.bench.ts",
+  "guard": "npx vitest run tests/fbxSingleOrchestrationGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
