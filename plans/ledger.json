@@ -316,7 +316,7 @@
     {
       "id": "P6.2",
       "titulo": "debug.enabled:true y relayToServer:true por defecto en build",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/fluConfig.js:2096,2117",
       "origen": "auditoria"
     },
@@ -330,7 +330,7 @@
     {
       "id": "P6.4",
       "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/listenLog.js:126-129",
       "origen": "auditoria",
       "noVerificado": true
@@ -898,6 +898,16 @@
       "id": "P5.8",
       "commit": "12da3ea",
       "titulo": "Umbrales de autonomia inline"
+    },
+    {
+      "id": "P6.2",
+      "commit": "601fdec",
+      "titulo": "debug.enabled:true y relayToServer:true por defecto en build"
+    },
+    {
+      "id": "P6.4",
+      "commit": "601fdec",
+      "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)"
     }
   ]
 }
