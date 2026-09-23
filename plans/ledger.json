@@ -101,7 +101,7 @@
     {
       "id": "P2.2",
       "titulo": "T2 - wakeWordRuntime guard con prueba de mutacion",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "tests/ (no existe)",
       "origen": "plan-T"
     },
@@ -739,6 +739,11 @@
       "id": "P0.4",
       "commit": "91665a4",
       "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md"
+    },
+    {
+      "id": "P2.2",
+      "commit": "e75605a",
+      "titulo": "T2 - wakeWordRuntime guard con prueba de mutacion"
     }
   ]
 }
