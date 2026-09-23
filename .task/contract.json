@@ -1,20 +1,21 @@
 {
   "id": "P6.6",
   "mode": "full",
-  "task": "P6.6 paso 4/N - applyGameAction sale de App.tsx",
-  "base": "cb6144f358993e4ae4258624cf7717e95d7e4660",
-  "objective": "Sacar a src/app/gameActions.ts el fast-path de juegos por voz (ApplyGameContext y applyGameAction) y retirar de App.tsx las importaciones que se quedan muertas al irse (stores de partida, tipos de juego, opciones de habla, sonda de audio, isMusicPlaying, catalogo de juegos). App.tsx 4920 -> ~4684. Sin cambio de comportamiento: la suite entera sigue verde.",
+  "task": "P6.6 paso 5/5 - trinquete de tamano de god-files, registrado y congelado",
+  "base": "56d054b3ec0ee13e379f05a6ec8e03546b3e4b99",
+  "objective": "Cerrar P6.6 con el trinquete que impide que lo extraido vuelva: tests/godFileSizeGuard.test.ts mide los cuatro god-files con techos exactos (shrink-only), trae prueba de detector por los dos lados y detecta tambien el techo que se queda flojo. Registrado en lint:guards y congelado por hash en .task/frozen.json. Sin el, un bloque extraido podria volver a App.tsx sin que nadie lo note.",
   "allow": [
-    "src/**",
+    "tests/**",
+    "package.json",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 6,
-  "maxLines": 700,
+  "maxFiles": 4,
+  "maxLines": 160,
   "dod": "npx tsc -b",
-  "guard": "npx vitest run tests/gameFlow.test.ts tests/tabRoutes.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/godFileSizeGuard.test.ts tests/guardMutationGuard.test.ts tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
