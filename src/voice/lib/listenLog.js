@@ -10,7 +10,7 @@ import { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 export { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 import { logCaughtError } from '../../lib/caughtError';
 
-const IS_DEV = import.meta.env.DEV
+const IS_DEV = Boolean(import.meta.env?.DEV)
 const RING_MAX = 200
 const SIM_STAGES = new Set(['sim-start', 'sim-done', 'sim-abort'])
 const FILE_STAGES = new Set(['chrome-raw', 'final', 'mic-ingress'])

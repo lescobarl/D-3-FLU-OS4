@@ -90,5 +90,6 @@
   "tests/plansProcessArtifactsGuard.test.ts": "78191152983cedbab3feb8ede3f534884079a1b70f397aaaea382c3b36af9ce9",
   "tests/hygieneIndicatorsGuard.test.ts": "8f66888142a6dc0c0501fac4ff7a2e15f90647c78c09318b5689e65b2209e07b",
   "tests/localStorageGatewayGuard.test.ts": "06b1cfdbf08059458247a95b5a39a1ab6b0a88f01c4d3a3a3e535524a3a9f207",
-  "tests/godFileSizeGuard.test.ts": "64b88beb46731afb58efa3a1edfb78ff47a551484db98ca3e087b68176598d91"
+  "tests/godFileSizeGuard.test.ts": "64b88beb46731afb58efa3a1edfb78ff47a551484db98ca3e087b68176598d91",
+  "tests/viteConfigNodeLoadGuard.test.ts": "b96e1ca2e164e740a7b4118cdb9c84ca519307899b4a72fc1ff1d3c53b50090d"
 }
