@@ -243,7 +243,7 @@
     {
       "id": "P5.1",
       "titulo": "Fallback wake word 'FLU' fuera de config",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/config/voiceConfigCatalog.ts:776",
       "origen": "auditoria"
     },
@@ -773,6 +773,11 @@
       "id": "P0.7",
       "commit": "d7f207d",
       "titulo": "CRLF silencioso: core.autocrlf=false y NO existe .gitattributes, asi que editar un archivo lo reescribe en CRLF -> diff de miles de lineas (rompio f1a1ca6, hubo que rehacerlo) y cambia el hash que frozen.json vigila (hashea BYTES)"
+    },
+    {
+      "id": "P5.1",
+      "commit": "12718c9",
+      "titulo": "Fallback wake word 'FLU' fuera de config"
     }
   ]
 }
