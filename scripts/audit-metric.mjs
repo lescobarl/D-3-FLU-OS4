@@ -75,6 +75,8 @@ const RE = {
   localeLiteral: /['"`](?:es|en)-(?:MX|US|ES|GB)['"`]/,
   // C49: doble cast que evade el tipado (`as unknown as`).
   tsDoubleCast: /as unknown as/,
+  // P7.3: `any` en posicion de TIPO (anotacion, asercion, generico, array).
+  tsAnyType: /\bas\s+any\b|<any\b|:\s*any\b|\bany\s*\[\]/,
 }
 
 // ---- C46: estado efectivo del esquema Dexie -------------------------------
@@ -500,6 +502,8 @@ const metrics = {
     ),
   // ---- C49 ---------------------------------------------------------------
   'ts-escapes': () => countLinesWhere((_r, l) => RE.tsDoubleCast.test(stripComment(l))),
+  // ---- P7.3 --------------------------------------------------------------
+  'ts-any': () => countLinesWhere((_r, l) => RE.tsAnyType.test(stripComment(l))),
   // ---- C46 ---------------------------------------------------------------
   // Tablas legacy que siguen VIVAS en el esquema Dexie efectivo (declaradas y
   // no borradas con `: null` en alguna version posterior).

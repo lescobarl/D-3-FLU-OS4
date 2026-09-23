@@ -1,22 +1,23 @@
 {
-  "id": "P6.9",
+  "id": "P7.3",
   "mode": "full",
-  "task": "lecciones-agents",
-  "base": "8a9ffef0a4184823e4393fc02eda81cf6efff505",
-  "objective": "Aterrizar en AGENTS.md 7.7.f las dos lecciones de P6.9: (5) un detector de higiene tambien sobrecuenta, se mide el falso positivo antes de arreglar nada; (6) no escribir no-ASCII desde heredoc de PowerShell (mojibake) y medir el codepage real (fue cp437).",
+  "task": "P7.3 paso 1/2 - metrica congelada antes del arreglo",
+  "base": "c4b08f921a066994f84d8ca4b4ba33bd73a2d8d0",
+  "objective": "Medir ANTES de tocar codigo: anade a audit-metric.mjs la metrica `ts-any` (any en posicion de tipo en src) y la re-congela. En HEAD vale 8 (los 8 del laboratorio ASR). El arreglo y el guard endurecido van en el paso 2/2, cuyo invariante usa ESTE commit como base. Nota de alcance: los ficheros del paso 2/2 ya estan editados en el arbol de trabajo (allow los cubre para que la puerta no los lea como fuera de alcance) pero NO se staggean aqui: el arbol de ESTE commit conserva los 8 `any`, que es justo lo que el invariante del paso 2/2 necesita medir en base.",
   "allow": [
-    "AGENTS.md",
-    ".task/contract.json",
-    ".task/frozen.json",
-    ".task/report"
+    "scripts/audit-metric.mjs",
+    "src/dev/asrLab/**",
+    "src/voice/lib/asr/**",
+    "tests/tsStrictGuard.test.ts",
+    ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 4,
-  "maxLines": 120,
-  "dod": "npx vitest run tests/hygieneIndicatorsGuard.test.ts tests/protocolGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
+  "maxFiles": 9,
+  "maxLines": 240,
+  "dod": "node scripts/audit-metric.mjs ts-any",
+  "guard": "npx vitest run tests/hygieneIndicatorsGuard.test.ts tests/eolGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
