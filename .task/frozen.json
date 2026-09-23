@@ -88,5 +88,6 @@
   "tests/onboardingSingleStoreGuard.test.ts": "d556f05dcb624fe45799ea59398016a6a83d574582585106046f37de03ea44f1",
   "tests/nonNullAssertionGuard.test.ts": "6b0141807fd74130a406c3e35de4aa43ec3d986518e2bc4795eba7a53a636fcb",
   "tests/plansProcessArtifactsGuard.test.ts": "78191152983cedbab3feb8ede3f534884079a1b70f397aaaea382c3b36af9ce9",
-  "tests/hygieneIndicatorsGuard.test.ts": "8f66888142a6dc0c0501fac4ff7a2e15f90647c78c09318b5689e65b2209e07b"
+  "tests/hygieneIndicatorsGuard.test.ts": "8f66888142a6dc0c0501fac4ff7a2e15f90647c78c09318b5689e65b2209e07b",
+  "tests/localStorageGatewayGuard.test.ts": "06b1cfdbf08059458247a95b5a39a1ab6b0a88f01c4d3a3a3e535524a3a9f207"
 }

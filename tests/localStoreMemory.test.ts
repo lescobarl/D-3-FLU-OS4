@@ -46,4 +46,11 @@ describe('localStore — respaldo en memoria (sin window)', () => {
   it('una clave ausente es null, no undefined', () => {
     expect(localGet('p59-no-existe')).toBeNull();
   });
+
+  it('resolveSafeStorage() comparte el respaldo con la puerta (un solo universo)', async () => {
+    const { resolveSafeStorage } = await import('../src/store/storage');
+    resolveSafeStorage().setItem('p59-zustand', 'v');
+    expect(localGet('p59-zustand')).toBe('v');
+    expect(localStorePort()).toBe(resolveSafeStorage());
+  });
 });

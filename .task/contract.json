@@ -1,21 +1,21 @@
 {
   "id": "P5.9",
   "mode": "full",
-  "task": "P5.9 paso 3/N - hooks, stores, App y voz (conteo a 0)",
-  "base": "7a604627f6642c6a59371ac71e5eb6c11fe7a42e",
-  "objective": "Migrar los ultimos consumidores (hooks de configuracion/DND/onboarding/participantes, environmentStore, storage de Zustand, App y los tres modulo de voz) para que no quede ni un acceso directo: la puerta sustituye tambien el ultimo wrapper local, resolveSafeStorage, que tenia su PROPIA copia del fallback en memoria. El conteo baja de 47 a 0.",
+  "task": "P5.9 paso 4/N - guard localStorageGateway (con prueba de mutacion)",
+  "base": "58710fb0e61b30a09843a196a86530eae0d32a6c",
+  "objective": "Fijar el invariante de P5.9 para que el 0 no se pueda reabrir sin que la barrera lo note: guard tests/localStorageGatewayGuard.test.ts (registrado en lint:guards y congelado) con prueba de detector por los dos lados, mas la regresion del defecto real (resolveSafeStorage compartiendo el respaldo con la puerta).",
   "allow": [
-    "src/**",
-    "scripts/audit-metric.mjs",
+    "tests/**",
+    "package.json",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 20,
-  "maxLines": 500,
+  "maxFiles": 8,
+  "maxLines": 300,
   "dod": "node scripts/audit-metric.mjs localstorage-directo",
-  "guard": "npx vitest run --reporter=dot",
+  "guard": "npx vitest run tests/localStorageGatewayGuard.test.ts tests/localStoreMemory.test.ts tests/localStoreBrowser.test.ts --reporter=dot",
   "guardExpect": "green"
 }
