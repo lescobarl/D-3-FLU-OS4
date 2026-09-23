@@ -15,6 +15,7 @@ import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 import { acquireSpeechRecognition } from '../../voice/lib/speechRecognitionLocal'
 import { logCaughtError } from '../../lib/caughtError';
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 
 const RATE = 16000
 
@@ -250,7 +251,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
         } else if (id === 'vosk') {
           setBusy('Vosk…')
           push(await runVosk(pcm))
-        } else if (id === 'gemini') {
+        } else if (id === AI_PROVIDER_IDS.GEMINI) {
           setBusy('Gemini (Google online)…')
           push(await runGemini(pcm))
         } else {

@@ -95,4 +95,59 @@ describe('P5 configSingleSource - el detector no es decorativo', () => {
     expect(literalOffenders('maxTokens: TEXT_TOKEN_BUDGETS.single', 'src/core/ai/aiServiceBase.ts')).toEqual([])
     expect(literalOffenders('temperature: temperature || TEXT_TEMPERATURE_DEFAULT,', 'src/services/deepseek.ts')).toEqual([])
   })
+})/** Fuente unica declarada de los locales de voz. */
+export const LOCALE_OWNER = 'src/core/config/localeConfig.ts'
+/** Fuentes unicas declaradas de los presupuestos de tokens. */
+export const TOKEN_BUDGET_OWNERS = ['src/voice/lib/fluConfig.js', 'src/core/config/appConfig.ts']
+/** Literales BCP-47 (xx-YY) en un fuente dado. */
+export function localeLiteralOffenders(src: string, fileName: string): string[] {
+  if (fileName === LOCALE_OWNER) return []
+  return [...src.matchAll(/'[a-z]{2}-[A-Z]{2}'/g)].map((m) => `${fileName}: ${m[0]}`)
+}
+/** Ids de proveedor escritos como literal en una comparacion o asignacion. */
+export function providerLiteralOffenders(src: string, fileName: string): string[] {
+  const re = /(?:===|!==|==|!=)\s*'(openrouter|gemini|local)'|(?:provider|providerId|providerKey)\s*:\s*'(openrouter|gemini|local)'/g
+  return [...src.matchAll(re)].map((m) => `${fileName}: ${m[0]}`)
+}
+/** Presupuesto de tokens quemado fuera del catalogo. */
+export function tokenBudgetOffenders(src: string, fileName: string): string[] {
+  if (TOKEN_BUDGET_OWNERS.includes(fileName)) return []
+  const re = /(?:maxTokens|max_tokens|maxOutputTokens|maxOutput)\s*[:=]\s*\d+/g
+  return [...src.matchAll(re)].map((m) => `${fileName}: ${m[0]}`)
+}
+describe('P5.5/P5.6/P5.7 configSingleSource - locales, proveedores y presupuestos', () => {
+  it('ningun modulo de src declara un locale BCP-47 fuera del catalogo hoja', () => {
+    const offenders = walk(SRC).flatMap((f) => localeLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `locales fuera de ${LOCALE_OWNER}:\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('ningun modulo compara o asigna un id de proveedor con literal', () => {
+    const offenders = walk(SRC).flatMap((f) => providerLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `ids de proveedor literales (usa AI_PROVIDER_IDS):\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('ningun modulo fuera del catalogo quema un presupuesto de tokens', () => {
+    const offenders = walk(SRC).flatMap((f) => tokenBudgetOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `presupuestos quemados:\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('el catalogo de proveedores sigue siendo el origen unico', () => {
+    const cfg = readFileSync(join(ROOT, 'src/core/config/sharedConfig.ts'), 'utf8')
+    expect(cfg).toContain('AI_PROVIDER_IDS')
+    expect(readFileSync(join(ROOT, LOCALE_OWNER), 'utf8')).toContain('SCRIPT_SPEECH_LOCALES')
+  })
+})
+describe('P5.5/P5.6/P5.7 configSingleSource - el detector no es decorativo', () => {
+  it('marca un locale BCP-47 fuera del dueno y no marca al dueno', () => {
+    expect(localeLiteralOffenders("return 'ja-JP'", 'src/voice/lib/fluSpeech.js')).toHaveLength(1)
+    expect(localeLiteralOffenders("return 'ja-JP'", LOCALE_OWNER)).toEqual([])
+  })
+  it('marca un id de proveedor literal', () => {
+    expect(providerLiteralOffenders("if (p === 'openrouter') return 1", 'src/a.ts')).toHaveLength(1)
+    expect(providerLiteralOffenders("provider: 'local'", 'src/a.ts')).toHaveLength(1)
+  })
+  it('no marca el uso de las constantes de proveedor', () => {
+    expect(providerLiteralOffenders('if (p === AI_PROVIDER_IDS.OPENROUTER) return 1', 'src/a.ts')).toEqual([])
+  })
+  it('marca un presupuesto de tokens quemado y no marca al catalogo', () => {
+    expect(tokenBudgetOffenders('maxTokens = 2048,', 'src/voice/lib/gemini.js')).toHaveLength(1)
+    expect(tokenBudgetOffenders('maxOutputTokens: 2048,', 'src/voice/lib/fluConfig.js')).toEqual([])
+  })
 })

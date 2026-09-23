@@ -13,6 +13,7 @@
 import { STORAGE_KEYS, resolveTextApiKey } from '../config/appConfig';
 import type { SearchProviderConfig, SearchResultType } from './searchSession';
 import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../config/sharedConfig'
 
 /** Overrides de un proveedor individual (por id). */
 export interface SearchProviderOverride {
@@ -187,7 +188,7 @@ export function mergeSearchConfig(
       const override = typeOverrides?.[provider.id || ''];
       // Respaldo: si no hay clave en la UI, el proveedor openrouter usa la del .env.
       const fallbackKey =
-        provider.id === 'openrouter' && envKey ? envKey : provider.key;
+        provider.id === AI_PROVIDER_IDS.OPENROUTER && envKey ? envKey : provider.key;
       return {
         ...provider,
         enabled: override?.enabled ?? provider.enabled,

@@ -23,3 +23,13 @@ export const DEFAULT_SPEECH_LOCALE: SpeechLocale = SPEECH_LOCALES.es;
 
 /** Locales del modo bilingüe (la escucha alterna según el idioma detectado). */
 export const BILINGUAL_LOCALES: readonly SpeechLocale[] = [SPEECH_LOCALES.es, SPEECH_LOCALES.en];
+
+/** Locale BCP-47 por alfabeto detectado (voz fuera del catalogo base). */
+export const SCRIPT_SPEECH_LOCALES = {
+    japanese: 'ja-JP',
+    chinese: 'zh-CN',
+    korean: 'ko-KR',
+    cyrillic: 'ru-RU',
+    arabic: 'ar-SA',
+    greek: 'el-GR',
+} as const

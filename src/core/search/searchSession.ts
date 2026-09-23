@@ -14,6 +14,7 @@
 import { isDomainAllowed, normalizeHost } from '../browser/browserSession';
 import type { ResolvedLanguage } from './searchLanguage';
 import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../config/sharedConfig'
 
 /** Resultado unificado de búsqueda (cualquier proveedor). */
 export interface SearchResult {
@@ -609,7 +610,7 @@ export function normalizeResults(
     if (providerId === 'wikipedia') return normalizeWikipedia(raw, lang, provider);
     if (providerId === 'duckduckgo') return normalizeDuckDuckGo(raw);
     if (providerId === 'tavily') return normalizeTavily(raw);
-    if (providerId === 'openrouter') return normalizeOpenRouter(raw);
+    if (providerId === AI_PROVIDER_IDS.OPENROUTER) return normalizeOpenRouter(raw);
     if (providerId === 'commons') return normalizeCommonsMedia(raw, 'images', provider);
     if (providerId === 'commons-video') return normalizeCommonsMedia(raw, 'video', provider);
     if (providerId === 'youtube') return normalizeYouTube(raw, provider);

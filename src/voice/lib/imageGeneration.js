@@ -3,6 +3,7 @@ import { TIMEOUT_POLICY_MS } from '../../core/config/appConfig'
 import { shortText } from '../../lib/textUtils'
 import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   buildGenerationPrompt,
   buildPollinationsArtifact,
@@ -270,7 +271,7 @@ export async function fetchOpenRouterImageFallback({
       return {
         image_url: '',
         trace: {
-          provider: 'openrouter',
+          provider: AI_PROVIDER_IDS.OPENROUTER,
           model: '',
           kind: 'images',
           source: 'proxy_error',
@@ -286,7 +287,7 @@ export async function fetchOpenRouterImageFallback({
       return {
         image_url: '',
         trace: payload?.trace || {
-          provider: 'openrouter',
+          provider: AI_PROVIDER_IDS.OPENROUTER,
           model: '',
           kind: 'images',
           source: 'empty_response',
@@ -299,7 +300,7 @@ export async function fetchOpenRouterImageFallback({
     return {
       image_url: payload.imageUrl,
       trace: payload.trace || {
-        provider: 'openrouter',
+        provider: AI_PROVIDER_IDS.OPENROUTER,
         model: '',
         kind: 'images',
         source: 'openrouter_image_fallback',
@@ -313,7 +314,7 @@ export async function fetchOpenRouterImageFallback({
     return {
       image_url: '',
       trace: {
-        provider: 'openrouter',
+        provider: AI_PROVIDER_IDS.OPENROUTER,
         model: '',
         kind: 'images',
         source: error?.name === 'AbortError' ? 'openrouter_image_timeout' : 'generation_failed',

@@ -39,6 +39,7 @@ import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
 import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
 import { postGeminiContractResilient } from '../../services/geminiContractClient'
 import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 
 export {
   buildVisualAnchorBlock,
@@ -108,7 +109,7 @@ async function postChatCompletion({
   messages,
   temperature,
   topP,
-  maxTokens = 2048,
+  maxTokens = FLU_CONFIG.vision.maxOutputTokens,
   jsonMode = false,
   timeoutMs,
 }) {
@@ -344,7 +345,7 @@ export async function generateOpenRouterImage({
     return {
       imageUrl: '',
       trace: {
-        provider: 'openrouter',
+        provider: AI_PROVIDER_IDS.OPENROUTER,
         model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'empty_prompt',
@@ -359,7 +360,7 @@ export async function generateOpenRouterImage({
     return {
       imageUrl: '',
       trace: {
-        provider: 'openrouter',
+        provider: AI_PROVIDER_IDS.OPENROUTER,
         model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'missing_api_key',
@@ -394,7 +395,7 @@ export async function generateOpenRouterImage({
       return {
         imageUrl: '',
         trace: {
-          provider: 'openrouter',
+          provider: AI_PROVIDER_IDS.OPENROUTER,
           model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
           kind: 'images',
           source: 'openrouter_image_error',
@@ -412,7 +413,7 @@ export async function generateOpenRouterImage({
       return {
         imageUrl: '',
         trace: {
-          provider: 'openrouter',
+          provider: AI_PROVIDER_IDS.OPENROUTER,
           model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
           kind: 'images',
           source: 'openrouter_image_empty',
@@ -426,7 +427,7 @@ export async function generateOpenRouterImage({
     return {
       imageUrl: `data:${mediaType};base64,${b64}`,
       trace: {
-        provider: 'openrouter',
+        provider: AI_PROVIDER_IDS.OPENROUTER,
         model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'openrouter_image_fallback',
@@ -441,7 +442,7 @@ export async function generateOpenRouterImage({
     return {
       imageUrl: '',
       trace: {
-        provider: 'openrouter',
+        provider: AI_PROVIDER_IDS.OPENROUTER,
         model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
         kind: 'images',
         source: 'openrouter_image_error',
@@ -994,7 +995,7 @@ export async function generateConversationSummary({
         siguientes_pasos: [],
       },
       diagnostics: {
-        provider: 'gemini',
+        provider: AI_PROVIDER_IDS.GEMINI,
         model,
         apiKeySource: resolvedKey.apiKeySource,
       },
@@ -1029,7 +1030,7 @@ export async function generateConversationSummary({
       messages,
       temperature: profile?.temperature,
       topP: profile?.topP,
-      maxTokens: profile?.maxOutputTokens || 2048,
+      maxTokens: profile?.maxOutputTokens || FLU_CONFIG.vision.maxOutputTokens,
       jsonMode: true,
     })
   } catch (error) {
@@ -1059,7 +1060,7 @@ export async function generateConversationSummary({
       siguientes_pasos: Array.isArray(parsed.siguientes_pasos) ? parsed.siguientes_pasos.filter(Boolean) : [],
     },
     diagnostics: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       model,
       apiKeySource: resolvedKey.apiKeySource,
     },
@@ -1119,7 +1120,7 @@ export async function generateParticipantEvaluation({
         confianza: 0,
       },
       diagnostics: {
-        provider: 'gemini',
+        provider: AI_PROVIDER_IDS.GEMINI,
         model,
         apiKeySource: resolvedKey.apiKeySource,
       },
@@ -1177,7 +1178,7 @@ export async function generateParticipantEvaluation({
       confianza: Number(parsed.confianza) || 0,
     },
     diagnostics: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       model,
       apiKeySource: resolvedKey.apiKeySource,
     },
@@ -1438,7 +1439,7 @@ export async function generateFluContract({
         },
         workspace: null,
         metadata: {
-          provider: 'gemini',
+          provider: AI_PROVIDER_IDS.GEMINI,
           promptRole: role,
           theme,
           phase,
@@ -1448,7 +1449,7 @@ export async function generateFluContract({
         },
       },
       diagnostics: {
-        provider: 'gemini',
+        provider: AI_PROVIDER_IDS.GEMINI,
         model,
         apiKeySource: resolvedKey.apiKeySource,
       },
@@ -1651,7 +1652,7 @@ export async function generateFluContract({
           : intent?.parametros || {},
     },
     metadata: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       promptRole: role,
       theme,
       phase,
@@ -1670,7 +1671,7 @@ export async function generateFluContract({
   return {
     contract,
     diagnostics: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       model,
       apiKeySource: resolvedKey.apiKeySource,
     },

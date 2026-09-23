@@ -3,7 +3,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { logCaughtError } from '../../lib/caughtError';
-import { SPEECH_LOCALES } from '../../core/config/localeConfig'
+import { SCRIPT_SPEECH_LOCALES, SPEECH_LOCALES } from '../../core/config/localeConfig'
 
 /**
  * Caché de la configuración de voz leída desde el integrationStore de OS3.
@@ -101,17 +101,17 @@ function ensureSpeechVoicesReady() {
 function detectSpeechScriptLocale(text = '') {
   if (typeof text !== 'string' || !text) return null
   // Japonés: kana (hiragana/katakana), exclusivo del japonés → ja-JP
-  if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
+  if (/[\u3040-\u30ff]/.test(text)) return SCRIPT_SPEECH_LOCALES.japanese
   // Chino: hanzi (CJK unificado) sin kana → zh-CN
-  if (/[\u3400-\u9fff]/.test(text)) return 'zh-CN'
+  if (/[\u3400-\u9fff]/.test(text)) return SCRIPT_SPEECH_LOCALES.chinese
   // Coreano: hangul → ko-KR
-  if (/[\uac00-\ud7af]/.test(text)) return 'ko-KR'
+  if (/[\uac00-\ud7af]/.test(text)) return SCRIPT_SPEECH_LOCALES.korean
   // Cirílico (ruso, ucraniano...) → ru-RU
-  if (/[\u0400-\u04ff]/.test(text)) return 'ru-RU'
+  if (/[\u0400-\u04ff]/.test(text)) return SCRIPT_SPEECH_LOCALES.cyrillic
   // Árabe → ar-SA
-  if (/[\u0600-\u06ff]/.test(text)) return 'ar-SA'
+  if (/[\u0600-\u06ff]/.test(text)) return SCRIPT_SPEECH_LOCALES.arabic
   // Griego → el-GR
-  if (/[\u0370-\u03ff]/.test(text)) return 'el-GR'
+  if (/[\u0370-\u03ff]/.test(text)) return SCRIPT_SPEECH_LOCALES.greek
   return null
 }
 

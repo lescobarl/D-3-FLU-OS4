@@ -138,6 +138,7 @@ import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
 import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   FLU_DIALOGUE_SPEAKER,
   deriveDialogueHistory,
@@ -1107,7 +1108,7 @@ export function useFluVoiceAssistant({
     }) => {
       if (knowledgeMode === 'minutes') {
         const local = resolveMinuteLookupRef.current(transcript, language)
-        if (local?.mode === 'local' && local.contract) {
+        if (local?.mode === AI_PROVIDER_IDS.LOCAL && local.contract) {
           return {
             contract: local.contract,
             diagnostics: local.diagnostics || { provider: 'minute-store', route: 'minute-lookup' },
@@ -3038,7 +3039,7 @@ export function useFluVoiceAssistant({
           configuracion,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
-        diagnostics: { route: 'deterministic-fast-path', provider: 'local', fastPath: true },
+        diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
         transcript,
         speakerName,
         speakerAlias,
@@ -3075,7 +3076,7 @@ export function useFluVoiceAssistant({
           juego,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
-        diagnostics: { route: 'deterministic-fast-path', provider: 'local', fastPath: true },
+        diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
         transcript,
         speakerName,
         speakerAlias,
@@ -3114,7 +3115,7 @@ export function useFluVoiceAssistant({
           ambiente: intent,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
-        diagnostics: { route: 'deterministic-fast-path', provider: 'local', fastPath: true },
+        diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
         transcript,
         speakerName,
         speakerAlias,
@@ -3267,7 +3268,7 @@ export function useFluVoiceAssistant({
           const { domain: statefulDomain, contract: deterministicContract } = skipGemini
           const courtesy = deterministicContract.respuesta_voz || ''
           setLastContract(deterministicContract)
-          setLastDiagnostics({ route: 'deterministic-arbiter', provider: 'local', skipGemini: true })
+          setLastDiagnostics({ route: 'deterministic-arbiter', provider: AI_PROVIDER_IDS.LOCAL, skipGemini: true })
           setError('')
           setLastErrorEvent(null)
           await saveSessionState({
@@ -3279,7 +3280,7 @@ export function useFluVoiceAssistant({
           await commitAndResolveTurn({
             capture: canonicalPhrase,
             contract: deterministicContract,
-            diagnostics: { route: 'deterministic-arbiter', provider: 'local', skipGemini: true },
+            diagnostics: { route: 'deterministic-arbiter', provider: AI_PROVIDER_IDS.LOCAL, skipGemini: true },
             conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
             speakerName: resolvedSpeakerName,
             speakerAlias,
