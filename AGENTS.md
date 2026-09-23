@@ -279,9 +279,14 @@ de **0 nuevos**.
 - Commit por hito funcional en verde; cambios independientes en paralelo en un mismo turno.
 
 ### Gates
-- Pre-commit LIGERO (nunca la suite completa): `npm run gate`; verificación local con
-  `npm run lint` (guards) + `npm run typecheck`.
-- CI (`.github/workflows/ci.yml`): `npm run lint`, `npm run typecheck`, `npm run gate`,
+- Pre-commit LIGERO (nunca la suite completa): `npm run lint` (guards) + `npm run typecheck`.
+  El hook vive versionado en `.githooks/pre-commit` y se activa con `core.hooksPath`
+  (script `prepare`); antes existia solo en `.git/hooks`, asi que no viajaba con el repo.
+- Gate de contrato: `npm run gate` es la barrera de CIERRE de una tarea. Requiere un
+  contrato activo (`.task/contract.json`) con su base declarada, por lo que NO corre por
+  commit ni en CI: fallaria en cuanto el arbol avanza respecto a esa base.
+- CI (`.github/workflows/ci.yml`): `npm run lint`, `npm run typecheck`, `npm run test:full`,
+  `npm run build`, `npm run e2e`. La cobertura de repo la dan guards, tipos y suite.
   `npm run test:full`, `npm run build`, `npm run e2e`.
 - Antes de declarar entrega, el CI DEBE estar en verde (o suite completa corrida una vez
   en el cierre).

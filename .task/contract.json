@@ -1,13 +1,15 @@
 {
-  "id": "P1.6",
+  "id": "P0.8",
   "mode": "full",
-  "task": "P1.6",
-  "base": "97e7349683cfbaf7e7a189adcfacfc90dfa69ba5",
-  "objective": "minutes: eliminar el indice muerto timestamp (esquema efectivo 1 -> 0) con migracion probada.",
+  "task": "P0.8",
+  "base": "f4e9427a4d046656ef6d8f3d40d6b3f5173a7162",
+  "objective": "La barrera pre-commit documentada existe y esta versionada (.githooks) y AGENTS.md deja de prometer el gate por commit.",
   "allow": [
-    "src/**",
-    "tests/**",
+    "AGENTS.md",
     "package.json",
+    ".githooks/**",
+    "scripts/**",
+    "tests/**",
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
@@ -20,17 +22,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/minutesDeadIndexPruneGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/minutesDeadIndexPruneGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/preCommitBarrierGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/preCommitBarrierGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "minutes: los archivos cuyo esquema EFECTIVO conserva el indice muerto timestamp pasan de 1 a 0.",
+    "statement": "Hooks versionados en .githooks que hacen cumplir la barrera pre-commit: 0 -> 1.",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];const RE=/minutes:\\s*[\\x27]([^\\x27]*)[\\x27]/g;while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx)$/.test(e.name)){let last=null;for(const m of fs.readFileSync(p,'utf8').matchAll(RE))last=m[1].split(',').map(s=>s.trim());if(last&&last.includes('timestamp'))n++;}}}console.log(n)\"",
-      "target": 0
+      "command": "node -e \"const {execFileSync}=require('child_process');const out=execFileSync('git',['ls-files','--','.githooks'],{encoding:'utf8'});console.log(out.split(/\\r?\\n/).filter(l=>l.trim().startsWith('.githooks/')).length);\"",
+      "target": 1
     },
     "guardFiles": [
-      "tests/minutesDeadIndexPruneGuard.test.ts"
+      "tests/preCommitBarrierGuard.test.ts"
     ]
   }
 }
