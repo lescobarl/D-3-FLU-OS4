@@ -417,7 +417,7 @@
     {
       "id": "P0.5",
       "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md",
-      "estado": "decision",
+      "estado": "done",
       "evidencia": "tests/protocolGuard.test.ts:56-71",
       "origen": "plan-T"
     },
@@ -433,6 +433,13 @@
       "titulo": "CRLF silencioso: core.autocrlf=false y NO existe .gitattributes, asi que editar un archivo lo reescribe en CRLF -> diff de miles de lineas (rompio f1a1ca6, hubo que rehacerlo) y cambia el hash que frozen.json vigila (hashea BYTES)",
       "estado": "decision",
       "evidencia": "git ls-files --eol -> i/lf w/crlf tras editar; P2.3 normalizado a LF antes de congelar",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P0.8",
+      "titulo": "El pre-commit que documenta AGENTS.md no es el que corre: AGENTS.md:282 dice \"npm run gate\" pero .git/hooks/pre-commit ejecuta lint+typecheck, y ese hook NO esta versionado (no existe en CI ni en otro clon)",
+      "estado": "decision",
+      "evidencia": "AGENTS.md:282 vs .git/hooks/pre-commit; guards ya comprueban los scripts, no el hook",
       "origen": "plan-T"
     }
   ],
@@ -756,6 +763,11 @@
       "id": "P2.3",
       "commit": "6de4bc9",
       "titulo": "Guard blinda alias @deprecated (logMicRaw)"
+    },
+    {
+      "id": "P0.5",
+      "commit": "6533441",
+      "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md"
     }
   ]
 }
