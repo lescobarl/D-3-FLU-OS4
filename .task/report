@@ -1865,4 +1865,28 @@ SEGUNDA PARTE DEL ITEM ("stores() sin revision/deleted") - EVALUADA Y RESUELTA C
   filtrar en JS tras leer (p.ej. getAuditLogs: .filter(row => !row.sync?.deleted)). NO se
   indexa; queda como decision razonada, no como olvido.
 VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards 140 tests ;
-  test:full -> 299 archivos / 3066 tests / 0 fallos ; npm run gate -> ver salida.
+  test:full -> 299 archivos / 3066 tests / 0 fallos ; npm run gate -> ver salida.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.5: el branding nunca se respaldo de verdad
+================================================================
+Que era: el branding (mode/activeSeason/birthday) vive en Dexie (fluDb.brandingConfig), que es
+lo que lee y escribe useSeasonalBranding. Pero backupSystem lo leia de claves localStorage
+(flu-branding-mode / -active-season / -birthday) y lo restauraba escribiendo ESAS mismas claves.
+Ningun otro modulo las toca (verificado: el unico consumidor es backupSystem).
+Consecuencia real, no cosmetica: el backup registraba SIEMPRE los valores por defecto y el
+restore escribia en un almacen que la aplicacion no lee. El branding no viajaba en el backup.
+Precedente aplicado: C31 ya bendijo esta doctrina para voiceProfiles - "si el dato vive SOLO en
+Dexie, que ya es persistente, el backup no lo duplica". Branding es exactamente la misma clase.
+Que se hizo:
+  1. backupSystem: extractSystemSettings deja de leer las claves LS de branding; restoreSystemSettings
+     deja de escribirlas. Se retira el campo `branding` de SystemSettingsData (los backups antiguos
+     que lo traigan siguen parseando: el campo extra se ignora).
+  2. appConfig: se retiran las 3 claves LS muertas (BRANDING_MODE/ACTIVE_SEASON/BIRTHDAY).
+  3. Guard nuevo tests/brandingDexieOnlyGuard.test.ts, plantilla C31, sin exclusiones (7.7.d):
+     ningun modulo de src declara ni usa claves LS de branding; se comprueba ademas que
+     useSeasonalBranding usa Dexie y NO localStorage; y que backupSystem ya no las toca.
+     Detector con prueba propia: detecta constantes y literales, y NO confunde lo legitimo
+     (BRANDING_MODES plural ni la clase CSS .flu-branding-scope).
+MEDICION (ANTES -> DESPUES): referencias a claves LS de branding en src (constantes y literales)
+  = 9 -> 0 (3 declaraciones en appConfig + 6 usos en backupSystem). El gate la recomputa en el
+  worktree base. Los patrones usan limite de palabra: BRANDING_MODES (plural, legitimo) no cuenta.
+VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; guard 5/5 ; npm run gate -> ver salida.

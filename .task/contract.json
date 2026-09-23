@@ -1,15 +1,13 @@
 {
-  "id": "P0.8",
+  "id": "P1.5",
   "mode": "full",
-  "task": "P0.8",
-  "base": "f4e9427a4d046656ef6d8f3d40d6b3f5173a7162",
-  "objective": "La barrera pre-commit documentada existe y esta versionada (.githooks) y AGENTS.md deja de prometer el gate por commit.",
+  "task": "P1.5",
+  "base": "eb6b5b1cdd9c7ac0af9694dea4083e1230f65ec5",
+  "objective": "Branding solo en Dexie: retirar la via localStorage muerta del backup/restore (9 -> 0).",
   "allow": [
-    "AGENTS.md",
-    "package.json",
-    ".githooks/**",
-    "scripts/**",
+    "src/**",
     "tests/**",
+    "package.json",
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
@@ -22,17 +20,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx vitest run tests/preCommitBarrierGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/preCommitBarrierGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b && npx vitest run tests/brandingDexieOnlyGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/brandingDexieOnlyGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Hooks versionados en .githooks que hacen cumplir la barrera pre-commit: 0 -> 1.",
+    "statement": "Referencias a claves localStorage de branding en src (constantes y literales): 9 -> 0.",
     "metric": {
-      "command": "node -e \"const {execFileSync}=require('child_process');const out=execFileSync('git',['ls-files','--','.githooks'],{encoding:'utf8'});console.log(out.split(/\\r?\\n/).filter(l=>l.trim().startsWith('.githooks/')).length);\"",
-      "target": 1
+      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];const RE=/\\bBRANDING_MODE\\b|\\bBRANDING_ACTIVE_SEASON\\b|\\bBRANDING_BIRTHDAY\\b|flu-branding-mode|flu-branding-active-season|flu-branding-birthday/;while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)){for(const l of fs.readFileSync(p,'utf8').split('\\n'))if(RE.test(l))n++;}}}console.log(n)\"",
+      "target": 0
     },
     "guardFiles": [
-      "tests/preCommitBarrierGuard.test.ts"
+      "tests/brandingDexieOnlyGuard.test.ts"
     ]
   }
 }

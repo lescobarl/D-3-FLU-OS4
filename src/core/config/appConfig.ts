@@ -132,10 +132,7 @@ export const STORAGE_KEYS = {
     AVATAR_PANTS_COLOR: 'flu-avatar-pants-color',
     AVATAR_BODY_COLOR: 'flu-avatar-body-color',
     AVATAR_FACE_COLOR: 'flu-avatar-face-color',
-    // Branding
-    BRANDING_MODE: 'flu-branding-mode',
-    BRANDING_ACTIVE_SEASON: 'flu-branding-active-season',
-    BRANDING_BIRTHDAY: 'flu-branding-birthday',
+    // Branding: sin claves localStorage — vive en Dexie (fluDb.brandingConfig).
     // Autonomy
     AUTONOMY_HEALTH_MONITORING: 'flu-health-monitoring',
     AUTONOMY_AUTO_RECOVERY: 'flu-auto-recovery',

@@ -96,9 +96,15 @@ export interface WorkspaceData {
     workspaceArtifact: WorkspaceEntry | null;
 }
 
-/** Configuración del sistema extraída/restaurada. */
+/**
+ * Configuración del sistema extraída/restaurada.
+ *
+ * C31 — el branding NO viaja por aquí: vive SOLO en Dexie (fluDb.brandingConfig), que
+ * ya es persistente. Antes se leía/escribía en claves localStorage que la aplicación no
+ * usa, así que el backup registraba siempre los valores por defecto y el restore
+ * escribía donde nadie lee.
+ */
 export interface SystemSettingsData {
-    branding: { mode: string; activeSeason: string; birthday: string | null };
     autonomy: { healthMonitoring: string; autoRecovery: string; decisionEngine: string };
     performance: { cacheEnabled: string; loggingLevel: string; analyticsEnabled: string };
     lastBackup: string | null;
@@ -303,11 +309,7 @@ class DataExtractor {
     extractSystemSettings(): SystemSettingsData | null {
         try {
             return {
-                branding: {
-                    mode: readStorage(STORAGE_KEYS.BRANDING_MODE, 'disabled'),
-                    activeSeason: readStorage(STORAGE_KEYS.BRANDING_ACTIVE_SEASON, 'default'),
-                    birthday: readStorage<string | null>(STORAGE_KEYS.BRANDING_BIRTHDAY, null),
-                },
+                // C31 — branding solo en Dexie (fluDb.brandingConfig): no se duplica aquí.
                 autonomy: {
                     healthMonitoring: readStorage(STORAGE_KEYS.AUTONOMY_HEALTH_MONITORING, 'enabled'),
                     autoRecovery: readStorage(STORAGE_KEYS.AUTONOMY_AUTO_RECOVERY, 'enabled'),
@@ -527,17 +529,7 @@ class DataRestorer {
         try {
             if (!data) return false;
             
-            if (data.branding) {
-                if (data.branding.mode) {
-                    localStorage.setItem(STORAGE_KEYS.BRANDING_MODE, data.branding.mode);
-                }
-                if (data.branding.activeSeason) {
-                    localStorage.setItem(STORAGE_KEYS.BRANDING_ACTIVE_SEASON, data.branding.activeSeason);
-                }
-                if (data.branding.birthday) {
-                    localStorage.setItem(STORAGE_KEYS.BRANDING_BIRTHDAY, data.branding.birthday);
-                }
-            }
+            // C31 — branding solo en Dexie: no se restaura a localStorage.
             
             if (data.autonomy) {
                 if (data.autonomy.healthMonitoring) {
