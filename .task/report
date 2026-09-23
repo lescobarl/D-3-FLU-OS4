@@ -1138,3 +1138,49 @@ REGRESION:
   despues: 287 archivos / 2967 tests / 0 fallos ; typecheck 0 ; lint 11 archivos / 46 tests.
 
 NO VALIDADO (usuario): que el ledger le resulte util como panel de trabajo.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - T1 / P0.4 (reparar la barrera)
+================================================================
+OBJETIVO: que `npm run gate` sea ejecutable y cierre en verde: criterio congelado
+== HEAD, baseline == cambios preexistentes, y contrato que describe la tarea EN CURSO.
+ANTES (3 fallos reales, no cosmeticos):
+  1) .task/frozen.json desincronizado en 2 de 71 entradas: el criterio de
+     tests/voiceOfflineFallback.test.ts y tests/providerLiteralGuard.test.ts quedo
+     SIN re-congelar en C49 (e6864b9). El hash guardado correspondia a versiones
+     anteriores (677ec0e / 5d40339). Efecto: el gate fallaba SIEMPRE en el paso 0
+     (congelados) y ninguna tarea podia cerrar.
+  2) .task/baseline.json tenia 113 entradas de un arbol antiguo; los cambios
+     preexistentes reales (1 archivo sin versionar) no estaban listados.
+  3) .task/contract.json describia C41 (YA CERRADO, base 4e35f2a): todo el
+     historial posterior a 4e35f2a entraba como "fuera de alcance" (10 archivos).
+DESPUES:
+  - frozen.json re-congelado con `node scripts/task-gate-freeze.mjs` (2 hashes).
+    El CONTENIDO de esos tests no cambio: se registro el hash del criterio que C49
+    ya habia modificado (retiro de codigo muerto con noUnused*). Mismo criterio.
+  - baseline.json regenerado: 1 archivo (plans/contratos/PREPARACION-123.md).
+  - contract.json = T1 real: base=HEAD, allow estrecho (6 archivos), maxFiles 8 /
+    maxLines 400, dod = 3 guards + ledger:check, guard = taskGateInvariant.test.ts.
+    ignore reducido a scripts/task-gate*.mjs + audit-metric + kilo.json para que el
+    control de ALCANCE sea FALSABLE (antes "allow" era subconjunto de "ignore", por
+    lo que el alcance no podia fallar nunca: contrato hueco).
+INVARIANTE (verificable) - prueba de mutacion del propio control (AGENTS.md B11/B12):
+  npm run gate                                        -> 0 VERDE
+  + src/__gate_probe.tmp (fuera de allow)             -> 1 ROJO "FUERA de alcance"
+  + 1 linea en tests/taskGateInvariant.test.ts (congelado) -> 1 ROJO "hash cambio"
+  restaurado                                          -> 0 VERDE (sin residuos)
+REGRESION:
+  antes:   287 archivos / 2967 tests / 0 fallos (verificado tras P7.1/P7.2)
+  despues: igual; no se toco codigo de producto en este bloque (solo .task/**).
+NO CERRADO EN ESTE BLOQUE (requiere decision del usuario - AGENTS.md B14):
+  El titulo de T1 incluye "guards desacoplados de AGENTS.md". Hoy el guard BASE
+  tests/protocolGuard.test.ts fija texto LITERAL de AGENTS.md ("Iteracion rapida",
+  "--changed", "Pre-commit LIGERO", "npm run test:full", ...) y corre en CADA gate;
+  ademas stackDocGuard.test.ts (CONGELADO) y taskLedgerGuard.test.ts tambien leen
+  ese documento. AGENTS.md es objetivo de trabajo pendiente (P6.5 y P6.8 tocan su
+  seccion 4 y son 'decision'), asi que editarlo puede dejar el gate en rojo por
+  PROSA y no por el mecanismo. Desacoplar implica (a) tocar un guard CONGELADO ->
+  enmienda formal con nuevo hash y re-aprobacion, y (b) RETIRAR aserciones que hoy
+  mantienen el documento honesto: es una decision de politica, no un fix de causa
+  raiz. Registrado como P0.5. No se hizo de forma unilateral.
+NO VALIDADO (usuario): que el gate le sirva como barrera real en su flujo diario.

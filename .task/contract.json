@@ -1,39 +1,30 @@
 {
-  "id": "C41",
+  "id": "T1",
   "mode": "full",
-  "task": "URLs de proveedor solo en la config canonica (ruta doble motor/proxy)",
-  "base": "4e35f2a7de47b7201e4c0e45b86b52fdc1f42cb0",
-  "objective": "Ningun archivo fuera de la config canonica hardcodea una URL de proveedor.",
+  "task": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md",
+  "base": "e7d0a9b6a9b8893f9a8070092adabadc01a8dd30",
+  "objective": "La puerta de tareas es ejecutable y cierra en verde sobre el arbol actual: criterio congelado == HEAD, baseline == cambios preexistentes, y el contrato describe la tarea EN CURSO (no una ya cerrada).",
   "allow": [
-    "src/voice/lib/fluConfig.js",
-    "tests/providerUrlGuard.test.ts"
+    ".task/contract.json",
+    ".task/baseline.json",
+    ".task/frozen.json",
+    ".task/report",
+    "plans/ledger.json",
+    "plans/contratos/PREPARACION-123.md"
   ],
   "deny": [
-    ".task/**",
     "scripts/task-gate.mjs",
+    "scripts/task-gate-invariant.mjs",
     "scripts/audit-metric.mjs"
   ],
   "ignore": [
-    ".task/**",
     "scripts/task-gate*.mjs",
     "scripts/audit-metric.mjs",
-    "kilo.json",
-    "plans/**"
+    "kilo.json"
   ],
-  "maxFiles": 10,
-  "maxLines": 500,
-  "dod": "npx vitest run tests/providerUrlGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/providerUrlGuard.test.ts --reporter=dot",
-  "guardExpect": "green",
-  "invariant": {
-    "statement": "URLs de proveedor solo en src/core/config/sharedConfig.ts y appConfig.ts",
-    "metric": {
-      "command": "node scripts/audit-metric.mjs provider-url-literals",
-      "target": 0
-    },
-    "base": "4e35f2a7de47b7201e4c0e45b86b52fdc1f42cb0",
-    "guardFiles": [
-      "tests/providerUrlGuard.test.ts"
-    ]
-  }
+  "maxFiles": 8,
+  "maxLines": 400,
+  "dod": "npx vitest run tests/taskGateInvariant.test.ts tests/taskLedgerGuard.test.ts tests/protocolGuard.test.ts --reporter=dot && npm run ledger:check",
+  "guard": "npx vitest run tests/taskGateInvariant.test.ts --reporter=dot",
+  "guardExpect": "green"
 }
