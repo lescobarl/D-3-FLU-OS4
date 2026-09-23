@@ -1,9 +1,9 @@
 {
   "id": "P6.13",
   "mode": "full",
-  "task": "P6.12 - medicion real del item (evidencia), sin tocar codigo",
-  "base": "01e1da459f4caf739a8ed003cfc2fcc23334dadc",
-  "objective": "Sustituir el puntero caducado del item P6.12 (src/App.tsx:4797) por la medicion de hoy: 104 style inline en 21 ficheros, de los que solo 8 son extendidos y solo 3 totalmente estaticos; mas el criterio propuesto para cerrarlo y la nota de que JSDoc no tiene metrica. El item SIGUE pendiente.",
+  "task": "Traspaso: registrar el hallazgo de la auditoria del ledger como items",
+  "base": "3384645a110985eee2a386cb428b68fc32ee3277",
+  "objective": "Antes de cambiar de sesion, dejar en el repo los hallazgos de la auditoria de plans/ledger.json para que no se pierdan: dos items nuevos (P6.14 barrera que valida por hash y no ve duplicados ni cierres ajenos; P6.15 datos del ledger) con la medicion y los comandos. Un .md en plans/ no vale: C52 lo prohibe. NO se toca scripts/task-ledger.mjs (congelado) ni los datos existentes.",
   "allow": [
     "plans/**",
     ".task/**"
@@ -15,6 +15,6 @@
   "maxFiles": 6,
   "maxLines": 40,
   "dod": "node scripts/task-ledger.mjs check",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/plansProcessArtifactsGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
