@@ -1,9 +1,9 @@
 {
-  "id": "P6.2+P6.4",
+  "id": "P6.2-ampl",
   "mode": "full",
-  "task": "P6.2+P6.4",
-  "base": "fef0ef8f78426d9c4506014dd0a3198c1ade85eb",
-  "objective": "Defaults de diagnostico fuera de produccion y retirada del alias muerto real.",
+  "task": "P6.2-ampl",
+  "base": "7b0349427c8a911ac4ab734cea67055e639e77b6",
+  "objective": "Cerrar la clase de defecto de P6.2: todo default de diagnostico/traza fuera de produccion.",
   "allow": [
     "src/**",
     "tests/transportSingleOwnerGuard.test.ts",
@@ -23,6 +23,6 @@
   "maxFiles": 40,
   "maxLines": 1500,
   "dod": "npx tsc -b && npx vitest run tests/prodDefaultsGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/prodDefaultsGuard.test.ts tests/specificDeadGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/prodDefaultsGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

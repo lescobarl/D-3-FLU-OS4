@@ -2045,13 +2045,13 @@ export const FLU_CONFIG = {
    * Volcar en consola: __fluDev.trace.dump() · archivo: __fluDev.trace.download()
    */
   trace: {
-    enabled: true,
+    enabled: IS_DEV,
     ringSize: 800,
     /** Eventos speaker/diarize-* en ring y __fluDev.speakerMonitor */
     speakerDiarize: true,
     mirrorConsole: false,
     /** POST periódico a Vite → flu-voz/logs/agent-trace.json (lectura agente). */
-    agentSink: true,
+    agentSink: IS_DEV,
     agentSinkMs: 1200,
   },
   /**

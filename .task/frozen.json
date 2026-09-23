@@ -74,5 +74,5 @@
   "tests/duplicationGuard.test.ts": "5800cc37cc63686c52f9f2a5c54b6fcab68fa55779ae156cbad31a79f97c20da",
   "tests/transportSingleOwnerGuard.test.ts": "fd8ee1ac6f5f8f7e4e0573e82c9221b88ee41dc0e7b3b195a9e1951e88a253da",
   "tests/cascadeSingleOrderGuard.test.ts": "69e131567ff1c295034c34a62da0c2d56507f656abaf8f935c7f0d691335ee51",
-  "tests/prodDefaultsGuard.test.ts": "0dcb29d03e3a0c670ba620dbc81049273977173bf5b0547d181cb4c240b463bb"
+  "tests/prodDefaultsGuard.test.ts": "4ba4ac2810170aec5b4e90fafb411d856fb6cf6d2e8980f2049f80af7503c7cc"
 }

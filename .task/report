@@ -1705,4 +1705,32 @@ VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 295 arch
   tests / 0 fallos.
 NO VALIDADO: no se construyo la build de produccion real (import.meta.env.DEV es falso en
   prod por definicion de Vite, pero no se ejecuto 'vite build' para comprobarlo en el bundle).
-  Queda como comprobacion pendiente si alguien quiere evidencia del bundle final.
+  Queda como comprobacion pendiente si alguien quiere evidencia del bundle final.================================================================
+[AMPLIACION DE CIERRE] 2026-09-22 - P6.2 cubre tambien el bloque trace
+================================================================
+Al verificar el cierre de P6.2 encontre que el bloque hermano `trace` tenia el MISMO defecto
+y seguia encendido por defecto: trace.enabled: true y trace.agentSink: true, con
+fluTrace.js:174 comprobando `agentSink !== false` y disparando un POST periodico
+(agentSinkMs 1200) a un endpoint de Vite que en produccion no existe. Dejar P6.2 "cerrado"
+con el hermano encendido era media cura, asi que se extiende el mismo gate IS_DEV a ambos.
+El guard se reescribio para comprobar por pares (bloque, clave) y ademas marcar un bloque
+AUSENTE en vez de darlo por bueno (el detector anterior solo miraba debug y habria dejado
+pasar cualquier bloque nuevo).
+P6.1 (decision) - NO se toca: el ledger ya la documenta como FALSO POSITIVO VERIFICADO
+  (4 de 6 son el despacho real leido por dispatchArbiterIntent; solo ConocerFlu/DeviceAction
+  eran huerfanos y pasan a DEV) con guard propio y mutacion verificada. Su estado sigue
+  siendo `decision` por decision deliberada de la sesion anterior; el usuario pidio preservar
+  estados exactos, asi que no lo convierto en `done` por mi cuenta. Queda para aceptacion
+  formal del usuario.
+P6.7 (medido, sigue pendiente) - se midio en vez de suponer:
+  `npx tsc -p tsconfig.json --noEmit --checkJs` -> 1749 errores en 143 archivos.
+  Desglose: TS2339 745, TS7006 526, TS7031 107, TS2322 74, TS7005 60, TS7053 57, TS2353 36,
+  TS2345 30, TS7034 26, resto <15 cada uno.
+  No es acotable en un lote: activar checkJs obliga a anotar practicamente todos los .js.
+  Caso REAL confirmado esta sesion (no teoria): una referencia a resolveApiKey sin importar
+  en src/voice/lib/gemini.js paso `tsc -b` en verde porque los .js no se comprueban; se
+  detecto a mano. Evidencia anotada en el propio item del ledger.
+BANDERAS noVerificado revisadas: P4.7, P4.8, P5.8 y P6.4 llevaban `noVerificado: true` de la
+  auditoria, pero esta sesion se cerraron CON verificacion ejecutada (guard + mutacion roja +
+  suite). Se retira la bandera en esos 4 y se deja en los que siguen pendientes (P1.6, P1.7,
+  P1.8, P6.10, P6.12) y en P5.6/P5.7 (cerrados en sesion previa, no por mi).
