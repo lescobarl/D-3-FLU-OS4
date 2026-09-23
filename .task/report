@@ -1733,4 +1733,38 @@ P6.7 (medido, sigue pendiente) - se midio en vez de suponer:
 BANDERAS noVerificado revisadas: P4.7, P4.8, P5.8 y P6.4 llevaban `noVerificado: true` de la
   auditoria, pero esta sesion se cerraron CON verificacion ejecutada (guard + mutacion roja +
   suite). Se retira la bandera en esos 4 y se deja en los que siguen pendientes (P1.6, P1.7,
-  P1.8, P6.10, P6.12) y en P5.6/P5.7 (cerrados en sesion previa, no por mi).
+  P1.8, P6.10, P6.12) y en P5.6/P5.7 (cerrados en sesion previa, no por mi).================================================================
+[CIERRE TECNICO] 2026-09-22 - P4.2 (parte 1/3): orquestacion FBX unica
+================================================================
+Que era: el worker (src/avatar/workers/fbxLoader.worker.js) y el respaldo
+main-thread (fbxWorkerClient.runMainThreadFallback) tenian el MISMO fetch, el mismo
+chequeo HTTP, el mismo parse y el MISMO literal de error escritos dos veces. Es
+literalmente el caso que AGENTS.md 7.7.b cita como "caso real: worker FBX vs fallback
+main-thread". Un respaldo legitimo en la intencion seguia siendo ruta doble porque la
+ORQUESTACION estaba copiada.
+Que se hizo: la orquestacion (fetch + chequeo + parse + toJSON) vive ahora SOLO en
+fetchFbxJson() de src/avatar/lib/fbxParse.ts. El worker la importa estaticamente; el
+respaldo la importa DINAMICAMENTE, igual que antes, para no meter FBXLoader en el chunk
+inicial del main thread. El literal de error se copio byte a byte desde el worker.
+MEDICION (ANTES -> DESPUES), mismo comando:
+  ANTES  : fbLoader.worker.js=1 + fbxWorkerClient.ts=1  ->  2
+  DESPUES: fbxParse.ts=1 (dueno)                        ->  1
+  Comando: node -e ".../cuenta lineas de codigo con 'fetch FBX' en src/..."
+  (declarado como invariant.metric del contrato, target 1; el gate lo RECOMPUTA en un
+   worktree del commit base, no se fia de esta nota.)
+GUARD: tests/fbxSingleOrchestrationGuard.test.ts (4 tests). Regla: en todo src/ solo un
+  sitio llama a parseFbxBuffer() y debe estar en el dueno; ningun consumidor reescribe el
+  literal del fetch. Nace ROJO en base y el gate lo falsa por su cuenta.
+  PRUEBA DE MUTACION (7.7.d): restaurado el worker a su version base -> guard ROJO con
+  "orquestaciones duplicadas (debe quedar solo src/avatar/lib/fbxParse.ts)" + el sitio
+  listado como archivo:linea. Restaurado mi cambio -> 4/4 verde.
+VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards -> 126 pass ;
+  test:full -> 296 archivos / 3052 tests / 0 fallos ; npm run gate -> ver salida.
+PENDIENTE DE P4.2 (por eso el item NO se cierra, queda in_progress):
+  - "medir bloqueo": cuantificar el freeze del parse sincrono en main thread. Es una
+    medicion de rendimiento (SwiftShader/WebGL por software), no un cambio de codigo;
+    necesita un banco reproducible o instrumentacion, no un test de CI. Sin disenar.
+  - "Three duplicada": 'three' entra al bundle por el worker y por el main thread; ver si
+    Vite duplica la libreria y si conviene un chunk compartido. Toca config de build
+    (vite.config), con riesgo de romper el worker: merece su propio contrato.
+  Ambas quedan anotadas; no se declaran hechas.

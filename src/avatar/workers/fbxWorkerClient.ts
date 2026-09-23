@@ -92,20 +92,14 @@ function postLoad(url: string): Promise<unknown> {
 }
 
 /**
- * Fallback main-thread: mismo flujo (fetch + parseFbxBuffer + toJSON) pero en
+ * Fallback main-thread: llama a la MISMA orquestacion compartida (fetchFbxJson) pero en
  * el hilo principal. Es bloqueante, pero garantiza que la app funciona aunque
  * el worker no arranque. En main thread `installDomShim()` es no-op (document
  * existe), de modo que el comportamiento es idéntico al FBXLoader.load actual.
  */
 async function runMainThreadFallback(url: string): Promise<unknown> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`fetch FBX falló: HTTP ${response.status} para ${url}`);
-  }
-  const buffer = await response.arrayBuffer();
-  const { parseFbxBuffer } = await import('../lib/fbxParse');
-  const group = parseFbxBuffer(buffer, url);
-  return group.toJSON();
+  const { fetchFbxJson } = await import('../lib/fbxParse');
+  return fetchFbxJson(url);
 }
 
 /**

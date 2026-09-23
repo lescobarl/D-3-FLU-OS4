@@ -1,19 +1,17 @@
 {
-  "id": "P6.2-ampl",
+  "id": "P4.2",
   "mode": "full",
-  "task": "P6.2-ampl",
-  "base": "7b0349427c8a911ac4ab734cea67055e639e77b6",
-  "objective": "Cerrar la clase de defecto de P6.2: todo default de diagnostico/traza fuera de produccion.",
+  "task": "P4.2",
+  "base": "94a1594ea6907982991244072a5f9a8f4dd8d9f5",
+  "objective": "FBX: una sola orquestacion de descarga+parseo (2 -> 1) en el dueno unico.",
   "allow": [
     "src/**",
-    "tests/transportSingleOwnerGuard.test.ts",
+    "tests/**",
     "package.json",
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
-    "plans/ledger.json",
-    "tests/cascadeSingleOrderGuard.test.ts",
-    "tests/**"
+    "plans/ledger.json"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
@@ -22,7 +20,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/prodDefaultsGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/prodDefaultsGuard.test.ts --reporter=dot",
-  "guardExpect": "green"
+  "dod": "npx tsc -b && npx vitest run tests/fbxSingleOrchestrationGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/fbxSingleOrchestrationGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "FBX: las lineas de codigo con el literal de error del fetch pasan de 2 a 1 (orquestacion unica).",
+    "metric": {
+      "command": "node -e \"const fs=require('fs');let c=0;const w=x=>{for(const e of fs.readdirSync(x,{withFileTypes:true})){const p=x+'/'+e.name;if(e.isDirectory())w(p);else if(e.name.endsWith('.ts')||e.name.endsWith('.tsx')||e.name.endsWith('.js')||e.name.endsWith('.jsx')){for(const l of fs.readFileSync(p,'utf8').split(String.fromCharCode(10))){const t=l.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;if(l.includes('fetch FBX'))c++;}}}};w('src');console.log(c)\"",
+      "target": 1
+    },
+    "guardFiles": [
+      "tests/fbxSingleOrchestrationGuard.test.ts"
+    ]
+  }
 }
