@@ -94,7 +94,7 @@
     {
       "id": "P2.1",
       "titulo": "T2 - catchSilenciosoGuard debe discriminar (hoy acepta logCaughtError sin excepcion)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "tests/catchSilenciosoGuard.test.ts:21",
       "origen": "auditoria"
     },
@@ -122,21 +122,21 @@
     {
       "id": "P3.1",
       "titulo": "console.warn teardown ignorado sin logCaughtError (12 sitios)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/hooks/useFluVoiceAssistant.js:1334,1935",
       "origen": "auditoria"
     },
     {
       "id": "P3.2",
       "titulo": ".catch(() => {}) vacios (13 sitios)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/services/musicPlayer.ts:74",
       "origen": "auditoria"
     },
     {
       "id": "P3.3",
       "titulo": "logCaughtError sin contexto de excepcion (108 sitios)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/App.tsx:3383,4351",
       "origen": "auditoria"
     },
@@ -798,6 +798,26 @@
       "id": "P2.4",
       "commit": "b4dc2f2",
       "titulo": "T2 - Prueba de mutacion obligatoria para los guards teatro"
+    },
+    {
+      "id": "P2.1",
+      "commit": "670c238",
+      "titulo": "T2 - catchSilenciosoGuard debe discriminar (hoy acepta logCaughtError sin excepcion)"
+    },
+    {
+      "id": "P3.1",
+      "commit": "670c238",
+      "titulo": "console.warn teardown ignorado sin logCaughtError (12 sitios)"
+    },
+    {
+      "id": "P3.2",
+      "commit": "670c238",
+      "titulo": ".catch(() => {}) vacios (13 sitios)"
+    },
+    {
+      "id": "P3.3",
+      "commit": "670c238",
+      "titulo": "logCaughtError sin contexto de excepcion (108 sitios)"
     }
   ]
 }
