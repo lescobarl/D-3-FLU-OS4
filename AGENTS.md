@@ -410,6 +410,29 @@ de **0 nuevos**.
    gate: una clasificación que solo vive ahí es prosa, no barrera. Si lo que quieres es una
    barrera, la lista tiene que estar donde el gate mira (`lint:guards`) y sobre el código medido.
 
+   **7.7.f — Un guard fuera de `lint:guards` no es una barrera: se pudre.** Medido en esta
+   sesión: `tsStrictGuard` (C49) y `dexieSchemaGuard` (C46) existían, estaban ROJOS en HEAD y
+   nadie lo veía, porque la barrera solo corre los ficheros listados en `lint:guards`. Daño
+   real: P1.4 movió el esquema a `DEXIE_VERSIONS` y dejó su propio guard leyendo llamadas
+   `.stores({...})` que ya no existen; el guard resolvía **0** tablas, así que "no hay legacy
+   vivas" pasaba por **vaciedad** (`undefined !== 'declared'`) mientras el otro test fallaba
+   con `undefined`. En el mismo sitio, la misma unificación dejó un `as unknown as` que C49
+   prohibe. Cuatro reglas:
+   (1) Todo guard que exista se lista en `lint:guards` o se borra: un guard que nadie corre es
+   prosa con sintaxis de test. Antes de dar por verde una sesión, busca huérfanos
+   (`tests/*Guard*.test.ts` contra `package.json`).
+   (2) **Anti-vaciedad explícita.** Además de "no veo el defecto", el guard debe exigir que ve
+   la FUENTE (`resuelve >15 tablas`) y que el defecto EXISTIÓ (`declared` y después `deleted`).
+   Sin eso, un detector sordo pasa el mismo test que un código limpio.
+   (3) **Reparar un detector no cabe en la maquinaria de invariante.** Si el código ya está
+   bien y lo roto es el criterio, no hay 1→0 que medir en `src`, y el guard nuevo pasaría
+   también en `base` (el gate copia el guard al worktree base): eso es un **contrato sin
+   `invariant`**, y su evidencia es el antes/después del detector (0 → 26 tablas) más las
+   exigencias anti-vaciedad, nunca una métrica forzada. Endurecer el criterio permite actualizar
+   su hash en `frozen.json` en el mismo commit.
+   (4) Al parchear ficheros con script, respeta su EOL: `eolGuard` detecta el "mixed" (salta al
+   insertar con `\n` en un fichero CRLF) y el gate no cierra. Normaliza antes de commitear.
+
 ## 8. CONTRATO DE TAREA Y VERIFICACIÓN POR COMANDO (anti-sustitución)
 
 Toda tarea se ejecuta contra un contrato escrito ANTES de tocar código. Sin contrato no se

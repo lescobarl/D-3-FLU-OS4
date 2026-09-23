@@ -1,24 +1,21 @@
 {
-  "id": "P1.4",
+  "id": "P7.3",
   "mode": "full",
-  "task": "C46",
-  "base": "086f73dbd4818b075dd49bc082156cfbad96a06c",
-  "objective": "El guard C46 (dexieSchema) vuelve a medir el esquema real: estaba sordo desde que P1.4 movio el esquema a DEXIE_VERSIONS, vivia fuera de lint:guards y en ROJO.",
+  "task": "AGENTS-7.7.f",
+  "base": "215526ccf6982b0e0e5b01d276945cb0b42abf67",
+  "objective": "Dejar escrito en AGENTS.md 7.7.f lo aprendido con los dos guards huerfanos (C46/C49): guard fuera de lint:guards = prosa, anti-vaciedad obligatoria y reparacion de detector sin invariante.",
   "allow": [
-    "tests/**",
-    "package.json",
-    ".task/frozen.json",
+    "AGENTS.md",
     ".task/contract.json",
-    ".task/report",
-    "plans/ledger.json"
+    ".task/report"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 400,
-  "dod": "npx vitest run tests/dexieSchemaGuard.test.ts tests/eolGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/dexieSchemaGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 80,
+  "dod": "npx vitest run tests/eolGuard.test.ts tests/taskLedgerGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/eolGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
