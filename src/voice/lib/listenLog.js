@@ -123,11 +123,6 @@ export function logChromeSpeechResult(event) {
   }
 }
 
-/** @deprecated Usar logChromeSpeechResult */
-export function logMicRaw(event) {
-  logChromeSpeechResult(event)
-}
-
 export function getListenLogRing() {
   if (!ringCount) return []
   if (ringCount < RING_MAX) return ring.slice(0, ringCount)

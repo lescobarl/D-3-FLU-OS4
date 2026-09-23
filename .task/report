@@ -1208,4 +1208,35 @@ REGRESION:
   antes:   287 archivos / 2967 tests / 0 fallos
   despues: 287 archivos / 2972 tests / 0 fallos ; tsc -b 0 ; eslint 0.
 NO VALIDADO (usuario): que el reconocimiento de voz siga aceptando las 16
-variantes en su pantalla (el guard solo prueba el criterio estatico).
+variantes en su pantalla (el guard solo prueba el criterio estatico).================================================================
+[CIERRE TECNICO] 2026-09-22 - P2.3 (guard que blindaba un alias @deprecated)
+================================================================
+OBJETIVO: que un guard no congele deuda. tests/specificDeadGuard.test.ts (C55)
+EXIGIA que el alias deprecado existiera:
+  expect(typeof listen.logMicRaw).toBe('function')
+ANTES: src/voice/lib/listenLog.js exportaba `logMicRaw` marcado @deprecated, que
+  solo delegaba en `logChromeSpeechResult`; y el unico consumidor real del camino
+  de log (useFluVoiceAssistant.js:2189) llamaba al ALIAS. Es decir: la API viva
+  no tenia consumidores y el guard obligaba a conservar el alias.
+DESPUES: retirado `logMicRaw`; el consumidor llama directo a `logChromeSpeechResult`
+  (comportamiento identico: el alias era un reenvio puro). El guard pasa a exigir
+  su AUSENCIA en las dos formas: estatica (DEAD_SYMBOLS -> 0 ocurrencias en src/)
+  y en runtime (expect('logMicRaw' in listen).toBe(false)).
+INVARIANTE (falsable, prueba de mutacion): reintroducido el alias en
+  src/voice/lib/listenLog.js -> 2 tests ROJOS nombrando
+  "src/voice/lib/listenLog.js:logMicRaw:143". Restaurado -> 5/5 VERDE.
+ENMIENDA FORMAL (AGENTS.md B14, autorizada por el usuario): specificDeadGuard.test.ts
+  estaba CONGELADO. Hash nuevo: 709a433961dd3ab9478800045cc5a039513bb4cd258d7013cf34db4a097012eb.
+  El criterio es MAS estricto (antes exigia el alias; ahora exige borrarlo).
+HALLAZGO DE INFRAESTRUCTURA (registrado como P0.7): editar con herramienta de
+  escritura en este repo produce CRLF (core.autocrlf=false y NO existe
+  .gitattributes), y un commit asi genera diffs de miles de lineas (es lo que ya
+  paso en f1a1ca6, corregido con amend). Aqui se detecto a tiempo: normalizados
+  los 3 archivos a LF antes de congelar -> diff real 3 archivos / 5 ins / 8 del.
+  Debe normalizarse SIEMPRE antes de re-congelar, porque frozen.json hashea BYTES.
+REGRESION:
+  antes:   287 archivos / 2972 tests / 0 fallos
+  despues: 287 archivos / 2972 tests / 0 fallos ; tsc -b 0 ; eslint . --max-warnings=0 0.
+NO VALIDADO (usuario): que el log de voz en vivo (ring de Chrome raw) siga
+registrando igual en su pantalla; el cambio es un reenvio equivalente, pero el
+camino real no se ejecuta en los tests.

@@ -96,7 +96,7 @@ import {
   startSpeechRecognition,
   stopSpeechRecognition,
 } from '../lib/speechRecognitionLocal'
-import { fluEvent, logMicRaw, getListenLogRing, clearListenLogRing } from '../lib/listenLog'
+import { fluEvent, logChromeSpeechResult, getListenLogRing, clearListenLogRing } from '../lib/listenLog'
 import {
   debugHotPath,
   fluDebugHot,
@@ -2186,7 +2186,7 @@ export function useFluVoiceAssistant({
         if (isFluSpeaking()) {
           return
         }
-        logMicRaw(event)
+        logChromeSpeechResult(event)
         lastOnresultAtRef.current = Date.now()
         recognitionRetryCountRef.current = 0
         consecutiveEndsWithoutResultRef.current = 0

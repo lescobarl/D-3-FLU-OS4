@@ -1,11 +1,13 @@
 {
-  "id": "P2.2",
+  "id": "P2.3",
   "mode": "full",
-  "task": "P2.2 - wakeWordRuntime guard con prueba de mutacion (cubria 2 de las 16 variantes)",
-  "base": "aecd09375dade4163dd7cef6257c63502c92eac0",
-  "objective": "El guard C6 deriva las wake words de FLU_WAKE_WORDS (fluConfig.js) y su prueba de mutacion discrimina: con la regex vieja el guard debe FALLAR.",
+  "task": "P2.3 - el guard blindaba el alias @deprecated logMicRaw (deuda congelada)",
+  "base": "a17059eee99e50ed4d82a6e68650a8598334771a",
+  "objective": "Ningun alias @deprecated queda blindado por un guard: logMicRaw se retira y specificDeadGuard exige su ausencia (estatica y en runtime).",
   "allow": [
-    "tests/wakeWordRuntimeGuard.test.ts",
+    "src/voice/lib/listenLog.js",
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "tests/specificDeadGuard.test.ts",
     ".task/contract.json",
     ".task/frozen.json",
     ".task/report",
@@ -21,9 +23,9 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 6,
-  "maxLines": 250,
-  "dod": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
+  "maxFiles": 8,
+  "maxLines": 300,
+  "dod": "npx vitest run tests/specificDeadGuard.test.ts --reporter=dot && npx tsc -b",
+  "guard": "npx vitest run tests/specificDeadGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
