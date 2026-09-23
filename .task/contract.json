@@ -1,23 +1,34 @@
 {
   "id": "P7.3",
   "mode": "full",
-  "task": "P7.3 paso 1/2 - metrica congelada antes del arreglo",
-  "base": "c4b08f921a066994f84d8ca4b4ba33bd73a2d8d0",
-  "objective": "Medir ANTES de tocar codigo: anade a audit-metric.mjs la metrica `ts-any` (any en posicion de tipo en src) y la re-congela. En HEAD vale 8 (los 8 del laboratorio ASR). El arreglo y el guard endurecido van en el paso 2/2, cuyo invariante usa ESTE commit como base. Nota de alcance: los ficheros del paso 2/2 ya estan editados en el arbol de trabajo (allow los cubre para que la puerta no los lea como fuera de alcance) pero NO se staggean aqui: el arbol de ESTE commit conserva los 8 `any`, que es justo lo que el invariante del paso 2/2 necesita medir en base.",
+  "task": "P7.3 paso 2/2 - tipar el laboratorio ASR y endurecer C49",
+  "base": "9d86307916a84ca5410e1235888956b7ee205ef3",
+  "objective": "Cerrar P7.3 quitando los 8 `any` de tipo, con su causa raiz resuelta: los tres modulos .js sin tipos que importaba el laboratorio. Los dos whisper (whisperWasmTranscriber.js y whisperRecognitionEngine.js) estrenan .d.ts hermamas que el propio TS prefiere al .js (probado: sin ellas tsc falla con TS2322/TS7006 en AsrLab). Los eventos de Chrome y el AudioProcessingEvent usan los tipos de lib.dom. C49/tsStrictGuard se endurece con el mismo criterio de `any` de tipo que mide la metrica ts-any, con prueba por los dos lados.",
   "allow": [
-    "scripts/audit-metric.mjs",
     "src/dev/asrLab/**",
     "src/voice/lib/asr/**",
     "tests/tsStrictGuard.test.ts",
+    "scripts/audit-metric.mjs",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 9,
-  "maxLines": 240,
-  "dod": "node scripts/audit-metric.mjs ts-any",
-  "guard": "npx vitest run tests/hygieneIndicatorsGuard.test.ts tests/eolGuard.test.ts --reporter=dot",
-  "guardExpect": "green"
+  "maxFiles": 8,
+  "maxLines": 200,
+  "dod": "npx vitest run tests/tsStrictGuard.test.ts tests/voiceAsrEventShape.test.ts tests/voiceOfflineFallback.test.ts tests/eolGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/tsStrictGuard.test.ts --reporter=dot",
+  "guardExpect": "green",
+  "invariant": {
+    "statement": "ningun `any` en posicion de tipo en src: los modulos .js que lo forzaban quedan tipados por .d.ts propias, y el invariante nace rojo en base (8)",
+    "metric": {
+      "command": "node scripts/audit-metric.mjs ts-any",
+      "target": 0
+    },
+    "base": "9d86307916a84ca5410e1235888956b7ee205ef3",
+    "guardFiles": [
+      "tests/tsStrictGuard.test.ts"
+    ]
+  }
 }

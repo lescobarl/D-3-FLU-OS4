@@ -28,6 +28,12 @@ interface ProbeResult {
   error?: string
 }
 
+/** Respuesta minima de OpenRouter que lee la sonda de audio. */
+interface OpenRouterChatResponse {
+  choices?: Array<{ message?: { content?: string } }>
+  error?: { message?: string }
+}
+
 function concat(chunks: Float32Array[]): Float32Array {
   const total = chunks.reduce((acc, c) => acc + c.length, 0)
   const out = new Float32Array(total)
@@ -102,7 +108,7 @@ async function runChrome(ms: number): Promise<ProbeResult> {
         error,
       })
     }
-    rec.onresult = (event: any) => {
+    rec.onresult = (event: SpeechRecognitionEvent) => {
       let interim = ''
       for (let i = 0; i < event.results.length; i += 1) {
         const result = event.results[i]
@@ -201,7 +207,7 @@ async function runGemini(pcm: Float32Array): Promise<ProbeResult> {
         ],
       }),
     })
-    const json: any = await res.json()
+    const json: OpenRouterChatResponse = await res.json()
     const ms = Date.now() - started
     if (!res.ok) return { id: 'gemini', text: '', ms, error: String(json?.error?.message || res.status) }
     return { id: 'gemini', text: String(json?.choices?.[0]?.message?.content || '').trim(), ms }
@@ -298,7 +304,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
       rec.lang = SPEECH_LOCALES.es
       rec.continuous = true
       rec.interimResults = true
-      rec.onresult = (event: any) => {
+      rec.onresult = (event: SpeechRecognitionEvent) => {
         let text = ''
         for (let i = 0; i < event.results.length; i += 1) text += event.results[i][0].transcript
         setLiveText(text)
@@ -319,18 +325,18 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
     const AudioCtx = (window.AudioContext || window.webkitAudioContext) as typeof AudioContext
     const ctx = new AudioCtx()
     const modelId = liveEngine === 'whisper-tiny' ? 'Xenova/whisper-tiny' : 'Xenova/whisper-base'
-    const tMod: any = await import('../../voice/lib/asr/whisperWasmTranscriber')
-    const eMod: any = await import('../../voice/lib/asr/whisperRecognitionEngine')
+    const tMod = await import('../../voice/lib/asr/whisperWasmTranscriber')
+    const eMod = await import('../../voice/lib/asr/whisperRecognitionEngine')
     const transcriber = tMod.createWhisperWasmTranscriber({ modelId, dtype: 'fp32' })
-    const engine: any = eMod.createWhisperRecognitionEngine({ sampleRate: ctx.sampleRate, transcriber })
-    engine.onresult = (event: any) => {
+    const engine = eMod.createWhisperRecognitionEngine({ sampleRate: ctx.sampleRate, transcriber })
+    engine.onresult = (event) => {
       const result = event?.results?.[0]
       setLiveText(String(result?.[0]?.transcript || ''))
     }
     engine.start()
     const src = ctx.createMediaStreamSource(stream)
     const proc = ctx.createScriptProcessor(4096, 1, 1)
-    proc.onaudioprocess = (event: any) =>
+    proc.onaudioprocess = (event: AudioProcessingEvent) =>
       engine.pushAudio(event.inputBuffer.getChannelData(0), ctx.sampleRate)
     src.connect(proc)
     proc.connect(ctx.destination)

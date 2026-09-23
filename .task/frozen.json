@@ -61,7 +61,7 @@
   "tests/interimPriorStripSingleSource.test.ts": "a350281f7d23937dee615aff097de354f0a8830dcc36e1feeabb91fd687d2168",
   "tests/geminiServiceFlow.test.ts": "8ea891dea81c4a89a9f0b9fa2f5369eb78217eb6d611115757305efd534eb897",
   "tests/localeConfigGuard.test.ts": "c0448d87781c9654d82da699e29633e3a46af36bcd86395fb54a0cb76da0a685",
-  "tests/tsStrictGuard.test.ts": "2dd2f20bfc972164022ede553d529e4e090c34d862df757ddff960b7d548fad9",
+  "tests/tsStrictGuard.test.ts": "0c8797dde20d6ba342117736ad918eaaecaf34b86bf62a0e1fe48058abbc6849",
   "tests/dexieSchemaGuard.test.ts": "640deba11bf19034f263e5c7aa6c66e3480aeed9b43b0b26eee0e1fd6aa83ee9",
   "tests/remoteResourceGuard.test.ts": "776bac80370434e94d58ebb7a38da7474ad53b26d2bbb59a96c76b3b37a3851f",
   "tests/wakeInternalGuard.test.ts": "7a27807da28fff3555b1746e76c52fe0001faaaf628d8ddf5d609db3b3ca2ce0",

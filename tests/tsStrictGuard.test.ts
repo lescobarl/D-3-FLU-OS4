@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const DOUBLE_CAST = /as unknown as/
+const ANY_TYPE = /\bas\s+any\b|<any\b|:\s*any\b|\bany\s*\[\]/
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
@@ -58,6 +59,43 @@ describe('C49 tsStrict — sin doble cast', () => {
   })
 })
 
+/** Líneas con `any` en posición de TIPO (`: any`, `as any`, `<any>`, `any[]`). */
+function findAnyTypes(src: string): number[] {
+  const out: number[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    const t = line.trim()
+    if (t.startsWith('*') || t.startsWith('/*') || t.startsWith('//')) return
+    if (ANY_TYPE.test(line)) out.push(i + 1)
+  })
+  return out
+}
+
+describe('C49 tsStrict — sin `any` de tipo', () => {
+  it('no hay `any` en posición de tipo en src', () => {
+    const offenders: string[] = []
+    for (const f of walk(SRC)) {
+      const r = relative(ROOT, f).replace(/\\/g, '/')
+      for (const line of findAnyTypes(readFileSync(f, 'utf8'))) {
+        offenders.push(`${r}:${line}`)
+      }
+    }
+    expect(offenders, `Any de tipo (N=${offenders.length}):\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+})
+
+describe('C49 tsStrict — el detector de `any` no es decorativo', () => {
+  it('no marca nombres que solo CONTIENEN "any"', () => {
+    expect(findAnyTypes('const addMany = (labels: string[]) => labels')).toEqual([])
+    expect(findAnyTypes('const anyWs = ws as XlsxSheet')).toEqual([])
+    expect(findAnyTypes('// filtra cualquier any entrante')).toEqual([])
+  })
+  it('marca el `any` de tipo en sus cuatro formas', () => {
+    expect(findAnyTypes('function f(x: any) {}')).toEqual([1])
+    expect(findAnyTypes('const y = z as any')).toEqual([1])
+    expect(findAnyTypes('const w: Array<any> = []')).toEqual([1])
+    expect(findAnyTypes('const v: string[] = [] as any[]')).toEqual([1])
+  })
+})
 describe('C49 tsStrict — el detector no es decorativo', () => {
   it('marca un doble cast', () => {
     expect(findDoubleCasts("session.state = state as unknown as Record<string, unknown>;")).toHaveLength(1)
