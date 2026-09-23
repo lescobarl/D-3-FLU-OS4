@@ -1,21 +1,20 @@
 {
   "id": "P5.9",
   "mode": "full",
-  "task": "P5.9 paso 4/N - guard localStorageGateway (con prueba de mutacion)",
-  "base": "58710fb0e61b30a09843a196a86530eae0d32a6c",
-  "objective": "Fijar el invariante de P5.9 para que el 0 no se pueda reabrir sin que la barrera lo note: guard tests/localStorageGatewayGuard.test.ts (registrado en lint:guards y congelado) con prueba de detector por los dos lados, mas la regresion del defecto real (resolveSafeStorage compartiendo el respaldo con la puerta).",
+  "task": "P5.9 cierre - ledger y evidencia",
+  "base": "2d4b5e3126f97ac2568382ea8a748741658d4730",
+  "objective": "Registrar el cierre de P5.9 en plans/ledger.json: estado done, evidencia medida (118 -> 0, commits ed4f026/7a60462/58710fb/2d4b5e3, guard con mutacion, defecto real corregido) y entrada en done[] apuntando al commit de la guarda. El medio de estilos del titular no se reclama: es P6.12.",
   "allow": [
-    "tests/**",
-    "package.json",
+    "plans/**",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 300,
+  "maxFiles": 4,
+  "maxLines": 60,
   "dod": "node scripts/audit-metric.mjs localstorage-directo",
-  "guard": "npx vitest run tests/localStorageGatewayGuard.test.ts tests/localStoreMemory.test.ts tests/localStoreBrowser.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/localStorageGatewayGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

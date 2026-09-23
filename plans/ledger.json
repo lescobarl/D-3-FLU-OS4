@@ -287,8 +287,8 @@
     {
       "id": "P5.9",
       "titulo": "T9 - 123 localStorage + 104 style={{ -> gateway unico",
-      "estado": "todo",
-      "evidencia": "conteo -> 0",
+      "estado": "done",
+      "evidencia": "CERRADO commit 2d4b5e3 (P5.9). El titular del item (123 localStorage) estaba mal medido: la metrica congelada `localstorage-directo` contaba 118 menciones reales al identificador en 22 ficheros de src/, no 123. Migradas TODAS a una unica puerta, src/core/storage/localStore.ts (localGet/localSet/localRemove/localKeys/hasLocalStorage + localStorePort), y retiradas las 4 invenciones locales de \"storage seguro\": resolveSafeStorage (store/storage.ts), readStorage/writeStorage (core/config/appConfig.ts), safeGet (core/search/searchConfigOverrides.ts) y getLocalStorage (core/onboarding/onboardingService.ts). El escalon de respaldo a sessionStorage de searchConfigOverrides SE MANTIENE a proposito: es una decision de diseno (cuota llena), no una copia de la misma ruta. Commits: ed4f026 (puerta + tests + metrica, 118), 7a60462 (core/ + services/, 118->47), 58710fb (hooks/stores/App/voz, 47->0), 2d4b5e3 (guard). Guard tests/localStorageGatewayGuard.test.ts (4 tests, registrado en lint:guards y congelado en .task/frozen.json): escanea git ls-files src y exige 0 ficheros fuera de la puerta, y trae prueba de detector por los dos lados. MUTACION VERIFICADA: localStorage.getItem inyectado en src/core/search/searchLanguage.ts -> metrica 1 y guard rojo (2 de 4); retirado -> 0. DEFECTO REAL encontrado por el camino (lo encontro la suite completa, no una lectura): la puerta resolvia el almacenamiento EN CADA ACCESO devolviendo un mapa NUEVO, asi que escribir y leer en el mismo acto perdia el dato (10 tests en rojo: localAi, searchConfigOverrides, searchOverridesStorage). Ahora la resolucion sigue siendo por acceso (los tests sustituyen el almacenamiento en caliente y tienen que mandar) pero el respaldo en memoria es UNO. Ademas store/storage.ts tenia su PROPIA copia del fallback (dos universos de memoria en el mismo proceso): ahora delega en la puerta, con regresion en tests/localStoreMemory.test.ts. Evidencia: node scripts/audit-metric.mjs localstorage-directo -> 0 (base 118). tsc -b -> 0. Suite completa vitest run -> 87 ficheros / 692 tests verde. lint:guards -> 37 ficheros / 217 tests verde. HONESTIDAD DE ALCANCE: el titular incluye tambien \"104 style={{ }}\" (estilos inline). Eso NO se toca aqui y este cierre no lo reclama: es el scope declarado de P6.12. Nota de metodo: el detector de la metrica se afino para no contar el TEXTO de una plantilla literal (el mensaje de log de searchConfigOverrides daba un falso positivo que impedia llegar a 0); las expresiones ${...} SIGUEN contando. Hash nuevo de scripts/audit-metric.mjs en .task/frozen.json: c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f.",
       "origen": "plan-T"
     },
     {
@@ -996,6 +996,11 @@
       "id": "P4.2",
       "commit": "de78579",
       "titulo": "FBX: orquestacion 2->1 (f99661f) + bloqueo del parse MEDIDO con banco (204 ms, no 10-20 s) + VEREDICTO medido de Three en bundle (1 sola copia y external; el build roto pasa a P6.13)"
+    },
+    {
+      "id": "P5.9",
+      "commit": "2d4b5e3",
+      "titulo": "T9 - puerta unica de almacenamiento: 118 accesos directos a localStorage -> 0, 4 invenciones locales retiradas (resolveSafeStorage/readStorage-writeStorage/safeGet/getLocalStorage), guard con prueba de mutacion"
     }
   ]
 }
