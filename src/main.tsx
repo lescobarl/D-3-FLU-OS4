@@ -12,8 +12,11 @@ declare global {
     }
 }
 
-// Exponer la configuración real en window para lecturas del panel de ajustes.
-window.FLU_CONFIG = FLU_CONFIG;
+// Solo en desarrollo: la app importa FLU_CONFIG directamente (no hay lectores de
+// este global en src/). Publicarlo en produccion no aporta y expone la config interna.
+if (import.meta.env.DEV) {
+  window.FLU_CONFIG = FLU_CONFIG;
+}
 
 // Registrar el Service Worker de la PWA (notificaciones/offscreen).
 // Regla #1: habilitado por FLU_CONFIG.notifications.enabled (sin hardcode).

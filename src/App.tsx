@@ -1214,6 +1214,21 @@ function exposeContractHookDev<T>(callback: T): T {
     return callback;
 }
 
+/**
+ * Expone un puente de desarrollo en `window` SOLO en desarrollo (misma politica que
+ * exposeContractHookDev). NO se usa para los `__fluHandleX` que la app consume en
+ * runtime: esos se asignan directamente (ver tests/devGlobalsGuard.test.ts).
+ * El `useCallback` de dentro se evalua siempre: se envuelve la ASIGNACION, nunca el
+ * hook, para no alterar el orden de hooks entre renders.
+ */
+function exposeDevHook<K extends keyof Window>(name: K, callback: Window[K]): Window[K] {
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+        const target: Window = window;
+        target[name] = callback;
+    }
+    return callback;
+}
+
 function App() {
     const [_currentState, setCurrentState] = useState<ConversationState>('IDLE');
     // Foco del Pizarrón por turno (señal monotónica): garantiza que el feed
@@ -3578,7 +3593,7 @@ function App() {
     // P1-C (§1.3.4) — autoconocimiento por texto (E2E + integración).
     // Fast-path local sin Gemini: detecta CONOCER_FLU, construye el manifiesto
     // compilado desde la configuración y lo devuelve como respuesta hablada.
-    window.__fluHandleConocerFluText = useCallback(
+    exposeDevHook('__fluHandleConocerFluText', useCallback(
         async (text: string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const clean = String(text || '').trim();
@@ -3599,12 +3614,12 @@ function App() {
             return manifesto;
         },
         [languageRef, auditLog],
-    );
+    ));
 
     // Fase 7 — Acciones de dispositivo — manejador por texto (E2E + integración).
     // Resuelve el contacto en la agenda y abre el esquema de URL estándar
     // (tel:, wa.me, sms:, mailto:) vía el servicio inyectado en el hook.
-    window.__fluHandleDeviceActionText = useCallback(
+    exposeDevHook('__fluHandleDeviceActionText', useCallback(
         async (text: string) => {
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const intent = parseDeviceActionIntent(String(text || ''));
@@ -3651,7 +3666,7 @@ function App() {
             );
         },
         [deviceActions, languageRef],
-    );
+    ));
 
     // Fase 6 — Notas por voz (E2E + integración + dictado por voz).
     // Detecta intenciones de nota ("nota para el super", "nota para recordar un

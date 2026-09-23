@@ -1362,4 +1362,59 @@ REGRESION:
            npm run gate 0 (tras la enmienda).
 NO VALIDADO (usuario): el copy visible del boton "Ceder la palabra" y el texto del
   prompt de configuracion en pantalla; ambos cambian de 'FLU' a 'oye flu' cuando la
-  lista de wakes esta vacia. Es el comportamiento correcto, pero no se ejercita en tests.
+  lista de wakes esta vacia. Es el comportamiento correcto, pero no se ejercita en tests.================================================================
+[CIERRE TECNICO] 2026-09-22 - P6.1 (decision) + P6.3 (done)
+================================================================
+SUJETO: "6 window.__fluHandle* en el bundle sin gate DEV" (P6.1) y
+"window.FLU_CONFIG expuesto sin gate" (P6.3).
+P6.1 = FALSO POSITIVO (verificado antes de tocar nada). La auditoria conto 6
+asignaciones y propuso gatearlas. Evidencia:
+  - src/App.tsx:1157 hace `const w = window;` dentro de dispatchArbiterIntent.
+  - src/App.tsx:1171-1194 LEE w.__fluHandleDiaryText / NoteText / ShoppingText /
+    AgendaCommandText y despacha el dominio del arbitro. Esos 4 NO son superficie de
+    depuracion: son el mecanismo REAL de despacho de diario/notas/compras/agenda.
+  - Gatearlos habria roto esas 4 funciones EN PRODUCCION (import.meta.env.DEV=false).
+  - Los otros 2 (__fluHandleConocerFluText, __fluHandleDeviceActionText) si estaban
+    huerfanos: 0 lectores en src/ y 0 en tests/e2e (los e2e usan solo
+    __fluOnContractResolved, que ya estaba gateado por exposeContractHookDev).
+  - El autoconocimiento NO depende del global: useFluVoiceAssistant.js:1150 y
+    useNavigationCommands.ts:603 lo resuelven por otras rutas.
+CAMBIO (P6.3 + los 2 huerfanos):
+  - src/main.tsx: window.FLU_CONFIG = FLU_CONFIG pasa a `if (import.meta.env.DEV)`.
+    Cero lectores en src/ (el comentario previo, "para lecturas del panel de ajustes",
+    era falso: FluSettingsPanel no menciona FLU_CONFIG).
+  - src/App.tsx: nuevo helper exposeDevHook<K extends keyof Window>(name, callback) que
+    asigna SOLO en DEV. Los 2 huerfanos pasan a exposeDevHook(...). El useCallback se
+    sigue evaluando siempre: se envuelve la ASIGNACION, nunca el hook, para no alterar
+    el orden de hooks entre builds.
+  - Sin casts: `const target: Window = window; target[name] = callback` (el `window`
+    real es Window & typeof globalThis y no asignaba directo). 0 `as unknown as`.
+GUARD NUEVO (tests/devGlobalsGuard.test.ts, tambien en lint:guards):
+  Regla: toda asignacion `window.<__fluHandle*> =` o `window.FLU_CONFIG =` debe estar
+  dentro de un gate import.meta.env.DEV, o ser un puente funcional declarado en
+  FUNCTIONAL_BRIDGE. Ademas, cada puente declarado debe tener un LECTOR REAL: si el
+  lector desaparece, el guard obliga a gatearlo o borrarlo (la lista no puede mentir).
+  Alcance deliberado: NO cubre el subsistema debug/traza (ver P6.2 abajo); mezclarlo
+  habria convertido el guard en una lista de excepciones.
+INVARIANTE (falsable, prueba de mutacion): (a) quitado el gate de window.FLU_CONFIG ->
+  ROJO citando src/main.tsx:17. (b) anadido `window.__fluHandlePruebaText = 1` ->
+  ROJO citando VoiceAssistantBarWrapper.tsx:10. Restaurado todo -> 10/10 VERDE.
+HALLAZGO PARA P6.2 (evidencia empirica del escaneo, aun pendiente): el guard encontro
+  6 globales del subsistema debug/traza que si estan sin gate DEV:
+    src/avatar/model/BunnyModel.tsx:135  window.__bunnyPreloadDone
+    src/voice/lib/fluDebug.js:116 y :124 window.__FLU_DEBUG_ENABLED
+    src/voice/lib/fluDebug.js:912       window.__fluDebug
+    src/voice/lib/fluTrace.js:66        window.__FLU_LISTEN_DEBUG
+    src/voice/lib/fluTrace.js:248       window.__fluDev
+  No se tocan aqui: P6.2 es un item aparte y el flag de debug con relay remoto es una
+  decision de dise├▒o, no un descuido de gate.
+REGRESION:
+  antes:   288 archivos / 2984 tests / 0 fallos ; lint:guards 73/73
+  despues: 289 archivos / 2994 tests / 0 fallos ; lint:guards 73/73 (14 archivos)
+           tsc -b 0 ; eslint . --max-warnings=0 0 ; npm run gate 0
+NO VALIDADO (usuario): que en el bundle minificado de produccion no queden
+  __fluHandleConocerFluText / __fluHandleDeviceActionText / FLU_CONFIG. `vite build`
+  NO se pudo ejecutar en este entorno: vite.config.ts revienta con
+  "Cannot read properties of undefined (reading 'VITE_APP_NAME')" (falta esa variable en
+  el .env local, que esta ignorado por git). No es consecuencia de este cambio (tsc -b y
+  la suite pasan). El gate DEV es el mismo mecanismo ya usado por AsrLab en main.tsx.
