@@ -56,8 +56,8 @@
     {
       "id": "P1.4",
       "titulo": "T7 - Esquema Dexie: una sola fuente de la lista de tablas",
-      "estado": "todo",
-      "evidencia": "src/core/db/fluDatabase.ts (23+23+20)",
+      "estado": "done",
+      "evidencia": "El esquema Dexie pasa a ser la FUENTE UNICA de la lista de tablas. La lista de las 23 tablas estaba escrita tres veces en src/core/db/fluDatabase.ts: campos tipados, llamadas this.table(literal) una por tabla (23 lineas a mano) y el esquema de versiones. Las tres coincidian hoy, luego no habia bug activo: el defecto es la DERIVA, y la peor copia es this.table(), porque olvidarla deja fluDb.<tabla> a undefined en runtime y TypeScript no avisa (campos con !). Ahora el esquema son datos (const DEXIE_VERSIONS, 21 versiones v3..v23 con sus comentarios historicos) y de el salen la cadena de versiones y los handles, derivados en un bucle; se eliminan las 23 lineas a mano. Guard tests/dexieSingleSourceGuard.test.ts (6 tests): prohibe las llamadas a mano, contrasta los campos tipados con el esquema, ABRE la base con fake-indexeddb y compara con db.tables (verificacion contra Dexie de verdad, no contra el propio parseo), handles en runtime, anti-vacuidad y detector no decorativo. Metrica: this.table(literal) a mano 23 -> 0, recomputada por el gate en el worktree base; gate exit 0.",
       "origen": "plan-T"
     },
     {
@@ -966,6 +966,11 @@
       "id": "P1.8",
       "titulo": "Veredicto: falso positivo (no hay almacen paralelo)",
       "commit": "6efbd50"
+    },
+    {
+      "id": "P1.4",
+      "commit": "40d8f04",
+      "titulo": "Dexie: una sola fuente de la lista de tablas"
     }
   ]
 }
