@@ -1,11 +1,12 @@
 {
-  "id": "P1.4",
+  "id": "P1.1",
   "mode": "full",
-  "task": "P1.4",
-  "base": "8f8288b1f448bf172ae631ffce97e97d004dd3b5",
-  "objective": "El esquema Dexie es la fuente unica de la lista de tablas: los handles se derivan, no se enumeran a mano.",
+  "task": "P1.1",
+  "base": "defc8eacbcc79a3ab8c4219abebd486683dfce1b",
+  "objective": "Las minutas viven SOLO en Dexie (doctrina C31): el backup no duplica esa ruta ni espeja en integrationStore.",
   "allow": [
-    "src/core/db/fluDatabase.ts",
+    "src/core/autonomy/backupSystem.ts",
+    "src/core/config/appConfig.ts",
     "tests/**",
     "package.json",
     ".task/frozen.json",
@@ -19,18 +20,18 @@
     "kilo.json"
   ],
   "maxFiles": 40,
-  "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/dexieSingleSourceGuard.test.ts tests/minutesDeadIndexPruneGuard.test.ts tests/fluStorage.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/dexieSingleSourceGuard.test.ts --reporter=dot",
+  "maxLines": 1200,
+  "dod": "npx tsc -b && npx vitest run tests/minutesDexieOnlyGuard.test.ts tests/minutosSinglePublisherGuard.test.ts tests/voiceProfilesLocalStorageGuard.test.ts tests/brandingDexieOnlyGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/minutesDexieOnlyGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Llamadas this.table(literal) escritas a mano en fluDatabase.ts (la lista paralela al esquema): 23 -> 0.",
+    "statement": "Sitios en src/ que usan la clave localStorage de minutas (MINUTE_HISTORY / flu-minute-history) o escriben el espejo minuteHistory: fuera del store: 5 -> 0.",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/core/db/fluDatabase.ts','utf8');const m=s.match(/this[.]table[(]'[^']+'[)]/g);console.log(m?m.length:0)\"",
+      "command": "node -e \"const fs=require('fs'),path=require('path');const NL=String.fromCharCode(10);const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));let n=0;for(const f of walk('src')){const p=f.split(path.sep).join('/');for(const line of fs.readFileSync(f,'utf8').split(NL)){const t=line.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;const m=line.match(/MINUTE_HISTORY|flu-minute-history/g);if(m)n+=m.length;if(p!=='src/store/integrationStore.ts'&&/minuteHistory *:/.test(line))n++;}}console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/dexieSingleSourceGuard.test.ts"
+      "tests/minutesDexieOnlyGuard.test.ts"
     ]
   }
 }

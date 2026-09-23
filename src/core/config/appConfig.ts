@@ -132,7 +132,6 @@ export const STORAGE_KEYS = {
     PERFORMANCE_LOGGING_LEVEL: 'flu-logging-level',
     PERFORMANCE_ANALYTICS_ENABLED: 'flu-analytics-enabled',
     // Business data
-    MINUTE_HISTORY: 'flu-minute-history',
     VOICE_PROFILES: 'flu-voice-profiles',
     // Backup metadata
     BACKUP_LAST_TIMESTAMP: 'flu-last-backup-timestamp',

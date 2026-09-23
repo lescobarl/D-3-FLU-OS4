@@ -1942,4 +1942,32 @@ Que se hizo:
      - anti-vacuidad + detector no decorativo (altas/bajas/realtas).
 MEDICION (ANTES -> DESPUES): llamadas "this.table(literal)" escritas a mano = 23 -> 0.
 VERIFICACION: tsc -b -> 0 ; guard P1.4 6/6 ; guards de P1.6 (minutes) y fluStorage 6/6 ;
-npm run gate -> ver salida.
+npm run gate -> ver salida.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.1: el backup de minutas duplicaba (mal) el almacen
+================================================================
+Que era: las minutas viven en Dexie (fluDb.minutes), pero backupSystem las trataba como
+si vivieran en localStorage:
+  - extractMinuteHistory() leia localStorage[MINUTE_HISTORY] ('flu-minute-history') con
+    fallback al espejo de integrationStore;
+  - restoreMinuteHistory() escribia esa clave y demas espejaba el resultado en
+    integrationStore (setState({minuteHistory})).
+Dos defectos medibles:
+  1) La clave local NO la escribia NADIE mas (grep en src/: 0 escritores). Luego el backup
+     de minutas salia SIEMPRE vacio y la restauracion escribia en una clave muerta.
+  2) El espejo en restore era un SEGUNDO publicador del store, contra la doctrina de P1.2
+     (solo el dueno de la minuta publica, via publishMinuteToStore()).
+No era un bug de render: era un backup que no respaldaba nada y una restauracion que no
+restauraba nada, en silencio.
+Que se hizo (doctrina C31, la misma que ya regia voiceProfiles y branding):
+  - extractMinuteHistory() -> [] (las minutas viven SOLO en Dexie, que ya es persistente);
+  - restoreMinuteHistory() -> false + void data (no se restaura desde localStorage ni se
+    espeja en el store);
+  - se retira la clave muerta STORAGE_KEYS.MINUTE_HISTORY de appConfig.ts (el guard de P1.9
+    habria fallado si se dejara declarada y sin uso);
+  - guard tests/minutesDexieOnlyGuard.test.ts: prohibe la clave en todo src/, prohibe
+    escribir elapsed mirror en el store fuera del store, y comprueba que el backup aplica
+    C31 (extract [] / restore false) analizando el cuerpo de los metodos.
+MEDICION (ANTES -> DESPUES): sitios que usan la clave localStorage de minutas o escriben el
+espejo minuteHistory: fuera del store = 5 -> 0. Recomputado por el gate en el worktree base.
+VERIFICACION: tsc -b -> 0 ; guard P1.1 5/5 ; DoD incluye los guards C31 de voiceProfiles y
+branding y el de un solo publicador de minutas (P1.2), todos verdes ; npm run gate -> exit 0.

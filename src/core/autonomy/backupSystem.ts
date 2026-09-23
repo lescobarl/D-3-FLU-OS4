@@ -272,18 +272,10 @@ class DataExtractor {
     }
     
     extractMinuteHistory(): MinuteUIEntry[] {
-        try {
-            // Extraer desde IndexedDB o localStorage
-            const minutesJson = localStorage.getItem(STORAGE_KEYS.MINUTE_HISTORY);
-            if (minutesJson) {
-                return JSON.parse(minutesJson);
-            }
-            
-            // Fallback: leer desde integrationStore (minuteHistory)
-            return useIntegrationStore.getState().minuteHistory || [];
-        } catch (error) {
-            logCaughtError('Error extrayendo historial de minutos', error);
-        }
+        // C31 - Las minutas viven SOLO en Dexie (fluDb.minutes), que ya es
+        // persistente. Antes se leian de localStorage con fallback al espejo de
+        // integrationStore, y esa clave local NO la escribia nadie: el backup
+        // salia siempre vacio. No se duplica esa ruta.
         return [];
     }
     
@@ -482,23 +474,10 @@ class DataRestorer {
     }
     
     restoreMinuteHistory(data: MinuteUIEntry[] | null): boolean {
-        try {
-            if (!data) return false;
-            
-            localStorage.setItem(STORAGE_KEYS.MINUTE_HISTORY, JSON.stringify(data));
-            
-            // También restaurar a integrationStore (fuente canónica) si es un array
-            if (Array.isArray(data)) {
-                useIntegrationStore.setState((state) => ({
-                    ...state,
-                    minuteHistory: data,
-                }));
-            }
-            
-            return true;
-        } catch (error) {
-            logCaughtError('Error restaurando historial de minutos', error);
-        }
+        // C31 - La fuente unica es Dexie (fluDb.minutes): no se restaura desde
+        // localStorage ni se espeja en integrationStore. El espejo era ademas un
+        // SEGUNDO publicador, contra la doctrina de P1.2 (solo el dueno publica).
+        void data;
         return false;
     }
     
