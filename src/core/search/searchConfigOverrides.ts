@@ -14,6 +14,7 @@ import { STORAGE_KEYS, resolveTextApiKey } from '../config/appConfig';
 import type { SearchProviderConfig, SearchResultType } from './searchSession';
 import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_IDS } from '../config/sharedConfig'
+import { localGet, localRemove, localSet, localStorePort } from '../storage/localStore';
 
 /** Overrides de un proveedor individual (por id). */
 export interface SearchProviderOverride {
@@ -246,7 +247,12 @@ export function getLastStorageError(): string {
   return lastStorageError;
 }
 
-function safeGet(store: Storage | null | undefined, key: string): string | null {
+/**
+ * Lee de un almacen concreto sin propagar errores: la puerta no lanza por "no
+ * hay almacen", pero el navegador SI puede lanzar al leer (modo privado), y el
+ * respaldo a sessionStorage exige no romper la lectura.
+ */
+function safeGet(store: { getItem: (key: string) => string | null } | null | undefined, key: string): string | null {
   try {
     return store ? store.getItem(key) : null;
   } catch (e) {
@@ -263,7 +269,7 @@ function safeGet(store: Storage | null | undefined, key: string): string | null 
  */
 function readRawOverrides(): string | null {
   if (typeof window === 'undefined') return null;
-  const ls = safeGet(window.localStorage, OVERRIDES_STORAGE_KEY);
+  const ls = safeGet(localStorePort(), OVERRIDES_STORAGE_KEY);
   if (ls) return ls;
   return safeGet(window.sessionStorage, OVERRIDES_STORAGE_KEY);
 }
@@ -273,7 +279,7 @@ function writeRawOverrides(value: string): boolean {
   if (typeof window === 'undefined') return false;
   let ok = false;
   try {
-    window.localStorage.setItem(OVERRIDES_STORAGE_KEY, value);
+    localSet(OVERRIDES_STORAGE_KEY, value);
     lastStorageError = '';
     ok = true;
   } catch (error) {
@@ -284,7 +290,7 @@ function writeRawOverrides(value: string): boolean {
     // Cuota llena/bloqueada: quitar el valor VIEJO para que no opaque al nuevo
     // (removeItem no consume cuota), así la lectura cae a sessionStorage.
     try {
-      window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
+      localRemove(OVERRIDES_STORAGE_KEY);
     } catch (e) {
         logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
       /* si tampoco se puede, la lectura usa sessionStorage */
@@ -331,7 +337,7 @@ export function saveSearchConfigOverrides(overrides: SearchConfigOverrides): boo
 export function clearSearchConfigOverrides(): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
+    localRemove(OVERRIDES_STORAGE_KEY);
   } catch (e) {
         logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     /* ignorar */
@@ -347,7 +353,7 @@ export function clearSearchConfigOverrides(): void {
 /** Carga el registro de uso diario persistido (null si no hay). */
 export function loadDailyUsage(): DailyUsageRecord | null {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.SEARCH_DAILY_USAGE);
+    const raw = localGet(STORAGE_KEYS.SEARCH_DAILY_USAGE);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DailyUsageRecord;
     if (!parsed || typeof parsed.day !== 'string' || typeof parsed.count !== 'number') {
@@ -363,7 +369,7 @@ export function loadDailyUsage(): DailyUsageRecord | null {
 /** Persiste el registro de uso diario (ignora errores de almacenamiento). */
 export function saveDailyUsage(record: DailyUsageRecord): void {
   try {
-    window.localStorage.setItem(STORAGE_KEYS.SEARCH_DAILY_USAGE, JSON.stringify(record));
+    localSet(STORAGE_KEYS.SEARCH_DAILY_USAGE, JSON.stringify(record));
   } catch (e) {
         logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     // ignorar

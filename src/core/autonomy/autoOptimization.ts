@@ -21,6 +21,7 @@
 import { emitAutonomyEvent } from './autonomyEvents';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 import { logCaughtError } from '../../lib/caughtError';
+import { localSet } from '../storage/localStore';
 
 // -----------------------------------------------------------
 // Tipos
@@ -598,7 +599,7 @@ class ParameterOptimizer {
         // En una implementación real, esto actualizaría la configuración del sistema
         
         // Guardar en localStorage para persistencia
-        localStorage.setItem(`flu-param-${parameter}`, value.toString());
+        localSet(`flu-param-${parameter}`, value.toString());
         
         // Notificar el cambio de parámetro vía bus central de autonomía
         emitAutonomyEvent({

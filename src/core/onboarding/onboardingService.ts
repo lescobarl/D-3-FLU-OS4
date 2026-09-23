@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type OnboardingStateRecord, type SyncTuple } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
 import { STORAGE_KEYS } from '../config/appConfig';
+import { localStorePort, type LocalStorePort } from '../storage/localStore';
 import { createInitialState, type OnboardingState } from './onboardingFlow';
 
 export type { OnboardingStateRecord } from '../db/fluDatabase';
@@ -76,20 +77,25 @@ export function createOnboardingRecord(
   };
 }
 
-export function getLocalStorage(): Storage | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage;
+/**
+ * La puerta unica de almacenamiento. Antes devolvia el `window.localStorage`
+ * crudo (inexistente fuera del navegador); ahora devuelve el puerto, que
+ * resuelve memoria cuando no hay navegador. Se conserva el nombre porque es API
+ * publica del modulo.
+ */
+export function getLocalStorage(): LocalStorePort {
+  return localStorePort();
 }
 
 /** Usuario activo: STORAGE_KEYS.ACTIVE_USER o el legacy 'default'. */
-export function resolveActiveUser(storage: Storage | undefined = getLocalStorage()): string {
+export function resolveActiveUser(storage: LocalStorePort | undefined = getLocalStorage()): string {
   const raw = storage?.getItem(STORAGE_KEYS.ACTIVE_USER);
   const id = raw?.trim() || '';
   return id && id !== DEFAULT_ONBOARDING_USER ? id : DEFAULT_ONBOARDING_USER;
 }
 
 /** Persiste el usuario activo; ''/'default' limpia la clave. */
-export function setActiveUser(storage: Storage | undefined = getLocalStorage(), id?: string): void {
+export function setActiveUser(storage: LocalStorePort | undefined = getLocalStorage(), id?: string): void {
   if (!storage) return;
   const clean = id?.trim() || '';
   if (!clean || clean === DEFAULT_ONBOARDING_USER) {

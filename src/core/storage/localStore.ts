@@ -8,10 +8,11 @@
  * `localStorage` repartidas por src. Cada sitio decidia por su cuenta si el
  * almacen existe y a donde caer.
  *
- * Esta puerta decide UNA vez y reparte: en navegador usa `window.localStorage`;
- * fuera de el (Node, SSR, test sin DOM) cae a un mapa en MEMORIA. El mapa es de
- * modulo, no por llamada: uno nuevo por llamada perderia lo que se acaba de
- * escribir (era el defecto latente de resolver el storage en cada acceso).
+ * Esta puerta es el unico sitio que mira si hay almacenamiento: en navegador usa
+ * `window.localStorage`, y fuera de el (Node, SSR, test sin DOM) cae a un mapa en
+ * MEMORIA que es de modulo y no por acceso (un mapa nuevo por acceso perderia lo
+ * que se acaba de escribir). La resolucion SI es por acceso, para que quien
+ * sustituya el almacenamiento —los tests lo hacen— siga mandando.
  *
  * NO captura los errores del almacen a proposito: quien se llena tiene que
  * poder enterarse. `backupSystem` poda backups antiguos justo al ver el
@@ -31,47 +32,51 @@ export interface LocalStorePort {
   key?: (index: number) => string | null;
 }
 
-/** Respaldo en memoria, vivo mientras dure el modulo. */
+/** Respaldo en memoria: UNO por modulo, no uno por acceso. */
 const MEMORY = new Map<string, string>();
 
-let port: LocalStorePort | null = null;
-let real = false;
+let memory: LocalStorePort | null = null;
 
 function memoryPort(): LocalStorePort {
-  return {
-    getItem: (key) => MEMORY.get(key) ?? null,
-    setItem: (key, value) => {
-      MEMORY.set(key, value);
-    },
-    removeItem: (key) => {
-      MEMORY.delete(key);
-    },
-  };
+  if (!memory) {
+    memory = {
+      getItem: (key) => MEMORY.get(key) ?? null,
+      setItem: (key, value) => {
+        MEMORY.set(key, value);
+      },
+      removeItem: (key) => {
+        MEMORY.delete(key);
+      },
+    };
+  }
+  return memory;
 }
 
-function resolvePort(): LocalStorePort {
+/** El almacen del navegador, o null si no hay (Node/SSR, o acceso bloqueado). */
+function browserStorage(): LocalStorePort | null {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      real = true;
-      return window.localStorage;
-    }
+    if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
   } catch (e) {
     logCaughtError('[catch] src/core/storage/localStore.ts', e);
     // Acceso bloqueado (cookies de terceros, modo privado): se usa memoria.
   }
-  return memoryPort();
+  return null;
 }
 
-/** La puerta, resuelta una sola vez. Es lo que consume `resolveSafeStorage`. */
+/**
+ * La puerta, resuelta EN CADA ACCESO y a proposito: quien sustituya el
+ * almacenamiento tiene que seguir mandando (los tests lo hacen) y no hay que
+ * cachear una referencia que puede dejar de ser valida. Lo unico unico es el
+ * respaldo en memoria, que es donde estaba el defecto: un mapa nuevo por acceso
+ * perdia lo escrito en el acto.
+ */
 export function localStorePort(): LocalStorePort {
-  if (!port) port = resolvePort();
-  return port;
+  return browserStorage() ?? memoryPort();
 }
 
-/** true si detras hay almacenamiento real (no el respaldo en memoria). */
+/** true si detras hay almacenamiento del navegador (no el respaldo en memoria). */
 export function hasLocalStorage(): boolean {
-  localStorePort();
-  return real;
+  return browserStorage() !== null;
 }
 
 export function localGet(key: string): string | null {

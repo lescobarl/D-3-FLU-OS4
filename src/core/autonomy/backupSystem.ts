@@ -25,6 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ConversationEntry, ConversationState, VoiceBridgeEvent, WorkspaceEntry } from '../../types/bridge';
 import type { MinuteUIEntry } from '../../hooks/useMinuteKnowledge';
 import { logCaughtError } from '../../lib/caughtError';
+import { localGet, localRemove, localSet } from '../storage/localStore';
 
 // -----------------------------------------------------------
 // Tipos
@@ -380,32 +381,32 @@ class DataRestorer {
         try {
             if (!data) return false;
             
-            localStorage.setItem(STORAGE_KEYS.AI_PROVIDER, data.provider || DEFAULT_AI_PROVIDER);
+            localSet(STORAGE_KEYS.AI_PROVIDER, data.provider || DEFAULT_AI_PROVIDER);
             
             if (data.apiKeys) {
                 if (data.apiKeys.gemini) {
-                    localStorage.setItem(STORAGE_KEYS.TEXT_API_KEY, data.apiKeys.gemini);
+                    localSet(STORAGE_KEYS.TEXT_API_KEY, data.apiKeys.gemini);
                 }
                 if (data.apiKeys.deepseek) {
-                    localStorage.setItem(STORAGE_KEYS.DEEPSEEK_API_KEY, data.apiKeys.deepseek);
+                    localSet(STORAGE_KEYS.DEEPSEEK_API_KEY, data.apiKeys.deepseek);
                 }
             }
             
             if (data.models) {
                 if (data.models.gemini) {
-                    localStorage.setItem(STORAGE_KEYS.TEXT_MODEL, data.models.gemini);
+                    localSet(STORAGE_KEYS.TEXT_MODEL, data.models.gemini);
                 }
                 if (data.models.deepseek) {
-                    localStorage.setItem(STORAGE_KEYS.DEEPSEEK_MODEL, data.models.deepseek);
+                    localSet(STORAGE_KEYS.DEEPSEEK_MODEL, data.models.deepseek);
                 }
             }
             
             if (data.creativity) {
-                localStorage.setItem(STORAGE_KEYS.CREATIVITY, data.creativity);
+                localSet(STORAGE_KEYS.CREATIVITY, data.creativity);
             }
             
             if (data.maxTokens) {
-                localStorage.setItem(STORAGE_KEYS.AI_MAX_TOKENS, data.maxTokens);
+                localSet(STORAGE_KEYS.AI_MAX_TOKENS, data.maxTokens);
             }
             
             return true;
@@ -420,49 +421,49 @@ class DataRestorer {
             if (!data) return false;
             
             if (data.language) {
-                localStorage.setItem(STORAGE_KEYS.LANGUAGE, data.language);
+                localSet(STORAGE_KEYS.LANGUAGE, data.language);
             }
             
             if (data.sessionRole) {
-                localStorage.setItem(STORAGE_KEYS.SESSION_ROLE, data.sessionRole);
+                localSet(STORAGE_KEYS.SESSION_ROLE, data.sessionRole);
             }
             
             if (data.voiceConfig) {
                 if (data.voiceConfig.speed) {
-                    localStorage.setItem(STORAGE_KEYS.VOICE_SPEED, data.voiceConfig.speed);
+                    localSet(STORAGE_KEYS.VOICE_SPEED, data.voiceConfig.speed);
                 }
                 if (data.voiceConfig.volume) {
-                    localStorage.setItem(STORAGE_KEYS.VOICE_VOLUME, data.voiceConfig.volume);
+                    localSet(STORAGE_KEYS.VOICE_VOLUME, data.voiceConfig.volume);
                 }
                 if (data.voiceConfig.pitch) {
-                    localStorage.setItem(STORAGE_KEYS.VOICE_PITCH, data.voiceConfig.pitch);
+                    localSet(STORAGE_KEYS.VOICE_PITCH, data.voiceConfig.pitch);
                 }
             }
             
             if (data.uiPreferences) {
                 if (data.uiPreferences.theme) {
-                    localStorage.setItem(STORAGE_KEYS.UI_THEME, data.uiPreferences.theme);
+                    localSet(STORAGE_KEYS.UI_THEME, data.uiPreferences.theme);
                 }
                 if (data.uiPreferences.fontSize) {
-                    localStorage.setItem(STORAGE_KEYS.UI_FONT_SIZE, data.uiPreferences.fontSize);
+                    localSet(STORAGE_KEYS.UI_FONT_SIZE, data.uiPreferences.fontSize);
                 }
                 if (data.uiPreferences.animations) {
-                    localStorage.setItem(STORAGE_KEYS.UI_ANIMATIONS, data.uiPreferences.animations);
+                    localSet(STORAGE_KEYS.UI_ANIMATIONS, data.uiPreferences.animations);
                 }
             }
             
             if (data.avatarConfig) {
                 if (data.avatarConfig.color) {
-                    localStorage.setItem(STORAGE_KEYS.AVATAR_COLOR, data.avatarConfig.color);
+                    localSet(STORAGE_KEYS.AVATAR_COLOR, data.avatarConfig.color);
                 }
                 if (data.avatarConfig.pantsColor) {
-                    localStorage.setItem(STORAGE_KEYS.AVATAR_PANTS_COLOR, data.avatarConfig.pantsColor);
+                    localSet(STORAGE_KEYS.AVATAR_PANTS_COLOR, data.avatarConfig.pantsColor);
                 }
                 if (data.avatarConfig.bodyColor) {
-                    localStorage.setItem(STORAGE_KEYS.AVATAR_BODY_COLOR, data.avatarConfig.bodyColor);
+                    localSet(STORAGE_KEYS.AVATAR_BODY_COLOR, data.avatarConfig.bodyColor);
                 }
                 if (data.avatarConfig.faceColor) {
-                    localStorage.setItem(STORAGE_KEYS.AVATAR_FACE_COLOR, data.avatarConfig.faceColor);
+                    localSet(STORAGE_KEYS.AVATAR_FACE_COLOR, data.avatarConfig.faceColor);
                 }
             }
             
@@ -512,25 +513,25 @@ class DataRestorer {
             
             if (data.autonomy) {
                 if (data.autonomy.healthMonitoring) {
-                    localStorage.setItem(STORAGE_KEYS.AUTONOMY_HEALTH_MONITORING, data.autonomy.healthMonitoring);
+                    localSet(STORAGE_KEYS.AUTONOMY_HEALTH_MONITORING, data.autonomy.healthMonitoring);
                 }
                 if (data.autonomy.autoRecovery) {
-                    localStorage.setItem(STORAGE_KEYS.AUTONOMY_AUTO_RECOVERY, data.autonomy.autoRecovery);
+                    localSet(STORAGE_KEYS.AUTONOMY_AUTO_RECOVERY, data.autonomy.autoRecovery);
                 }
                 if (data.autonomy.decisionEngine) {
-                    localStorage.setItem(STORAGE_KEYS.AUTONOMY_DECISION_ENGINE, data.autonomy.decisionEngine);
+                    localSet(STORAGE_KEYS.AUTONOMY_DECISION_ENGINE, data.autonomy.decisionEngine);
                 }
             }
             
             if (data.performance) {
                 if (data.performance.cacheEnabled) {
-                    localStorage.setItem(STORAGE_KEYS.PERFORMANCE_CACHE_ENABLED, data.performance.cacheEnabled);
+                    localSet(STORAGE_KEYS.PERFORMANCE_CACHE_ENABLED, data.performance.cacheEnabled);
                 }
                 if (data.performance.loggingLevel) {
-                    localStorage.setItem(STORAGE_KEYS.PERFORMANCE_LOGGING_LEVEL, data.performance.loggingLevel);
+                    localSet(STORAGE_KEYS.PERFORMANCE_LOGGING_LEVEL, data.performance.loggingLevel);
                 }
                 if (data.performance.analyticsEnabled) {
-                    localStorage.setItem(STORAGE_KEYS.PERFORMANCE_ANALYTICS_ENABLED, data.performance.analyticsEnabled);
+                    localSet(STORAGE_KEYS.PERFORMANCE_ANALYTICS_ENABLED, data.performance.analyticsEnabled);
                 }
             }
             
@@ -735,7 +736,7 @@ class BackupManager implements IBackupManager {
     deleteBackup(backupId: string): boolean {
         try {
             // Eliminar de almacenamiento
-            localStorage.removeItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backupId}`);
+            localRemove(`${STORAGE_KEYS.BACKUP_PREFIX}${backupId}`);
             
             // Eliminar de lista
             const index = this.backups.findIndex(b => b.id === backupId);
@@ -756,7 +757,7 @@ class BackupManager implements IBackupManager {
         let total = 0;
         for (const backup of this.backups) {
             try {
-                const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
+                const raw = localGet(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
                 if (raw) total += raw.length * 2; // UTF-16
             } catch (e) {
         logCaughtError('[catch] src/core/autonomy/backupSystem.ts', e);
@@ -787,7 +788,7 @@ class BackupManager implements IBackupManager {
             for (const backup of oldestFirst) {
                 if (total <= maxBytes) break;
                 try {
-                    const raw = localStorage.getItem(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
+                    const raw = localGet(`${STORAGE_KEYS.BACKUP_PREFIX}${backup.id}`);
                     if (raw) total -= raw.length * 2;
                 } catch (e) {
         logCaughtError('[catch] src/core/autonomy/backupSystem.ts', e);
@@ -822,7 +823,7 @@ class BackupManager implements IBackupManager {
     /** Escribe un backup. `false` si no entró (cuota), distinguiendo otros errores. */
     private writeBackupRaw(key: string, payload: string): boolean {
         try {
-            localStorage.setItem(key, payload);
+            localSet(key, payload);
             return true;
         } catch (error) {
             if ((error as DOMException)?.name !== 'QuotaExceededError') {
@@ -859,7 +860,7 @@ class BackupManager implements IBackupManager {
     private loadBackup(backupId: string): BackupData | null {
         try {
             const key = `${STORAGE_KEYS.BACKUP_PREFIX}${backupId}`;
-            const data = localStorage.getItem(key);
+            const data = localGet(key);
             
             if (!data) {
                 return null;
@@ -878,7 +879,7 @@ class BackupManager implements IBackupManager {
     
     private loadBackupList(): void {
         try {
-            const listJson = localStorage.getItem(STORAGE_KEYS.BACKUP_LIST);
+            const listJson = localGet(STORAGE_KEYS.BACKUP_LIST);
             if (listJson) {
                 this.backups = JSON.parse(listJson);
             }
@@ -890,7 +891,7 @@ class BackupManager implements IBackupManager {
     
     private saveBackupList(): void {
         try {
-            localStorage.setItem(STORAGE_KEYS.BACKUP_LIST, JSON.stringify(this.backups));
+            localSet(STORAGE_KEYS.BACKUP_LIST, JSON.stringify(this.backups));
         } catch (error) {
             logCaughtError('Error guardando lista de backups', error);
         }
@@ -927,18 +928,18 @@ class BackupManager implements IBackupManager {
     private updateBackupStats(metadata: BackupMetadata): void {
         try {
             // Actualizar último backup
-            localStorage.setItem(STORAGE_KEYS.BACKUP_LAST_TIMESTAMP, metadata.timestamp.toString());
+            localSet(STORAGE_KEYS.BACKUP_LAST_TIMESTAMP, metadata.timestamp.toString());
             
             // Incrementar contador
-            const count = parseInt(localStorage.getItem(STORAGE_KEYS.BACKUP_COUNT) || '0');
-            localStorage.setItem(STORAGE_KEYS.BACKUP_COUNT, (count + 1).toString());
+            const count = parseInt(localGet(STORAGE_KEYS.BACKUP_COUNT) || '0');
+            localSet(STORAGE_KEYS.BACKUP_COUNT, (count + 1).toString());
             
             // Guardar estadísticas de tamaño
-            const sizeStats = JSON.parse(localStorage.getItem(STORAGE_KEYS.BACKUP_SIZE_STATS) || '{"total": 0, "count": 0}');
+            const sizeStats = JSON.parse(localGet(STORAGE_KEYS.BACKUP_SIZE_STATS) || '{"total": 0, "count": 0}');
             sizeStats.total += metadata.size;
             sizeStats.count += 1;
             sizeStats.average = sizeStats.total / sizeStats.count;
-            localStorage.setItem(STORAGE_KEYS.BACKUP_SIZE_STATS, JSON.stringify(sizeStats));
+            localSet(STORAGE_KEYS.BACKUP_SIZE_STATS, JSON.stringify(sizeStats));
         } catch (error) {
             logCaughtError('Error actualizando estadísticas de backup', error);
         }
@@ -1068,7 +1069,7 @@ export class BackupSystem {
         const backups = this.getAvailableBackups();
         const totalSize = backups.reduce((sum, b) => sum + b.size, 0);
         
-        const sizeStats = JSON.parse(localStorage.getItem(STORAGE_KEYS.BACKUP_SIZE_STATS) || '{"total": 0, "count": 0, "average": 0}');
+        const sizeStats = JSON.parse(localGet(STORAGE_KEYS.BACKUP_SIZE_STATS) || '{"total": 0, "count": 0, "average": 0}');
         
         return {
             totalBackups: backups.length,

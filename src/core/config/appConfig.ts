@@ -59,6 +59,7 @@ import {
     buildPollinationsImageUrl,
     resolveTextApiKeyFromEnv,
 } from './sharedConfig';
+import { hasLocalStorage, localGet, localSet } from '../storage/localStore';
 
 export {
     WORKSPACE_TIPOS,
@@ -587,11 +588,11 @@ export const SYSTEM_EVENT_CONFIG = {
  * Returns the default value if reading fails or value is not found.
  */
 export function readStorage<T>(key: string, defaultValue: T): T {
-    // En entornos sin localStorage (Node/SSR/proxy del dev server), no hay
-    // storage: devolver el default SIN lanzar ni loguear.
-    if (typeof localStorage === 'undefined') return defaultValue;
+    // Fuera del navegador la puerta responde desde memoria: no hay almacen que
+    // leer, y se devuelve el default SIN lanzar ni loguear.
+    if (!hasLocalStorage()) return defaultValue;
     try {
-        const raw = localStorage.getItem(key);
+        const raw = localGet(key);
         if (raw === null) return defaultValue;
         return raw as T;
     } catch (e) {
@@ -604,9 +605,9 @@ export function readStorage<T>(key: string, defaultValue: T): T {
  * Write a value to localStorage safely.
  */
 export function writeStorage(key: string, value: string): void {
-    if (typeof localStorage === 'undefined') return;
+    if (!hasLocalStorage()) return;
     try {
-        localStorage.setItem(key, value);
+        localSet(key, value);
     } catch (e) {
         logCaughtError('[catch] src/core/config/appConfig.ts', e);
         // Silencioso: el storage puede no estar disponible (privacidad/quota)

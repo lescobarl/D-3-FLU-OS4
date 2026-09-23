@@ -32,6 +32,7 @@ import {
     type MinuteRequest,
     type TextCompletionRequest,
 } from '../core/ai/aiServiceBase';
+import { localGet } from '../core/storage/localStore';
 
 // -----------------------------------------------------------
 // Helpers específicos del transporte de texto
@@ -47,7 +48,7 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
     }
 
     const stored = (() => {
-        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY); } catch (e) {
+        try { return localGet(STORAGE_KEYS.TEXT_API_KEY); } catch (e) {
         logCaughtError('[catch] src/services/deepseek.ts', e); return null; }
     })();
     if (stored && stored.trim()) {
@@ -67,7 +68,7 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
  */
 function resolveCreativityTemperature(): number | undefined {
     try {
-        const stored = localStorage.getItem(STORAGE_KEYS.CREATIVITY);
+        const stored = localGet(STORAGE_KEYS.CREATIVITY);
         if (stored) {
             const value = parseFloat(stored);
             if (!isNaN(value) && value >= 0 && value <= 1) {

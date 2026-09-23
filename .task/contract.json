@@ -1,22 +1,21 @@
 {
   "id": "P5.9",
   "mode": "full",
-  "task": "P5.9 paso 1/N - la puerta unica de almacenamiento y su metrica",
-  "base": "5d8d955ac152d170f1091df39484ddc15bc65a57",
-  "objective": "Medir ANTES de tocar los consumidores: nace la puerta unica src/core/storage/localStore.ts (resuelve el almacenamiento una vez y cae a memoria persistente fuera del navegador) con sus dos tests (memoria y jsdom) y el medidor gana `localstorage-directo`, que cuenta las menciones al IDENTIFICADOR localStorage fuera de la puerta (los literales `localStorage` como nombre de canal NO cuentan). Nace ROJO: los consumidores se migran en los pasos siguientes y el guard endurecido llega en el ultimo, con este commit como base del invariante.",
+  "task": "P5.9 paso 2/N - consumidores de core/ y services/",
+  "base": "ed4f0268893a7ee06e33f3fd95d123a5e0bf0ac9",
+  "objective": "Migrar a la puerta los consumidores de core/ y services/ (autonomy, config, notifications, search, onboarding) y retirar las invenciones locales de storage que la puerta sustituye: readStorage/writeStorage de appConfig pasan a preguntar hasLocalStorage(), safeGet de searchConfigOverrides acepta el puerto (el escalon de sessionStorage se mantiene: es una decision de diseno, no una copia) y getLocalStorage de onboardingService devuelve el puerto. La metrica baja de 118 a 47.",
   "allow": [
-    "src/core/storage/**",
-    "tests/localStore*.test.ts",
-    "scripts/audit-metric.mjs",
+    "src/core/**",
+    "src/services/**",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
+  "maxFiles": 20,
   "maxLines": 500,
   "dod": "node scripts/audit-metric.mjs localstorage-directo",
-  "guard": "npx vitest run tests/localStoreMemory.test.ts tests/localStoreBrowser.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/localStoreMemory.test.ts tests/localStoreBrowser.test.ts tests/onboardingService.test.ts tests/localAi.test.ts tests/searchConfigOverrides.test.ts tests/searchOverridesStorage.test.ts --reporter=dot",
   "guardExpect": "green"
 }

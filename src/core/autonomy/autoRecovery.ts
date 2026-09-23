@@ -26,6 +26,7 @@ import { emitAutonomyEvent } from './autonomyEvents';
 import { v4 as uuidv4 } from 'uuid';
 import type { ComponentHealth, HealthMonitor } from './healthMonitor';
 import { logCaughtError } from '../../lib/caughtError';
+import { localGet, localSet } from '../storage/localStore';
 
 // -----------------------------------------------------------
 // Tipos
@@ -423,8 +424,8 @@ class RecoveryActionExecutor {
         
         try {
             // Activar modo degradado
-            localStorage.setItem('flu-degraded-mode', mode);
-            localStorage.setItem('flu-degraded-features', JSON.stringify(features));
+            localSet('flu-degraded-mode', mode);
+            localSet('flu-degraded-features', JSON.stringify(features));
             
             // Notificar la activación del modo degradado vía bus central de autonomía
             emitAutonomyEvent({
@@ -465,7 +466,7 @@ class RecoveryActionExecutor {
                 case 'localStorage':
                     // Restaurar desde localStorage backup
                     const backupKey = 'flu-backup-' + new Date().toISOString().split('T')[0];
-                    const backupData = localStorage.getItem(backupKey);
+                    const backupData = localGet(backupKey);
                     
                     if (backupData) {
                         // Aquí se restaurarían los datos
@@ -540,14 +541,14 @@ class RecoveryActionExecutor {
                         console.error(`[ESCALACIÓN] ${message}`, incident);
                         break;
                     case 'localStorage':
-                        const escalations = JSON.parse(localStorage.getItem('flu-escalations') || '[]');
+                        const escalations = JSON.parse(localGet('flu-escalations') || '[]');
                         escalations.push({
                             incidentId: incident.id,
                             message,
                             timestamp: Date.now(),
                             component: incident.component,
                         });
-                        localStorage.setItem('flu-escalations', JSON.stringify(escalations));
+                        localSet('flu-escalations', JSON.stringify(escalations));
                         break;
                 }
             });

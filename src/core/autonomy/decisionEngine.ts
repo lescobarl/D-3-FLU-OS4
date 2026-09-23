@@ -22,6 +22,7 @@ import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
 import { logCaughtError } from '../../lib/caughtError';
+import { localGet, localSet } from '../storage/localStore';
 
 // -----------------------------------------------------------
 // Tipos
@@ -357,7 +358,7 @@ class FactorEvaluator {
     
     private calculateChangePenalty(_currentProvider: string, _newProvider: string): number {
         // Penalizar cambios frecuentes
-        const changeHistory: ProviderChangeRecord[] = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
+        const changeHistory: ProviderChangeRecord[] = JSON.parse(localGet('flu-provider-changes') || '[]');
         const recentChanges = changeHistory.filter((c) => 
             Date.now() - c.timestamp < 3600000 // Última hora
         );
@@ -585,7 +586,7 @@ class DecisionMaker {
     
     private loadDailyDecisionCount(): void {
         const today = new Date().toDateString();
-        const stored = localStorage.getItem('flu-decisions-today');
+        const stored = localGet('flu-decisions-today');
         
         if (stored) {
             const { date, count } = JSON.parse(stored);
@@ -599,7 +600,7 @@ class DecisionMaker {
     
     private saveDailyDecisionCount(): void {
         const today = new Date().toDateString();
-        localStorage.setItem('flu-decisions-today', JSON.stringify({
+        localSet('flu-decisions-today', JSON.stringify({
             date: today,
             count: this.decisionsToday,
         }));
@@ -676,7 +677,7 @@ export class DecisionEngine {
         }
         
         // Obtener proveedor actual
-        const currentProvider = localStorage.getItem(STORAGE_KEYS.AI_PROVIDER) || DEFAULT_AI_PROVIDER;
+        const currentProvider = localGet(STORAGE_KEYS.AI_PROVIDER) || DEFAULT_AI_PROVIDER;
         
         // Evaluar decisión de cambio de proveedor
         const decision = this.decisionMaker.evaluateAISwitchDecision(currentProvider);
@@ -743,10 +744,10 @@ export class DecisionEngine {
         const { newProvider, oldProvider } = params;
         
         // Actualizar configuración
-        localStorage.setItem(STORAGE_KEYS.AI_PROVIDER, newProvider);
+        localSet(STORAGE_KEYS.AI_PROVIDER, newProvider);
         
         // Registrar cambio
-        const changeHistory: ProviderChangeRecord[] = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
+        const changeHistory: ProviderChangeRecord[] = JSON.parse(localGet('flu-provider-changes') || '[]');
         changeHistory.push({
             from: oldProvider,
             to: newProvider,
@@ -759,7 +760,7 @@ export class DecisionEngine {
             changeHistory.shift();
         }
         
-        localStorage.setItem('flu-provider-changes', JSON.stringify(changeHistory));
+        localSet('flu-provider-changes', JSON.stringify(changeHistory));
         
         // Notificar del cambio de proveedor vía bus central de autonomía
         emitAutonomyEvent({
@@ -782,7 +783,7 @@ export class DecisionEngine {
     }
     
     private async executeRecordDecision(_params: RecordDecisionParams, decision: AutonomousDecision): Promise<void> {
-        const decisionHistory: Array<AutonomousDecision & { executedAt: number }> = JSON.parse(localStorage.getItem('flu-autonomous-decisions') || '[]');
+        const decisionHistory: Array<AutonomousDecision & { executedAt: number }> = JSON.parse(localGet('flu-autonomous-decisions') || '[]');
         
         decisionHistory.push({
             ...decision,
@@ -794,7 +795,7 @@ export class DecisionEngine {
             decisionHistory.shift();
         }
         
-        localStorage.setItem('flu-autonomous-decisions', JSON.stringify(decisionHistory));
+        localSet('flu-autonomous-decisions', JSON.stringify(decisionHistory));
     }
     
     getDecisionHistory(): AutonomousDecision[] {

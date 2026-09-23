@@ -7,6 +7,7 @@
 // ============================================================
 import { STORAGE_KEYS } from '../config/appConfig';
 import { logCaughtError } from '../../lib/caughtError';
+import { localGet, localSet } from '../storage/localStore';
 
 /** Canal de notificación elegido por el usuario. */
 export type NotificationChannel = 'none' | 'toast' | 'voice' | 'both';
@@ -124,7 +125,7 @@ export interface NotificationService {
 
 function readStoredChannel(fallback: NotificationChannel): NotificationChannel {
   if (typeof window === 'undefined') return fallback;
-  const stored = window.localStorage.getItem(STORAGE_KEYS.NOTIFICATION_CHANNEL);
+  const stored = localGet(STORAGE_KEYS.NOTIFICATION_CHANNEL);
   if (stored === 'none' || stored === 'toast' || stored === 'voice' || stored === 'both') {
     return stored;
   }
@@ -217,7 +218,7 @@ export function createNotificationService(
   const requestPermission = async (): Promise<NotificationPermission> => {
     const permission = await driver.requestPermission();
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.NOTIFICATION_PERMISSION, permission);
+      localSet(STORAGE_KEYS.NOTIFICATION_PERMISSION, permission);
     }
     return permission;
   };
@@ -225,7 +226,7 @@ export function createNotificationService(
   const setChannel = (next: NotificationChannel): void => {
     channel = next;
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.NOTIFICATION_CHANNEL, next);
+      localSet(STORAGE_KEYS.NOTIFICATION_CHANNEL, next);
     }
   };
 
