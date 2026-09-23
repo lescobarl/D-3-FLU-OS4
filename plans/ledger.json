@@ -431,7 +431,7 @@
     {
       "id": "P0.7",
       "titulo": "CRLF silencioso: core.autocrlf=false y NO existe .gitattributes, asi que editar un archivo lo reescribe en CRLF -> diff de miles de lineas (rompio f1a1ca6, hubo que rehacerlo) y cambia el hash que frozen.json vigila (hashea BYTES)",
-      "estado": "decision",
+      "estado": "done",
       "evidencia": "git ls-files --eol -> i/lf w/crlf tras editar; P2.3 normalizado a LF antes de congelar",
       "origen": "plan-T"
     },
@@ -768,6 +768,11 @@
       "id": "P0.5",
       "commit": "6533441",
       "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md"
+    },
+    {
+      "id": "P0.7",
+      "commit": "d7f207d",
+      "titulo": "CRLF silencioso: core.autocrlf=false y NO existe .gitattributes, asi que editar un archivo lo reescribe en CRLF -> diff de miles de lineas (rompio f1a1ca6, hubo que rehacerlo) y cambia el hash que frozen.json vigila (hashea BYTES)"
     }
   ]
 }
