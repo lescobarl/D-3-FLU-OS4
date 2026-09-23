@@ -31,6 +31,7 @@ import {
   DEFAULT_ONBOARDING_USER,
   type OnboardingService,
 } from '../core/onboarding/onboardingService';
+import { localRemove, localSet } from '../core/storage/localStore';
 
 export interface UseOnboardingOptions {
   speak: (text: string, lang: string) => Promise<void>;
@@ -196,7 +197,7 @@ export function useOnboarding({
       if (!isPerUser && typeof window !== 'undefined' && config.nameKey) {
         const nameKey = nameCaptureKey(config.steps);
         const name = nameKey ? result.state.captured[nameKey] : undefined;
-        if (name) window.localStorage.setItem(config.nameKey, name);
+        if (name) localSet(config.nameKey, name);
       }
       if (result.action.type === 'requestNotifications') {
         handleAction(result);
@@ -233,7 +234,7 @@ export function useOnboarding({
       // Ruta legacy: persistir también el nombre capturado en la clave global
       // (misma lógica que answer()).
       if (!isPerUser && typeof window !== 'undefined' && config.nameKey) {
-        window.localStorage.setItem(config.nameKey, trimmed);
+        localSet(config.nameKey, trimmed);
       }
     },
     [state, config, persistState, isPerUser, notifyCompleted],
@@ -257,7 +258,7 @@ export function useOnboarding({
       serviceRef.current?.reset(participantId).catch(() => undefined);
     }
     if (typeof window !== 'undefined' && config.nameKey) {
-      window.localStorage.removeItem(config.nameKey);
+      localRemove(config.nameKey);
     }
     setState(next);
     speak(initialSpeech(config.steps, lang, next.captured), lang).catch(() => undefined);

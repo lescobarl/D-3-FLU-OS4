@@ -9,6 +9,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { STORAGE_KEYS } from '../core/config/appConfig';
 import { describeDndSchedule, isDoNotDisturbActive } from '../core/dnd/dndPolicy';
 import { logCaughtError } from '../lib/caughtError';
+import { localGet, localSet } from '../core/storage/localStore';
 
 export interface DndSchedule {
   start: string;
@@ -38,7 +39,7 @@ export interface DoNotDisturbActions {
 
 function readStoredSchedule(fallback: DndSchedule): DndSchedule {
   if (typeof window === 'undefined') return fallback;
-  const raw = window.localStorage.getItem(STORAGE_KEYS.DND_SCHEDULE);
+  const raw = localGet(STORAGE_KEYS.DND_SCHEDULE);
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw);
@@ -59,7 +60,7 @@ function readStoredSchedule(fallback: DndSchedule): DndSchedule {
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback;
-  const raw = window.localStorage.getItem(key);
+  const raw = localGet(key);
   if (raw === 'true') return true;
   if (raw === 'false') return false;
   return fallback;
@@ -102,9 +103,9 @@ export function useDoNotDisturb(): [DoNotDisturbState, DoNotDisturbActions] {
     setConfig((prev) => {
       const next = { ...prev, ...patch };
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(STORAGE_KEYS.DND_ENABLED, String(next.enabled));
-        window.localStorage.setItem(STORAGE_KEYS.DND_SCHEDULE, JSON.stringify(next.schedule));
-        window.localStorage.setItem(STORAGE_KEYS.DND_ALLOW_URGENT, String(next.allowUrgent));
+        localSet(STORAGE_KEYS.DND_ENABLED, String(next.enabled));
+        localSet(STORAGE_KEYS.DND_SCHEDULE, JSON.stringify(next.schedule));
+        localSet(STORAGE_KEYS.DND_ALLOW_URGENT, String(next.allowUrgent));
       }
       return next;
     });

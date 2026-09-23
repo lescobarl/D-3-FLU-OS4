@@ -30,6 +30,7 @@ import {
 import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { logCaughtError } from '../lib/caughtError';
+import { localGet, localRemove } from '../core/storage/localStore';
 
 /** Gateway único de la tabla onboardingStates (C44: un solo escritor). */
 const onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates });
@@ -181,8 +182,8 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
         }
         try {
           if (typeof window !== 'undefined') {
-            const active = window.localStorage.getItem(STORAGE_KEYS.ACTIVE_USER);
-            if (active === id) window.localStorage.removeItem(STORAGE_KEYS.ACTIVE_USER);
+            const active = localGet(STORAGE_KEYS.ACTIVE_USER);
+            if (active === id) localRemove(STORAGE_KEYS.ACTIVE_USER);
           }
         } catch (err) {
           logCaughtError('[useParticipants] active-user cleanup error', err);

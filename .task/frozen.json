@@ -15,7 +15,7 @@
   "tests/agendaSingleSource.test.ts": "aa95a7511a0d49751e13226c35ba0d0b4f30a5f91a685cf64ae9cef9eb192113",
   "tests/agendaUiSwap.test.ts": "d4dcc689dcd50cc64e957acf9d182d185833dce9e791c3f57750cb92cf4fa2e1",
   "tests/voiceOfflineFallback.test.ts": "01ae13e8fba823cc3ac60716f1b9962767301ad07075924526db7631567c9b93",
-  "scripts/audit-metric.mjs": "0d12d9e7eaa0caa67a5e7e8001d21910a0d0c958df5c043a07d7f917cda1e373",
+  "scripts/audit-metric.mjs": "c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f",
   "tests/vozInstanciaUnicaGuard.test.ts": "aa86e1e89175d4ae7962aad71c0d0bb161e370d6f6de968d1024d1c6e47b1eb5",
   "tests/searchAllowlistFuenteUnicaGuard.test.ts": "b8b37b17b5f37e1f8c5758107cfcece2b6405b8606ec2bcfc8b75778ee1b316c",
   "tests/voiceProfilesEscritorUnicoGuard.test.ts": "59289c85abc3e3c855a84a77f93f85f041f5197e039d2e7f5a7b5cd066a5d989",

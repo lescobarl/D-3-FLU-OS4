@@ -204,6 +204,7 @@ import { evaluateListenParity } from './voice/lib/listenParity';
 import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
 import { logCaughtError } from './lib/caughtError';
+import { localGet, localRemove, localSet } from './core/storage/localStore';
 
 // ============================================================
 // Tipo para las pestañas del panel derecho
@@ -3292,7 +3293,7 @@ function App() {
                 setActiveParticipantId(undefined);
                 if (typeof window !== 'undefined') {
                     if (onboarding.config.nameKey)
-                        window.localStorage.removeItem(onboarding.config.nameKey);
+                        localRemove(onboarding.config.nameKey);
                 }
                 onboarding.reset();
             } else if (removed) {
@@ -3315,7 +3316,7 @@ function App() {
         // Se limpia el estado legacy para que el onboarding de la persona nueva
         // arranque de cero y no herede la sesión anterior.
         if (typeof window !== 'undefined') {
-            if (onboarding.config.nameKey) window.localStorage.removeItem(onboarding.config.nameKey);
+            if (onboarding.config.nameKey) localRemove(onboarding.config.nameKey);
         }
         const wasLegacy =
             !activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER;
@@ -4356,7 +4357,7 @@ const {
         const dayStorageKey = `${STORAGE_KEYS.LAST_SESSION_DAY}:${activeParticipantId}`;
         let lastSessionDay = '';
         try {
-            lastSessionDay = window.localStorage.getItem(dayStorageKey) || '';
+            lastSessionDay = localGet(dayStorageKey) || '';
         } catch (e) {
         logCaughtError('[catch] src/App.tsx', e);
             lastSessionDay = '';
@@ -4382,7 +4383,7 @@ const {
                 }
             }
             try {
-                window.localStorage.setItem(dayStorageKey, dayKey(Date.now()));
+                localSet(dayStorageKey, dayKey(Date.now()));
             } catch (e) {
         logCaughtError('[catch] src/App.tsx', e);
                 /* ignorar */
@@ -4574,7 +4575,7 @@ const {
                 setActiveParticipantId(undefined);
                 if (typeof window !== 'undefined') {
                     if (onboarding.config.nameKey)
-                        window.localStorage.removeItem(onboarding.config.nameKey);
+                        localRemove(onboarding.config.nameKey);
                 }
                 onboarding.reset();
             }

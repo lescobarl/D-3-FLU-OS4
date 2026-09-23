@@ -376,9 +376,53 @@ function countExisting(paths) {
 // ---- P5.9: una sola puerta al almacenamiento local del navegador ----------
 const LOCAL_PORT_OWNER = 'src/core/storage/localStore.ts'
 
-/** Deja el CONTENIDO de los literales de cadena vacio (el identificador, no). */
+/**
+ * Deja vacio el CONTENIDO de los literales ('...', "..." y el TEXTO de los
+ * templates) conservando las expresiones `${...}`, que si son codigo: un mensaje
+ * de log que NOMBRA localStorage no es un acceso al almacen, pero
+ * `${localStorage.length}` si lo es y tiene que seguir contando.
+ */
 function maskStrings(line) {
-  return line.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""')
+  let out = ''
+  let i = 0
+  while (i < line.length) {
+    const c = line[i]
+    if (c !== "'" && c !== '"' && c !== '`') {
+      out += c
+      i += 1
+      continue
+    }
+    const quote = c
+    out += quote
+    i += 1
+    while (i < line.length) {
+      const d = line[i]
+      if (d === '\\') {
+        i += 2
+        continue
+      }
+      if (quote === '`' && d === '$' && line[i + 1] === '{') {
+        let depth = 1
+        out += '${'
+        i += 2
+        while (i < line.length && depth > 0) {
+          if (line[i] === '{') depth += 1
+          else if (line[i] === '}') depth -= 1
+          if (depth > 0) out += line[i]
+          i += 1
+        }
+        out += '}'
+        continue
+      }
+      if (d === quote) {
+        out += quote
+        i += 1
+        break
+      }
+      i += 1
+    }
+  }
+  return out
 }
 
 /**

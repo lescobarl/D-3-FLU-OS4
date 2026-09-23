@@ -21,6 +21,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage';
 import { DEFAULT_AMBIENTE_ID, isAmbienteId } from '../core/environments/environmentRegistry';
 import { logCaughtError } from '../lib/caughtError';
+import { hasLocalStorage, localGet } from '../core/storage/localStore';
 
 // -----------------------------------------------------------
 // Clave de persistencia (única fuente de verdad del formato)
@@ -101,8 +102,8 @@ export const useEnvironmentStore = create<EnvironmentStore>()(
 // App la usa tras `hydrateAmbientes()` para recuperar el ambiente correcto.
 export function readPersistedActiveAmbienteId(): string | null {
     try {
-        if (typeof window === 'undefined' || !window.localStorage) return null;
-        const raw = window.localStorage.getItem(ENVIRONMENT_STORE_KEY);
+        if (!hasLocalStorage()) return null;
+        const raw = localGet(ENVIRONMENT_STORE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as { state?: { activeAmbienteId?: unknown } };
         const id = parsed?.state?.activeAmbienteId;

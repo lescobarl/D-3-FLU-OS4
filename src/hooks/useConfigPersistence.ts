@@ -19,6 +19,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
 import { logCaughtError } from '../lib/caughtError';
+import { localGet, localKeys, localRemove, localSet } from '../core/storage/localStore';
 
 // ============================================================
 // Tipos
@@ -85,7 +86,7 @@ export interface ConfigPersistence {
  */
 function loadString(key: string, fallback = ''): string {
     try {
-        const val = localStorage.getItem(key);
+        const val = localGet(key);
         return val ?? fallback;
     } catch (e) {
         logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
@@ -98,7 +99,7 @@ function loadString(key: string, fallback = ''): string {
  */
 function saveString(key: string, value: string): void {
     try {
-        localStorage.setItem(key, value);
+        localSet(key, value);
     } catch (e) {
         logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
         // Silently ignore storage errors (quota exceeded, private mode, etc.)
@@ -140,7 +141,7 @@ export function useConfigPersistence(): ConfigPersistence {
     // ---- Language ----
     const [language, setLanguage] = useState<'es' | 'en' | 'both'>(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
+            const saved = localGet(STORAGE_KEYS.LANGUAGE);
             if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
         } catch (e) {
         logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
@@ -340,12 +341,8 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES,
         ]);
         try {
-            const toRemove: string[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && !keep.has(key)) toRemove.push(key);
-            }
-            toRemove.forEach((k) => localStorage.removeItem(k));
+            const toRemove = localKeys().filter((key) => !keep.has(key));
+            toRemove.forEach((k) => localRemove(k));
         } catch (e) {
         logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         // Rehidratar el estado desde la fuente de verdad (localStorage)

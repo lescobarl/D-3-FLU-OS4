@@ -1,42 +1,21 @@
-import { logCaughtError } from '../lib/caughtError';
+import { localStorePort, type LocalStorePort } from '../core/storage/localStore';
 
 // ============================================================
-// storage.ts — Resolución segura del almacenamiento Zustand
+// storage.ts — Almacenamiento de Zustand por la puerta unica
 // ============================================================
-// localStorage en el navegador; fallback en memoria en entornos
-// sin almacenamiento (Node.js/vitest). Elimina el fallback
-// duplicado que existía en integrationStore y environmentStore
-// (fuente única por intención, AGENTS.md).
+// La resolucion del almacenamiento (localStorage en el navegador;
+// memoria fuera de el) vive ahora en src/core/storage/localStore.ts.
+// Este modulo se queda como la factory que espera
+// `createJSONStorage(resolveSafeStorage)`; antes tenia su PROPIA copia
+// del fallback en memoria, que ademas no compartia con el resto de la
+// app (dos universos de memoria distintos en el mismo proceso).
 // ============================================================
-
-export interface SafeStorage {
-    getItem: (key: string) => string | null;
-    setItem: (key: string, value: string) => void;
-    removeItem: (key: string) => void;
-}
 
 /**
- * Devuelve localStorage si está disponible; si no, un almacén en
- * memoria (funciona pero no persiste entre recargas). Pensada como
+ * Devuelve la puerta unica: el mismo almacenamiento (y el mismo
+ * respaldo en memoria) que usa el resto de la app. Pensada como
  * factory para `createJSONStorage(resolveSafeStorage)` de Zustand.
  */
-export function resolveSafeStorage(): SafeStorage {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            return window.localStorage;
-        }
-    } catch (e) {
-        logCaughtError('[catch] src/store/storage.ts', e);
-        // localStorage no disponible (Node.js, SSR, etc.)
-    }
-    const store = new Map<string, string>();
-    return {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => {
-            store.set(key, value);
-        },
-        removeItem: (key: string) => {
-            store.delete(key);
-        },
-    };
+export function resolveSafeStorage(): LocalStorePort {
+    return localStorePort();
 }

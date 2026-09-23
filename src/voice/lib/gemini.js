@@ -41,6 +41,7 @@ import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge
 import { postGeminiContractResilient } from '../../services/geminiContractClient'
 import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
+import { localGet } from '../../core/storage/localStore';
 
 export {
   buildVisualAnchorBlock,
@@ -1191,10 +1192,10 @@ export async function requestParticipantEvaluation(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
+    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch (e) {
         logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
@@ -1222,10 +1223,10 @@ export async function requestFluContract(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
+    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch (e) {
         logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
@@ -1246,8 +1247,8 @@ export async function requestConversationSummary(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
-    savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
+    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
   const body = {
     ...(params ?? {}),
@@ -1310,7 +1311,7 @@ export function resolveGeminiApiKey(apiKey = '') {
 export function resolveGeminiModel() {
   try {
     // Leer modelo guardado en localStorage por el configurador UI (OS3 parity)
-    const savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
+    const savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
   } catch (e) {
         logCaughtError('[catch] src/voice/lib/gemini.js', e);
