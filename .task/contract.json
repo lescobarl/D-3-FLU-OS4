@@ -1,9 +1,9 @@
 {
   "id": "P6.6",
   "mode": "full",
-  "task": "P6.6 paso 3/N - applyConfigAction sale de App.tsx",
-  "base": "8ae18ce231f6b9a19fd369677d9f89c8cfa706a3",
-  "objective": "Sacar a src/app/configActions.ts el bloque de accion de configuracion (ApplyConfigContext, parseBoolean, applyNumberConfig y applyConfigAction): era el trozo mas grande con destino claro y sin acoplamiento a guards. App.tsx 5344 -> ~4920. Se retiran de App.tsx los imports que se quedan sin uso al moverse (tsc noUnusedLocals los canta).",
+  "task": "P6.6 paso 4/N - applyGameAction sale de App.tsx",
+  "base": "cb6144f358993e4ae4258624cf7717e95d7e4660",
+  "objective": "Sacar a src/app/gameActions.ts el fast-path de juegos por voz (ApplyGameContext y applyGameAction) y retirar de App.tsx las importaciones que se quedan muertas al irse (stores de partida, tipos de juego, opciones de habla, sonda de audio, isMusicPlaying, catalogo de juegos). App.tsx 4920 -> ~4684. Sin cambio de comportamiento: la suite entera sigue verde.",
   "allow": [
     "src/**",
     ".task/**"
@@ -13,8 +13,8 @@
     "kilo.json"
   ],
   "maxFiles": 6,
-  "maxLines": 1000,
+  "maxLines": 700,
   "dod": "npx tsc -b",
-  "guard": "npx vitest run tests/localStorageGatewayGuard.test.ts tests/tabRoutes.test.ts tests/appTypeGuards.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/gameFlow.test.ts tests/tabRoutes.test.ts --reporter=dot",
   "guardExpect": "green"
 }
