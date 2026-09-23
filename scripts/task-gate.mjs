@@ -255,8 +255,14 @@ if (c.invariant) {
 
 // 5) GUARDS BASE (anti-hardcode / anti-rutas-dobles / estabilidad) ---------
 if (c.skipBaseGuards !== true) {
+  // P0.6: los tres guards son puramente estaticos (leen fuentes), asi que un fallo
+  // intermitente NO puede venir de ellos. La causa medida era la propia invocacion:
+  // arranque en frio de vitest (transform cache) con el testTimeout por defecto de 5s
+  // y varios workers compitiendo. Se fija: sin paralelismo de archivos, timeout holgado
+  // y UN reintento. El reintento NO tapa fallos reales: un guard determinista que falla
+  // por una violacion real vuelve a fallar en el reintento y la puerta sigue en rojo.
   const BASE_GUARDS =
-    'npx vitest run tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts'
+    'npx vitest run --no-file-parallelism --testTimeout=30000 --retry=1 --reporter=dot tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts'
   console.log(`[task-gate] Guards base: ${BASE_GUARDS}`)
   const bg = sh(BASE_GUARDS)
   if (bg.code !== 0) {

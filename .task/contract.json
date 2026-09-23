@@ -1,14 +1,13 @@
 {
-  "id": "P6.1+P6.3",
+  "id": "P0.6+P2.4",
   "mode": "full",
-  "task": "P6.1+P6.3 - globales de depuracion/config fuera del bundle de produccion",
-  "base": "fb5538d74c61f7f4ce1078c9f7ff590a5393dad0",
-  "objective": "window.FLU_CONFIG y los 2 puentes __fluHandle* sin lector dejan de publicarse en produccion (gate DEV); los 4 puentes funcionales quedan documentados y vigilados por un guard.",
+  "task": "P0.6+P2.4 - barrera fiable: gate determinista y meta-guard anti-teatro",
+  "base": "ad45b194ed3bfa0adda36bc62153e1fc9d4001fb",
+  "objective": "La invocacion de los guards base deja de ser intermitente y ningun guard registrado en lint:guards puede quedarse sin prueba de su propio detector.",
   "allow": [
-    "src/main.tsx",
-    "src/App.tsx",
-    "tests/devGlobalsGuard.test.ts",
     "package.json",
+    "tests/guardMutationGuard.test.ts",
+    ".task/guard-proof-baseline.json",
     ".task/contract.json",
     ".task/report",
     "plans/ledger.json"
@@ -23,9 +22,9 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 400,
-  "dod": "npx vitest run tests/devGlobalsGuard.test.ts --reporter=dot && npx tsc -b",
-  "guard": "npx vitest run tests/devGlobalsGuard.test.ts --reporter=dot",
+  "maxFiles": 10,
+  "maxLines": 500,
+  "dod": "npx vitest run tests/guardMutationGuard.test.ts --reporter=dot && npx tsc -b",
+  "guard": "npx vitest run tests/guardMutationGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

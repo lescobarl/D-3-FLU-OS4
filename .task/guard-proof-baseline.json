@@ -1,0 +1,13 @@
+[
+  "tests/hardcodeGuard.test.ts",
+  "tests/protocolGuard.test.ts",
+  "tests/stability-guards.test.ts",
+  "tests/voiceSingleSourceGuard.test.ts",
+  "tests/searchSingleRouteGuard.test.ts",
+  "tests/voiceTurnSingleWriter.test.ts",
+  "tests/voiceTurnCommitDerivation.test.ts",
+  "tests/voiceTurnClosingSingleRoute.test.ts",
+  "tests/taskGateInvariant.test.ts",
+  "tests/schedulerSingleDefinition.test.ts",
+  "tests/taskLedgerGuard.test.ts"
+]

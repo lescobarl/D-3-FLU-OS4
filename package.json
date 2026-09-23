@@ -24,7 +24,7 @@
     "gate:baseline": "node scripts/task-gate-baseline.mjs",
     "ledger": "node scripts/task-ledger.mjs list",
     "ledger:check": "node scripts/task-ledger.mjs check",
-    "lint:guards": "vitest run tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts tests/voiceSingleSourceGuard.test.ts tests/searchSingleRouteGuard.test.ts tests/voiceTurnSingleWriter.test.ts tests/voiceTurnCommitDerivation.test.ts tests/voiceTurnClosingSingleRoute.test.ts tests/taskGateInvariant.test.ts tests/schedulerSingleDefinition.test.ts tests/taskLedgerGuard.test.ts tests/eolGuard.test.ts tests/wakeInternalGuard.test.ts tests/devGlobalsGuard.test.ts --reporter=dot --silent"
+    "lint:guards": "vitest run tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts tests/voiceSingleSourceGuard.test.ts tests/searchSingleRouteGuard.test.ts tests/voiceTurnSingleWriter.test.ts tests/voiceTurnCommitDerivation.test.ts tests/voiceTurnClosingSingleRoute.test.ts tests/taskGateInvariant.test.ts tests/schedulerSingleDefinition.test.ts tests/taskLedgerGuard.test.ts tests/eolGuard.test.ts tests/wakeInternalGuard.test.ts tests/devGlobalsGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot --silent"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",

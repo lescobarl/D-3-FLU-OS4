@@ -1417,4 +1417,43 @@ NO VALIDADO (usuario): que en el bundle minificado de produccion no queden
   NO se pudo ejecutar en este entorno: vite.config.ts revienta con
   "Cannot read properties of undefined (reading 'VITE_APP_NAME')" (falta esa variable en
   el .env local, que esta ignorado por git). No es consecuencia de este cambio (tsc -b y
-  la suite pasan). El gate DEV es el mismo mecanismo ya usado por AsrLab en main.tsx.
+  la suite pasan). El gate DEV es el mismo mecanismo ya usado por AsrLab en main.tsx.================================================================
+[CIERRE TECNICO] 2026-09-22 - P0.6 (gate determinista) + P2.4 (meta-guard)
+================================================================
+P0.6 - "Gate INTERMITENTE: la invocacion de guards base fallo 1 de 7 veces".
+DIAGNOSTICO (medido antes de tocar): los tres guards base (hardcodeGuard,
+protocolGuard, stability-guards) son PURAMENTE ESTATICOS: leen fuentes y comparan
+substrings. No hay timing, red ni estado compartido, asi que el fallo no podia venir
+de su logica. La causa estaba en la INVOCACION:
+  - arranque en frio de vitest (primer run sin cache de transform),
+  - testTimeout por defecto de 5000 ms,
+  - workers compitiendo en un equipo cargado.
+Evidencia del sintoma: fallo en la 1a de 7 ejecuciones y 0 fallos en las 5 siguientes.
+FIX (scripts/task-gate.mjs, no congelado): la invocacion pasa a
+  --no-file-parallelism --testTimeout=30000 --retry=1 --reporter=dot
+El reintento NO tapa fallos reales: un guard determinista que falle por una violacion
+real vuelve a fallar en el reintento y la puerta sigue ROJA. Solo absorbe hipos de
+infraestructura (spawn/timeout).
+EVIDENCIA: 7/7 ejecuciones con la invocacion nueva -> exit 0 (0 0 0 0 0 0 0).
+P2.4 - "Prueba de mutacion obligatoria para los guards teatro".
+MEDICION: de los 14 guards registrados en lint:guards, 11 no tenian NINGUNA prueba de
+que su detector discrimine (no hay caso que alimente una entrada infractora y compruebe
+la marca). Un guard asi puede estar verde para siempre sin proteger nada.
+ENTREGA: tests/guardMutationGuard.test.ts + .task/guard-proof-baseline.json.
+  - Lee la lista de guards del MECANISMO (package.json scripts['lint:guards']), no de prosa.
+  - Trinquete shrink-only: el teatro vivo debe coincidir EXACTAMENTE con el baseline.
+    * Guard nuevo sin prueba de detector -> ROJO ("NUEVO teatro").
+    * Guard del baseline que gana su prueba y sigue listado -> ROJO ("quitalo del baseline").
+  - Baseline de partida: los 11 guards existentes (documentados, no ocultos).
+  - El propio meta-guard trae su prueba de detector (predica con el ejemplo).
+INVARIANTE (falsable, dos mutaciones ejecutadas):
+  (A) creado tests/tmpTheater.test.ts sin prueba y registrado en lint:guards ->
+      ROJO citando "NUEVO teatro (no estaba en baseline): tests/tmpTheater.test.ts".
+  (B) eliminada una entrada del baseline que si es teatro -> ROJO citando
+      "NUEVO teatro (no estaba en baseline): tests/hardcodeGuard.test.ts".
+  Restaurado todo -> 7/7 VERDE.
+REGRESION: lint:guards 73 -> 80 tests (14 -> 15 archivos), 0 fallos.
+  npm run gate -> exit 0 ; npx tsc -b -> 0
+NO VALIDADO (usuario): que el fallo intermitente original no reaparezca en su equipo
+  bajo una carga distinta a la de esta sesion; la mitigacion es determinista por
+  construccion (sin paralelismo + timeout holgado + reintento de infraestructura).
