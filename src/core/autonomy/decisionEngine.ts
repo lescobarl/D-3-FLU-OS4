@@ -380,25 +380,25 @@ class FactorEvaluator {
         return [
             {
                 provider: AI_PROVIDER_IDS.OPENROUTER,
-                avgResponseTime: 12000, // Gemini 2.5 Flash Lite — 12 segundos
+                avgResponseTime: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterResponseTimeMs,
                 successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterSuccessRate,
                 costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterCostPer1k, // costo por 1k tokens (config)
-                co2Emissions: 1.0,
-                perceivedLatency: 15000,
+                co2Emissions: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterCo2,
+                perceivedLatency: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterPerceivedLatencyMs,
                 responseQuality: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterQuality,
                 lastUpdated: Date.now(),
-                requestCount: 150,
+                requestCount: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterRequestCount,
             },
             {
                 provider: AI_PROVIDER_IDS.GEMINI,
-                avgResponseTime: 45000, // 45 segundos (nativo)
+                avgResponseTime: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiResponseTimeMs,
                 successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiSuccessRate,
                 costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiCostPer1k,
-                co2Emissions: 2.5,
-                perceivedLatency: 50000,
+                co2Emissions: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiCo2,
+                perceivedLatency: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiPerceivedLatencyMs,
                 responseQuality: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiQuality,
                 lastUpdated: Date.now(),
-                requestCount: 100,
+                requestCount: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiRequestCount,
             },
         ];
     }

@@ -1637,4 +1637,31 @@ INVARIANTE (falsable): reintroducido un fetch crudo en services/gemini.ts -> gua
 VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 293 archivos /
   3037 tests / 0 fallos.
 NO VALIDADO: no se ejercito el flujo real contra el proxy (solo tests); los endpoints y las
-  respuestas son los mismos, lo que cambia es que ahora hay deadline y reintento.
+  respuestas son los mismos, lo que cambia es que ahora hay deadline y reintento.================================================================
+[CIERRE TECNICO] 2026-09-22 - P4.8 + P5.8 (un orden, un umbral)
+================================================================
+P4.8 (cascada de imagen con 3 ordenes): los TRES pasos de la cascada
+  (generateFromContract, retry, fallbackToOpenRouter) aplicaban el resultado con el mismo
+  bloque copiado: fijar urlRef/setImageUrl, bajar isLoading y decidir isFailed. Tres copias
+  del mismo orden de estado: tocar una y no las otras hace que la UI termine en estados
+  distintos segun el camino que gano. Se extrae applyImageResult(result, requestId): boolean,
+  que ademas centraliza la comprobacion de peticion obsoleta (requestRef.current !==
+  requestId) y devuelve si hubo imagen. El fallback usa el retorno para decidir si trazar el
+  'sin-URL', conservando el orden original (traza y luego estado).
+P5.8 (umbrales de autonomia inline): getAllProviderMetrics() mezclaba valores que ya venian de
+  AUTONOMY_THRESHOLD_DEFAULTS.decision (successRate, costPer1k, quality) con otros 8
+  incrustados (avgResponseTime 12000/45000, co2Emissions 1.0/2.5, perceivedLatency
+  15000/50000, requestCount 150/100). Los 8 pasan al catalogo como sample*.
+EL GUARD ENCONTRO MAS DE LO QUE CITABA EL AUDIT: la regla de metricas incrustadas marco
+  tambien healthMonitor.ts, que devuelve avgResponseTime: 0 cuando no hay historial. Se
+  reviso: es el valor neutro de "todavia sin datos", no un umbral. El detector admite el 0
+  explicito (literales [1-9]...) y queda probado en el bloque de detector (0 -> no marca,
+  1.0/150/12000 -> marca). No se debilito la regla: se acoto a su intencion.
+GUARD: tests/cascadeSingleOrderGuard.test.ts (2 reglas + detector), registrado en
+  lint:guards y congelado.
+INVARIANTE (falsable): duplicado el orden de la cascada en useWorkspaceImage.ts -> guard
+  ROJO; restaurado -> 10/10 VERDE.
+VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; eolGuard 6/6 (useWorkspaceImage.ts
+  estaba MIXED en el indice: la primera pasada lo dejo en CRLF y el guard lo cazo; se rehizo
+  por lineas preservando el EOL del blob) ; test:full -> 294 archivos / 3041 tests / 0 fallos.
+NO VALIDADO: no se ejercito la UI real de imagen (los 3 caminos se validan por tests).

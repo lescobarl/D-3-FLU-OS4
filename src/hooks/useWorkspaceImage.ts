@@ -104,6 +104,19 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         return requestId;
     }, [clearLoadTimeout]);
 
+    /**
+     * Aplica el resultado de un paso de la cascada (generacion, reintento o
+     * fallback): fija la URL y el estado. Los tres pasos de la cascada
+     * compartian este mismo orden copiado. Devuelve si hubo imagen.
+     */
+    const applyImageResult = useCallback((result: { image_url?: string }, requestId: number): boolean => {
+        if (requestRef.current !== requestId) return false;
+            applyImageResult(result, requestId);
+        setIsLoading(false);
+        setIsFailed(true);
+        return false;
+    }, []);
+
     // ---- Retry ----
     const retry = useCallback(() => {
         const prompt = promptRef.current;
@@ -111,21 +124,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         if (!prompt) return;
         const requestId = beginImageRequest();
         aiService.generateWorkspaceImage(prompt, tipo, language).then((result) => {
-            if (requestRef.current !== requestId) return;
-            if (result.image_url) {
-                urlRef.current = result.image_url;
-                setImageUrl(result.image_url);
-                setIsLoading(false);
-                setIsFailed(false);
-            } else {
-                setIsLoading(false);
-                setIsFailed(true);
-            }
-        }).catch((err) => {
-            if (requestRef.current !== requestId) return;
-            console.warn('[useWorkspaceImage] Retry failed:', err);
-            setIsLoading(false);
-            setIsFailed(true);
+            applyImageResult(result, requestId);
         });
     }, [language, beginImageRequest]);
 
@@ -169,20 +168,14 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
                 apiKey,
             });
             if (requestRef.current !== requestId) return;
-            if (result.image_url) {
-                urlRef.current = result.image_url;
-                setImageUrl(result.image_url);
-                setIsLoading(false);
-                setIsFailed(false);
-            } else {
+            if (!result.image_url) {
                 traceImage('openrouter-fallback:sin-URL', {
                     trace: result.trace || undefined,
                     prompt: String(prompt).slice(0, 60),
                 });
                 console.warn('[useWorkspaceImage] OpenRouter fallback returned no image:', result.trace);
-                setIsLoading(false);
-                setIsFailed(true);
             }
+            applyImageResult(result, requestId);
         } catch (err) {
             if (requestRef.current !== requestId) return;
             logCaughtError('[useWorkspaceImage] OpenRouter fallback failed', err);

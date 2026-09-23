@@ -1,9 +1,9 @@
 {
-  "id": "P4.1+P4.6+P4.7",
+  "id": "P4.8+P5.8",
   "mode": "full",
-  "task": "P4.1+P4.6+P4.7",
-  "base": "d24cb6fab5bd68b669343a7701232e4c1ae70766",
-  "objective": "Un origen por dato: cliente HTTP del proxy, resolucion de API key y URL de Pollinations.",
+  "task": "P4.8+P5.8",
+  "base": "487f892a44b2fa9d17d709eba6ed20afac8e84a8",
+  "objective": "Un solo orden de aplicacion en la cascada de imagen y umbrales de autonomia en el catalogo.",
   "allow": [
     "src/**",
     "tests/transportSingleOwnerGuard.test.ts",
@@ -20,7 +20,7 @@
   ],
   "maxFiles": 30,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/transportSingleOwnerGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/transportSingleOwnerGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b && npx vitest run tests/cascadeSingleOrderGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/cascadeSingleOrderGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
