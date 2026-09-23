@@ -435,6 +435,13 @@
       "estado": "done",
       "evidencia": "CERRADO commit 849bae5. AGENTS.md seccion Gates afirmaba DOS cosas falsas: (1) \"Pre-commit LIGERO (nunca la suite completa): npm run gate\" se contradecia a si misma; (2) atribuia npm run gate a CI, y el propio ci.yml documenta que NO lo corre. Ademas el hook real vivia en .git/hooks/pre-commit (no versionado: no existia en clon nuevo ni CI). Ahora: .githooks/pre-commit VERSIONADO (lint + typecheck, nunca suite ni gate) + scripts/install-hooks.mjs y script prepare que activa core.hooksPath=.githooks + AGENTS.md Gates reescrito con la barrera REAL (gate = cierre de tarea con contrato activo). Guard nuevo tests/preCommitBarrierGuard.test.ts (4 tests) verifica versionado, ligereza, activacion y coherencia del doc; nace ROJO en base. Gate: metrica hooks versionados 0->1, guard base=ROJO actual=VERDE, exit 0. El propio guard detecto un fallo en su primera version (contaba comandos dentro de comentarios del hook) y se corrigio el detector.",
       "origen": "plan-T"
+    },
+    {
+      "id": "P1.9",
+      "titulo": "STORAGE_KEYS sin claves muertas (11 declaradas y nunca leidas)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "DESCUBIERTO Y CERRADO commit b6e81b2. STORAGE_KEYS declaraba 11 claves localStorage que NADIE referencia: las 6 del Configur r FLU (FLU_PROFILE/IMAGE/VOICE/ADVANCED_CONFIG, FLU_PERSONALITY_TRAITS/TONE) sustituidas por integrationStore; GEMINI_MODEL/GEMINI_API_URL y POLLINATIONS_URL/MODEL por la config de proveedor; NOTIFICATION_MUTED por NOTIFICATION_CHANNEL/PERMISSION. Verificado antes de borrar: 791 ficheros, los 11 literales solo en su declaracion, sin acceso dinamico STORAGE_KEYS[...]. Guard tests/storageKeysAliveGuard.test.ts (6 tests, con test anti-vacuidad) exige que toda clave declarada se referencie. El guard detecto un fallo real en su primera version (regex que exigia >=2 caracteres -> habria pasado vacio). Gate: metrica 11->0 en el worktree base; exit 0."
     }
   ],
   "done": [
@@ -952,6 +959,11 @@
       "id": "P6.8",
       "titulo": "Veredicto registrado (sin cambio de codigo)",
       "commit": "e0d5a1c"
+    },
+    {
+      "id": "P1.9",
+      "commit": "b6e81b2",
+      "titulo": "STORAGE_KEYS sin claves muertas"
     }
   ]
 }
