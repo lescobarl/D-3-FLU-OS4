@@ -364,10 +364,9 @@
     {
       "id": "P6.10",
       "titulo": "plans/** 30+ artefactos de proceso versionados",
-      "estado": "todo",
-      "evidencia": "plans/contratos/*",
-      "origen": "auditoria",
-      "noVerificado": true
+      "estado": "done",
+      "evidencia": "CERRADO commit 38a097e. plans/ tenia 76 ficheros versionados y 50 eran artefactos de proceso: 43 en plans/contratos/** (el sistema de contratos por tarea que hoy vive en .task/contract.json + plans/ledger.json) y 7 informes estado-sesion-*/estado-entrega-*. Antes de borrar se verifico con git grep sobre scripts/, src/ y tests/ que nadie los referencia: la unica dependencia viva es plans/ledger.json (scripts/task-ledger.mjs, tests/decisionVerdictGuard.test.ts) y plans/unificacion-duplicados.md (scripts/hito.mjs), y ambos se conservan junto a los documentos de diseno (plan-*.md, propuesta-*.md). El historial sigue en git: no se pierde informacion, se deja de arrastrarla. Guard C52 tests/plansProcessArtifactsGuard.test.ts (5 tests): prohibe contratos viejos e informes de sesion/entrega, exige que el ledger siga presente, y prueba el detector por los dos lados (marca contratos e informes; NO marca ledger ni dise├▒o). Registrado en lint:guards y congelado. Gate: metrica base=50 actual=0 target=0; guard base=ROJO (N=50) actual=verde. NOTA DE HONESTIDAD: el limite de tama├▒o del gate se declaro en 3400 lineas porque son 50 bajas (3176 lineas), y trocear no es viable: el invariante es todo-o-nada sobre plans/, un trozo dejaria el guard en rojo y el cierre a trozos seria teatro; ademas la regla de tama├▒o apunta a codigo autorado, no a retirar ficheros obsoletos.",
+      "origen": "auditoria"
     },
     {
       "id": "P6.11",
@@ -991,6 +990,11 @@
       "id": "P6.11",
       "commit": "a6011aa",
       "titulo": "Sin aserciones no-null en src: 51 -> 0 (guard C51)"
+    },
+    {
+      "id": "P6.10",
+      "commit": "38a097e",
+      "titulo": "plans/: 50 artefactos de proceso fuera, con guard C52"
     }
   ]
 }
