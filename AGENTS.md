@@ -37,6 +37,8 @@
 | Test rápido (archivo tocado) | `npm run test:file <ruta>` |
 | Suite completa (solo al cierre/CI) | `npm run test:full` |
 | Gate de contrato (obligatorio) | `npm run gate` |
+| Ledger de pendientes (leer) | `npm run ledger` |
+| Ledger: sincronia vs git | `npm run ledger:check` |
 | E2E | `npm run e2e` |
 | Build | `npm run build` |
 
@@ -44,6 +46,13 @@
 (ligero, por commit, AGENTS.md seccion 5); `.github/workflows/ci.yml` -> `lint`, `typecheck`,
 `test:full`, `build`, `e2e`. `npm run gate` es de **cierre de tarea** (valida UN contrato contra
 su base), NO un gate de repo: no se ejecuta en CI ni en cada commit.
+
+**Ledger de pendientes (fuente unica de lo que falta):** `plans/ledger.json` (git-tracked)
+registra pendientes y cierres. El **chat y su resumen NO son fuente**: se compactan y
+descartan, por eso un pendiente que solo vive en la conversacion se pierde. `scripts/task-ledger.mjs`
+(`npm run ledger:check`) es la barrera: falla si un commit de cierre no esta en el ledger, si un
+`done` apunta a un commit inexistente o si un pendiente no cita evidencia. Guard:
+`tests/taskLedgerGuard.test.ts`. Toda sesion **empieza leyendo el ledger y `git log`**.
 
 **Registro único de excepciones capturadas:** todo `catch` registra por
 `logCaughtError(contexto, ...detalles)` (`src/lib/caughtError.ts`). Es la vía por
@@ -121,6 +130,12 @@ no depende de la buena voluntad; vive en el repo y en comandos verificables.
 20. **La barrera vive en el repo, no en la buena voluntad:** pre-commit hook + job
     de CI que ejecutan el gate. Reglas en el chat son promesas; en el repo, son
     **imposibilidad de mentir**.
+21. **Ledger de pendientes (fuente unica, no el chat).** Todo pendiente y todo
+    hallazgo fuera de alcance se registra en `plans/ledger.json` **al detectarlo**,
+    no al final. Toda sesion **empieza leyendo el ledger y `git log`**; el resumen
+    del chat es contexto **no confiable** (se compacta y descarta). Prohibido
+    afirmar "esto ya se hizo / esto no se hizo" sin citar el ledger o el commit.
+    `npm run ledger:check` + `tests/taskLedgerGuard.test.ts` lo impiden.
 
 ### C. Contrato (formato mínimo)
 

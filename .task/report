@@ -1107,3 +1107,34 @@ RESUELTO EN ESTE BLOQUE (puntos pendientes):
 NO VALIDADO (usuario): que la busqueda web siga funcionando igual en su pantalla;
 y la decision de diseno sobre la ruta directa-vs-proxy (AsrLab llama directo) queda
 pendiente de aprobacion por ser arquitectonica.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Hito LEDGER (pendientes persistentes)
+================================================================
+OBJETIVO: que ningun pendiente/hallazgo se pierda al compactarse el chat:
+  el repo es la fuente, no el resumen de la conversacion.
+
+ANTES:
+  - No existia ledger (el chat era la unica lista -> se perdia al compactar).
+  - Guard tests/taskLedgerGuard.test.ts -> ROJO (2 fallos):
+      * 59 commits de cierre en git sin registrar en el ledger;
+      * AGENTS.md no obligaba a leer el ledger.
+    (4 tests de discriminacion ya verdes).
+
+DESPUES:
+  - plans/ledger.json: 57 pendientes + 59 done (cierres derivados de git).
+  - scripts/task-ledger.mjs (list|check): valida ledger <-> git.
+  - tests/taskLedgerGuard.test.ts: 6/6 VERDE.
+  - npm run ledger / ledger:check; guard anadido a npm run lint.
+  - AGENTS.md: regla 21 + filas de comando + parrafo de barrera.
+
+INVARIANTE (verificable):
+  node scripts/task-ledger.mjs check -> ledger OK: 57 pendientes, 59 done, 59 cierres.
+  commit de cierre (scope=codigo) sin entrada en ledger -> ROJO;
+  done con commit inexistente -> ROJO; pendiente sin evidencia -> ROJO.
+
+REGRESION:
+  antes:   286 archivos / 2961 tests / 0 fallos
+  despues: 287 archivos / 2967 tests / 0 fallos ; typecheck 0 ; lint 11 archivos / 46 tests.
+
+NO VALIDADO (usuario): que el ledger le resulte util como panel de trabajo.

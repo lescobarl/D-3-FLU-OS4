@@ -1,0 +1,715 @@
+{
+  "version": 1,
+  "updated": "2026-09-22",
+  "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
+  "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
+  "items": [
+    {
+      "id": "P0.1",
+      "titulo": "Ledger de pendientes en el repo (esta propia tarea)",
+      "estado": "done",
+      "evidencia": ".task/ledger.json",
+      "origen": "meta"
+    },
+    {
+      "id": "P0.2",
+      "titulo": "Guard de sincronia ledger<->git",
+      "estado": "done",
+      "evidencia": "tests/taskLedgerGuard.test.ts",
+      "origen": "meta"
+    },
+    {
+      "id": "P0.3",
+      "titulo": "Regla en AGENTS.md: arrancar leyendo el ledger",
+      "estado": "done",
+      "evidencia": "AGENTS.md",
+      "origen": "meta"
+    },
+    {
+      "id": "P0.4",
+      "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md",
+      "estado": "todo",
+      "evidencia": "npm run gate -> exit 0",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.1",
+      "titulo": "T5 - Minutas a un solo almacen (Dexie registro; retirar integrationStore/flu-minute-history; backup real)",
+      "estado": "todo",
+      "evidencia": "src/hooks/useMinuteKnowledge.ts:265",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.2",
+      "titulo": "T2a - Guard de minutas ciego (no cubre useMinuteKnowledge.ts)",
+      "estado": "todo",
+      "evidencia": "tests/minutosDobleEscrituraGuard.test.ts:10",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.3",
+      "titulo": "T6 - Onboarding a un solo almacen (retirar claves legacy)",
+      "estado": "todo",
+      "evidencia": "src/core/onboarding/onboardingService.ts:110",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.4",
+      "titulo": "T7 - Esquema Dexie: una sola fuente de la lista de tablas",
+      "estado": "todo",
+      "evidencia": "src/core/db/fluDatabase.ts (23+23+20)",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.5",
+      "titulo": "brandingConfig en Dexie + flu-branding-* LS (mismo dato, 2 almacenes)",
+      "estado": "todo",
+      "evidencia": "src/core/branding/useSeasonalBranding.ts:96,159",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P1.6",
+      "titulo": "Indice muerto minutes.timestamp; stores() sin revision/deleted",
+      "estado": "todo",
+      "evidencia": "src/core/db/fluDatabase.ts:567",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P1.7",
+      "titulo": "indexedDB.open/deleteDatabase crudo fuera del singleton",
+      "estado": "todo",
+      "evidencia": "src/core/autonomy/healthMonitor.ts:441,450,463",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P1.8",
+      "titulo": "Config de participante en LS paralela a Dexie",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/fluParticipantConfig.js:8,144",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P2.1",
+      "titulo": "T2 - catchSilenciosoGuard debe discriminar (hoy acepta logCaughtError sin excepcion)",
+      "estado": "todo",
+      "evidencia": "tests/catchSilenciosoGuard.test.ts:21",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P2.2",
+      "titulo": "T2 - wakeWordRuntime guard con prueba de mutacion",
+      "estado": "todo",
+      "evidencia": "tests/ (no existe)",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P2.3",
+      "titulo": "Guard blinda alias @deprecated (logMicRaw)",
+      "estado": "todo",
+      "evidencia": "tests/specificDeadGuard.test.ts:114",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P2.4",
+      "titulo": "T2 - Prueba de mutacion obligatoria para los guards teatro",
+      "estado": "todo",
+      "evidencia": "defecto inyectado -> ROJO",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P3.1",
+      "titulo": "console.warn teardown ignorado sin logCaughtError (12 sitios)",
+      "estado": "todo",
+      "evidencia": "src/voice/hooks/useFluVoiceAssistant.js:1334,1935",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P3.2",
+      "titulo": ".catch(() => {}) vacios (13 sitios)",
+      "estado": "todo",
+      "evidencia": "src/services/musicPlayer.ts:74",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P3.3",
+      "titulo": "logCaughtError sin contexto de excepcion (108 sitios)",
+      "estado": "todo",
+      "evidencia": "src/App.tsx:3383,4351",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.1",
+      "titulo": "Dos clientes HTTP al mismo endpoint (participant-eval, workspace-image)",
+      "estado": "todo",
+      "evidencia": "src/services/gemini.ts:320 vs src/voice/lib/gemini.js:1205",
+      "origen": "propio"
+    },
+    {
+      "id": "P4.2",
+      "titulo": "T4 - FBX parseFbxBuffer 2->1 + medir bloqueo + Three duplicada",
+      "estado": "todo",
+      "evidencia": "src/avatar/workers/fbxLoader.worker.js:16-27",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P4.3",
+      "titulo": "parseAllowlist identica x2",
+      "estado": "todo",
+      "evidencia": "src/server/searchProxy.ts:41 = src/server/browserProxy.ts:23",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.4",
+      "titulo": "slugifyPalette = slugifyAmbiente",
+      "estado": "todo",
+      "evidencia": "src/core/branding/paletaFactory.ts:28",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.5",
+      "titulo": "strip NFD reimplementado en 10 archivos",
+      "estado": "todo",
+      "evidencia": "src/lib/textUtils.ts:36 (+9)",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.6",
+      "titulo": "resolveGeminiApiKey near-dupes x2 (contrato distinto en appConfig)",
+      "estado": "todo",
+      "evidencia": "src/services/gemini.ts:61 vs src/voice/lib/gemini.js:1296",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.7",
+      "titulo": "buildPollinationsArtifact/ImageUrl/Url x3",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/fluVisualPipeline.js:120",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P4.8",
+      "titulo": "Cascada imagen workspace con 3 ordenes",
+      "estado": "todo",
+      "evidencia": "src/hooks/useWorkspaceImage.ts:113,166",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P4.9",
+      "titulo": "allowlist wikipedia/educ.ar repetida x3",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/fluConfig.js:1061,1069,1076",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.10",
+      "titulo": "T3 - Clasificar los 16 simbolos repetidos con seccion 7.7",
+      "estado": "todo",
+      "evidencia": "conteo por simbolo ANTES/DESPUES",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P4.11",
+      "titulo": "hasToken/findTokenIndex regex divergente (NO forzar)",
+      "estado": "decision",
+      "evidencia": "src/core/games/gameUtils.ts:25,33",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.12",
+      "titulo": "uncheckAll parecido-pero-distinto (NO forzar)",
+      "estado": "decision",
+      "evidencia": "src/core/notes/notesList.ts:59",
+      "origen": "propio"
+    },
+    {
+      "id": "P4.13",
+      "titulo": "PROVIDER_SYNONYMS re-declara catalogo",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/configCommands.js:277",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.14",
+      "titulo": "Ruta directa vs proxy en AsrLab (arquitectonica)",
+      "estado": "decision",
+      "evidencia": "src/dev/asrLab/AsrLab.tsx:184",
+      "origen": "propio"
+    },
+    {
+      "id": "P5.1",
+      "titulo": "Fallback wake word 'FLU' fuera de config",
+      "estado": "todo",
+      "evidencia": "src/core/config/voiceConfigCatalog.ts:776",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.2",
+      "titulo": "sampleRate = 48000 quemado (~12 modulos)",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/asr/whisperRecognitionEngine.js:70",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.3",
+      "titulo": "maxTokens literales en logica (1800/900/2200/3000)",
+      "estado": "todo",
+      "evidencia": "src/core/ai/aiServiceBase.ts:349,365,385,430,482",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.4",
+      "titulo": "temperature || 0.7, max_tokens 1000/500/300",
+      "estado": "todo",
+      "evidencia": "src/services/deepseek.ts:200,201,285,286",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.5",
+      "titulo": "Locales BCP-47 fuera de localeConfig",
+      "estado": "todo",
+      "evidencia": "src/core/search/searchLanguage.ts:134-135",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.6",
+      "titulo": "Literales de proveedor 'openrouter'/'gemini'/'local'",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/gemini.js:347",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P5.7",
+      "titulo": "Defaults magicos 2048/0.3/1024",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/gemini.js:1032,1155",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P5.8",
+      "titulo": "Umbrales de autonomia inline",
+      "estado": "todo",
+      "evidencia": "src/core/autonomy/decisionEngine.ts:383-401",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P5.9",
+      "titulo": "T9 - 123 localStorage + 104 style={{ -> gateway unico",
+      "estado": "todo",
+      "evidencia": "conteo -> 0",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P6.1",
+      "titulo": "6 window.__fluHandle* en bundle sin gate DEV",
+      "estado": "todo",
+      "evidencia": "src/App.tsx:1564,3507,3581,3607,3660,3773",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.2",
+      "titulo": "debug.enabled:true y relayToServer:true por defecto en build",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/fluConfig.js:2096,2117",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.3",
+      "titulo": "window.FLU_CONFIG expuesto sin gate",
+      "estado": "todo",
+      "evidencia": "src/main.tsx:16",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.4",
+      "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/listenLog.js:126-129",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P6.5",
+      "titulo": "src/modules/** inexistente (layout seccion 4)",
+      "estado": "decision",
+      "evidencia": "glob = 0",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.6",
+      "titulo": "God files (SRP): App.tsx 5382, useFluVoiceAssistant.js 4576, fluConfig.js 2753, gemini.js 1857",
+      "estado": "todo",
+      "evidencia": "src/App.tsx",
+      "origen": "propio"
+    },
+    {
+      "id": "P6.7",
+      "titulo": "allowJs:true sin checkJs (84 .js sin verificar)",
+      "estado": "todo",
+      "evidencia": "tsconfig.json",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.8",
+      "titulo": "Stack seccion 4 no implementado (WebLLM/Orama/Piper/Rhubarb = 0)",
+      "estado": "decision",
+      "evidencia": "grep = 0",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.9",
+      "titulo": "T10 - Higiene: audit-metric duplicado, 91 TODO, LFS texturas",
+      "estado": "todo",
+      "evidencia": "git ls-files",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P6.10",
+      "titulo": "plans/** 30+ artefactos de proceso versionados",
+      "estado": "todo",
+      "evidencia": "plans/contratos/*",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P6.11",
+      "titulo": "37 archivos con aserciones ! (no-null)",
+      "estado": "todo",
+      "evidencia": "src/avatar/model/bunnyAnimator.ts (20)",
+      "origen": "propio"
+    },
+    {
+      "id": "P6.12",
+      "titulo": "Estilos inline extendidos / JSDoc faltante",
+      "estado": "todo",
+      "evidencia": "src/App.tsx:4797",
+      "origen": "auditoria",
+      "noVerificado": true
+    },
+    {
+      "id": "P7.1",
+      "titulo": "npm run lint no lintea eslint (solo guards)",
+      "estado": "todo",
+      "evidencia": "package.json:12",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P7.2",
+      "titulo": "Plugin react-hooks sin reglas (lint de hooks inerte)",
+      "estado": "todo",
+      "evidencia": "eslint.config.mjs:18-32",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P7.3",
+      "titulo": "T8 - TS estricto: 67 as unknown as, 17 any, noUnused*",
+      "estado": "todo",
+      "evidencia": "conteo -> 0",
+      "origen": "plan-T"
+    }
+  ],
+  "done": [
+    {
+      "id": "C41",
+      "commit": "168abdf",
+      "titulo": "URLs de proveedor solo en la config canonica"
+    },
+    {
+      "id": "C60",
+      "commit": "4e35f2a",
+      "titulo": "una sola lectura de rounds en los motores de juego"
+    },
+    {
+      "id": "C59",
+      "commit": "bbc9039",
+      "titulo": "una sola adopcion del RNG en los motores de juego"
+    },
+    {
+      "id": "C58",
+      "commit": "1e407f8",
+      "titulo": "una sola fuente para la clave de dia local (YYYY-MM-DD)"
+    },
+    {
+      "id": "C44",
+      "commit": "d4c5c60",
+      "titulo": "un solo escritor de onboardingStates"
+    },
+    {
+      "id": "C56",
+      "commit": "67944d9",
+      "titulo": "wake words solo desde config"
+    },
+    {
+      "id": "C48",
+      "commit": "0bea63c",
+      "titulo": "hosts remotos solo desde config"
+    },
+    {
+      "id": "C46",
+      "commit": "05f23c0",
+      "titulo": "esquema Dexie sin tablas legacy vivas"
+    },
+    {
+      "id": "C49",
+      "commit": "e6864b9",
+      "titulo": "TS estricto sin doble cast y sin codigo muerto"
+    },
+    {
+      "id": "C47",
+      "commit": "4c3537e",
+      "titulo": "locales de voz/escucha desde una fuente unica"
+    },
+    {
+      "id": "C40/C41",
+      "commit": "5f6f9bc",
+      "titulo": "flujo F1/F2/F3 Gemini; act() limpio; freeze: 7 guards congelados"
+    },
+    {
+      "id": "C42",
+      "commit": "f558a93",
+      "titulo": "stats de proveedor con claves de config; guard C8 ignora comentarios"
+    },
+    {
+      "id": "C8",
+      "commit": "a9b2f81",
+      "titulo": "fuente unica del recorte de turnos del interino; docs(C7,C9) distintos (D5)"
+    },
+    {
+      "id": "C40/C41",
+      "commit": "d1ccf70",
+      "titulo": "flujo Gemini ejecutado; docs(C54): grupos de texto no-unificados (D5)"
+    },
+    {
+      "id": "C54",
+      "commit": "f3c507a",
+      "titulo": "paridad de normalizeForMatch en musicPlayer (variante exacta) + test"
+    },
+    {
+      "id": "C54",
+      "commit": "6034236",
+      "titulo": "utilidades de texto unicas (textUtils)"
+    },
+    {
+      "id": "C55",
+      "commit": "7a64453",
+      "titulo": "guard de muertos mide codigo (no comentarios) y quita asercion vacia"
+    },
+    {
+      "id": "C55",
+      "commit": "fe55171",
+      "titulo": "eliminar codigo muerto y deps sin uso"
+    },
+    {
+      "id": "C40/C41",
+      "commit": "01671e0",
+      "titulo": "base unica IAIService, gemini/deepseek adapters"
+    },
+    {
+      "id": "C45",
+      "commit": "8080550",
+      "titulo": "tupla de sync con fuente unica buildSyncTuple"
+    },
+    {
+      "id": "C42",
+      "commit": "5d40339",
+      "titulo": "proveedor IA desde config, sin literales"
+    },
+    {
+      "id": "C21",
+      "commit": "21d19c3",
+      "titulo": "subscribeSpeechVoices tolera mocks sin addEventListener"
+    },
+    {
+      "id": "C21",
+      "commit": "7ddc6a5",
+      "titulo": "un solo punto de sintesis TTS (fluSpeech)"
+    },
+    {
+      "id": "C23",
+      "commit": "3fd430d",
+      "titulo": "AGENTS.md alineado con el stack real"
+    },
+    {
+      "id": "C35",
+      "commit": "bec6912",
+      "titulo": "sin console.debug residual"
+    },
+    {
+      "id": "C34",
+      "commit": "10563ab",
+      "titulo": "elimina fallbackResponses muerto y sus tests"
+    },
+    {
+      "id": "C17",
+      "commit": "b51cae9",
+      "titulo": "elimina docs/utilidades huerfanas"
+    },
+    {
+      "id": "C16",
+      "commit": "555d698",
+      "titulo": "elimina modulos muertos de src/lib y tests huerfanos"
+    },
+    {
+      "id": "C13",
+      "commit": "6e18d51",
+      "titulo": "ningun catch silencioso (160 bloques registran)"
+    },
+    {
+      "id": "C33",
+      "commit": "6e2752b",
+      "titulo": "tupla de sync en MemoryItem"
+    },
+    {
+      "id": "C32",
+      "commit": "ab356dc",
+      "titulo": "invariante longTermMemory ya satisfecho por C30"
+    },
+    {
+      "id": "C31",
+      "commit": "c3aabda",
+      "titulo": "perfiles de voz solo en Dexie"
+    },
+    {
+      "id": "C30",
+      "commit": "919d957",
+      "titulo": "una sola base IndexedDB (flu-os3)"
+    },
+    {
+      "id": "C14",
+      "commit": "88f8b2a",
+      "titulo": "borrado logico en Dexie (sin delete/clear fisico)"
+    },
+    {
+      "id": "C11",
+      "commit": "b2e7a72",
+      "titulo": "una sola tabla/servicio de notas y listas + fix regresion C36"
+    },
+    {
+      "id": "C10",
+      "commit": "1899430",
+      "titulo": "sin doble escritura de minutas"
+    },
+    {
+      "id": "C9",
+      "commit": "1a0f997",
+      "titulo": "un solo backend de sesion (Dexie)"
+    },
+    {
+      "id": "C8",
+      "commit": "e8d89aa",
+      "titulo": "un solo escritor de conversacion"
+    },
+    {
+      "id": "C38",
+      "commit": "fbb9a22",
+      "titulo": "umbrales de autonomia y voz desde config"
+    },
+    {
+      "id": "C19",
+      "commit": "6e140d1",
+      "titulo": "cliente sin fetch directo a proveedor"
+    },
+    {
+      "id": "C18",
+      "commit": "89242af",
+      "titulo": "timeouts de red desde config central"
+    },
+    {
+      "id": "C39",
+      "commit": "a089d78",
+      "titulo": "motor no re-normaliza ni re-deriva"
+    },
+    {
+      "id": "C37",
+      "commit": "a5c0aff",
+      "titulo": "una sola ruta de finalizeTurnCommit"
+    },
+    {
+      "id": "C36",
+      "commit": "d4648ad",
+      "titulo": "consumidores no re-normalizan"
+    },
+    {
+      "id": "C28",
+      "commit": "0eab4b1",
+      "titulo": "una sola implementacion de strip de wake word"
+    },
+    {
+      "id": "C27",
+      "commit": "5908d37",
+      "titulo": "una sola derivacion de query"
+    },
+    {
+      "id": "C26",
+      "commit": "862781d",
+      "titulo": "un solo commit de turno"
+    },
+    {
+      "id": "C25",
+      "commit": "e0e89b9",
+      "titulo": "App no re-normaliza la frase canonica"
+    },
+    {
+      "id": "C29",
+      "commit": "6acb6fe",
+      "titulo": "sample rate desde FLU_CONFIG"
+    },
+    {
+      "id": "C24",
+      "commit": "a523fd7",
+      "titulo": "un solo default de modelo de texto"
+    },
+    {
+      "id": "C15",
+      "commit": "26e9e33",
+      "titulo": "IDs UUIDv4 al insertar"
+    },
+    {
+      "id": "C12",
+      "commit": "5eaa425",
+      "titulo": "claves de texto desde STORAGE_KEYS"
+    },
+    {
+      "id": "C7",
+      "commit": "67e8dc0",
+      "titulo": "base Pollinations unica desde sharedConfig"
+    },
+    {
+      "id": "C6",
+      "commit": "7873bad",
+      "titulo": "wake word runtime desde FLU_CONFIG"
+    },
+    {
+      "id": "C5",
+      "commit": "465e274",
+      "titulo": "API key de texto solo desde el resolver central"
+    },
+    {
+      "id": "C4",
+      "commit": "a3dfe79",
+      "titulo": "clave de proveedor solo desde STORAGE_KEYS"
+    },
+    {
+      "id": "C3",
+      "commit": "8bbad00",
+      "titulo": "un solo escritor de voiceProfiles"
+    },
+    {
+      "id": "C2",
+      "commit": "1d2e8fa",
+      "titulo": "allowlist de busqueda solo desde FLU_CONFIG"
+    },
+    {
+      "id": "v18",
+      "commit": "5c2fb93",
+      "titulo": "unifica cuerpos duplicados en un dueno unico (12->0)"
+    }
+  ]
+}
