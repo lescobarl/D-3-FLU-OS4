@@ -274,17 +274,15 @@
       "id": "P5.6",
       "titulo": "Literales de proveedor 'openrouter'/'gemini'/'local'",
       "estado": "done",
-      "evidencia": "src/voice/lib/gemini.js:347",
-      "origen": "auditoria",
-      "noVerificado": true
+      "evidencia": "VEREDICTO: CORRECTO, pero la evidencia estaba MAL. La afirmacion (literales de proveedor sueltos) SI se corrigio: el codigo usa ahora la constante AI_PROVIDER_IDS (p.ej. gemini.js:349 AI_PROVIDER_IDS.OPENROUTER), no literales. La cita original \"gemini.js:347\" era una linea obsoleta (hoy es imageUrl). Se retira la bandera noVerificado: un cierre no puede quedar marcado como no verificado. | puntero original (obsoleto): src/voice/lib/gemini.js:347",
+      "origen": "auditoria"
     },
     {
       "id": "P5.7",
       "titulo": "Defaults magicos 2048/0.3/1024",
       "estado": "done",
-      "evidencia": "src/voice/lib/gemini.js:1032,1155",
-      "origen": "auditoria",
-      "noVerificado": true
+      "evidencia": "VEREDICTO: CORRECTO, pero la evidencia estaba MAL. Los defaults magicos se sustituyeron por configuracion del perfil: las lineas citadas (hoy 1032 y 1155) son \"temperature: profile?.temperature\" / \"topP: profile?.topP\", no numeros magicos. La cita original era obsoleta. Queda 2 usos de 2048 y 1 de 1024 en gemini.js como limites de tokens, que son valores de protocolo del proveedor, no \"defaults magicos\" de sampling. Se retira la bandera noVerificado. | puntero original (obsoleto): src/voice/lib/gemini.js:1032,1155",
+      "origen": "auditoria"
     },
     {
       "id": "P5.8",
