@@ -1,20 +1,11 @@
 {
-  "id": "P6.11",
+  "id": "P7.3",
   "mode": "full",
-  "task": "P6.11",
-  "base": "9fbfb167207a12eee784686a4c7a379f194acba0",
-  "objective": "src/ no aserta \"esto no es null\": las 51 aserciones no-null (expr!) se sustituyen por demostracion del tipo (guard, early return, ?? con default, acceso por referencia no-null), no por otro cast.",
+  "task": "P7.3",
+  "base": "a4336b7060fd0109cc7cf56466f80aecb31beed0",
+  "objective": "TS estricto: desaparece el ultimo doble cast (as unknown as) de src y su guard (C49) entra en la barrera, para que no vuelva en silencio.",
   "allow": [
-    "src/avatar/model/bunnyAnimator.ts",
-    "src/avatar/model/bunnyTextures.ts",
-    "src/components/WorkspaceHub.tsx",
-    "src/core/autonomy/autoOptimization.ts",
-    "src/core/autonomy/autoRecovery.ts",
-    "src/core/autonomy/healthMonitor.ts",
-    "src/core/contacts/contactService.ts",
-    "src/hooks/useNavigationCommands.ts",
-    "src/main.tsx",
-    "src/services/musicPlayer.ts",
+    "src/core/db/fluDatabase.ts",
     "tests/**",
     "package.json",
     ".task/frozen.json",
@@ -26,19 +17,19 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 20,
-  "maxLines": 500,
-  "dod": "npx tsc -b && npx vitest run tests/nonNullAssertionGuard.test.ts tests/guardMutationGuard.test.ts tests/eolGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/nonNullAssertionGuard.test.ts --reporter=dot",
+  "maxFiles": 12,
+  "maxLines": 300,
+  "dod": "npx tsc -b && npx vitest run tests/tsStrictGuard.test.ts tests/dexieSingleSourceGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/tsStrictGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Aserciones no-null (nodos NonNullExpression del AST de TypeScript) en src/**/*.{ts,tsx,js,jsx,mjs}: 51 -> 0.",
+    "statement": "Doble cast (as unknown as) en src: 1 -> 0.",
     "metric": {
-      "command": "node -e \"const ts=require('typescript'),fs=require('fs'),path=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));const k=f=>f.endsWith('tsx')?ts.ScriptKind.TSX:f.endsWith('jsx')?ts.ScriptKind.JSX:f.endsWith('ts')?ts.ScriptKind.TS:ts.ScriptKind.JS;let n=0;for(const f of walk('src')){const sf=ts.createSourceFile(f,fs.readFileSync(f,'utf8'),ts.ScriptTarget.Latest,true,k(f));const v=x=>{if(x.kind===ts.SyntaxKind.NonNullExpression)n++;ts.forEachChild(x,v)};v(sf)}console.log(n)\"",
+      "command": "node -e \"const fs=require('fs'),path=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));let n=0;for(const f of walk('src')){for(const line of fs.readFileSync(f,'utf8').split(/\\r?\\n/)){const t=line.trim();if(t.startsWith('*')||t.startsWith('/*')||t.startsWith('//'))continue;if(/as unknown as/.test(line))n++;}}console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/nonNullAssertionGuard.test.ts"
+      "tests/tsStrictGuard.test.ts"
     ]
   }
 }

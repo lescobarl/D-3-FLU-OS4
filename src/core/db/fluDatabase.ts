@@ -708,10 +708,13 @@ export class FluDatabase extends Dexie {
             this.version(version).stores(stores);
         }
 
-        const handles = this as unknown as Record<string, unknown>;
-        for (const name of schemaTableNames()) {
-            handles[name] = this.table(name);
-        }
+        // Handles derivados del esquema (no se enumeran a mano). Object.assign
+        // rellena los campos por nombre sin doble cast: los tipos siguen declarados
+        // en la clase y el guard los contrasta con DEXIE_VERSIONS.
+        Object.assign(
+            this,
+            Object.fromEntries(schemaTableNames().map((name) => [name, this.table(name)])),
+        );
     }
 }
 
