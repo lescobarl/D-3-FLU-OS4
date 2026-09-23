@@ -266,6 +266,7 @@ de **0 nuevos**.
 - Archivos: `PascalCase` componentes, `camelCase` hooks/utils. Un componente por archivo.
 - Estructura: `src/modules/[bloque]/[modulo]/Componente.tsx`.
 - Interfaces con prefijo `I`; tipos sin prefijo. Tipos en `src/types/[dominio].ts`.
+- EOL: conserva la del fichero. El repo es mixto (`core.autocrlf=false`, sin `.gitattributes`): hay blobs en LF y en CRLF. Cambiar la clase EOL hace que git marque TODO el fichero como modificado y que el diff del gate reviente por tamaño. El `eolGuard` lo pilla respecto al índice, pero tras commitear el flip deja de verlo: no te fíes de un diff de miles de líneas.
 
 ## 5. VALIDACIÓN, ITERACIÓN Y CI
 
