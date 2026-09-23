@@ -1,22 +1,20 @@
 {
-  "id": "barrier",
+  "id": "P6.6",
   "mode": "full",
-  "task": "hallazgo - el guard del ledger hacia 115 git cat-file y flaqueaba por timeout",
-  "base": "3d25a4de2fb159c66b979459fc5dcfc97664d49d",
-  "objective": "Hacer determinista la barrera: commitExists resolvia UN `git cat-file` por hash del ledger (~115 procesos) y con la suite completa en carga el guard del ledger superaba los 15 s de timeout y se ponia rojo de forma intermitente con el ledger correcto. Pasa a un solo `git cat-file --batch-check` cacheado, misma semantica. Medido: 6.0 s -> 0.13 s en el guard.",
+  "task": "P6.6 paso 3/N - applyConfigAction sale de App.tsx",
+  "base": "8ae18ce231f6b9a19fd369677d9f89c8cfa706a3",
+  "objective": "Sacar a src/app/configActions.ts el bloque de accion de configuracion (ApplyConfigContext, parseBoolean, applyNumberConfig y applyConfigAction): era el trozo mas grande con destino claro y sin acoplamiento a guards. App.tsx 5344 -> ~4920. Se retiran de App.tsx los imports que se quedan sin uso al moverse (tsc noUnusedLocals los canta).",
   "allow": [
-    "scripts/**",
-    ".task/**",
     "src/**",
-    "tests/**"
+    ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 10,
+  "maxFiles": 6,
   "maxLines": 1000,
-  "dod": "node scripts/task-ledger.mjs check",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b",
+  "guard": "npx vitest run tests/localStorageGatewayGuard.test.ts tests/tabRoutes.test.ts tests/appTypeGuards.test.ts --reporter=dot",
   "guardExpect": "green"
 }
