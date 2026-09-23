@@ -396,14 +396,14 @@
     {
       "id": "P7.1",
       "titulo": "npm run lint no lintea eslint (solo guards)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "package.json:12",
       "origen": "auditoria"
     },
     {
       "id": "P7.2",
       "titulo": "Plugin react-hooks sin reglas (lint de hooks inerte)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "eslint.config.mjs:18-32",
       "origen": "auditoria"
     },
@@ -710,6 +710,16 @@
       "id": "v18",
       "commit": "5c2fb93",
       "titulo": "unifica cuerpos duplicados en un dueno unico (12->0)"
+    },
+    {
+      "id": "P7.1",
+      "commit": "62252ab",
+      "titulo": "npm run lint no lintea eslint (solo guards)"
+    },
+    {
+      "id": "P7.2",
+      "commit": "62252ab",
+      "titulo": "Plugin react-hooks sin reglas (lint de hooks inerte)"
     }
   ]
 }
