@@ -1889,4 +1889,31 @@ Que se hizo:
 MEDICION (ANTES -> DESPUES): referencias a claves LS de branding en src (constantes y literales)
   = 9 -> 0 (3 declaraciones en appConfig + 6 usos en backupSystem). El gate la recomputa en el
   worktree base. Los patrones usan limite de palabra: BRANDING_MODES (plural, legitimo) no cuenta.
-VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; guard 5/5 ; npm run gate -> ver salida.
+VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; guard 5/5 ; npm run gate -> ver salida.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.9 (descubierto): STORAGE_KEYS declaraba 11 claves muertas
+================================================================
+Que era: STORAGE_KEYS (mapa de claves localStorage) declaraba 11 entradas que NADIE referencia:
+  - Configurador FLU (6): FLU_PROFILE, FLU_IMAGE_CONFIG, FLU_VOICE_CONFIG, FLU_ADVANCED_CONFIG,
+    FLU_PERSONALITY_TRAITS, FLU_PERSONALITY_TONE -> sustituidas por el integrationStore
+    (zustand persist). La app ya no las lee.
+  - Proveedor (4): GEMINI_MODEL, GEMINI_API_URL, POLLINATIONS_URL, POLLINATIONS_MODEL.
+  - NOTIFICATION_MUTED -> sustituida por NOTIFICATION_CHANNEL/NOTIFICATION_PERMISSION.
+Es la MISMA clase de defecto que P1.5: un almacen declarado que la aplicacion ya no usa. El mapa
+parecia la lista de claves vivas y no lo era.
+VERIFICACION PREVIA (no se borro a ciegas): 791 ficheros escaneados fuera de node_modules/.git/dist
+(escaneo por contenido, no por grep del terminal); los 11 literales aparecen SOLO en su propia
+declaracion en appConfig.ts (11 hits exactos); NO existe acceso dinamico STORAGE_KEYS[...] en el
+repo. Por tanto la retirada no puede romper ninguna lectura.
+Que se hizo:
+  1. appConfig.ts: retiradas las 11 claves. Donde estaba el bloque del Configurador FLU queda la
+     nota de que ese estado vive en el integrationStore.
+  2. Guard nuevo tests/storageKeysAliveGuard.test.ts: TODA clave declarada en STORAGE_KEYS debe
+     estar referenciada en src/ o tests/. Ademas: todas deben usar el namespace flu-, y las 6 ya
+     retiradas no pueden volver.
+  3. El guard se blinda contra si mismo: un test exige que el mapa se parsee de verdad (>50 claves)
+     y que haya referencias (>10). Esa guarda nacio de un fallo REAL detectado por el propio guard:
+     su primera version tenia la regex [A-Z][A-Z0-9_]+ (minimo 2 caracteres), asi que una clave de
+     1 caracter no matcheaba y el guard habria pasado vacio (declared={} -> dead=[] trivial).
+MEDICION (ANTES -> DESPUES): claves declaradas en STORAGE_KEYS sin ninguna referencia en el codigo
+  = 11 -> 0. El gate la recomputa en el worktree base.
+VERIFICACION: tsc -b -> 0 ; guard 6/6 ; npm run gate -> ver salida.

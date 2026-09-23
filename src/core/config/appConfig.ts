@@ -77,12 +77,8 @@ export {
 // Storage Keys
 // -----------------------------------------------------------
 export const STORAGE_KEYS = {
-    GEMINI_MODEL: 'flu-gemini-model',
-    GEMINI_API_URL: 'flu-gemini-api-url',
     LANGUAGE: 'flu-language',
     SESSION_ROLE: 'flu-session-role',
-    POLLINATIONS_URL: 'flu-pollinations-url',
-    POLLINATIONS_MODEL: 'flu-pollinations-model',
     // New image config keys
     TEXT_API_URL: 'flu-text-api-url',
     TEXT_MODEL: 'flu-text-model',
@@ -101,13 +97,7 @@ export const STORAGE_KEYS = {
     OCR_API_KEY: 'flu-ocr-api-key',
     OCR_MODEL: 'flu-ocr-model',
     OCR_API_URL: 'flu-ocr-api-url',
-    // FLU Configurator keys
-    FLU_PROFILE: 'flu-profile',
-    FLU_IMAGE_CONFIG: 'flu-image-config',
-    FLU_VOICE_CONFIG: 'flu-voice-config',
-    FLU_ADVANCED_CONFIG: 'flu-advanced-config',
-    FLU_PERSONALITY_TRAITS: 'flu-personality-traits',
-    FLU_PERSONALITY_TONE: 'flu-personality-tone',
+    // Configurador FLU: sin claves localStorage — vive en integrationStore (zustand persist).
     // Creativity configuration
     CREATIVITY: 'flu-creativity',
     // DeepSeek configuration
@@ -157,7 +147,6 @@ export const STORAGE_KEYS = {
     ACTIVE_USER: 'flu-active-user',
     NOTIFICATION_PERMISSION: 'flu-notification-permission',
     NOTIFICATION_CHANNEL: 'flu-notification-channel',
-    NOTIFICATION_MUTED: 'flu-notification-muted',
     DND_ENABLED: 'flu-dnd-enabled',
     DND_SCHEDULE: 'flu-dnd-schedule',
     DND_ALLOW_URGENT: 'flu-dnd-allow-urgent',

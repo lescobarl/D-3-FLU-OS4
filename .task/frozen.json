@@ -81,5 +81,6 @@
   "tests/minutesDeadIndexPruneGuard.test.ts": "f5ce7b392b933a85d77fb0385c78a8f0284b3a17dbf837d1d726acb25a223d66",
   "tests/preCommitBarrierGuard.test.ts": "05e906314326fa08f7768df774807f2d80be6769687c1e92325bec625f65b69e",
   "tests/brandingDexieOnlyGuard.test.ts": "c7ab4e45ca3d5c102cb775f71557daa9935290913e64749efce39e47e2d70fdb",
-  "tests/decisionVerdictGuard.test.ts": "d74ecf383187511b7216cec8d595e20bbcf875aafd06798856d533fe3bf53a14"
+  "tests/decisionVerdictGuard.test.ts": "d74ecf383187511b7216cec8d595e20bbcf875aafd06798856d533fe3bf53a14",
+  "tests/storageKeysAliveGuard.test.ts": "a269d15fd6ee2351efc0eb0fbf9744e8649720b3202fa4951d6f34dbd646684c"
 }

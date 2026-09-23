@@ -1,16 +1,17 @@
 {
-  "id": "DECISIONS",
+  "id": "P1.9",
   "mode": "full",
-  "task": "DECISIONS",
-  "base": "e0d5a1c40946a82e291b29a4ec34ed1ca39d54aa",
-  "objective": "Registrar veredicto formal de las 6 decisiones abiertas del ledger, con evidencia citada.",
+  "task": "P1.9",
+  "base": "1575503361dd812c3749518f0e9cb897d5f72c3c",
+  "objective": "STORAGE_KEYS no declara claves localStorage muertas: el mapa vuelve a ser la lista de claves vivas.",
   "allow": [
-    "plans/ledger.json",
+    "src/core/config/appConfig.ts",
     "tests/**",
     "package.json",
     ".task/frozen.json",
     ".task/contract.json",
-    ".task/report"
+    ".task/report",
+    "plans/ledger.json"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
@@ -19,17 +20,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b && npx vitest run tests/storageKeysAliveGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/storageKeysAliveGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Entradas del ledger en estado decision SIN veredicto formal: 6 -> 0.",
+    "statement": "Claves declaradas en STORAGE_KEYS sin ninguna referencia en el codigo: 11 -> 0.",
     "metric": {
-      "command": "node -e \"const l=require('./plans/ledger.json');const bad=l.items.filter(i=>i.estado==='decision'&&!String(i.evidencia||'').includes('VEREDICTO:'));console.log(bad.length)\"",
+      "command": "node -e \"const fs=require('fs'),path=require('path');const cfg=fs.readFileSync('src/core/config/appConfig.ts','utf8');const body=cfg.split('export const STORAGE_KEYS')[1].split('} as const')[0];const declared=[...body.matchAll(/^\\\\s*([A-Z][A-Z0-9_]+)\\\\s*:\\\\s*.\\\\S/gm)].map(m=>m[1]);const files=[];const walk=d=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory()){if(['node_modules','.git','dist'].includes(e.name))continue;walk(p);}else if(/[.](ts|tsx|js|jsx|mjs|cjs)$/.test(e.name))files.push(p);}};walk('src');walk('tests');const used=new Set();for(const f of files){const t=fs.readFileSync(f,'utf8');for(const m of t.matchAll(/STORAGE_KEYS[.]([A-Z][A-Z0-9_]*)/g))used.add(m[1]);}console.log(declared.filter(k=>!used.has(k)).length)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/decisionVerdictGuard.test.ts"
+      "tests/storageKeysAliveGuard.test.ts"
     ]
   }
 }
