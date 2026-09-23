@@ -43,6 +43,11 @@ const LISTENING_ACK_PHRASES = Object.freeze([
   `${firstWakeWith('hey ')} are you listening`,
 ])
 
+/** Allowlist curada del navegador: fuente unica de los sitios permitidos. */
+const CURATED_ALLOWLIST = ['wikipedia.org', 'educ.ar']
+/** Variante Familiar: la allowlist curada mas video. */
+const CURATED_ALLOWLIST_FAMILIAR = [...CURATED_ALLOWLIST, 'youtube.com']
+
 export const FLU_CONFIG = {
   sessionDefaults: {
     role: 'Asistente del Maestro',
@@ -1059,7 +1064,7 @@ export const FLU_CONFIG = {
     },
     defaultProfile: {
       categories: ['educacion', 'cuentos'],
-      allowlist: ['wikipedia.org', 'educ.ar'],
+      allowlist: CURATED_ALLOWLIST,
       readingLevel: 'detallado',
       language: 'es',
       homeTiles: ['educacion', 'cuentos'],
@@ -1067,14 +1072,14 @@ export const FLU_CONFIG = {
     defaultsByRole: {
       Estudiante: {
         categories: ['educacion', 'cuentos', 'juegos'],
-        allowlist: ['wikipedia.org', 'educ.ar'],
+        allowlist: CURATED_ALLOWLIST,
         readingLevel: 'simple',
         language: 'es',
         homeTiles: ['educacion', 'cuentos', 'juegos'],
       },
       Familiar: {
         categories: ['educacion', 'cuentos', 'juegos', 'musica'],
-        allowlist: ['wikipedia.org', 'educ.ar', 'youtube.com'],
+        allowlist: CURATED_ALLOWLIST_FAMILIAR,
         readingLevel: 'detallado',
         language: 'es',
         homeTiles: ['educacion', 'cuentos', 'juegos', 'musica'],

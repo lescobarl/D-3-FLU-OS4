@@ -6,6 +6,7 @@
  * en hilo principal). Los textos configurables («Hablante N») viven en FLU_CONFIG.
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { stripDiacriticsLower } from '../../lib/textUtils';
 
 /** Etiqueta de hablante por defecto (config-driven; nunca un literal fuera de config). */
 export function getFallbackSpeaker(config = FLU_CONFIG) {
@@ -73,10 +74,7 @@ export function labelToSpeakerId(label = '') {
   const text = String(label || '').trim()
   const match = text.match(/^Hablante\s+(\d+)$/i)
   if (match) return `speaker_${match[1]}`
-  const slug = text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+  const slug = stripDiacriticsLower(text)
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
   return slug ? `speaker_name_${slug}` : 'speaker_1'

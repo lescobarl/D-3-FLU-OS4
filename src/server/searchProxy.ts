@@ -28,6 +28,7 @@ import type { ResolvedLanguage } from '../core/search/searchLanguage';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
 import { logCaughtError } from '../lib/caughtError';
+import { parseAllowlist } from './allowlist';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.SEARCH_PROXY_MS;
@@ -38,13 +39,6 @@ const USER_AGENT = 'FLU-OS4-Curaduria/1.0 (modo lectura curada)';
 const sendJson = (res: ServerResponse, status: number, data: unknown) =>
   sendJsonShared(res, status, data, '[searchProxy] sendJson failed:');
 
-function parseAllowlist(raw: string | null): string[] {
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 /**
  * Parsea los proveedores enviados por el cliente (JSON).

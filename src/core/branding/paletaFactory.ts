@@ -15,6 +15,7 @@
 // ============================================================
 
 import { PALETTE_COLOR_KEYS, type PaletteDefinition } from './seasonalPalettes';
+import { stripDiacriticsLower } from '../../lib/textUtils';
 
 // -----------------------------------------------------------
 // Slug de id
@@ -26,10 +27,7 @@ import { PALETTE_COLOR_KEYS, type PaletteDefinition } from './seasonalPalettes';
  * Ej.: "Modo Neon" → "modo-neon", "Bosque Encantado" → "bosque-encantado".
  */
 export function slugifyPalette(nombre: string): string {
-    return nombre
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+    return stripDiacriticsLower(nombre)
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
 }

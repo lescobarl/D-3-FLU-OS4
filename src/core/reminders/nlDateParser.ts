@@ -13,6 +13,7 @@
 
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { SPEECH_LOCALES } from '../config/localeConfig';
+import { stripDiacriticsLower } from '../../lib/textUtils';
 
 export interface NlDateTimeResult {
   /** Cómo se interpretó la expresión (para trazas/mensajes). */
@@ -127,10 +128,7 @@ const PART_OF_DAY: ReadonlyArray<{ pattern: RegExp; hour: number; label: string 
 
 /** Quita acentos y normaliza a minúsculas con espacios simples. */
 function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+  return stripDiacriticsLower(text)
     .replace(/\s+/g, ' ')
     .trim();
 }

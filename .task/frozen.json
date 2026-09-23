@@ -70,5 +70,6 @@
   "tests/gameAdoptRandomGuard.test.ts": "9c630640c3f7d4edb38d2502aa53dd730b289b642663f75d9136646633276d54",
   "tests/gameRoundsGuard.test.ts": "6addf4307d517adafc6edcce39d01c9a2eebfab2c9bbdbb5f1c928b3768b6529",
   "tests/providerUrlGuard.test.ts": "6dd90518212f286f6d34357095e78cecd47f4328dfed10d2add761edd78a17a3",
-  "tests/configSingleSourceGuard.test.ts": "0b4f7f7aeffcaf745662ccc2981c153c19a5c82273496e13e517be72e1802156"
+  "tests/configSingleSourceGuard.test.ts": "0b4f7f7aeffcaf745662ccc2981c153c19a5c82273496e13e517be72e1802156",
+  "tests/duplicationGuard.test.ts": "5800cc37cc63686c52f9f2a5c54b6fcab68fa55779ae156cbad31a79f97c20da"
 }

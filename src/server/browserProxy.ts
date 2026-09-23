@@ -12,6 +12,7 @@ import { buildBrowserUrl } from '../core/browser/browserSession';
 import { acceptLanguageHeader } from '../core/search/searchLanguage';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
 import { logCaughtError } from '../lib/caughtError';
+import { parseAllowlist } from './allowlist';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
@@ -20,13 +21,6 @@ const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
 const sendJson = (res: ServerResponse, status: number, data: unknown) =>
   sendJsonShared(res, status, data, '[browserProxy] sendJson failed:');
 
-function parseAllowlist(raw: string | null): string[] {
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 interface FetchOk {
   ok: true;

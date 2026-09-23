@@ -18,6 +18,7 @@ import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
 import { isGameId } from '../../core/games/gameCatalog'
 import { normalizeForMatch } from '../../lib/textUtils'
 import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_SYNONYMS } from '../../core/config/sharedConfig'
 
 // ------------------------------------------------------------
 // Normalización de texto
@@ -274,13 +275,6 @@ const LANGUAGE_SYNONYMS = {
   both: ['ambos', 'both', 'bilingue', 'bilingual'],
 }
 
-const PROVIDER_SYNONYMS = {
-  openrouter: ['openrouter', 'open router'],
-  gemini: ['gemini', 'google'],
-  deepseek: ['deepseek', 'deep seek'],
-  local: ['local', 'offline', 'servidor local'],
-}
-
 const EMOTION_SYNONYMS = {
   neutral: ['neutral', 'normal', 'neutro'],
   happy: ['feliz', 'contento', 'alegre'],
@@ -313,7 +307,7 @@ export function matchLanguage(text = '') {
 }
 
 export function matchProvider(text = '') {
-  return resolveFromSynonyms(text, PROVIDER_SYNONYMS)
+  return resolveFromSynonyms(text, AI_PROVIDER_SYNONYMS)
 }
 
 export function matchEmotion(text = '') {

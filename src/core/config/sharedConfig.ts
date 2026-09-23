@@ -110,6 +110,18 @@ export const AI_PROVIDER_IDS = {
 export const DEFAULT_AI_PROVIDER: AIProvider = 'openrouter';
 
 /**
+ * Sinonimos hablados de cada proveedor. Tipado por AIProvider: anadir un proveedor
+ * al catalogo obliga a declarar aqui sus sinonimos (antes vivian en configCommands.js
+ * re-declarando las claves del catalogo).
+ */
+export const AI_PROVIDER_SYNONYMS: Readonly<Record<AIProvider, readonly string[]>> = {
+    openrouter: ['openrouter', 'open router'],
+    gemini: ['gemini', 'google'],
+    deepseek: ['deepseek', 'deep seek'],
+    local: ['local', 'offline', 'servidor local'],
+};
+
+/**
  * Orden de conmutación cuando el servicio de IA cae (auto-recovery y motor de
  * decisiones). Un solo lugar para la política de fallback.
  */

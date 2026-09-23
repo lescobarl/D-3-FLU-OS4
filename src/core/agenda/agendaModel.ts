@@ -21,6 +21,7 @@ import {
     parseTimeOfDayToMs,
 } from '../temporal/scheduleEngine';
 import type { SyncTuple } from '../db/fluDatabase';
+import { stripDiacriticsLower } from '../../lib/textUtils';
 
 export type AgendaKind = 'recordatorio' | 'cita' | 'junta' | 'clase' | 'alarma';
 
@@ -71,11 +72,7 @@ export function agendaTriggerAction(kind: AgendaKind): 'sonar' | 'avisar' | 'mar
 
 /** Normaliza una etiqueta para el dedup (sin acentos, minúsculas, recortada). */
 export function normalizeAgendaLabel(label: string): string {
-    return String(label || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
+    return stripDiacriticsLower(label || '').trim();
 }
 
 /** Clave de dedup: mismo tipo + misma etiqueta + mismo disparo ⇒ no duplica. */

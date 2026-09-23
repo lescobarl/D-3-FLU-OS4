@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { stripDiacriticsLower } from '../../lib/textUtils';
 
 // ------------------------------------------------------------
 // Tipos
@@ -126,12 +127,7 @@ export function resolveKindRole(
   if (!kind) return undefined;
   // Normaliza mayúsculas, espacios, acentos y duplicados para aceptar voz y texto.
   const normKey = (value: string): string =>
-    String(value)
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, ' ')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+    stripDiacriticsLower(value).replace(/\s+/g, ' ').trim();
   // Limpia signos de puntuación finales que el ASR puede añadir ("adulto.", "niño?").
   const stripPunct = (value: string): string => value.replace(/[.,;:!?¿¡]+$/g, '').trim();
   // Raíz sin plural: quita una "s" final para aceptar "adultos"/"niños" por voz.

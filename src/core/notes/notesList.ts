@@ -1,3 +1,4 @@
+import { stripDiacriticsLower } from '../../lib/textUtils';
 // ============================================================
 // Notes List — Listado de notas (Pizarrón consolidado)
 // ------------------------------------------------------------
@@ -108,11 +109,7 @@ export function matchNotesByTarget<T extends { label: string; done: boolean }>(
   target: string,
 ): T[] {
   const normalize = (value: string): string =>
-    String(value || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim();
+    stripDiacriticsLower(value || '').trim();
   const needle = normalize(target);
   if (!needle) return [];
   return items.filter((note) => !note.done && normalize(note.label).includes(needle));

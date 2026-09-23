@@ -18,6 +18,7 @@ import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
 import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
+import { stripDiacriticsLower } from '../../lib/textUtils';
 
 export type AgendaCommandAction =
     | 'agenda.create'
@@ -84,7 +85,7 @@ const CLASE_ALL_DAYS_RE = /\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d
 const COUNTDOWN_RE = /\b(?:en|de)\s+(\d+)\s+(segundos?|minutos?|horas?)\b/i;
 
 function normalize(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return stripDiacriticsLower(text).trim();
 }
 
 /** Colapsa tartamudeo de cuantificador: "todo toda" → "toda", "todo todo" → "todo". */

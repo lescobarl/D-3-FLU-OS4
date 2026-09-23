@@ -1560,4 +1560,42 @@ INVARIANTE (falsable): devuelto un id de proveedor literal en searchSession.ts -
 VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 291 archivos /
   3023 tests / 0 fallos ; gate -> exit 0 ; arbol limpio.
 NO VALIDADO: no se ejercito el flujo real de voz/Gemini (solo tests); los valores efectivos
-  no cambian (mismos ids y mismo 2048).
+  no cambian (mismos ids y mismo 2048).================================================================
+[CIERRE TECNICO] 2026-09-22 - P4.3 + P4.4 + P4.5 + P4.9 + P4.13 (un algoritmo, una copia)
+================================================================
+Los cinco items eran el mismo defecto con cinco caras: la misma logica escrita dos o mas
+veces, de modo que arreglar una copia deja las otras rotas. Se ataca como una clase, no
+como cinco incidencias.
+P4.5 (NFD en 10 archivos): src/lib/textUtils.ts ya se declaraba FUENTE UNICA de la
+  normalizacion de acentos y ofrecia stripDiacritics/stripDiacriticsLower, pero 8 modulos
+  reimplementaban la cadena a mano (agendaCommandParser, agendaModel, paletaFactory,
+  participantRegistry, notesList, nlDateParser, selfKnowledge, speakerCore). Los 8 pasan a
+  stripDiacriticsLower. Se conserva el orden de operaciones: el plegado NFD y el
+  toLowerCase conmutan, y donde habia colapso de espacios o recorte se mantienen en su
+  posicion original para no cambiar la salida.
+P4.4 (slugifyPalette = slugifyAmbiente): eran identicas linea a linea; slugifyAmbiente
+  delega en slugifyPalette. El guard ademas exige que el cuerpo del algoritmo de slug
+  exista en un solo archivo.
+P4.3 (parseAllowlist x2): copiada identica en searchProxy y browserProxy; pasa a
+  src/server/allowlist.ts y ambos la importan.
+P4.9 (allowlist wikipedia/educ.ar x3): las tres declaraciones salen de CURATED_ALLOWLIST y
+  CURATED_ALLOWLIST_FAMILIAR (la Familiar es la curada + youtube.com), una sola vez.
+P4.13 (PROVIDER_SYNONYMS re-declaraba el catalogo): las claves openrouter/gemini/deepseek/
+  local duplicaban AI_PROVIDERS. Pasan a AI_PROVIDER_SYNONYMS en sharedConfig, tipado
+  Readonly<Record<AIProvider, readonly string[]>>: anadir un proveedor al catalogo ahora
+  NO COMPILA si no se declaran sus sinonimos. No se crea catalogo nuevo.
+GUARD: tests/duplicationGuard.test.ts, registrado en lint:guards y congelado. 5 reglas
+  (NFD fuera del dueno; algoritmo de slug unico; parseAllowlist definida una sola vez y
+  ambos proxies la importan; allowlist curada declarada una vez; sinonimos de proveedor
+  cubren exactamente AI_PROVIDERS) + segundo describe que falsifica el propio detector.
+DEFECTO DE PROCESO DECLARADO: el guard eolGuard detecto que ambienteFactory.ts pasaba de
+  CRLF (indice) a mixed: mi reemplazo inserto saltos LF en un archivo CRLF. Corregido
+  re-normalizando el archivo a CRLF. Lo encontro el guard, no yo; queda como recordatorio
+  de que todo reemplazo de texto debe respetar la clase EOL del archivo.
+INVARIANTE (falsable): reinyectado el plegado NFD inline en agendaModel.ts -> guard ROJO
+  nombrando el archivo; restaurado -> 7/7 VERDE.
+VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 292 archivos /
+  3030 tests / 0 fallos ; lint:guards 17 archivos OK ; gate -> exit 0.
+NO VALIDADO: no se ejercitaron los flujos reales de busqueda, agenda o voz (solo tests);
+  los valores efectivos no cambian (mismo plegado, mismo slug, misma allowlist, mismos
+  sinonimos).
