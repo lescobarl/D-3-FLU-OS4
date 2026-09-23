@@ -432,8 +432,8 @@
     {
       "id": "P0.8",
       "titulo": "El pre-commit que documenta AGENTS.md no es el que corre: AGENTS.md:282 dice \"npm run gate\" pero .git/hooks/pre-commit ejecuta lint+typecheck, y ese hook NO esta versionado (no existe en CI ni en otro clon)",
-      "estado": "decision",
-      "evidencia": "AGENTS.md:282 vs .git/hooks/pre-commit; guards ya comprueban los scripts, no el hook",
+      "estado": "done",
+      "evidencia": "CERRADO commit 849bae5. AGENTS.md seccion Gates afirmaba DOS cosas falsas: (1) \"Pre-commit LIGERO (nunca la suite completa): npm run gate\" se contradecia a si misma; (2) atribuia npm run gate a CI, y el propio ci.yml documenta que NO lo corre. Ademas el hook real vivia en .git/hooks/pre-commit (no versionado: no existia en clon nuevo ni CI). Ahora: .githooks/pre-commit VERSIONADO (lint + typecheck, nunca suite ni gate) + scripts/install-hooks.mjs y script prepare que activa core.hooksPath=.githooks + AGENTS.md Gates reescrito con la barrera REAL (gate = cierre de tarea con contrato activo). Guard nuevo tests/preCommitBarrierGuard.test.ts (4 tests) verifica versionado, ligereza, activacion y coherencia del doc; nace ROJO en base. Gate: metrica hooks versionados 0->1, guard base=ROJO actual=VERDE, exit 0. El propio guard detecto un fallo en su primera version (contaba comandos dentro de comentarios del hook) y se corrigio el detector.",
       "origen": "plan-T"
     }
   ],
@@ -917,6 +917,11 @@
       "id": "P1.6",
       "commit": "03a7172",
       "titulo": "minutes: indice muerto timestamp eliminado (migracion probada)"
+    },
+    {
+      "id": "P0.8",
+      "commit": "849bae5",
+      "titulo": "Barrera pre-commit versionada y doc alineada"
     }
   ]
 }
