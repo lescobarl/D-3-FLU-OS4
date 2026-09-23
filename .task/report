@@ -1833,4 +1833,36 @@ MEDICION (ANTES -> DESPUES), mismo comando sobre src (lineas de codigo, sin come
   Declarado como invariant.metric (target 1); el gate lo RECOMPUTA en un worktree del
   commit base y falsa el guard por su cuenta.
 VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards 136 tests ;
-  test:full -> 298 archivos / 3062 tests / 0 fallos ; npm run gate -> ver salida.
+  test:full -> 298 archivos / 3062 tests / 0 fallos ; npm run gate -> ver salida.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.6: indice muerto minutes.timestamp
+================================================================
+Que era: el esquema declaraba `minutes: 'id, timestamp, sequence'` (v3, y ninguna version
+posterior la re-declaro, asi que seguia VIGENTE). NINGUNA consulta usa ese indice: la unica
+real es orderBy('sequence') en useMinuteKnowledge.ts:223. Un indice que nadie consulta
+ocupa espacio y hace creer que existen consultas por fecha.
+Por que antes lo deje pendiente y ahora SI se pudo: quitar un indice toca el esquema, y su
+correccion solo se valida contra un IndexedDB real. El repo YA tiene `fake-indexeddb`
+(^6.2.5) y tests que lo usan (fluStorage.test.ts), asi que SI habia ruta de verificacion
+real. Decision corregida: se ejecuta con prueba de migracion de verdad.
+Que se hizo:
+  1. Dexie v23: `this.version(23).stores({ minutes: 'id, sequence' })`. Dexie borra el
+     indice conservando las filas. (La declaracion de v3 se deja intacta: el historial de
+     versiones es inmutable.)
+  2. Guard nuevo tests/minutesDeadIndexPruneGuard.test.ts. NO se conforma con mirar el
+     fuente: monta una base con el esquema VIEJO (v22, con el indice), mete una minuta, y
+     reabre con FluDatabase (v23) para comprobar de verdad que
+       - la fila SOBREVIVE (id y contenido),
+       - el indice `timestamp` DESAPARECE,
+       - el indice `sequence` PERMANECE.
+     Eso es la migracion probada, no el fuente leido.
+MEDICION (ANTES -> DESPUES): archivos cuyo esquema EFECTIVO (ultima declaracion) conserva
+  el indice muerto: ANTES 1 -> DESPUES 0. La metrica lee la ULTIMA declaracion a proposito:
+  la v3 historica sigue nominando `timestamp` y no debe contar como defecto vivo.
+  Declarado como invariant.metric (target 0); el gate lo recomputa en el worktree base.
+SEGUNDA PARTE DEL ITEM ("stores() sin revision/deleted") - EVALUADA Y RESUELTA COMO NO:
+  indexar `sync.deleted` (o `sync.revision`) seria indexar un BOOLEANO (2 valores): coste de
+  escritura en cada put a cambio de selectividad practicamente nula. El patron del repo es
+  filtrar en JS tras leer (p.ej. getAuditLogs: .filter(row => !row.sync?.deleted)). NO se
+  indexa; queda como decision razonada, no como olvido.
+VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards 140 tests ;
+  test:full -> 299 archivos / 3066 tests / 0 fallos ; npm run gate -> ver salida.

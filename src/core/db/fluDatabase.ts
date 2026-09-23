@@ -676,6 +676,15 @@ export class FluDatabase extends Dexie {
             temporalItems: null,
         });
 
+        // v23: ELIMINAR el indice muerto minutes.timestamp. Ninguna consulta usa
+        // orderBy/where sobre `timestamp` en minutas (la unica consulta real es
+        // orderBy("sequence"), en useMinuteKnowledge). El indice arrastraba desde v3:
+        // solo ocupaba espacio y hacia creer que habia consultas por fecha. Dexie
+        // borra el indice conservando las filas (verificado con fake-indexeddb).
+        this.version(23).stores({
+            minutes: 'id, sequence',
+        });
+
         this.auditLog = this.table('auditLog');
         this.conversations = this.table('conversations');
         this.minutes = this.table('minutes');

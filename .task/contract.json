@@ -1,9 +1,9 @@
 {
-  "id": "P1.2",
+  "id": "P1.6",
   "mode": "full",
-  "task": "P1.2",
-  "base": "35d174921498ae9f68e7a1a556e73b679d379ef8",
-  "objective": "Minutas: un solo publicador hacia integrationStore (2 -> 1) + dedup por id.",
+  "task": "P1.6",
+  "base": "97e7349683cfbaf7e7a189adcfacfc90dfa69ba5",
+  "objective": "minutes: eliminar el indice muerto timestamp (esquema efectivo 1 -> 0) con migracion probada.",
   "allow": [
     "src/**",
     "tests/**",
@@ -20,17 +20,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/minutosSinglePublisherGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/minutosSinglePublisherGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b && npx vitest run tests/minutesDeadIndexPruneGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/minutesDeadIndexPruneGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Minutas: los sitios que publican en integrationStore pasan de 2 a 1 (un solo publicador).",
+    "statement": "minutes: los archivos cuyo esquema EFECTIVO conserva el indice muerto timestamp pasan de 1 a 0.",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];const RE=/(?:useIntegrationStore\\s*[.]\\s*getState\\s*[(]\\s*[)]|integrationStore)\\s*[.]\\s*addMinute\\s*[(]/;while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx)$/.test(e.name)){for(const l of fs.readFileSync(p,'utf8').split(String.fromCharCode(10))){const t=l.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;if(RE.test(l))n++;}}}}console.log(n)\"",
-      "target": 1
+      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];const RE=/minutes:\\s*[\\x27]([^\\x27]*)[\\x27]/g;while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx)$/.test(e.name)){let last=null;for(const m of fs.readFileSync(p,'utf8').matchAll(RE))last=m[1].split(',').map(s=>s.trim());if(last&&last.includes('timestamp'))n++;}}}console.log(n)\"",
+      "target": 0
     },
     "guardFiles": [
-      "tests/minutosSinglePublisherGuard.test.ts"
+      "tests/minutesDeadIndexPruneGuard.test.ts"
     ]
   }
 }
