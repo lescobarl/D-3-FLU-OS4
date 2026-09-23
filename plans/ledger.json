@@ -63,8 +63,8 @@
     {
       "id": "P1.5",
       "titulo": "brandingConfig en Dexie + flu-branding-* LS (mismo dato, 2 almacenes)",
-      "estado": "todo",
-      "evidencia": "src/core/branding/useSeasonalBranding.ts:96,159",
+      "estado": "done",
+      "evidencia": "CERRADO commit 44ec3dc. DEFECTO REAL, no cosmetico: el branding (mode/activeSeason/birthday) vive en Dexie (fluDb.brandingConfig), que es lo que usa useSeasonalBranding, pero backupSystem lo leia de claves localStorage (flu-branding-*) y lo restauraba escribiendo ESAS claves, que ningun otro modulo toca. El backup registraba SIEMPRE los valores por defecto y el restore escribia donde nadie lee. Se aplica la doctrina ya bendecida por C31 para voiceProfiles (si el dato vive SOLO en Dexie, que ya es persistente, el backup no lo duplica): extract/restore dejan de tocar branding; se retira el campo branding de SystemSettingsData y las 3 claves LS muertas de appConfig. Guard nuevo tests/brandingDexieOnlyGuard.test.ts (plantilla C31, sin exclusiones, 5 tests) que ademas no confunde BRANDING_MODES ni .flu-branding-scope. Gate: metrica 9->0 (recomputada en el worktree base), guard base=ROJO actual=VERDE, exit 0. tsc/eslint 0; test:full 301/3074/0.",
       "origen": "auditoria"
     },
     {
@@ -922,6 +922,11 @@
       "id": "P0.8",
       "commit": "849bae5",
       "titulo": "Barrera pre-commit versionada y doc alineada"
+    },
+    {
+      "id": "P1.5",
+      "commit": "44ec3dc",
+      "titulo": "Branding solo en Dexie: backup sin via LS muerta"
     }
   ]
 }
