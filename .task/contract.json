@@ -1,24 +1,12 @@
 {
-  "id": "C60",
+  "id": "C41",
   "mode": "full",
-  "task": "Fuente unica de la lectura de rounds en motores de juego",
-  "base": "bbc90394b8a6b1daa6028a1ffa11eb0897fff934",
-  "objective": "Una unica funcion (gameUtils.readRounds) lee cfg.rounds/defaultRounds; los 12 motores la consumen.",
+  "task": "URLs de proveedor solo en la config canonica (ruta doble motor/proxy)",
+  "base": "4e35f2a7de47b7201e4c0e45b86b52fdc1f42cb0",
+  "objective": "Ningun archivo fuera de la config canonica hardcodea una URL de proveedor.",
   "allow": [
-    "src/core/games/gameUtils.ts",
-    "src/core/games/abecedario.ts",
-    "src/core/games/adivinaCancion.ts",
-    "src/core/games/calculoMental.ts",
-    "src/core/games/memoriaSecuencias.ts",
-    "src/core/games/ordenaSecuencia.ts",
-    "src/core/games/palabrasEncadenadas.ts",
-    "src/core/games/quienSoy.ts",
-    "src/core/games/repiteTraduce.ts",
-    "src/core/games/riddles.ts",
-    "src/core/games/trabalenguas.ts",
-    "src/core/games/trivia.ts",
-    "src/core/games/veoVeo.ts",
-    "tests/gameRoundsGuard.test.ts"
+    "src/voice/lib/fluConfig.js",
+    "tests/providerUrlGuard.test.ts"
   ],
   "deny": [
     ".task/**",
@@ -32,20 +20,20 @@
     "kilo.json",
     "plans/**"
   ],
-  "maxFiles": 20,
+  "maxFiles": 10,
   "maxLines": 500,
-  "dod": "npx vitest run tests/gameRoundsGuard.test.ts --reporter=dot && npm run typecheck",
-  "guard": "npx vitest run tests/gameRoundsGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/providerUrlGuard.test.ts --reporter=dot && npm run typecheck",
+  "guard": "npx vitest run tests/providerUrlGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ninguna copia local de la lectura de rounds (cfg.rounds/defaultRounds)",
+    "statement": "URLs de proveedor solo en src/core/config/sharedConfig.ts y appConfig.ts",
     "metric": {
-      "command": "node scripts/audit-metric.mjs game-rounds",
+      "command": "node scripts/audit-metric.mjs provider-url-literals",
       "target": 0
     },
-    "base": "bbc90394b8a6b1daa6028a1ffa11eb0897fff934",
+    "base": "4e35f2a7de47b7201e4c0e45b86b52fdc1f42cb0",
     "guardFiles": [
-      "tests/gameRoundsGuard.test.ts"
+      "tests/providerUrlGuard.test.ts"
     ]
   }
 }

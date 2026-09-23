@@ -1074,3 +1074,36 @@ REGRESION:
 
 NO VALIDADO (usuario): que los 12 juegos respeten su numero de rondas configurado
 al jugar en su pantalla.
+
+================================================================
+[CIERRE TECNICO] 2026-09-22 - Bloque C41 (URLs de proveedor unicas)
+================================================================
+OBJETIVO: ningun literal de URL de proveedor fuera de la config canonica.
+
+ANTES: node scripts/audit-metric.mjs provider-url-literals -> 1
+  src/voice/lib/fluConfig.js:1191 hardcodeaba el endpoint de OpenRouter
+  (ruta doble: el motor ya importa OPENROUTER_DEFAULTS de sharedConfig).
+  guard tests/providerUrlGuard.test.ts (nace ROJO): lista el literal.
+DESPUES: provider-url-literals -> 0 ; guard -> VERDE (2 tests).
+
+FIX: endpoint se deriva de OPENROUTER_DEFAULTS.API_URL (misma cadena resultante).
+  Canonico: sharedConfig.ts (OpenRouter/Pollinations) + appConfig.ts (Gemini/DeepSeek legacy).
+  .tsx de UI (placeholders) fuera del conteo: los cubre tests/remoteResourceGuard.test.ts.
+
+REGRESION:
+  antes:   285 archivos / 2959 tests / 0 fallos
+  despues: 286 archivos / 2961 tests / 0 fallos ; typecheck 0 ; lint limpio.
+
+RESUELTO EN ESTE BLOQUE (puntos pendientes):
+  - uncheckAll: NO es duplicado real (notas.done vs compras.checked; dominios distintos).
+    Documentado; no se fuerza unificacion (evita abstraccion generica y cambio de tipos).
+  - hasToken: 5 implementaciones con regex DISTINTAS (familias (^|\s)…($|\s|[.,;!?ae])
+    vs gameUtils con [.,;!?iq]; configCommands otro dominio). Parecidos-pero-distintos:
+    NO se unifican (cambiaria comportamiento; precedente: guard de textUtils).
+  - C42 ai-provider-literal = 0 (ya en meta).
+  - C43 voiceprofiles-localstorage = 0 (ya en meta); resto de localStorage usa STORAGE_KEYS
+    o compat legacy documentada en onboardingService.
+
+NO VALIDADO (usuario): que la busqueda web siga funcionando igual en su pantalla;
+y la decision de diseno sobre la ruta directa-vs-proxy (AsrLab llama directo) queda
+pendiente de aprobacion por ser arquitectonica.

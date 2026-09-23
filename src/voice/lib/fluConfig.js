@@ -1188,7 +1188,7 @@ export const FLU_CONFIG = {
             label: 'OpenRouter (web)',
             enabled: true,
             method: 'POST',
-            endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+            endpoint: `${OPENROUTER_DEFAULTS.API_URL}/chat/completions`,
             headers: { Authorization: 'Bearer {key}', 'Content-Type': 'application/json' },
             body: { model: '{model}', messages: [{ role: 'user', content: '{q}' }] },
             key: null,

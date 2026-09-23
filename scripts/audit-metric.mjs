@@ -255,6 +255,28 @@ function roundsCopies() {
   return hits.sort()
 }
 
+// ---- C41: URLs de proveedor solo en la config canonica -------------------
+const PROVIDER_URL = /(openrouter\.ai|image\.pollinations\.ai|api\.deepseek\.com|generativelanguage\.googleapis\.com)/
+const CANONICAL_CONFIG = new Set([
+  'src/core/config/sharedConfig.ts',
+  'src/core/config/appConfig.ts',
+])
+/** Archivos con un literal de URL de proveedor fuera de la config canonica (excluye comentarios .ts/.js y .tsx de UI). */
+function providerUrlLiterals() {
+  const hits = []
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (!/\.(ts|js)$/.test(r)) continue // .tsx = placeholders de UI (whitelisted en remoteResourceGuard)
+    if (CANONICAL_CONFIG.has(r)) continue
+    const ls = linesOf(f)
+    for (let i = 0; i < ls.length; i++) {
+      if (isCommentLine(ls[i])) continue
+      if (PROVIDER_URL.test(ls[i])) hits.push(`${r}:${i + 1}`)
+    }
+  }
+  return hits
+}
+
 const CONSUMER_NORM_FILES = new Set([
   'src/lib/generationTopic.ts',
   'src/core/agenda/agendaCommandParser.ts',
@@ -494,6 +516,8 @@ const metrics = {
   'game-adopt-random': () => adoptRandomImpls().length,
   // ---- C60 ---------------------------------------------------------------
   'game-rounds': () => roundsCopies().length,
+  // ---- C41 ---------------------------------------------------------------
+  'provider-url-literals': () => providerUrlLiterals().length,
   // ---- C39 ---------------------------------------------------------------
   'motor-normaliza': () => {
     const p = join(ROOT, 'src/voice/hooks/useFluVoiceAssistant.js')
