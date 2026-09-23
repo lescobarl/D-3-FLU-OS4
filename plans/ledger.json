@@ -42,8 +42,8 @@
     {
       "id": "P1.2",
       "titulo": "T2a - Guard de minutas ciego (no cubre useMinuteKnowledge.ts)",
-      "estado": "todo",
-      "evidencia": "tests/minutosDobleEscrituraGuard.test.ts:10",
+      "estado": "done",
+      "evidencia": "CERRADO commit ea91645. El guard C10 era ciego por partida doble (archivo hardcodeado useMinuteHandlers.ts + una sola forma): no veia useMinuteKnowledge.ts:265 (useIntegrationStore.getState().addMinute) ni App.tsx:4278. Ahora UN publicador: publishMinuteToStore() en el dueno; App pide publishAllToStore() en vez de espejar; integrationStore.addMinute dedupea por id (antes prepend ciego). Guard nuevo tests/minutosSinglePublisherGuard.test.ts (sin exclusiones, cubre ambas formas + prueba CONDUCTA del dedup); el C10 congelado no se toca. Gate: metrica base=2 actual=1 target=1, guard base=ROJO actual=VERDE, exit 0. tsc/eslint 0; test:full 298/3062/0.",
       "origen": "plan-T"
     },
     {
@@ -908,6 +908,11 @@
       "id": "P1.7",
       "commit": "06b249c",
       "titulo": "indexedDB crudo fuera del singleton (sonda via Dexie)"
+    },
+    {
+      "id": "P1.2",
+      "commit": "ea91645",
+      "titulo": "Minutas: un solo publicador hacia integrationStore"
     }
   ]
 }
