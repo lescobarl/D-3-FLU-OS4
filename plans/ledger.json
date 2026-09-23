@@ -145,13 +145,6 @@
       "origen": "propio"
     },
     {
-      "id": "P4.2",
-      "titulo": "T4 - FBX parseFbxBuffer 2->1 + medir bloqueo + Three duplicada",
-      "estado": "in_progress",
-      "evidencia": "PARTE 1/3 HECHA (commit f99661f): orquestacion FBX 2->1. ANTES 2 lineas con el literal de error (fbxLoader.worker.js:24, fbxWorkerClient.ts:103) -> DESPUES 1 (fbxParse.ts, fetchFbxJson). Guard tests/fbxSingleOrchestrationGuard.test.ts (4/4; nace rojo en base; mutacion probada). Gate: metrica base=2 actual=1 target=1, guard base=ROJO actual=VERDE, exit 0. FALTAN: (a) medir bloqueo del parse sincrono en main thread = banco de rendimiento, no test CI, sin disenar; (b) Three duplicada en bundle = chunk compartido en vite.config, riesgo de romper el worker, requiere contrato propio.",
-      "origen": "plan-T"
-    },
-    {
       "id": "P4.3",
       "titulo": "parseAllowlist identica x2",
       "estado": "done",
@@ -375,6 +368,13 @@
       "evidencia": "src/App.tsx:4797",
       "origen": "auditoria",
       "noVerificado": true
+    },
+    {
+      "id": "P6.13",
+      "titulo": "npm run build no arranca: la config arrastra codigo de app que lee import.meta.env.DEV",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-09-23 en de78579 (y ya roto en c4b08f9: no lo introdujo el lote P7.3/P4.2). `npm run build` falla AL CARGAR la config, no al compilar: TypeError: Cannot read properties of undefined (reading DEV). Causa reproducida empaquetando la config como la empaqueta Vite (esbuild --bundle --platform=node --packages=external): la cadena vite.config.ts -> src/server/{gemini,search,browser}Proxy.ts -> src/core/config/sharedConfig.ts -> src/lib/caughtError.ts arrastra modulos de app, y ahi hay DOS const IS_DEV = import.meta.env.DEV sin guarda (src/voice/lib/fluConfig.js:7 y src/voice/lib/listenLog.js:13); al cargar la config en Node import.meta.env no existe. Los otros tres modulos equivalentes YA usan el patron seguro Boolean(import.meta.env?.DEV) (fluDebug.js:15, fluDevConsole.js:8, fluTrace.js:9), asi que el arreglo minimo apunta al mismo patron, pero el item NO es de una linea: hay que decidir por que build.rollupOptions.external marca three/react/react-dom/r3f/drei/zustand como external (un dist asi no resuelve en navegador sin importmap, y hoy impide medir la composicion del bundle, que es justo lo que dejo a medias P4.2(b)) y no romper prodDefaultsGuard/devGlobalsGuard.",
+      "origen": "propio"
     },
     {
       "id": "P7.1",
@@ -991,6 +991,11 @@
       "id": "P7.3",
       "commit": "2950343",
       "titulo": "Sin `any` de tipo en src: 8 -> 0 (los .js del ASR tipados por .d.ts hermana; guard C49 endurecido)"
+    },
+    {
+      "id": "P4.2",
+      "commit": "de78579",
+      "titulo": "FBX: orquestacion 2->1 (f99661f) + bloqueo del parse MEDIDO con banco (204 ms, no 10-20 s) + VEREDICTO medido de Three en bundle (1 sola copia y external; el build roto pasa a P6.13)"
     }
   ]
 }
