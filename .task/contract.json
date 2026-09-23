@@ -1,13 +1,12 @@
 {
-  "id": "P5.2+P5.3+P5.4",
+  "id": "P5.5+P5.6+P5.7",
   "mode": "full",
-  "task": "P5.2+P5.3+P5.4",
-  "base": "7f132fca8fb221d4306fe3e271641fc9f9ea53cd",
-  "objective": "Un solo origen para sample rate, presupuestos de tokens y temperatura.",
+  "task": "P5.5+P5.6+P5.7",
+  "base": "5f3d2e53950ecf596c647626ba7718982b25c05d",
+  "objective": "Locales, ids de proveedor y presupuestos de tokens con un solo origen.",
   "allow": [
     "src/**",
     "tests/configSingleSourceGuard.test.ts",
-    "package.json",
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
@@ -18,8 +17,8 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 40,
-  "maxLines": 1500,
+  "maxFiles": 30,
+  "maxLines": 1200,
   "dod": "npx tsc -b && npx vitest run tests/configSingleSourceGuard.test.ts --reporter=dot",
   "guard": "npx vitest run tests/configSingleSourceGuard.test.ts --reporter=dot",
   "guardExpect": "green"
