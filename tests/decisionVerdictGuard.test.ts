@@ -14,9 +14,9 @@ import { describe, expect, it } from 'vitest';
 
 const LEDGER = 'plans/ledger.json';
 const MARK = 'VEREDICTO:';
-const RESOLVED = ['P4.11', 'P4.12', 'P4.14', 'P6.1', 'P6.5', 'P6.8', 'P1.8'];
+const RESOLVED = ['P4.11', 'P4.12', 'P4.14', 'P6.1', 'P6.5', 'P6.8', 'P1.8', 'P5.6', 'P5.7'];
 
-interface Item { id: string; estado: string; evidencia?: string }
+interface Item { id: string; estado: string; evidencia?: string; noVerificado?: boolean }
 
 /** Entradas en 'decision' sin veredicto formal. */
 export function decisionsWithoutVerdict(items: Item[]): string[] {
@@ -30,7 +30,13 @@ describe('Veredictos del ledger', () => {
     expect(bad, 'decisiones sin veredicto (N=' + bad.length + '): ' + bad.join(', ')).toEqual([]);
   });
 
-  it('las seis decisiones historicas quedaron cerradas con veredicto citado', () => {
+
+  it('ningun cierre queda marcado como no verificado', () => {
+    const items: Item[] = JSON.parse(readFileSync(LEDGER, 'utf8')).items;
+    const bad = items.filter((i) => i.estado === 'done' && i.noVerificado === true).map((i) => i.id);
+    expect(bad, 'done sin verificar (N=' + bad.length + '): ' + bad.join(', ')).toEqual([]);
+  });
+  it('los cierres con veredicto quedan done y citan VEREDICTO', () => {
     const items: Item[] = JSON.parse(readFileSync(LEDGER, 'utf8')).items;
     for (const id of RESOLVED) {
       const it = items.find((i) => i.id === id);

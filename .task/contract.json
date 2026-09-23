@@ -1,9 +1,9 @@
 {
-  "id": "P1.8",
+  "id": "P5.6-P5.7",
   "mode": "full",
-  "task": "P1.8",
-  "base": "6efbd502c79b75b251f5068e0337bf7235daeee4",
-  "objective": "Verificar la afirmacion noVerificado de P1.8 (config de participante en LS paralela a Dexie) y zanjarla por escrito.",
+  "task": "P5.6-P5.7",
+  "base": "9374b3071c0c89400be77820eb7b8bdf60ce0c24",
+  "objective": "Cerrar la incoherencia del ledger: items en done marcados noVerificado, con evidencia obsoleta.",
   "allow": [
     "tests/**",
     "plans/ledger.json",
@@ -22,10 +22,10 @@
   "guard": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Entradas noVerificado sin VEREDICTO: 5 -> 4.",
+    "statement": "Items en estado done marcados noVerificado (cierre sin verificar): 2 -> 0.",
     "metric": {
-      "command": "node -e \"const l=require('./plans/ledger.json');console.log(l.items.filter(i=>i.noVerificado===true&&!String(i.evidencia||'').includes('VEREDICTO:')).length)\"",
-      "target": 4
+      "command": "node -e \"const l=require('./plans/ledger.json');console.log(l.items.filter(i=>i.estado==='done'&&i.noVerificado===true).length)\"",
+      "target": 0
     },
     "guardFiles": [
       "tests/decisionVerdictGuard.test.ts"
