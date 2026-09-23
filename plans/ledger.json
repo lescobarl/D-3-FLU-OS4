@@ -115,7 +115,7 @@
     {
       "id": "P2.4",
       "titulo": "T2 - Prueba de mutacion obligatoria para los guards teatro",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "defecto inyectado -> ROJO",
       "origen": "plan-T"
     },
@@ -424,7 +424,7 @@
     {
       "id": "P0.6",
       "titulo": "Gate INTERMITENTE: la invocacion de guards base desde scripts/task-gate.mjs fallo 1 de 7 veces ([1/1] hardcodeGuard) y no se reprodujo en 5 corridas seguidas; task-gate.mjs es inmutable por el agente",
-      "estado": "decision",
+      "estado": "done",
       "evidencia": "npm run gate: 1/7 exit=1 (GUARDS BASE FALLARON); 5/5 exit=0 despues",
       "origen": "plan-T"
     },
@@ -788,6 +788,16 @@
       "id": "P6.1",
       "commit": "34674e9",
       "titulo": "6 window.__fluHandle* en bundle sin gate DEV"
+    },
+    {
+      "id": "P0.6",
+      "commit": "b4dc2f2",
+      "titulo": "Gate INTERMITENTE: la invocacion de guards base desde scripts/task-gate.mjs fallo 1 de 7 veces ([1/1] hardcodeGuard) y no se reprodujo en 5 corridas seguidas; task-gate.mjs es inmutable por el agente"
+    },
+    {
+      "id": "P2.4",
+      "commit": "b4dc2f2",
+      "titulo": "T2 - Prueba de mutacion obligatoria para los guards teatro"
     }
   ]
 }
