@@ -1239,4 +1239,47 @@ REGRESION:
   despues: 287 archivos / 2972 tests / 0 fallos ; tsc -b 0 ; eslint . --max-warnings=0 0.
 NO VALIDADO (usuario): que el log de voz en vivo (ring de Chrome raw) siga
 registrando igual en su pantalla; el cambio es un reenvio equivalente, pero el
-camino real no se ejecuta en los tests.
+camino real no se ejecuta en los tests.================================================================
+[CIERRE TECNICO] 2026-09-22 - P0.5 (guards desacoplados de AGENTS.md)
+================================================================
+OBJETIVO (3er punto del titulo de T1): que el gate no pueda ponerse ROJO por la
+REDACTAON de AGENTS.md. Era una traba real: el documento es objetivo de trabajo
+pendiente (P6.5 y P6.8 tocan su seccion 4).
+ANTES: tests/protocolGuard.test.ts (guard BASE: corre en CADA gate) ataba 4 de sus
+  5 tests a prosa del documento:
+    toContain('Iteraci├│n r├ípida') | '--changed' | 'test:full'
+    toContain('protocolGuard.test.ts')
+    toMatch(/Pre-commit LIGERO/) | 'npm run lint' | 'npm run typecheck'
+    '.github/workflows/ci.yml' | 'npm run test:full'
+  Reescribir el doc ponia el gate en ROJO sin que nada se hubiera roto.
+DESPUES: protocolGuard NO lee AGENTS.md. Comprueba los MECANISMOS que hacen
+verdad el protocolo:
+  1) package.json: "test" usa --changed y NO es la suite completa.
+  2) "test:full" == 'vitest run' (suite completa para cierre/CI).
+  3) lint = guards + eslint ; lint:eslint == 'eslint . --max-warnings=0' ;
+     typecheck == 'tsc -b' ; y lint NO arrastra test:full (pre-commit ligero).
+  4) lint:guards incluye los guards del protocolo (protocolGuard,
+     stability-guards, taskGateInvariant, taskLedgerGuard).
+  5) .github/workflows/ci.yml corre test:full + build + typecheck.
+INVARIANTE (falsable, en dos direcciones):
+  (A) mismo cambio de prosa ('Pre-commit LIGERO' -> 'Pre-commit rapido'):
+      guard VIEJO (materializado desde git) -> ROJO por
+      "expected '# AGENTS.md ...' to match /Pre-commit LIGERO/";
+      guard NUEVO -> 5/5 VERDE con ese mismo documento.
+  (B) debilitar package.json ("test" = 'vitest run'): guard NUEVO -> ROJO en
+      "npm test (default) debe ejecutar SOLO los tests del cambio".
+HALLAZGO 1 (registrado como P0.8): AGENTS.md:282 documenta el pre-commit como
+  "npm run gate", pero el hook REAL (.git/hooks/pre-commit) ejecuta
+  "npm run lint" + "npm run typecheck". O sea: el guard viejo validaba prosa que
+  describia un mecanismo DISTINTO del instalado, y pasaba igual. El guard nuevo
+  comprueba los scripts reales.
+HALLAZGO 2 (registrado como P0.8): ese hook vive en .git/hooks/, que NO esta
+  versionado: no existe en CI ni en otro clon. El guard ahora comprueba los
+  scripts que el hook invoca, no el hook. Versionarlo (core.hooksPath) o
+  instalarlo desde npm cambia la config git del usuario: decision suya.
+REGRESION:
+  antes:   287 archivos / 2972 tests / 0 fallos
+  despues: 287 archivos / 2972 tests / 0 fallos ; tsc -b 0 ; npm run gate 0.
+NO VALIDADO (usuario): que el pre-commit siga corriendo en su maquina. Se
+comprobo que .git/hooks/pre-commit existe y llama a lint+typecheck, pero no se
+edito ni se ejecuto (no esta versionado y tocarlo es decision suya).

@@ -1,15 +1,12 @@
 {
-  "id": "P2.3",
+  "id": "P0.5",
   "mode": "full",
-  "task": "P2.3 - el guard blindaba el alias @deprecated logMicRaw (deuda congelada)",
-  "base": "a17059eee99e50ed4d82a6e68650a8598334771a",
-  "objective": "Ningun alias @deprecated queda blindado por un guard: logMicRaw se retira y specificDeadGuard exige su ausencia (estatica y en runtime).",
+  "task": "P0.5 - desacoplar los guards de la prosa de AGENTS.md (3er punto del titulo de T1)",
+  "base": "85e7596f81c8f9f0b18e04f59a66c9ea8bc8cf2c",
+  "objective": "protocolGuard comprueba los MECANISMOS del protocolo (scripts de package.json + workflow CI), no la redaccion de AGENTS.md: editar el documento no puede poner el gate en rojo.",
   "allow": [
-    "src/voice/lib/listenLog.js",
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "tests/specificDeadGuard.test.ts",
+    "tests/protocolGuard.test.ts",
     ".task/contract.json",
-    ".task/frozen.json",
     ".task/report",
     "plans/ledger.json"
   ],
@@ -23,9 +20,9 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 300,
-  "dod": "npx vitest run tests/specificDeadGuard.test.ts --reporter=dot && npx tsc -b",
-  "guard": "npx vitest run tests/specificDeadGuard.test.ts --reporter=dot",
+  "maxFiles": 6,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/protocolGuard.test.ts --reporter=dot && npx tsc -b",
+  "guard": "npx vitest run tests/protocolGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

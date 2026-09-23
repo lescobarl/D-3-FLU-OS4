@@ -1,42 +1,34 @@
 // ============================================================
-// protocolGuard.test.ts — Guard del PROTOCOLO DE ITERACIÓN RÁPIDA
+// protocolGuard.test.ts ΓÇö Guard del PROTOCOLO DE ITERACI├ôN R├üPIDA
 // ============================================================
-// Hace INAMOVIBLE la Regla #1 de la Sección 9 de AGENTS.md:
-//   "npm test" (comando por defecto) ejecuta SOLO los tests del
-//   cambio específico (--changed). La suite completa queda reservada
-//   a "npm run test:full", usada SOLO en cierre de hitos/entregas
-//   y pre-commit (Sección 6).
+// Hace INAMOVIBLE la Regla #1 de la Secci├│n 9: "npm test" (comando por defecto)
+// ejecuta SOLO los tests del cambio (--changed); la suite completa queda
+// reservada a "npm run test:full" (cierre de hitos/entregas/pre-commit/CI).
 //
-// Este test es la "regla de lint" estructural del protocolo: lee
-// package.json y AGENTS.md y FALLA si alguien debilita la estructura.
-// Como se ejecuta dentro de la suite completa (test:full), cualquier
-// intento de revertir el default a la suite completa o de eliminar
-// test:full rompe la puerta de cierre de hitos — el protocolo queda
-// blindado contra regresión.
+// DESACOPLADO DE AGENTS.md (P0.5): antes este guard fijaba PROSA del documento
+// ('Iteraci├│n r├ípida', '--changed', 'Pre-commit LIGERO', ...), de modo que
+// reescribir el doc pon├¡a el gate en ROJO sin que nada se hubiera roto, y el
+// documento no se pod├¡a corregir (P6.5/P6.8 son trabajo pendiente sobre su
+// secci├│n 4). Ahora comprueba solo los MECANISMOS que hacen verdad el protocolo:
+// los scripts de package.json y el workflow de CI. El documento se redacta libre.
 // ============================================================
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-
-// Directorio raíz de la aplicación (una carpeta arriba de tests/).
+// Directorio ra├¡z de la aplicaci├│n (una carpeta arriba de tests/).
 const ROOT_DIR = path.resolve(__dirname, '..');
-
 function readRootFile(name: string): string {
     return fs.readFileSync(path.join(ROOT_DIR, name), 'utf-8');
 }
-
 const pkg = JSON.parse(readRootFile('package.json')) as {
     scripts: Record<string, string>;
 };
-const agents = readRootFile('AGENTS.md');
-
-describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', () => {
+describe('Protocolo de Iteraci├│n R├ípida ΓÇö Guard estructural (inamovible)', () => {
     it('npm test (default) debe ejecutar SOLO los tests del cambio (--changed)', () => {
         const testScript = pkg.scripts['test'] ?? '';
         expect(
             testScript.includes('--changed'),
-            `"test" debe usar --changed para la iteración mínima. Actual: "${testScript}"`,
+            `"test" debe usar --changed para la iteraci├│n m├¡nima. Actual: "${testScript}"`,
         ).toBe(true);
         // El default NO debe ser la suite completa.
         expect(
@@ -44,7 +36,6 @@ describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', (
             `"test" no debe ser la suite completa (eso es test:full). Actual: "${testScript}"`,
         ).toBe(false);
     });
-
     it('debe existir "test:full" con la suite completa para cierre de hitos/pre-commit', () => {
         const fullScript = pkg.scripts['test:full'] ?? '';
         expect(
@@ -52,24 +43,23 @@ describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', (
             `"test:full" debe ejecutar la suite completa. Actual: "${fullScript}"`,
         ).toBe(true);
     });
-
-    it('AGENTS.md debe conservar el protocolo de iteración mínima y referenciar test:full', () => {
-        expect(agents).toContain('Iteración rápida');
-        expect(agents).toContain('--changed');
-        expect(agents).toContain('test:full');
-        expect(agents).toContain('protocolGuard.test.ts');
+    it('el pre-commit LIGERO tiene sus dos mecanismos: lint (guards + eslint) y typecheck', () => {
+        // El pre-commit ligero corre guards + tipos y NO la suite completa.
+        // "lint" paso a incluir eslint en P7.1 (antes solo corria guards).
+        const lint = pkg.scripts['lint'] ?? '';
+        expect(lint).toContain('lint:guards');
+        expect(lint).toContain('lint:eslint');
+        expect(pkg.scripts['lint:eslint'] ?? '').toBe('eslint . --max-warnings=0');
+        expect(pkg.scripts['typecheck'] ?? '').toBe('tsc -b');
+        expect(lint).not.toContain('test:full');
     });
-
-    it('AGENTS.md pre-commit es LIGERO y la suite completa se delega al gate CI', () => {
-        // El commit NO ejecuta la suite completa: se hace ligero (guards + typecheck).
-        expect(agents).toMatch(/Pre-commit LIGERO/);
-        expect(agents).toContain('npm run lint');
-        expect(agents).toContain('npm run typecheck');
-        // Y la suite completa queda documentada en el gate CI (una vez por push/PR).
-        expect(agents).toContain('.github/workflows/ci.yml');
-        expect(agents).toContain('npm run test:full');
+    it('los guards del protocolo corren en lint:guards (no solo dentro de la suite)', () => {
+        const guards = pkg.scripts['lint:guards'] ?? '';
+        expect(guards).toContain('protocolGuard.test.ts');
+        expect(guards).toContain('stability-guards.test.ts');
+        expect(guards).toContain('taskGateInvariant.test.ts');
+        expect(guards).toContain('taskLedgerGuard.test.ts');
     });
-
     it('debe existir el workflow de CI con suite completa + build (gate de entrega)', () => {
         const ciPath = path.join(ROOT_DIR, '.github', 'workflows', 'ci.yml');
         const ci = fs.existsSync(ciPath) ? fs.readFileSync(ciPath, 'utf-8') : '';
