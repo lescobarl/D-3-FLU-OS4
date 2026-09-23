@@ -1,17 +1,15 @@
 {
-  "id": "P1.9",
+  "id": "P1.8",
   "mode": "full",
-  "task": "P1.9",
-  "base": "1575503361dd812c3749518f0e9cb897d5f72c3c",
-  "objective": "STORAGE_KEYS no declara claves localStorage muertas: el mapa vuelve a ser la lista de claves vivas.",
+  "task": "P1.8",
+  "base": "6efbd502c79b75b251f5068e0337bf7235daeee4",
+  "objective": "Verificar la afirmacion noVerificado de P1.8 (config de participante en LS paralela a Dexie) y zanjarla por escrito.",
   "allow": [
-    "src/core/config/appConfig.ts",
     "tests/**",
-    "package.json",
+    "plans/ledger.json",
     ".task/frozen.json",
     ".task/contract.json",
-    ".task/report",
-    "plans/ledger.json"
+    ".task/report"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
@@ -20,17 +18,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/storageKeysAliveGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/storageKeysAliveGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Claves declaradas en STORAGE_KEYS sin ninguna referencia en el codigo: 11 -> 0.",
+    "statement": "Entradas noVerificado sin VEREDICTO: 5 -> 4.",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');const cfg=fs.readFileSync('src/core/config/appConfig.ts','utf8');const body=cfg.split('export const STORAGE_KEYS')[1].split('} as const')[0];const decl=[...body.matchAll(/^ *([A-Z][A-Z0-9_]*):/gm)].map(m=>m[1]);const files=[];const walk=d=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory()){if(['node_modules','.git','dist'].includes(e.name))continue;walk(p);}else if(/[.](ts|tsx|js|jsx|mjs|cjs)$/.test(e.name))files.push(p);}};walk('src');walk('tests');const used=new Set();for(const f of files){const t=fs.readFileSync(f,'utf8');for(const m of t.matchAll(/STORAGE_KEYS[.]([A-Z][A-Z0-9_]*)/g))used.add(m[1]);}console.log(decl.filter(k=>!used.has(k)).length)\"",
-      "target": 0
+      "command": "node -e \"const l=require('./plans/ledger.json');console.log(l.items.filter(i=>i.noVerificado===true&&!String(i.evidencia||'').includes('VEREDICTO:')).length)\"",
+      "target": 4
     },
     "guardFiles": [
-      "tests/storageKeysAliveGuard.test.ts"
+      "tests/decisionVerdictGuard.test.ts"
     ]
   }
 }

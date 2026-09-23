@@ -84,10 +84,9 @@
     {
       "id": "P1.8",
       "titulo": "Config de participante en LS paralela a Dexie",
-      "estado": "todo",
-      "evidencia": "src/voice/lib/fluParticipantConfig.js:8,144",
-      "origen": "auditoria",
-      "noVerificado": true
+      "estado": "done",
+      "evidencia": "VEREDICTO: FALSO POSITIVO (verificado). El item afirmaba una config de participante en LS paralela a Dexie, y NO la hay: fluParticipantConfig.js gestiona el TUNING GLOBAL de intervencion proactiva (enabled, cooldownAfterInterventionMs, maxInterventionsPerSession/Hour, minConfidence...) en la clave flu-participant-settings, mientras que Dexie guarda otra cosa distinta: la IDENTIDAD del participante (tabla participants: name/role/birthday/speakerLabel/profileId) y el ESTILO de comunicacion (tabla communicationProfiles). Ninguna tabla Dexie almacena el tuning proactivo. La unica clave legacy (flu-participant-enabled) es un puente de MIGRACION deliberado y coherente: se lee al cargar (linea 129) para migrar, se mantiene en sync al escribir (145) y se borra en el reset (152); no es duplicado. Conclusion: no hay segundo almacen que unificar; el LS es aqui el almacen legitimo. Si algun dia se quiere el tuning POR participante, seria alcance nuevo (multiusuario), no la correccion de un duplicado. Accion: ninguna. | original: src/voice/lib/fluParticipantConfig.js:8,144",
+      "origen": "auditoria"
     },
     {
       "id": "P2.1",
@@ -964,6 +963,11 @@
       "id": "P1.9",
       "commit": "b6e81b2",
       "titulo": "STORAGE_KEYS sin claves muertas"
+    },
+    {
+      "id": "P1.8",
+      "titulo": "Veredicto: falso positivo (no hay almacen paralelo)",
+      "commit": "6efbd50"
     }
   ]
 }

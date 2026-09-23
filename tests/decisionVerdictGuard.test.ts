@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 
 const LEDGER = 'plans/ledger.json';
 const MARK = 'VEREDICTO:';
-const RESOLVED = ['P4.11', 'P4.12', 'P4.14', 'P6.1', 'P6.5', 'P6.8'];
+const RESOLVED = ['P4.11', 'P4.12', 'P4.14', 'P6.1', 'P6.5', 'P6.8', 'P1.8'];
 
 interface Item { id: string; estado: string; evidencia?: string }
 
