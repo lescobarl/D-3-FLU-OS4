@@ -21,7 +21,7 @@
   "tests/voiceProfilesEscritorUnicoGuard.test.ts": "59289c85abc3e3c855a84a77f93f85f041f5197e039d2e7f5a7b5cd066a5d989",
   "tests/aiProviderStorageKeyUnicaGuard.test.ts": "09f9ab7db621b548f1adfc4e776744defa09e800a148b979f58be5a785a574f4",
   "tests/textApiKeyResolverUnicoGuard.test.ts": "c7a58becb516c4c0b719ea31f31a6c77e439b36fd15178ea4cdf908e64657374",
-  "tests/wakeWordRuntimeGuard.test.ts": "a8572507e1fb545d90d397921fec52d724af4512824849dedac021b78e6dbdf5",
+  "tests/wakeWordRuntimeGuard.test.ts": "63220271ae934e2872ea7ef3fb08cb879c22d498350ea86424100fb115ee647c",
   "tests/pollinationsFuenteUnicaGuard.test.ts": "868b6b8669ffec8aa61b0bdd7e8b292edc6edceb2c37e19d07e8c9e0644e22c0",
   "tests/textKeyLiteralesGuard.test.ts": "c4abf42ff36d69f5fd26329886a1a96b188a69045045f80961fd6202c9f4300a",
   "tests/uuidV4InsercionGuard.test.ts": "fddaa06da679d87e3bb95cf6f26e26eaf23ad1df4486cf56983fa75896eb8ae2",
@@ -87,5 +87,6 @@
   "tests/minutesDexieOnlyGuard.test.ts": "dd5d36a01a886fdc18a1e1afa8accc9981bcd9afdc12514b7f463b5b8dd9d3b9",
   "tests/onboardingSingleStoreGuard.test.ts": "d556f05dcb624fe45799ea59398016a6a83d574582585106046f37de03ea44f1",
   "tests/nonNullAssertionGuard.test.ts": "6b0141807fd74130a406c3e35de4aa43ec3d986518e2bc4795eba7a53a636fcb",
-  "tests/plansProcessArtifactsGuard.test.ts": "78191152983cedbab3feb8ede3f534884079a1b70f397aaaea382c3b36af9ce9"
+  "tests/plansProcessArtifactsGuard.test.ts": "78191152983cedbab3feb8ede3f534884079a1b70f397aaaea382c3b36af9ce9",
+  "tests/hygieneIndicatorsGuard.test.ts": "8f66888142a6dc0c0501fac4ff7a2e15f90647c78c09318b5689e65b2209e07b"
 }

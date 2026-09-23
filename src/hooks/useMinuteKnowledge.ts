@@ -180,7 +180,7 @@ export function formatMinuteHistoryLabel(entry: MinuteUIEntry): string {
 /**
  * UNICO punto del proyecto que publica una minuta en integrationStore (C10).
  *
- * El due├▒o de la minuta (useMinuteKnowledge) es quien publica; los consumidores
+ * El dueño de la minuta (useMinuteKnowledge) es quien publica; los consumidores
  * NO espejan por su cuenta. Centralizar aqui hace que la publicacion individual y
  * la hidratacion del store pasen por la misma puerta: antes App recorria las
  * minutas y llamaba a integrationStore.addMinute por su cuenta (segundo escritor).

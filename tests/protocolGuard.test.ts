@@ -1,21 +1,21 @@
 // ============================================================
-// protocolGuard.test.ts ΓÇö Guard del PROTOCOLO DE ITERACI├ôN R├üPIDA
+// protocolGuard.test.ts — Guard del PROTOCOLO DE ITERACIÓN RÁPIDA
 // ============================================================
-// Hace INAMOVIBLE la Regla #1 de la Secci├│n 9: "npm test" (comando por defecto)
+// Hace INAMOVIBLE la Regla #1 de la Sección 9: "npm test" (comando por defecto)
 // ejecuta SOLO los tests del cambio (--changed); la suite completa queda
 // reservada a "npm run test:full" (cierre de hitos/entregas/pre-commit/CI).
 //
 // DESACOPLADO DE AGENTS.md (P0.5): antes este guard fijaba PROSA del documento
-// ('Iteraci├│n r├ípida', '--changed', 'Pre-commit LIGERO', ...), de modo que
-// reescribir el doc pon├¡a el gate en ROJO sin que nada se hubiera roto, y el
-// documento no se pod├¡a corregir (P6.5/P6.8 son trabajo pendiente sobre su
-// secci├│n 4). Ahora comprueba solo los MECANISMOS que hacen verdad el protocolo:
+// ('Iteración rápida', '--changed', 'Pre-commit LIGERO', ...), de modo que
+// reescribir el doc ponía el gate en ROJO sin que nada se hubiera roto, y el
+// documento no se podía corregir (P6.5/P6.8 son trabajo pendiente sobre su
+// sección 4). Ahora comprueba solo los MECANISMOS que hacen verdad el protocolo:
 // los scripts de package.json y el workflow de CI. El documento se redacta libre.
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-// Directorio ra├¡z de la aplicaci├│n (una carpeta arriba de tests/).
+// Directorio raíz de la aplicación (una carpeta arriba de tests/).
 const ROOT_DIR = path.resolve(__dirname, '..');
 function readRootFile(name: string): string {
     return fs.readFileSync(path.join(ROOT_DIR, name), 'utf-8');
@@ -23,12 +23,12 @@ function readRootFile(name: string): string {
 const pkg = JSON.parse(readRootFile('package.json')) as {
     scripts: Record<string, string>;
 };
-describe('Protocolo de Iteraci├│n R├ípida ΓÇö Guard estructural (inamovible)', () => {
+describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', () => {
     it('npm test (default) debe ejecutar SOLO los tests del cambio (--changed)', () => {
         const testScript = pkg.scripts['test'] ?? '';
         expect(
             testScript.includes('--changed'),
-            `"test" debe usar --changed para la iteraci├│n m├¡nima. Actual: "${testScript}"`,
+            `"test" debe usar --changed para la iteración mínima. Actual: "${testScript}"`,
         ).toBe(true);
         // El default NO debe ser la suite completa.
         expect(

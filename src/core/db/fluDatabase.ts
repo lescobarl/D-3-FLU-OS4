@@ -796,7 +796,7 @@ export async function clearAuditLogs(): Promise<void> {
  *
  * El health monitor necesita saber si IndexedDB funciona. Antes lo hacia con
  * una base de prueba desechable (`flu-health-test`) que abria y borraba a mano:
- * un segundo almacen fuera del ciclo de vida de Dexie (┬º7.7.c) y el unico sitio
+ * un segundo almacen fuera del ciclo de vida de Dexie (§7.7.c) y el unico sitio
  * del proyecto que tocaba indexedDB sin pasar por el singleton. Sondear fluDb
  * responde la misma pregunta sin crear ni destruir almacenes ajenos.
  *

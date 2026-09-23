@@ -1,5 +1,5 @@
 /**
- * P0.7 ΓÇö eolGuard: la convencion EOL del repo no se rompe por accidente.
+ * P0.7 — eolGuard: la convencion EOL del repo no se rompe por accidente.
  *
  * CONTEXTO REAL: core.autocrlf=false y NO existe .gitattributes. Los editores de
  * texto pueden guardar en CRLF un archivo cuyo blob esta en LF; git entonces
@@ -53,7 +53,7 @@ function lsFilesEol(): EolRow[] {
       return { i: meta[0], w: meta[1], path: line.slice(tab + 1) }
     })
 }
-describe('P0.7 eolGuard ΓÇö el arbol de trabajo conserva la clase EOL del indice', () => {
+describe('P0.7 eolGuard — el arbol de trabajo conserva la clase EOL del indice', () => {
   it('ningun archivo versionado cambia de EOL solo por editarlo', () => {
     const offenders = eolMismatches(lsFilesEol())
     expect(
@@ -63,7 +63,7 @@ describe('P0.7 eolGuard ΓÇö el arbol de trabajo conserva la clase EOL del ind
     ).toEqual([])
   })
 })
-describe('P0.7 eolGuard ΓÇö el detector no es decorativo', () => {
+describe('P0.7 eolGuard — el detector no es decorativo', () => {
   it('marca un archivo con blob en LF guardado en CRLF (el caso que rompio f1a1ca6)', () => {
     expect(eolMismatches([{ i: 'i/lf', w: 'w/crlf', path: 'src/x.ts' }])).toHaveLength(1)
   })

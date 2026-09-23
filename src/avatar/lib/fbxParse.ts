@@ -31,7 +31,7 @@ export function parseFbxBuffer(buffer: ArrayBuffer, url: string): THREE.Group {
  * Orquestacion UNICA del flujo de carga: el worker la ejecuta fuera del hilo
  * principal y el respaldo main-thread dentro, pero el fetch, el chequeo HTTP,
  * el parse y el mensaje de error viven solo aqui. El mismo flujo copiado en
- * dos archivos es ruta doble aunque la intencion sea un respaldo (┬º7.7.b).
+ * dos archivos es ruta doble aunque la intencion sea un respaldo (§7.7.b).
  *
  * @param url ruta publica del archivo FBX.
  * @returns representacion JSON del grupo raiz, apta para postMessage.

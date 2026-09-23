@@ -439,7 +439,7 @@ async function checkIndexedDB(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // Verificar si IndexedDB est├í disponible
+        // Verificar si IndexedDB está disponible
         if (!('indexedDB' in window)) {
             hasError = true;
             message = 'IndexedDB no disponible en este navegador';

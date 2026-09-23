@@ -1,12 +1,12 @@
 /**
- * C6 ΓÇö wakeWordRuntime: la wake word en runtime sale de FLU_CONFIG (┬º9.4).
+ * C6 — wakeWordRuntime: la wake word en runtime sale de FLU_CONFIG (§9.4).
  *
  * El criterio se DERIVA de `FLU_WAKE_WORDS` en fluConfig.js en vez de copiarse a
  * mano: antes cubria 2 de las 16 variantes (`/ok\s*flu|okay\s*flow/`) y dejaba
  * pasar 'oye flu', 'hey flu', 'okay flu', 'ok flow'... (guard teatro). Al derivarla,
  * anadir una wake word a la config amplia el guard solo.
  *
- * El segundo describe comprueba el detector (AGENTS.md ┬ºB11/B12): un guard que no
+ * El segundo describe comprueba el detector (AGENTS.md §B11/B12): un guard que no
  * distingue el defecto no es barrera.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -21,7 +21,7 @@ const strip = (line: string) => {
   if (t.startsWith('*') || t.startsWith('/*') || t.startsWith('//')) return ''
   return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
 }
-/** Wake words canonicas, leidas de la config (fuente unica, ┬º9.4). */
+/** Wake words canonicas, leidas de la config (fuente unica, §9.4). */
 function readWakeWords(): string[] {
   const src = readFileSync(join(ROOT, CONFIG), 'utf8')
   const block = src.match(/FLU_WAKE_WORDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)
@@ -46,7 +46,7 @@ function walk(dir: string, acc: string[] = []): string[] {
   }
   return acc
 }
-describe('C6 wakeWordRuntime ΓÇö wake word solo de config', () => {
+describe('C6 wakeWordRuntime — wake word solo de config', () => {
   it('la config conserva las variantes canonicas (4 prefijos x 4 alias ASR)', () => {
     expect(WAKE_WORDS.length).toBeGreaterThanOrEqual(CANONICAL_COUNT)
   })
@@ -67,7 +67,7 @@ describe('C6 wakeWordRuntime ΓÇö wake word solo de config', () => {
     ).toEqual([])
   })
 })
-describe('C6 wakeWordRuntime ΓÇö el detector no es decorativo', () => {
+describe('C6 wakeWordRuntime — el detector no es decorativo', () => {
   it('detecta las 16 variantes (la regex vieja solo cubria 2)', () => {
     const missed = WAKE_WORDS.filter((w) => !isWakeLiteral(`if (t === '${w}') return true`))
     expect(missed, `Variantes que el guard NO detecta: ${missed.join(', ')}`).toEqual([])

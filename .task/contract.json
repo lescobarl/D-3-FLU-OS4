@@ -1,23 +1,25 @@
 {
-  "id": "P6.10",
+  "id": "P6.9",
   "mode": "full",
-  "task": "fix-utf8-C52",
-  "base": "40c8c39a53fa90631d83d8c58ebd360c1b9a6d02",
-  "objective": "Corregir el mojibake que introdujo el guard C52: el heredoc de PowerShell destrozo las tildes al escribirlo (5 marcas). Se reescribe con UTF-8 correcto y se actualiza su hash en frozen.json en el mismo commit.",
+  "task": "higiene-C53",
+  "base": "6bd174959596a55e1e2ed3f7140784906037bc2a",
+  "objective": "Cerrar la auditoria de higiene del repo: (1) los 91 TODO del audit eran falso positivo (palabra espanola); (2) audit-metric.mjs NO duplica a auditoria.mjs (medidor congelado de literales vs catalogo de clases), demostrado con taller sintetico; (3) LFS aplazado por decision con barrera de peso; (4) el mojibake UTF-8 preexistente se repara: 130 sustituciones en 12 ficheros, incluidas 4 cadenas que FLU pronuncia (\"Navegacion curada\", \"No pude entender la direccion\", \"Busqueda: \", \"Que queres que busque?\"). Guard C53 fija los cuatro indicadores.",
   "allow": [
     "tests/**",
+    "src/**",
+    "plans/ledger.json",
+    "package.json",
     ".task/frozen.json",
     ".task/contract.json",
-    ".task/report",
-    "package.json"
+    ".task/report"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 10,
-  "maxLines": 900,
-  "dod": "npx vitest run tests/plansProcessArtifactsGuard.test.ts tests/eolGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/plansProcessArtifactsGuard.test.ts --reporter=dot",
+  "maxFiles": 22,
+  "maxLines": 1200,
+  "dod": "npx vitest run tests/hygieneIndicatorsGuard.test.ts tests/eolGuard.test.ts tests/protocolGuard.test.ts tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

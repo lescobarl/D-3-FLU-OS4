@@ -2762,7 +2762,7 @@ export function getConversationConfig() {
 
 /**
  * Wake word canonica para copy y prompts: la configurada en Ajustes, o la primera
- * del catalogo si el usuario vacio la lista. Fuente unica (┬º9.4): en runtime nunca
+ * del catalogo si el usuario vacio la lista. Fuente unica (§9.4): en runtime nunca
  * se escribe un literal de wake.
  */
 export function getCanonicalWakeWord() {

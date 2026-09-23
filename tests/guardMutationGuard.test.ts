@@ -18,7 +18,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-const PROOF_RE = /no es decorativo|no decorativo|mutaci[o├│]n|mutation|el detector/i
+const PROOF_RE = /no es decorativo|no decorativo|mutaci[oó]n|mutation|el detector/i
 /** Guards (tests/*.test.ts) referenciados por un comando de package.json. */
 export function guardFilesFrom(command: string): string[] {
   const found = command.match(/tests\/[A-Za-z0-9_.-]+\.test\.ts/g) || []

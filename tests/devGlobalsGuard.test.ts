@@ -16,7 +16,7 @@
  * ALCANCE DELIBERADO: la regla cubre los puentes __fluHandle* y FLU_CONFIG (el sujeto
  * de P6.1/P6.3). NO cubre el subsistema de depuracion/traza (__fluDebug,
  * __FLU_DEBUG_ENABLED, __fluDev, __FLU_LISTEN_DEBUG, __bunnyPreloadDone), que es un
- * flag de dise├▒o con relay remoto y es el sujeto de P6.2 (aun pendiente): mezclarlo
+ * flag de diseño con relay remoto y es el sujeto de P6.2 (aun pendiente): mezclarlo
  * aqui convertiria este guard en una lista de excepciones.
  */
 import { readFileSync, readdirSync } from 'node:fs'
