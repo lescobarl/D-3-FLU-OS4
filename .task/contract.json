@@ -1,11 +1,11 @@
 {
   "id": "P6.9",
   "mode": "full",
-  "task": "cierre-ledger-P6.9",
-  "base": "268e0c78b7337e3f39cd26b2b31a7948a120626e",
-  "objective": "Cierre de P6.9 en el ledger tras el commit 268e0c7: se retira de items y se anota en done con el commit de codigo. La evidencia completa (cuatro indicadores medidos, decision de LFS y reparacion de mojibake) queda en el mensaje de 268e0c7 y en el guard C53.",
+  "task": "lecciones-agents",
+  "base": "8a9ffef0a4184823e4393fc02eda81cf6efff505",
+  "objective": "Aterrizar en AGENTS.md 7.7.f las dos lecciones de P6.9: (5) un detector de higiene tambien sobrecuenta, se mide el falso positivo antes de arreglar nada; (6) no escribir no-ASCII desde heredoc de PowerShell (mojibake) y medir el codepage real (fue cp437).",
   "allow": [
-    "plans/ledger.json",
+    "AGENTS.md",
     ".task/contract.json",
     ".task/frozen.json",
     ".task/report"
@@ -14,9 +14,9 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 6,
-  "maxLines": 200,
-  "dod": "npx vitest run tests/decisionVerdictGuard.test.ts tests/taskLedgerGuard.test.ts tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "maxFiles": 4,
+  "maxLines": 120,
+  "dod": "npx vitest run tests/hygieneIndicatorsGuard.test.ts tests/protocolGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

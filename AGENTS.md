@@ -432,6 +432,22 @@ de **0 nuevos**.
    su hash en `frozen.json` en el mismo commit.
    (4) Al parchear ficheros con script, respeta su EOL: `eolGuard` detecta el "mixed" (salta al
    insertar con `\n` en un fichero CRLF) y el gate no cierra. Normaliza antes de commitear.
+   (5) **Un detector de higiene también SOBRECUENTA: mide el falso positivo antes de "arreglarlo".**
+   Medido en P6.9: los "91 TODO" de `src` eran la palabra española TODO/TODOS ("Se listan TODOS
+   los estados"), y cuatro `plans/*.md` aparecían con "mojibake" que era arte ASCII legítimo
+   (`├──`, `│`, `─┐`). En los dos casos, el defecto era el detector del audit, no el código
+   señalado: cerrar el hallazgo sin medirlo habría reescrito código sano. Un hallazgo se cierra
+   midiendo; si es falso positivo, lo que se corrige es el DETECTOR, y su prueba es que ve el
+   defecto y NO marca lo legítimo (C53 lo hace por los dos lados).
+   (6) **No escribas código con no-ASCII desde un heredoc de PowerShell**: llega a disco roto y
+   deja mojibake. Medido: 12 ficheros versionados arrastraban 130 secuencias de UTF-8 mal
+   decodificado, incluidas cuatro cadenas que FLU **pronuncia** por TTS (la de "Navegación
+   curada" y la de "¿Qué querés que busque?" entre ellas). El daño se ve como parejas de
+   caracteres de caja y griegos donde debería haber una vocal acentuada o una raya. Usa una
+   herramienta que garantice UTF-8 (o escapes `\uXXXX`), y para reparar mide el codepage real
+   en vez de suponerlo: aquí el que apareció fue **cp437**, no cp850 (el byte 0xE2 da la gamma
+   en cp437 y una O acentuada en cp850). C53 vigila el residuo, así que este propio documento
+   no puede citar las secuencias rotas en crudo: se describen por su code point.
 
 ## 8. CONTRATO DE TAREA Y VERIFICACIÓN POR COMANDO (anti-sustitución)
 
