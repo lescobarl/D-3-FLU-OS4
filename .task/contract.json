@@ -1,11 +1,12 @@
 {
-  "id": "P0.5",
+  "id": "P0.7",
   "mode": "full",
-  "task": "P0.5 - desacoplar los guards de la prosa de AGENTS.md (3er punto del titulo de T1)",
-  "base": "85e7596f81c8f9f0b18e04f59a66c9ea8bc8cf2c",
-  "objective": "protocolGuard comprueba los MECANISMOS del protocolo (scripts de package.json + workflow CI), no la redaccion de AGENTS.md: editar el documento no puede poner el gate en rojo.",
+  "task": "P0.7 - el CRLF silencioso no puede volver a romper un commit ni un hash congelado",
+  "base": "ccb012ff173e8e2f22ad036ab706641afd8bc45b",
+  "objective": "tests/eolGuard.test.ts: el arbol de trabajo conserva la clase EOL del indice en todo archivo versionado (0 desajustes), integrado en npm run lint:guards.",
   "allow": [
-    "tests/protocolGuard.test.ts",
+    "tests/eolGuard.test.ts",
+    "package.json",
     ".task/contract.json",
     ".task/report",
     "plans/ledger.json"
@@ -22,7 +23,7 @@
   ],
   "maxFiles": 6,
   "maxLines": 250,
-  "dod": "npx vitest run tests/protocolGuard.test.ts --reporter=dot && npx tsc -b",
-  "guard": "npx vitest run tests/protocolGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/eolGuard.test.ts tests/protocolGuard.test.ts --reporter=dot && npx tsc -b",
+  "guard": "npx vitest run tests/eolGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

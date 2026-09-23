@@ -1282,4 +1282,40 @@ REGRESION:
   despues: 287 archivos / 2972 tests / 0 fallos ; tsc -b 0 ; npm run gate 0.
 NO VALIDADO (usuario): que el pre-commit siga corriendo en su maquina. Se
 comprobo que .git/hooks/pre-commit existe y llama a lint+typecheck, pero no se
-edito ni se ejecuto (no esta versionado y tocarlo es decision suya).
+edito ni se ejecuto (no esta versionado y tocarlo es decision suya).================================================================
+[CIERRE TECNICO] 2026-09-22 - P0.7 (el CRLF silencioso deja de ser silencioso)
+================================================================
+CAUSA RAIZ: core.autocrlf=false y NO existe .gitattributes. Si un editor guarda en
+  CRLF un archivo cuyo blob esta en LF, git considera que TODAS las lineas cambiaron.
+  Medido en esta sesion: 9154 lineas de diff por 2 lineas editadas.
+DANO REPETIDO: (1) f1a1ca6 tuvo que rehacerse por este ruido; (2) .task/frozen.json
+  hashea BYTES del arbol de trabajo, asi que un flip de EOL cambia el hash vigilado y
+  el gate falla por una razon ajena a la tarea.
+POR QUE NO SE NORMALIZO A LF: medido antes de decidir -> el repo es MIXTO a
+  proposito: 378 archivos en LF, 331 en CRLF y 63 mixtos en el arbol de trabajo, con
+  CRLF tambien en el indice de 300+ archivos (AGENTS.md, src/App.tsx,
+  scripts/audit-metric.mjs...). Imponer eol=lf reescribiria los bytes de cientos de
+  archivos, invalidaria hashes congelados y sepultaria el trabajo real en ruido. No
+  es mi decision: es formato a escala de repo.
+DECISION: no se cambia la convencion; se protege la que ya existe. tests/eolGuard.test.ts
+  exige que CADA archivo versionado mantenga la MISMA clase de EOL que su blob en el
+  indice. Es un trinquete, no una politica nueva: editar un archivo conservando su EOL
+  es invisible para el guard. Se ignoran binarios/no-texto (-text/none), que git no
+  normaliza. Baseline: 0 desajustes (verificado antes de escribirlo, asi que nace verde
+  sin lista de excepciones).
+MEDICION (809 archivos versionados, 37 no-texto):
+  desajustes indice<->arbol = 0.
+INVARIANTE (falsable, prueba de mutacion): convertido src/voice/lib/listenLog.js
+  (blob i/lf) a CRLF -> w/crlf -> guard ROJO:
+  "EOL cambiado respecto al indice (N=1)". Restaurado -> 6/6 VERDE.
+  Ademas el propio detector se prueba con filas sinteticas: marca lf->crlf, marca
+  crlf->lf, no marca coincidencias, ignora binarios, y encuentra el malo entre 3 filas.
+INTEGRACION: registrado en "lint:guards", que es lo que ejecuta el hook pre-commit
+  (lint = lint:guards + lint:eslint) y tambien la suite completa. lint:guards pasa de
+  11 archivos/46 tests a 12/52.
+REGRESION:
+  antes:   287 archivos / 2972 tests / 0 fallos
+  despues: 288 archivos / 2978 tests / 0 fallos ; tsc -b 0 ; eslint . --max-warnings=0 0
+           npm run gate 0 ; lint:guards 12/52 0.
+NO VALIDADO (usuario): que su editor no reescriba EOL al guardar. El guard ahora lo
+  detecta en el pre-commit en lugar de dejarlo pasar, pero no puede impedir la escritura.
