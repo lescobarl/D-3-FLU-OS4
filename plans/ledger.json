@@ -329,8 +329,8 @@
     {
       "id": "P6.6",
       "titulo": "God files (SRP): App.tsx 5382, useFluVoiceAssistant.js 4576, fluConfig.js 2753, gemini.js 1857",
-      "estado": "todo",
-      "evidencia": "src/App.tsx",
+      "estado": "in_progress",
+      "evidencia": "EN CURSO (2026-09-22). MEDIDO: src/App.tsx 5391 lineas (la funcion App sola: 4157, lineas 1233-5390), src/voice/hooks/useFluVoiceAssistant.js 4579 (el hook solo: 4256, lineas 322-4578), src/voice/lib/fluConfig.js 2772 (de los cuales ~2700 son DATOS: es el catalogo de config, no logica), src/voice/lib/gemini.js 1848 (33 funciones, la mayor 328). RESTRICCION MEDIDA: 28 referencias de guards CONGELADOS apuntan a esos ficheros como fuente unica (10 a App.tsx, 12 a fluConfig.js, 3 a useFluVoiceAssistant.js, 3 a gemini.js) y los guards miden POR FICHERO, asi que sacar codigo de uno deja al guard mirando a otro sitio y en verde (cobertura que se pierde en silencio). PLAN: (1) sacar primero bloques de nivel superior SIN acoplamiento a guards (rutas de tab -> src/app/tabRoutes.ts; guardas de tipo -> src/app/appTypeGuards.ts; acciones de config -> src/app/configActions.ts; acciones de juego -> src/app/gameActions.ts); (2) los dos monstruos (App() 4157 y useFluVoiceAssistant() 4256) necesitan un lote propio con verificacion de UI/e2e, no son troceables por script.",
       "origen": "propio"
     },
     {

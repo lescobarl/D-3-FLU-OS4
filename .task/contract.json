@@ -1,10 +1,12 @@
 {
-  "id": "P5.9",
+  "id": "P6.6",
   "mode": "full",
-  "task": "P5.9 cierre - ledger y evidencia",
-  "base": "2d4b5e3126f97ac2568382ea8a748741658d4730",
-  "objective": "Registrar el cierre de P5.9 en plans/ledger.json: estado done, evidencia medida (118 -> 0, commits ed4f026/7a60462/58710fb/2d4b5e3, guard con mutacion, defecto real corregido) y entrada en done[] apuntando al commit de la guarda. El medio de estilos del titular no se reclama: es P6.12.",
+  "task": "P6.6 paso 1/N - sacar las rutas de tab de App.tsx",
+  "base": "74d173f2927188212f9e68f01dbe202a1abe75b8",
+  "objective": "Empezar el troceo de los god files por el bloque con menos acoplamiento: RightTab/TAB_ROUTES/DEFAULT_TAB/tabFromPath/pathForTab salen de App.tsx a src/app/tabRoutes.ts (logica pura, 0 imports y 0 dependencias del componente), con test propio que antes no existia. Ledger de P6.6 a in_progress con la medicion completa.",
   "allow": [
+    "src/**",
+    "tests/**",
     "plans/**",
     ".task/**"
   ],
@@ -12,9 +14,9 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 4,
-  "maxLines": 60,
-  "dod": "node scripts/audit-metric.mjs localstorage-directo",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/localStorageGatewayGuard.test.ts tests/guardMutationGuard.test.ts --reporter=dot",
+  "maxFiles": 8,
+  "maxLines": 260,
+  "dod": "npx tsc -b",
+  "guard": "npx vitest run tests/tabRoutes.test.ts tests/localStorageGatewayGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

@@ -205,33 +205,8 @@ import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
 import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
 import { logCaughtError } from './lib/caughtError';
 import { localGet, localRemove, localSet } from './core/storage/localStore';
+import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 
-// ============================================================
-// Tipo para las pestañas del panel derecho
-// ============================================================
-type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings' | 'system';
-
-// ============================================================
-// Rutas por tab — React Router v6 (Fase 3: code-split por tab)
-// ============================================================
-const TAB_ROUTES: ReadonlyArray<{ tab: RightTab; path: string }> = [
-    { tab: 'workspace', path: '/workspace' },
-    { tab: 'conversation', path: '/conversation' },
-    { tab: 'minutes', path: '/minutes' },
-    { tab: 'settings', path: '/settings' },
-    { tab: 'system', path: '/system' },
-];
-
-const DEFAULT_TAB: RightTab = 'workspace';
-
-function tabFromPath(pathname: string): RightTab {
-    const match = TAB_ROUTES.find((r) => r.path === pathname);
-    return match ? match.tab : DEFAULT_TAB;
-}
-
-function pathForTab(tab: RightTab): string {
-    return TAB_ROUTES.find((r) => r.tab === tab)?.path || `/${tab}`;
-}
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
 const FluWorkspaceTabView = lazy(() => import('./components/FluWorkspaceTabView'));
