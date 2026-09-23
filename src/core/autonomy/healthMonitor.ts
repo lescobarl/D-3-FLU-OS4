@@ -25,6 +25,7 @@ import { fetchTextEngine } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 import { isSpeechSupported, getSpeechVoices } from '../../voice/lib/fluSpeech';
 import { logCaughtError } from '../../lib/caughtError';
+import { probeIndexedDb } from '../db/fluDatabase';
 
 // -----------------------------------------------------------
 // Tipos
@@ -437,38 +438,25 @@ async function checkIndexedDB(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // Verificar si IndexedDB está disponible
+        // Verificar si IndexedDB est├í disponible
         if (!('indexedDB' in window)) {
             hasError = true;
             message = 'IndexedDB no disponible en este navegador';
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;
-            
-            // Intentar abrir una base de datos de prueba
-            const testDbName = 'flu-health-test';
-            const request = indexedDB.open(testDbName, 1);
-            
-            await new Promise<void>((resolve, reject) => {
-                request.onerror = () => {
-                    hasError = true;
-                    message = 'Error abriendo base de datos IndexedDB';
-                    reject(new Error('IndexedDB open failed'));
-                };
-                
-                request.onsuccess = () => {
-                    const db = request.result;
-                    db.close();
-                    // Eliminar la base de datos de prueba
-                    indexedDB.deleteDatabase(testDbName);
-                    resolve();
-                };
-                
-                request.onupgradeneeded = (event) => {
-                    const db = (event.target as IDBOpenDBRequest).result;
-                    db.createObjectStore('test');
-                };
-            });
+
+            // Sondear la base REAL de la app a traves del singleton Dexie.
+            // Antes se creaba una base desechable (flu-health-test) y se borraba:
+            // un segundo almacen fuera del ciclo de vida de Dexie (7.7.c) y el
+            // unico punto que tocaba indexedDB a mano. Sondear fluDb responde la
+            // misma pregunta sin crear ni destruir almacenes ajenos.
+            const opened = await probeIndexedDb();
+            metrics.opened = opened;
+            if (!opened) {
+                hasError = true;
+                message = 'Error abriendo base de datos IndexedDB';
+            }
         }
     } catch (error) {
         logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);

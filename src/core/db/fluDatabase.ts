@@ -770,3 +770,24 @@ export async function clearAuditLogs(): Promise<void> {
         row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
     });
 }
+
+// -----------------------------------------------------------
+// Sonda de salud
+// -----------------------------------------------------------
+
+/**
+ * Sonda de disponibilidad de IndexedDB sobre la PROPIA base de la app.
+ *
+ * El health monitor necesita saber si IndexedDB funciona. Antes lo hacia con
+ * una base de prueba desechable (`flu-health-test`) que abria y borraba a mano:
+ * un segundo almacen fuera del ciclo de vida de Dexie (┬º7.7.c) y el unico sitio
+ * del proyecto que tocaba indexedDB sin pasar por el singleton. Sondear fluDb
+ * responde la misma pregunta sin crear ni destruir almacenes ajenos.
+ *
+ * @returns true si la base de la app queda abierta.
+ */
+export async function probeIndexedDb(): Promise<boolean> {
+  if (typeof indexedDB === 'undefined') return false;
+  await fluDb.open();
+  return fluDb.isOpen();
+}

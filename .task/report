@@ -1768,4 +1768,35 @@ PENDIENTE DE P4.2 (por eso el item NO se cierra, queda in_progress):
     Vite duplica la libreria y si conviene un chunk compartido. Toca config de build
     (vite.config), con riesgo de romper el worker: merece su propio contrato.
   Ambas quedan anotadas; no se declaran hechas.[GATE] npm run gate -> exit 0. El gate RECOMPUTO por su cuenta: metrica base=2 actual=1
-  target 1, y falsacion del guard: guard base=1 (ROJO) actual=0 (VERDE). No depende de mi nota.
+  target 1, y falsacion del guard: guard base=1 (ROJO) actual=0 (VERDE). No depende de mi nota.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.7: IndexedDB crudo fuera del singleton
+================================================================
+Que era: src/core/autonomy/healthMonitor.ts:checkIndexedDB() creaba una base de prueba
+desechable ('flu-health-test') con indexedDB.open y la borraba con
+indexedDB.deleteDatabase. Era el UNICO punto del proyecto que tocaba indexedDB sin pasar
+por el singleton Dexie: un segundo almacen IndexedDB fuera del ciclo de vida de la app
+(AGENTS.md 7.7.c).
+POR QUE EL GUARD EXISTENTE NO LO VEIA: tests/indexedDbSingleGuard.test.ts (C30) tenia
+  const EXCLUDE = 'src/core/autonomy/healthMonitor.ts'
+y su patron solo miraba indexedDB.open. Es decir: excluia POR NOMBRE la carpeta donde vive
+el duplicado y era ciego a deleteDatabase. Eso es exactamente lo que AGENTS.md 7.7.d
+prohibe. Y ese guard esta CONGELADO (.task/frozen.json), asi que no se edita: el criterio
+inmutable del gate lo impide.
+Que se hizo:
+  1. La sonda de disponibilidad vive ahora en la capa de datos: probeIndexedDb() en
+     src/core/db/fluDatabase.ts (el dueno de indexedDB). Comprueba la base REAL de la app
+     via Dexie (fluDb.open()/isOpen()) en vez de crear y destruir una base ajena.
+  2. healthMonitor.ts llama a probeIndexedDb(); fuera el open/deleteDatabase a mano y la
+     base de prueba 'flu-health-test'.
+  3. Guard NUEVO tests/indexedDbRawOutsideSingletonGuard.test.ts (sin tocar el congelado):
+     alcance TODO src, sin exclusiones, y cubre las dos formas reales (open Y
+     deleteDatabase), case-insensitive y tolerante a espacios (7.7.d). Registrado en
+     lint:guards y congelado a su vez.
+MEDICION (ANTES -> DESPUES), mismo comando sobre src:
+  ANTES  : 1 archivo -> src/core/autonomy/healthMonitor.ts
+  DESPUES: 0 archivos
+  Declarado como invariant.metric (target 0) del contrato; el gate lo RECOMPUTA en un
+  worktree del commit base. El guard nace ROJO en base (healthMonitor listado) y el gate
+  lo falsa por su cuenta.
+VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards 22 archivos /
+  131 tests ; test:full -> 3057 tests / 0 fallos ; npm run gate -> ver salida.
