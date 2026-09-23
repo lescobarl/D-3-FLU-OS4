@@ -193,7 +193,7 @@
     {
       "id": "P4.8",
       "titulo": "Cascada imagen workspace con 3 ordenes",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/hooks/useWorkspaceImage.ts:113,166",
       "origen": "auditoria",
       "noVerificado": true
@@ -294,7 +294,7 @@
     {
       "id": "P5.8",
       "titulo": "Umbrales de autonomia inline",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/autonomy/decisionEngine.ts:383-401",
       "origen": "auditoria",
       "noVerificado": true
@@ -888,6 +888,16 @@
       "id": "P4.7",
       "commit": "a5c4490",
       "titulo": "buildPollinationsArtifact/ImageUrl/Url x3"
+    },
+    {
+      "id": "P4.8",
+      "commit": "12da3ea",
+      "titulo": "Cascada imagen workspace con 3 ordenes"
+    },
+    {
+      "id": "P5.8",
+      "commit": "12da3ea",
+      "titulo": "Umbrales de autonomia inline"
     }
   ]
 }
