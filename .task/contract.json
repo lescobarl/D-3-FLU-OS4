@@ -1,17 +1,16 @@
 {
-  "id": "P1.5",
+  "id": "DECISIONS",
   "mode": "full",
-  "task": "P1.5",
-  "base": "eb6b5b1cdd9c7ac0af9694dea4083e1230f65ec5",
-  "objective": "Branding solo en Dexie: retirar la via localStorage muerta del backup/restore (9 -> 0).",
+  "task": "DECISIONS",
+  "base": "e0d5a1c40946a82e291b29a4ec34ed1ca39d54aa",
+  "objective": "Registrar veredicto formal de las 6 decisiones abiertas del ledger, con evidencia citada.",
   "allow": [
-    "src/**",
+    "plans/ledger.json",
     "tests/**",
     "package.json",
     ".task/frozen.json",
     ".task/contract.json",
-    ".task/report",
-    "plans/ledger.json"
+    ".task/report"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
@@ -20,17 +19,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/brandingDexieOnlyGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/brandingDexieOnlyGuard.test.ts --reporter=dot",
+  "dod": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Referencias a claves localStorage de branding en src (constantes y literales): 9 -> 0.",
+    "statement": "Entradas del ledger en estado decision SIN veredicto formal: 6 -> 0.",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];const RE=/\\bBRANDING_MODE\\b|\\bBRANDING_ACTIVE_SEASON\\b|\\bBRANDING_BIRTHDAY\\b|flu-branding-mode|flu-branding-active-season|flu-branding-birthday/;while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)){for(const l of fs.readFileSync(p,'utf8').split('\\n'))if(RE.test(l))n++;}}}console.log(n)\"",
+      "command": "node -e \"const l=require('./plans/ledger.json');const bad=l.items.filter(i=>i.estado==='decision'&&!String(i.evidencia||'').includes('VEREDICTO:'));console.log(bad.length)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/brandingDexieOnlyGuard.test.ts"
+      "tests/decisionVerdictGuard.test.ts"
     ]
   }
 }

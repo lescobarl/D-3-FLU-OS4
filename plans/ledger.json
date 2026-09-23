@@ -211,15 +211,15 @@
     {
       "id": "P4.11",
       "titulo": "hasToken/findTokenIndex regex divergente (NO forzar)",
-      "estado": "decision",
-      "evidencia": "src/core/games/gameUtils.ts:25,33",
+      "estado": "done",
+      "evidencia": "VEREDICTO: FALSO POSITIVO / YA CORREGIDO. La divergencia de regex ya no existe: findTokenIndex es la unica due├▒a del patron (gameUtils.ts:25-31) y hasToken se define como findTokenIndex(...)!==null (gameUtils.ts:33-35), con el comentario \"Fuente unica de hasToken\". No hay dos regex que reconciliar. Accion: ninguna; no forzar. (sin cambio de codigo: src/core/games/gameUtils.ts:25,33)",
       "origen": "auditoria"
     },
     {
       "id": "P4.12",
       "titulo": "uncheckAll parecido-pero-distinto (NO forzar)",
-      "estado": "decision",
-      "evidencia": "src/core/notes/notesList.ts:59",
+      "estado": "done",
+      "evidencia": "VEREDICTO: DIVERGENCIA DELIBERADA, SE MANTIENE. uncheckAll (notesList.ts:59-63) es una operacion EN LOTE: comparte un unico `now` para todas las notas, a diferencia de toggleNote por item (que daria un updatedAt distinto a cada una). Unificarlas cambiaria el dato observable. Accion: ninguna; queda documentado. (sin cambio de codigo: src/core/notes/notesList.ts:59)",
       "origen": "propio"
     },
     {
@@ -232,8 +232,8 @@
     {
       "id": "P4.14",
       "titulo": "Ruta directa vs proxy en AsrLab (arquitectonica)",
-      "estado": "decision",
-      "evidencia": "src/dev/asrLab/AsrLab.tsx:184",
+      "estado": "done",
+      "evidencia": "VEREDICTO: YA CORRECTO. AsrLab es un laboratorio de comparacion de motores ASR, no codigo de produccion: se carga SOLO en main.tsx:48-55 tras flag (isAsrLab) y con React.lazy, asi que vive en un chunk aparte que produccion no importa; fluConfig.js:2149 documenta que produccion usa Chrome SpeechRecognition. La ruta directa al proveedor ES el proposito del banco (medir el motor crudo); pasar por el proxy invalidaria la comparacion. Mientras siga aislado en src/dev, no se cambia. (sin cambio de codigo: src/dev/asrLab/AsrLab.tsx:184)",
       "origen": "propio"
     },
     {
@@ -304,8 +304,8 @@
     {
       "id": "P6.1",
       "titulo": "6 window.__fluHandle* en bundle sin gate DEV",
-      "estado": "decision",
-      "evidencia": "FALSO POSITIVO verificado: 4 de los 6 (Diary/Note/Shopping/AgendaCommand) son el despacho real (App.tsx:1157 `const w = window` + 1171-1194 lee w.__fluHandle*Text); gatearlos rompe produccion. Solo ConocerFlu/DeviceAction estaban huerfanos (0 lectores en src/ ni tests/e2e) y pasan a DEV via App.exposeDevHook. Guard: tests/devGlobalsGuard.test.ts (mutacion verificada).",
+      "estado": "done",
+      "evidencia": "VEREDICTO: FALSO POSITIVO (ya verificado). __fluHandle* vive en src/types/fluWindow.d.ts como DECLARACIONES de tipos (metodos opcionales de Window) y los manejadores reales se despachan en App.tsx (4 de los 6 son el despacho efectivo, leidos desde window en App.tsx:1157/1171-1194). Un gate DEV los rompe en produccion. Solo DeclaracionesType; nada que gatear. (sin cambio de codigo: FALSO POSITIVO verificado: 4 de los 6 (Diary/Note/Shopping/AgendaCommand) son el despacho real (App.tsx:1157 `const w = window` + 1171-1194 lee w.__fluHandle*Text); gatearlos rompe produccion. Solo ConocerFlu/DeviceAction estaban huerfanos (0 lectores en src/ ni tests/e2e) y pasan a DEV via App.exposeDevHook. Guard: tests/devGlobalsGuard.test.ts (mutacion verificada).)",
       "origen": "auditoria"
     },
     {
@@ -332,8 +332,8 @@
     {
       "id": "P6.5",
       "titulo": "src/modules/** inexistente (layout seccion 4)",
-      "estado": "decision",
-      "evidencia": "glob = 0",
+      "estado": "done",
+      "evidencia": "VEREDICTO: NO APLICA (nunca existio). src/modules/** = 0 coincidencias: la seccion 4 del layout describe una organizacion por modulos que el repositorio no adopto (usa src/core, src/hooks, src/voice, src/avatar). No hay codigo que mover. Se descarta como decision de arquitectura ya tomada de facto. (sin cambio de codigo: glob = 0)",
       "origen": "auditoria"
     },
     {
@@ -353,8 +353,8 @@
     {
       "id": "P6.8",
       "titulo": "Stack seccion 4 no implementado (WebLLM/Orama/Piper/Rhubarb = 0)",
-      "estado": "decision",
-      "evidencia": "grep = 0",
+      "estado": "done",
+      "evidencia": "VEREDICTO: DESCARTADO POR DECISION. WebLLM/Orama/Piper/Rhubarb = 0 implementaciones. El repositorio eligio otro stack: Gemini (via proxy server-side) para razonamiento y Chrome SpeechRecognition/Web Speech para voz, y lo documento (fluConfig.js:2149). Construir un stack local alternativo es una apuesta de producto, no un defecto: fuera de alcance hasta que se decida lo contrario. (sin cambio de codigo: grep = 0)",
       "origen": "auditoria"
     },
     {
@@ -927,6 +927,31 @@
       "id": "P1.5",
       "commit": "44ec3dc",
       "titulo": "Branding solo en Dexie: backup sin via LS muerta"
+    },
+    {
+      "id": "P4.11",
+      "titulo": "Veredicto registrado (sin cambio de codigo)",
+      "commit": "e0d5a1c"
+    },
+    {
+      "id": "P4.12",
+      "titulo": "Veredicto registrado (sin cambio de codigo)",
+      "commit": "e0d5a1c"
+    },
+    {
+      "id": "P4.14",
+      "titulo": "Veredicto registrado (sin cambio de codigo)",
+      "commit": "e0d5a1c"
+    },
+    {
+      "id": "P6.5",
+      "titulo": "Veredicto registrado (sin cambio de codigo)",
+      "commit": "e0d5a1c"
+    },
+    {
+      "id": "P6.8",
+      "titulo": "Veredicto registrado (sin cambio de codigo)",
+      "commit": "e0d5a1c"
     }
   ]
 }
