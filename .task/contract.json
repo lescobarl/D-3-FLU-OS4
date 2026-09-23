@@ -1,12 +1,14 @@
 {
-  "id": "P1.1",
+  "id": "P1.3",
   "mode": "full",
-  "task": "P1.1",
-  "base": "defc8eacbcc79a3ab8c4219abebd486683dfce1b",
-  "objective": "Las minutas viven SOLO en Dexie (doctrina C31): el backup no duplica esa ruta ni espeja en integrationStore.",
+  "task": "P1.3",
+  "base": "98e24210257708f9bc7effddf658ece57187d140",
+  "objective": "El estado de onboarding vive SOLO en Dexie: se retiran las claves legacy de localStorage.",
   "allow": [
-    "src/core/autonomy/backupSystem.ts",
+    "src/hooks/useOnboarding.ts",
+    "src/core/onboarding/onboardingService.ts",
     "src/core/config/appConfig.ts",
+    "src/App.tsx",
     "tests/**",
     "package.json",
     ".task/frozen.json",
@@ -20,18 +22,18 @@
     "kilo.json"
   ],
   "maxFiles": 40,
-  "maxLines": 1200,
-  "dod": "npx tsc -b && npx vitest run tests/minutesDexieOnlyGuard.test.ts tests/minutosSinglePublisherGuard.test.ts tests/voiceProfilesLocalStorageGuard.test.ts tests/brandingDexieOnlyGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/minutesDexieOnlyGuard.test.ts --reporter=dot",
+  "maxLines": 1500,
+  "dod": "npx tsc -b && npx vitest run tests/onboardingSingleStoreGuard.test.ts tests/onboardingWriterGuard.test.ts tests/storageKeysAliveGuard.test.ts tests/onboardingService.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/onboardingSingleStoreGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Sitios en src/ que usan la clave localStorage de minutas (MINUTE_HISTORY / flu-minute-history) o escriben el espejo minuteHistory: fuera del store: 5 -> 0.",
+    "statement": "Referencias vivas a las claves legacy de onboarding (ONBOARDING_COMPLETED / ONBOARDING_STEP / flu-onboarding-completed / flu-onboarding-step) en src/: 16 -> 0.",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');const NL=String.fromCharCode(10);const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));let n=0;for(const f of walk('src')){const p=f.split(path.sep).join('/');for(const line of fs.readFileSync(f,'utf8').split(NL)){const t=line.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;const m=line.match(/MINUTE_HISTORY|flu-minute-history/g);if(m)n+=m.length;if(p!=='src/store/integrationStore.ts'&&/minuteHistory *:/.test(line))n++;}}console.log(n)\"",
+      "command": "node -e \"const fs=require('fs'),path=require('path');const NL=String.fromCharCode(10);const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));let n=0;for(const f of walk('src')){for(const line of fs.readFileSync(f,'utf8').split(NL)){const t=line.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;const m=line.match(/ONBOARDING_COMPLETED|ONBOARDING_STEP|flu-onboarding-completed|flu-onboarding-step/g);if(m)n+=m.length;}}console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/minutesDexieOnlyGuard.test.ts"
+      "tests/onboardingSingleStoreGuard.test.ts"
     ]
   }
 }

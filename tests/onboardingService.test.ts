@@ -22,7 +22,6 @@ import {
   DEFAULT_ONBOARDING_USER,
   getLocalStorage,
   onboardingStateFromRecord,
-  readLegacyOnboarding,
   resolveActiveUser,
   setActiveUser,
   type OnboardingDb,
@@ -183,61 +182,6 @@ describe('onboardingService — usuario activo (resolveActiveUser / setActiveUse
 });
 
 // ------------------------------------------------------------
-// Helpers puros — estado legacy de localStorage (Fase 1)
-// ------------------------------------------------------------
-describe('onboardingService — estado legacy (readLegacyOnboarding)', () => {
-  it('sin storage devuelve el estado inicial sin completar', () => {
-    const state = readLegacyOnboarding(undefined);
-    expect(state).toMatchObject({ stepIndex: 0, completed: false, captured: {} });
-  });
-
-  it('sin claves guardadas devuelve el estado inicial', () => {
-    const state = readLegacyOnboarding(createFakeStorage());
-    expect(state).toMatchObject({ stepIndex: 0, completed: false, captured: {} });
-  });
-
-  it('ONBOARDING_COMPLETED=true marca completado conservando el paso 0', () => {
-    const storage = createFakeStorage({ [STORAGE_KEYS.ONBOARDING_COMPLETED]: 'true' });
-    expect(readLegacyOnboarding(storage)).toMatchObject({ stepIndex: 0, completed: true, captured: {} });
-  });
-
-  it('una sesión legacy incompleta a mitad de flujo se auto-sana al paso 0', () => {
-    const storage = createFakeStorage({
-      [STORAGE_KEYS.ONBOARDING_STEP]: JSON.stringify({ stepIndex: 2, captured: { name: 'Ana' } }),
-    });
-    const state = readLegacyOnboarding(storage);
-    expect(state).toMatchObject({ stepIndex: 0, completed: false, captured: {} });
-  });
-
-  it('una sesión legacy incompleta aún en el paso 0 conserva su estado', () => {
-    const storage = createFakeStorage({
-      [STORAGE_KEYS.ONBOARDING_STEP]: JSON.stringify({ stepIndex: 0, captured: {} }),
-    });
-    const state = readLegacyOnboarding(storage);
-    expect(state).toMatchObject({ stepIndex: 0, completed: false });
-  });
-
-  it('combina completed con el paso restaurado', () => {
-    const storage = createFakeStorage({
-      [STORAGE_KEYS.ONBOARDING_COMPLETED]: 'true',
-      [STORAGE_KEYS.ONBOARDING_STEP]: JSON.stringify({ stepIndex: 3, captured: { name: 'Papá' } }),
-    });
-    const state = readLegacyOnboarding(storage);
-    expect(state).toMatchObject({ stepIndex: 3, completed: true, captured: { name: 'Papá' } });
-  });
-
-  it('JSON corrupto o con campos inválidos cae al estado inicial sin romper', () => {
-    const corrupt = createFakeStorage({
-      [STORAGE_KEYS.ONBOARDING_STEP]: 'no-json',
-    });
-    expect(readLegacyOnboarding(corrupt)).toMatchObject({ stepIndex: 0, completed: false, captured: {} });
-
-    const badTypes = createFakeStorage({
-      [STORAGE_KEYS.ONBOARDING_STEP]: JSON.stringify({ stepIndex: 'mal', captured: 'nope' }),
-    });
-    expect(readLegacyOnboarding(badTypes)).toMatchObject({ stepIndex: 0, completed: false, captured: {} });
-  });
-});
 
 // ------------------------------------------------------------
 // Helpers puros — mapeo entre estado y registro Dexie

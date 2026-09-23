@@ -1970,4 +1970,38 @@ Que se hizo (doctrina C31, la misma que ya regia voiceProfiles y branding):
 MEDICION (ANTES -> DESPUES): sitios que usan la clave localStorage de minutas o escriben el
 espejo minuteHistory: fuera del store = 5 -> 0. Recomputado por el gate en el worktree base.
 VERIFICACION: tsc -b -> 0 ; guard P1.1 5/5 ; DoD incluye los guards C31 de voiceProfiles y
-branding y el de un solo publicador de minutas (P1.2), todos verdes ; npm run gate -> exit 0.
+branding y el de un solo publicador de minutas (P1.2), todos verdes ; npm run gate -> exit 0.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.3: el onboarding tenia DOS almacenes
+================================================================
+Que era: el estado de onboarding tenia dos almacenes con la misma forma:
+  1) Dexie, tabla onboardingStates, via createOnboardingService (gateway unico, C44);
+  2) localStorage, con flu-onboarding-completed + flu-onboarding-step, SOLO para la
+     fase "sin participante" (useOnboarding.persistState/reset) y borrado a mano en
+     TRES sitios de App.tsx (borrar participante activo, crear perfil nuevo, borrar
+     perfil de voz que coincide con un participante).
+El almacen 2 no aportaba casi nada: la sesion INCOMPLETA se auto-sanaba al recargar
+(readLegacyOnboarding rebobinaba a paso 0 si stepIndex>0), asi que lo unico que
+sobrevivia era el flag "completado"; y App re-pregunta el onboarding en cada entrada.
+Que se hizo: la fase sin participante pasa a ser EFIMERA (memoria) y el estado se
+persiste SOLO por el gateway al registrar al participante, que ya ocurria:
+App.onCompleted -> persistForParticipant(id, completed) siembra el estado en Dexie.
+  - useOnboarding: fuera readLegacyOnboarding; persistState no escribe nada sin
+    participante; reset no borra claves; el useEffect de transicion reinicia en memoria.
+  - onboardingService: retirado readLegacyOnboarding (y su logCaughtError huerfano).
+  - appConfig: retiradas las claves ONBOARDING_COMPLETED / ONBOARDING_STEP.
+  - App.tsx: 6 lineas de removeItem sustituidas por el reset del gateway.
+  - tests/onboardingService.test.ts: retirados los 8 casos del lector legacy.
+  - tests/e2e: los helpers sembraban el onboarding en localStorage como fixture; ahora
+    el backdrop se omite con el boton skip (que el helper ya usaba) y el spec de
+    registro ya no borra claves al recargar.
+  - guard tests/onboardingSingleStoreGuard.test.ts (7 tests, C45): prohibe las claves
+    legacy en src/, prohibe el lector retirado, exige que useOnboarding solo toque
+    localStorage para el espejo del nombre (nameKey) y que persista por el gateway.
+MEDICION (ANTES -> DESPUES): referencias vivas a las claves legacy de onboarding en
+src/ = 16 -> 0. Recomputado por el gate en el worktree base.
+VERIFICACION: tsc -b -> 0 ; guard C45 7/7 ; C44 (escritor unico de onboardingStates)
+y storageKeysAliveGuard verdes ; tests de onboarding 56 -> verdes ; npm run gate -> exit 0.
+LIMITE: los e2e NO se pudieron ejecutar en esta maquina: el dev server de vite falla
+al cargar vite.config.ts ("Cannot read properties of undefined (reading DEV)"), fallo
+PREEXISTENTE (vite.config.ts no se toco en esta tarea). El ajuste de los helpers e2e
+queda pendiente de corrida en un entorno con vite operativo.

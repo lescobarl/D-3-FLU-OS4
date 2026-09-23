@@ -11,7 +11,6 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { STORAGE_KEYS } from '../core/config/appConfig';
 import {
   advanceOnboarding,
   createInitialState,
@@ -30,7 +29,6 @@ import { logCaughtError } from '../lib/caughtError';
 import {
   createOnboardingService,
   DEFAULT_ONBOARDING_USER,
-  readLegacyOnboarding,
   type OnboardingService,
 } from '../core/onboarding/onboardingService';
 
@@ -92,7 +90,7 @@ export function useOnboarding({
   }
 
   const [state, setState] = useState<OnboardingState>(() =>
-    isPerUser ? createInitialState() : readLegacyOnboarding(),
+    createInitialState(),
   );
   // La ruta legacy está lista de inmediato; la per-user espera al load().
   const [ready, setReady] = useState<boolean>(() => !isPerUser);
@@ -131,28 +129,24 @@ export function useOnboarding({
     };
   }, [isPerUser, participantId]);
 
-  // Transición a la ruta legacy (sin participante activo — p. ej. al tocar
-  // "Crear perfil nuevo"): relee el estado legacy de localStorage para no
-  // heredar el estado per-user del participante anterior y dejar visible el
+  // Transicion a la ruta sin participante: el onboarding arranca de cero (no hay
+  // almacen que releer). Antes se releia el estado legacy de localStorage para no
+  // heredar el estado per-user del participante anterior.
   // onboarding de la persona que está entrando.
   useEffect(() => {
     if (isPerUser) return;
-    setState(readLegacyOnboarding());
+    setState(createInitialState());
     setReady(true);
   }, [isPerUser]);
 
   const persistState = useCallback(
     (next: OnboardingState) => {
-      if (isPerUser) {
-        if (participantId) serviceRef.current?.save(participantId, next).catch(() => undefined);
-        return;
-      }
-      if (typeof window === 'undefined') return;
-      window.localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, String(next.completed));
-      window.localStorage.setItem(
-        STORAGE_KEYS.ONBOARDING_STEP,
-        JSON.stringify({ stepIndex: next.stepIndex, captured: next.captured }),
-      );
+      // Sin participante no hay nada que persistir: el estado es EFIMERO (memoria).
+      // Al completar, App registra al participante y siembra su estado en Dexie con
+      // persistForParticipant(); una sesion sin completar ya se descartaba antes
+      // (auto-sanacion), asi que no se pierde nada al retirar el volcado a localStorage.
+      if (!isPerUser) return;
+      if (participantId) serviceRef.current?.save(participantId, next).catch(() => undefined);
     },
     [isPerUser, participantId],
   );
@@ -259,12 +253,11 @@ export function useOnboarding({
 
   const reset = useCallback(() => {
     const next = createInitialState();
-    if (isPerUser) {
-      if (participantId) serviceRef.current?.reset(participantId).catch(() => undefined);
-    } else if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
-      window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
-      if (config.nameKey) window.localStorage.removeItem(config.nameKey);
+    if (isPerUser && participantId) {
+      serviceRef.current?.reset(participantId).catch(() => undefined);
+    }
+    if (typeof window !== 'undefined' && config.nameKey) {
+      window.localStorage.removeItem(config.nameKey);
     }
     setState(next);
     speak(initialSpeech(config.steps, lang, next.captured), lang).catch(() => undefined);

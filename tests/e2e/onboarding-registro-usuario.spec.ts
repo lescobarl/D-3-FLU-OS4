@@ -84,10 +84,6 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
         expect(adan.role).toBeTruthy();
 
         // 5) Al volver a abrir el onboarding, Adán figura en las sugerencias.
-        await page.evaluate(() => {
-            localStorage.removeItem('flu-onboarding-completed');
-            localStorage.removeItem('flu-onboarding-step');
-        });
         await page.reload({ waitUntil: 'load' });
         await page.waitForSelector('.flu-shell', { timeout: 15000 });
         await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 15000 });

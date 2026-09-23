@@ -141,8 +141,6 @@ export const STORAGE_KEYS = {
     BACKUP_PREFIX: 'flu-backup-',
     // Onboarding & asistente personal (Fase 1)
     USER_NAME: 'flu-user-name',
-    ONBOARDING_COMPLETED: 'flu-onboarding-completed',
-    ONBOARDING_STEP: 'flu-onboarding-step',
     ACTIVE_USER: 'flu-active-user',
     NOTIFICATION_PERMISSION: 'flu-notification-permission',
     NOTIFICATION_CHANNEL: 'flu-notification-channel',

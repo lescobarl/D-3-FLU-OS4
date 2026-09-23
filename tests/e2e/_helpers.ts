@@ -21,29 +21,20 @@ export interface GotoCleanOptions {
 }
 
 /**
- * Carga la app limpia: precarga el onboarding completado (para que el
- * portal no bloquee), navega, espera el shell y luego limpia el
- * localStorage ya montado. Devuelve los pageerror capturados.
+ * Carga la app limpia: navega, espera el shell y limpia el localStorage. El
+ * onboarding NO se precarga por localStorage (su estado vive SOLO en Dexie):
+ * el backdrop se omite con el boton skip dentro del bucle. Devuelve los pageerror.
  */
 export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Promise<string[]> {
     const { waitWorkspaceHub = true } = options;
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
-    await page.addInitScript(() => {
-        localStorage.setItem('flu-onboarding-completed', 'true');
-        localStorage.setItem('flu-onboarding-step', JSON.stringify({ stepIndex: 0, captured: {} }));
-    });
     await page.goto(BASE_URL, { waitUntil: 'load', timeout: 30000 });
     await page.waitForSelector('.flu-shell', { timeout: 15000 });
-    // Limpia el estado volátil pero CONSERVA el onboarding completado: si se
-    // borra, el backdrop de onboarding reaparece e intercepta los clics.
+    // Limpia el estado volatil. El onboarding ya no se conserva/evita por
+    // localStorage: su estado vive en Dexie (tabla onboardingStates).
     await page.evaluate(() => {
-        const preserved: Record<string, string> = {
-            'flu-onboarding-completed': 'true',
-            'flu-onboarding-step': JSON.stringify({ stepIndex: 0, captured: {} }),
-        };
         localStorage.clear();
-        Object.entries(preserved).forEach(([key, value]) => localStorage.setItem(key, value));
     });
     // El onboarding puede aparecer async (estado per-user en IndexedDB): su
     // backdrop bloquea la interacción, así que se omite dentro del bucle.

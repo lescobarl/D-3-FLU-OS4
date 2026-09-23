@@ -3291,8 +3291,6 @@ function App() {
                 setActiveUser(undefined);
                 setActiveParticipantId(undefined);
                 if (typeof window !== 'undefined') {
-                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
-                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
                     if (onboarding.config.nameKey)
                         window.localStorage.removeItem(onboarding.config.nameKey);
                 }
@@ -3317,8 +3315,6 @@ function App() {
         // Se limpia el estado legacy para que el onboarding de la persona nueva
         // arranque de cero y no herede la sesión anterior.
         if (typeof window !== 'undefined') {
-            window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
-            window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
             if (onboarding.config.nameKey) window.localStorage.removeItem(onboarding.config.nameKey);
         }
         const wasLegacy =
@@ -4577,8 +4573,6 @@ const {
                 setActiveUser(undefined);
                 setActiveParticipantId(undefined);
                 if (typeof window !== 'undefined') {
-                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
-                    window.localStorage.removeItem(STORAGE_KEYS.ONBOARDING_STEP);
                     if (onboarding.config.nameKey)
                         window.localStorage.removeItem(onboarding.config.nameKey);
                 }

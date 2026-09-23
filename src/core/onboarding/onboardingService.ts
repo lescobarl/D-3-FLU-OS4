@@ -3,8 +3,8 @@
 // ------------------------------------------------------------
 // Multiusuario (Fase 3): cada participante (papá/mamá/hijo) tiene
 // su propio estado de primera configuración en Dexie (tabla v14
-// onboardingStates). El usuario legacy 'default' conserva el
-// comportamiento original basado en localStorage (compatibilidad).
+// onboardingStates). Ya NO hay ruta paralela en localStorage: el estado de
+// onboarding (incluida la fase sin participante) vive SOLO en Dexie.
 //
 // Cumple:
 //  - Regla #1 (no hardcode): claves de almacenamiento desde
@@ -21,7 +21,6 @@ import { createInitialState, type OnboardingState } from './onboardingFlow';
 
 export type { OnboardingStateRecord } from '../db/fluDatabase';
 export type { OnboardingState } from './onboardingFlow';
-import { logCaughtError } from '../../lib/caughtError';
 
 /** Id del usuario legacy basado en localStorage (sin participante). */
 export const DEFAULT_ONBOARDING_USER = 'default';
@@ -98,39 +97,6 @@ export function setActiveUser(storage: Storage | undefined = getLocalStorage(), 
     return;
   }
   storage.setItem(STORAGE_KEYS.ACTIVE_USER, clean);
-}
-
-/**
- * Estado legacy de localStorage (Fase 1). Compatibilidad: cuando no hay
- * participante activo, useOnboarding sigue leyendo/escribiendo aquí.
- */
-export function readLegacyOnboarding(storage: Storage | undefined = getLocalStorage()): OnboardingState {
-  const base = createInitialState();
-  if (!storage) return base;
-  const completed = storage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
-  const raw = storage.getItem(STORAGE_KEYS.ONBOARDING_STEP);
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      const stepIndex = Number.isFinite(parsed?.stepIndex) ? parsed.stepIndex : 0;
-      const captured =
-        parsed?.captured && typeof parsed.captured === 'object' ? parsed.captured : {};
-      // Auto-sanación: una sesión legacy INCOMPLETA que quedó a mitad de flujo
-      // (stepIndex > 0) puede estar atascada con artefactos de voz o elecciones
-      // previas (p. ej. captured.name = "cómo") que no coinciden con ningún
-      // participante real. En lugar de restaurarla tal cual (lo que reabriría la
-      // pregunta de rol "niño/adulto" para siempre en cada recarga), se rebobina
-      // al paso 0 para volver a preguntar el nombre con la lista de usuarios.
-      if (!completed && stepIndex > 0) {
-        return { ...base, completed };
-      }
-      return { stepIndex, completed, captured, startedAt: Date.now() };
-    } catch (e) {
-        logCaughtError('[catch] src/core/onboarding/onboardingService.ts', e);
-      // estado corrupto → reiniciar
-    }
-  }
-  return { ...base, completed };
 }
 
 // -----------------------------------------------------------
