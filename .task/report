@@ -1799,4 +1799,38 @@ MEDICION (ANTES -> DESPUES), mismo comando sobre src:
   worktree del commit base. El guard nace ROJO en base (healthMonitor listado) y el gate
   lo falsa por su cuenta.
 VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards 22 archivos /
-  131 tests ; test:full -> 3057 tests / 0 fallos ; npm run gate -> ver salida.
+  131 tests ; test:full -> 3057 tests / 0 fallos ; npm run gate -> ver salida.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.2 (T2a): guard de minutas ciego -> un solo publicador
+================================================================
+Que era: el guard congelado C10 (tests/minutosDobleEscrituraGuard.test.ts) vigilaba UN
+archivo hardcodeado (src/hooks/useMinuteHandlers.ts) y UNA forma
+(integrationStore.addMinute). Por eso era ciego a los otros DOS escritores reales:
+  - src/hooks/useMinuteKnowledge.ts:265 -> useIntegrationStore.getState().addMinute(ui)
+    (forma DISTINTA: via getState, no via objeto del store)
+  - src/App.tsx:4278 -> integrationStore.addMinute(m)  (archivo DISTINTO)
+El titulo del hito lo dice literal: "no cubre useMinuteKnowledge.ts".
+El propio codigo ya declaraba la doctrina (useMinuteKnowledge.ts:262-264): "el dueno de la
+minuta (persistencia) es quien publica en integrationStore; los consumidores NO espejan por
+su cuenta". El codigo no la cumplia: habia 2 publicadores.
+AGRAVANTE MEDIDO: integrationStore.addMinute era un prepend CIEGO
+(minuteHistory: [minute, ...current.minuteHistory], sin dedup) y estaba protegido por un
+invariante fragil en App ("solo si minuteHistory.length === 0"). Cualquier segundo escritor
+duplicaba filas.
+Que se hizo:
+  1. Puerta unica en el dueno: publishMinuteToStore() (una sola llamada al store en todo
+     src). addMinute la usa; y publishAllToStore() (nueva) la usa para la hidratacion.
+  2. App.tsx deja de espejar: pide minuteKnowledge.publishAllToStore() en vez de recorrer
+     las minutas y escribir en el store por su cuenta.
+  3. Dedup por id en integrationStore.addMinute: republicar la misma minuta (p.ej. al
+     actualizarla) ya no la duplica.
+  4. Guard NUEVO tests/minutosSinglePublisherGuard.test.ts, sin exclusiones (7.7.d): alcance
+     todo src, cubre AMBAS formas reales de publicar, y ademas prueba CONDUCTA (importa el
+     store y verifica el dedup llamando addMinute dos veces con el mismo id). El guard
+     congelado C10 no se toca (criterio inmutable): el nuevo cierra el hueco.
+MEDICION (ANTES -> DESPUES), mismo comando sobre src (lineas de codigo, sin comentarios):
+  ANTES  : 2 -> useMinuteKnowledge.ts:265 y App.tsx:4278
+  DESPUES: 1 -> useMinuteKnowledge.ts (la puerta del dueno)
+  Declarado como invariant.metric (target 1); el gate lo RECOMPUTA en un worktree del
+  commit base y falsa el guard por su cuenta.
+VERIFICACION: tsc -b -> 0 ; eslint . --max-warnings=0 -> 0 ; lint:guards 136 tests ;
+  test:full -> 298 archivos / 3062 tests / 0 fallos ; npm run gate -> ver salida.

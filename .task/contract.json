@@ -1,9 +1,9 @@
 {
-  "id": "P1.7",
+  "id": "P1.2",
   "mode": "full",
-  "task": "P1.7",
-  "base": "edf18588e163d14a8269dbce52d43683ba0a4f37",
-  "objective": "IndexedDB crudo fuera del singleton: 1 archivo con acceso manual -> 0.",
+  "task": "P1.2",
+  "base": "35d174921498ae9f68e7a1a556e73b679d379ef8",
+  "objective": "Minutas: un solo publicador hacia integrationStore (2 -> 1) + dedup por id.",
   "allow": [
     "src/**",
     "tests/**",
@@ -20,17 +20,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/indexedDbRawOutsideSingletonGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/indexedDbRawOutsideSingletonGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b && npx vitest run tests/minutosSinglePublisherGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/minutosSinglePublisherGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "IndexedDB: los archivos de src con acceso manual (open/deleteDatabase) pasan de 1 a 0.",
+    "statement": "Minutas: los sitios que publican en integrationStore pasan de 2 a 1 (un solo publicador).",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx)$/.test(e.name)){if(/(indexeddb)\\s*[.](open|deletedatabase)\\s*[(]/i.test(fs.readFileSync(p,'utf8')))n++;}}}console.log(n)\"",
-      "target": 0
+      "command": "node -e \"const fs=require('fs'),path=require('path');let n=0;const st=['src'];const RE=/(?:useIntegrationStore\\s*[.]\\s*getState\\s*[(]\\s*[)]|integrationStore)\\s*[.]\\s*addMinute\\s*[(]/;while(st.length){const d=st.pop();for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())st.push(p);else if(/[.](ts|tsx|js|jsx)$/.test(e.name)){for(const l of fs.readFileSync(p,'utf8').split(String.fromCharCode(10))){const t=l.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;if(RE.test(l))n++;}}}}console.log(n)\"",
+      "target": 1
     },
     "guardFiles": [
-      "tests/indexedDbRawOutsideSingletonGuard.test.ts"
+      "tests/minutosSinglePublisherGuard.test.ts"
     ]
   }
 }

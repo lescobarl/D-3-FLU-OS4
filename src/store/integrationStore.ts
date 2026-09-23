@@ -636,7 +636,10 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             addMinute: (minute: MinuteUIEntry) => {
                 set((current) => ({
-                    minuteHistory: [minute, ...current.minuteHistory],
+                    // Dedup por id: republicar la misma minuta (p.ej. al actualizarla)
+                    // no debe duplicarla en el historial. El prepend ciego permitia que
+                    // cualquier segundo escritor duplicara filas.
+                    minuteHistory: [minute, ...current.minuteHistory.filter((m) => m.id !== minute.id)],
                 }));
             },
 

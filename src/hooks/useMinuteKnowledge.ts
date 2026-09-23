@@ -177,6 +177,17 @@ export function formatMinuteHistoryLabel(entry: MinuteUIEntry): string {
  * Hook para gestionar minutas con persistencia en IndexedDB.
  * Sigue la nomenclatura exacta de OS2 normalizeMinuteKnowledgeRecord.
  */
+/**
+ * UNICO punto del proyecto que publica una minuta en integrationStore (C10).
+ *
+ * El due├▒o de la minuta (useMinuteKnowledge) es quien publica; los consumidores
+ * NO espejan por su cuenta. Centralizar aqui hace que la publicacion individual y
+ * la hidratacion del store pasen por la misma puerta: antes App recorria las
+ * minutas y llamaba a integrationStore.addMinute por su cuenta (segundo escritor).
+ */
+function publishMinuteToStore(entry: MinuteUIEntry): void {
+    useIntegrationStore.getState().addMinute(entry);
+}
 export function useMinuteKnowledge(participantId?: string) {
     const scope = participantId || 'global';
     const [minutes, setMinutes] = useState<MinuteUIEntry[]>([]);
@@ -262,11 +273,16 @@ export function useMinuteKnowledge(participantId?: string) {
             // C10 — Escritura ÚNICA hacia el store: el dueño de la minuta
             // (persistencia) es quien publica en integrationStore; los
             // consumidores NO espejan por su cuenta.
-            useIntegrationStore.getState().addMinute(ui);
+            publishMinuteToStore(ui);
             return ui;
         },
         [],
     );
+
+    /** Publica en integrationStore todas las minutas cargadas (hidratacion). */
+    const publishAllToStore = useCallback(() => {
+        minutes.forEach(publishMinuteToStore);
+    }, [minutes]);
 
     /** Actualizar una minuta existente */
     const updateMinute = useCallback(async (id: string, snapshot: Partial<MinuteSummarySnapshot>) => {
@@ -318,6 +334,7 @@ export function useMinuteKnowledge(participantId?: string) {
         loading,
         refresh,
         addMinute,
+        publishAllToStore,
         updateMinute,
         deleteMinute,
         getMinute,

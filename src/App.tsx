@@ -4273,10 +4273,8 @@ function App() {
         if (minuteKnowledge.minutes.length > 0) {
             // Sync from DB to store if store is empty
             if (integrationStore.minuteHistory.length === 0) {
-                minuteKnowledge.minutes.forEach((m) => {
-                    // m is MinuteUIEntry with summarySnapshot nested
-                    integrationStore.addMinute(m);
-                });
+                // C10 - el dueno de la minuta publica; App solo pide la hidratacion.
+                minuteKnowledge.publishAllToStore();
             }
         }
     }, [minuteKnowledge.minutes.length]);
