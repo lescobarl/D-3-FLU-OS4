@@ -86,5 +86,6 @@
   "tests/dexieSingleSourceGuard.test.ts": "51a0151ccbd7ce88771dd6b36193dc3dc26513f38080fce292099a04e687fad8",
   "tests/minutesDexieOnlyGuard.test.ts": "dd5d36a01a886fdc18a1e1afa8accc9981bcd9afdc12514b7f463b5b8dd9d3b9",
   "tests/onboardingSingleStoreGuard.test.ts": "d556f05dcb624fe45799ea59398016a6a83d574582585106046f37de03ea44f1",
-  "tests/nonNullAssertionGuard.test.ts": "6b0141807fd74130a406c3e35de4aa43ec3d986518e2bc4795eba7a53a636fcb"
+  "tests/nonNullAssertionGuard.test.ts": "6b0141807fd74130a406c3e35de4aa43ec3d986518e2bc4795eba7a53a636fcb",
+  "tests/plansProcessArtifactsGuard.test.ts": "7569127dca91df246e99ad848d7a717b1f9af635ac4186c99742fb0d54f55beb"
 }
