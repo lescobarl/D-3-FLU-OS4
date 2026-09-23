@@ -373,6 +373,33 @@ function countExisting(paths) {
   return n
 }
 
+// ---- P5.9: una sola puerta al almacenamiento local del navegador ----------
+const LOCAL_PORT_OWNER = 'src/core/storage/localStore.ts'
+
+/** Deja el CONTENIDO de los literales de cadena vacio (el identificador, no). */
+function maskStrings(line) {
+  return line.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""')
+}
+
+/**
+ * Lineas que mencionan el IDENTIFICADOR `localStorage` fuera de la puerta unica.
+ * No cuentan los comentarios ni el contenido de los literales: `'localStorage'`
+ * como NOMBRE de canal o de fuente de la key (autoRecovery, sharedConfig,
+ * deepseek) no es un acceso al almacen.
+ */
+function localStorageDirect() {
+  const hits = []
+  for (const f of walk(SRC)) {
+    const r = rel(f)
+    if (r === LOCAL_PORT_OWNER) continue
+    if (!/\.(ts|tsx|js|jsx|mjs)$/.test(r)) continue
+    for (const line of linesOf(f)) {
+      if (isCommentLine(line)) continue
+      if (/\blocalStorage\b/.test(maskStrings(stripComment(line)))) hits.push(r)
+    }
+  }
+  return hits.length
+}
 const metrics = {
   // ---- C1-C5 -------------------------------------------------------------
   'voz-instancia': () =>
@@ -504,6 +531,8 @@ const metrics = {
   'ts-escapes': () => countLinesWhere((_r, l) => RE.tsDoubleCast.test(stripComment(l))),
   // ---- P7.3 --------------------------------------------------------------
   'ts-any': () => countLinesWhere((_r, l) => RE.tsAnyType.test(stripComment(l))),
+  // ---- P5.9 --------------------------------------------------------------
+  'localstorage-directo': () => localStorageDirect(),
   // ---- C46 ---------------------------------------------------------------
   // Tablas legacy que siguen VIVAS en el esquema Dexie efectivo (declaradas y
   // no borradas con `: null` en alguna version posterior).

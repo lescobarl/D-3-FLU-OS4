@@ -1,20 +1,22 @@
 {
-  "id": "P4.2",
+  "id": "P5.9",
   "mode": "full",
-  "task": "cierre-ledger-P4.2 + registro de P6.13",
-  "base": "de78579fc73abc298db089943f99a533053a043e",
-  "objective": "Cerrar P4.2 en el ledger tras de78579 (parte 1/3 en f99661f, parte 2/3 medida con el banco y parte 3/3 con VEREDICTO) y registrar como item propio el defecto que la medicion descubrio: el build de produccion no arranca al cargar la config. P6.13 nace con la causa reproducida y el limite del alcance escrito, para no dejar la decision en un mensaje de commit.",
+  "task": "P5.9 paso 1/N - la puerta unica de almacenamiento y su metrica",
+  "base": "5d8d955ac152d170f1091df39484ddc15bc65a57",
+  "objective": "Medir ANTES de tocar los consumidores: nace la puerta unica src/core/storage/localStore.ts (resuelve el almacenamiento una vez y cae a memoria persistente fuera del navegador) con sus dos tests (memoria y jsdom) y el medidor gana `localstorage-directo`, que cuenta las menciones al IDENTIFICADOR localStorage fuera de la puerta (los literales `localStorage` como nombre de canal NO cuentan). Nace ROJO: los consumidores se migran en los pasos siguientes y el guard endurecido llega en el ultimo, con este commit como base del invariante.",
   "allow": [
-    "plans/ledger.json",
+    "src/core/storage/**",
+    "tests/localStore*.test.ts",
+    "scripts/audit-metric.mjs",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 6,
-  "maxLines": 120,
-  "dod": "node scripts/task-ledger.mjs check",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/fbxSingleOrchestrationGuard.test.ts --reporter=dot",
+  "maxFiles": 8,
+  "maxLines": 500,
+  "dod": "node scripts/audit-metric.mjs localstorage-directo",
+  "guard": "npx vitest run tests/localStoreMemory.test.ts tests/localStoreBrowser.test.ts --reporter=dot",
   "guardExpect": "green"
 }
