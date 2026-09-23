@@ -81,8 +81,8 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
       return new Blob([bytes], { type: mime });
     }
     return new Blob([decodeURIComponent(m[3])], { type: mime });
-  } catch {
-        logCaughtError('[catch] src/lib/formatAdapters.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/lib/formatAdapters.ts', e);
     return null;
   }
 }
@@ -94,8 +94,8 @@ function toBlobUrl(content: string, mime: string): string {
     }
     const blob = new Blob([content], { type: mime });
     return URL.createObjectURL(blob);
-  } catch {
-        logCaughtError('[catch] src/lib/formatAdapters.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/lib/formatAdapters.ts', e);
     return '';
   }
 }
@@ -212,8 +212,8 @@ async function serializeXlsx(content: string, nombre: string): Promise<Generated
     let parsed: XlsxPayload;
     try {
       parsed = JSON.parse(String(content || '{}'));
-    } catch {
-        logCaughtError('[catch] src/lib/formatAdapters.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/lib/formatAdapters.ts', e);
       parsed = { rows: String(content || '').split(/\r?\n/).map((l) => l.split('\t')) };
     }
     const wb = XLSX.utils.book_new();

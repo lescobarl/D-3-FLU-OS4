@@ -1,30 +1,25 @@
 {
-  "id": "P0.6+P2.4",
+  "id": "P2.1+P3.1+P3.2+P3.3",
   "mode": "full",
-  "task": "P0.6+P2.4 - barrera fiable: gate determinista y meta-guard anti-teatro",
-  "base": "ad45b194ed3bfa0adda36bc62153e1fc9d4001fb",
-  "objective": "La invocacion de los guards base deja de ser intermitente y ningun guard registrado en lint:guards puede quedarse sin prueba de su propio detector.",
+  "task": "P2.1+P3 - todo catch registra la excepcion con su contexto",
+  "base": "ac94a6724e6a5ce52010125f1afcaaa40ad3d5e9",
+  "objective": "Ningun catch pierde la excepcion: registra en el registro central con contexto y excepcion, propaga, o declara la omision con ignorado:.",
   "allow": [
-    "package.json",
-    "tests/guardMutationGuard.test.ts",
-    ".task/guard-proof-baseline.json",
+    "src/**",
+    "tests/catchSilenciosoGuard.test.ts",
+    ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
     "plans/ledger.json"
-  ],
-  "deny": [
-    "scripts/task-gate.mjs",
-    "scripts/task-gate-invariant.mjs",
-    "scripts/audit-metric.mjs"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 10,
-  "maxLines": 500,
-  "dod": "npx vitest run tests/guardMutationGuard.test.ts --reporter=dot && npx tsc -b",
-  "guard": "npx vitest run tests/guardMutationGuard.test.ts --reporter=dot",
+  "maxFiles": 120,
+  "maxLines": 4000,
+  "dod": "npx tsc -b && npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

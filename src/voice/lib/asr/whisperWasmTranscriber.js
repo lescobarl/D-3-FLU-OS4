@@ -43,8 +43,8 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
       // Reintento: se destruye el worker roto; la próxima petición lo recrea.
       try {
         worker.terminate()
-      } catch {
-        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
+      } catch (e) {
+        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js', e);
         // ignore
       }
       worker = null
@@ -91,8 +91,8 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
       if (worker) {
         try {
           worker.terminate()
-        } catch {
-        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js');
+        } catch (e) {
+        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js', e);
           // ignore
         }
         worker = null

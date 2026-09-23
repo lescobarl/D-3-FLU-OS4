@@ -1270,8 +1270,8 @@ export function useFluVoiceAssistant({
           }
           try {
             stopSpeechRecognition(recognitionRef.current)
-          } catch {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js');
+          } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
             // ignore
           }
           const retryCount = recognitionRetryCountRef.current + 1
@@ -1287,8 +1287,8 @@ export function useFluVoiceAssistant({
         const restartCfg = getActiveListenConfig().restart
         try {
           stopSpeechRecognition(recognitionRef.current)
-        } catch {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js');
+        } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
           // ignore
         }
         const retryCount = recognitionRetryCountRef.current + 1
@@ -1364,8 +1364,8 @@ export function useFluVoiceAssistant({
       } else {
         recognitionRef.current.stop()
       }
-    } catch {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
       // ignore
     }
 
@@ -1924,8 +1924,8 @@ export function useFluVoiceAssistant({
       recognitionRef.current.onend = null
       try {
         recognitionRef.current.stop()
-      } catch {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js');
+      } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
         // Ignore stop errors.
       }
       recognitionRef.current = null
@@ -2114,9 +2114,7 @@ export function useFluVoiceAssistant({
 
   const schedulePassiveAudioCapture = useCallback(() => {
     const runCapture = () => {
-      void setupPassiveAudioCapture().catch((_error) => {
-        // audio opcional; SR sigue sin segundo stream
-      })
+      void setupPassiveAudioCapture().catch((e) => { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e) })
     }
 
     if (!conversationActiveRef?.current) {
@@ -2349,8 +2347,8 @@ export function useFluVoiceAssistant({
             try {
               if (typeof previous.abort === 'function') previous.abort()
               else previous.stop()
-            } catch {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js');
+            } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
               // ignore
             }
           }
@@ -2751,8 +2749,8 @@ export function useFluVoiceAssistant({
           await cleanupAudio()
           setStatus('idle')
         }
-      } catch {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js');
+      } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
         if (closing) {
           isListeningRef.current = false
           await cleanupAudio().catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
@@ -3310,6 +3308,7 @@ export function useFluVoiceAssistant({
             `processConversationFluQuery TRACE: determinista sobre question="${(question || '').slice(0, 80)}" → matched=${Boolean(probe?.matched)} domain="${probe?.domain || ''}" action="${JSON.stringify(probe?.action?.action ?? probe?.action ?? null)?.slice(0, 120)}"`,
           )
         } catch (probeError) {
+    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', probeError);
           relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery TRACE determinista lanzó: ${probeError?.message || probeError}`)
         }
 
@@ -3437,6 +3436,7 @@ export function useFluVoiceAssistant({
           fastPathEnvironment: Boolean(fastEnv?.tipo),
         })
       } catch (error) {
+    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', error);
         relayLog('ERROR', 'useFluVoiceAssistant', `processConversationFluQuery CATCH: message="${error?.message || error}", code="${error?.code}", status="${error?.status}"`)
         reportGeminiFailure(error, { phase: 'SESION_ACTIVA', transcript: fullTranscript })
         // Also notify the UI (FluShell) so FLU speaks the error to the user

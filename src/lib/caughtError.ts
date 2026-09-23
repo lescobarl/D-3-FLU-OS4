@@ -41,7 +41,5 @@ export function logCaughtError(context: string, ...details: unknown[]): void {
     }
     void import('./clientLogRelay')
         .then((mod) => mod.relayLog('ERROR', 'catch', message, { detail }))
-        .catch(() => {
-            /* ignorado: el relay de logs no está disponible en este contexto */
-        });
+        .catch((e: unknown) => { logCaughtError('[catch] src/lib/caughtError.ts', e) });
 }

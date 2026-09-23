@@ -47,8 +47,8 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
     }
 
     const stored = (() => {
-        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY); } catch {
-        logCaughtError('[catch] src/services/deepseek.ts'); return null; }
+        try { return localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY); } catch (e) {
+        logCaughtError('[catch] src/services/deepseek.ts', e); return null; }
     })();
     if (stored && stored.trim()) {
         return { apiKey: stored.trim(), apiKeySource: 'localStorage' };
@@ -74,8 +74,8 @@ function resolveCreativityTemperature(): number | undefined {
                 return value;
             }
         }
-    } catch {
-        logCaughtError('[catch] src/services/deepseek.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/services/deepseek.ts', e);
         // ignore
     }
     return OPENROUTER_CONFIG.DEFAULT_TEMPERATURE;
@@ -214,8 +214,8 @@ class DeepSeekService extends BaseAIService {
             let parsed;
             try {
                 parsed = JSON.parse(responseText);
-            } catch {
-                logCaughtError('[catch] src/services/deepseek.ts');
+            } catch (e) {
+                logCaughtError('[catch] src/services/deepseek.ts', e);
                 // Fallback if JSON parsing fails
                 parsed = {};
             }
@@ -372,8 +372,8 @@ Formato de respuesta (JSON):
             let parsed;
             try {
                 parsed = JSON.parse(responseText);
-            } catch {
-                logCaughtError('[catch] src/services/deepseek.ts');
+            } catch (e) {
+                logCaughtError('[catch] src/services/deepseek.ts', e);
                 parsed = { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 };
             }
 
@@ -494,8 +494,8 @@ Formato de respuesta (JSON):
             let parsed;
             try {
                 parsed = JSON.parse(responseText);
-            } catch {
-                logCaughtError('[catch] src/services/deepseek.ts');
+            } catch (e) {
+                logCaughtError('[catch] src/services/deepseek.ts', e);
                 parsed = {
                     materia: 'Desconocida',
                     problemas: [],

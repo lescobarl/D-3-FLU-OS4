@@ -156,8 +156,8 @@ export function applyProviderOverrides(
 function envOpenRouterKey(): string {
   try {
     return resolveTextApiKey();
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     return '';
   }
 }
@@ -248,8 +248,8 @@ export function getLastStorageError(): string {
 function safeGet(store: Storage | null | undefined, key: string): string | null {
   try {
     return store ? store.getItem(key) : null;
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     return null;
   }
 }
@@ -279,13 +279,13 @@ function writeRawOverrides(value: string): boolean {
     lastStorageError = (error as Error)?.name || 'localStorage error';
     logCaughtError(
       `[searchConfig] localStorage no disponible (${lastStorageError}); se usa respaldo en sessionStorage.`,
-    );
+     error);
     // Cuota llena/bloqueada: quitar el valor VIEJO para que no opaque al nuevo
     // (removeItem no consume cuota), así la lectura cae a sessionStorage.
     try {
       window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
-    } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
       /* si tampoco se puede, la lectura usa sessionStorage */
     }
   }
@@ -312,8 +312,8 @@ export function loadSearchConfigOverrides(): SearchConfigOverrides {
   try {
     const parsed = JSON.parse(raw) as SearchConfigOverrides;
     return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     return {};
   }
 }
@@ -331,14 +331,14 @@ export function clearSearchConfigOverrides(): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.removeItem(OVERRIDES_STORAGE_KEY);
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     /* ignorar */
   }
   try {
     window.sessionStorage.removeItem(OVERRIDES_STORAGE_KEY);
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     /* ignorar */
   }
 }
@@ -353,8 +353,8 @@ export function loadDailyUsage(): DailyUsageRecord | null {
       return null;
     }
     return parsed;
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     return null;
   }
 }
@@ -363,8 +363,8 @@ export function loadDailyUsage(): DailyUsageRecord | null {
 export function saveDailyUsage(record: DailyUsageRecord): void {
   try {
     window.localStorage.setItem(STORAGE_KEYS.SEARCH_DAILY_USAGE, JSON.stringify(record));
-  } catch {
-        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     // ignorar
   }
 }

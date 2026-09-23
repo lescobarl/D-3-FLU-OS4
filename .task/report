@@ -1456,4 +1456,42 @@ REGRESION: lint:guards 73 -> 80 tests (14 -> 15 archivos), 0 fallos.
   npm run gate -> exit 0 ; npx tsc -b -> 0
 NO VALIDADO (usuario): que el fallo intermitente original no reaparezca en su equipo
   bajo una carga distinta a la de esta sesion; la mitigacion es determinista por
-  construccion (sin paralelismo + timeout holgado + reintento de infraestructura).
+  construccion (sin paralelismo + timeout holgado + reintento de infraestructura).================================================================
+[CIERRE TECNICO] 2026-09-22 - P2.1 + P3.1 + P3.2 + P3.3 (excepciones)
+================================================================
+PROBLEMA (medido antes de tocar): el guard C13 aceptaba `logCaughtError('contexto')`
+a secas. Registraba el HECHO pero perdia la EXCEPCION, asi que el guard no
+discriminaba: 124 llamadas de 1 argumento, 117 catch sin binding (no podian aportar
+la excepcion) y 19 catch que solo hacian console.warn. En total ~270 sitios donde el
+fallo se registraba sin el dato que permite diagnosticarlo.
+REGLA NUEVA (P2.1, guard endurecido):
+  1. `ignorado:` -> omision deliberada declarada.
+  2. propaga (throw / reject( / emit* / setError / onError / reportError) -> ok.
+  3. si no: el catch DEBE declarar binding, DEBE haber una llamada DIRECTA a
+     logCaughtError, y cada llamada debe tener >= 2 argumentos y referenciar el binding.
+  4. `.catch(() => {})` (handler vacio) tambien es un trago silencioso.
+DETALLE CLAVE: el analisis pasa a ser por AST (TypeScript), no por regex. Con regex,
+`catch` dentro de un comentario o de una cadena se confundia con un bloque real y las
+llamadas de un catch ANIDADO se evaluaban contra el binding del catch EXTERNO (7 falsos
+positivos medidos). El AST elimina las dos clases de error.
+MIGRACION (codemod por AST, 57 archivos):
+  - 117 catch sin binding -> `catch (e)` con nombre libre (sin sombrear nada del cuerpo).
+  - 119 llamadas -> contexto + excepcion.
+  - 10 console.warn/error dentro de catch -> logCaughtError (P3.1).
+  - 16 `.catch(() => {})` -> handler que registra (P3.2: eran 13 sin marca + 3 mas que
+    el conteo por regex no veia por formato).
+  - 9 catch que no registraban nada -> logCaughtError al principio del bloque.
+  - 4 imports de logCaughtError anadidos donde faltaban.
+INVARIANTE (falsable): revertido un `.catch((e: unknown) => {...})` a `.catch(() => {})`
+  -> guard ROJO citando "src/components/FluAvatarVoiceBridge.tsx:367: .catch(() => {})
+  traga el error". Restaurado -> 10/10 VERDE.
+ENMIENDA FORMAL (AGENTS.md B14): tests/catchSilenciosoGuard.test.ts estaba CONGELADO.
+  Re-congelado: sha256 aae2d7c86b36... -> 175e14e3fef1... El criterio nuevo es
+  estrictamente mas amplio que el viejo.
+VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 290 archivos /
+  3001 tests / 0 fallos ; ledger:check -> OK ; npm run gate -> exit 0 ; eolGuard 6/6
+  (la primera version del codemod normalizaba EOL y se detecto: corregido a insercion
+  por splice que preserva los bytes).
+NO VALIDADO: el comportamiento en runtime de los catch que antes solo hacian console.warn
+  (ahora escriben por el relay central; en DEV la visibilidad de consola se mantiene
+  porque logCaughtError hace console.error).

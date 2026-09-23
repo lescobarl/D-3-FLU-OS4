@@ -121,7 +121,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 }, 'Minute generated from conversation').catch(console.error);
             }
         } catch (error) {
-            console.error('[useMinuteHandlers] Error generating minute:', error);
+            logCaughtError('[useMinuteHandlers] Error generating minute:', error);
             auditLog.logEvent('minute:error', 'minute', uuidv4(), {
                 error: String(error),
             }, 'Minute generation failed').catch(console.error);
@@ -155,7 +155,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
         const wasListening = voiceStatus === 'listening';
         if (wasListening) {
-            await os2StopListening({ closing: true }).catch(() => { });
+            await os2StopListening({ closing: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useMinuteHandlers.ts', e) });
         }
 
         // FLU "Pensando" (Idle_1) while generating the summary — deterministic
@@ -211,7 +211,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 }, 'Summary generated').catch(console.error);
             }
         } catch (error) {
-            console.error('[useMinuteHandlers] Error generating summary:', error);
+            logCaughtError('[useMinuteHandlers] Error generating summary:', error);
             setMinuteDraft(
                 createMinuteDraftFromSummary({
                     titulo: FLU_CONFIG.ui.workspace.summaryUnavailableTitle || 'Resumen no disponible',
@@ -232,7 +232,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 integrationStore.setConversationState('IDLE');
             }
             if (wasListening) {
-                os2StartListening({ resume: true }).catch(() => { });
+                os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useMinuteHandlers.ts', e) });
             }
         }
         return saved;
@@ -285,7 +285,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 titulo: persisted.summarySnapshot.titulo || '',
             }, 'Minute saved').catch(console.error);
         } catch (error) {
-            console.error('[useMinuteHandlers] Error saving minute:', error);
+            logCaughtError('[useMinuteHandlers] Error saving minute:', error);
             auditLog.logEvent('minute:save-error', 'minute', uuidv4(), {
                 error: String(error),
             }, 'Minute save failed').catch(console.error);
@@ -334,7 +334,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 kind: 'conversacion',
             }, 'Conversation summary saved on close').catch(console.error);
         } catch (error) {
-            console.error('[useMinuteHandlers] Error saving conversation summary:', error);
+            logCaughtError('[useMinuteHandlers] Error saving conversation summary:', error);
             auditLog.logEvent('conversation:summary-save-error', 'summary', uuidv4(), {
                 error: String(error),
             }, 'Conversation summary save failed').catch(console.error);

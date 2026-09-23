@@ -39,8 +39,8 @@ function loadPanelPosition(panel) {
     }
     if (Number.isFinite(width) && width >= 240) panel.style.width = `${width}px`
     if (Number.isFinite(height) && height >= 120) panel.style.height = `${height}px`
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluDevConsole.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js', e);
     // ignore
   }
 }
@@ -57,8 +57,8 @@ function savePanelPosition(panel) {
         height: Math.round(rect.height),
       }),
     )
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluDevConsole.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js', e);
     // ignore
   }
 }
@@ -104,8 +104,8 @@ function enablePanelDrag(panel, handle) {
     dragging = false
     try {
       handle.releasePointerCapture(pointerId)
-    } catch {
-        logCaughtError('[catch] src/voice/lib/fluDevConsole.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js', e);
       // ignore
     }
     pointerId = null

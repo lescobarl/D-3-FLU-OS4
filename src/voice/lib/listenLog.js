@@ -53,8 +53,8 @@ function shouldRecord(stage) {
 function serialize(entry) {
   try {
     return JSON.stringify(entry)
-  } catch {
-        logCaughtError('[catch] src/voice/lib/listenLog.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/listenLog.js', e);
     return JSON.stringify({ t: Date.now(), stage: 'log-serialize-error' })
   }
 }

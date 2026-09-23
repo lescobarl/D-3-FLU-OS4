@@ -29,6 +29,7 @@ async function refreshVoiceConfigCache() {
       }
     }
   } catch (error) {
+    logCaughtError('[catch] src/voice/lib/fluSpeech.js', error);
     // Si falla el import (entorno test, standalone, etc.), usar defaults
     relayLog('LOG', 'FluSpeech', 'integrationStore no disponible; defaults de voz', error)
     _cachedVoiceConfig = { rate: 1.0, pitch: 1.0, volume: 1.0, voiceURI: '' }
@@ -64,8 +65,8 @@ async function enterSpeakingState() {
         current.setConversationState(prevState)
       }
     }
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js', e);
     return null
   }
 }
@@ -215,8 +216,8 @@ export async function waitForSpeechIdle() {
   if (activeSpeechPromise) {
     try {
       await activeSpeechPromise
-    } catch {
-        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js', e);
       // ignore
     }
   }
@@ -285,8 +286,8 @@ function speakSingleChunk(spoken, language, overrides = {}) {
       if (speechWatchdogTimer !== null) clearTimeout(speechWatchdogTimer)
       speechWatchdogTimer = setTimeout(finish, watchdogMs)
       synth.speak(utterance)
-    } catch {
-        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js', e);
       finish()
     }
   })
@@ -346,8 +347,8 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
     // Se limpia en vez de descartar el habla en silencio para siempre.
     try {
       synth.cancel()
-    } catch {
-        logCaughtError('[catch] src/voice/lib/fluSpeech.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluSpeech.js', e);
       // ignore
     }
   }

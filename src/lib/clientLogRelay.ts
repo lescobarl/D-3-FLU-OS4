@@ -10,6 +10,7 @@
 // ============================================================
 
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { logCaughtError } from './caughtError';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -33,10 +34,9 @@ function flush() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(batch),
-        }).catch(() => {
-            // Silently ignore — server may not be available
-        });
-    } catch {
+        }).catch((e: unknown) => { logCaughtError('[catch] src/lib/clientLogRelay.ts', e) });
+    } catch (e) {
+    logCaughtError('[catch] src/lib/clientLogRelay.ts', e);
         relayLog('WARN', 'catch', 'src/lib/clientLogRelay.ts');
         // Silently ignore
     }

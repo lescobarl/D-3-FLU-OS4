@@ -81,8 +81,8 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   let parsed: URL;
   try {
     parsed = new URL(rawUrl, 'http://localhost');
-  } catch {
-        logCaughtError('[catch] src/server/browserProxy.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/server/browserProxy.ts', e);
     sendJson(res, 400, { ok: false, reason: 'invalid' });
     return;
   }

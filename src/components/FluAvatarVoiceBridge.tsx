@@ -31,6 +31,7 @@ import { useFluBridge } from '../context/FluBridgeContext';
 import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
 import { useEnvironmentStore } from '../store/environmentStore';
 import { getAmbiente } from '../core/environments/environmentRegistry';
+import { logCaughtError } from '../lib/caughtError';
 
 // -----------------------------------------------------------
 // Props — mínimas, el resto viene de FluBridgeContext
@@ -363,19 +364,19 @@ export function FluAvatarVoiceBridge({
         switch (cmd) {
             case 'start-listening':
                 onStartListening?.();
-                speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch(() => { });
+                speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
             case 'stop-listening':
                 onStopListening?.({ closing: true });
-                speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch(() => { });
+                speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
             case 'toggle-listening':
                 if (isListeningRef.current) {
                     onStopListening?.({ closing: true });
-                    speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch(() => { });
+                    speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 } else {
                     onStartListening?.();
-                    speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch(() => { });
+                    speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 }
                 break;
             case 'start-conversation':
@@ -383,7 +384,7 @@ export function FluAvatarVoiceBridge({
                     onStartListening?.();
                 }
                 const iniciarText = FLU_CONFIG.ui.commandSpeech.INICIAR_CONVERSACION?.[langKey] || FLU_CONFIG.ui.commandSpeech.INICIAR_CONVERSACION?.es || 'Iniciando conversación';
-                speakResponse(iniciarText, language).catch(() => { });
+                speakResponse(iniciarText, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
         }
     }, [integrationStore.uiState.voiceCommand]);

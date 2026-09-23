@@ -125,8 +125,8 @@ export function readLegacyOnboarding(storage: Storage | undefined = getLocalStor
         return { ...base, completed };
       }
       return { stepIndex, completed, captured, startedAt: Date.now() };
-    } catch {
-        logCaughtError('[catch] src/core/onboarding/onboardingService.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/onboarding/onboardingService.ts', e);
       // estado corrupto → reiniciar
     }
   }

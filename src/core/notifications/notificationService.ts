@@ -93,8 +93,8 @@ export function createDefaultDriver(): NotificationDriver {
           data: { url: '/' },
         });
         return true;
-      } catch {
-        logCaughtError('[catch] src/core/notifications/notificationService.ts');
+      } catch (e) {
+        logCaughtError('[catch] src/core/notifications/notificationService.ts', e);
         return false;
       }
     },

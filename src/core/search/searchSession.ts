@@ -259,8 +259,8 @@ function stripHtml(html: string): string {
 function extractHost(url: string): string {
     try {
         return new URL(url).hostname;
-    } catch {
-        logCaughtError('[catch] src/core/search/searchSession.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/search/searchSession.ts', e);
         return '';
     }
 }
@@ -294,8 +294,8 @@ function deriveOrigin(endpoint: string): string {
         .split('?')[0];
     try {
         return new URL(clean).origin;
-    } catch {
-        logCaughtError('[catch] src/core/search/searchSession.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/search/searchSession.ts', e);
         return '';
     }
 }

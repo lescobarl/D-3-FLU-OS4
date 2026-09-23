@@ -156,8 +156,8 @@ export function createDeviceActionService({
   const resolve = async (name: string): Promise<ContactRecord | undefined> => {
     try {
       return await resolveContact(name);
-    } catch {
-        logCaughtError('[catch] src/core/deviceActions/deviceActionService.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/deviceActions/deviceActionService.ts', e);
       return undefined;
     }
   };

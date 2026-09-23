@@ -108,8 +108,8 @@ async function probeWithRange(url: string, timeoutMs: number): Promise<boolean> 
       redirect: 'follow',
     })
     return res.ok
-  } catch {
-        logCaughtError('[catch] src/services/musicSearch.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/services/musicSearch.ts', e);
     return false
   }
 }

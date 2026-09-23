@@ -613,8 +613,8 @@ export function readStorage<T>(key: string, defaultValue: T): T {
         const raw = localStorage.getItem(key);
         if (raw === null) return defaultValue;
         return raw as T;
-    } catch {
-        logCaughtError('[catch] src/core/config/appConfig.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/appConfig.ts', e);
         return defaultValue;
     }
 }
@@ -626,8 +626,8 @@ export function writeStorage(key: string, value: string): void {
     if (typeof localStorage === 'undefined') return;
     try {
         localStorage.setItem(key, value);
-    } catch {
-        logCaughtError('[catch] src/core/config/appConfig.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/appConfig.ts', e);
         // Silencioso: el storage puede no estar disponible (privacidad/quota)
     }
 }
@@ -710,8 +710,8 @@ export function resolveFalApiKey(): string {
     if (override) return override;
     try {
         return String(import.meta.env.VITE_FALAI_API_KEY ?? '').trim();
-    } catch {
-        logCaughtError('[catch] src/core/config/appConfig.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/appConfig.ts', e);
         return '';
     }
 }

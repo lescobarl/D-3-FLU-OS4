@@ -4,6 +4,7 @@ import { useSettingsSaveRegistration } from '../../components/SettingsSaveContex
 import { resolveAppLanguage } from '../lib/audioMath.js'
 import { resolveFluParticipantLabel } from '../lib/participantFloor.js'
 import { speakResponse } from '../lib/fluSpeech.js'
+import { logCaughtError } from '../../lib/caughtError';
 import {
   FLU_PARTICIPANT_EDITABLE_FIELDS,
   getFluParticipantConfig,
@@ -115,7 +116,7 @@ export default function FluParticipantSettingsPanel({
                       ? 'Hello, I am FLU. This is my voice.'
                       : 'Hola, soy FLU. Esta es mi voz.',
                     lang === 'en' ? 'en' : 'es'
-                  ).catch(() => {});
+                  ).catch((e) => { logCaughtError('[catch] src/voice/components/FluParticipantSettingsPanel.jsx', e) });
                 }}
               >
                 ▶ Probar

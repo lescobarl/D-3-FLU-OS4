@@ -1196,7 +1196,7 @@ async function dispatchArbiterIntent(
             relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
         }
     } catch (err) {
-        console.warn('[App] dispatchArbiterIntent threw (non-critical):', err);
+        logCaughtError('[App] dispatchArbiterIntent threw (non-critical):', err);
         relayLog('WARN', 'App', `dispatchArbiterIntent threw: ${err}`);
     }
     relayLog('LOG', 'App', `dispatchArbiterIntent → reply="${String(reply).slice(0, 120)}"`);
@@ -2249,7 +2249,7 @@ function App() {
                         }
                     }
                 } catch (err) {
-                    console.warn('[App] acciones dispatch threw (non-critical):', err);
+                    logCaughtError('[App] acciones dispatch threw (non-critical):', err);
                     relayLog('WARN', 'App', `acciones dispatch threw: ${err}`);
                 }
                 // §1 (sin éxito falso): si la acción se despachó pero la ESCRITURA
@@ -2350,7 +2350,7 @@ function App() {
                     }
                     if (reply) localHandledReply = reply;
                 } catch (err) {
-                    console.warn('[App] Deterministic feature interception threw (non-critical):', err);
+                    logCaughtError('[App] Deterministic feature interception threw (non-critical):', err);
                     relayLog('WARN', 'App', `feature interception threw: ${err}`);
                 }
                 // Para intenciones DETERMINISTAS (agenda/notas/etc.), la
@@ -2443,7 +2443,7 @@ function App() {
                     fallbackTheme: sessionRoleRef.current,
                 });
             } catch (err) {
-                console.warn('[App] selectMinuteForLookup threw (non-critical):', err);
+                logCaughtError('[App] selectMinuteForLookup threw (non-critical):', err);
                 relayLog('WARN', 'App', `selectMinuteForLookup threw: ${err}`);
             }
             if (minuteSelection) {
@@ -2456,7 +2456,7 @@ function App() {
                         changeTab('minutes');
                     }
                 } catch (err) {
-                    console.warn('[App] minuteSelection handler threw (non-critical):', err);
+                    logCaughtError('[App] minuteSelection handler threw (non-critical):', err);
                     relayLog('WARN', 'App', `minuteSelection handler threw: ${err}`);
                 }
             }
@@ -2472,6 +2472,7 @@ function App() {
             try {
                 workspaceImage.clear();
             } catch (err) {
+    logCaughtError('[catch] src/App.tsx', err);
                 relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
             }
             integrationStore.setWorkspaceArtifact(null);
@@ -3394,8 +3395,8 @@ function App() {
                         // quieras") y el anti-eco aborta la escucha (se cierra sola).
                         try {
                             await speakFluRef.current(ackText, currentLang);
-                        } catch {
-        logCaughtError('[catch] src/App.tsx');
+                        } catch (e) {
+        logCaughtError('[catch] src/App.tsx', e);
                             // Sin TTS disponible: continuar igual.
                         }
                     }
@@ -3407,8 +3408,8 @@ function App() {
                     // restaura (Bug #2: "detenido"). Se espera el fin REAL del
                     // habla del asistente antes de intentar abrir el micrófono.
                     await waitForSpeechIdle();
-                } catch {
-        logCaughtError('[catch] src/App.tsx');
+                } catch (e) {
+        logCaughtError('[catch] src/App.tsx', e);
                     // Sin habla activa / timeout: continuar igual.
                 }
                 // Abre la escucha EN MODO CONVERSACIÓN (dueño único del modo):
@@ -4362,8 +4363,8 @@ const {
         let lastSessionDay = '';
         try {
             lastSessionDay = window.localStorage.getItem(dayStorageKey) || '';
-        } catch {
-        logCaughtError('[catch] src/App.tsx');
+        } catch (e) {
+        logCaughtError('[catch] src/App.tsx', e);
             lastSessionDay = '';
         }
         dayRolloverDoneRef.current = true;
@@ -4388,8 +4389,8 @@ const {
             }
             try {
                 window.localStorage.setItem(dayStorageKey, dayKey(Date.now()));
-            } catch {
-        logCaughtError('[catch] src/App.tsx');
+            } catch (e) {
+        logCaughtError('[catch] src/App.tsx', e);
                 /* ignorar */
             }
         })();

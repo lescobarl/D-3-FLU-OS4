@@ -96,15 +96,15 @@ function isNonGameActionableCommand(text) {
   try {
     const agenda = parseAgendaCommand(text)
     if (agenda?.handled && agenda.action) return true
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gameCommands.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
     /* parser sin match no debe romper el juego */
   }
   try {
     const note = parseNoteIntentText(text)
     if (note?.label) return true
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gameCommands.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
     /* idem */
   }
   return false

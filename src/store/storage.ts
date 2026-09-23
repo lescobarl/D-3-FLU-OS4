@@ -25,8 +25,8 @@ export function resolveSafeStorage(): SafeStorage {
         if (typeof window !== 'undefined' && window.localStorage) {
             return window.localStorage;
         }
-    } catch {
-        logCaughtError('[catch] src/store/storage.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/store/storage.ts', e);
         // localStorage no disponible (Node.js, SSR, etc.)
     }
     const store = new Map<string, string>();

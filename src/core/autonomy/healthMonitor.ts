@@ -284,8 +284,8 @@ async function checkAIService(): Promise<ComponentHealth> {
                     hasError = true;
                     message = `Servicio de IA no responde correctamente (HTTP ${response.status})`;
                 }
-            } catch {
-        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts');
+            } catch (e) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
                 hasError = true;
                 message = 'Error de conexión con servicio de IA';
                 metrics.networkReachable = false;
@@ -348,8 +348,8 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
                     hasError = true;
                     message = 'Permiso de micrófono no concedido';
                 }
-            } catch {
-        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts');
+            } catch (e) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
                 metrics.microphonePermission = 'unknown';
             }
         } else {
@@ -521,8 +521,8 @@ async function checkNetwork(): Promise<ComponentHealth> {
                 
                 successfulPings++;
                 pingResults.push(Date.now() - pingStart);
-            } catch {
-        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts');
+            } catch (e) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
                 // Ignorar errores individuales
             }
         }

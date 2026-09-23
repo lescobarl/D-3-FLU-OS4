@@ -50,6 +50,6 @@ export function sendJson(
         const message = err && typeof err === 'object' && 'message' in err
             ? (err.message || err)
             : err;
-        logCaughtError(label, message);
+        logCaughtError(label, message, err);
     }
 }

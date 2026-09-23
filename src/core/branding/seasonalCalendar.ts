@@ -353,8 +353,8 @@ export function getActiveSeason(
                     };
                 }
             }
-        } catch {
-        logCaughtError('[catch] src/core/branding/seasonalCalendar.ts');
+        } catch (e) {
+        logCaughtError('[catch] src/core/branding/seasonalCalendar.ts', e);
             // Invalid date, skip birthday detection
         }
     }

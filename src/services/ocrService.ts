@@ -128,8 +128,8 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
                 'pdfjs-dist/build/pdf.worker.min.mjs',
                 import.meta.url,
             ).toString();
-        } catch {
-        logCaughtError('[catch] src/services/ocrService.ts');
+        } catch (e) {
+        logCaughtError('[catch] src/services/ocrService.ts', e);
             /* sin worker configurado: se intenta igual; degradación si falla */
         }
     }

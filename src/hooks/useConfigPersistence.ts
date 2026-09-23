@@ -87,8 +87,8 @@ function loadString(key: string, fallback = ''): string {
     try {
         const val = localStorage.getItem(key);
         return val ?? fallback;
-    } catch {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
         return fallback;
     }
 }
@@ -99,8 +99,8 @@ function loadString(key: string, fallback = ''): string {
 function saveString(key: string, value: string): void {
     try {
         localStorage.setItem(key, value);
-    } catch {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
         // Silently ignore storage errors (quota exceeded, private mode, etc.)
     }
 }
@@ -142,8 +142,8 @@ export function useConfigPersistence(): ConfigPersistence {
         try {
             const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
             if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
-        } catch {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts'); /* ignore */ }
+        } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         return UI_DEFAULTS.LANGUAGE;
     });
 
@@ -346,8 +346,8 @@ export function useConfigPersistence(): ConfigPersistence {
                 if (key && !keep.has(key)) toRemove.push(key);
             }
             toRemove.forEach((k) => localStorage.removeItem(k));
-        } catch {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts'); /* ignore */ }
+        } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         // Rehidratar el estado desde la fuente de verdad (localStorage)
         setApiKey(resolveTextApiKey());
         window.location.reload();

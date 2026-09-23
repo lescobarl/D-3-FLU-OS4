@@ -64,8 +64,8 @@ function parseProviders(raw: string | null): SearchConfig['providers'] {
       };
     }
     return undefined;
-  } catch {
-        logCaughtError('[catch] src/server/searchProxy.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/server/searchProxy.ts', e);
     return undefined;
   }
 }
@@ -117,8 +117,8 @@ async function fetchProviderJson(
       let detail = '';
       try {
         detail = (await response.text()).slice(0, 300);
-      } catch {
-        logCaughtError('[catch] src/server/searchProxy.ts');
+      } catch (e) {
+        logCaughtError('[catch] src/server/searchProxy.ts', e);
         detail = '';
       }
       return { ok: false, reason: 'fetch_error', status: response.status, detail };
@@ -146,8 +146,8 @@ async function handleSearch(
   let parsed: URL;
   try {
     parsed = new URL(rawUrl, 'http://localhost');
-  } catch {
-        logCaughtError('[catch] src/server/searchProxy.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/server/searchProxy.ts', e);
     sendJson(res, 400, { ok: false, reason: 'invalid' });
     return;
   }

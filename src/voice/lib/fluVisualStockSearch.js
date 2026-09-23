@@ -16,8 +16,8 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
     )
     if (!response.ok) return null
     return await response.json()
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluVisualStockSearch.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluVisualStockSearch.js', e);
     return null
   }
 }

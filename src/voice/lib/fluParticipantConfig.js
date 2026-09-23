@@ -73,8 +73,8 @@ function readStorageOverrides() {
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluParticipantConfig.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluParticipantConfig.js', e);
     return {}
   }
 }

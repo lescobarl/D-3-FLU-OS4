@@ -108,8 +108,8 @@ export function buildBrowserUrl(
     let parsed: URL;
     try {
         parsed = new URL(candidate);
-    } catch {
-        logCaughtError('[catch] src/core/browser/browserSession.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/browser/browserSession.ts', e);
         return { ok: false, reason: 'invalid' };
     }
 

@@ -73,8 +73,8 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
     if (typeof window === 'undefined') return false;
     try {
       return Boolean(getContext());
-    } catch {
-        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts', e);
       return false;
     }
   };
@@ -133,8 +133,8 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
         }, r * repeatIntervalMs);
         repeatTimers.push(timer);
       }
-    } catch {
-        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts', e);
       // Degradación elegante: el hook avisa con toast + voz.
     }
   };
@@ -151,20 +151,20 @@ export function createWebAudioDriver(getContext: AudioContextFactory = defaultGe
       const node = activeNodes.pop();
       try {
         node?.osc?.stop(0);
-      } catch {
-        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
+      } catch (e) {
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts', e);
         /* ya detenido */
       }
       try {
         node?.osc?.disconnect?.();
-      } catch {
-        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
+      } catch (e) {
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts', e);
         /* ignorar */
       }
       try {
         node?.gain?.disconnect?.();
-      } catch {
-        logCaughtError('[catch] src/core/temporal/audioAlert.ts');
+      } catch (e) {
+        logCaughtError('[catch] src/core/temporal/audioAlert.ts', e);
         /* ignorar */
       }
     }

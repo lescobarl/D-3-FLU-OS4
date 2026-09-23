@@ -89,6 +89,7 @@ export function stopSpeechRecognition(recognition) {
   try {
     recognition.stop()
   } catch (error) {
+    logCaughtError('[catch] src/voice/lib/speechRecognitionLocal.js', error);
     relayLog('INFO', 'SpeechRecognition', 'stop() falló al detener la escucha (ignorado)', error)
   }
   if (activeRecognition === recognition) {
@@ -103,6 +104,7 @@ export function abortSpeechRecognition(recognition) {
     if (typeof recognition.abort === 'function') recognition.abort()
     else recognition.stop()
   } catch (error) {
+    logCaughtError('[catch] src/voice/lib/speechRecognitionLocal.js', error);
     relayLog('INFO', 'SpeechRecognition', 'abort() falló al liberar la escucha (ignorado)', error)
   }
   if (activeRecognition === recognition) {

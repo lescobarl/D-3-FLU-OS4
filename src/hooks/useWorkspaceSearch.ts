@@ -32,6 +32,7 @@ import {
 } from '../core/search/searchConfigOverrides';
 import { dayKey } from '../lib/dateKey';
 import { postGeminiContract } from '../services/geminiContractClient';
+import { logCaughtError } from '../lib/caughtError';
 
 export type SearchLevel = 'simple' | 'detallado' | 'avanzado';
 
@@ -194,6 +195,7 @@ export async function fetchAiOverview(
         const data = await response.json();
         return String(data.respuesta_voz || data.text || '').trim();
     } catch (error) {
+    logCaughtError('[catch] src/hooks/useWorkspaceSearch.ts', error);
         relayLog('WARN', 'WorkspaceSearch', 'fallo al derivar el resumen de IA; se omite', error);
         return '';
     }
@@ -248,6 +250,7 @@ export async function fetchTypeResults(
         }
         return { ok: false, results: [], errors: [] };
     } catch (error) {
+    logCaughtError('[catch] src/hooks/useWorkspaceSearch.ts', error);
         relayLog('WARN', 'WorkspaceSearch', 'fetchTypeResults falló; se devuelve vacío', error);
         return { ok: false, results: [], errors: [] };
     }

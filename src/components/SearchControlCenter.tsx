@@ -270,8 +270,8 @@ export function SearchControlCenter({
         ai = await fetchAiOverview(q, 'es', resolved.maxChars, resolved.aiOverviewTitle);
       }
       setPreview({ state: 'done', results: fetched.results, ai });
-    } catch {
-        logCaughtError('[catch] src/components/SearchControlCenter.tsx');
+    } catch (e) {
+        logCaughtError('[catch] src/components/SearchControlCenter.tsx', e);
       setPreview({ state: 'error', results: [], ai: '' });
     }
   };

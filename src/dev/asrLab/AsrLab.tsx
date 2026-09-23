@@ -89,8 +89,8 @@ async function runChrome(ms: number): Promise<ProbeResult> {
       done = true
       try {
         rec.stop()
-      } catch {
-        logCaughtError('[catch] src/dev/asrLab/AsrLab.tsx');
+      } catch (e) {
+        logCaughtError('[catch] src/dev/asrLab/AsrLab.tsx', e);
         // ignore
       }
       // Latencia de "cola": último parcial → final (aprox. tras dejar de hablar).
@@ -276,8 +276,8 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
   const stopLive = useCallback(() => {
     try {
       liveStopRef.current?.()
-    } catch {
-        logCaughtError('[catch] src/dev/asrLab/AsrLab.tsx');
+    } catch (e) {
+        logCaughtError('[catch] src/dev/asrLab/AsrLab.tsx', e);
       // ignore
     }
     liveStopRef.current = null
@@ -306,8 +306,8 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
       liveStopRef.current = () => {
         try {
           rec.stop()
-        } catch {
-        logCaughtError('[catch] src/dev/asrLab/AsrLab.tsx');
+        } catch (e) {
+        logCaughtError('[catch] src/dev/asrLab/AsrLab.tsx', e);
           // ignore
         }
       }

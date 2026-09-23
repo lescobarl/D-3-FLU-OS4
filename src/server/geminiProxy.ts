@@ -188,8 +188,8 @@ function parseBody<T = ProxyBody>(req: IncomingMessage): Promise<T | null> {
             const body = Buffer.concat(chunks).toString('utf-8');
             try {
                 resolve(JSON.parse(body));
-            } catch {
-        logCaughtError('[catch] src/server/geminiProxy.ts');
+            } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e);
                 resolve(null);
             }
         });
@@ -222,7 +222,7 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
         res.end(JSON.stringify(data));
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        logCaughtError('[geminiProxy] sendJson: respuesta no entregada (socket cerrado)', message);
+        logCaughtError('[geminiProxy] sendJson: respuesta no entregada (socket cerrado)', message, err);
     }
 }
 
@@ -657,8 +657,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch {
-        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/openrouter-image — fallback de imagen por OpenRouter
@@ -672,8 +672,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch {
-        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/fal-video — video real con fal.ai (text-to-video)
@@ -686,8 +686,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch {
-        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/gemini/vision — OCR analysis of uploaded images
@@ -710,8 +710,8 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
-                    } catch {
-        logCaughtError('[catch] src/server/geminiProxy.ts'); /* ignore write errors after connection close */ }
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
                 }
             });
             // POST /__flu_agent_trace — OS2's fluTrace.js agent sink (accepted, logged)

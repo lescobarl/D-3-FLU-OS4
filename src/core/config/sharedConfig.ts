@@ -305,8 +305,8 @@ export function isLocalTextEndpoint(url: string): boolean {
     try {
         const host = new URL(url).hostname.toLowerCase();
         return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
-    } catch {
-        logCaughtError('[catch] src/core/config/sharedConfig.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/sharedConfig.ts', e);
         return /localhost|127\.0\.0\.1|::1/i.test(url);
     }
 }

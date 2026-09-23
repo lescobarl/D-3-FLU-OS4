@@ -105,13 +105,13 @@ export function safeParseJson(text: string): Record<string, unknown> | null {
         const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (match) return JSON.parse(match[1]);
         return null;
-    } catch {
-        logCaughtError('[catch] src/core/ai/aiServiceBase.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/ai/aiServiceBase.ts', e);
         try {
             const match = text.match(/\{[\s\S]*\}/);
             if (match) return JSON.parse(match[0]);
-        } catch {
-            logCaughtError('[catch] src/core/ai/aiServiceBase.ts');
+        } catch (e) {
+            logCaughtError('[catch] src/core/ai/aiServiceBase.ts', e);
             return null;
         }
         return null;

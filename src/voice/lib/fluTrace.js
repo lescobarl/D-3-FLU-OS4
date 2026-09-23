@@ -31,8 +31,8 @@ function readStorageFlag() {
     const value = localStorage.getItem('flu.trace')
     if (value === '1') enabled = true
     if (value === '0') enabled = false
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluTrace.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     /* ignore */
   }
 }
@@ -105,8 +105,8 @@ function scheduleAgentSink() {
       }).catch((error) => {
         if (IS_DEV) console.warn('[Flu][trace] agent sink failed:', error?.message || error)
       })
-    } catch {
-        logCaughtError('[catch] src/voice/lib/fluTrace.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
       // ignore
     }
   }, AGENT_SINK_MS)
@@ -121,8 +121,8 @@ export function enableFluTrace() {
   enabled = true
   try {
     localStorage.setItem('flu.trace', '1')
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluTrace.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     /* ignore */
   }
   console.info('[Flu][trace] Encendido')
@@ -133,8 +133,8 @@ export function disableFluTrace() {
   enabled = false
   try {
     localStorage.setItem('flu.trace', '0')
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluTrace.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     /* ignore */
   }
   console.info('[Flu][trace] Apagado')
@@ -180,8 +180,8 @@ export function getFluTraceSnapshot() {
   let session = {}
   try {
     session = sessionProvider?.() || {}
-  } catch {
-        logCaughtError('[catch] src/voice/lib/fluTrace.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     session = { sessionError: true }
   }
   return {

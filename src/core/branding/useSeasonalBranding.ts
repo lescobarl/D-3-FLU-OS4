@@ -116,8 +116,8 @@ async function loadConfigFromDB(): Promise<BrandingConfig> {
                         if (Array.isArray(parsed)) {
                             config.customEvents = parsed;
                         }
-                    } catch {
-        logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts'); /* ignore */ }
+                    } catch (e) {
+        logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts', e); /* ignore */ }
                     break;
                 case CONFIG_KEYS.CELEBRATE_ACHIEVEMENTS:
                     config.celebrateAchievements = record.value === 'true';
@@ -143,8 +143,8 @@ async function loadConfigFromDB(): Promise<BrandingConfig> {
         }
 
         return config;
-    } catch {
-        logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts', e);
         return { ...DEFAULT_CONFIG };
     }
 }

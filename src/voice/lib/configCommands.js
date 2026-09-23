@@ -738,8 +738,8 @@ export function normalizeConfiguracion(raw = null) {
     if (!trimmed) return null
     try {
       parsed = JSON.parse(trimmed)
-    } catch {
-        logCaughtError('[catch] src/voice/lib/configCommands.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/configCommands.js', e);
       return null
     }
   }
@@ -797,8 +797,8 @@ export function normalizeJuego(raw = null) {
     if (!trimmed) return null
     try {
       parsed = JSON.parse(trimmed)
-    } catch {
-        logCaughtError('[catch] src/voice/lib/configCommands.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/configCommands.js', e);
       return null
     }
   }

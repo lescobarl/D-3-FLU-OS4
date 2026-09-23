@@ -90,8 +90,8 @@ function hasUsableVoiceBackend(apiKey) {
   if (apiKey) return true
   try {
     return isLocalTextEndpoint(joinApiUrl(resolveServerTextApiUrl(), '/chat/completions'))
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     return false
   }
 }
@@ -460,14 +460,14 @@ function tryParseJsonCandidate(candidate) {
   if (!text) return undefined
   try {
     return JSON.parse(text)
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // ignore
   }
   try {
     return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'))
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     return undefined
   }
 }
@@ -1193,8 +1193,8 @@ export async function requestParticipantEvaluation(params) {
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
   }
   const body = {
@@ -1224,8 +1224,8 @@ export async function requestFluContract(params) {
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localStorage.getItem(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
   }
   const body = {
@@ -1322,8 +1322,8 @@ export function resolveGeminiModel() {
     // Leer modelo guardado en localStorage por el configurador UI (OS3 parity)
     const savedModel = String(localStorage.getItem(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
-  } catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage (SSR / Node)
   }
   return resolveServerTextModel()
@@ -1748,8 +1748,8 @@ try {
     nivel: String(parsed.nivel || parsed.level || '').trim(),
     texto_extraido: String(parsed.texto_extraido || parsed.extracted_text || '').trim(),
   }
-} catch {
-        logCaughtError('[catch] src/voice/lib/gemini.js');
+} catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
   // Si no se puede parsear JSON, devolver el texto crudo
   return {
     materia: '',

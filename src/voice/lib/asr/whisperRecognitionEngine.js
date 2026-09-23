@@ -122,8 +122,8 @@ export function createWhisperRecognitionEngine({
     start() {
       if (active) return
       active = true
-      Promise.resolve(whisper.preload?.()).catch(() => {})
-      if (whisperInterim !== whisper) Promise.resolve(whisperInterim.preload?.()).catch(() => {})
+      Promise.resolve(whisper.preload?.()).catch((e) => { logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e) })
+      if (whisperInterim !== whisper) Promise.resolve(whisperInterim.preload?.()).catch((e) => { logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e) })
       if (typeof engine.onstart === 'function') engine.onstart()
     },
     stop() {
@@ -217,8 +217,8 @@ export function createWhisperRecognitionEngine({
           engine.onresult(buildResultEvent(text, false))
         }
       }
-    } catch {
-        logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js');
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e);
       // Parcial descartable: no afecta el final.
     } finally {
       partialInFlight = false

@@ -71,9 +71,9 @@ function getAudio(): HTMLAudioElement {
         console.warn('[musicPlayer] stream interrumpido → reiniciando para seguir cantando')
         try {
           audioRef!.currentTime = 0
-          audioRef!.play().catch(() => {})
-        } catch {
-        logCaughtError('[catch] src/services/musicPlayer.ts');
+          audioRef!.play().catch((e: unknown) => { logCaughtError('[catch] src/services/musicPlayer.ts', e) })
+        } catch (e) {
+        logCaughtError('[catch] src/services/musicPlayer.ts', e);
           /* ignore */
         }
       }

@@ -80,8 +80,8 @@ function resolveCreativityTemperature(): number | undefined {
         if (state?.advancedConfig?.creativity !== undefined && state.advancedConfig.creativity !== null) {
             return state.advancedConfig.creativity;
         }
-    } catch {
-        logCaughtError('[catch] src/services/gemini.ts');
+    } catch (err) {
+        logCaughtError('[catch] src/services/gemini.ts', err);
         // Store not available (e.g. test environment)
     }
     return undefined;
@@ -414,8 +414,8 @@ Responde como ${botName}:`;
                         language,
                     },
                 };
-            } catch {
-                logCaughtError('[catch] src/services/gemini.ts');
+            } catch (e) {
+                logCaughtError('[catch] src/services/gemini.ts', e);
                 return {
                     image_url: '',
                     trace: {

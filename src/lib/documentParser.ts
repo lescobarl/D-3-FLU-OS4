@@ -118,8 +118,8 @@ function errMsg(e: unknown): string {
 function readArrayBufferAsUtf8(data: ArrayBuffer): string {
   try {
     return new TextDecoder('utf-8').decode(data);
-  } catch {
-        logCaughtError('[catch] src/lib/documentParser.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/lib/documentParser.ts', e);
     const bytes = new Uint8Array(data);
     let out = '';
     for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -274,8 +274,8 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
   let XLSX: unknown;
   try {
     XLSX = await import('xlsx');
-  } catch {
-        logCaughtError('[catch] src/lib/documentParser.ts');
+  } catch (e) {
+        logCaughtError('[catch] src/lib/documentParser.ts', e);
     return {
       rawText: '',
       errores: [],
@@ -332,8 +332,8 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
           'pdfjs-dist/build/pdf.worker.min.mjs',
           import.meta.url
         ).toString();
-      } catch {
-        logCaughtError('[catch] src/lib/documentParser.ts');
+      } catch (e) {
+        logCaughtError('[catch] src/lib/documentParser.ts', e);
         /* sin worker configurado: se intenta igual; si falla, degradación */
       }
     }

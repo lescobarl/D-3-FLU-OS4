@@ -51,8 +51,8 @@ export function getPreferredAIProvider(): AIProvider {
         if (isAIProvider(stored)) {
             return stored;
         }
-    } catch {
-        logCaughtError('[catch] src/services/aiServiceFactory.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/services/aiServiceFactory.ts', e);
         // ignore
     }
 
@@ -72,8 +72,8 @@ export function getPreferredAIProvider(): AIProvider {
 export function setPreferredAIProvider(provider: AIProvider): void {
     try {
         localStorage.setItem(AI_PROVIDER_KEY, provider);
-    } catch {
-        logCaughtError('[catch] src/services/aiServiceFactory.ts');
+    } catch (e) {
+        logCaughtError('[catch] src/services/aiServiceFactory.ts', e);
         // ignore
     }
 }
@@ -123,7 +123,7 @@ function createIntelligentAIService(): IAIService {
             try {
                 return await fallbackService.generateWorkspaceImage(prompt, tipo, language);
             } catch (error) {
-                console.error('[Intelligent AI Service] Error generating workspace image:', error);
+                logCaughtError('[Intelligent AI Service] Error generating workspace image:', error);
                 // Return a graceful fallback instead of throwing
                 return {
                     image_url: '',

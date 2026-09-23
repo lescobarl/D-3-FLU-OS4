@@ -52,16 +52,16 @@ export function createConversationModeController({
     const reflect = (state: 'LISTENING' | 'IDLE') => {
         try {
             setConversationState?.(state);
-        } catch {
-        logCaughtError('[catch] src/voice/lib/conversationMode.ts');
+        } catch (e) {
+        logCaughtError('[catch] src/voice/lib/conversationMode.ts', e);
             // UI no disponible (tests/SSR): el modo y el ruteo siguen válidos.
         }
     };
     const trace = (event: string) => {
         try {
             onTransition?.({ event, active: Boolean(conversationActiveRef.current) });
-        } catch {
-        logCaughtError('[catch] src/voice/lib/conversationMode.ts');
+        } catch (e) {
+        logCaughtError('[catch] src/voice/lib/conversationMode.ts', e);
             // Traza no disponible: no afecta al modo.
         }
     };

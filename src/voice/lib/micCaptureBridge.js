@@ -83,14 +83,14 @@ export async function wireMicCapturePipeline({
       try {
         workletNode.port.onmessage = null
         workletNode.disconnect()
-      } catch {
-        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js');
+      } catch (e) {
+        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js', e);
         // ignore
       }
       try {
         zeroGain.disconnect()
-      } catch {
-        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js');
+      } catch (e) {
+        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js', e);
         // ignore
       }
     },

@@ -133,12 +133,12 @@ export function useNavigationCommands(
                     resumeListeningTimerRef.current = null;
                     if (isSpeechBusy()) return;
                     if (voiceStatus === 'listening') return;
-                    os2StartListening({ resume: true }).catch(() => { });
+                    os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useNavigationCommands.ts', e) });
                 }, 120);
                 return;
             }
             if (voiceStatus === 'listening') return;
-            os2StartListening({ resume: true }).catch(() => { });
+            os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useNavigationCommands.ts', e) });
         }, delayMs);
     }, [clearResumeListeningTimer, os2StartListening, voiceStatus, conversationActiveRef, resumeListeningTimerRef, resolveResumeAfterSpeechMs]);
 
