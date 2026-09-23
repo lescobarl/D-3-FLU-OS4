@@ -271,14 +271,14 @@
     {
       "id": "P5.5",
       "titulo": "Locales BCP-47 fuera de localeConfig",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/search/searchLanguage.ts:134-135",
       "origen": "auditoria"
     },
     {
       "id": "P5.6",
       "titulo": "Literales de proveedor 'openrouter'/'gemini'/'local'",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/gemini.js:347",
       "origen": "auditoria",
       "noVerificado": true
@@ -286,7 +286,7 @@
     {
       "id": "P5.7",
       "titulo": "Defaults magicos 2048/0.3/1024",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/gemini.js:1032,1155",
       "origen": "auditoria",
       "noVerificado": true
@@ -833,6 +833,21 @@
       "id": "P5.4",
       "commit": "6e0ba22",
       "titulo": "temperature || 0.7, max_tokens 1000/500/300"
+    },
+    {
+      "id": "P5.5",
+      "commit": "01d1d31",
+      "titulo": "Locales BCP-47 fuera de localeConfig"
+    },
+    {
+      "id": "P5.6",
+      "commit": "01d1d31",
+      "titulo": "Literales de proveedor 'openrouter'/'gemini'/'local'"
+    },
+    {
+      "id": "P5.7",
+      "commit": "01d1d31",
+      "titulo": "Defaults magicos 2048/0.3/1024"
     }
   ]
 }
