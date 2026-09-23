@@ -55,16 +55,55 @@ export function readGitClosures(cwd = process.cwd()) {
 
 /**
  * Existe el commit en git?
+ *
+ * RENDIMIENTO (medido 2026-09-22): el ledger tiene 100+ cierres y esta funcion
+ * hacia un `git cat-file` POR HASH: ~115 procesos por validacion. Bajo carga
+ * (suite completa con 10 workers) el guard del ledger pasaba de los 15 s de
+ * timeout y se caia en rojo de forma intermitente con el ledger correcto. Ahora
+ * la primera llamada resuelve TODO el ledger con un solo `git cat-file
+ * --batch-check` y el resto son consultas a un Map. Misma semantica: un commit
+ * del ledger solo cuenta si git lo resuelve como objeto de tipo commit.
+ *
+ * @param {string} hash
+ * @param {string} [cwd]
+ */
+let cacheExistentes = null;
+
+function existentesEnLote(cwd) {
+  if (cacheExistentes && cacheExistentes.cwd === cwd) return cacheExistentes.set;
+  const hashes = [...new Set((readLedger().done || []).map((d) => d.commit).filter(Boolean))];
+  const set = new Set();
+  if (hashes.length) {
+    const salida = execFileSync('git', ['cat-file', '--batch-check=%(objecttype)'], {
+      cwd,
+      encoding: 'utf8',
+      input: hashes.join('\n') + '\n',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    // --batch-check responde una linea por entrada, en el mismo orden
+    salida.split('\n').forEach((linea, i) => {
+      if (linea.trim() === 'commit' && hashes[i]) set.add(hashes[i]);
+    });
+  }
+  cacheExistentes = { cwd, set };
+  return set;
+}
+
+/**
  * @param {string} hash
  * @param {string} [cwd]
  */
 export function commitExists(hash, cwd = process.cwd()) {
   if (!hash) return false;
   try {
-    execFileSync('git', ['cat-file', '-e', `${hash}^{commit}`], { cwd, stdio: 'ignore' });
-    return true;
+    return existentesEnLote(cwd).has(hash);
   } catch {
-    return false;
+    try {
+      execFileSync('git', ['cat-file', '-e', `${hash}^{commit}`], { cwd, stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
