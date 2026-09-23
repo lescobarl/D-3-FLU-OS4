@@ -187,16 +187,14 @@
       "titulo": "buildPollinationsArtifact/ImageUrl/Url x3",
       "estado": "done",
       "evidencia": "src/voice/lib/fluVisualPipeline.js:120",
-      "origen": "auditoria",
-      "noVerificado": true
+      "origen": "auditoria"
     },
     {
       "id": "P4.8",
       "titulo": "Cascada imagen workspace con 3 ordenes",
       "estado": "done",
       "evidencia": "src/hooks/useWorkspaceImage.ts:113,166",
-      "origen": "auditoria",
-      "noVerificado": true
+      "origen": "auditoria"
     },
     {
       "id": "P4.9",
@@ -296,8 +294,7 @@
       "titulo": "Umbrales de autonomia inline",
       "estado": "done",
       "evidencia": "src/core/autonomy/decisionEngine.ts:383-401",
-      "origen": "auditoria",
-      "noVerificado": true
+      "origen": "auditoria"
     },
     {
       "id": "P5.9",
@@ -317,7 +314,7 @@
       "id": "P6.2",
       "titulo": "debug.enabled:true y relayToServer:true por defecto en build",
       "estado": "done",
-      "evidencia": "src/voice/lib/fluConfig.js:2096,2117",
+      "evidencia": "src/voice/lib/fluConfig.js:2105,2126 (debug) y 2048,2054 (trace), gate IS_DEV",
       "origen": "auditoria"
     },
     {
@@ -332,8 +329,7 @@
       "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)",
       "estado": "done",
       "evidencia": "src/voice/lib/listenLog.js:126-129",
-      "origen": "auditoria",
-      "noVerificado": true
+      "origen": "auditoria"
     },
     {
       "id": "P6.5",
@@ -353,7 +349,7 @@
       "id": "P6.7",
       "titulo": "allowJs:true sin checkJs (84 .js sin verificar)",
       "estado": "todo",
-      "evidencia": "tsconfig.json",
+      "evidencia": "tsconfig.json | MEDIDO 2026-09-22: npx tsc -p tsconfig.json --noEmit --checkJs -> 1749 errores / 143 archivos (TS2339 745, TS7006 526, TS7031 107, TS2322 74, TS7005 60, TS7053 57). Caso real: resolveApiKey sin importar en src/voice/lib/gemini.js paso tsc -b en verde. No acotable en un lote.",
       "origen": "auditoria"
     },
     {
