@@ -28,7 +28,7 @@
     {
       "id": "P0.4",
       "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "npm run gate -> exit 0",
       "origen": "plan-T"
     },
@@ -413,6 +413,13 @@
       "estado": "todo",
       "evidencia": "conteo -> 0",
       "origen": "plan-T"
+    },
+    {
+      "id": "P0.5",
+      "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md",
+      "estado": "decision",
+      "evidencia": "tests/protocolGuard.test.ts:56-71",
+      "origen": "plan-T"
     }
   ],
   "done": [
@@ -720,6 +727,11 @@
       "id": "P7.2",
       "commit": "62252ab",
       "titulo": "Plugin react-hooks sin reglas (lint de hooks inerte)"
+    },
+    {
+      "id": "P0.4",
+      "commit": "91665a4",
+      "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md"
     }
   ]
 }
