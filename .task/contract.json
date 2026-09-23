@@ -1,14 +1,11 @@
 {
   "id": "P6.13",
   "mode": "full",
-  "task": "P6.13 - npm run build arranca (config cargable en Node + external justificado)",
-  "base": "a3a23e2796a3c8dfc848880e09ca64a014a0eff7",
-  "objective": "Arreglar que `npm run build` no arrancaba: la config de Vite se cargaba en Node y la cadena vite.config.ts -> src/server/* -> src/core/config/appConfig.ts lee import.meta.env en scope de modulo, donde no existe. Arreglo: shim de import.meta.env en el cuerpo del config + import() dinamico de los proxies (que se inicializan despues del shim). Decision pendiente del item: build.rollupOptions.external deja de marcar como external react/three/r3f-drei/zustand/@huggingface/transformers (el dist quedaba con imports desnudos que el navegador no resuelve y tapaba la composicion del bundle). No se tocan las lecturas literales de IS_DEV (el guard congelado P6.2 las exige).",
+  "task": "P6.13 cierre - ledger, unica fuente de cierres",
+  "base": "1bbb47ea38acbba342fb8910deb5b0cb3d7b1533",
+  "objective": "Registrar el cierre de P6.13 en plans/ledger.json (append-only): estado done, evidencia medida y done[] con el commit de cierre. Sin esto el ledger y git se desincronizan y taskLedgerGuard se pone rojo.",
   "allow": [
-    "vite.config.ts",
-    "src/voice/lib/listenLog.js",
-    "tests/**",
-    "package.json",
+    "plans/**",
     ".task/**"
   ],
   "ignore": [
@@ -16,8 +13,8 @@
     "kilo.json"
   ],
   "maxFiles": 6,
-  "maxLines": 220,
-  "dod": "npm run build",
-  "guard": "npx vitest run tests/viteConfigNodeLoadGuard.test.ts tests/prodDefaultsGuard.test.ts tests/devGlobalsGuard.test.ts tests/eolGuard.test.ts --reporter=dot",
+  "maxLines": 50,
+  "dod": "node scripts/task-ledger.mjs check",
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts tests/plansProcessArtifactsGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

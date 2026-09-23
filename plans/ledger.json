@@ -372,8 +372,8 @@
     {
       "id": "P6.13",
       "titulo": "npm run build no arranca: la config arrastra codigo de app que lee import.meta.env.DEV",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-09-23 en de78579 (y ya roto en c4b08f9: no lo introdujo el lote P7.3/P4.2). `npm run build` falla AL CARGAR la config, no al compilar: TypeError: Cannot read properties of undefined (reading DEV). Causa reproducida empaquetando la config como la empaqueta Vite (esbuild --bundle --platform=node --packages=external): la cadena vite.config.ts -> src/server/{gemini,search,browser}Proxy.ts -> src/core/config/sharedConfig.ts -> src/lib/caughtError.ts arrastra modulos de app, y ahi hay DOS const IS_DEV = import.meta.env.DEV sin guarda (src/voice/lib/fluConfig.js:7 y src/voice/lib/listenLog.js:13); al cargar la config en Node import.meta.env no existe. Los otros tres modulos equivalentes YA usan el patron seguro Boolean(import.meta.env?.DEV) (fluDebug.js:15, fluDevConsole.js:8, fluTrace.js:9), asi que el arreglo minimo apunta al mismo patron, pero el item NO es de una linea: hay que decidir por que build.rollupOptions.external marca three/react/react-dom/r3f/drei/zustand como external (un dist asi no resuelve en navegador sin importmap, y hoy impide medir la composicion del bundle, que es justo lo que dejo a medias P4.2(b)) y no romper prodDefaultsGuard/devGlobalsGuard.",
+      "estado": "done",
+      "evidencia": "CERRADO commit 1bbb47e (P6.13). El fallo era al CARGAR la config, no al compilar: Vite empaqueta vite.config.ts y lo importa en Node, donde `import.meta.env` no existe, y la cadena vite.config.ts -> src/server/* -> src/core/config/appConfig.ts lee sus VITE_* en scope de modulo (TypeError ... reading DEV, y detras VITE_APP_NAME). ARREGLO: shim de import.meta.env en el cuerpo del config + import() DINAMICO de los tres proxies dentro de la funcion de config; asi el env existe antes de que se inicialicen los modulos de app y el cliente no cambia (Vite sigue sustituyendo sus import.meta.env.VITE_X estaticos: medido, 0 referencias a import.meta.env en el bundle). EL PROPIO ITEM AVISABA de no romper prodDefaultsGuard ni devGlobalsGuard, y acerto: el primer intento (cambiar las lecturas a la guarda `Boolean(import.meta.env?.DEV)`) lo paro prodDefaultsGuard, que exige el literal `const IS_DEV = import.meta.env.DEV` en src/voice/lib/fluConfig.js porque es lo que Vite inyecta como false en produccion. Revertido: con el shim no hace falta tocar ninguna lectura literal. En src/voice/lib/listenLog.js si se adopta la guarda, porque es modulo de diagnostico como sus tres pares (fluDebug/fluDevConsole/fluTrace). DECISION QUE PEDIA EL ITEM (external): la lista venia del import inicial (979e412) y nunca se justifico. No hay importmap en index.html, asi que marcar react/three/react-dom/jsx-runtime/r3f/drei/zustand/@huggingface/transformers como external dejaba el dist con imports desnudos que el navegador no puede resolver: MEDIDO en el dist de antes, audioMath.js hacia `from\"@huggingface/transformers\"` con el paquete instalado en node_modules. Ahora se empaqueta todo (external: []). MEDICION DEL DIST (47 chunks): 0 imports desnudos; 0 referencias a import.meta.env en el cliente; composicion ya medible (lo que dejaba a medias P4.2b): index 1.27 MB, pdfkit.standalone 1.30 MB, workers de voz 0.55 MB cada uno, 22.5 MB de wasm de onnxruntime, 31.5 MB en total. npm run build -> exit 0. GUARD (tests/viteConfigNodeLoadGuard.test.ts, 3 tests, registrado en lint:guards y congelado): empaqueta el config como lo empaqueta Vite (esbuild --bundle --platform=node --packages=external) y lo importa en un PROCESO NODE HIJO, porque dentro de Vitest `import.meta.env` SI existe y medido ahi el fallo seria invisible (falso verde). Prueba de mutacion por los dos lados y ademas fija la decision: external no puede nombrar nada instalado en node_modules. VERIFICACION: suite completa 316 ficheros / 3147 tests verde; npm run gate -> exit 0.",
       "origen": "propio"
     },
     {
@@ -1006,6 +1006,11 @@
       "id": "P6.6",
       "commit": "cc92168",
       "titulo": "P6.6 - App.tsx 5391 -> 4684: rutas de tab, guardas de tipo, accion de config y fast-path de juegos extraidos a src/app/*, con trinquete de tamano de god-files"
+    },
+    {
+      "id": "P6.13",
+      "commit": "1bbb47e",
+      "titulo": "P6.13 - npm run build arranca: config de Vite cargable en Node (shim + import() dinamico de los proxies) y external sin paquetes instalados (dist sin imports desnudos, composicion medible)"
     }
   ]
 }
