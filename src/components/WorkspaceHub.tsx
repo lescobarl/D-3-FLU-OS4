@@ -715,9 +715,8 @@ export function WorkspaceHub({
                 ? 'image'
                 : null;
 
-    const hasPendingImport = Boolean(
-        horarioImport?.pending && horarioImport.pending.length > 0
-    );
+    const pendingHorarioImport =
+        horarioImport?.pending && horarioImport.pending.length > 0 ? horarioImport.pending : null;
 
     return (
         <div className="workspace-hub" data-testid="workspace-hub">
@@ -823,9 +822,9 @@ export function WorkspaceHub({
 
                         <aside className="workspace-hub__side" data-testid="workspace-hub-side">
                             {/* Digitalización de horario → confirmación dentro del HOY */}
-                            {hasPendingImport && horarioImport && (
+                            {pendingHorarioImport && horarioImport && (
                                 <HorarioImportConfirm
-                                    pending={horarioImport.pending!}
+                                    pending={pendingHorarioImport}
                                     busy={horarioImport.busy}
                                     onConfirm={horarioImport.onConfirm}
                                     onCancel={horarioImport.onCancel}

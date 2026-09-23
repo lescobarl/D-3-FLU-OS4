@@ -58,11 +58,12 @@ const MIN_RESTART_GAP_MS = 3000
 
 function getAudio(): HTMLAudioElement {
   if (!audioRef) {
-    audioRef = new Audio()
-    audioRef.preload = 'auto'
-    audioRef.volume = DEFAULT_VOLUME
+    const audio = new Audio()
+    audioRef = audio
+    audio.preload = 'auto'
+    audio.volume = DEFAULT_VOLUME
     // Auto-recuperación del stream (guard: algunos mocks no implementan eventos).
-    if (typeof audioRef.addEventListener === 'function') {
+    if (typeof audio.addEventListener === 'function') {
       const restartStream = () => {
         if (!keepAlive) return
         const now = Date.now()
@@ -70,8 +71,8 @@ function getAudio(): HTMLAudioElement {
         lastRestartAt = now
         console.warn('[musicPlayer] stream interrumpido → reiniciando para seguir cantando')
         try {
-          audioRef!.currentTime = 0
-          audioRef!.play().catch((e: unknown) => { logCaughtError('[catch] src/services/musicPlayer.ts', e) })
+          audio.currentTime = 0
+          audio.play().catch((e: unknown) => { logCaughtError('[catch] src/services/musicPlayer.ts', e) })
         } catch (e) {
         logCaughtError('[catch] src/services/musicPlayer.ts', e);
           /* ignore */

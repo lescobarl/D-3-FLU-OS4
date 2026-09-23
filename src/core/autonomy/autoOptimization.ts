@@ -417,74 +417,82 @@ class ParameterOptimizer {
         parameter: OptimizableParameter,
         metrics: Partial<PerformanceMetrics>
     ): 'increase' | 'decrease' | 'no_change' {
+        // Una metrica ausente (Partial) no cumple la comparacion: mismo resultado
+        // que `metrics.x! < t` (undefined < t es false), pero sin asertar que existe.
+        // NO se usa `?? 0`: 0 < 0.6 seria true y cambiaria la decision.
+        const lt = (value: number | undefined, threshold: number): boolean =>
+            value !== undefined && value < threshold;
+        const gt = (value: number | undefined, threshold: number): boolean =>
+            value !== undefined && value > threshold;
+
         // Lógica específica por parámetro
         switch (parameter) {
             case 'speech_recognition_confidence_threshold':
                 // Aumentar si la tasa de éxito es baja, disminuir si es alta pero hay muchos falsos negativos
-                if (metrics.speechRecognitionSuccessRate! < 0.6) {
+                if (lt(metrics.speechRecognitionSuccessRate, 0.6)) {
                     return 'decrease'; // Bajar umbral para capturar más
-                } else if (metrics.speechRecognitionSuccessRate! > 0.9 && metrics.userFeedback! < 0.7) {
+                } else if (gt(metrics.speechRecognitionSuccessRate, 0.9) && lt(metrics.userFeedback, 0.7)) {
                     return 'increase'; // Subir umbral para reducir falsos positivos
                 }
                 break;
                 
             case 'ai_request_timeout':
                 // Aumentar si hay muchos timeouts, disminuir si es demasiado largo
-                if (metrics.timeoutRate! > 0.3) {
+                if (gt(metrics.timeoutRate, 0.3)) {
                     return 'increase';
-                } else if (metrics.aiResponseTime! < 10000 && metrics.timeoutRate! < 0.1) {
+                } else if (lt(metrics.aiResponseTime, 10000) && lt(metrics.timeoutRate, 0.1)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'cache_ttl':
                 // Aumentar si la respuesta de IA es lenta, disminuir si el uso de memoria es alto
-                if (metrics.aiResponseTime! > 20000 && metrics.memoryUsage! < 500) {
+                if (gt(metrics.aiResponseTime, 20000) && lt(metrics.memoryUsage, 500)) {
                     return 'increase';
-                } else if (metrics.memoryUsage! > 800) {
+                } else if (gt(metrics.memoryUsage, 800)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'animation_speed':
                 // Ajustar basado en feedback del usuario
-                if (metrics.userFeedback! < 0.6) {
+                if (lt(metrics.userFeedback, 0.6)) {
                     return Math.random() > 0.5 ? 'increase' : 'decrease'; // Exploración
                 }
                 break;
                 
             case 'ui_refresh_rate':
                 // Disminuir si el uso de memoria es alto, aumentar si la tasa real es baja
-                if (metrics.memoryUsage! > 700) {
+                if (gt(metrics.memoryUsage, 700)) {
                     return 'decrease';
-                } else if (metrics.actualUIRefreshRate! < 45 && metrics.memoryUsage! < 400) {
+                } else if (lt(metrics.actualUIRefreshRate, 45) && lt(metrics.memoryUsage, 400)) {
                     return 'increase';
                 }
                 break;
                 
             case 'memory_cache_size':
                 // Aumentar si la respuesta de IA es lenta, disminuir si el uso de memoria es alto
-                if (metrics.aiResponseTime! > 15000 && metrics.memoryUsage! < 600) {
+                if (gt(metrics.aiResponseTime, 15000) && lt(metrics.memoryUsage, 600)) {
                     return 'increase';
-                } else if (metrics.memoryUsage! > 900) {
+                } else if (gt(metrics.memoryUsage, 900)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'retry_max_attempts':
                 // Aumentar si hay muchos timeouts, disminuir si el sistema es inestable
-                if (metrics.timeoutRate! > 0.4) {
+                if (gt(metrics.timeoutRate, 0.4)) {
                     return 'increase';
-                } else if (metrics.systemStability! < 0.7) {
+                } else if (lt(metrics.systemStability, 0.7)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'backoff_base_delay':
                 // Aumentar si el sistema es inestable, disminuir si la respuesta es lenta
-                if (metrics.systemStability! < 0.7) {
+                if (lt(metrics.systemStability, 0.7)) {
                     return 'increase';
-                } else if (metrics.aiResponseTime! > 25000) {
+                } else if (gt(metrics.aiResponseTime, 25000)) {
                     return 'decrease';
                 }
                 break;

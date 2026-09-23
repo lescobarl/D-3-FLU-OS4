@@ -306,16 +306,14 @@ class RecoveryActionExecutor {
         const attemptCount = this.getExecutionCount(incident.id, 'retry_with_backoff');
         const delay = Math.min(initialDelay * Math.pow(multiplier, attemptCount), maxDelay);
         
-        if (this.executionHistory.has(incident.id)) {
-            const history = this.executionHistory.get(incident.id)!;
-            if (Date.now() - history.lastExecution < delay) {
-                return {
-                    success: false,
-                    action: 'retry_with_backoff',
-                    message: `Esperando delay de backoff: ${delay}ms`,
-                    durationMs: Date.now() - startTime,
-                };
-            }
+        const history = this.executionHistory.get(incident.id);
+        if (history && Date.now() - history.lastExecution < delay) {
+            return {
+                success: false,
+                action: 'retry_with_backoff',
+                message: `Esperando delay de backoff: ${delay}ms`,
+                durationMs: Date.now() - startTime,
+            };
         }
         
         // Simular reintento (en implementación real, esto ejecutaría la operación fallida)

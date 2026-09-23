@@ -1,14 +1,20 @@
 {
-  "id": "P1.3",
+  "id": "P6.11",
   "mode": "full",
-  "task": "P1.3",
-  "base": "98e24210257708f9bc7effddf658ece57187d140",
-  "objective": "El estado de onboarding vive SOLO en Dexie: se retiran las claves legacy de localStorage.",
+  "task": "P6.11",
+  "base": "9fbfb167207a12eee784686a4c7a379f194acba0",
+  "objective": "src/ no aserta \"esto no es null\": las 51 aserciones no-null (expr!) se sustituyen por demostracion del tipo (guard, early return, ?? con default, acceso por referencia no-null), no por otro cast.",
   "allow": [
-    "src/hooks/useOnboarding.ts",
-    "src/core/onboarding/onboardingService.ts",
-    "src/core/config/appConfig.ts",
-    "src/App.tsx",
+    "src/avatar/model/bunnyAnimator.ts",
+    "src/avatar/model/bunnyTextures.ts",
+    "src/components/WorkspaceHub.tsx",
+    "src/core/autonomy/autoOptimization.ts",
+    "src/core/autonomy/autoRecovery.ts",
+    "src/core/autonomy/healthMonitor.ts",
+    "src/core/contacts/contactService.ts",
+    "src/hooks/useNavigationCommands.ts",
+    "src/main.tsx",
+    "src/services/musicPlayer.ts",
     "tests/**",
     "package.json",
     ".task/frozen.json",
@@ -18,22 +24,21 @@
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
-    "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 40,
-  "maxLines": 1500,
-  "dod": "npx tsc -b && npx vitest run tests/onboardingSingleStoreGuard.test.ts tests/onboardingWriterGuard.test.ts tests/storageKeysAliveGuard.test.ts tests/onboardingService.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/onboardingSingleStoreGuard.test.ts --reporter=dot",
+  "maxFiles": 20,
+  "maxLines": 500,
+  "dod": "npx tsc -b && npx vitest run tests/nonNullAssertionGuard.test.ts tests/guardMutationGuard.test.ts tests/eolGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/nonNullAssertionGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Referencias vivas a las claves legacy de onboarding (ONBOARDING_COMPLETED / ONBOARDING_STEP / flu-onboarding-completed / flu-onboarding-step) en src/: 16 -> 0.",
+    "statement": "Aserciones no-null (nodos NonNullExpression del AST de TypeScript) en src/**/*.{ts,tsx,js,jsx,mjs}: 51 -> 0.",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),path=require('path');const NL=String.fromCharCode(10);const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));let n=0;for(const f of walk('src')){for(const line of fs.readFileSync(f,'utf8').split(NL)){const t=line.trim();if(t.startsWith('//')||t.startsWith('*')||t.startsWith('/*'))continue;const m=line.match(/ONBOARDING_COMPLETED|ONBOARDING_STEP|flu-onboarding-completed|flu-onboarding-step/g);if(m)n+=m.length;}}console.log(n)\"",
+      "command": "node -e \"const ts=require('typescript'),fs=require('fs'),path=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):(/[.](ts|tsx|js|jsx|mjs)$/.test(e.name)?[path.join(d,e.name)]:[]));const k=f=>f.endsWith('tsx')?ts.ScriptKind.TSX:f.endsWith('jsx')?ts.ScriptKind.JSX:f.endsWith('ts')?ts.ScriptKind.TS:ts.ScriptKind.JS;let n=0;for(const f of walk('src')){const sf=ts.createSourceFile(f,fs.readFileSync(f,'utf8'),ts.ScriptTarget.Latest,true,k(f));const v=x=>{if(x.kind===ts.SyntaxKind.NonNullExpression)n++;ts.forEachChild(x,v)};v(sf)}console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/onboardingSingleStoreGuard.test.ts"
+      "tests/nonNullAssertionGuard.test.ts"
     ]
   }
 }

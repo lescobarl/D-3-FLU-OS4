@@ -152,6 +152,21 @@ export class BunnyAnimator {
     }
 
     /**
+     * Clip por nombre: los sintéticos se generan al vuelo. Lanza si no existe
+     * (antes se asertaba con `!`, así que un clip ausente explotaba más tarde
+     * y con un error peor, dentro del mixer).
+     */
+    private resolveClip(name: BunnyAnimation): THREE.AnimationClip {
+        const clip = this.isSynthetic(name)
+            ? (name === 'MouthMove' ? this.ensureMouthClip() : this.ensurePalabraClip())
+            : this.clips.get(name) ?? null;
+        if (!clip) {
+            throw new Error(`[Animator] clip no disponible: ${name}`);
+        }
+        return clip;
+    }
+
+    /**
      * Creates the synthetic MouthMove clip if poses are available.
      * The clip oscillates jaw_01.quaternion between closed (Idle_2)
      * and open (Emo_blink) poses using a sinusoidal wave.
@@ -233,6 +248,7 @@ export class BunnyAnimator {
     private ensurePalabraClip(): THREE.AnimationClip | null {
         if (this.palabraClip) return this.palabraClip;
         if (!this.armRestPose) return null;
+        const rest = this.armRestPose;
 
         const duration = 2.0;
         const times = new Float32Array([0, 0.5, 2.0]);
@@ -258,27 +274,27 @@ export class BunnyAnimator {
         // Compute raised pose by applying scaled delta rotations to rest pose.
         // raisedPose = scaledDelta * restQuat (world-space delta)
         const raisedPose: ArmPose = {
-            clavicle_r: this.armRestPose!.clavicle_r.clone(),
+            clavicle_r: rest.clavicle_r.clone(),
             upperarm_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.upperarm_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.upperarm_r);
+                return scaled.multiply(rest.upperarm_r);
             })(),
             lowerarm_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.lowerarm_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.lowerarm_r);
+                return scaled.multiply(rest.lowerarm_r);
             })(),
             hand_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.hand_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.hand_r);
+                return scaled.multiply(rest.hand_r);
             })(),
         };
 
@@ -377,13 +393,9 @@ export class BunnyAnimator {
                                         }
                                     }
                                 }
-                                if (armQuats.clavicle_r && armQuats.upperarm_r && armQuats.lowerarm_r && armQuats.hand_r) {
-                                    this.armRestPose = {
-                                        clavicle_r: armQuats.clavicle_r!,
-                                        upperarm_r: armQuats.upperarm_r!,
-                                        lowerarm_r: armQuats.lowerarm_r!,
-                                        hand_r: armQuats.hand_r!,
-                                    };
+                                const { clavicle_r, upperarm_r, lowerarm_r, hand_r } = armQuats;
+                                if (clavicle_r && upperarm_r && lowerarm_r && hand_r) {
+                                    this.armRestPose = { clavicle_r, upperarm_r, lowerarm_r, hand_r };
                                 }
                             }
                         }
@@ -509,9 +521,7 @@ export class BunnyAnimator {
         this.ensureAnimBones();
 
         // --- First animation: main action ---
-        const firstClip = this.isSynthetic(anims[0])
-            ? (anims[0] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-            : this.clips.get(anims[0])!;
+        const firstClip = this.resolveClip(anims[0]);
         const mainAction = this.mixer.clipAction(firstClip);
         mainAction.reset();
         mainAction.setLoop(THREE.LoopRepeat, Infinity);
@@ -522,9 +532,7 @@ export class BunnyAnimator {
         // --- Remaining animations: blend actions ---
         this.blendActions = [];
         for (let i = 1; i < anims.length; i++) {
-            const clip = this.isSynthetic(anims[i])
-                ? (anims[i] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-                : this.clips.get(anims[i])!;
+            const clip = this.resolveClip(anims[i]);
             const action = this.mixer.clipAction(clip);
             action.reset();
             action.setLoop(THREE.LoopRepeat, Infinity);
@@ -631,9 +639,7 @@ export class BunnyAnimator {
         this.ensureAnimBones();
 
         // --- First animation: main action ---
-        const firstClip = this.isSynthetic(anims[0])
-            ? (anims[0] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-            : this.clips.get(anims[0])!;
+        const firstClip = this.resolveClip(anims[0]);
         const mainAction = this.mixer.clipAction(firstClip);
         mainAction.reset();
         mainAction.setLoop(THREE.LoopRepeat, Infinity);
@@ -649,9 +655,7 @@ export class BunnyAnimator {
         // --- Remaining animations: blend actions ---
         const newBlendActions: THREE.AnimationAction[] = [];
         for (let i = 1; i < anims.length; i++) {
-            const clip = this.isSynthetic(anims[i])
-                ? (anims[i] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-                : this.clips.get(anims[i])!;
+            const clip = this.resolveClip(anims[i]);
             const action = this.mixer.clipAction(clip);
             action.reset();
             action.setLoop(THREE.LoopRepeat, Infinity);

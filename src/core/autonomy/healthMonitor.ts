@@ -183,16 +183,17 @@ class HealthMetricTracker {
     private readonly maxHistorySize = 100;
 
     recordMetric(component: string, responseTime: number, hasError: boolean): void {
-        if (!this.history.has(component)) {
-            this.history.set(component, {
+        let hist = this.history.get(component);
+        if (!hist) {
+            hist = {
                 responseTimes: [],
                 errorCounts: [],
                 checkCounts: [],
                 timestamps: [],
-            });
+            };
+            this.history.set(component, hist);
         }
 
-        const hist = this.history.get(component)!;
         hist.responseTimes.push(responseTime);
         hist.errorCounts.push(hasError ? 1 : 0);
         hist.checkCounts.push(1);

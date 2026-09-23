@@ -268,9 +268,9 @@ export function createContactService({
     const refKey = dayKey(ref);
     const all = await db.contacts.toArray();
     return all
-      .filter((c) => c.birthday !== undefined && DATE_KEY_RE.test(c.birthday!))
+      .filter((c): c is ContactRecord & { birthday: string } => c.birthday !== undefined && DATE_KEY_RE.test(c.birthday))
       .map((c) => {
-        const nextBirthday = nextBirthdayKey(c.birthday!, ref);
+        const nextBirthday = nextBirthdayKey(c.birthday, ref);
         return {
           record: copyRecord(c),
           nextBirthday,

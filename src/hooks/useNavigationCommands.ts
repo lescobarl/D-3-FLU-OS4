@@ -170,7 +170,7 @@ export function useNavigationCommands(
         }
         const prev = pendingNavRef.current;
         // Misma emisiÃ³n (una extiende a la otra): reemplazar sin ejecutar el parcial.
-        const related = Boolean(prev) && (query.startsWith(prev!.query) || prev!.query.startsWith(query));
+        const related = prev !== null && (query.startsWith(prev.query) || prev.query.startsWith(query));
         if (prev && !related) {
             // BÃºsqueda distinta ya pendiente: ejecutarla antes de encolar la nueva.
             flushNavSettle();

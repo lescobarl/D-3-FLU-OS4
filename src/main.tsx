@@ -49,7 +49,12 @@ const isAsrLab =
   import.meta.env.DEV && window.location.pathname.replace(/\/+$/, '') === '/asr-lab'
 const AsrLab = isAsrLab ? React.lazy(() => import('./dev/asrLab/AsrLab')) : null
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')
+if (!rootElement) {
+  throw new Error('main.tsx: falta #root en index.html')
+}
+
+ReactDOM.createRoot(rootElement).render(
   isAsrLab && AsrLab ? (
     <React.Suspense fallback={null}>
       <AsrLab />
