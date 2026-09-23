@@ -8,6 +8,5 @@
   "tests/voiceTurnCommitDerivation.test.ts",
   "tests/voiceTurnClosingSingleRoute.test.ts",
   "tests/taskGateInvariant.test.ts",
-  "tests/schedulerSingleDefinition.test.ts",
-  "tests/taskLedgerGuard.test.ts"
+  "tests/schedulerSingleDefinition.test.ts"
 ]

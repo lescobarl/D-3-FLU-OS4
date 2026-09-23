@@ -8,7 +8,7 @@
       "id": "P0.1",
       "titulo": "Ledger de pendientes en el repo (esta propia tarea)",
       "estado": "done",
-      "evidencia": ".task/ledger.json",
+      "evidencia": "plans/ledger.json",
       "origen": "meta"
     },
     {
@@ -197,7 +197,7 @@
       "id": "P4.10",
       "titulo": "T3 - Clasificar los 16 simbolos repetidos con seccion 7.7",
       "estado": "done",
-      "evidencia": "Ya satisfecho (item fantasma): la clasificacion se completo en los commits chore(criterio) que llenaron ALLOW_COLLISION/KNOWN_GROUPS de scripts/auditoria.mjs, y el catch-all D0 (simbolos exportados definidos en >1 archivo SIN clasificar) esta en 0 en todos los commits muestreados (16e3df8, ab0490b, 2fc1484, 44c2490, bbcb8e5, 5c2fb93, d5a3f17) y hoy. Universo recomputado hoy = 15 simbolos exportados duplicados (el item decia 16: uno se unifico despues), TODOS con veredicto §7.7 declarado: buildGenerationPrompt, buildMinuteKnowledgeBase2, editableFieldsOf, emptyEditableFields, formatMinuteHistoryLabel, formatSpeakerLabel, getAsrSegmentationCfg, hasToken, labelToSpeakerId, loadSessionState, resolveFluParticipantLabel, resolveGeminiApiKey, saveSessionState, uncheckAll, wouldShrinkLog. Los 15 son COLISION (mismo nombre, distinto dominio o forma del dato); 0 ruta doble. Comprobacion independiente (no me fie del comentario): comparacion de cuerpos normalizados de los 15 pares -> ningun par identico; inspeccion directa de labelToSpeakerId (conversationRow normaliza+parsea indice y cae a SPEAKER_ID_CALCULATING vs speakerCore regex + fallback speaker_1), uncheckAll (Note.done vs ShoppingItem.checked) y formatSpeakerLabel ((index,cfg) vs (label,confidence,config)) confirma logica distinta en los tres. Progresion medida del total de exportados duplicados en src/: 49 (16e3df8) -> 25 (d5a3f17) -> 15 (hoy). Las unificaciones reales de este dominio YA se hicieron (V18 12->0 en 5c2fb93, D1 scheduler, allowlists D2/D3/D4). Cierre SIN cambio de codigo, a proposito: no hay ruta doble que unificar, la metrica (no clasificados) ya esta en 0 y empujarla por el gate daria un hito cosmetico que §7.2/§7.5 prohiben. Evidencia reproducible: node scripts/auditoria.mjs --only D0 -> HOY=0. HALLAZGOS derivados (fuera de alcance; requieren decision del usuario): (a) la clasificacion la corre el auditor a mano, NO el gate (scripts/auditoria.mjs no esta en lint:guards): es prosa, no barrera; (b) el propio auditor declara su punto ciego \"duplicados NO exportados no se cuentan\": medidos 51 nombres de nivel superior duplicados con al menos una definicion interna, entre ellos ruta doble real visible: DATE_KEY_RE copiado en 4 servicios (contact/diary/habit/mood) y 4 helpers get* (getEmbeddingConfig/getMinSamples/getModelId/getTargetSampleRate) repetidos entre speakerEmbeddingCore.js y voiceId.worker.js.",
+      "evidencia": "VEREDICTO: Ya satisfecho (item fantasma): la clasificacion se completo en los commits chore(criterio) que llenaron ALLOW_COLLISION/KNOWN_GROUPS de scripts/auditoria.mjs, y el catch-all D0 (simbolos exportados definidos en >1 archivo SIN clasificar) esta en 0 en todos los commits muestreados (16e3df8, ab0490b, 2fc1484, 44c2490, bbcb8e5, 5c2fb93, d5a3f17) y hoy. Universo recomputado hoy = 15 simbolos exportados duplicados (el item decia 16: uno se unifico despues), TODOS con veredicto §7.7 declarado: buildGenerationPrompt, buildMinuteKnowledgeBase2, editableFieldsOf, emptyEditableFields, formatMinuteHistoryLabel, formatSpeakerLabel, getAsrSegmentationCfg, hasToken, labelToSpeakerId, loadSessionState, resolveFluParticipantLabel, resolveGeminiApiKey, saveSessionState, uncheckAll, wouldShrinkLog. Los 15 son COLISION (mismo nombre, distinto dominio o forma del dato); 0 ruta doble. Comprobacion independiente (no me fie del comentario): comparacion de cuerpos normalizados de los 15 pares -> ningun par identico; inspeccion directa de labelToSpeakerId (conversationRow normaliza+parsea indice y cae a SPEAKER_ID_CALCULATING vs speakerCore regex + fallback speaker_1), uncheckAll (Note.done vs ShoppingItem.checked) y formatSpeakerLabel ((index,cfg) vs (label,confidence,config)) confirma logica distinta en los tres. Progresion medida del total de exportados duplicados en src/: 49 (16e3df8) -> 25 (d5a3f17) -> 15 (hoy). Las unificaciones reales de este dominio YA se hicieron (V18 12->0 en 5c2fb93, D1 scheduler, allowlists D2/D3/D4). Cierre SIN cambio de codigo, a proposito: no hay ruta doble que unificar, la metrica (no clasificados) ya esta en 0 y empujarla por el gate daria un hito cosmetico que §7.2/§7.5 prohiben. Evidencia reproducible: node scripts/auditoria.mjs --only D0 -> HOY=0. HALLAZGOS derivados (fuera de alcance; requieren decision del usuario): (a) la clasificacion la corre el auditor a mano, NO el gate (scripts/auditoria.mjs no esta en lint:guards): es prosa, no barrera; (b) el propio auditor declara su punto ciego \"duplicados NO exportados no se cuentan\": medidos 51 nombres de nivel superior duplicados con al menos una definicion interna, entre ellos ruta doble real visible: DATE_KEY_RE copiado en 4 servicios (contact/diary/habit/mood) y 4 helpers get* (getEmbeddingConfig/getMinSamples/getModelId/getTargetSampleRate) repetidos entre speakerEmbeddingCore.js y voiceId.worker.js.",
       "origen": "plan-T"
     },
     {
@@ -492,11 +492,6 @@
       "titulo": "locales de voz/escucha desde una fuente unica"
     },
     {
-      "id": "C40/C41",
-      "commit": "5f6f9bc",
-      "titulo": "flujo F1/F2/F3 Gemini; act() limpio; freeze: 7 guards congelados"
-    },
-    {
       "id": "C42",
       "commit": "f558a93",
       "titulo": "stats de proveedor con claves de config; guard C8 ignora comentarios"
@@ -505,11 +500,6 @@
       "id": "C8",
       "commit": "a9b2f81",
       "titulo": "fuente unica del recorte de turnos del interino; docs(C7,C9) distintos (D5)"
-    },
-    {
-      "id": "C40/C41",
-      "commit": "d1ccf70",
-      "titulo": "flujo Gemini ejecutado; docs(C54): grupos de texto no-unificados (D5)"
     },
     {
       "id": "C54",
@@ -530,11 +520,6 @@
       "id": "C55",
       "commit": "fe55171",
       "titulo": "eliminar codigo muerto y deps sin uso"
-    },
-    {
-      "id": "C40/C41",
-      "commit": "01671e0",
-      "titulo": "base unica IAIService, gemini/deepseek adapters"
     },
     {
       "id": "C45",
@@ -932,31 +917,6 @@
       "titulo": "Branding solo en Dexie: backup sin via LS muerta"
     },
     {
-      "id": "P4.11",
-      "titulo": "Veredicto registrado (sin cambio de codigo)",
-      "commit": "e0d5a1c"
-    },
-    {
-      "id": "P4.12",
-      "titulo": "Veredicto registrado (sin cambio de codigo)",
-      "commit": "e0d5a1c"
-    },
-    {
-      "id": "P4.14",
-      "titulo": "Veredicto registrado (sin cambio de codigo)",
-      "commit": "e0d5a1c"
-    },
-    {
-      "id": "P6.5",
-      "titulo": "Veredicto registrado (sin cambio de codigo)",
-      "commit": "e0d5a1c"
-    },
-    {
-      "id": "P6.8",
-      "titulo": "Veredicto registrado (sin cambio de codigo)",
-      "commit": "e0d5a1c"
-    },
-    {
       "id": "P1.9",
       "commit": "b6e81b2",
       "titulo": "STORAGE_KEYS sin claves muertas"
@@ -980,11 +940,6 @@
       "id": "P1.3",
       "commit": "3d3542e",
       "titulo": "Onboarding: un solo almacen (Dexie)"
-    },
-    {
-      "id": "P4.10",
-      "commit": "ee75233",
-      "titulo": "Clasificacion §7.7 de los simbolos repetidos (ya aterrizada en chore(criterio))"
     },
     {
       "id": "P6.11",
@@ -1025,6 +980,61 @@
       "id": "P6.13",
       "commit": "1bbb47e",
       "titulo": "P6.13 - npm run build arranca: config de Vite cargable en Node (shim + import() dinamico de los proxies) y external sin paquetes instalados (dist sin imports desnudos, composicion medible)"
+    },
+    {
+      "id": "C40",
+      "commit": "5f6f9bc",
+      "titulo": "flujo F1/F2/F3 Gemini; act() limpio; freeze: 7 guards congelados"
+    },
+    {
+      "id": "C41",
+      "commit": "5f6f9bc",
+      "titulo": "flujo F1/F2/F3 Gemini; act() limpio; freeze: 7 guards congelados"
+    },
+    {
+      "id": "C40",
+      "commit": "d1ccf70",
+      "titulo": "flujo Gemini ejecutado; docs(C54): grupos de texto no-unificados (D5)"
+    },
+    {
+      "id": "C41",
+      "commit": "d1ccf70",
+      "titulo": "flujo Gemini ejecutado; docs(C54): grupos de texto no-unificados (D5)"
+    },
+    {
+      "id": "C40",
+      "commit": "01671e0",
+      "titulo": "base unica IAIService, gemini/deepseek adapters"
+    },
+    {
+      "id": "C41",
+      "commit": "01671e0",
+      "titulo": "base unica IAIService, gemini/deepseek adapters"
+    },
+    {
+      "id": "C53",
+      "commit": "268e0c7",
+      "titulo": "chore(P6.9): auditoria de higiene medida + repara 130 mojibakes UTF-8 (C53)"
+    },
+    {
+      "id": "T1",
+      "commit": "91665a4",
+      "titulo": "P0.4 (antes T1): reparar la barrera (criterio re-congelado + baseline + contrato real) - frozen.json: re-congeladas las 2 entradas que C49 (e6864b9) dejo sin refrescar   (voiceOfflineFallback, providerLiteralGuard). El criterio no cambia: sus hashes   apuntaban a versiones anteriores (677ec0e / 5d40339). El gate fallaba SIEMPRE en   el paso 0 y ninguna tarea podia cerrar. - baseline.json: regenerado (1 archivo preexistente real en vez de 113 obsoletos). - contract.json: deja de describir C41 (ya cerrado, base 4e35f2a) y pasa a describir   T1 EN CURSO: base=HEAD, allow estrecho (6 archivos), maxFiles 8 / maxLines 400,   dod = taskGateInvariant + taskLedgerGuard + protocolGuard + ledger:check,   guard = taskGateInvariant (verde). - contract.json: ignore reducido a scripts/task-gate*.mjs + audit-metric + kilo.json.   Antes \"allow\" era subconjunto de \"ignore\", asi que el control de alcance no podia   fallar nunca (contrato hueco). Ahora es falsable. - plans/contratos/PREPARACION-123.md: se versiona el plan de preparacion (C1..C57). Validado contra (prueba de mutacion del propio control, AGENTS.md B11/B12):   npm run gate                                             -> 0 VERDE   + src/__gate_probe.tmp fuera de allow                    -> 1 ROJO \"FUERA de alcance\"   + 1 linea en tests/taskGateInvariant.test.ts (congelado) -> 1 ROJO \"hash cambio\"   restaurado                                               -> 0 VERDE, sin residuos.   npm run ledger:check -> OK (57 pendientes, 61 done, 59 cierres).   npm run test:full -> 287 archivos / 2967 tests / 0 fallos (sin cambios en codigo). No validado: \"guards desacoplados de AGENTS.md\" (3er punto del titulo de T1). Hoy protocolGuard (guard BASE, corre en cada gate) fija texto literal de AGENTS.md, y stackDocGuard esta CONGELADO leyendo ese documento. Desacoplarlo exige enmienda formal (nuevo hash + re-aprobacion) y retira aserciones que hoy mantienen el doc honesto: decision de politica, no fix. Registrado como P0.5. No se hizo unilateral. No validado (usuario): que el gate le sirva como barrera real en su flujo diario. Co-authored-by: openhands <openhands@all-hands.dev>"
+    },
+    {
+      "id": "P0.1",
+      "commit": "f23889d",
+      "titulo": "pendientes en el repo como fuente unica + guard"
+    },
+    {
+      "id": "P0.2",
+      "commit": "f23889d",
+      "titulo": "pendientes en el repo como fuente unica + guard"
+    },
+    {
+      "id": "P0.3",
+      "commit": "f23889d",
+      "titulo": "pendientes en el repo como fuente unica + guard"
     }
   ]
 }
