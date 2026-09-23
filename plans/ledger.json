@@ -49,8 +49,8 @@
     {
       "id": "P1.3",
       "titulo": "T6 - Onboarding a un solo almacen (retirar claves legacy)",
-      "estado": "todo",
-      "evidencia": "src/core/onboarding/onboardingService.ts:110",
+      "estado": "done",
+      "evidencia": "El estado de onboarding tenia dos almacenes: la tabla Dexie onboardingStates (gateway unico, C44) y localStorage con flu-onboarding-completed/flu-onboarding-step para la fase sin participante, borradas a mano en tres sitios de App.tsx. El de localStorage casi no aportaba: la sesion incompleta ya se auto-sanaba al recargar y App re-pregunta el onboarding en cada entrada. Ahora la fase sin participante es EFIMERA (memoria) y el estado se persiste SOLO por el gateway al registrar al participante (App.onCompleted -> persistForParticipant siembra en Dexie). Retirados readLegacyOnboarding, las 2 claves de appConfig y las 6 lineas de removeItem de App.tsx; los tests del lector legacy sustituidos por el guard C45 (7 tests): prohibe las claves en src/, prohibe el lector retirado, exige que useOnboarding solo use localStorage para el espejo del nombre y que persista por el gateway. Metrica: referencias vivas a las claves legacy en src/ 16 -> 0, recomputada por el gate en el worktree base; gate exit 0. LIMITE: los e2e no se pudieron correr aqui (el dev server de vite falla al cargar vite.config.ts, fallo preexistente): el ajuste de los helpers e2e queda pendiente de corrida.",
       "origen": "plan-T"
     },
     {
@@ -976,6 +976,11 @@
       "id": "P1.1",
       "commit": "c73eacd",
       "titulo": "Minutas: un solo almacen (Dexie), backup real"
+    },
+    {
+      "id": "P1.3",
+      "commit": "3d3542e",
+      "titulo": "Onboarding: un solo almacen (Dexie)"
     }
   ]
 }
