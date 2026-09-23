@@ -1184,3 +1184,28 @@ NO CERRADO EN ESTE BLOQUE (requiere decision del usuario - AGENTS.md B14):
   mantienen el documento honesto: es una decision de politica, no un fix de causa
   raiz. Registrado como P0.5. No se hizo de forma unilateral.
 NO VALIDADO (usuario): que el gate le sirva como barrera real en su flujo diario.
+================================================================
+[CIERRE TECNICO] 2026-09-22 - P2.2 (guards teatro: wake word en runtime)
+================================================================
+OBJETIVO: que el guard C6 discrimine de verdad. Cubria 2 de las 16 variantes
+canonicas de wake word (/ok\s*flu|okay\s*flow/) y no tenia prueba de mutacion:
+dejaba pasar en runtime 'oye flu', 'hey flu', 'okay flu', 'ok flow', etc.
+ANTES: regex literal de 2 variantes; 0 tests de discriminacion.
+DESPUES: el criterio se DERIVA de FLU_WAKE_WORDS en src/voice/lib/fluConfig.js
+  (fuente unica 9.4): anadir una wake word a la config amplia el guard solo.
+  Mas 5 tests: cobertura de las 16 variantes, literal entrecomillado, comentario
+  (no marca), identificadores FLU_* (no marca) y tamano del catalogo.
+INVARIANTE (falsable): sustituida la regex derivada por la VIEJA en una copia
+  temporal -> 2 tests ROJOS nombrando las 14 variantes no detectadas
+  ("oye flu, oye flow, oye blue, oye flo, ok flow, ok blue, ok flo, okay flu,
+   okay blue, okay flo, hey flu, hey flow, hey blue, hey flo").
+  Con la derivada -> 6/6 VERDE y 0 infractores en src/.
+ENMIENDA FORMAL (AGENTS.md B14, autorizada por el usuario): tests/wakeWordRuntimeGuard.test.ts
+  estaba CONGELADO. Se declara el cambio, se registra el hash nuevo
+  (a8572507e1fb545d90d397921fec52d724af4512824849dedac021b78e6dbdf5) y se
+  reinicia el hito. El criterio resultante es MAS estricto (16 variantes > 2).
+REGRESION:
+  antes:   287 archivos / 2967 tests / 0 fallos
+  despues: 287 archivos / 2972 tests / 0 fallos ; tsc -b 0 ; eslint 0.
+NO VALIDADO (usuario): que el reconocimiento de voz siga aceptando las 16
+variantes en su pantalla (el guard solo prueba el criterio estatico).

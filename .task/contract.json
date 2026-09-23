@@ -1,16 +1,15 @@
 {
-  "id": "T1",
+  "id": "P2.2",
   "mode": "full",
-  "task": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md",
-  "base": "e7d0a9b6a9b8893f9a8070092adabadc01a8dd30",
-  "objective": "La puerta de tareas es ejecutable y cierra en verde sobre el arbol actual: criterio congelado == HEAD, baseline == cambios preexistentes, y el contrato describe la tarea EN CURSO (no una ya cerrada).",
+  "task": "P2.2 - wakeWordRuntime guard con prueba de mutacion (cubria 2 de las 16 variantes)",
+  "base": "aecd09375dade4163dd7cef6257c63502c92eac0",
+  "objective": "El guard C6 deriva las wake words de FLU_WAKE_WORDS (fluConfig.js) y su prueba de mutacion discrimina: con la regex vieja el guard debe FALLAR.",
   "allow": [
+    "tests/wakeWordRuntimeGuard.test.ts",
     ".task/contract.json",
-    ".task/baseline.json",
     ".task/frozen.json",
     ".task/report",
-    "plans/ledger.json",
-    "plans/contratos/PREPARACION-123.md"
+    "plans/ledger.json"
   ],
   "deny": [
     "scripts/task-gate.mjs",
@@ -22,9 +21,9 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 400,
-  "dod": "npx vitest run tests/taskGateInvariant.test.ts tests/taskLedgerGuard.test.ts tests/protocolGuard.test.ts --reporter=dot && npm run ledger:check",
-  "guard": "npx vitest run tests/taskGateInvariant.test.ts --reporter=dot",
+  "maxFiles": 6,
+  "maxLines": 250,
+  "dod": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/wakeWordRuntimeGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
