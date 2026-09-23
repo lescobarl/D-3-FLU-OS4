@@ -438,6 +438,13 @@
       "estado": "done",
       "origen": "auditoria",
       "evidencia": "DESCUBIERTO Y CERRADO commit b6e81b2. STORAGE_KEYS declaraba 11 claves localStorage que NADIE referencia: las 6 del Configur r FLU (FLU_PROFILE/IMAGE/VOICE/ADVANCED_CONFIG, FLU_PERSONALITY_TRAITS/TONE) sustituidas por integrationStore; GEMINI_MODEL/GEMINI_API_URL y POLLINATIONS_URL/MODEL por la config de proveedor; NOTIFICATION_MUTED por NOTIFICATION_CHANNEL/PERMISSION. Verificado antes de borrar: 791 ficheros, los 11 literales solo en su declaracion, sin acceso dinamico STORAGE_KEYS[...]. Guard tests/storageKeysAliveGuard.test.ts (6 tests, con test anti-vacuidad) exige que toda clave declarada se referencie. El guard detecto un fallo real en su primera version (regex que exigia >=2 caracteres -> habria pasado vacio). Gate: metrica 11->0 en el worktree base; exit 0."
+    },
+    {
+      "id": "P6.16",
+      "titulo": "I5: el id de cierre casaba por SUBCADENA (C2 justificado por un commit que dice C21)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "scripts/task-ledger.mjs:204 - HECHO en d674137. I5 (justificaCierre) casaba el id por SUBCADENA: `subject.includes(id)`. Con ids de 1 digito eso es un agujero real: la entrada `C2` quedaba justificada por un commit que solo dice `C21` (C2..C6 son prefijo de C21..C60; medido, 0 casos explotados hoy, el fallo era latente). Se retira esa rama y queda solo la de familia, que YA usaba \\b: familiaDe(C41)===C41, asi que el id exacto sigue cubierto y las 121 entradas reales siguen validando (ledger:check en exit 0). Hallazgo de la 3a pasada de la auditoria del ledger. Guard de comportamiento: caso nuevo en taskLedgerGuard.test.ts que FALLA contra el codigo anterior (expected true to be false) y PASA ahora; metrica del contrato 1 -> 0, recomputada por el gate en el worktree base, con el guard tambien fallando alli (base=1, actual=0). npm run gate -> exit 0. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report."
     }
   ],
   "done": [
@@ -1045,6 +1052,11 @@
       "id": "P6.15",
       "commit": "dc404cf",
       "titulo": "Datos del ledger: cierres por veredicto sin commit ajeno, codigos C53/T1, cierres de P0.1-3"
+    },
+    {
+      "id": "P6.16",
+      "commit": "d674137",
+      "titulo": "I5 del ledger: el id casa como palabra, no como subcadena"
     }
   ]
 }
