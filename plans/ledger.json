@@ -372,8 +372,8 @@
     {
       "id": "P6.11",
       "titulo": "37 archivos con aserciones ! (no-null)",
-      "estado": "todo",
-      "evidencia": "src/avatar/model/bunnyAnimator.ts (20)",
+      "estado": "done",
+      "evidencia": "CERRADO commit a6011aa (P6.11). El titular del item (37 archivos) estaba mal medido: el AST de TypeScript cuenta 51 aserciones no-null en 10 ficheros (20 en avatar/model/bunnyAnimator.ts y 20 en core/autonomy/autoOptimization.ts), no 37 ficheros; un regex sobre el texto daba 83 porque contaba tambien plantillas, comentarios y comparaciones !==. Retiradas las 51: bunnyAnimator gana resolveClip() (clip o error claro, y borra 4 ternarios duplicados sintetica/real), captura armRestPose en una const no-null (el narrowing se perdia al entrar en los closures) y destructura armQuats; autoOptimization sustituye metrics.x! por lt()/gt() con value !== undefined (misma semantica: undefined < t es false; un ?? 0 habria cambiado la decision); los otros 8 ficheros usan guard explicito, const local no-null, un solo acceso al mapa en vez de has()+get()!, y type predicate en el filtro de cumpleanos. Guard nuevo C51 tests/nonNullAssertionGuard.test.ts (4 tests): mide el AST (no el texto), trae prueba de detector y de mutacion, y exige que el universo medido sea todo src sin exclusiones silenciosas. Registrado en lint:guards y congelado en .task/frozen.json. Gate: metrica base=51 actual=0 target=0; guard base=ROJO (N=51) actual=verde; tsc -b -> 0; lint:guards 32 ficheros/180 tests verde. LIMITE (hallazgo, ajeno a esta tarea): dos guards existen pero NO estan registrados en lint:guards y estan ROJOS en HEAD: tsStrictGuard (un as unknown as en src/core/db/fluDatabase.ts:711) y dexieSchemaGuard (la version de Dexie que borra la tabla legacy reminders). Fuera de la barrera: se reportan, no se tocan aqui.",
       "origen": "propio"
     },
     {
@@ -986,6 +986,11 @@
       "id": "P4.10",
       "commit": "ee75233",
       "titulo": "Clasificacion ┬º7.7 de los simbolos repetidos (ya aterrizada en chore(criterio))"
+    },
+    {
+      "id": "P6.11",
+      "commit": "a6011aa",
+      "titulo": "Sin aserciones no-null en src: 51 -> 0 (guard C51)"
     }
   ]
 }
