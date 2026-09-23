@@ -1,14 +1,12 @@
 {
-  "base": "87c4d11bff6c7535233d507130776791f3f46ab0",
-  "task": "P6.14 + P6.15: la barrera del ledger y los datos que dejo pasar",
-  "objective": "Los dos hallazgos de la auditoria van juntos en un commit porque estan acoplados: al endurecer la barrera (P6.14) los datos de hoy pasan a rojo, y el mensaje de verde solo vuelve reparandolos (P6.15). P6.14: I1b (todo codigo declarado en git tiene entrada, o la cubre su familia), I5 (el commit citado nombra el id o toco su evidencia), I6 (item done exige cierre registrado), I7 (decision exige veredicto), parser que lee el parentesis FINAL (C53 era invisible) y mensaje honesto (decia 60 pendientes habiendo 2). P6.15: 6 items por veredicto pasan a decision y se les quita el commit ajeno, C40/C41 deja de ser un id compuesto, se registran C53, T1 (renombrado a P0.4) y los cierres que faltaban de P0.1/P0.2/P0.3, y P0.1 deja de citar una ruta inexistente.",
+  "base": "dc404cfa52d3df667795d3a9d2399952179ac9bc",
+  "task": "Cierre de P6.14 y P6.15 en el ledger",
+  "objective": "Registrar en plans/ledger.json el cierre de los dos items, con evidencia de lo medido y del cambio de rumbo sobre el estado decision. Solo datos del ledger y contrato.",
   "allow": [
-    "scripts/task-ledger.mjs",
-    "tests/taskLedgerGuard.test.ts",
-    ".task/**",
-    "plans/ledger.json"
+    "plans/ledger.json",
+    ".task/**"
   ],
-  "maxFiles": 6,
+  "maxFiles": 4,
   "dod": "node scripts/task-ledger.mjs check",
-  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/guardMutationGuard.test.ts tests/taskGateInvariant.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot"
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts --reporter=dot"
 }

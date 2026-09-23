@@ -372,15 +372,15 @@
     {
       "id": "P6.14",
       "titulo": "Barrera del ledger: valida por hash, no ve duplicados ni cierres ajenos",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-09-23: `node scripts/task-ledger.mjs check` devuelve OK con tres huecos dentro. (1) UNICIDAD: el bucle de ids duplicados recorre solo items[] (scripts/task-ledger.mjs:130-134); done[] no se mira nunca -> 117 entradas / 110 ids unicos (C40/C41 x3, C42 x2, C8 x2, C54 x2, C55 x2, C21 x2). (2) CORRESPONDENCIA: I1 se comprueba con `doneHashes.has(c.hash)` (scripts/task-ledger.mjs:143-147); nunca se compara el commit con su id, asi que el invariante se cumple literalmente y vacio. Medido: 8 items cuelgan de un commit que no los nombra, y 5 de ellos (P4.11, P4.12, P4.14, P6.5, P6.8) cuelgan del commit e0d5a1c, cuyo asunto es \"cierre de P1.5\". (3) PARSER INVISIBLE: los codigos se leen solo del parentesis pegado al tipo (CLOSURE_RE, scripts/task-ledger.mjs:21, `([^)]*)`), asi que un codigo en la descripcion no existe: `chore(P6.9): auditoria de higiene medida (C53)` no registra C53 (0 apariciones en el ledger). (4) MENSAJE: el guard imprime `items.length` con la etiqueta \"pendientes\" (scripts/task-ledger.mjs:174) -> dice \"60 pendientes\" habiendo 2. No se toca aqui: scripts/task-ledger.mjs esta congelado en .task/frozen.json y el arreglo necesita su propio contrato. DoD: guard con prueba de mutacion para los cuatro casos (los datos de hoy deben poner el verde en rojo).",
+      "estado": "done",
+      "evidencia": "HECHO en dc404cf. La barrera verifica el cierre, no solo que el hash este en alguna parte: I1b (todo codigo que git declara tiene entrada en done[], o la cubre su familia: P3 cubre P3.1; antes C53 -> 268e0c7 pasaba por estar dado de alta como P6.9), I5 (el commit citado nombra el id o toco el archivo de la evidencia; antes bastaba el hash, que es lo que dejaba colgarse de un commit ajeno), I6 (item done exige cierre registrado o VEREDICTO escrito) e I7. El parser lee el codigo del parentesis FINAL del asunto (solo el final: en medio de la prosa no declara cierre). El mensaje decia \"60 pendientes\" (era items.length, el total); ahora lista los pendientes reales: \"ledger OK: 4 pendientes (P6.7, P6.12, P6.14, P6.15)\". NO se hizo unico `done[].id`, y se documenta por que en el propio guard: es el CODIGO del hallazgo y un arreglo por tandas lo repite legitimamente (medido: fix(C54) x2, test(C40,C41) x3); unico es el par (id, commit) = 0 repetidos en 119 entradas. Prueba de mutacion en tests/taskLedgerGuard.test.ts (11 casos, uno por invariante); por tenerla, el guard sale de .task/guard-proof-baseline.json (el trinquete P2.4 solo encoge). Medicion que lo respalda: con los datos anteriores la barrera endurecida devuelve 12 fallos y exit 1; con los reparados, exit 0. CORRECCION DE RUMBO: el informe pedia pasar los cierres por veredicto a `decision`; al hacerlo cayo tests/decisionVerdictGuard.test.ts (CONGELADO), que exige lo contrario y explica por que: `decision` es una decision ABIERTA y los veredictos resueltos van en `done` citando su motivo. Reclasificar los reabria. Lo que se quito fue el commit ajeno, no el estado. decisionVerdictGuard: intacto. DoD: node scripts/task-ledger.mjs check -> exit 0.",
       "origen": "auditoria"
     },
     {
       "id": "P6.15",
       "titulo": "Datos del ledger: duplicados en done[], cierres colgados, P0.1 y la fecha",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-09-23: 6 ids duplicados en done[] (C40/C41 x3, C42, C8, C54, C55, C21 x2; ej. C54 aparece en f3c507a \"paridad de normalizeForMatch\" y en 6034236 \"utilidades de texto unicas\"); 8 items cuyo commit no los nombra (P3.1/P3.2/P3.3 -> 670c238 \"fix(P2.1+P3)\"; P4.11/P4.12/P4.14/P6.5/P6.8 -> e0d5a1c \"cierre de P1.5\"); P0.1 cita \".task/ledger.json\", que no existe (la ruta real es plans/ledger.json, la que usan AGENTS.md y el guard); `updated` desfasado respecto a HEAD. HALLAZGO ADICIONAL (no estaba en la auditoria): P0.1, P0.2 y P0.3 estan estado done en items[] SIN ninguna entrada en done[]: cierre sin ningun registro. REQUIERE DECISION DEL USUARIO: 7 items se cerraron por veredicto (FALSO POSITIVO / NO APLICA / DESCARTADO POR DECISION) y el guard les exige commit (scripts/task-ledger.mjs:150), que es justo lo que les hizo colgarse de uno ajeno; pasarlos al estado `decision` -que el guard declara en ESTADOS y hoy usa 0 veces- es reescribir cierres ANTERIORES a esta sesion y por eso no se hace sin autorizacion explicita.",
+      "estado": "done",
+      "evidencia": "HECHO en dc404cf. Datos reparados en plans/ledger.json (119 cierres): (1) 6 items colgaban de un commit ajeno para poder estar en `done`: P4.11/P4.12/P4.14/P6.5/P6.8 de e0d5a1c (\"cierre de P1.5 verificado por el gate\") y P4.10 de un commit de criterio; sus entradas en done[] se retiran porque su cierre es el VEREDICTO ya escrito en su evidencia, no un commit. (2) C40/C41 era un id compuesto que no existe en git (los 3 commits declaran (C40,C41)): cada codigo pasa a ser entrada propia. (3) Cierres que faltaban por completo: C53 -> 268e0c7, T1 -> 91665a4 (T1 se renombro a P0.4 sin dejar rastro del codigo viejo) y P0.1/P0.2/P0.3 -> f23889d, que estaban `done` SIN ninguna entrada en done[]; su commit es el que creo el ledger, su guard y la regla de AGENTS.md, los tres artefactos que esos items citan como evidencia. (4) P0.1 citaba \".task/ledger.json\", que no existe: ahora cita plans/ledger.json. CUATRO DEFECTOS MAS que la auditoria no listaba y aparecieron al medir: P4.10 (item fantasma colgado de un commit de criterio), T1 (codigo renombrado e invisible), P0.1/P0.2/P0.3 (cierres sin registro) y C53 (registrado con el hash de P6.9, codigo inexistente). NO se toco el estado `decision` (hoy 0 entradas) por la razon de P6.14. DoD: node scripts/task-ledger.mjs check -> exit 0 con 4 pendientes reales.",
       "origen": "auditoria"
     },
     {
@@ -1035,6 +1035,16 @@
       "id": "P0.3",
       "commit": "f23889d",
       "titulo": "pendientes en el repo como fuente unica + guard"
+    },
+    {
+      "id": "P6.14",
+      "commit": "dc404cf",
+      "titulo": "Barrera del ledger: verifica el cierre (I1b/I5/I6), parser del parentesis final y mensaje honesto"
+    },
+    {
+      "id": "P6.15",
+      "commit": "dc404cf",
+      "titulo": "Datos del ledger: cierres por veredicto sin commit ajeno, codigos C53/T1, cierres de P0.1-3"
     }
   ]
 }
