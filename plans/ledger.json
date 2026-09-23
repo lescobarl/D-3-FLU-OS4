@@ -250,21 +250,21 @@
     {
       "id": "P5.2",
       "titulo": "sampleRate = 48000 quemado (~12 modulos)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/asr/whisperRecognitionEngine.js:70",
       "origen": "auditoria"
     },
     {
       "id": "P5.3",
       "titulo": "maxTokens literales en logica (1800/900/2200/3000)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/ai/aiServiceBase.ts:349,365,385,430,482",
       "origen": "auditoria"
     },
     {
       "id": "P5.4",
       "titulo": "temperature || 0.7, max_tokens 1000/500/300",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/services/deepseek.ts:200,201,285,286",
       "origen": "auditoria"
     },
@@ -818,6 +818,21 @@
       "id": "P3.3",
       "commit": "670c238",
       "titulo": "logCaughtError sin contexto de excepcion (108 sitios)"
+    },
+    {
+      "id": "P5.2",
+      "commit": "6e0ba22",
+      "titulo": "sampleRate = 48000 quemado (~12 modulos)"
+    },
+    {
+      "id": "P5.3",
+      "commit": "6e0ba22",
+      "titulo": "maxTokens literales en logica (1800/900/2200/3000)"
+    },
+    {
+      "id": "P5.4",
+      "commit": "6e0ba22",
+      "titulo": "temperature || 0.7, max_tokens 1000/500/300"
     }
   ]
 }
