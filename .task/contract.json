@@ -1,21 +1,20 @@
 {
   "id": "P6.6",
   "mode": "full",
-  "task": "P6.6 paso 5/5 - trinquete de tamano de god-files, registrado y congelado",
-  "base": "56d054b3ec0ee13e379f05a6ec8e03546b3e4b99",
-  "objective": "Cerrar P6.6 con el trinquete que impide que lo extraido vuelva: tests/godFileSizeGuard.test.ts mide los cuatro god-files con techos exactos (shrink-only), trae prueba de detector por los dos lados y detecta tambien el techo que se queda flojo. Registrado en lint:guards y congelado por hash en .task/frozen.json. Sin el, un bloque extraido podria volver a App.tsx sin que nadie lo note.",
+  "task": "P6.6 cierre - ledger, unica fuente de cierres",
+  "base": "cc92168ad559c2023467c9f4c5112e1eab991ac1",
+  "objective": "Registrar el cierre de P6.6 en plans/ledger.json (append-only): estado done, evidencia medida y done[] con el commit de cierre. Sin esto el ledger y git se desincronizan y taskLedgerGuard se pone rojo.",
   "allow": [
-    "tests/**",
-    "package.json",
+    "plans/**",
     ".task/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "maxFiles": 4,
-  "maxLines": 160,
-  "dod": "npx tsc -b",
-  "guard": "npx vitest run tests/godFileSizeGuard.test.ts tests/guardMutationGuard.test.ts tests/hygieneIndicatorsGuard.test.ts --reporter=dot",
+  "maxFiles": 3,
+  "maxLines": 60,
+  "dod": "node scripts/task-ledger.mjs check",
+  "guard": "npx vitest run tests/taskLedgerGuard.test.ts tests/decisionVerdictGuard.test.ts tests/plansProcessArtifactsGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }
