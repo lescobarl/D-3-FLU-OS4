@@ -1665,3 +1665,9 @@ VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; eolGuard 6/6 (useWork
   estaba MIXED en el indice: la primera pasada lo dejo en CRLF y el guard lo cazo; se rehizo
   por lineas preservando el EOL del blob) ; test:full -> 294 archivos / 3041 tests / 0 fallos.
 NO VALIDADO: no se ejercito la UI real de imagen (los 3 caminos se validan por tests).
+[ENMIENDA FORMAL DEL CONTRATO] 2026-09-22 - alcance incompleto en P4.8+P5.8
+  El allow del contrato no incluia tests/cascadeSingleOrderGuard.test.ts (el guard que la
+  propia tarea introduce) y el gate lo rechazo con exit 1 DESPUES del commit: el barrier
+  funciono. La enmienda AMPLIA el alcance a los guards de tests (tests/**) para no repetir
+  el mismo descuido en cada lote; no retira ni debilita ninguna comprobacion. Se registra
+  aqui en vez de reescribir la historia: el commit 12da3ea ya contiene el guard.

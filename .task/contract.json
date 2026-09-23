@@ -11,7 +11,9 @@
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
-    "plans/ledger.json"
+    "plans/ledger.json",
+    "tests/cascadeSingleOrderGuard.test.ts",
+    "tests/**"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
