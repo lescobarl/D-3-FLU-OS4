@@ -70,10 +70,9 @@
     {
       "id": "P1.6",
       "titulo": "Indice muerto minutes.timestamp; stores() sin revision/deleted",
-      "estado": "todo",
-      "evidencia": "src/core/db/fluDatabase.ts:567",
-      "origen": "auditoria",
-      "noVerificado": true
+      "estado": "done",
+      "evidencia": "CERRADO commit 03a7172. Indice muerto minutes.timestamp (arrastrado desde v3, sin consultas: la unica real es orderBy(\"sequence\")) eliminado con Dexie v23 (stores({minutes: \"id, sequence\"})). MIGRACION PROBADA con fake-indexeddb: se siembra el esquema v22 con una minuta, se reabre con FluDatabase y se comprueba que la fila SOBREVIVE, que timestamp DESAPARECE y que sequence PERMANECE. Guard nuevo tests/minutesDeadIndexPruneGuard.test.ts (4 tests). Gate: metrica 1->0 (esquema EFECTIVO, lee la ultima declaracion: la v3 historica no cuenta), guard base=ROJO actual=VERDE, exit 0. Segunda parte del item (stores() sin revision/deleted): EVALUADA Y RESUELTA COMO NO - indexar un booleano tiene selectividad nula y coste de escritura por put; el patron del repo es filtrar en JS tras leer (getAuditLogs). Decision razonada, no olvido.",
+      "origen": "auditoria"
     },
     {
       "id": "P1.7",
@@ -913,6 +912,11 @@
       "id": "P1.2",
       "commit": "ea91645",
       "titulo": "Minutas: un solo publicador hacia integrationStore"
+    },
+    {
+      "id": "P1.6",
+      "commit": "03a7172",
+      "titulo": "minutes: indice muerto timestamp eliminado (migracion probada)"
     }
   ]
 }
