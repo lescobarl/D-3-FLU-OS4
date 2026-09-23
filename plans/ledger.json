@@ -309,8 +309,8 @@
     {
       "id": "P6.1",
       "titulo": "6 window.__fluHandle* en bundle sin gate DEV",
-      "estado": "todo",
-      "evidencia": "src/App.tsx:1564,3507,3581,3607,3660,3773",
+      "estado": "decision",
+      "evidencia": "FALSO POSITIVO verificado: 4 de los 6 (Diary/Note/Shopping/AgendaCommand) son el despacho real (App.tsx:1157 `const w = window` + 1171-1194 lee w.__fluHandle*Text); gatearlos rompe produccion. Solo ConocerFlu/DeviceAction estaban huerfanos (0 lectores en src/ ni tests/e2e) y pasan a DEV via App.exposeDevHook. Guard: tests/devGlobalsGuard.test.ts (mutacion verificada).",
       "origen": "auditoria"
     },
     {
@@ -323,8 +323,8 @@
     {
       "id": "P6.3",
       "titulo": "window.FLU_CONFIG expuesto sin gate",
-      "estado": "todo",
-      "evidencia": "src/main.tsx:16",
+      "estado": "done",
+      "evidencia": "src/main.tsx:16 -> window.FLU_CONFIG ahora dentro de if (import.meta.env.DEV); 0 lectores en src/",
       "origen": "auditoria"
     },
     {
@@ -778,6 +778,16 @@
       "id": "P5.1",
       "commit": "12718c9",
       "titulo": "Fallback wake word 'FLU' fuera de config"
+    },
+    {
+      "id": "P6.3",
+      "commit": "34674e9",
+      "titulo": "window.FLU_CONFIG expuesto sin gate"
+    },
+    {
+      "id": "P6.1",
+      "commit": "34674e9",
+      "titulo": "6 window.__fluHandle* en bundle sin gate DEV"
     }
   ]
 }
