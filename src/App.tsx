@@ -58,7 +58,7 @@ import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
 import { playSong, pauseMusic, stopMusic, isMusicPlaying } from './services/musicPlayer';
-import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from './services/aiServiceFactory';
+import { getPreferredAIProvider, setPreferredAIProvider } from './services/aiServiceFactory';
 import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
@@ -206,6 +206,7 @@ import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile }
 import { logCaughtError } from './lib/caughtError';
 import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
+import { isAIProvider, isBunnyComponent } from './app/appTypeGuards';
 
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
@@ -233,29 +234,6 @@ const FluSystemTabView = lazy(() => import('./components/FluSystemTabView'));
 // Si falla, no afecta el resto del contrato (try/catch en el caller).
 // ============================================================
 
-/**
- * Miembros válidos de BunnyComponent. El Record tipado obliga a listar todos
- * los componentes del tipo: es la fuente runtime del guard (sin lista paralela
- * sin tipar) y mantiene el parámetro real de ctx.setComponentColor.
- */
-const BUNNY_COMPONENTS: Record<BunnyComponent, true> = {
-    Bunny_full: true,
-    Bunny_body: true,
-    Bunny_cap: true,
-    Bunny_pants: true,
-    Bunny_face: true,
-    Bunny_eyes: true,
-    Bunny_glasses: true,
-    Bunny_ears: true,
-};
-
-function isBunnyComponent(value: string): value is BunnyComponent {
-    return Object.prototype.hasOwnProperty.call(BUNNY_COMPONENTS, value);
-}
-
-function isAIProvider(value: string): value is AIProvider {
-    return (AI_PROVIDERS as readonly string[]).includes(value);
-}
 
 interface ApplyConfigContext {
     branding: ReturnType<typeof useEnhancedBranding>;

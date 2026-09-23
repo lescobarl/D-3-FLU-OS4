@@ -1,13 +1,12 @@
 {
   "id": "P6.6",
   "mode": "full",
-  "task": "P6.6 paso 1/N - sacar las rutas de tab de App.tsx",
-  "base": "74d173f2927188212f9e68f01dbe202a1abe75b8",
-  "objective": "Empezar el troceo de los god files por el bloque con menos acoplamiento: RightTab/TAB_ROUTES/DEFAULT_TAB/tabFromPath/pathForTab salen de App.tsx a src/app/tabRoutes.ts (logica pura, 0 imports y 0 dependencias del componente), con test propio que antes no existia. Ledger de P6.6 a in_progress con la medicion completa.",
+  "task": "P6.6 paso 2/N - guardas de tipo de App.tsx",
+  "base": "4fd661069750a62371a0f80fb340314ef4498854",
+  "objective": "Sacar de App.tsx el bloque de guardas de tipo (BUNNY_COMPONENTS, isBunnyComponent, isAIProvider) a src/app/appTypeGuards.ts, con test propio derivado del catalogo. Se conserva privado BUNNY_COMPONENTS (fuente runtime) y se retira el import de tipo que quedaba sin uso.",
   "allow": [
     "src/**",
     "tests/**",
-    "plans/**",
     ".task/**"
   ],
   "ignore": [
@@ -17,6 +16,6 @@
   "maxFiles": 8,
   "maxLines": 260,
   "dod": "npx tsc -b",
-  "guard": "npx vitest run tests/tabRoutes.test.ts tests/localStorageGatewayGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/appTypeGuards.test.ts tests/tabRoutes.test.ts --reporter=dot",
   "guardExpect": "green"
 }
