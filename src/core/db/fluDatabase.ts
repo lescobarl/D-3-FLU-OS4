@@ -531,6 +531,147 @@ export interface BrowserProfileRecord {
 }
 
 // -----------------------------------------------------------
+// Esquema Dexie - FUENTE UNICA de la lista de tablas
+// -----------------------------------------------------------
+/**
+ * El esquema se declara UNA vez, como datos. De aqui salen dos cosas:
+ *   - la cadena `this.version(n).stores(...)` que aplica Dexie, y
+ *   - los handles `this.<tabla>`, DERIVADOS (no se enumeran a mano).
+ *
+ * Antes la lista de tablas estaba escrita tres veces (campos tipados, llamadas
+ * `this.table(...)` y el esquema) y las tres podian divergir en silencio: olvidar
+ * un `this.table()` dejaba `fluDb.<tabla>` a undefined en runtime sin que
+ * TypeScript dijera nada (los campos van declarados con `!`). Ahora la lista se
+ * escribe una sola vez aqui. Los campos tipados de la clase siguen existiendo
+ * (son el tipo que consume el resto del codigo) y el guard los contrasta con esto.
+ *
+ * `null` = eliminar la tabla (semantica de Dexie). Cada version es inmutable:
+ * el historico se conserva tal cual y solo se añade al final.
+ */
+const DEXIE_VERSIONS: ReadonlyArray<{
+    version: number;
+    stores: Record<string, string | null>;
+}> = [
+    { version: 3, stores: {
+        auditLog: 'id, action, entity, timestamp, [entity+entityId]',
+        conversations: 'id, role, timestamp, speakerId',
+        minutes: 'id, timestamp, sequence',
+        voiceProfiles: 'id, label, speakerId, timestamp',
+        sessionState: 'id, key',
+    } },
+    // v4: Agregar tabla brandingConfig para Branding Inteligente por Temporalidad
+    { version: 4, stores: {
+        // Hereda todas las tablas de v3 (Dexie las preserva automáticamente)
+        brandingConfig: 'id, key, timestamp',
+    } },
+    // v5: Agregar tablas de Fase 2 — Memoria y recordatorios (B1/B4/B10)
+    { version: 5, stores: {
+        reminders: 'id, status, dueAt, personId, createdAt',
+        shoppingItems: 'id, checked, personId, createdAt',
+    } },
+    // v6: Agregar tablas de Fase 3 — Multi-usuario (A3/A4/A5/B9/F5)
+    { version: 6, stores: {
+        participants: 'id, name, role, birthday, createdAt',
+        materiaGris: 'id, participantId, createdAt',
+    } },
+    // v7: Agregar tablas de Fase 4 — Hábitos y metas (Módulo G)
+    { version: 7, stores: {
+        goals: 'id, participantId, status, category, createdAt',
+        goalCheckIns: 'id, goalId, participantId, date, createdAt',
+    } },
+    // v8: Agregar tabla de Fase 5 — Bienestar/Ánimo (Módulo H)
+    { version: 8, stores: {
+        moodCheckIns: 'id, participantId, date, createdAt',
+    } },
+    // v9: Agregar tablas de Fase 6 — Contactos y Diario personal (Módulos I y J)
+    { version: 9, stores: {
+        contacts: 'id, name, birthday, createdAt',
+        diaryEntries: 'id, date, createdAt',
+    } },
+    // v10: Agregar tablas de catálogo dinámico (Fase 1 — 1A ambientes, 1B paletas)
+    { version: 10, stores: {
+        ambientes: 'id, nombre, createdAt',
+        paletas: 'id, name, createdAt',
+    } },
+    // v11: Agregar tabla de horario de clases (Pizarrón)
+    { version: 11, stores: {
+        horario: 'id, dia, materia, createdAt',
+    } },
+    // v12: Agregar tabla del motor temporal genérico (alarmas + temporizadores)
+    { version: 12, stores: {
+        temporalItems: 'id, kind, status, nextAt, createdAt',
+    } },
+    // v13: Agregar tabla de perfiles de comunicación por persona (FASE P)
+    { version: 13, stores: {
+        communicationProfiles: 'id, participantId, createdAt',
+    } },
+    // v14: Agregar tabla de estados de onboarding por usuario (multiusuario)
+    { version: 14, stores: {
+        onboardingStates: 'id, updatedAt',
+    } },
+    // v15: Agregar tabla de perfiles del navegador curado (Punto 2)
+    { version: 15, stores: {
+        browserProfiles: 'id, participantId, createdAt',
+    } },
+    // v16: Agregar tabla de sitios del catálogo de búsqueda (F2)
+    { version: 16, stores: {
+        searchSites: 'id, dominio, createdAt',
+    } },
+    // v17: Agregar tabla de notas del pizarrón consolidado (listado de notas)
+    { version: 17, stores: {
+        notes: 'id, done, personId, createdAt',
+    } },
+    // v18: Aislar la conversación por usuario (participantId indexado).
+    { version: 18, stores: {
+        conversations: 'id, role, timestamp, speakerId, participantId',
+    } },
+    // v19: Aislar temporales por usuario (personId indexado).
+    { version: 19, stores: {
+        temporalItems: 'id, kind, status, nextAt, createdAt, personId',
+    } },
+    // v20: Historial de documentos/imágenes generados o cargados por usuario.
+    { version: 20, stores: {
+        documents: 'id, kind, formato, createdAt, personId',
+    } },
+    // v21: Calendario UNIFICADO — alarma/recordatorio/cita/junta/clase en una
+    // sola tabla. El color se deriva en LECTURA (FLU_CONFIG.agenda.colors),
+    // no se guarda. Los datos legacy (reminders/temporal/horario) ya no se
+    // migran: la tabla `agenda` es la única fuente.
+    { version: 21, stores: {
+        agenda: 'id, kind, status, personId',
+    } },
+    // v22: ELIMINAR las tablas legacy. La agenda unificada (v21) es la unica
+    // fuente; reminders/horario/temporalItems quedaban declaradas y sin uso.
+    { version: 22, stores: {
+        reminders: null,
+        horario: null,
+        temporalItems: null,
+    } },
+    // v23: ELIMINAR el indice muerto minutes.timestamp. Ninguna consulta usa
+    // orderBy/where sobre `timestamp` en minutas (la unica consulta real es
+    // orderBy("sequence"), en useMinuteKnowledge). El indice arrastraba desde v3:
+    // solo ocupaba espacio y hacia creer que habia consultas por fecha. Dexie
+    // borra el indice conservando las filas (verificado con fake-indexeddb).
+    { version: 23, stores: {
+        minutes: 'id, sequence',
+    } },
+];
+
+/** Tablas resultantes del esquema: altas menos bajas, en orden de aparicion. */
+export function schemaTableNames(
+    versions: ReadonlyArray<{ stores: Record<string, string | null> }> = DEXIE_VERSIONS,
+): string[] {
+    const names = new Set<string>();
+    for (const { stores } of versions) {
+        for (const [name, spec] of Object.entries(stores)) {
+            if (spec === null) names.delete(name);
+            else names.add(name);
+        }
+    }
+    return [...names];
+}
+
+// -----------------------------------------------------------
 // Database Class
 // -----------------------------------------------------------
 export class FluDatabase extends Dexie {
@@ -561,153 +702,16 @@ export class FluDatabase extends Dexie {
     constructor() {
         super('flu-os3');
 
-        this.version(3).stores({
-            auditLog: 'id, action, entity, timestamp, [entity+entityId]',
-            conversations: 'id, role, timestamp, speakerId',
-            minutes: 'id, timestamp, sequence',
-            voiceProfiles: 'id, label, speakerId, timestamp',
-            sessionState: 'id, key',
-        });
+        // El esquema vive en DEXIE_VERSIONS (arriba): fuente unica. Aqui solo se
+        // aplica y se derivan los handles; no se enumeran tablas a mano.
+        for (const { version, stores } of DEXIE_VERSIONS) {
+            this.version(version).stores(stores);
+        }
 
-        // v4: Agregar tabla brandingConfig para Branding Inteligente por Temporalidad
-        this.version(4).stores({
-            // Hereda todas las tablas de v3 (Dexie las preserva automáticamente)
-            brandingConfig: 'id, key, timestamp',
-        });
-
-        // v5: Agregar tablas de Fase 2 — Memoria y recordatorios (B1/B4/B10)
-        this.version(5).stores({
-            reminders: 'id, status, dueAt, personId, createdAt',
-            shoppingItems: 'id, checked, personId, createdAt',
-        });
-
-        // v6: Agregar tablas de Fase 3 — Multi-usuario (A3/A4/A5/B9/F5)
-        this.version(6).stores({
-            participants: 'id, name, role, birthday, createdAt',
-            materiaGris: 'id, participantId, createdAt',
-        });
-
-        // v7: Agregar tablas de Fase 4 — Hábitos y metas (Módulo G)
-        this.version(7).stores({
-            goals: 'id, participantId, status, category, createdAt',
-            goalCheckIns: 'id, goalId, participantId, date, createdAt',
-        });
-
-        // v8: Agregar tabla de Fase 5 — Bienestar/Ánimo (Módulo H)
-        this.version(8).stores({
-            moodCheckIns: 'id, participantId, date, createdAt',
-        });
-
-        // v9: Agregar tablas de Fase 6 — Contactos y Diario personal (Módulos I y J)
-        this.version(9).stores({
-            contacts: 'id, name, birthday, createdAt',
-            diaryEntries: 'id, date, createdAt',
-        });
-
-        // v10: Agregar tablas de catálogo dinámico (Fase 1 — 1A ambientes, 1B paletas)
-        this.version(10).stores({
-            ambientes: 'id, nombre, createdAt',
-            paletas: 'id, name, createdAt',
-        });
-
-        // v11: Agregar tabla de horario de clases (Pizarrón)
-        this.version(11).stores({
-            horario: 'id, dia, materia, createdAt',
-        });
-
-        // v12: Agregar tabla del motor temporal genérico (alarmas + temporizadores)
-        this.version(12).stores({
-            temporalItems: 'id, kind, status, nextAt, createdAt',
-        });
-
-        // v13: Agregar tabla de perfiles de comunicación por persona (FASE P)
-        this.version(13).stores({
-            communicationProfiles: 'id, participantId, createdAt',
-        });
-
-        // v14: Agregar tabla de estados de onboarding por usuario (multiusuario)
-        this.version(14).stores({
-            onboardingStates: 'id, updatedAt',
-        });
-
-        // v15: Agregar tabla de perfiles del navegador curado (Punto 2)
-        this.version(15).stores({
-            browserProfiles: 'id, participantId, createdAt',
-        });
-
-        // v16: Agregar tabla de sitios del catálogo de búsqueda (F2)
-        this.version(16).stores({
-            searchSites: 'id, dominio, createdAt',
-        });
-
-        // v17: Agregar tabla de notas del pizarrón consolidado (listado de notas)
-        this.version(17).stores({
-            notes: 'id, done, personId, createdAt',
-        });
-
-        // v18: Aislar la conversación por usuario (participantId indexado).
-        this.version(18).stores({
-            conversations: 'id, role, timestamp, speakerId, participantId',
-        });
-
-        // v19: Aislar temporales por usuario (personId indexado).
-        this.version(19).stores({
-            temporalItems: 'id, kind, status, nextAt, createdAt, personId',
-        });
-
-        // v20: Historial de documentos/imágenes generados o cargados por usuario.
-        this.version(20).stores({
-            documents: 'id, kind, formato, createdAt, personId',
-        });
-
-        // v21: Calendario UNIFICADO — alarma/recordatorio/cita/junta/clase en una
-        // sola tabla. El color se deriva en LECTURA (FLU_CONFIG.agenda.colors),
-        // no se guarda. Los datos legacy (reminders/temporal/horario) ya no se
-        // migran: la tabla `agenda` es la única fuente.
-        this.version(21).stores({
-            agenda: 'id, kind, status, personId',
-        });
-
-        // v22: ELIMINAR las tablas legacy. La agenda unificada (v21) es la unica
-        // fuente; reminders/horario/temporalItems quedaban declaradas y sin uso.
-        this.version(22).stores({
-            reminders: null,
-            horario: null,
-            temporalItems: null,
-        });
-
-        // v23: ELIMINAR el indice muerto minutes.timestamp. Ninguna consulta usa
-        // orderBy/where sobre `timestamp` en minutas (la unica consulta real es
-        // orderBy("sequence"), en useMinuteKnowledge). El indice arrastraba desde v3:
-        // solo ocupaba espacio y hacia creer que habia consultas por fecha. Dexie
-        // borra el indice conservando las filas (verificado con fake-indexeddb).
-        this.version(23).stores({
-            minutes: 'id, sequence',
-        });
-
-        this.auditLog = this.table('auditLog');
-        this.conversations = this.table('conversations');
-        this.minutes = this.table('minutes');
-        this.voiceProfiles = this.table('voiceProfiles');
-        this.sessionState = this.table('sessionState');
-        this.brandingConfig = this.table('brandingConfig');
-        this.shoppingItems = this.table('shoppingItems');
-        this.participants = this.table('participants');
-        this.materiaGris = this.table('materiaGris');
-        this.goals = this.table('goals');
-        this.goalCheckIns = this.table('goalCheckIns');
-        this.moodCheckIns = this.table('moodCheckIns');
-        this.contacts = this.table('contacts');
-        this.diaryEntries = this.table('diaryEntries');
-        this.ambientes = this.table('ambientes');
-        this.paletas = this.table('paletas');
-        this.communicationProfiles = this.table('communicationProfiles');
-        this.onboardingStates = this.table('onboardingStates');
-        this.browserProfiles = this.table('browserProfiles');
-        this.searchSites = this.table('searchSites');
-        this.notes = this.table('notes');
-        this.documents = this.table('documents');
-        this.agenda = this.table('agenda');
+        const handles = this as unknown as Record<string, unknown>;
+        for (const name of schemaTableNames()) {
+            handles[name] = this.table(name);
+        }
     }
 }
 

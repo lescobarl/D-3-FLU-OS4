@@ -1916,4 +1916,30 @@ Que se hizo:
      1 caracter no matcheaba y el guard habria pasado vacio (declared={} -> dead=[] trivial).
 MEDICION (ANTES -> DESPUES): claves declaradas en STORAGE_KEYS sin ninguna referencia en el codigo
   = 11 -> 0. El gate la recomputa en el worktree base.
-VERIFICACION: tsc -b -> 0 ; guard 6/6 ; npm run gate -> ver salida.
+VERIFICACION: tsc -b -> 0 ; guard 6/6 ; npm run gate -> ver salida.================================================================
+[CIERRE TECNICO] 2026-09-22 - P1.4: el esquema Dexie era la 3a copia de la lista de tablas
+================================================================
+Que era: la lista de las 23 tablas estaba escrita TRES veces en src/core/db/fluDatabase.ts:
+  (1) los campos tipados de la clase (23 x "x!: EntityTable<...>"),
+  (2) las llamadas "this.table('...')" una por tabla (23 lineas a mano),
+  (3) el esquema de versiones (DEXIE_VERSIONS de facto, v3..v23).
+Hoy las tres coincidian (verificado: 23/23/21 versiones), o sea que NO habia bug activo: el
+defecto es la DERIVA. Y la peor de las tres es la (2): olvidar un "this.table()" al a├▒adir una
+tabla deja "fluDb.<tabla>" a undefined en runtime, y TypeScript no avisa porque los campos van
+declarados con "!" (definite assignment). Un fallo silencioso a un paso de distancia.
+Que se hizo:
+  1. El esquema pasa a ser DATOS y FUENTE UNICA: const DEXIE_VERSIONS (version -> stores, 21
+     entradas v3..v23, con sus comentarios historicos). De ahi salen las dos cosas: la cadena
+     "this.version(n).stores(...)" y los handles "this.<tabla>", DERIVADOS en un bucle.
+     Se eliminan las 23 lineas de "this.table('...')" a mano.
+  2. schemaTableNames(): altas menos bajas (null) en orden de aparicion. Exportada para el guard.
+  3. Guard tests/dexieSingleSourceGuard.test.ts (6 tests):
+     - no vuelven las llamadas "this.table(literal)" a mano (la metrica);
+     - los campos tipados coinciden con el esquema (caza un campo olvidado);
+     - Dexie resuelve EXACTAMENTE las tablas del esquema: se ABRE la base con fake-indexeddb y
+       se compara con db.tables (contraste contra Dexie de verdad, no contra mi propio parseo);
+     - cada tabla del esquema tiene handle en runtime;
+     - anti-vacuidad + detector no decorativo (altas/bajas/realtas).
+MEDICION (ANTES -> DESPUES): llamadas "this.table(literal)" escritas a mano = 23 -> 0.
+VERIFICACION: tsc -b -> 0 ; guard P1.4 6/6 ; guards de P1.6 (minutes) y fluStorage 6/6 ;
+npm run gate -> ver salida.

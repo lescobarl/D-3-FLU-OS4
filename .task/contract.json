@@ -1,15 +1,17 @@
 {
-  "id": "P5.6-P5.7",
+  "id": "P1.4",
   "mode": "full",
-  "task": "P5.6-P5.7",
-  "base": "9374b3071c0c89400be77820eb7b8bdf60ce0c24",
-  "objective": "Cerrar la incoherencia del ledger: items en done marcados noVerificado, con evidencia obsoleta.",
+  "task": "P1.4",
+  "base": "8f8288b1f448bf172ae631ffce97e97d004dd3b5",
+  "objective": "El esquema Dexie es la fuente unica de la lista de tablas: los handles se derivan, no se enumeran a mano.",
   "allow": [
+    "src/core/db/fluDatabase.ts",
     "tests/**",
-    "plans/ledger.json",
+    "package.json",
     ".task/frozen.json",
     ".task/contract.json",
-    ".task/report"
+    ".task/report",
+    "plans/ledger.json"
   ],
   "ignore": [
     "scripts/task-gate*.mjs",
@@ -18,17 +20,17 @@
   ],
   "maxFiles": 40,
   "maxLines": 1500,
-  "dod": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/decisionVerdictGuard.test.ts --reporter=dot",
+  "dod": "npx tsc -b && npx vitest run tests/dexieSingleSourceGuard.test.ts tests/minutesDeadIndexPruneGuard.test.ts tests/fluStorage.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/dexieSingleSourceGuard.test.ts --reporter=dot",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Items en estado done marcados noVerificado (cierre sin verificar): 2 -> 0.",
+    "statement": "Llamadas this.table(literal) escritas a mano en fluDatabase.ts (la lista paralela al esquema): 23 -> 0.",
     "metric": {
-      "command": "node -e \"const l=require('./plans/ledger.json');console.log(l.items.filter(i=>i.estado==='done'&&i.noVerificado===true).length)\"",
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/core/db/fluDatabase.ts','utf8');const m=s.match(/this[.]table[(]'[^']+'[)]/g);console.log(m?m.length:0)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/decisionVerdictGuard.test.ts"
+      "tests/dexieSingleSourceGuard.test.ts"
     ]
   }
 }
