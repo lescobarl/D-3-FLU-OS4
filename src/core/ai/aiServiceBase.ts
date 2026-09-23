@@ -17,7 +17,7 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { GENERATION_TIMEOUT_MS, VALID_VISUAL_TIPOS } from '../config/appConfig';
+import { GENERATION_TIMEOUT_MS, TEXT_TOKEN_BUDGETS, VALID_VISUAL_TIPOS } from '../config/appConfig';
 import { buildMinuteSystemPrompt } from './prompts';
 import {
     buildMapPrompt,
@@ -346,7 +346,7 @@ export abstract class BaseAIService implements IAIService {
                 const singlePrompt = chunks.length
                     ? buildSingleAnalysisPrompt(chunks.join('\n\n'), ctx, language)
                     : buildSingleAnalysisPrompt('(documento sin texto extraído)', ctx, language);
-                const raw = await this.completeText({ system, prompt: singlePrompt, maxTokens: 1800 });
+                const raw = await this.completeText({ system, prompt: singlePrompt, maxTokens: TEXT_TOKEN_BUDGETS.single });
                 const parsed = safeParseJson(raw);
                 return applyReduceToContract(base, {
                     resumen: String(parsed?.resumen || base.resumen),
@@ -362,7 +362,7 @@ export abstract class BaseAIService implements IAIService {
                     const raw = await this.completeText({
                         system,
                         prompt: buildMapPrompt(chunks[i], i + 1, chunks.length, ctx, language),
-                        maxTokens: 900,
+                        maxTokens: TEXT_TOKEN_BUDGETS.mapChunk,
                     });
                     const parsed = safeParseJson(raw);
                     partials.push({
@@ -382,7 +382,7 @@ export abstract class BaseAIService implements IAIService {
                 const raw = await this.completeText({
                     system,
                     prompt: buildReducePrompt(partials, ctx, language),
-                    maxTokens: 1800,
+                    maxTokens: TEXT_TOKEN_BUDGETS.reduce,
                 });
                 const parsed = safeParseJson(raw);
                 reduced = {
@@ -427,7 +427,7 @@ export abstract class BaseAIService implements IAIService {
                 '"errores_detectados":string[]}',
                 'Solo usa información presente en la estructura proporcionada; no inventes.',
             ].join('\n');
-            const raw = await this.completeText({ system, prompt, maxTokens: 2200 });
+            const raw = await this.completeText({ system, prompt, maxTokens: TEXT_TOKEN_BUDGETS.appAnalysis });
             const parsed = safeParseJson(raw);
             const screens: Record<string, unknown>[] = Array.isArray(parsed?.pantallas) ? parsed.pantallas : [];
             const flows: Record<string, unknown>[] = Array.isArray(parsed?.flujos) ? parsed.flujos : [];
@@ -479,7 +479,7 @@ export abstract class BaseAIService implements IAIService {
             const raw = await this.completeText({
                 system: buildGenerationSystemPrompt(language),
                 prompt: buildGenerationPrompt(payload, language),
-                maxTokens: 3000,
+                maxTokens: TEXT_TOKEN_BUDGETS.generation,
                 jsonMode: false,
                 timeoutMs: GENERATION_TIMEOUT_MS,
             });

@@ -7,6 +7,7 @@ import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { foldSpeakerKey, getVoiceIdentityConfig } from './speakerLabels.js'
 import { getPassiveBufferMs } from './micCapture.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 export const ROOM_REMATCH_STRICT = 0.85
 export const SHORT_UTTERANCE_HISTORICAL_MATCH = 0.7
@@ -74,7 +75,7 @@ export function trimAudioChunkBuffer(
   { minRetainMs = 0 } = {},
 ) {
   const limitMs = Number.isFinite(maxMs) ? maxMs : getPassiveBufferMs(config)
-  const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : 48000
+  const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE
   const minRetainSamples =
     Number.isFinite(minRetainMs) && minRetainMs > 0
       ? Math.floor(rate * (minRetainMs / 1000))
@@ -109,14 +110,14 @@ function countUtteranceWords(text = '') {
 export function isShortUtteranceContext({
   utteranceText = '',
   voicedSampleCount = 0,
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   thresholds = {},
 } = {}) {
   const maxWords = Number(thresholds.shortUtteranceMaxWords)
   const maxMs = Number(thresholds.shortUtteranceMaxMs)
   const wordCap = Number.isFinite(maxWords) && maxWords > 0 ? maxWords : 3
   const msCap = Number.isFinite(maxMs) && maxMs > 0 ? maxMs : 1500
-  const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : 48000
+  const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE
   const words = countUtteranceWords(utteranceText)
   const durationMs = voicedSampleCount > 0 ? (voicedSampleCount / rate) * 1000 : 0
   if (words > 0 && words < wordCap) return true
@@ -224,7 +225,7 @@ export function findShortUtteranceHistoricalMatch({
   thresholds = {},
   utteranceText = '',
   voicedSampleCount = 0,
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   preferSpeaker = '',
   lastSpeaker = '',
   effectiveSticky = '',

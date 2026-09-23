@@ -1,12 +1,13 @@
 {
-  "id": "P2.1+P3.1+P3.2+P3.3",
+  "id": "P5.2+P5.3+P5.4",
   "mode": "full",
-  "task": "P2.1+P3 - todo catch registra la excepcion con su contexto",
-  "base": "ac94a6724e6a5ce52010125f1afcaaa40ad3d5e9",
-  "objective": "Ningun catch pierde la excepcion: registra en el registro central con contexto y excepcion, propaga, o declara la omision con ignorado:.",
+  "task": "P5.2+P5.3+P5.4",
+  "base": "7f132fca8fb221d4306fe3e271641fc9f9ea53cd",
+  "objective": "Un solo origen para sample rate, presupuestos de tokens y temperatura.",
   "allow": [
     "src/**",
-    "tests/catchSilenciosoGuard.test.ts",
+    "tests/configSingleSourceGuard.test.ts",
+    "package.json",
     ".task/frozen.json",
     ".task/contract.json",
     ".task/report",
@@ -17,9 +18,9 @@
     "scripts/audit-metric.mjs",
     "kilo.json"
   ],
-  "maxFiles": 120,
-  "maxLines": 4000,
-  "dod": "npx tsc -b && npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot",
-  "guard": "npx vitest run tests/catchSilenciosoGuard.test.ts --reporter=dot",
+  "maxFiles": 40,
+  "maxLines": 1500,
+  "dod": "npx tsc -b && npx vitest run tests/configSingleSourceGuard.test.ts --reporter=dot",
+  "guard": "npx vitest run tests/configSingleSourceGuard.test.ts --reporter=dot",
   "guardExpect": "green"
 }

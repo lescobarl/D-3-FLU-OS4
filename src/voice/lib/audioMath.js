@@ -6,6 +6,7 @@ import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelt
 import { buildWakeWordPattern } from './wakeWord.js'
 import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils'
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -1404,7 +1405,7 @@ export function formatEmbeddingPreview(vector = [], { head = 3, tail = 2 } = {})
  * Firma de voz: embedding ECAPA-TDNN (192-D) vía Transformers.js.
  * @param {Float32Array|number[]} samples — PCM filtrado del turno
  */
-export async function computeAudioSignature(samples = [], sampleRate = 48000) {
+export async function computeAudioSignature(samples = [], sampleRate = DEFAULT_SAMPLE_RATE) {
   if (!samples?.length) {
     return {
       vector: [],

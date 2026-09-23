@@ -4,6 +4,7 @@
 import { encodePcmChunk } from './pcmAudio.js'
 import { nowPerf } from './audioSegmentClock.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 const WORKLET_NAME = 'flu-mic-capture'
 
@@ -36,7 +37,7 @@ export async function wireMicCapturePipeline({
   source,
   onPcmBlock,
   pushSttPcm,
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   sttTargetRate = 16000,
   processEvery = 1,
 } = {}) {

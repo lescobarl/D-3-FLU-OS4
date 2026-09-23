@@ -8,6 +8,7 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
 import { compareCosineSignatures, normalizeEmbeddingVector, getFallbackSpeaker } from './speakerCore.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import {
   foldSpeakerKey,
   isAutoSpeakerLabel,
@@ -65,7 +66,7 @@ function resolveProductionSpeakerAtBoundary({
   preferSpeaker = '',
   utteranceText = '',
   voicedSampleCount = 0,
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   note,
 }) {
   const normalized = normalizeEmbeddingVector(vector)
@@ -410,7 +411,7 @@ function resolveRoomNearestNeighbor({
   effectiveSticky,
   utteranceText = '',
   voicedSampleCount = 0,
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   preferSpeaker = '',
   lastSpeaker = '',
   lastSignature = null,
@@ -541,7 +542,7 @@ export function resolveConversationSpeaker({
   preferSpeaker = '',
   thresholds = {},
   utteranceText = '',
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   maxAutoSpeakers = 0,
   atTurnBoundary = false,
   allowNewCluster = true,

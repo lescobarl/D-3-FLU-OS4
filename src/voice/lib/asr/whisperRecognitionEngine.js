@@ -19,6 +19,7 @@ import { createVoiceSegmenter, getAsrConfig, getAsrSampleRate } from './voiceAct
 import { createWhisperWasmTranscriber } from './whisperWasmTranscriber.js'
 import { isSpeechSynthesisSpeaking } from '../fluSpeech.js'
 import { logCaughtError } from '../../../lib/caughtError';
+import { DEFAULT_SAMPLE_RATE } from '../audioConstants.js'
 
 function downsample(samples, fromRate, toRate) {
   const input = samples instanceof Float32Array ? samples : new Float32Array(samples || [])
@@ -67,7 +68,7 @@ function buildResultEvent(transcript, isFinal) {
  * @param {{ sampleRate?: number, transcriber?: object, finalTranscriber?: object, interimTranscriber?: object }} [options]
  */
 export function createWhisperRecognitionEngine({
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   transcriber,
   finalTranscriber,
   interimTranscriber,

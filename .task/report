@@ -1495,3 +1495,32 @@ VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 290 arch
 NO VALIDADO: el comportamiento en runtime de los catch que antes solo hacian console.warn
   (ahora escriben por el relay central; en DEV la visibilidad de consola se mantiene
   porque logCaughtError hace console.error).
+================================================================
+[CIERRE TECNICO] 2026-09-22 - P5.2 + P5.3 + P5.4 (literales de configuracion)
+================================================================
+PROBLEMA (medido): el sample rate 48000 estaba quemado en 25 sitios de 15 modulos del
+pipeline de voz, ademas de en fluConfig.audio.sampleRate. Cambiar el valor en la config
+NO cambiaba los defaults quemados: dos origenes que se desincronizan en silencio. Los
+presupuestos de tokens (1800/900/2200/3000 en aiServiceBase, 1000/500/300 y
+temperature||0.7 en deepseek) estaban repartidos sin nombre ni catalogo.
+CAMBIO:
+  P5.2 - nuevo modulo HOJA src/voice/lib/audioConstants.js con DEFAULT_SAMPLE_RATE, y
+    fluConfig.audio.sampleRate deriva de el. Los 12 modulos consumidores usan la
+    constante (23 literales sustituidos, 12 imports nuevos). Modulo hoja a proposito:
+    al ser valor por defecto en firmas, un modulo con dependencias arriesgaba ciclos.
+  P5.3 - TEXT_TOKEN_BUDGETS en el catalogo (single/mapChunk/reduce/appAnalysis/
+    generation); aiServiceBase deja de llevar 5 numeros sueltos.
+  P5.4 - TEXT_TEMPERATURE_DEFAULT y TEXT_TOKEN_LIMITS (json/chat/brief) en el catalogo;
+    deepseek deja de llevar 3 temperature||0.7 y 4 max_tokens numericos.
+GUARD: tests/configSingleSourceGuard.test.ts. Reglas sobre el mecanismo: (1) 48000 no
+  puede aparecer en src/ fuera del dueno declarado; (2) fluConfig deriva del origen
+  unico; (3) aiServiceBase sin maxTokens numerico; (4) deepseek sin temperature||0.7 ni
+  max_tokens numerico. Registrado en lint:guards.
+INVARIANTE (falsable): reintroducido 48000 en speakerClusters.js -> guard ROJO nombrando
+  el archivo; restaurado -> 9/9 VERDE.
+VERIFICACION: tsc -b -> 0 ; eslint --max-warnings=0 -> 0 ; test:full -> 291 archivos /
+  3014 tests / 0 fallos (tras restaurar la clase EOL de appConfig.ts, que mi script habia
+  pasado de CRLF a mixed: cazado por eolGuard) ; eolGuard 6/6 ; gate -> exit 0.
+NO VALIDADO: no se ejecuto el pipeline de audio real (solo tests); el valor efectivo de
+  sampleRate no cambia (mismo 48000), por lo que el riesgo es de desincronizacion futura,
+  no de comportamiento actual.

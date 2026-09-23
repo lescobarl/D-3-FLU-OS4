@@ -12,6 +12,7 @@ import {
   resolveSpeakerNameFromId,
 } from './conversationRow.js'
 import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**
  * @param {number[]} vector — embedding 512-D (solo capa diarización)
@@ -25,7 +26,7 @@ export function resolveSpeakerIdentityFromVector(
     lastSignature = null,
     fallbackSpeaker = getFallbackSpeaker(),
     utteranceText = '',
-    sampleRate = 48000,
+    sampleRate = DEFAULT_SAMPLE_RATE,
     voicedSampleCount = 0,
     atTurnBoundary = true,
     allowNewCluster = false,

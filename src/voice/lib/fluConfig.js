@@ -1,6 +1,7 @@
 /** Configuración central de FLU. */
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**
  * Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
@@ -387,7 +388,7 @@ export const FLU_CONFIG = {
   },
   /** Audio del motor de voz: sample rate de captura (fuente única, sin hardcode). */
   audio: {
-    sampleRate: 48000,
+    sampleRate: DEFAULT_SAMPLE_RATE,
   },
   /** Escucha activa local (SpeechRecognition del navegador). */
   activeListen: {

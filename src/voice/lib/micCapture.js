@@ -2,6 +2,7 @@
  * Restricciones y ganancia del micrófono (config central, sin hardcode).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 export function getConversationAudioConfig(config = FLU_CONFIG) {
   return config.voiceIdentity?.capture?.conversationAudio || {}
@@ -64,7 +65,7 @@ export function getVoiceHoldMs(config = FLU_CONFIG) {
 }
 
 /** Ventanas de silencio en segmentAudio (hop ~20 ms). */
-export function getMaxSilenceWindowsForHold(_sampleRate = 48000, config = FLU_CONFIG) {
+export function getMaxSilenceWindowsForHold(_sampleRate = DEFAULT_SAMPLE_RATE, config = FLU_CONFIG) {
   const hopMs = 20
   const voiceHoldMs = getVoiceHoldMs(config)
   return Math.max(4, Math.ceil(voiceHoldMs / hopMs))

@@ -726,3 +726,33 @@ export function resolveFalVideoModel(): string {
     if (override) return override;
     return FALAI_CONFIG.VIDEO_MODEL;
 }
+
+/**
+ * Presupuestos de tokens de las llamadas de texto. Un solo origen para los
+ * limites que antes estaban quemados en la logica de aiServiceBase. (P5.3)
+ */
+export const TEXT_TOKEN_BUDGETS = {
+    /** Documento corto: una sola llamada de resumen. */
+    single: 1800,
+    /** Fase map: una llamada por chunk. */
+    mapChunk: 900,
+    /** Fase reduce: fusion de los parciales. */
+    reduce: 1800,
+    /** Analisis de estructura de app. */
+    appAnalysis: 2200,
+    /** Generacion de documento final. */
+    generation: 3000,
+} as const
+
+/** Temperatura por defecto de las llamadas de texto. (P5.4) */
+export const TEXT_TEMPERATURE_DEFAULT = 0.7
+
+/** Limites de tokens de los transportes de texto. (P5.4) */
+export const TEXT_TOKEN_LIMITS = {
+    /** Respuesta JSON estructurada. */
+    json: 1000,
+    /** Conversacion libre. */
+    chat: 500,
+    /** Respuesta breve. */
+    brief: 300,
+} as const

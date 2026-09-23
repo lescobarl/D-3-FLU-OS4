@@ -16,6 +16,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { createWhisperRecognitionEngine } from './asr/whisperRecognitionEngine.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**
  * Códigos de error de Chrome SpeechRecognition que degradan al motor local.
@@ -58,5 +59,5 @@ export function shouldUseLocalFallback(error) {
  * @returns {ReturnType<typeof createWhisperRecognitionEngine>} motor local.
  */
 export function createLocalRecognition() {
-  return createWhisperRecognitionEngine({ sampleRate: 48000 })
+  return createWhisperRecognitionEngine({ sampleRate: DEFAULT_SAMPLE_RATE })
 }

@@ -6,6 +6,7 @@ import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from './fluConfig.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from './embeddingFrames.js'
 import { normalizeEmbeddingVector } from './speakerCore.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 let modelBundlePromise = null
 let preloadError = null
@@ -75,7 +76,7 @@ export function getSpeakerEmbeddingModelStatus() {
   return { state: 'idle', modelId, dim: 512, backend: 'wavlm-sv' }
 }
 
-export async function computeSpeakerEmbedding(samples = [], sampleRate = 48000, cfg = getEmbeddingConfig()) {
+export async function computeSpeakerEmbedding(samples = [], sampleRate = DEFAULT_SAMPLE_RATE, cfg = getEmbeddingConfig()) {
   if (!samples?.length) return []
 
   if (typeof Worker !== 'undefined' && typeof window !== 'undefined') {

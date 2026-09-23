@@ -7,6 +7,7 @@ import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 let worker = null
 let seq = 0
@@ -202,7 +203,7 @@ function samplesFromPayload(payload = {}) {
   return new Float32Array(0)
 }
 
-async function embedAudioInternal(samples, sampleRate = 48000) {
+async function embedAudioInternal(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(samples)
   if (!sampleCount) return []
   const payload = {
@@ -240,7 +241,7 @@ function resolveIdentityIdle(vector, matchPayload, sampleRate, sourceLength) {
   )
 }
 
-export async function resolveSpeakerFromAudio(samples, sampleRate = 48000, matchPayload = {}) {
+export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMPLE_RATE, matchPayload = {}) {
   const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(samples)
   const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
   const fallbackName = matchPayload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
@@ -358,7 +359,7 @@ export function preloadVoiceIdWorker() {
   })
 }
 
-export async function embedAudioForDiarization(samples, sampleRate = 48000) {
+export async function embedAudioForDiarization(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   return embedAudioInternal(samples, sampleRate)
 }
 

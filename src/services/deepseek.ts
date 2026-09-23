@@ -16,7 +16,7 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
+import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { logCaughtError } from '../lib/caughtError';
 import type {
@@ -197,8 +197,8 @@ class DeepSeekService extends BaseAIService {
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: temperature || 0.7,
-                    max_tokens: 1000,
+                    temperature: temperature || TEXT_TEMPERATURE_DEFAULT,
+                    max_tokens: TEXT_TOKEN_LIMITS.json,
                     response_format: { type: 'json_object' }
                 }),
             });
@@ -282,8 +282,8 @@ class DeepSeekService extends BaseAIService {
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: temperature || 0.7,
-                    max_tokens: 500,
+                    temperature: temperature || TEXT_TEMPERATURE_DEFAULT,
+                    max_tokens: TEXT_TOKEN_LIMITS.chat,
                 }),
             });
 
@@ -356,8 +356,8 @@ Formato de respuesta (JSON):
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: temperature || 0.7,
-                    max_tokens: 300,
+                    temperature: temperature || TEXT_TEMPERATURE_DEFAULT,
+                    max_tokens: TEXT_TOKEN_LIMITS.brief,
                     response_format: { type: 'json_object' }
                 }),
             });
@@ -479,7 +479,7 @@ Formato de respuesta (JSON):
                 body: JSON.stringify({
                     model,
                     messages,
-                    max_tokens: 1000,
+                    max_tokens: TEXT_TOKEN_LIMITS.json,
                     response_format: { type: 'json_object' }
                 }),
             });
