@@ -395,6 +395,21 @@ de **0 nuevos**.
    verde) mientras existían **2** puntos de síntesis (`fluSpeech.js`,
    `src/services/localTts.ts`) — invisibles por mayúsculas y por delegación del motor.
 
+   **7.7.e — Clasificación pura: no la fuerces por el gate.** Si un item pide *clasificar* N
+   símbolos (no unificarlos), su métrica es "sin clasificar" y puede estar YA en 0 cuando el item
+   se abre: la clasificación se hizo en commits anteriores y el ledger nunca la cerró (item
+   fantasma). Compruébalo antes de escribir código (`node scripts/auditoria.mjs --only D0`). Dos
+   hechos aprendidos midiendo:
+   (1) el gate **copia** los `guardFiles` al worktree base. Un veredicto que vive *dentro* del
+   guard no distingue base de actual (métrica base=0 actual=0, y el guard pasa en base): el
+   veredicto tiene que vivir en el código medido, no en el guard.
+   (2) Sin reducción disponible, se cierra como **medición** (tabla por símbolo + comando
+   reproducible) citando el commit donde la clasificación aterrizó. Empujarlo por el gate produce
+   un hito cosmético que §7.2/§7.5 rechazan.
+   (3) Los catálogos y medidores (`scripts/auditoria.mjs`, `audit-metric.mjs`) **no** los corre el
+   gate: una clasificación que solo vive ahí es prosa, no barrera. Si lo que quieres es una
+   barrera, la lista tiene que estar donde el gate mira (`lint:guards`) y sobre el código medido.
+
 ## 8. CONTRATO DE TAREA Y VERIFICACIÓN POR COMANDO (anti-sustitución)
 
 Toda tarea se ejecuta contra un contrato escrito ANTES de tocar código. Sin contrato no se
