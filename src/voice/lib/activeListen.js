@@ -4,7 +4,7 @@
 import { cleanForSpeech, detectWakeIntroducedName, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG, getActiveListenConfig } from './fluConfig.js'
 import { nextAvailableSpeakerLabel } from './voiceIdentity.js'
-import { integrateMicPacket, mergeSpeechText, mergeMicChunks, readStreamDisplay, resolveCommitCapture, utterancesRelate, utterancesSameRevision } from './conversationStream.js'
+import { integrateMicPacket, mergeMicChunks, readStreamDisplay, resolveCommitCapture, utterancesRelate, utterancesSameRevision } from './conversationStream.js'
 
 export {
   advancePublishedDisplay,

@@ -651,15 +651,17 @@ export function useFluVoiceAssistant({
 
   // OS3 parity: if an external participantRef is provided, use it instead of creating a new instance.
   // This ensures voice commands (FLU_ADELANTE) and the UI button share the same participant state.
-  const fluParticipant = participantRef?.current
-    ? participantRef.current
-    : useFluParticipant({
-      apiKey,
-      language,
-      conversationActiveRef,
-      session,
-      getLogSnapshot: () => getParticipantLogSnapshotRef.current(),
-    })
+  // El hook SIEMPRE se invoca (orden de hooks estable): useFluParticipant no dispara
+  // efectos por si solo -- evaluar requiere llamar a la API que devuelve --, por lo que la
+  // instancia propia queda inerte cuando App.tsx inyecta la suya. No omitirlo condicionalmente.
+  const ownParticipant = useFluParticipant({
+    apiKey,
+    language,
+    conversationActiveRef,
+    session,
+    getLogSnapshot: () => getParticipantLogSnapshotRef.current(),
+  })
+  const fluParticipant = participantRef?.current ?? ownParticipant
   const fluParticipantRef = useRef(fluParticipant)
   fluParticipantRef.current = fluParticipant
 

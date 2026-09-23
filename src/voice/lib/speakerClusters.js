@@ -3,7 +3,6 @@
  * búsqueda por vecino más cercano, match histórico de frase corta y fusión.
  * Única fuente de estas operaciones; el resolver (speakerDiarization.js) las consume.
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { foldSpeakerKey, getVoiceIdentityConfig } from './speakerLabels.js'

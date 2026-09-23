@@ -28,6 +28,9 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'off',
+      'react-hooks/rules-of-hooks': 'error',
+      // exhaustive-deps: ~66 deps faltantes (deuda P7.4; no bloquea el gate).
+      'react-hooks/exhaustive-deps': 'off',
       'eqeqeq': ['warn', 'smart'],
     },
   },

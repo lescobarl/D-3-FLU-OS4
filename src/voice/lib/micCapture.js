@@ -7,7 +7,7 @@ export function getConversationAudioConfig(config = FLU_CONFIG) {
   return config.voiceIdentity?.capture?.conversationAudio || {}
 }
 
-export function useRoomMicCapture(config = FLU_CONFIG, { conversationActive = false, listening = false } = {}) {
+export function isRoomMicCapture(config = FLU_CONFIG, { conversationActive = false, listening = false } = {}) {
   const capture = config.voiceIdentity?.capture || {}
   if (capture.maxSensitivity) return true
   if (listening || conversationActive) return capture.captureRoomAudio !== false
@@ -19,7 +19,7 @@ export function getMicMediaConstraints(
   { conversationActive = false, listening = false } = {},
 ) {
   const audio = getConversationAudioConfig(config)
-  const room = useRoomMicCapture(config, { conversationActive, listening })
+  const room = isRoomMicCapture(config, { conversationActive, listening })
 
   return {
     echoCancellation: room ? (audio.echoCancellation ?? false) : true,
@@ -34,7 +34,7 @@ export function getMicCaptureGain(
 ) {
   const audio = getConversationAudioConfig(config)
   const gain = Number(audio.captureGain)
-  if (useRoomMicCapture(config, { conversationActive, listening })) {
+  if (isRoomMicCapture(config, { conversationActive, listening })) {
     return gain
   }
   return 1

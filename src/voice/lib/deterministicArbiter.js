@@ -145,10 +145,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   const {
     language = 'es',
     texts = null,
-    defaultOffsetMs,
     now,
-    defaultAlarmTimeOfDay,
-    defaultTimerMinutes,
   } = options || {}
   const normalizedTexts = Array.isArray(texts) && texts.length
     ? texts.map((t) => normalizeSpokenCommand(t))
