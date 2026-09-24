@@ -394,7 +394,8 @@
       "titulo": "npm run lint no lintea eslint (solo guards)",
       "estado": "done",
       "evidencia": "package.json:12",
-      "origen": "auditoria"
+      "origen": "auditoria",
+      "auditoria": "V19"
     },
     {
       "id": "P7.2",
@@ -513,7 +514,8 @@
       "titulo": "token helpers unificados: la tokenizacion vive solo en gameUtils.ts (auditoria #1)",
       "estado": "done",
       "origen": "propio",
-      "evidencia": "VEREDICTO: RESUELTO por 7792bde. Se intento cubrirlo antes con un guard y el detector sobreconto: delegar no es duplicar, y los falsos positivos medidos (rango \"C1-C8\", dos guards reclamando C1, datos T1/T2) lo descartaron hasta acotarlo a P#.#."
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde. Se intento cubrirlo antes con un guard y el detector sobreconto: delegar no es duplicar, y los falsos positivos medidos (rango \"C1-C8\", dos guards reclamando C1, datos T1/T2) lo descartaron hasta acotarlo a P#.#.",
+      "auditoria": "D5"
     },
     {
       "id": "P7.12",
@@ -570,6 +572,30 @@
       "estado": "done",
       "origen": "propio",
       "evidencia": "VEREDICTO: auditoria externa #11. La directiva no-await-in-loop de AsrLab.tsx resulto INERTE por dos motivos independientes: src/dev/** esta en los ignores de eslint.config.mjs y la regla no-await-in-loop no esta activada en la config. Se retiro la directiva y se dejo el porque en prosa. Cierra la clase con tests/eslintSuppressionGuard.test.ts: toda directiva eslint-disable* en src/ exige `-- motivo`. El detector distingue la directiva del literal `/eslint-disable/` que appAnalyzer.ts usa como patron, y tiene prueba de ello."
+    },
+    {
+      "id": "P7.20",
+      "titulo": "isAIProvider definido 2 veces con la misma logica (catch-all D0)",
+      "estado": "done",
+      "origen": "propio",
+      "auditoria": "D0",
+      "evidencia": "VEREDICTO: el medidor scripts/auditoria.mjs lo marcaba en su catch-all D0 (junto a 2 falsos positivos). MEDIDO: appTypeGuards.ts:32 y sharedConfig.ts:155 declaraban isAIProvider con la MISMA logica (includes sobre AI_PROVIDERS); la de sharedConfig es superset (acepta unknown + typeof). appTypeGuards ahora re-exporta del dueno. D0 pasa de 3 a 0."
+    },
+    {
+      "id": "P7.21",
+      "titulo": "catch-all D0: los .d.ts contaban como segunda definicion",
+      "estado": "done",
+      "origen": "propio",
+      "auditoria": "D0",
+      "evidencia": "VEREDICTO: de las 3 entradas de D0, 2 eran FALSOS POSITIVOS: whisperRecognitionEngine.d.ts y whisperWasmTranscriber.d.ts frente a sus .js hermanos. Un .d.ts DECLARA el simbolo que implementa su .js, no es una segunda definicion. El detector duplicateExportedSymbols los excluye ahora."
+    },
+    {
+      "id": "P7.22",
+      "titulo": "dos sistemas de seguimiento (sensor auditoria.mjs vs ledger) sin coser",
+      "estado": "done",
+      "origen": "propio",
+      "auditoria": "D0",
+      "evidencia": "VEREDICTO: RESUELTO: nuevo tests/auditLedgerSync.test.ts. Reparto explicito: auditoria.mjs es el SENSOR (HOY/META por id) y plans/ledger.json la unica fuente de ESTADO. El guard obliga a que todo hallazgo abierto del sensor tenga item de ledger no cerrado, y a que ningun item cerrado tenga su hallazgo por encima de META. Crosswalk documentado en el campo auditoria de los items (P7.1=V19, P7.11=D5, D0=P7.20/P7.21/P7.22)."
     }
   ],
   "done": [

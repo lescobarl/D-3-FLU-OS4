@@ -221,6 +221,10 @@ function duplicateExportedSymbols() {
   const re = /export\s+(?:async\s+)?(?:function|const|class)\s+([A-Za-z0-9_$]+)/
   const map = new Map() // name -> Set(archivo)
   for (const f of srcFiles) {
+    // Un .d.ts DECLARA el simbolo que implementa su .js hermano: no es una segunda
+    // definicion. Sin esto el catch-all D0 contaba createWhisperWasmTranscriber y
+    // createWhisperRecognitionEngine como duplicados (falsos positivos > 0).
+    if (/\.d\.[cm]?ts$/.test(f)) continue
     const seen = new Set()
     for (const line of readLines(f)) {
       const m = re.exec(line)

@@ -2,13 +2,11 @@
  * P6.6 - Guardas de tipo de la app (extraidas de App.tsx).
  *
  * BUNNY_COMPONENTS es la fuente runtime de la guarda (Record tipado: el
- * compilador obliga a listar todos los miembros) y las dos guardas son
- * predicados puros. BUNNY_COMPONENTS se queda privado.
+ * compilador obliga a listar todos los miembros). BUNNY_COMPONENTS se queda
+ * privado.
  */
 
 import type { BunnyComponent } from '../avatar/types/bunny';
-import { AI_PROVIDERS } from '../core/config/voiceConfigCatalog';
-import type { AIProvider } from '../services/aiServiceFactory';
 /**
  * Miembros válidos de BunnyComponent. El Record tipado obliga a listar todos
  * los componentes del tipo: es la fuente runtime del guard (sin lista paralela
@@ -29,6 +27,8 @@ export function isBunnyComponent(value: string): value is BunnyComponent {
     return Object.prototype.hasOwnProperty.call(BUNNY_COMPONENTS, value);
 }
 
-export function isAIProvider(value: string): value is AIProvider {
-    return (AI_PROVIDERS as readonly string[]).includes(value);
-}
+// isAIProvider se RE-EXPORTA: su dueno es sharedConfig.ts, donde vive el catalogo
+// AI_PROVIDERS. Estaba reimplementada aqui con la misma logica (la del dueno es
+// superset: acepta unknown y comprueba typeof); duplicacion real cazada por el
+// catch-all D0 y unificada en P7.20.
+export { isAIProvider } from '../core/config/sharedConfig';

@@ -101,3 +101,15 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo',
     expect(curatedAllowlistLiterals('CURATED_ALLOWLIST')).toBe(0);
   });
 });
+describe('P7.20 duplicacion - isAIProvider con un solo dueno', () => {
+  const DEFINICION = /export\s+function\s+isAIProvider\b/;
+  it('isAIProvider se define una sola vez en src', () => {
+    const defs = walk(SRC).filter((f) => DEFINICION.test(readFileSync(f, 'utf8'))).map(rel);
+    expect(defs, 'isAIProvider definido en varios sitios').toEqual(['src/core/config/sharedConfig.ts']);
+  });
+  it('appTypeGuards re-exporta en vez de redefinir', () => {
+    const g = readFileSync(join(ROOT, 'src/app/appTypeGuards.ts'), 'utf8');
+    expect(DEFINICION.test(g), 'appTypeGuards sigue definiendo isAIProvider').toBe(false);
+    expect(g).toContain("export { isAIProvider } from '../core/config/sharedConfig'");
+  });
+});
