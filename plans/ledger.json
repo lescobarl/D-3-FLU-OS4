@@ -1255,6 +1255,12 @@
       "commit": "a6011aa",
       "titulo": "sin aserciones no-null en src (guard nonNullAssertionGuard)",
       "evidencia": "tests/nonNullAssertionGuard.test.ts: fix(P6.11) saco las 51 aserciones no-null de src y dejo el guard. Se registra ahora porque su id vivia en el docstring y en el titulo describe del guard, pero nunca entro en done[]; C52 y C53 si lo estaban. Detectado por tests/taskLedgerReferenceGuard.test.ts."
+    },
+    {
+      "id": "C61",
+      "commit": "a7329fa",
+      "titulo": "el techo global de tests no falla por reloj bajo carga (era 15s)",
+      "evidencia": "vitest.config.ts: testTimeout 15_000 -> 120_000. MEDIDO: la suite mezcla guards de ms con guards que recorren el repo o lanzan subprocesos; en limpio, hookDepsRatchet 11.4s, jsReferenceGuard 8.8s, auditLedgerSync 5.8s, hygieneIndicators 4.6s, catchSilencioso 3.5s (reporter JSON). Bajo carga su latencia se multiplica: viteConfigNodeLoad, 1.6s en limpio, paso de 15s (~10x) y fallo con \"Test timed out in 15000ms\". El fallo no era de ningun guard: pasaban 5/5 en aislado. Se eligio el techo global y no un timeout por test porque en auditLedgerSync el spawnSync corre a nivel de MODULO (recoleccion), donde un timeout por test no llega. Prueba A/B: un test de 16s SIN timeout explicito pasa con 120_000 y falla con 15_000."
     }
   ]
 }
