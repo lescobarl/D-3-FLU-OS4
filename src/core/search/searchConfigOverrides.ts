@@ -44,6 +44,19 @@ export interface SearchConfigOverrides {
   dailyLimit?: number;
 }
 
+/**
+ * Rutas del proxy de busqueda: dueno UNICO del valor por DEFECTO.
+ * La fuente de verdad en runtime es FLU_CONFIG.browser.search.endpoints; esto es el
+ * fallback de la capa de consumo cuando la config no trae el campo. Antes el hook
+ * llevaba su propia copia literal (useWorkspaceSearch.ts:91-93); el guard
+ * searchEndpointSingleOwner existe para que esa copia no vuelva.
+ */
+export const SEARCH_ENDPOINT_DEFAULTS: Record<SearchResultType, string> = {
+  web: '/api/search/web',
+  images: '/api/search/images',
+  video: '/api/search/video',
+}
+
 /** Config de búsqueda resuelta (la forma que consume el hook). */
 export interface SearchRuntimeConfig {
   endpoints: Record<SearchResultType, string>;

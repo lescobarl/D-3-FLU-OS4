@@ -26,6 +26,7 @@ import {
     loadDailyUsage,
     mergeSearchConfig,
     saveDailyUsage,
+    SEARCH_ENDPOINT_DEFAULTS,
     type MergedSearchConfig,
     type SearchConfigOverrides,
     type SearchRuntimeConfig,
@@ -88,9 +89,9 @@ export function buildRuntimeConfig(): SearchRuntimeConfig {
     const groups = cfg.providers || {};
     return {
         endpoints: {
-            web: endpoints.web || cfg.endpoint || '/api/search/web',
-            images: endpoints.images || '/api/search/images',
-            video: endpoints.video || '/api/search/video',
+            web: endpoints.web || cfg.endpoint || SEARCH_ENDPOINT_DEFAULTS.web,
+            images: endpoints.images || SEARCH_ENDPOINT_DEFAULTS.images,
+            video: endpoints.video || SEARCH_ENDPOINT_DEFAULTS.video,
         },
         timeoutMs: cfg.timeoutMs || 8000,
         maxResultsByType: {
