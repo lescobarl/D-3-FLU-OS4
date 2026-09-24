@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # El ledger valida con `git cat-file -e` que cada commit C## existe y
+          # `git log` cuenta commits. Con el fetch-depth:1 por defecto el clon
+          # solo tiene 1 commit -> taskLedgerGuard falla en CI (pasaba en local).
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -49,6 +54,11 @@ jobs:
     needs: quality
     steps:
       - uses: actions/checkout@v4
+        with:
+          # El ledger valida con `git cat-file -e` que cada commit C## existe y
+          # `git log` cuenta commits. Con el fetch-depth:1 por defecto el clon
+          # solo tiene 1 commit -> taskLedgerGuard falla en CI (pasaba en local).
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
