@@ -39,7 +39,13 @@ jobs:
         if: failure()
         run: |
           npm run lint > /tmp/g.txt 2>&1 || true
-          echo "::error::GUARDS-B64 $(tail -c 5000 /tmp/g.txt | base64 -w0)"
+          grep -aE "FAIL|Assertion|Error|expected|Test Files|Tests |failed" /tmp/g.txt | tail -48 > /tmp/h.txt || true
+          i=0
+          while [ $i -lt 5 ]; do
+            part=$(sed -n "$((i*10+1)),$((i*10+10))p" /tmp/h.txt | base64 -w0)
+            if [ -n "$part" ]; then echo "::error::GB$i $part"; fi
+            i=$((i+1))
+          done
 
       - name: Puerta de tipos
         run: npm run typecheck
