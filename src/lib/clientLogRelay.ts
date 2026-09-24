@@ -10,7 +10,6 @@
 // ============================================================
 
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { logCaughtError } from './caughtError';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -20,6 +19,20 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 function syncEnabled(): boolean {
     return FLU_CONFIG.debug?.relayToServer !== false;
+}
+
+/**
+ * Reporta un fallo del PROPIO relay: consola y nada mas.
+ * Deliberadamente NO usa `logCaughtError`: esa via reenvia por el relay
+ * (caughtError.ts:42-43 -> relayLog), de modo que un fallo de entrega se convertia en
+ * una entrada nueva que reintentaba la entrega que acababa de fallar: bucle infinito.
+ */
+function reportOwnFailure(e: unknown): void {
+    try {
+        console.error('[catch] src/lib/clientLogRelay.ts', e);
+    } catch {
+        /* ignorado: la consola no esta disponible en este contexto */
+    }
 }
 
 function flush() {
@@ -34,11 +47,9 @@ function flush() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(batch),
-        }).catch((e: unknown) => { logCaughtError('[catch] src/lib/clientLogRelay.ts', e) });
+        }).catch((e: unknown) => reportOwnFailure(e));
     } catch (e) {
-    logCaughtError('[catch] src/lib/clientLogRelay.ts', e);
-        relayLog('WARN', 'catch', 'src/lib/clientLogRelay.ts');
-        // Silently ignore
+        reportOwnFailure(e);
     }
 }
 
