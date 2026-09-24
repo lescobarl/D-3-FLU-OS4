@@ -13,7 +13,14 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot } from './_helpers';
+import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding } from './_helpers';
+
+// Este spec NO valida el onboarding: su overlay se reabre async (estado
+// per-user en IndexedDB) y su backdrop intercepta clics. Se auto-omite para que
+// los flujos lleguen a ejecutarse de verdad.
+test.beforeEach(async ({ page }) => {
+    await autoSkipOnboarding(page);
+});
 
 const SHOTS_DIR = path.join(process.cwd(), 'reports', 'cita-agenda');
 fs.mkdirSync(SHOTS_DIR, { recursive: true });
@@ -24,7 +31,7 @@ test.describe('Bug #7 — cita para mañana a las 10 agendada y visible', () => 
     test('la frase real persiste la cita (mañana 10:00) y la muestra en el panel Hoy', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
-        await clearStore(page, 'reminders');
+        await clearStore(page, 'agenda');
 
         // Inserta la frase por el MISMO pipeline del voz (gate determinista).
         const reply = await page.evaluate(() => {
@@ -40,11 +47,11 @@ test.describe('Bug #7 — cita para mañana a las 10 agendada y visible', () => 
         expect(reply).toMatch(/cita/i);
 
         // 2) Persistió como recordatorio con texto limpio y dueAt mañana 10:00.
-        const records = await readStore(page, 'reminders');
-        const cita = records.find((r) => r.text === 'cita');
+        const records = await readStore(page, 'agenda');
+        const cita = records.find((r) => r.kind === 'cita');
         expect(cita, 'debe existir el recordatorio "cita"').toBeTruthy();
         expect(cita.status).toBe('pending');
-        const due = new Date(cita.dueAt);
+        const due = new Date(cita.trigger.at);
         const browserDate = await page.evaluate(() => {
             const now = new Date();
             const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 10, 0, 0, 0);
@@ -56,14 +63,15 @@ test.describe('Bug #7 — cita para mañana a las 10 agendada y visible', () => 
         expect(due.getHours()).toBe(10);
         expect(due.getMinutes()).toBe(0);
 
-        // 3) La cita es visible en el panel lateral Hoy (sección "Próximas citas").
-        const agendaSection = page.locator('[data-testid="hoy-agenda"]');
+        // 3) La cita es visible en el panel lateral Hoy (sección "Próximos").
+        const agendaSection = page.locator('[data-testid="agenda-panel"]');
         await agendaSection.waitFor({ state: 'visible', timeout: 10000 });
-        const agendaItem = agendaSection.locator('[data-testid="hoy-agenda-item"]', { hasText: 'cita' });
+        const agendaItem = agendaSection.locator('.agenda-item', { hasText: 'cita' }).first();
         await expect(agendaItem).toBeVisible();
-        const when = await agendaItem.locator('.hoy-panel__clase-meta').textContent();
-        expect(when).toMatch(/mañana/);
-        expect(when).toContain('10:00');
+        const when = await agendaItem.locator('.agenda-item__day').textContent();
+        expect(when).toMatch(/mañana/i);
+        const at = await agendaItem.locator('.agenda-item__time').textContent();
+        expect(at).toContain('10:00');
 
         await captureScreenshot(page, SHOTS_DIR, 'cita-visible-en-hoy.png');
     });

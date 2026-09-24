@@ -13,7 +13,14 @@
 import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot } from './_helpers';
+import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding } from './_helpers';
+
+// Este spec NO valida el onboarding: su overlay se reabre async (estado
+// per-user en IndexedDB) y su backdrop intercepta clics. Se auto-omite para que
+// los flujos lleguen a ejecutarse de verdad.
+test.beforeEach(async ({ page }) => {
+    await autoSkipOnboarding(page);
+});
 
 const SHOTS_DIR = path.join(process.cwd(), 'reports', 'matriz-comandos-productivos');
 fs.mkdirSync(SHOTS_DIR, { recursive: true });
