@@ -1,3 +1,4 @@
+import { isDayKey } from '../../lib/dateKey';
 // ============================================================
 // Mood Service — Bienestar/Ánimo (Fase 5, Módulo H)
 // ------------------------------------------------------------
@@ -99,7 +100,6 @@ export interface RemoveMoodResult {
 // Helpers de fecha (día local 'YYYY-MM-DD' a partir de un timestamp)
 // ------------------------------------------------------------
 
-const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ------------------------------------------------------------
 // Service
@@ -124,7 +124,7 @@ export function createMoodService({
       !input ||
       !input.participantId ||
       !input.date ||
-      !DATE_KEY_RE.test(input.date) ||
+      !isDayKey(input.date) ||
       typeof input.mood !== 'number' ||
       !inScale(input.mood)
     ) {
@@ -204,7 +204,7 @@ export function createMoodService({
     participantId: string,
     date: string,
   ): Promise<MoodRecord | undefined> => {
-    if (!participantId || !date || !DATE_KEY_RE.test(date)) return undefined;
+    if (!participantId || !date || !isDayKey(date)) return undefined;
     const all = await db.moodCheckIns.toArray();
     const row = all.find((m) => !m.sync?.deleted && m.participantId === participantId && m.date === date);
     return row ? copyRecord(row) : undefined;

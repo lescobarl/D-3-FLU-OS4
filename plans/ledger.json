@@ -470,9 +470,10 @@
     {
       "id": "P7.5",
       "titulo": "resolveGeminiApiKey definida 3 veces con contratos distintos",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "Auditoria externa #3. MEDIDO: src/core/config/appConfig.ts:682 (sin args, devuelve string), src/services/gemini.ts:63 (recibe apiKey, devuelve {apiKey, apiKeySource}) y src/voice/lib/gemini.js:1299 (recibe apiKey). Tres funciones con el MISMO nombre y firmas/retornos distintos: importar la equivocada no falla al compilar, falla en runtime. No se unifico aun porque unificar exige decidir cual es el canonico y reescribir 14 puntos de uso en la capa de servicios/voz; renombrar por responsabilidad es la via."
+      "evidencia": "VEREDICTO: NO APLICA - duplicado de un cierre previo. La auditoria externa lo contaba como \"definida 3 veces con contratos distintos\", pero el repo YA lo habia investigado y cerrado: P4.6 \"resolveGeminiApiKey near-dupes x2 (contrato distinto en appConfig)\" esta done desde antes, con ALLOW_COLLISION declarado en scripts/auditoria.mjs. Medido de nuevo: son 3 definiciones, pero solo DOS exportadas (appConfig.ts:682 devuelve string sin args; voice/lib/gemini.js:1299 devuelve objeto con args) y la tercera (services/gemini.ts:63) es PRIVADA del modulo, asi que no puede confundirse por import. Los tres son adaptadores FINOS sobre el dueno real resolveApiKey (sharedConfig.ts:383) que solo difieren en el fallback (resolveTextApiKey cliente vs resolveServerTextApiKey servidor) o en el retorno. Renombrar para \"arreglar\" el nombre no cambiaria ninguna ruta y seria justo el hito cosmetico que §7.2/§7.5 prohiben. Lo unico que faltaba era que el criterio fuera EJECUTABLE en vez de prosa: eso es P7.23.",
+      "auditoria": "D0"
     },
     {
       "id": "P7.6",
@@ -493,7 +494,7 @@
       "titulo": "los 4 window.__fluHandle* de App.tsx nunca se limpian",
       "estado": "done",
       "origen": "propio",
-      "evidencia": "VEREDICTO: auditoria externa #12. La FUGA es real (6 asignaciones, ninguna limpieza) pero la mitad del diagnostico era erroneo: la auditoria pedia gatearlos y eso ROMPERIA produccion, porque los 4 __fluHandle{Diary,Note,Shopping,AgendaCommand}Text son el mecanismo REAL de despacho que lee dispatchArbiterIntent (ya documentado en devGlobalsGuard.FUNCTIONAL_BRIDGE). Lo correcto era limpiarlos al desmontar. Nuevo src/app/fluBridges.ts con el ciclo de vida (snapshot/publish/clear) y App.tsx lo usa. La republicacion en el efecto es obligatoria: main.tsx monta en StrictMode (cleanup->effect sin re-render) y un borrado a secas los dejaria ausentes en desarrollo. Probado con el ciclo real en tests/fluBridges.test.ts."
+      "evidencia": "VEREDICTO: auditoria externa #12. La FUGA es real (6 asignaciones, ninguna limpieza) pero la mitad del diagnostico era erroneo: la auditoria pedia gatearlos y eso ROMPERIA produccion, porque los 4 __fluHandle{Diary,Note,Shopping,AgendaCommand}Text son el mecanismo REAL de despacho que lee dispatchArbiterIntent (ya documentado en devGlobalsGuard.FUNCTIONAL_BRIDGE). Lo correcto era limpiarlos al desmontar. Nuevo src/app/fluBridges.ts con el ciclo de vida (snapshot/publish/clear) y App.tsx lo usa. La republicacion en el efecto es obligatoria: main.tsx monta en StrictMode (cleanup->effect sin re-render) y un borrado a secas los dejaria ausentes en desarrollo. Probado con el ciclo real en tests/fluBridges.test.ts. HONESTIDAD (barreras que me pararon a mi): al cerrarlo introduje 3 regresiones que los propios guards del repo cazaron, y las arregle en vez de esquivarlos. (1) tsStrictGuard C49: use window as unknown as BridgeTarget; rehice la API con FluBridgeHost (los 4 puentes opcionales, que Window satisface) y sin ningun cast. (2) guardMutationGuard P2.4: los tests nuevos eran teatro (sin prueba de detector); les anadi casos que falsifican. (3) godFileSizeGuard P6.6: App.tsx pasaba de 4684; saque el ciclo de vida a src/app/fluBridges.ts y aun asi quedaba +2, asi que SUBI el techo a 4686 de forma deliberada y justificada en el propio fichero (la opcion que el guard autoriza). Anotado aqui para que no parezca un cambio gratis."
     },
     {
       "id": "P7.9",
@@ -596,6 +597,20 @@
       "origen": "propio",
       "auditoria": "D0",
       "evidencia": "VEREDICTO: RESUELTO: nuevo tests/auditLedgerSync.test.ts. Reparto explicito: auditoria.mjs es el SENSOR (HOY/META por id) y plans/ledger.json la unica fuente de ESTADO. El guard obliga a que todo hallazgo abierto del sensor tenga item de ledger no cerrado, y a que ningun item cerrado tenga su hallazgo por encima de META. Crosswalk documentado en el campo auditoria de los items (P7.1=V19, P7.11=D5, D0=P7.20/P7.21/P7.22)."
+    },
+    {
+      "id": "P7.23",
+      "titulo": "el catalogo de auditoria era prosa: no estaba en el gate",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: hallazgo derivado que el propio P4.6 declaro y dejo \"fuera de alcance\". scripts/auditoria.mjs (ALLOW_COLLISION, KNOWN_GROUPS, META por hallazgo) NO estaba en lint:guards: la clasificacion la aplicaba el auditor a mano, asi que nada impedia anadir un hallazgo y no mirarlo. Ahora tests/auditLedgerSync.test.ts ejecuta `auditoria.mjs --strict` dentro de lint:guards, que cuelga de `npm run lint`: un hallazgo por encima de su META rompe el lint. El sensor pasa de prosa a barrera."
+    },
+    {
+      "id": "P7.24",
+      "titulo": "el formato de clave de dia copiado en 5 modulos",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: segundo hallazgo derivado de P4.6 (su punto ciego declarado: \"duplicados NO exportados no se cuentan\"). Medido: el literal /^\\d{4}-\\d{2}-\\d{2}$/ estaba COPIADO 5 veces (contactService.ts:113, diaryService.ts:97, habitService.ts:138, moodService.ts:102 y participantRegistry.ts:182 inline). C58 habia unificado el FORMATEADOR dayKey() pero dejo el VALIDADOR sin dueno. Ahora vive en src/lib/dateKey.ts como isDayKey() (guarda de formato, no de calendario: se respeto la semantica previa) y los 5 importan de alli. Guard nuevo en tests/duplicationGuard.test.ts: el literal solo puede aparecer en el dueno y DATE_KEY_RE no puede reaparecer."
     }
   ],
   "done": [

@@ -67,6 +67,16 @@ describe('P7.20 - el sensor de auditoria y el ledger no divergen', () => {
     expect(out, 'trabajo invisible (sensor abierto, ledger sin registrar):\n  ' + out.join('\n  ')).toEqual([])
   })
 
+  it('el catalogo completo pasa --strict: el sensor es un gate, no prosa', () => {
+    // P7.23: la clasificacion de scripts/auditoria.mjs (ALLOW_COLLISION, KNOWN_GROUPS,
+    // META por hallazgo) la aplicaba el auditor A MANO. Sin esto, el catalogo era prosa:
+    // nada impedia meter un hallazgo nuevo y no mirarlo. Con --strict dentro de
+    // lint:guards (que cuelga de `npm run lint`), un hallazgo por encima de su META
+    // rompe el lint.
+    const r = spawnSync('node', ['scripts/auditoria.mjs', '--strict'], { cwd: ROOT, encoding: 'utf8' })
+    expect(r.status, 'auditoria --strict fallo:\n' + (r.stdout || '') + (r.stderr || '')).toBe(0)
+  })
+
   it('el detector no es decorativo', () => {
     const audit: Hallazgo[] = [
       { id: 'X1', info: false, today: 3, target: 0, title: 'x' },

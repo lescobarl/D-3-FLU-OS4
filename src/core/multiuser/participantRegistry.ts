@@ -14,7 +14,7 @@
 // Inyección de dependencias: { db, config, now, newId }.
 // ============================================================
 
-import { dayKey } from '../../lib/dateKey'
+import { dayKey, isDayKey } from '../../lib/dateKey'
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
@@ -179,7 +179,7 @@ export function createParticipantRegistry({
   const normalizeBirthday = (birthday?: string): string | undefined => {
     if (!birthday) return undefined;
     const value = birthday.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+    if (!isDayKey(value)) return undefined;
     return value;
   };
 

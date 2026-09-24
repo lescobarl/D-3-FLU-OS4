@@ -26,7 +26,9 @@ import { describe, expect, it } from 'vitest'
  * linea nueva obliga a decidir, no a pasar).
  */
 export const TECHOS: Record<string, number> = {
-  'src/App.tsx': 4684, // 5391 antes de P6.6
+  // +2 en P7.8: el ciclo de vida de los puentes se saco a src/app/fluBridges.ts, pero la
+  // LLAMADA y su import siguen teniendo que estar en App (los manejadores se asignan ahi).
+  'src/App.tsx': 4686, // 5391 antes de P6.6
   'src/voice/hooks/useFluVoiceAssistant.js': 4579,
   'src/voice/lib/fluConfig.js': 2772,
   'src/voice/lib/gemini.js': 1848,

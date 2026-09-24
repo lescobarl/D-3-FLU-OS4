@@ -113,3 +113,17 @@ describe('P7.20 duplicacion - isAIProvider con un solo dueno', () => {
     expect(g).toContain("export { isAIProvider } from '../core/config/sharedConfig'");
   });
 });
+
+describe('P7.24 - el formato de clave de dia tiene un solo dueno', () => {
+  const LITERAL = '/^\\d{4}-\\d{2}-\\d{2}$/';
+  it('el literal solo aparece en src/lib/dateKey.ts', () => {
+    const con = walk(SRC)
+      .filter((f) => readFileSync(f, 'utf8').includes(LITERAL))
+      .map(rel);
+    expect(con, 'formato de clave de dia copiado:\n  ' + con.join('\n  ')).toEqual(['src/lib/dateKey.ts']);
+  });
+  it('ningun modulo re-declara DATE_KEY_RE', () => {
+    const con = walk(SRC).filter((f) => readFileSync(f, 'utf8').includes('DATE_KEY_RE')).map(rel);
+    expect(con).toEqual([]);
+  });
+});

@@ -1,3 +1,4 @@
+import { isDayKey } from '../../lib/dateKey';
 // ============================================================
 // Diary Service — Diario personal (Fase 6, Módulo J)
 // ------------------------------------------------------------
@@ -94,7 +95,6 @@ export interface RemoveDiaryResult {
 // Helpers de fecha (día local 'YYYY-MM-DD')
 // ------------------------------------------------------------
 
-const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ------------------------------------------------------------
 // Service
@@ -112,7 +112,7 @@ export function createDiaryService({
     if (
       !input ||
       !input.date ||
-      !DATE_KEY_RE.test(input.date) ||
+      !isDayKey(input.date) ||
       !input.content ||
       !input.content.trim()
     ) {
@@ -154,7 +154,7 @@ export function createDiaryService({
 
   const updateEntry = async (id: string, patch: DiaryEntryPatch): Promise<UpdateDiaryResult> => {
     if (!id) return { ok: false, reason: 'invalid-input' };
-    if (patch.date !== undefined && !DATE_KEY_RE.test(patch.date)) {
+    if (patch.date !== undefined && !isDayKey(patch.date)) {
       return { ok: false, reason: 'invalid-input' };
     }
     if (patch.content !== undefined && !patch.content.trim()) {

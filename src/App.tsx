@@ -188,7 +188,7 @@ import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile }
 import { logCaughtError } from './lib/caughtError';
 import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
-import { clearFluBridges, publishFluBridges, snapshotFluBridges, type BridgeTarget, type BridgeSnapshot } from './app/fluBridges';
+import { useFluBridgesLifecycle } from './app/fluBridges';
 import { isAIProvider } from './app/appTypeGuards';
 import { applyConfigAction } from './app/configActions';
 import { applyGameAction } from './app/gameActions';
@@ -3131,19 +3131,7 @@ function App() {
         },
         [diary, languageRef],
     );
-
-    // P7.8 - Ciclo de vida de los 4 puentes funcionales (devGlobalsGuard los documenta
-    // como NO gateables: dispatchArbiterIntent los lee en produccion). Se asignan en
-    // cada render y hasta ahora nunca se limpiaban. El ref guarda lo publicado y el
-    // efecto lo republica + lo limpia al desmontar. La republicacion es obligatoria
-    // porque main.tsx monta en StrictMode (cleanup -> effect sin re-render).
-    const fluBridgesRef = useRef<BridgeSnapshot>([]);
-    fluBridgesRef.current = snapshotFluBridges(window as unknown as BridgeTarget);
-    useEffect(() => {
-        const w = window as unknown as BridgeTarget;
-        publishFluBridges(fluBridgesRef.current, w);
-        return () => clearFluBridges(w);
-    }, []);
+    useFluBridgesLifecycle();
 
     // Horario por dictado de voz (agregar / consultar / quitar). Motor
     // determinista: parseAgendaCommand interpreta el transcript y ejecuta la

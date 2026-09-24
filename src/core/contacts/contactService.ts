@@ -14,7 +14,7 @@
 // Inyección de dependencias: { db, config, now, newId }.
 // ============================================================
 
-import { dayKey } from '../../lib/dateKey'
+import { dayKey, isDayKey } from '../../lib/dateKey'
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
@@ -110,7 +110,6 @@ export interface BirthdayContact {
 // Helpers de fecha (día local 'YYYY-MM-DD')
 // ------------------------------------------------------------
 
-const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const parseDateKey = (key: string): Date => {
   const [y, m, d] = key.split('-').map(Number);
@@ -148,7 +147,7 @@ export function createContactService({
     if (!input || !input.name || !input.name.trim()) {
       return { ok: false, reason: 'invalid-input' };
     }
-    if (input.birthday !== undefined && input.birthday !== '' && !DATE_KEY_RE.test(input.birthday)) {
+    if (input.birthday !== undefined && input.birthday !== '' && !isDayKey(input.birthday)) {
       return { ok: false, reason: 'invalid-input' };
     }
     if (config.maxContacts !== undefined) {
@@ -192,7 +191,7 @@ export function createContactService({
     if (patch.name !== undefined && !patch.name.trim()) {
       return { ok: false, reason: 'invalid-input' };
     }
-    if (patch.birthday !== undefined && patch.birthday !== '' && !DATE_KEY_RE.test(patch.birthday)) {
+    if (patch.birthday !== undefined && patch.birthday !== '' && !isDayKey(patch.birthday)) {
       return { ok: false, reason: 'invalid-input' };
     }
     const existing = await db.contacts.get(id);
@@ -268,7 +267,7 @@ export function createContactService({
     const refKey = dayKey(ref);
     const all = await db.contacts.toArray();
     return all
-      .filter((c): c is ContactRecord & { birthday: string } => c.birthday !== undefined && DATE_KEY_RE.test(c.birthday))
+      .filter((c): c is ContactRecord & { birthday: string } => c.birthday !== undefined && isDayKey(c.birthday))
       .map((c) => {
         const nextBirthday = nextBirthdayKey(c.birthday, ref);
         return {

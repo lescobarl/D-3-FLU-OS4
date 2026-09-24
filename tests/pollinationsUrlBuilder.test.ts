@@ -57,6 +57,17 @@ describe('P7.6 - el artefacto visual pasa por el dueno', () => {
     }
   })
 
+  it('no es decorativo: el artefacto aporta params que la llamada pelada no tiene', () => {
+    // Si el artefacto NO pasara por el dueno, se perderian model/enhance del pipeline.
+    const pelada = buildPollinationsImageUrl(BASE, 'un gato')
+    const artefacto = buildPollinationsArtifact('un gato', { seedInput: 'x' }).image_url
+    expect(pelada).not.toContain('model=')
+    expect(pelada).not.toContain('enhance=')
+    expect(artefacto).toContain('&model=flux')
+    expect(artefacto).toContain('&enhance=true')
+    expect(artefacto).not.toBe(pelada)
+  })
+
   it('el seed es estable para el mismo seedInput (hash determinista)', () => {
     const a = buildPollinationsArtifact('un gato', { seedInput: 'es::un gato' })
     const b = buildPollinationsArtifact('un gato', { seedInput: 'es::un gato' })

@@ -13,7 +13,7 @@
 // Inyección de dependencias: { db, config, now, newId }.
 // ============================================================
 
-import { dayKey } from '../../lib/dateKey'
+import { dayKey, isDayKey } from '../../lib/dateKey'
 import { v4 as uuidv4 } from 'uuid';
 import {
   addAuditLog,
@@ -135,7 +135,6 @@ const previousDayKey = (dateKey: string): string => {
   return `${prev.getFullYear()}-${pm}-${pd}`;
 };
 
-const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ------------------------------------------------------------
 // Service
@@ -277,7 +276,7 @@ export function createHabitsService({
   };
 
   const checkIn = async (input: CheckInInput, reference?: number): Promise<CheckInResult> => {
-    if (!input || !input.goalId || !input.date || !DATE_KEY_RE.test(input.date)) {
+    if (!input || !input.goalId || !input.date || !isDayKey(input.date)) {
       return { ok: false, reason: 'invalid-input' };
     }
     const goal = await db.goals.get(input.goalId);
