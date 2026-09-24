@@ -57,13 +57,11 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
     expect(owners.map(rel), 'algoritmo de slug duplicado').toEqual(['src/core/branding/paletaFactory.ts']);
   });
   it('la tokenizacion de frases existe solo en su dueno', () => {
-    // configCommands.js NO es una copia: su hasToken es case-insensitive ('i') y
-    // normaliza la frase antes de buscar, y es el contrato que la capa de voz necesita
-    // (~18 usos, tambien importado por environmentIntents y gameCommands). Se exime
-    // a proposito; unificar exigiria que los juegos aceptasen coincidencias por caja.
+    // La capa de voz ya NO se llama igual que la de juegos (C70: hasVoiceToken /
+    // findVoiceTokenIndex), asi que no reabre este contrato y no necesita exencion: se
+    // eximia a proposito y la exencion se retiro para que este guard no tenga zona ciega.
     const offenders = walk(SRC)
-      .flatMap((f) => tokenHelperOffenders(readFileSync(f, 'utf8'), rel(f)))
-      .filter((o) => !o.startsWith('src/voice/lib/configCommands.js'));
+      .flatMap((f) => tokenHelperOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'token helpers redefinidos fuera de ' + TOKEN_HELPERS_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
   });
   it('parseAllowlist se define una sola vez y los proxies la importan', () => {

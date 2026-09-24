@@ -198,7 +198,6 @@ const ALLOW_COLLISION = new Set([
   'normalizeForMatch',       // 3 impls (lower/collapse difieren)
   'normalizeSpaces',         // textUtils String(s||'') vs audioMath String(x): difiere en null/undefined
   'cleanForSpeech',          // idem normalizeSpaces
-  'hasToken',                // regex/flag distintos
   'dayKey',                  // number (dayRollover) vs Date (browserSession)
   'wouldShrinkLog',          // activeListen (2 args) vs speechMerge (3 args + checks extra)
   // Verificados como mismo nombre pero distinta logica (D2/D3, 2026-09-14):
@@ -449,7 +448,7 @@ const FINDINGS = [
   },
   {
     id: 'N2', sev: 'info', info: true, title: 'Deuda reconocida en comentario (analysisFallbacks.ts)',
-    target: 0, detect: () => grep(srcFiles, /parches duplicados/),
+    target: 0, detect: () => grep(srcFiles, /deuda (t[eé]cnica|reconocida|pendiente)/i),
     note: 'Comentario que reconoce el problema de duplicación; evidencia, no hallazgo accionable.',
   },
 ]
