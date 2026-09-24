@@ -19,7 +19,19 @@ export default defineConfig({
         environment: 'node',
         include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
         exclude: ['tests/e2e/**', 'node_modules/**'],
-        testTimeout: 15_000,
+        // 120s, no 15s (C61). MEDIDO: la suite mezcla guards de milisegundos con guards
+        // que recorren el repo entero o lanzan subprocesos (git/npm/auditoria), y esos
+        // tardan SEGUNDOS en limpio: hookDepsRatchet 11.4s, jsReferenceGuard 8.8s,
+        // auditLedgerSync 5.8s, hygieneIndicators 4.6s, catchSilencioso 3.5s. Peor: su
+        // latencia no crece lineal con la carga. MEDIDO tambien, no supuesto: en una
+        // ejecucion con la suite completa en paralelo, viteConfigNodeLoadGuard (1.6s en
+        // limpio) se paso de los 15s -> "Test timed out in 15000ms". Un factor ~10x. Con
+        // 15s el fallo no era del guard, era del reloj: el detector era correcto y la
+        // asercion pasaba. 120s da >10x sobre el guard mas lento medido y NO cuesta nada
+        // en el camino feliz, porque un timeout es un techo, no una espera. Ademas este
+        // proyecto ya usaba 120_000 para su guard mas pesado (hookDepsRatchet), asi que
+        // ahora el techo global y el del caso peor coinciden en vez de contradecirse.
+        testTimeout: 120_000,
         // RENDIMIENTO: pool 'forks' (default de vitest 3) resultó más rápido
         // que 'threads' en este proyecto (jsdom + three.js). Con 12 CPUs
         // lógicos, el cuello de botella es el arranque/transform de workers
