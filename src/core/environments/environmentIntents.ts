@@ -7,7 +7,7 @@
 // catálogo de ambientes (ver environmentRegistry.ts).
 // ============================================================
 
-import { normalizeForMatch, hasToken } from '../../voice/lib/configCommands.js';
+import { normalizeForMatch, hasVoiceToken } from '../../voice/lib/configCommands.js';
 import {
     getAmbientes,
     isAmbienteId,
@@ -41,7 +41,7 @@ export function resolveEnvironmentIntent(text = '', lang = 'es'): EnvironmentInt
     const langKey = resolveLangKey(lang);
     for (const ambiente of getAmbientes()) {
         const frases = ambiente.frasesActivacion?.[langKey] ?? [];
-        const matched = frases.some((frase) => hasToken(normalized, frase));
+        const matched = frases.some((frase) => hasVoiceToken(normalized, frase));
         if (matched) {
             return ambiente.id === DEFAULT_AMBIENTE_ID
                 ? { tipo: 'reset', ambienteId: DEFAULT_AMBIENTE_ID }

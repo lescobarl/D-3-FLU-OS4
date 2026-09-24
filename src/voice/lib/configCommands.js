@@ -34,7 +34,7 @@ export { normalizeForMatch }
  * o "set" dentro de "settings". La posición permite priorizar el sustantivo
  * principal (el que aparece primero en la frase) de forma determinista.
  */
-function findTokenIndex(normalized = '', phrase = '') {
+function findVoiceTokenIndex(normalized = '', phrase = '') {
   const clean = normalizeForMatch(phrase)
   if (!clean || !normalized) return null
   const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -46,9 +46,10 @@ function findTokenIndex(normalized = '', phrase = '') {
  * Verifica que `phrase` aparezca como token independiente (con límites de
  * palabra) dentro de `normalized`. Evita coincidencias parciales tipo
  * "activa" dentro de "desactiva" o "set" dentro de "settings".
+ * Nombre acotado a la voz: el hasToken de gameUtils tiene otro contrato.
  */
-export function hasToken(normalized = '', phrase = '') {
-  return findTokenIndex(normalized, phrase) != null
+export function hasVoiceToken(normalized = '', phrase = '') {
+  return findVoiceTokenIndex(normalized, phrase) != null
 }
 
 // ------------------------------------------------------------
@@ -114,7 +115,7 @@ const BRANDING_OFF_VERBS = Object.freeze([
 
 /** ¿El texto contiene alguno de los verbos de la lista dada? */
 function hasBrandingIntent(normalized = '', verbs = []) {
-  return verbs.some((verb) => hasToken(normalized, verb))
+  return verbs.some((verb) => hasVoiceToken(normalized, verb))
 }
 
 // ------------------------------------------------------------
@@ -204,7 +205,7 @@ const NOUN_PAIRS = Object.entries(CONFIG_NOUNS).flatMap(([clave, nouns]) =>
 function findConfigEntry(normalized = '') {
   let best = null
   for (const [clave, noun] of NOUN_PAIRS) {
-    const index = findTokenIndex(normalized, noun)
+    const index = findVoiceTokenIndex(normalized, noun)
     if (index == null) continue
     const entry = VOICE_CONFIG_CATALOG.find((e) => e.clave === clave)
     if (!entry || entry.handler === 'unsupported') continue
@@ -258,7 +259,7 @@ function buildSeasonAliases() {
 export function matchSeason(text = '') {
   const normalized = normalizeForMatch(text)
   for (const [syn, key] of buildSeasonAliases()) {
-    if (hasToken(normalized, syn)) return key
+    if (hasVoiceToken(normalized, syn)) return key
   }
   return null
 }
@@ -293,7 +294,7 @@ function resolveFromSynonyms(text = '', map = {}) {
   }
   pairs.sort((a, b) => b[0].length - a[0].length)
   for (const [syn, key] of pairs) {
-    if (hasToken(normalized, syn)) return key
+    if (hasVoiceToken(normalized, syn)) return key
   }
   return null
 }
@@ -323,7 +324,7 @@ export function resolveSelectValue(text = '', entry = {}) {
   if (entry.clave === 'aiProvider') return matchProvider(normalized)
   if (entry.clave === 'defaultEmotion') return matchEmotion(normalized)
   for (const opt of entry.opciones || []) {
-    if (hasToken(normalized, String(opt))) return String(opt)
+    if (hasVoiceToken(normalized, String(opt))) return String(opt)
   }
   return null
 }
@@ -339,10 +340,10 @@ const BOOLEAN_FALSE = ['no', 'desactivar', 'desactiva', 'desactivado', 'desactiv
 export function resolveBooleanValue(text = '') {
   const normalized = normalizeForMatch(text)
   for (const tok of BOOLEAN_FALSE) {
-    if (hasToken(normalized, tok)) return 'false'
+    if (hasVoiceToken(normalized, tok)) return 'false'
   }
   for (const tok of BOOLEAN_TRUE) {
-    if (hasToken(normalized, tok)) return 'true'
+    if (hasVoiceToken(normalized, tok)) return 'true'
   }
   return null
 }
@@ -483,8 +484,8 @@ const MUTATION_REMOVE_VERBS = ['quita', 'quitar', 'elimina', 'eliminar', 'borra'
 export function resolveConfigSubvalor(text = '', entry = {}) {
   if (!entry.requiereSubvalor) return undefined
   const normalized = normalizeForMatch(text)
-  if (MUTATION_REMOVE_VERBS.some((v) => hasToken(normalized, v))) return 'remove'
-  if (MUTATION_ADD_VERBS.some((v) => hasToken(normalized, v))) return 'add'
+  if (MUTATION_REMOVE_VERBS.some((v) => hasVoiceToken(normalized, v))) return 'remove'
+  if (MUTATION_ADD_VERBS.some((v) => hasVoiceToken(normalized, v))) return 'add'
   return undefined
 }
 
@@ -616,7 +617,7 @@ function resolveColorValue(text = '', entry = {}) {
     hex = `#${hex}`
   } else {
     for (const name of Object.keys(COLOR_NAME_HEX)) {
-      if (hasToken(normalized, name)) {
+      if (hasVoiceToken(normalized, name)) {
         hex = COLOR_NAME_HEX[name]
         break
       }
@@ -626,7 +627,7 @@ function resolveColorValue(text = '', entry = {}) {
   if (entry.clave === 'avatarColor') {
     let component = 'Bunny_body'
     for (const alias of Object.keys(AVATAR_COMPONENT_ALIASES)) {
-      if (hasToken(normalized, alias)) {
+      if (hasVoiceToken(normalized, alias)) {
         component = AVATAR_COMPONENT_ALIASES[alias]
         break
       }
@@ -675,7 +676,7 @@ export function resolveConfigCommandFromText(text = '', _options = {}) {
   const normalized = normalizeForMatch(text)
   if (!normalized) return null
 
-  const hasDirective = DIRECTIVE_VERBS.some((verb) => hasToken(normalized, verb))
+  const hasDirective = DIRECTIVE_VERBS.some((verb) => hasVoiceToken(normalized, verb))
   if (!hasDirective) return null
 
   const entry = findConfigEntry(normalized)

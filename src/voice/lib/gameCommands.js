@@ -13,7 +13,7 @@
 //   Sin partida activa, "simón dice que te calles" NO inicia nada.
 // ============================================================
 
-import { normalizeForMatch, hasToken } from './configCommands.js'
+import { normalizeForMatch, hasVoiceToken } from './configCommands.js'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseNoteIntentText } from './noteIntentParser'
 import {
@@ -133,11 +133,11 @@ export function resolveGameCommandFromText(text = '') {
 
   if (activeSession) {
     // 1. Frase de salida → terminar la partida activa.
-    if (END_GAME_FRAMES.some((frame) => hasToken(normalized, frame))) {
+    if (END_GAME_FRAMES.some((frame) => hasVoiceToken(normalized, frame))) {
       return { gameId: activeSession.id, action: 'end' }
     }
     // 2. Pide el menú de juegos.
-    if (GAME_MENU_FRAMES.some((frame) => hasToken(normalized, frame))) {
+    if (GAME_MENU_FRAMES.some((frame) => hasVoiceToken(normalized, frame))) {
       return { gameId: activeSession.id, action: 'menu' }
     }
     // 2b. Juego que suprime voz ambiente (karaoke) con audio sonando: solo

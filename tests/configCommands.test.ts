@@ -12,7 +12,7 @@
 import { describe, test, expect, afterEach } from 'vitest';
 import {
     normalizeForMatch,
-    hasToken,
+    hasVoiceToken,
     matchSeason,
     matchMode,
     matchLanguage,
@@ -522,11 +522,11 @@ describe('configCommands — matchers', () => {
         expect(normalizeForMatch('  Pon el   Tema de Otoño ')).toBe('pon el tema de otono');
     });
 
-    test('hasToken respeta límites de palabra (sin falsos positivos)', () => {
-        expect(hasToken('activa la temporada', 'activa')).toBe(true);
-        expect(hasToken('desactiva la temporada', 'activa')).toBe(false);
-        expect(hasToken('cambia settings', 'set')).toBe(false);
-        expect(hasToken('pon set', 'set')).toBe(true);
+    test('hasVoiceToken respeta límites de palabra (sin falsos positivos)', () => {
+        expect(hasVoiceToken('activa la temporada', 'activa')).toBe(true);
+        expect(hasVoiceToken('desactiva la temporada', 'activa')).toBe(false);
+        expect(hasVoiceToken('cambia settings', 'set')).toBe(false);
+        expect(hasVoiceToken('pon set', 'set')).toBe(true);
     });
 
     test('matchSeason resuelve temporadas data-driven (PALETTES)', () => {
