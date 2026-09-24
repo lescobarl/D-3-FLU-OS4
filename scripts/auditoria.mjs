@@ -188,7 +188,6 @@ const KNOWN_GROUPS = new Set([...SCHEDULER, ...PARTICIPANT, ...MINUTE, ...STORAG
 const ALLOW_COLLISION = new Set([
   'editableFieldsOf',        // paleta vs ambiente: distinta forma de dato
   'emptyEditableFields',     // idem
-  'resolveGeminiApiKey',     // appConfig (sin arg) vs gemini.js (con arg)
   'stripDiacritics',         // gameUtils (no lowercase) vs audioMath (lowercase): distinto comportamiento
   'uncheckAll',              // ShoppingItem.checked vs Note.done: distinto dominio
   'buildGenerationPrompt',   // docs (GenerationInput) vs visual (workspace): distinto dominio

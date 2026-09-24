@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
+import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveDedicatedGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
@@ -122,8 +122,8 @@ export function useConfigPersistence(): ConfigPersistence {
     const [textApiUrl, setTextApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_API_URL));
 
     // ---- Gemini nativo (paso 5): clave dedicada + toggle del fallback de imagen ----
-    // Usa resolveGeminiApiKey() centralizado desde appConfig (Rule #1: NO HARDCODE).
-    const [geminiApiKey, setGeminiApiKey] = useState<string>(() => resolveGeminiApiKey());
+    // Usa resolveDedicatedGeminiApiKey() centralizado desde appConfig (Rule #1: NO HARDCODE).
+    const [geminiApiKey, setGeminiApiKey] = useState<string>(() => resolveDedicatedGeminiApiKey());
 
     // ---- Image (Pollinations) Config ----
     const [imageApiKey, setImageApiKey] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_KEY));

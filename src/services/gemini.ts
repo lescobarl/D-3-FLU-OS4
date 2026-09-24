@@ -60,7 +60,7 @@ function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics 
  * Usa resolveTextApiKey() desde appConfig:
  *   localStorage (flu-text-api-key) > env var > empty. Sin legado.
  */
-function resolveGeminiApiKey(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
+function resolveGeminiKeyForRequest(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
     return resolveApiKey(apiKey, resolveTextApiKey);
 }
 
@@ -92,7 +92,7 @@ class GeminiService extends BaseAIService implements IAIService {
     protected readonly engineLabel = 'Gemini';
 
     protected canUseTextBackend(): boolean {
-        return Boolean(resolveGeminiApiKey().apiKey);
+        return Boolean(resolveGeminiKeyForRequest().apiKey);
     }
 
     protected documentAnalysisSystem(language: string): string {
@@ -110,7 +110,7 @@ class GeminiService extends BaseAIService implements IAIService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: resolveGeminiApiKey().apiKey,
+                apiKey: resolveGeminiKeyForRequest().apiKey,
                 system: request.system,
                 prompt: request.prompt,
                 maxTokens: request.maxTokens,
@@ -144,7 +144,7 @@ Genera la minuta en formato JSON.`;
 
         const response = await postGeminiContract({
             mode: 'minute',
-            apiKey: resolveGeminiApiKey(request.options.apiKey).apiKey,
+            apiKey: resolveGeminiKeyForRequest(request.options.apiKey).apiKey,
             language: request.options.language || 'es',
             role: request.options.role || '',
             theme: request.options.theme || '',
@@ -194,7 +194,7 @@ Genera la minuta en formato JSON.`;
         // Delegate to proxy with mode='minute' (same route as generateMinute)
         const response = await postGeminiContract({
             mode: 'minute',
-            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
             language: options.language || 'es',
             role: options.role || '',
             theme: options.theme || '',
@@ -280,7 +280,7 @@ Responde como ${botName}:`;
         // Delegate to proxy with mode='response'
         const response = await postGeminiContract({
             mode: 'response',
-            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
             transcript: userText,
             language: options.language || 'es',
             role: options.role || '',
@@ -314,7 +314,7 @@ Responde como ${botName}:`;
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+                apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
                 language: options.language || 'es',
                 role: options.role || '',
                 theme: options.theme || '',
@@ -487,7 +487,7 @@ Responde como ${botName}:`;
         // Delegate to proxy
         const response = await postGeminiContract({
             mode: 'contract',
-            apiKey: resolveGeminiApiKey(options.apiKey).apiKey,
+            apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
             transcript,
             language: options.language || 'es',
             role: options.role || '',
@@ -561,7 +561,7 @@ Responde como ${botName}:`;
             return parsed.length > 0 ? parsed : undefined;
         })();
 
-        const resolved = resolveGeminiApiKey(options.apiKey);
+        const resolved = resolveGeminiKeyForRequest(options.apiKey);
 
         return {
             respuesta_voz,

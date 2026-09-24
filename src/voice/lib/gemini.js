@@ -982,7 +982,7 @@ export async function generateConversationSummary({
   theme = '',
   model: modelParam,
 }) {
-  const resolvedKey = resolveGeminiApiKey(apiKey)
+  const resolvedKey = resolveServerGeminiApiKey(apiKey)
   const model = modelParam || resolveGeminiModel()
 
   if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
@@ -1108,7 +1108,7 @@ export async function generateParticipantEvaluation({
   maxDraftChars = 420,
   model: modelParam,
 }) {
-  const resolvedKey = resolveGeminiApiKey(apiKey)
+  const resolvedKey = resolveServerGeminiApiKey(apiKey)
   const model = modelParam || resolveGeminiModel()
   const isEnglish = language === 'en'
 
@@ -1296,7 +1296,7 @@ export function mapChatMessagesToGemini(messages) {
   }
 }
 
-export function resolveGeminiApiKey(apiKey = '') {
+export function resolveServerGeminiApiKey(apiKey = '') {
   // Prioridad de la key central server-side: resolveServerTextApiKey().
   return resolveApiKey(apiKey, resolveServerTextApiKey)
 }
@@ -1370,7 +1370,7 @@ export async function generateFluContract({
   resultadosContext = '',
   model: modelParam,
 }) {
-  const resolvedKey = resolveGeminiApiKey(apiKey)
+  const resolvedKey = resolveServerGeminiApiKey(apiKey)
   // Usar modelo enviado por el cliente (desde localStorage) si está presente
   const model = modelParam || resolveGeminiModel()
 
@@ -1675,7 +1675,7 @@ export async function generateFluContract({
 * @returns {Promise<{ materia: string, problemas: string[], instrucciones: string, nivel: string, texto_extraido: string }>}
 */
 export async function analyzeImage({ apiKey, imageBase64, mimeType, language = 'es', profile = 'tutor' }) {
-const resolvedKey = resolveGeminiApiKey(apiKey)
+const resolvedKey = resolveServerGeminiApiKey(apiKey)
 if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
   return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' }
 }

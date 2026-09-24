@@ -679,7 +679,7 @@ export function resolveTextApiKey(): string {
  * Permite usar una clave de Gemini dedicada sin romper la compatibilidad con
  * la clave de texto compartida existente.
  */
-export function resolveGeminiApiKey(): string {
+export function resolveDedicatedGeminiApiKey(): string {
     const dedicated = readStorage(STORAGE_KEYS.GEMINI_API_KEY, '').trim();
     if (dedicated) return dedicated;
     return resolveTextApiKey();
