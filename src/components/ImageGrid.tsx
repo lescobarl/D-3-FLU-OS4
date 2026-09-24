@@ -94,7 +94,7 @@ export function ImageGrid({ results, loading, generated, language = 'es' }: Imag
             {hasGenerated && generated && (
                 <li
                     className="workspace-search__grid-item workspace-search__grid-item--generated"
-                    data-testid="result-feed-card-ia-imagen"
+                    data-testid="workspace-search-cell-ia-imagen"
                 >
                     {generated.isFailed ? (
                         <div className="workspace-search__grid-link workspace-search__grid-link--ia-error">

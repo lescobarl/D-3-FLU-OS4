@@ -292,7 +292,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             await page.getByRole('button', { name: /Imágenes/i }).click();
 
             // La celda IA abre el overlay al hacer click.
-            const card = page.getByTestId('result-feed-card-ia-imagen');
+            const card = page.getByTestId('workspace-search-cell-ia-imagen');
             await expect(card).toBeVisible({ timeout: 10000 });
 
             // Esperar a que aparezca la imagen generada (o el estado de carga)

@@ -211,6 +211,22 @@ export async function clearStore(page: Page, storeName: string, dbName: string =
     );
 }
 
+/**
+ * La agenda UNIFICADA (fluDatabase v21/v22) es la unica tabla de eventos:
+ * `reminders`, `horario` y `temporalItems` se declararon null y Dexie las
+ * borro. Los specs leen `agenda` filtrando por `kind` en vez de abrir una
+ * tabla muerta (devolvia 0 filas y hacia fallar aserciones validas).
+ */
+export async function readAgenda(page: Page, kind?: string): Promise<any[]> {
+    const rows = await readStore(page, 'agenda');
+    return kind ? rows.filter((r) => r?.kind === kind) : rows;
+}
+
+/** Limpia la agenda unificada. */
+export async function clearAgenda(page: Page): Promise<void> {
+    await clearStore(page, 'agenda');
+}
+
 /** Captura una prueba visual tras una breve espera de reconciliación. */
 export async function captureScreenshot(
     page: Page,

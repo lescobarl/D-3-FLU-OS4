@@ -30,7 +30,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding } from './_helpers';
+import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding, readAgenda, clearAgenda } from './_helpers';
 
 // Este spec NO valida el onboarding: su overlay se reabre async (estado
 // per-user en IndexedDB) y su backdrop intercepta clics. Se auto-omite para que
@@ -72,21 +72,21 @@ async function driveTranscript(page: Page, transcript: string): Promise<string> 
 test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => {
     test.describe.configure({ mode: 'serial' });
 
-    test('1. Recordatorio: "recuérdame comprar leche" persiste en IndexedDB (reminders)', async ({ page }) => {
+    test('1. Recordatorio: "recuérdame comprar leche a las 18:00" persiste en la agenda unificada', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
-        await clearStore(page, 'reminders');
+        await clearAgenda(page);
 
-        const reply = await driveTranscript(page, 'recuérdame comprar leche');
+        const reply = await driveTranscript(page, 'recuérdame comprar leche a las 18:00');
 
-        const records = await readStore(page, 'reminders');
+        const records = await readAgenda(page, 'recordatorio');
         expect(records.length, 'debe existir 1 recordatorio persistido').toBeGreaterThan(0);
         const rec = records[records.length - 1];
-        expect(rec.text).toContain('comprar leche');
+        expect(rec.label).toContain('comprar leche');
         expect(rec.status).toBe('pending');
-        expect(typeof rec.dueAt).toBe('number');
-        expect(rec.dueAt).toBeGreaterThan(Date.now() - 1000);
-        expect(reply).toContain('Recordatorio creado');
+        expect(typeof rec.trigger.at).toBe('number');
+        expect(rec.trigger.at).toBeGreaterThan(Date.now() - 1000);
+        expect(reply).toMatch(/comprar leche/i);
         await captureScreenshot(page, SHOTS_DIR, '1-recordatorio.png');
     });
 
@@ -109,17 +109,22 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
     test('3. Alarma: "pon una alarma a las 7 de la mañana" persiste (temporalItems kind=alarm)', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
-        await clearStore(page, 'temporalItems');
+        await clearAgenda(page);
 
         const reply = await driveTranscript(page, 'pon una alarma a las 7 de la mañana');
 
-        const records = await readStore(page, 'temporalItems');
+        const records = await readAgenda(page, 'alarma');
         expect(records.length).toBeGreaterThan(0);
         const item = records[records.length - 1];
-        expect(item.kind).toBe('alarm');
+        expect(item.kind).toBe('alarma');
         expect(item.status).toBe('pending');
-        expect(item.trigger?.timeOfDay).toBe('07:00');
-        expect(typeof item.nextAt).toBe('number');
+        // La agenda unificada guarda la alarma como trigger ABSOLUTO (at), no
+        // como timeOfDay: se valida el instante real (07:00 futuro).
+        const when = new Date(item.trigger.at);
+        expect(when.getHours()).toBe(7);
+        expect(when.getMinutes()).toBe(0);
+        expect(item.trigger.at).toBeGreaterThan(Date.now() - 1000);
+        expect(item.trigger?.type).toBeTruthy();
         expect(reply).toBeTruthy();
         await captureScreenshot(page, SHOTS_DIR, '3-alarma.png');
     });
@@ -127,14 +132,14 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
     test('4. Temporizador: "pon un temporizador de 5 minutos" persiste (temporalItems kind=timer)', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
-        await clearStore(page, 'temporalItems');
+        await clearAgenda(page);
 
         const reply = await driveTranscript(page, 'pon un temporizador de 5 minutos');
 
-        const records = await readStore(page, 'temporalItems');
+        const records = await readAgenda(page, 'alarma');
         expect(records.length).toBeGreaterThan(0);
         const item = records[records.length - 1];
-        expect(item.kind).toBe('timer');
+        expect(item.trigger?.type).toBe('countdown');
         expect(item.status).toBe('pending');
         expect(item.trigger?.durationMs).toBe(5 * 60 * 1000);
         expect(reply).toBeTruthy();
@@ -173,16 +178,16 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
     test('7. Horario: "agrega matemáticas el lunes a las 8 al horario" persiste (horario)', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
-        await clearStore(page, 'horario');
+        await clearAgenda(page);
 
         const reply = await driveTranscript(page, 'agrega matemáticas el lunes a las 8 al horario');
 
-        const records = await readStore(page, 'horario');
+        const records = await readAgenda(page, 'clase');
         expect(records.length).toBeGreaterThan(0);
         const entry = records[records.length - 1];
-        expect(entry.materia.toLowerCase()).toContain('matemáticas');
-        expect(entry.dia).toBe(1); // lunes
-        expect(entry.inicio).toBe('08:00');
+        expect(entry.label.toLowerCase()).toContain('matemáticas');
+        expect(entry.trigger?.daysOfWeek?.[0]).toBe(1); // lunes
+        expect(entry.trigger?.timeOfDay).toBe('08:00');
         expect(reply).toContain('agregué');
         await captureScreenshot(page, SHOTS_DIR, '7-horario.png');
     });
