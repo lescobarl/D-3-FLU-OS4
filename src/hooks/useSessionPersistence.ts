@@ -110,5 +110,6 @@ export function useSessionPersistence(state: {
         state.participantPhase,
         state.participantTurnCount,
         state.workspaceImageExpanded,
+      state,
     ]);
 }

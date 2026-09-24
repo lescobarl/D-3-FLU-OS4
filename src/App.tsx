@@ -1063,7 +1063,7 @@ function App() {
         return () => {
             cancelled = true;
         };
-    }, [realParticipantId, agendaList, agendaCreate]);
+    }, [realParticipantId, agendaList, agendaCreate, notes]);
 
     // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
     const deviceActions = useDeviceActions({
@@ -1085,7 +1085,7 @@ function App() {
         return () => {
             active = false;
         };
-    }, [participants.participants, participants.participantsWithBirthdayNear]);
+    }, [participants.participants, participants.participantsWithBirthdayNear, participants]);
 
     // ---- AI Provider Selection ----
     const [aiProvider, setAiProviderState] = useState<string>(() => getPreferredAIProvider());
@@ -2385,6 +2385,7 @@ function App() {
             // (y las pruebas E2E de intercepción) puedan conocer qué dijo FLU.
             // Puede ser '' si no hubo respuesta hablada (p. ej. solo navegación).
             return respuestaVoz;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatcher central: parte de sus dependencias (showListeningAck, workspaceImage...) se declaran DEBAJO (TDZ, tsc lo confirmo) y listarlas aqui no compila; moverlo cambiaria el orden de hooks.
         }, [])),
         // OS2 parity: inject the local useFluParticipant instance so OS2's voice commands
         // (FLU_ADELANTE) use the same participant state as the UI button.
@@ -2522,7 +2523,7 @@ function App() {
             return;
         }
         onboarding.completeWithName(capturedName as string);
-    }, [onboarding.visible, onboarding.currentStep, onboarding.state.captured, participants.participants, activeParticipantId]);
+    }, [onboarding.visible, onboarding.currentStep, onboarding.state.captured, participants.participants, activeParticipantId, onboarding]);
     // Captura dual TEXTO + VOZ: la voz alimenta el MISMO embudo `answer`
     // del teclado. Solo se activa en pasos capture/decision con
     // acceptVoice !== false (config-driven, sin hardcode). Escucha activa:
@@ -2644,7 +2645,7 @@ function App() {
             // pedir el onboarding en esta entrada.
             onboarding.reset();
         }
-    }, [participants.loading, onboarding.ready, onboarding.visible]);
+    }, [participants.loading, onboarding.ready, onboarding.visible, onboarding]);
 
     // Activa a un participante tras resolver el completado del onboarding:
     // lo escribe como ACTIVE_USER + usuario activo del header y enciende la
@@ -2738,7 +2739,7 @@ function App() {
                 Number(FLU_CONFIG.timing.onboardingStartListeningDelayMs),
             );
         },
-        [conversationMode],
+        [conversationMode, languageRef, participants.participants],
     );
 
     // Al COMPLETAR el onboarding (primer arranque, perfil nuevo o re-entrega en
@@ -3569,7 +3570,7 @@ function App() {
                 minuteKnowledge.publishAllToStore();
             }
         }
-    }, [minuteKnowledge.minutes.length]);
+    }, [minuteKnowledge.minutes.length, integrationStore.minuteHistory.length, minuteKnowledge]);
 
     // ---- Handlers ----
 

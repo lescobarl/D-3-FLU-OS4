@@ -317,6 +317,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
                 backupSystemRef.current.stop();
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- efecto de montaje: los helpers (addNotification, mapHealthStatusToAutonomyStatus, updateBackupStats) se declaran DEBAJO (L326+) y listarlos aqui seria un TDZ (tsc lo confirmo); moverlos cambiaria el orden de hooks.
     }, []);
 
     // -----------------------------------------------------------

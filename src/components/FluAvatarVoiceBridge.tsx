@@ -387,7 +387,7 @@ export function FluAvatarVoiceBridge({
                 speakResponse(iniciarText, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
         }
-    }, [integrationStore.uiState.voiceCommand]);
+    }, [integrationStore.uiState.voiceCommand, integrationStore, language, onStartListening, onStopListening]);
 
     // -------------------------------------------------------
     // Notificar cambios de estado

@@ -126,7 +126,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
         aiService.generateWorkspaceImage(prompt, tipo, language).then((result) => {
             applyImageResult(result, requestId);
         });
-    }, [language, beginImageRequest]);
+    }, [language, beginImageRequest, applyImageResult]);
 
     // ---- Expand / Close ----
     const expand = useCallback(() => setIsExpanded(true), []);
@@ -182,7 +182,7 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
             setIsLoading(false);
             setIsFailed(true);
         }
-    }, [language, markFailed, beginImageRequest]);
+    }, [language, markFailed, beginImageRequest, applyImageResult]);
 
     // ---- Retry load of current URL (Pollinations is stateless) ----
     // Cuando el <img> dispara onError por un fallo transitorio o por generación

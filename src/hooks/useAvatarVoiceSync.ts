@@ -807,7 +807,7 @@ export function useAvatarVoiceSync() {
             startIdleMicroExpressions();
         }
         // Intencional: solo debe ejecutarse al montar.
-    }, []);
+    }, [conversationState, startIdleMicroExpressions]);
 
     // -------------------------------------------------------
     // Efecto: aplicar configuración de imagen (gorra/pelo) al avatar
@@ -823,7 +823,7 @@ export function useAvatarVoiceSync() {
 
         if (debugMode) {
         }
-    }, [imageConfig.capVisible, imageConfig.hairVisible, debugMode]);
+    }, [imageConfig.capVisible, imageConfig.hairVisible, debugMode, imageConfig]);
 
     // -------------------------------------------------------
     // Efecto: sincronizar velocidad de animación

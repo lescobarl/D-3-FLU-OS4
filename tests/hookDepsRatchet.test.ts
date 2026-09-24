@@ -1,17 +1,19 @@
 /**
- * P7.4 - react-hooks/exhaustive-deps esta en 'off', asi que la deuda de deps de hooks
- * NO se ve: `lint` puede estar en verde con 63 violaciones dentro.
+ * P7.4 - react-hooks/exhaustive-deps: la deuda estaba oculta (la regla estaba en
+ * 'off') y era de 59 violaciones. ESTA PAGADA: la regla esta ACTIVA en
+ * eslint.config.mjs y este guard la mide para que no vuelva a crecer.
  *
- * Este guard NO paga la deuda. El ledger (P7.4) razona por que no se paga de golpe:
- * anadir o quitar deps en los efectos del flujo de voz cambia re-render y
- * suscripciones, y se paga POR ZONAS y con test de comportamiento, no a ciegas.
- * Lo que hace aqui es CONGELARLA: mide con la regla forzada a 'warn' y exige que el
- * recuento no suba, ni en total ni en los ficheros que la concentran. El trinquete
- * solo puede bajar.
+ * Como se pago (no a ciegas, por tipos):
+ *  - 3 'unnecessary': se quitaron deps que no se usaban (no pueden causar staleness).
+ *  - 6 'complex': se memoizaron los valores que cambiaban de identidad por render
+ *    (config de useOnboarding, ws de WorkspaceHub, matchesFilter de ResultFeed...).
+ *  - 50 'missing': la mayoria eran useCallback/useMemo ya memoizados, asi que
+ *    listarlos solo cambia la identidad (no la semantica de efecto): se anadieron.
+ *    Los pocos casos donde anadirlos seria un TDZ (helpers declarados DEBAJO del
+ *    hook) quedan desactivados EN EL SITIO con el motivo escrito (2 casos).
  *
- * Ademas ata el numero a la fuente unica de verdad: si el ledger dice "63 violaciones
- * medidas" y la realidad dice otra cosa, este guard lo canta. Antes el numero vivia
- * en un comentario sin nada que lo comprobara.
+ * Ademas, el trinquete vigila que toda excepcion este justificada: no vale un
+ * `eslint-disable` mudo.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -19,18 +21,11 @@ import { join, relative } from 'node:path'
 import { ESLint } from 'eslint'
 import { describe, expect, it } from 'vitest'
 
-/** Techo global. Solo puede BAJAR: si pagas una zona, bajalo en el mismo commit. */
-export const TECHO_TOTAL = 59
+/** Techo global. PAGADO (P7.4): la deuda era 59 y ya es 0. Solo puede seguir bajando. */
+export const TECHO_TOTAL = 0
 
-/** Techos de los ficheros que concentran la deuda (medidos con `porFichero`). */
-export const TECHO_POR_FICHERO: Record<string, number> = {
-  'src/voice/hooks/useFluVoiceAssistant.js': 26,
-  'src/App.tsx': 7,
-  'src/hooks/useOnboarding.ts': 7,
-  'src/hooks/useAvatarVoiceSync.ts': 2,
-  'src/hooks/useMinuteKnowledge.ts': 2,
-  'src/hooks/useWorkspaceImage.ts': 2,
-}
+/** Techos por fichero: ya no hace falta ninguno (la deuda es 0 en todos). */
+export const TECHO_POR_FICHERO: Record<string, number> = {}
 
 export type Mensaje = { ruleId: string | null; message: string }
 export type Resultado = { filePath: string; messages: Mensaje[] }
@@ -156,3 +151,30 @@ describe('P7.4 hookDeps - la deuda de deps de hooks se congela, no se esconde', 
     expect(declarado, 'P7.4 debe declarar "N violaciones" en su evidencia').toBe(total)
   }, 120_000)
 })
+
+/** Un disable de exhaustive-deps sin motivo escrito vuelve a esconder la deuda. */
+export function excepcionesSinMotivo(fuentes: { file: string; src: string }[]): string[] {
+  const faltan: string[] = []
+  for (const { file, src } of fuentes) {
+    for (const [i, linea] of src.split('\n').entries()) {
+      if (!/eslint-disable(-next-line|-line)?\b[^\n]*react-hooks\/exhaustive-deps/.test(linea)) continue
+      if (!/--\s*\S/.test(linea)) faltan.push(`${file}:${i + 1}`)
+    }
+  }
+  return faltan
+}
+
+describe('P7.4 hookDeps - toda excepcion esta justificada (no vale un disable mudo)', () => {
+  it('el detector marca un disable sin motivo y deja pasar al que lo lleva', () => {
+    const malo = [{ file: 'a.ts', src: '// eslint-disable-next-line react-hooks/exhaustive-deps' }]
+    const bien = [{ file: 'b.ts', src: '// eslint-disable-next-line react-hooks/exhaustive-deps -- por TDZ' }]
+    expect(excepcionesSinMotivo(malo)).toEqual(['a.ts:1'])
+    expect(excepcionesSinMotivo(bien)).toEqual([])
+  })
+
+  it('ninguna excepcion real en src carece de motivo', () => {
+    const fuentes = ficherosVersionados().map((f) => ({ file: f, src: readFileSync(join(ROOT, f), 'utf8') }))
+    expect(excepcionesSinMotivo(fuentes)).toEqual([])
+  })
+})
+

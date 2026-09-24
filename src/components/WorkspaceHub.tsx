@@ -277,7 +277,9 @@ export function WorkspaceHub({
     language,
     agenda,
 }: WorkspaceHubProps) {
-    const ws = FLU_CONFIG.ui?.workspace || {};
+    // Memoizado: sin esto, el literal de respaldo cambiaba de identidad por render
+    // y arrastraba el useMemo de mas abajo (exhaustive-deps lo cantaba).
+    const ws = useMemo(() => FLU_CONFIG.ui?.workspace || {}, []);
 
     // ---- Búsqueda web (Sección 1 → Sección 2) ----
     // El estado de búsqueda (useWorkspaceSearch) vive aquí, elevado desde
@@ -674,13 +676,6 @@ export function WorkspaceHub({
         latestResponse,
         workspaceArtifact,
         homeworkContext,
-        image.imageUrl,
-        image.isLoading,
-        image.isFailed,
-        image.loadTimeoutRef,
-        image.expand,
-        image.retry,
-        image.fallbackToOpenRouter,
         document.artifact,
         document.isAnalyzing,
         document.warnings,
@@ -696,12 +691,12 @@ export function WorkspaceHub({
         generation.job,
         generation.error,
         generation.clear,
-        image.imageUrl,
         documents,
         language,
         ws,
         searchState,
         restoreDismissed,
+      image,
     ]);
 
     // Foco por artefacto del turno: video o documento → "Video/Docs";

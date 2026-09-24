@@ -625,7 +625,7 @@ export function useNavigationCommands(
                 break;
             }
         }
-    }, [speakFlu, scheduleResumeListening, conversationActiveRef]);
+    }, [speakFlu, scheduleResumeListening, conversationActiveRef, scheduleNavSettle]);
 
     return {
         speakFlu,

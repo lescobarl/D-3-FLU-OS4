@@ -219,7 +219,7 @@ export function useMinuteKnowledge(participantId?: string) {
         } finally {
             setLoading(false);
         }
-    }, [scope]);
+    }, [scope, participantId]);
 
     useEffect(() => {
         refresh().catch(console.error);
@@ -276,7 +276,7 @@ export function useMinuteKnowledge(participantId?: string) {
             publishMinuteToStore(ui);
             return ui;
         },
-        [],
+        [scope],
     );
 
     /** Publica en integrationStore todas las minutas cargadas (hidratacion). */

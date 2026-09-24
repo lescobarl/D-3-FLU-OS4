@@ -14,7 +14,7 @@
 // NO hace fetching propio. Las etiquetas vienen de FLU_CONFIG
 // con pickLabel (Regla #1: sin hardcode).
 // ============================================================
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pickLabel } from '../lib/textUtils';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { configChild, configLabel } from './configText';
@@ -160,16 +160,16 @@ export function ResultFeed({
   // `onlyInKind` SOLO se muestra con su filtro de tipo activo (nunca en
   // "Todo"): evita que contenido generado se intercale bajo la Respuesta de
   // Flu en la vista general del pizarrón.
-  const matchesFilter = (item: ResultFeedItem): boolean => {
+  const matchesFilter = useCallback((item: ResultFeedItem): boolean => {
     if (filter === 'all') return !item.onlyInKind;
     if (filter === 'image') return item.kind === 'image';
     if (filter === 'media') return item.kind === 'doc' || item.kind === 'video';
     return item.kind === 'history';
-  };
+  }, [filter]);
 
   const visible = useMemo(
     () => items.filter(matchesFilter),
-    [items, filter]
+    [items, matchesFilter]
   );
 
   const originLabel = (origin: ResultOrigin): string => {

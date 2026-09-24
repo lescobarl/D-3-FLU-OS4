@@ -97,7 +97,7 @@ export function useDoNotDisturb(): [DoNotDisturbState, DoNotDisturbActions] {
   }, [config.enabled, tickMs]);
 
   const active = useMemo(() => isDoNotDisturbActive(now, config), [now, config]);
-  const scheduleLabel = useMemo(() => describeDndSchedule(config), [config.schedule]);
+  const scheduleLabel = useMemo(() => describeDndSchedule(config), [config]);
 
   const persist = useCallback((patch: Partial<DndConfigData>) => {
     setConfig((prev) => {

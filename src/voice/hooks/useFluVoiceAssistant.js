@@ -965,7 +965,7 @@ export function useFluVoiceAssistant({
     publishedLiveRef.current = ''
     commitVisibleTranscript('')
     setLiveTranscript('')
-  }, [clearCaptureState])
+  }, [clearCaptureState, commitVisibleTranscript])
 
   const resetConversationSession = useCallback(() => {
     resetVoiceDisplay()
@@ -975,7 +975,7 @@ export function useFluVoiceAssistant({
     lastSpeakerRef.current = speakers.defaultLabel
     lastLoggedSpeakerRef.current = speakers.defaultLabel
     lastTurnSignatureRef.current = null
-  }, [clearListeningAck, resetVoiceDisplay])
+  }, [clearListeningAck, resetVoiceDisplay, setSpeakerClusters])
 
   const advanceConversationSpeaker = useCallback(() => {
     if (conversationActiveRef?.current) {
@@ -995,7 +995,7 @@ export function useFluVoiceAssistant({
     lastSpeakerRef.current = next
     lastLoggedSpeakerRef.current = next
     return next
-  }, [conversationActiveRef])
+  }, [conversationActiveRef, dialogueView])
 
   const renameSessionSpeaker = useCallback((fromLabel = '', toLabel = '') => {
     const source = String(fromLabel || '').trim()
@@ -1010,7 +1010,7 @@ export function useFluVoiceAssistant({
 
     if (lastSpeakerRef.current === source) lastSpeakerRef.current = target
     if (lastLoggedSpeakerRef.current === source) lastLoggedSpeakerRef.current = target
-  }, [])
+  }, [setSpeakerClusters])
 
   const removeSessionSpeaker = useCallback((label = '') => {
     const source = String(label || '').trim()
@@ -1022,7 +1022,7 @@ export function useFluVoiceAssistant({
 
     if (lastSpeakerRef.current === source) lastSpeakerRef.current = ''
     if (lastLoggedSpeakerRef.current === source) lastLoggedSpeakerRef.current = ''
-  }, [])
+  }, [setSpeakerClusters])
 
   const reconcileSpeakerClusters = useCallback((committedSpeakers = []) => {
     const roomCfg = FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
@@ -1039,7 +1039,7 @@ export function useFluVoiceAssistant({
     if (import.meta.env.DEV && debugHotPath && removed.length) {
       fluDebugHot('speaker-prune', { removed, kept: after })
     }
-  }, [])
+  }, [setSpeakerClusters])
 
   const releaseTurnAfterLog = useCallback(
     (loggedCapture = '') => {
@@ -1093,7 +1093,7 @@ export function useFluVoiceAssistant({
 
   const getConversationContext = useCallback(
     () => getDialogueContextSlice(dialogueView.current, CONTEXT_HISTORY_LIMIT),
-    [],
+    [dialogueView],
   )
 
   const requestFluContractForTranscript = useCallback(
@@ -1484,7 +1484,7 @@ export function useFluVoiceAssistant({
         getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
         getReservedLabels: () => [...userSpeakersView.current].filter(Boolean),
       }),
-    [getContinuousBufferAdapter],
+    [getContinuousBufferAdapter, userSpeakersView],
   )
 
   const scheduleIdentityPreflight = useCallback(
@@ -1598,7 +1598,7 @@ export function useFluVoiceAssistant({
       }
       return speaker
     },
-    [resolveSpeakerWithAudio],
+    [resolveSpeakerWithAudio, conversationActiveRef],
   )
 
   const resolveSpeaker = useCallback(
@@ -1693,7 +1693,7 @@ export function useFluVoiceAssistant({
         speakerAlias,
       }
     },
-    [conversationActiveRef, resolveConversationSpeakerSync],
+    [conversationActiveRef, resolveConversationSpeakerSync, computeTurnSignature],
   )
 
   const emitConversationLog = useCallback(
@@ -1780,7 +1780,7 @@ export function useFluVoiceAssistant({
       }
       return true
     },
-    [clearStreamLogTimer, conversationActiveRef, flushPendingStreamLog, onContractResolved, phase],
+    [clearStreamLogTimer, conversationActiveRef, flushPendingStreamLog, onContractResolved, phase, commitTurnPhrase],
   )
 
   const commitSessionTurn = useCallback(
@@ -1802,7 +1802,7 @@ export function useFluVoiceAssistant({
         reconcileSpeakerClusters(userSpeakersView.current)
       }
     },
-    [reconcileSpeakerClusters],
+    [reconcileSpeakerClusters, userSpeakersView],
   )
 
   // §9: se eliminó `injectDialogueEntry`. App ya persiste el evento en el store
@@ -1862,6 +1862,9 @@ export function useFluVoiceAssistant({
       flushPendingStreamLog,
       flushPcmAfterTurnCommit,
       scheduleLiveTranscriptUpdate,
+      setSpeakerClusters,
+      userRowsTextView,
+      userSpeakersView,
     ],
   )
 
@@ -1899,8 +1902,6 @@ export function useFluVoiceAssistant({
     setLiveTranscript('')
   }, [
     conversationActiveRef,
-    debugHotPath,
-    fluDebugHot,
     openPreviewTurnRef,
     publishedLiveRef,
     lastStreamPreviewRef,
@@ -1969,7 +1970,7 @@ export function useFluVoiceAssistant({
 
     await stopMediaStream(mediaStreamRef.current)
     mediaStreamRef.current = null
-  }, [clearAllCommitTimers, clearLiveTranscriptTimers, clearPassiveAudioDelayTimer, clearRecognitionRetryTimer, flushPendingStreamLog])
+  }, [clearAllCommitTimers, clearLiveTranscriptTimers, clearPassiveAudioDelayTimer, clearRecognitionRetryTimer, flushPendingStreamLog, clearCaptureState])
 
   const releasePassiveAudioCapture = useCallback(async () => {
     if (processorRef.current) {
@@ -2111,7 +2112,7 @@ export function useFluVoiceAssistant({
 
     processorRef.current = micBridge
     zeroGainRef.current = micBridge.zeroGain
-  }, [needsConversationPassiveAudio])
+  }, [needsConversationPassiveAudio, conversationActiveRef])
 
   const schedulePassiveAudioCapture = useCallback(() => {
     const runCapture = () => {
@@ -2467,11 +2468,9 @@ export function useFluVoiceAssistant({
       requestRecognitionRestart,
       scheduleAutoProcess,
       readActiveSnapshot,
-      applyConversationSpeaker,
-      commitTurnToSessionRows,
       syncConversationStream,
       setError,
-      showListeningAck,
+      resolvedWakeWords,
     ],
   )
 
@@ -2704,14 +2703,9 @@ export function useFluVoiceAssistant({
     conversationActiveRef,
     isSupported,
     language,
-    publishLive,
-    publishLiveFromTurn,
-    publishLiveImmediate,
-    scheduleAutoProcess,
     wireRecognitionEvents,
     schedulePassiveAudioCapture,
     requestRecognitionRestart,
-    releasePassiveAudioCapture,
     status,
     clearRecognitionRetryTimer,
   ])
@@ -2769,6 +2763,7 @@ export function useFluVoiceAssistant({
       finalizeRecognition,
       syncConversationStream,
       requestRecognitionRestart,
+      conversationActiveRef,
     ],
   )
 
@@ -2930,7 +2925,7 @@ export function useFluVoiceAssistant({
         conversationCommandPreLogged,
       })
     },
-    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog],
+    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters],
   )
 
   const dispatchPassiveVoiceCommand = useCallback(
@@ -2999,6 +2994,7 @@ export function useFluVoiceAssistant({
       conversationActiveRef,
       emitActiveConversationCommand,
       syncConversationStream,
+      userRowsTextView,
     ],
   )
 
@@ -3011,7 +3007,7 @@ export function useFluVoiceAssistant({
     const grantWord = String(FLU_CONFIG.voiceCommands?.grantFloor?.[0] || '').trim()
     const phrase = [wakeWord, grantWord].filter(Boolean).join(' ')
     await emitActiveConversationCommand('FLU_ADELANTE', phrase)
-  }, [emitActiveConversationCommand])
+  }, [emitActiveConversationCommand, resolvedWakeWords])
 
   // ============================================================
   // FAST-PATH DETERMINISTA (configuración por voz instantánea)
@@ -3483,10 +3479,9 @@ export function useFluVoiceAssistant({
       resolveSpeaker,
       applyConversationSpeaker,
       session,
-      dispatchFastConfigCommand,
-      dispatchFastGameCommand,
-      dispatchFastEnvironmentCommand,
       evaluateDeterministicFastPaths,
+      computeTurnSignature,
+      language,
     ],
   )
 
@@ -3571,7 +3566,7 @@ export function useFluVoiceAssistant({
       }
       return false
     },
-    [conversationActiveRef, debugHotPath, dispatchPassiveVoiceCommand, processConversationFluQuery],
+    [conversationActiveRef, dispatchPassiveVoiceCommand, processConversationFluQuery, resolvedWakeWords, userRowsTextView],
   )
 
   const tryDispatchConversationAction = useCallback(
@@ -4272,12 +4267,7 @@ export function useFluVoiceAssistant({
     cleanupAudio,
     clearAutoProcessTimer,
     commitAndResolveTurn,
-    commitConversationTurn,
     conversationActiveRef,
-    dispatchFastConfigCommand,
-    dispatchFastGameCommand,
-    dispatchFastEnvironmentCommand,
-    dispatchPassiveVoiceCommand,
     evaluateDeterministicFastPaths,
     emitActiveConversationCommand,
     emitConversationLog,
@@ -4285,13 +4275,17 @@ export function useFluVoiceAssistant({
     getConversationContext,
     language,
     phase,
-    processConversationFluQuery,
     readCaptureSnapshot,
     releaseTurnAfterLog,
     requestFluContractForTranscript,
     resolveSpeaker,
     restartRecognition,
     session,
+    awaitConversationAction,
+    commitSessionTurn,
+    computeTurnSignature,
+    resolvedWakeWords,
+    userRowsTextView,
   ])
 
   const flushPassiveConversation = useCallback(async () => {
@@ -4319,7 +4313,6 @@ export function useFluVoiceAssistant({
     advanceConversationSpeaker,
     awaitConversationAction,
     dispatchPassiveVoiceCommand,
-    processCapture,
     readActiveSnapshot,
   ])
 

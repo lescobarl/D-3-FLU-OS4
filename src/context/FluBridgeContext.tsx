@@ -68,23 +68,7 @@ export function FluBridgeProvider({
 }) {
     // Memoize to prevent unnecessary re-renders
     const ctx = useMemo(() => value, [
-        value.voiceStatus,
-        value.voiceError,
-        value.liveTranscript,
-        value.lastTranscript,
-        value.onStartListening,
-        value.onStopListening,
-        value.onToggleListening,
-        value.onParticipantEmotionRef,
-        value.onContextualEmotionRef,
-        value.onEmotionAnimsRef,
-        value.apiKey,
-        value.language,
-        value.welcomeMessage,
-        value.onStateChange,
-        value.onFluParticipa,
-        value.onWorkspaceImage,
-        value.onGeminiError,
+      value,
     ]);
 
     return (

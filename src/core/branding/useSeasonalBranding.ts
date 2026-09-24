@@ -238,7 +238,7 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
     useEffect(() => {
         if (!loaded) return;
         applyBranding(config);
-    }, [loaded, config.mode, config.activeSeason, config.birthday, config.customEvents, applyBranding]);
+    }, [loaded, config.mode, config.activeSeason, config.birthday, config.customEvents, applyBranding, config]);
 
     // ============================================================
     // Actions

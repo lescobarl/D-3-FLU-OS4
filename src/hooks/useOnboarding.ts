@@ -9,7 +9,7 @@
 //    STORAGE_KEYS (compatibilidad e2e).
 // Habla el paso inicial al montar y reacciona a answer()/skip()/reset().
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import {
   advanceOnboarding,
@@ -79,7 +79,12 @@ export function useOnboarding({
   participantId,
   onCompleted,
 }: UseOnboardingOptions): UseOnboardingResult {
-  const config = (FLU_CONFIG.onboarding || { enabled: false, steps: [] }) as OnboardingConfig;
+  // Memoizado: es un literal de fallback, y sin memoizar cambiaba de identidad en
+  // cada render, arrastrando a los useCallback que lo usan como dependencia.
+  const config = useMemo(
+    () => (FLU_CONFIG.onboarding || { enabled: false, steps: [] }) as OnboardingConfig,
+    [],
+  );
   const lang = language === 'en' ? 'en' : 'es';
   const isPerUser =
     participantId !== undefined && participantId !== '' && participantId !== DEFAULT_ONBOARDING_USER;
@@ -155,17 +160,24 @@ export function useOnboarding({
 
   // Fuente única de la transición a completado: notifica al llamador con el
   // estado resultante solo cuando se pasa de NO completado a completado.
-  const notifyCompleted = (next: OnboardingState): void => {
-    if (next.completed && !state.completed) {
-      onCompletedRef.current?.(next);
-    }
-  };
+  // Memoizado: al ser una funcion recreada en cada render, los useCallback que la
+  // declaran como dependencia tambien se recreaban siempre.
+  const notifyCompleted = useCallback(
+    (next: OnboardingState): void => {
+      if (next.completed && !state.completed) {
+        onCompletedRef.current?.(next);
+      }
+    },
+    [state.completed],
+  );
 
   // Hablar el saludo inicial al montar (una sola vez) cuando esté listo.
+  const greetedRef = useRef(false);
   useEffect(() => {
-    if (!ready || !config.enabled || state.completed) return;
+    if (greetedRef.current || !ready || !config.enabled || state.completed) return;
+    greetedRef.current = true;
     speak(initialSpeech(config.steps, lang, state.captured), lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
-  }, [ready]);
+  }, [ready, config.enabled, config.steps, lang, state.captured, state.completed, speak]);
 
   const handleAction = useCallback(async (result: AdvanceResult) => {
     if (result.action.type !== 'requestNotifications') return;

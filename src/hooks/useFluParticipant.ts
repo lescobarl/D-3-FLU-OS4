@@ -228,7 +228,7 @@ export function useFluParticipant({
         }
 
         return false;
-    }, [apiKey, bumpUi, conversationActiveRef, getLogSnapshot, language, scheduleHandTimeout, session.role, session.theme]);
+    }, [apiKey, bumpUi, conversationActiveRef, getLogSnapshot, language, scheduleHandTimeout, session.role, session.theme, onEmotion]);
 
     // -----------------------------------------------------------
     // Evaluate on demand (manual "Flu Participa" click)

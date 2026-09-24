@@ -174,7 +174,7 @@ export function useNotificationCenter({
       window.removeEventListener(NOTIFICATION_EVENT, onNotification);
       timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [speak, lang, toastDurationMs, maxStack, dismissToast]);
+  }, [speak, lang, toastDurationMs, maxStack, dismissToast, maxHistory]);
 
   return {
     toasts,

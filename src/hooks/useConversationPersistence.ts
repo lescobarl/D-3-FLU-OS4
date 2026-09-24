@@ -191,7 +191,7 @@ export function useConversationPersistence(participantId?: string) {
                 logCaughtError('[ConversationPersistence] Error loading history', err);
             }
         })();
-    }, [scope]);
+    }, [scope, integrationStore, participantId]);
 
     // ---- Save each new entry to DB ----
     // Subscribe to conversationHistory.length only (not the full array) to avoid

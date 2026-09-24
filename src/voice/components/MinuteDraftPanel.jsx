@@ -10,7 +10,7 @@ export const MinuteDraftPanel = forwardRef(function MinuteDraftPanel(
 
   useEffect(() => {
     setText(formatMinuteDraftText(draft))
-  }, [draftKey])
+  }, [draftKey, draft])
 
   const handleSave = () => {
     if (!draft) return
