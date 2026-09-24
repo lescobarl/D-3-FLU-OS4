@@ -13,7 +13,7 @@
 import React from 'react';
 import type { FluProfile } from '../types/bridge';
 import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES } from '../core/config/appConfig';
-import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER } from '../core/config/sharedConfig';
+import { OPENROUTER_DEFAULTS, POLLINATIONS_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER } from '../core/config/sharedConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
@@ -294,7 +294,7 @@ export function FluSettingsPanel({
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input flu-settings-input-mono--small"
-                                        placeholder="https://openrouter.ai/api/v1"
+                                        placeholder={OPENROUTER_DEFAULTS.API_URL}
                                         defaultValue={textApiUrl}
                                         onChange={(e) => handleTextApiUrlCommit(e.target.value)}
                                     />
@@ -354,7 +354,7 @@ export function FluSettingsPanel({
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input flu-settings-input-mono--small"
-                                        placeholder="https://image.pollinations.ai/prompt"
+                                        placeholder={POLLINATIONS_DEFAULTS.BASE_URL}
                                         defaultValue={imageApiUrl}
                                         onChange={(e) => handleImageApiUrlCommit(e.target.value)}
                                     />

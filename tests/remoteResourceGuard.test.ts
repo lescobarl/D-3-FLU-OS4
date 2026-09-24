@@ -85,3 +85,39 @@ describe('C48 remoteResource — el detector no es decorativo', () => {
     expect(hardcodedRemoteHost("// const X = 'https://api.example.com'")).toBeNull()
   })
 })
+
+describe('C65 remoteResource - el texto de UI no RE-TECLEA un valor de config', () => {
+  /**
+   * C48 ignora a proposito el texto de UI (placeholders, hints) porque una frase que
+   * menciona una URL no es codigo. Pero esa exclusion tapaba un caso: un placeholder
+   * que REPITE textualmente una URL que ya vive en sharedConfig. MEDIDO: FluSettingsPanel
+   * duplicaba las de OpenRouter y Pollinations. Si la config cambia, el placeholder
+   * miente y nadie lo nota. Esta regla SOLO dispara con la copia EXACTA.
+   */
+  it('ningun literal de UI repite textualmente una URL declarada en sharedConfig', () => {
+    const cfg = readFileSync(join(ROOT, 'src/core/config/sharedConfig.ts'), 'utf8')
+    const urls = [...new Set([...cfg.matchAll(/['"`](https?:\/\/[^'"`\s]+)['"`]/g)].map((m) => m[1]))]
+    expect(urls.length, 'la config no declara URLs: el detector seria vacio').toBeGreaterThan(0)
+    const hits: string[] = []
+    for (const f of walk(SRC)) {
+      const r = relative(ROOT, f).replace(/\\/g, '/')
+      if (CONFIG_OWNED(r)) continue
+      readFileSync(f, 'utf8')
+        .split(/\r?\n/)
+        .forEach((line, i) => {
+          if (/^\s*(?:\/\/|\*|\/\*)/.test(line)) return
+          for (const u of urls) {
+            const dq = '"' + u + '"'
+            const sq = "'" + u + "'"
+            if (line.includes(dq) || line.includes(sq)) hits.push(r + ':' + (i + 1) + ' ' + u)
+          }
+        })
+    }
+    expect(
+      hits,
+      'Valores de config re-tecleados en UI (N=' + hits.length + '):\n  ' + hits.join('\n  ') +
+        '\nImporta el valor del dueno (sharedConfig) en vez de copiarlo.',
+    ).toEqual([])
+  })
+})
+
