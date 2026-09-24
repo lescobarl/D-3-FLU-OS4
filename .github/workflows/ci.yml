@@ -49,6 +49,19 @@ jobs:
       - name: Suite completa de unit
         run: npm run test:full
 
+      # TEMPORAL: diagnostico. Emite los fallos como annotations (legibles sin token).
+      - name: Diagnostico suite (TEMPORAL)
+        if: failure()
+        run: |
+          npm run test:full > /tmp/t.txt 2>&1 || true
+          grep -aE "FAIL|AssertionError|Expected|Received|Test Files|Tests |Errors|Error" /tmp/t.txt | tail -48 > /tmp/u.txt || true
+          i=0
+          while [ $i -lt 6 ]; do
+            part=$(sed -n "$((i*8+1)),$((i*8+8))p" /tmp/u.txt | base64 -w0)
+            if [ -n "$part" ]; then echo "::error::TB$i $part"; fi
+            i=$((i+1))
+          done
+
       - name: Build
         run: npm run build
 
