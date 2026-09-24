@@ -231,11 +231,6 @@ export function getTurnCommitText(state, pendingSpill = '') {
 // Dueño canónico: transcriptDelta.js. Se re-exporta para no duplicar.
 export { getTranscriptDelta } from './transcriptDelta.js'
 
-/** @deprecated Usar getTurnCommitText / appendSpillText. Conservado por compatibilidad temporal. */
-export function mergeCaptureText(...parts) {
-  return appendSpillText(...parts)
-}
-
 /** Une spill y fragmentos conservando prefijos acumulativos del reconocedor. */
 export function appendSpillText(...parts) {
   const cleaned = parts.map((part) => cleanForSpeech(part)).filter(Boolean)

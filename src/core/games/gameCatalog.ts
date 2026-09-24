@@ -12,7 +12,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameId } from './types';
-import { normalizeForMatch } from './gameUtils';
+import { normalizeForMatch, hasToken } from './gameUtils';
 import { createSimonDiceEngine } from './simonDice';
 import { createRiddlesEngine } from './riddles';
 import { createVeoVeoEngine } from './veoVeo';
@@ -61,17 +61,9 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
 
 // --- Tokenización local (sin dependencias) ---
 
-function findTokenIndex(normalized = '', phrase = ''): number | null {
-    if (!phrase) return null;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    const match = normalized.match(pattern);
-    return match ? match.index ?? null : null;
-}
 
-function hasToken(normalized = '', phrase = ''): boolean {
-    return findTokenIndex(normalized, phrase) !== null;
-}
+
+
 
 // --- Guardias (data-driven) ---
 

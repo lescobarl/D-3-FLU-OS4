@@ -2113,9 +2113,6 @@ export const FLU_CONFIG = {
     micConsoleMaxLines: 500,
     /** Consola [Flu][mic-ingress] además del panel. */
     micIngressConsole: true,
-    /** @deprecated Usar chromeRawConsole */
-    /** @deprecated Usar chromeRawConsole */
-    micRawConsole: true,
     consoleLog: false,
     refreshMs: 1500,
     /** Relaya fragmentos crudos de Chrome (interim/final) al servidor para diagnóstico. */

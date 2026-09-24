@@ -37,6 +37,14 @@ export function allowlistDefinitions(src: string): number {
 export function curatedAllowlistLiterals(src: string): number {
   return (src.match(/\['wikipedia\.org', 'educ\.ar'\]/g) || []).length;
 }
+/** Dueno unico de la tokenizacion de frases (limites de palabra). */
+export const TOKEN_HELPERS_OWNER = 'src/core/games/gameUtils.ts';
+/** Definiciones locales de los token helpers fuera del dueno. */
+export function tokenHelperOffenders(src: string, fileName: string): string[] {
+  if (fileName === TOKEN_HELPERS_OWNER) return [];
+  const defs = src.match(/\bfunction\s+(findTokenIndex|hasToken|hasAnyToken)\s*[(<]/g) || [];
+  return defs.map((d) => `${fileName}: ${d.trim()}`);
+}
 describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () => {
   it('el plegado NFD existe solo en su dueno', () => {
     const offenders = walk(SRC).flatMap((f) => nfdOffenders(readFileSync(f, 'utf8'), rel(f)));
@@ -47,6 +55,16 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
     expect(ambiente).toContain('slugifyPalette(nombre)');
     const owners = walk(SRC).filter((f) => /\.replace\(\/\[\^a-z0-9\]\+\/g, '-'\)/.test(readFileSync(f, 'utf8')));
     expect(owners.map(rel), 'algoritmo de slug duplicado').toEqual(['src/core/branding/paletaFactory.ts']);
+  });
+  it('la tokenizacion de frases existe solo en su dueno', () => {
+    // configCommands.js NO es una copia: su hasToken es case-insensitive ('i') y
+    // normaliza la frase antes de buscar, y es el contrato que la capa de voz necesita
+    // (~18 usos, tambien importado por environmentIntents y gameCommands). Se exime
+    // a proposito; unificar exigiria que los juegos aceptasen coincidencias por caja.
+    const offenders = walk(SRC)
+      .flatMap((f) => tokenHelperOffenders(readFileSync(f, 'utf8'), rel(f)))
+      .filter((o) => !o.startsWith('src/voice/lib/configCommands.js'));
+    expect(offenders, 'token helpers redefinidos fuera de ' + TOKEN_HELPERS_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
   });
   it('parseAllowlist se define una sola vez y los proxies la importan', () => {
     const defs = walk(join(SRC, 'server')).filter((f) => allowlistDefinitions(readFileSync(f, 'utf8')) > 0).map(rel);
@@ -68,6 +86,13 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo',
   it('marca el NFD reimplementado y no marca al dueno', () => {
     expect(nfdOffenders("x.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')", 'src/a.ts')).toHaveLength(1);
     expect(nfdOffenders("x.normalize('NFD')", DIACRITICS_OWNER)).toEqual([]);
+  });
+  it('marca los token helpers redefinidos y no marca al dueno', () => {
+    expect(tokenHelperOffenders('function hasToken(n, p) { return true }', 'src/core/games/veoVeo.ts')).toHaveLength(1);
+    expect(tokenHelperOffenders('function hasAnyToken(n, ps) {}', 'src/core/games/palabrasEncadenadas.ts')).toHaveLength(1);
+    // El dueno puede definirlos; importarlos no cuenta como definicion.
+    expect(tokenHelperOffenders('function hasToken(n, p) {}', TOKEN_HELPERS_OWNER)).toEqual([]);
+    expect(tokenHelperOffenders("import { hasToken } from './gameUtils'", 'src/core/games/veoVeo.ts')).toEqual([]);
   });
   it('cuenta definiciones de parseAllowlist y literales de la allowlist', () => {
     expect(allowlistDefinitions('function parseAllowlist(raw) {}')).toBe(1);
