@@ -29,8 +29,10 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'off',
       'react-hooks/rules-of-hooks': 'error',
-      // exhaustive-deps: deuda MEDIDA en P7.4 (63 violaciones, 19 ficheros). No puede
-      // activarse mientras lint:eslint use --max-warnings=0: cualquier warn rompe lint.
+      // exhaustive-deps: deuda MEDIDA y CONGELADA por P7.4. El numero vive en un solo
+      // sitio (plans/ledger.json) y tests/hookDepsRatchet.test.ts lo relee y lo vigila;
+      // no se copia aqui a proposito, que un comentario con un numero envejece solo.
+      // No se activa mientras lint:eslint use --max-warnings=0: cualquier warn rompe lint.
       'react-hooks/exhaustive-deps': 'off',
       'eqeqeq': ['warn', 'smart'],
     },

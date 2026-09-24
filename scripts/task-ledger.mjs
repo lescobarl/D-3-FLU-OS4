@@ -319,8 +319,17 @@ function cmdCheck(ledger) {
     const pendientes = ledger.items.filter((i) => ['todo', 'in_progress', 'blocked'].includes(i.estado));
     const conteo = ESTADOS.map((e) => `${ledger.items.filter((i) => i.estado === e).length} ${e}`).join(', ');
     const primeros = pendientes.map((i) => i.id).join(', ');
+    // "N cierres en git" se leia como "faltan M por llegar a git", y no es eso: los
+    // 128 cierres registrados citan 100 commits y los 100 son ancestros de HEAD
+    // (medido con merge-base --is-ancestor). Lo que cuenta `closures` son los commits
+    // que DECLARAN un codigo C##/T## en el subject; CODE_RE no acepta el punto de los
+    // P#.#, asi que un `fix(P7.1): ...` no entra en esa cuenta. El mensaje dice ahora
+    // que es cada numero para que nadie valide contra una cifra mal leida.
+    const commitsCitados = new Set(ledger.done.map((d) => d.commit).filter(Boolean)).size;
     console.log(
-      `ledger OK: ${pendientes.length} pendientes (${primeros}) -> items: ${conteo} | ${ledger.done.length} cierres registrados | ${closures.length} cierres en git`,
+      `ledger OK: ${pendientes.length} pendientes (${primeros}) -> items: ${conteo} | ` +
+        `${ledger.done.length} cierres registrados en ${commitsCitados} commits | ` +
+        `${closures.length} commits declaran codigo C##/T## en el subject`,
     );
     return 0;
   }
