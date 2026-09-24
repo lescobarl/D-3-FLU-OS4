@@ -1297,6 +1297,12 @@
       "commit": "98f35be",
       "titulo": "el relay de traza dev deja de auto-reintentarse en bucle",
       "evidencia": "src/lib/clientLogRelay.ts: flush() reportaba sus fallos de entrega con logCaughtError, y logCaughtError reenvia por el relay (caughtError.ts:42-43). El fallo se reportaba POR EL CANAL QUE ACABABA DE FALLAR, asi que cada fallo re-encolaba una entrada y armaba otro intento cada 200 ms (scheduleFlush) indefinidamente. Ese era el origen REAL del ruido 'Failed to parse URL from /__flu_client_log' que se habia atribuido a timing. MEDIDO: una entrada + una entrega fallida daba intentos=2 (re-encolada) en vez de 1. Arreglo: reportOwnFailure(e) (consola y nada mas) en las DOS vias de fallo, mas el import de logCaughtError que quedaba sin uso (desaparece la arista clientLogRelay -> caughtError). Guard nuevo tests/clientLogRelayNoLoop.test.ts, probado ROJO con intentos=2; instrumenta el fetch REAL, no lo falsea. Comprobado ademas que el gate de dev YA existia (FLU_CONFIG.debug.relayToServer = IS_DEV, fluConfig.js:2123): no habia fuga a produccion que arreglar. Verificado: guard 1/1, eolGuard + utf8Guard 10/10, tsc 0, eslint 0."
+    },
+    {
+      "id": "C68",
+      "commit": "c4dbf16",
+      "titulo": "el relay de traza dev no entrega sin origen ni reporta el fallo de entrega",
+      "evidencia": "Residuo declarado al cerrar C67. src/lib/clientLogRelay.ts entrega a la ruta RELATIVA /__flu_client_log, que se resuelve contra el origen del documento; fuera del navegador no hay origen y fetch lanzaba \"Failed to parse URL\". MEDIDO antes: el TypeError salia en la suite cada vez que un modulo importado registraba un log. Dos medidas, porque la clase de fallo difiere en cada entorno: (1) SIN documento (Node/SSR) cero intentos, con corte temprano en flush() via hasDocumentOrigin(), en vez de intentar y fallar; (2) CON documento pero sin servidor detras (los tests con jsdom, que SI tienen document) el intento falla igual y se re-reportaba por consola: se declina en silencio con \"ignorado: <motivo>\", que es la omision deliberada que el repo contempla, porque el canal de re-reporte del relay ES el propio relay (el bucle cortado en C67). Guard: tests/clientLogRelayNoLoop.test.ts pasa a 2 casos; C68 nace ROJO (medido 1 intento) y C67 fija ademas que no se re-reporte. Se conservo la clase EOL del fichero (i/mixed -> w/mixed): el primer intento la cambio a crlf y tests/eolGuard.test.ts lo cazo. MEDIDO despues, suite completa: 330/330 ficheros (3239 tests) y ruido del relay 2 -> 0 lineas. tsc 0, eslint 0."
     }
   ]
 }
