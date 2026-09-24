@@ -2522,7 +2522,7 @@
   gap: 0;
 }
 
-/* Línea separadora entre bloques (citas / alarmas / clases) sin aumentar
+/* LÃ­nea separadora entre bloques (citas / alarmas / clases) sin aumentar
    el aire vertical. */
 .hoy-panel__section + .hoy-panel__section {
   border-top: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
@@ -6898,9 +6898,9 @@ details[open].flu-card .flu-card__chev {
   word-break: break-word;
 }
 
-/* ===== AgendaPanel — calendario unificado (un solo panel, color por tipo) =====
-   Reutiliza el lenguaje visual del Pizarrón (.hoy-panel__*); solo estilos
-   para las pestañas, el formulario y el banner de alarma. */
+/* ===== AgendaPanel â€” calendario unificado (un solo panel, color por tipo) =====
+   Reutiliza el lenguaje visual del PizarrÃ³n (.hoy-panel__*); solo estilos
+   para las pestaÃ±as, el formulario y el banner de alarma. */
 .agenda-tabs { display: flex; gap: 2px; padding: 1px 0; }
 .agenda-tab {
     flex: 1;
@@ -6994,7 +6994,7 @@ details[open].flu-card .flu-card__chev {
     cursor: pointer;
 }
 .agenda-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
-/* Item (agenda y próximos): bolita de color + hora + texto, sin borde de viñeta. */
+/* Item (agenda y prÃ³ximos): bolita de color + hora + texto, sin borde de viÃ±eta. */
 .agenda-item {
     display: flex;
     align-items: center;
@@ -7038,7 +7038,7 @@ details[open].flu-card .flu-card__chev {
     white-space: nowrap;
 }
 /* Leyenda de colores por tipo: FIJA al borde inferior del panel (siempre visible
-   mientras se scrollea), con fondo sólido para no transparentar el contenido. */
+   mientras se scrollea), con fondo sÃ³lido para no transparentar el contenido. */
 .agenda-legend {
     position: sticky;
     bottom: 0;
@@ -7063,7 +7063,7 @@ details[open].flu-card .flu-card__chev {
     height: 7px;
     border-radius: 50%;
 }
-/* MES: rejilla de calendario con chips de color por día. */
+/* MES: rejilla de calendario con chips de color por dÃ­a. */
 .agenda-month {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -7100,7 +7100,7 @@ details[open].flu-card .flu-card__chev {
     border-radius: 2px;
     cursor: pointer;
 }
-/* Nota: nombre + contenido (body multilínea). */
+/* Nota: nombre + contenido (body multilÃ­nea). */
 .agenda-note-body { display: flex; flex-direction: column; gap: 1px; padding: 0; }
 .agenda-note-body__area {
     width: 100%;
@@ -7118,7 +7118,7 @@ details[open].flu-card .flu-card__chev {
     color: var(--text-secondary, #a0a0b0);
     font-size: var(--text-xs, 11px);
 }
-/* SEMANA — columnas por día (Outlook): una columna por día con sus items. */
+/* SEMANA â€” columnas por dÃ­a (Outlook): una columna por dÃ­a con sus items. */
 .agenda-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .agenda-week__col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .agenda-week__day {

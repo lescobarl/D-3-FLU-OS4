@@ -2206,3 +2206,41 @@ autorizacion expresa del usuario.
 Nota de proceso: el cierre de P6.12 dejo el item con la marca `noVerificado` y el
 guard frozen `decisionVerdictGuard` lo caza (done + noVerificado). Se corrigio
 enmendando ese commit de cierre; de ahi que la base de P6.7 sea 1e97530.
+## P6.18 - los ficheros de texto de src/ son UTF-8 valido
+
+Hallazgo colateral de P6.7, y no un detalle de estilo: `src/styles/unified.css` NO
+era UTF-8 valido. Tenia 12 bytes fuera de UTF-8:
+
+    0xED -> 'i' acentuada (5)     0xF3 -> 'o' acentuada (3)
+    0xF1 -> 'n' con tilde (2)     0x97 -> guion largo, cp1252 (2)
+
+Los 12 dentro de COMENTARIOS CSS, y los contextos no dejan duda porque son
+palabras enteras: "Línea separadora", "Pizarrón", "pestañas", "próximos",
+"viñeta", "sólido", "por día", "multilínea", "SEMANA — columnas por día".
+
+Merece item propio por dos razones concretas, no por estetica:
+
+  1. Un fichero que no es UTF-8 no se lee con la herramienta normal. En esta
+     sesion lo bloqueo: `open(f, encoding='utf-8')` reventaba con
+     UnicodeDecodeError y la consola mostraba `/* L?nea separadora`.
+  2. El error ESCONDE los demas. El decodificador se para en el primer byte malo,
+     asi que un recuento se queda corto y devuelve un numero que PARECE respuesta:
+     mi primer recuento dijo 5 bytes (solo 0xED). Eran 12, con tres valores mas.
+
+Arreglado en el sitio equivalente (0xED->í, 0xF3->ó, 0xF1->ñ, 0x97->—), que es lo
+que el contexto dice que eran. `git diff` de unified.css: 9 lineas cambiadas, las 9
+dentro de comentarios `/* ... */`, cero declaraciones. El fichero crece 14 bytes.
+
+Enforcement, para que no vuelva: scripts/utf8-metric.mjs (medidor, unica fuente) y
+tests/utf8Guard.test.ts, registrado en lint:guards. El guard se prueba con bytes
+sinteticos: tiene que distinguir los 4 valores, no estar en verde por mirar otra
+cosa.
+
+Verificacion: npm run gate exit 0 (metrica base=1 actual=0 target=0, guard base=1
+actual=0, con el guard fallando en base citando exactamente src/styles/unified.css);
+npm run lint verde (42 ficheros de guard / 250 tests, eslint 0 avisos);
+npm run test:full -> 319 ficheros / 3174 tests / 0 fallos; npm run build OK.
+
+Nota: el bundle no sirve como evidencia aqui: el minificador de CSS elimina los
+comentarios en produccion, asi que no se pueden citar en dist/. Lo que se comprueba
+es la fuente, que es donde estaba el defecto.
