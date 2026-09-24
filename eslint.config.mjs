@@ -29,7 +29,8 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'off',
       'react-hooks/rules-of-hooks': 'error',
-      // exhaustive-deps: ~66 deps faltantes (deuda P7.4; no bloquea el gate).
+      // exhaustive-deps: deuda MEDIDA en P7.4 (63 violaciones, 19 ficheros). No puede
+      // activarse mientras lint:eslint use --max-warnings=0: cualquier warn rompe lint.
       'react-hooks/exhaustive-deps': 'off',
       'eqeqeq': ['warn', 'smart'],
     },

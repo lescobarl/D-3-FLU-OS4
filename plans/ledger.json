@@ -458,6 +458,13 @@
       "estado": "done",
       "origen": "auditoria",
       "evidencia": "src/styles/unified.css - HECHO en 91a048d. Hallazgo colateral de P6.7: unified.css NO era UTF-8 valido. MEDIDO en base 27bda1f: 12 bytes fuera de UTF-8, todos dentro de COMENTARIOS CSS: 0xED -> \"i\" acentuada (5), 0xF3 -> \"o\" acentuada (3), 0xF1 -> \"n\" con tilde (2), 0x97 -> guion largo en cp1252 (2). Los contextos no dejan duda porque son palabras enteras: \"Línea separadora\", \"Pizarrón\", \"pestañas\", \"próximos\", \"viñeta\", \"sólido\", \"por día\", \"multilínea\", \"SEMANA — columnas por día\". POR QUE ES ITEM Y NO DETALLE: (1) un fichero que no es UTF-8 no se lee con la herramienta normal; en esta sesion bloqueo lecturas reales (Python reventaba con UnicodeDecodeError y la consola mostraba \"L?nea separadora\"); (2) el error ESCONDE los demas, porque el decodificador se para en el primer byte malo, asi que un recuento se queda corto y devuelve un numero que PARECE respuesta: mi primer recuento dijo 5 bytes (solo 0xED) y eran 12, con tres valores mas. ARREGLO: reescrito en el sitio equivalente de cada byte (0xED->í, 0xF3->ó, 0xF1->ñ, 0x97->—), que es lo que el contexto dice que eran. git diff de unified.css: 9 lineas cambiadas, las 9 dentro de comentarios, CERO declaraciones. ENFORCEMENT: scripts/utf8-metric.mjs (medidor, unica fuente) y tests/utf8Guard.test.ts, registrado en lint:guards, con prueba de detector por bytes sinteticos (los 4 valores tienen que discriminar, no estar en verde por mirar otra cosa). VERIFICACION: npm run gate -> exit 0 (metrica base=1 actual=0 target=0, guard base=1 actual=0, con el guard fallando en base citando exactamente src/styles/unified.css); npm run lint verde (42 ficheros de guard / 250 tests, eslint 0 avisos); npm run test:full -> 319 ficheros / 3174 tests / 0 fallos; npm run build OK. NOTA: el bundle no vale como evidencia aqui porque el minificador de CSS elimina los comentarios en produccion; lo que se comprueba es la fuente, que es donde estaba el defecto."
+    },
+    {
+      "id": "P7.4",
+      "titulo": "react-hooks/exhaustive-deps desactivada: 63 violaciones medidas (deuda de deps de hooks)",
+      "estado": "todo",
+      "origen": "propio",
+      "evidencia": "MEDIDA, no estimada. eslint.config.mjs tiene react-hooks/exhaustive-deps en \"off\" y NO puede pasar a \"warn\" mientras lint:eslint use --max-warnings=0: cualquier warning rompe lint. Recuento real (npx eslint . -f json con la regla forzada a warn): 63 violaciones en 19 ficheros -> 37 \"missing dependency\", 21 expresiones complejas, 5 \"unnecessary dependency\". Concentracion: useFluVoiceAssistant.js 26, App.tsx 10, useOnboarding.ts 7, useAvatarVoiceSync.ts 3, resto 1 por fichero. El comentario decia \"~66\": el numero real es 63. POR QUE NO SE PAGA DE GOLPE: anadir o quitar deps en los efectos del flujo de voz cambia re-render y suscripciones, y la estabilidad de voz es justo lo que esta rama consolida; se paga por zonas y con test de comportamiento, no a ciegas. POR QUE ES ITEM: hasta ahora el comentario citaba \"P7.4\" y P7.4 no existia en items[] ni en done[], asi que la deuda era invisible para la fuente unica de verdad (el ledger podia decir \"0 pendientes\" mientras el codigo reconocia 63 problemas). P7.1, P7.2 y P7.3 si existian: P7.4 era el hermano que nunca se creo. Guard que cierra la clase de defecto: tests/taskLedgerReferenceGuard.test.ts."
     }
   ],
   "done": [
@@ -1090,6 +1097,18 @@
       "id": "P6.18",
       "commit": "91a048d",
       "titulo": "Los ficheros de texto de src/ son UTF-8 valido (unified.css con 12 bytes en latin-1/cp1252)"
+    },
+    {
+      "id": "C52",
+      "commit": "38a097e",
+      "titulo": "plans/: sin artefactos de proceso versionados (guard plansProcessArtifactsGuard)",
+      "evidencia": "tests/plansProcessArtifactsGuard.test.ts: guard que impide versionar contratos e informes de sesion en plans/. Creado en 38a097e junto a la retirada de los 50 artefactos. Se registra ahora porque el ledger tenia C53 pero no C52: un guard entero sin entrada en la fuente unica de verdad."
+    },
+    {
+      "id": "C51",
+      "commit": "a6011aa",
+      "titulo": "sin aserciones no-null en src (guard nonNullAssertionGuard)",
+      "evidencia": "tests/nonNullAssertionGuard.test.ts: fix(P6.11) saco las 51 aserciones no-null de src y dejo el guard. Se registra ahora porque su id vivia en el docstring y en el titulo describe del guard, pero nunca entro en done[]; C52 y C53 si lo estaban. Detectado por tests/taskLedgerReferenceGuard.test.ts."
     }
   ]
 }

@@ -8,7 +8,7 @@
 // DESACOPLADO DE AGENTS.md (P0.5): antes este guard fijaba PROSA del documento
 // ('Iteración rápida', '--changed', 'Pre-commit LIGERO', ...), de modo que
 // reescribir el doc ponía el gate en ROJO sin que nada se hubiera roto, y el
-// documento no se podía corregir (P6.5/P6.8 son trabajo pendiente sobre su
+// documento no se podía corregir (P6.5/P6.8, ya cerrados, afectaban a su
 // sección 4). Ahora comprueba solo los MECANISMOS que hacen verdad el protocolo:
 // los scripts de package.json y el workflow de CI. El documento se redacta libre.
 // ============================================================
