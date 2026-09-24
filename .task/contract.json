@@ -1,25 +1,33 @@
 {
-  "base": "a8ad06d",
-  "task": "P6.17 - I5 del ledger: el id casa EXACTO (ni subcadena ni familia)",
-  "objective": "Que justificaCierre() no acepte una entrada cuyo commit solo mencione a OTRO hijo de su familia (P1.8 justificado por chore(P1.9)), y que un id con metacaracteres no tumbe la barrera.",
+  "base": "1949f0c",
+  "task": "P6.12 - estilo inline extendido: criterio (>3 declaraciones) y extraccion de los 10 sitios a CSS",
+  "objective": "Que ningun bloque style={{ }} de src/ pase de 3 declaraciones, con el criterio medido, guardado y con prueba de detector; y que los 10 sitios que hoy lo superan vivan en una clase CSS.",
   "allow": [
-    "scripts/task-ledger.mjs",
-    "tests/taskLedgerGuard.test.ts",
+    "scripts/style-inline-metric.mjs",
+    "tests/styleInlineGuard.test.ts",
+    "src/avatar/components/BunnyViewer.tsx",
+    "src/avatar/App.css",
+    "src/components/ThinkingIndicator.tsx",
+    "src/components/FluSettingsPanel.tsx",
+    "src/dev/asrLab/AsrLab.tsx",
+    "src/styles/unified.css",
+    "package.json",
     "plans/ledger.json"
   ],
-  "maxFiles": 4,
-  "maxLines": 90,
-  "dod": "node scripts/task-ledger.mjs check",
-  "guard": "npx vitest run --no-file-parallelism --testTimeout=30000 --reporter=dot tests/taskLedgerGuard.test.ts",
+  "maxFiles": 11,
+  "maxLines": 450,
+  "dod": "npx tsc -b",
+  "guard": "npx vitest run --no-file-parallelism --testTimeout=30000 --reporter=dot tests/styleInlineGuard.test.ts",
   "invariant": {
-    "statement": "Ninguna entrada `done` se justifica con un commit que solo menciona a otro hijo de su familia.",
+    "statement": "Ningun bloque style={{ }} de src/ tiene mas de 3 declaraciones.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('scripts/task-ledger.mjs','utf8');console.log(s.split('familiaDe(id)}').length-1)\"",
+      "command": "node scripts/style-inline-metric.mjs",
       "target": 0
     },
-    "base": "a8ad06d",
+    "base": "1949f0c",
     "guardFiles": [
-      "tests/taskLedgerGuard.test.ts"
+      "tests/styleInlineGuard.test.ts",
+      "scripts/style-inline-metric.mjs"
     ]
   }
 }

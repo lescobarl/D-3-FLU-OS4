@@ -350,12 +350,12 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
   }, [liveEngine])
 
   return (
-    <div style={{ padding: 24, fontFamily: 'monospace', color: '#e6e6e6', background: '#111', minHeight: '100vh' }}>
+    <div className="asr-lab">
       <h1>ASR Lab (dev)</h1>
       <p>
         Graba una frase y corre cada motor. Capturado: {capturedMs} ms @ {RATE} Hz.
       </p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div className="asr-lab-actions">
         <button onClick={() => record(4000)}>Grabar 4 s</button>
         <button onClick={runAll} disabled={!!busy}>
           Probar todos
@@ -369,7 +369,7 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
       </div>
       {busy && <p style={{ color: '#ffd479' }}>{busy}</p>}
       <h2>En vivo (conversación)</h2>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+      <div className="asr-lab-live-row">
         <select
           value={liveEngine}
           onChange={(event) => setLiveEngine(event.target.value as typeof liveEngine)}

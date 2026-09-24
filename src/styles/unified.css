@@ -7193,3 +7193,86 @@ details[open].flu-card .flu-card__chev {
     width: 100%;
 }
 .hoy-panel__card-title--note:hover { color: var(--accent-color, #7c6cff); }
+/* --- ThinkingIndicator (P6.12: salio del `style={{}}` inline) --- */
+.thinking-indicator {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(15, 15, 25, 0.82);
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  color: #e9e6ff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: flu-thinking-pulse 1.6s ease-in-out infinite;
+}
+
+.thinking-indicator__spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(139, 92, 246, 0.35);
+  border-top-color: #a78bfa;
+  animation: flu-thinking-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+/* --- FluSettingsPanel: preview de paleta, muestra de color y auditoria --- */
+.flu-settings-branding-preview {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.flu-settings-branding-swatch {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.flu-settings-audit-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* --- AsrLab (banco de pruebas de ASR, solo dev) --- */
+.asr-lab {
+  padding: 24px;
+  font-family: monospace;
+  color: #e6e6e6;
+  background: #111;
+  min-height: 100vh;
+}
+
+.asr-lab-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.asr-lab-live-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}

@@ -1009,14 +1009,7 @@ export function FluSettingsPanel({
 
                     {/* Preview de paleta activa */}
                     {brandingMode !== 'disabled' && brandingSeason && (
-                        <div style={{
-                            marginTop: 8,
-                            padding: '8px 10px',
-                            background: 'var(--bg-secondary)',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: 'var(--text-xs)',
-                            color: 'var(--text-secondary)',
-                        }}>
+                        <div className="flu-settings-branding-preview">
                             <div style={{ marginBottom: 4 }}>
                                 <strong>Paleta activa:</strong> {getPalette(brandingSeason).name}
                             </div>
@@ -1025,14 +1018,8 @@ export function FluSettingsPanel({
                                     <span
                                         key={key}
                                         title={key}
-                                        style={{
-                                            display: 'inline-block',
-                                            width: 20,
-                                            height: 20,
-                                            borderRadius: 4,
-                                            background: color,
-                                            border: '1px solid var(--border-color)',
-                                        }}
+                                        className="flu-settings-branding-swatch"
+                                        style={{ background: color }}
                                     />
                                 ))}
                             </div>
@@ -1127,7 +1114,7 @@ export function FluSettingsPanel({
                             ) : audit.logs.length === 0 ? (
                                 <small style={{ color: 'var(--text-secondary)' }}>Sin eventos registrados todavía.</small>
                             ) : (
-                                <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <ul className="flu-settings-audit-list">
                                     {audit.logs.slice(0, 8).map((entry) => (
                                         <li key={entry.id} style={{ marginBottom: 4 }}>
                                             <strong>{entry.action}</strong> · {entry.entity}

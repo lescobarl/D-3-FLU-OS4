@@ -2123,3 +2123,31 @@ del contrato 1 -> 0, sin `$` (sobrevive a cmd.exe y a PowerShell).
 
 Enmienda formal (AGENTS.md B14): el contrato de esta tarea lo escribe el agente
 con autorizacion expresa del usuario, igual que en P6.16.
+## P6.12 - estilo inline extendido: criterio fijado y 10 sitios extraidos
+
+Criterio fijado: "extendido" = bloque `style={{ }}` con MAS de 3 declaraciones.
+Medible y guardado. Sin el, "quitar estilos inline" es una meta infinita: 96 de
+los 104 existen porque el valor se calcula.
+
+Dos correcciones a la medicion que traia el item, ambas por medir en vez de
+repetir la lista descriptiva:
+  - Eran 10, no 8. La lista solo miraba "objeto de estilo a varias lineas", asi
+    que se le escapaban 4 sitios de UNA linea (FluSettingsPanel:1130 y AsrLab
+    353/358/372) y metia 2 que el criterio deja pasar (SignalPanel y
+    FluAvatarVoiceBridge: 2 declaraciones dinamicas cada uno). El criterio manda.
+  - Los recuentos del item estaban inflados en 1 donde habia coma final.
+
+Decidido NO inventar un criterio de cobertura de JSDoc: el titular del item lo
+mencionaba, pero en el repo no hay metrica ni guard de JSDoc (medido:
+scripts/audit-metric.mjs no la tiene), asi que era un requisito no verificable.
+Se saca del titular y se deja dicho aqui y en la evidencia del item.
+
+Hallazgo colateral NO tocado aqui (para no mezclar invariantes): src/styles/
+unified.css tiene 5 bytes que no son UTF-8 valido (4 'i' acentuadas y un guion
+largo codificados en latin-1). Va como tarea aparte.
+
+Verificacion: npm run gate exit 0 (metrica base=10 actual=0, guard base=1
+actual=0); npm run lint -> 40 guards / 241 tests / eslint 0; npm run test:full ->
+317 ficheros / 3165 tests / 0 fallos; npx vite build OK con las clases en el
+bundle. Enmienda formal (AGENTS.md B14): contrato escrito por el agente con
+autorizacion expresa del usuario.
