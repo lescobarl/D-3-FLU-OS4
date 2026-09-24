@@ -49,6 +49,9 @@ function flush() {
             body: JSON.stringify(batch),
         }).catch((e: unknown) => reportOwnFailure(e));
     } catch (e) {
+        /* ignorado: el fallo del PROPIO relay se reporta a consola y NO va al registro
+           central a proposito, porque logCaughtError reenvia por el relay y esa es justo
+           la via de entrega que acaba de fallar (bucle de reintento, C67). */
         reportOwnFailure(e);
     }
 }

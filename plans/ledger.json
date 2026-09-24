@@ -1261,6 +1261,42 @@
       "commit": "a7329fa",
       "titulo": "el techo global de tests no falla por reloj bajo carga (era 15s)",
       "evidencia": "vitest.config.ts: testTimeout 15_000 -> 120_000. MEDIDO: la suite mezcla guards de ms con guards que recorren el repo o lanzan subprocesos; en limpio, hookDepsRatchet 11.4s, jsReferenceGuard 8.8s, auditLedgerSync 5.8s, hygieneIndicators 4.6s, catchSilencioso 3.5s (reporter JSON). Bajo carga su latencia se multiplica: viteConfigNodeLoad, 1.6s en limpio, paso de 15s (~10x) y fallo con \"Test timed out in 15000ms\". El fallo no era de ningun guard: pasaban 5/5 en aislado. Se eligio el techo global y no un timeout por test porque en auditLedgerSync el spawnSync corre a nivel de MODULO (recoleccion), donde un timeout por test no llega. Prueba A/B: un test de 16s SIN timeout explicito pasa con 120_000 y falla con 15_000."
+    },
+    {
+      "id": "C62",
+      "commit": "75cd6ed",
+      "titulo": "el global __bunnyPreloadDone deja de fugarse a produccion",
+      "evidencia": "src/avatar/model/BunnyModel.tsx: window.__bunnyPreloadDone pasa a asignarse dentro de `if (import.meta.env.DEV)`, como el resto de globales de diagnostico. MEDIDO antes del arreglo: se escribia tambien en produccion y tenia 0 lectores, o sea ensuciaba window sin aportar nada. Guard: tests/devGlobalsGuard.test.ts ampliado para vigilarlo (142 -> 148 lineas) y probado ROJO antes del arreglo, nombrando BunnyModel.tsx:135. Verificado: tsc 0, eslint 0, guards 19/19."
+    },
+    {
+      "id": "C63",
+      "commit": "f9c7c53",
+      "titulo": "las rutas del proxy de busqueda dejan de estar copiadas en la capa que solo las consume",
+      "evidencia": "src/hooks/useWorkspaceSearch.ts:91-93 llevaba los 3 literales ('/api/search/web|images|video') como fallback. La ruta ya esta declarada en src/voice/lib/fluConfig.js y la PRODUCE src/server/searchProxy.ts:276-278: era una TERCERA copia escrita por la capa que solo consume, y el dia que cambie una ruta el hook apuntaria a la vieja sin que ningun gate lo note. MEDIDO antes de tocar: 0 tests fijaban ese fallback (buildRuntimeConfig no lo llama ningun test; solo lo usan SearchControlCenter y el propio hook). El valor por defecto pasa a SEARCH_ENDPOINT_DEFAULTS en src/core/search/searchConfigOverrides.ts, que ya se declara 'sin hardcode de URLs'. Guard nuevo tests/searchEndpointSingleOwner.test.ts, probado ROJO nombrando useWorkspaceSearch.ts:91, :92 y :93. Sin cambio de comportamiento: mismas rutas resueltas. Verificado: guard 2/2, searchConfigOverrides + los 2 tests del hook 32/32, tsc 0, eslint 0."
+    },
+    {
+      "id": "C64",
+      "commit": "d89c309",
+      "titulo": "search.endpoint pasa a ser alias por REFERENCIA, sin copia de la ruta",
+      "evidencia": "src/voice/lib/fluConfig.js declaraba la MISMA ruta dos veces: search.endpoint ('/api/search/web') y search.endpoints.web. MEDIDO antes del arreglo: el literal '/api/search/web' aparecia x2 en el fichero (images y video x1). Ahora los 3 literales viven en un unico const SEARCH_PROXY_ENDPOINTS y `endpoint` es `SEARCH_PROXY_ENDPOINTS.web` mientras `endpoints` es el MISMO objeto: el alias no puede derivar por construccion. Guard: tests/searchEndpointSingleOwner.test.ts, probado ROJO con '/api/search/web x2'. Cambio NET-NEUTRAL en lineas (2769 -> 2769), asi que no consume el trinquete de tests/godFileSizeGuard.test.ts (techo 2772, siguio 3/3). Sin cambio de comportamiento. Verificado: guards 85/85, tsc 0, eslint 0."
+    },
+    {
+      "id": "C65",
+      "commit": "7724e8d",
+      "titulo": "los placeholders no re-teclean URLs que ya viven en config",
+      "evidencia": "src/components/FluSettingsPanel.tsx:297 y :357 repetian textualmente URLs que ya tienen dueno en config. MEDIDO con un probe sobre todo src: de las 5 URLs declaradas en sharedConfig, exactamente 2 estaban re-tecleadas fuera de su dueno, y eran esas dos; ahora consumen OPENROUTER_DEFAULTS.API_URL y POLLINATIONS_DEFAULTS.BASE_URL (el panel queda con 0 URLs quemadas). El guard existente remoteResourceGuard (C48) excluia a proposito el texto de UI y esa exclusion tapaba justo este caso: se anade una regla C65 DISTINTA (no revierte C48, cuyo test del detector de hosts sigue intacto), probada ROJA nombrando FluSettingsPanel.tsx:297 y :357. Verificado: remoteResourceGuard 7/7, lint:guards 50/51 (el unico rojo era este registro del ledger, ultimo paso), tsc 0, eslint 0."
+    },
+    {
+      "id": "C66",
+      "commit": "1c10cfc",
+      "titulo": "la semilla del sujeto de video se DERIVA del prompt, no se sortea",
+      "evidencia": "src/services/videoAssembler.ts:74 sembraba con Math.floor(Math.random() * 999999) mientras el pipeline visual deriva la semilla del prompt (buildPollinationsArtifact -> hashPromptSeed) y la ruta de imagen hace lo mismo (imageGeneration.js:101): DOS politicas de semilla para lo mismo. MEDIDO: dos peticiones identicas del mismo prompt devolvian URLs con seeds distintos e irreproducibles (uno fue seed=165212). Ahora usa hashPromptSeed(prompt) importado del dueno. Guard nuevo tests/videoSubjectSeed.test.ts (buildSubjectImageUrl se exporta para poder vigilarlo desde un test de comportamiento), probado ROJO con esa divergencia antes del arreglo. tests/videoAssembler.test.ts sigue 14/14 sin tocar. Verificado: videoSubjectSeed 2/2, eolGuard + utf8Guard 11/11, tsc 0, eslint 0."
+    },
+    {
+      "id": "C67",
+      "commit": "98f35be",
+      "titulo": "el relay de traza dev deja de auto-reintentarse en bucle",
+      "evidencia": "src/lib/clientLogRelay.ts: flush() reportaba sus fallos de entrega con logCaughtError, y logCaughtError reenvia por el relay (caughtError.ts:42-43). El fallo se reportaba POR EL CANAL QUE ACABABA DE FALLAR, asi que cada fallo re-encolaba una entrada y armaba otro intento cada 200 ms (scheduleFlush) indefinidamente. Ese era el origen REAL del ruido 'Failed to parse URL from /__flu_client_log' que se habia atribuido a timing. MEDIDO: una entrada + una entrega fallida daba intentos=2 (re-encolada) en vez de 1. Arreglo: reportOwnFailure(e) (consola y nada mas) en las DOS vias de fallo, mas el import de logCaughtError que quedaba sin uso (desaparece la arista clientLogRelay -> caughtError). Guard nuevo tests/clientLogRelayNoLoop.test.ts, probado ROJO con intentos=2; instrumenta el fetch REAL, no lo falsea. Comprobado ademas que el gate de dev YA existia (FLU_CONFIG.debug.relayToServer = IS_DEV, fluConfig.js:2123): no habia fuga a produccion que arreglar. Verificado: guard 1/1, eolGuard + utf8Guard 10/10, tsc 0, eslint 0."
     }
   ]
 }
