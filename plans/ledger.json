@@ -491,9 +491,9 @@
     {
       "id": "P7.8",
       "titulo": "los 4 window.__fluHandle* de App.tsx nunca se limpian",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "Auditoria externa #12, PARCIAL. MEDIDO: App.tsx asigna en 873/2813/2966/3079 y NO existe ningun \"delete window.__fluHandle\" ni reasignacion a undefined en src. Es una fuga real de tooling en prod. NO se gatean (la auditoria pedia gatearlos): devGlobalsGuard documenta que son PUENTES FUNCIONALES de despacho (diary/notas/compras/agenda los invocan), y gatearlos rompe el despacho en produccion. La accion correcta es limpiarlos en el unmount, que es lo que falta."
+      "evidencia": "VEREDICTO: auditoria externa #12. La FUGA es real (6 asignaciones, ninguna limpieza) pero la mitad del diagnostico era erroneo: la auditoria pedia gatearlos y eso ROMPERIA produccion, porque los 4 __fluHandle{Diary,Note,Shopping,AgendaCommand}Text son el mecanismo REAL de despacho que lee dispatchArbiterIntent (ya documentado en devGlobalsGuard.FUNCTIONAL_BRIDGE). Lo correcto era limpiarlos al desmontar. Nuevo src/app/fluBridges.ts con el ciclo de vida (snapshot/publish/clear) y App.tsx lo usa. La republicacion en el efecto es obligatoria: main.tsx monta en StrictMode (cleanup->effect sin re-render) y un borrado a secas los dejaria ausentes en desarrollo. Probado con el ciclo real en tests/fluBridges.test.ts."
     },
     {
       "id": "P7.9",
