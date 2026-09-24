@@ -8,7 +8,7 @@ import {
   assignSpeaker,
   compareCosineSignatures,
   getFallbackSpeaker,
-  labelToSpeakerId,
+  labelToSpeakerIdSimple,
   normalizeEmbeddingVector as normalizeVector,
 } from '../lib/speakerCore.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from '../lib/embeddingFrames.js'
@@ -107,7 +107,7 @@ self.onmessage = async (event) => {
           String(payload.fallbackSpeaker || getFallbackSpeaker()).trim() || getFallbackSpeaker()
         reply(true, {
           vector: [],
-          speakerId: labelToSpeakerId(fallbackLabel),
+          speakerId: labelToSpeakerIdSimple(fallbackLabel),
           speakerName: fallbackLabel,
           similarity: 0,
           reason: 'no-vector',

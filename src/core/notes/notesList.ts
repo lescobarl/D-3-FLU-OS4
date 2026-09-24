@@ -57,7 +57,7 @@ export function removeNote(items: readonly Note[], id: string): Note[] {
 }
 
 /** Marca todas las notas como pendientes (no hechas). */
-export function uncheckAll(items: readonly Note[]): Note[] {
+export function uncheckAllNotes(items: readonly Note[]): Note[] {
   const now = Date.now();
   return items.map((note) => (note.done ? { ...note, done: false, updatedAt: now } : note));
 }

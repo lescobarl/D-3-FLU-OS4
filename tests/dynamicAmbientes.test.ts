@@ -3,7 +3,7 @@
 // ------------------------------------------------------------
 // Cubre la capa pura del catálogo dinámico de ambientes:
 //   - slugifyAmbiente (id canónico a partir del nombre)
-//   - editableFieldsOf / emptyEditableFields (contrato del formulario)
+//   - editableFieldsOfEnvironment / emptyEnvironmentEditableFields (contrato del formulario)
 //   - buildAmbientePayload (payload completo desde plantilla)
 //   - mergeCatalog / cloneBuiltin (fusión built-ins + dinámicos)
 //   - ambienteSchema (validación estricta)
@@ -25,8 +25,8 @@ import {
 } from '../src/core/environments/environmentRegistry';
 import {
   buildAmbientePayload,
-  editableFieldsOf,
-  emptyEditableFields,
+  editableFieldsOfEnvironment,
+  emptyEnvironmentEditableFields,
   slugifyAmbiente,
   type EditableAmbienteFields,
 } from '../src/core/environments/ambienteFactory';
@@ -86,11 +86,11 @@ describe('slugifyAmbiente — id canónico', () => {
 });
 
 // ------------------------------------------------------------
-describe('editableFieldsOf / emptyEditableFields — contrato del formulario', () => {
+describe('editableFieldsOfEnvironment / emptyEnvironmentEditableFields — contrato del formulario', () => {
   const ambiente = ENVIRONMENTS.find((a) => a.id === 'chef') ?? ENVIRONMENTS[0];
 
   it('expone identidad, frases, tema y pestañas del ambiente', () => {
-    const fields = editableFieldsOf(ambiente);
+    const fields = editableFieldsOfEnvironment(ambiente);
     expect(fields.nombre).toBe(ambiente.nombre);
     expect(fields.tagline).toBe(ambiente.tagline);
     expect(fields.icono).toBe(ambiente.icono);
@@ -102,20 +102,20 @@ describe('editableFieldsOf / emptyEditableFields — contrato del formulario', (
   });
 
   it('no comparte referencias: mutar vars no afecta al ambiente', () => {
-    const fields = editableFieldsOf(ambiente);
+    const fields = editableFieldsOfEnvironment(ambiente);
     fields.vars['flu-accent'] = '#000000';
     expect(ambiente.tema.vars['flu-accent']).not.toBe('#000000');
   });
 
   it('no comparte referencias: mutar tabs no afecta al ambiente', () => {
     const tabsBefore = [...ambiente.pestanas.mostrar];
-    const fields = editableFieldsOf(ambiente);
+    const fields = editableFieldsOfEnvironment(ambiente);
     fields.tabs.pop();
     expect(ambiente.pestanas.mostrar).toEqual(tabsBefore);
   });
 
-  it('emptyEditableFields limpia la identidad pero conserva tema y pestañas', () => {
-    const fields = emptyEditableFields(ambiente);
+  it('emptyEnvironmentEditableFields limpia la identidad pero conserva tema y pestañas', () => {
+    const fields = emptyEnvironmentEditableFields(ambiente);
     expect(fields.nombre).toBe('');
     expect(fields.tagline).toBe('');
     expect(fields.icono).toBe('');

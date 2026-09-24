@@ -162,10 +162,10 @@ export function createSummarySnapshotFromDraft(draft: Record<string, unknown>, t
 }
 
 /**
- * Formatea una etiqueta de historial al estilo OS2 formatMinuteHistoryLabel.
+ * Formatea una etiqueta de historial al estilo OS2 formatMinuteHistoryLabelForUi.
  * Formato: "YYMMDD-NN-Description" o solo "Description" si no hay code.
  */
-export function formatMinuteHistoryLabel(entry: MinuteUIEntry): string {
+export function formatMinuteHistoryLabelForUi(entry: MinuteUIEntry): string {
     const code = (entry.historyCode || '').trim();
     const description = (entry.description || entry.summarySnapshot?.titulo || '').trim();
     if (!code) return description;

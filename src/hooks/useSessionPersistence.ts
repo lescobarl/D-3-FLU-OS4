@@ -44,12 +44,12 @@ export function defaultSessionState(): SessionState {
 /**
  * Load session state from the Dexie session store (fluStorage).
  */
-export async function loadSessionState(): Promise<SessionState> {
+export async function readSessionState(): Promise<SessionState> {
     try {
         const stored = await loadUiSessionState();
         if (stored) return { ...DEFAULT_SESSION, ...stored };
     } catch (err) {
-        logCaughtError('[SessionPersistence] loadSessionState failed', err);
+        logCaughtError('[SessionPersistence] readSessionState failed', err);
     }
     return { ...DEFAULT_SESSION };
 }
@@ -57,13 +57,13 @@ export async function loadSessionState(): Promise<SessionState> {
 /**
  * Save session state to the Dexie backend (merge con lo ya persistido).
  */
-export async function saveSessionState(state: Partial<SessionState>): Promise<void> {
+export async function writeSessionState(state: Partial<SessionState>): Promise<void> {
     try {
         const current = await loadUiSessionState();
         const merged = { ...DEFAULT_SESSION, ...(current || {}), ...state };
         await saveUiSessionState(merged);
     } catch (err) {
-        logCaughtError('[SessionPersistence] saveSessionState failed', err);
+        logCaughtError('[SessionPersistence] writeSessionState failed', err);
     }
 }
 
@@ -100,7 +100,7 @@ export function useSessionPersistence(state: {
             isInitialMount.current = false;
             return;
         }
-        void saveSessionState(state);
+        void writeSessionState(state);
     }, [
         state.activeTab,
         state.language,

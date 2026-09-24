@@ -70,7 +70,7 @@ export function compareCosineSignatures(sig1 = [], sig2 = []) {
 }
 
 /** Id estable a partir de la etiqueta de hablante («Hablante 3» → speaker_3). */
-export function labelToSpeakerId(label = '') {
+export function labelToSpeakerIdSimple(label = '') {
   const text = String(label || '').trim()
   const match = text.match(/^Hablante\s+(\d+)$/i)
   if (match) return `speaker_${match[1]}`
@@ -150,7 +150,7 @@ export function assignSpeaker(
       String(lastSpeaker || getFallbackSpeaker(config)).trim() || getFallbackSpeaker(config)
     return {
       speakerName: fallback,
-      speakerId: labelToSpeakerId(fallback),
+      speakerId: labelToSpeakerIdSimple(fallback),
       similarity: 0,
       reason: 'empty-vector',
     }
@@ -204,7 +204,7 @@ export function assignSpeaker(
       if (preferSim >= floor) {
         return {
           speakerName: prefer,
-          speakerId: labelToSpeakerId(prefer),
+          speakerId: labelToSpeakerIdSimple(prefer),
           similarity: preferSim,
           reason: 'prefer-cluster-match',
         }
@@ -215,7 +215,7 @@ export function assignSpeaker(
   if (bestLabel && bestSim >= clusterMatch) {
     return {
       speakerName: bestLabel,
-      speakerId: labelToSpeakerId(bestLabel),
+      speakerId: labelToSpeakerIdSimple(bestLabel),
       similarity: bestSim,
       reason: bestLabel === lastSpeaker ? 'cluster-cosine-match' : 'cluster-reidentify',
     }
@@ -225,7 +225,7 @@ export function assignSpeaker(
     const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
     return {
       speakerName: newLabel,
-      speakerId: labelToSpeakerId(newLabel),
+      speakerId: labelToSpeakerIdSimple(newLabel),
       similarity: bestSim,
       reason: 'forced-new-voice-below-threshold',
     }
@@ -234,7 +234,7 @@ export function assignSpeaker(
   if (lastSpeaker && lastSim >= continuity) {
     return {
       speakerName: lastSpeaker,
-      speakerId: labelToSpeakerId(lastSpeaker),
+      speakerId: labelToSpeakerIdSimple(lastSpeaker),
       similarity: lastSim,
       reason: 'last-continuity',
     }
@@ -243,7 +243,7 @@ export function assignSpeaker(
   if (lastSpeaker && bestLabel === lastSpeaker && bestSim >= newVoice) {
     return {
       speakerName: lastSpeaker,
-      speakerId: labelToSpeakerId(lastSpeaker),
+      speakerId: labelToSpeakerIdSimple(lastSpeaker),
       similarity: bestSim,
       reason: 'cluster-continuity',
     }
@@ -253,7 +253,7 @@ export function assignSpeaker(
     const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
     return {
       speakerName: newLabel,
-      speakerId: labelToSpeakerId(newLabel),
+      speakerId: labelToSpeakerIdSimple(newLabel),
       similarity: bestSim,
       reason: 'new-voice-below-threshold',
     }
@@ -263,7 +263,7 @@ export function assignSpeaker(
     if (bestLabel === lastSpeaker && bestSim >= newVoice) {
       return {
         speakerName: lastSpeaker,
-        speakerId: labelToSpeakerId(lastSpeaker),
+        speakerId: labelToSpeakerIdSimple(lastSpeaker),
         similarity: Math.max(lastSim, bestSim),
         reason: 'grey-zone-cluster-agreement',
       }
@@ -272,7 +272,7 @@ export function assignSpeaker(
       const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
       return {
         speakerName: newLabel,
-        speakerId: labelToSpeakerId(newLabel),
+        speakerId: labelToSpeakerIdSimple(newLabel),
         similarity: bestSim,
         reason: 'forced-new-voice-grey-zone',
       }
@@ -284,7 +284,7 @@ export function assignSpeaker(
       String(lastSpeaker || bestLabel || '').trim() || getFallbackSpeaker(config)
     return {
       speakerName: coalesceLabel,
-      speakerId: labelToSpeakerId(coalesceLabel),
+      speakerId: labelToSpeakerIdSimple(coalesceLabel),
       similarity: lastSim >= 0 ? lastSim : bestSim,
       reason: 'solo-coalesce',
     }
@@ -293,7 +293,7 @@ export function assignSpeaker(
   const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
   return {
     speakerName: newLabel,
-    speakerId: labelToSpeakerId(newLabel),
+    speakerId: labelToSpeakerIdSimple(newLabel),
     similarity: bestSim,
     reason: bestSim < newVoice ? 'new-voice-below-threshold' : 'first-voice-cluster',
   }

@@ -65,7 +65,7 @@ export interface EditableAmbienteFields {
  * Extrae los campos editables de un ambiente existente.
  * Las frases se agrupan una por línea para edición en textarea.
  */
-export function editableFieldsOf(ambiente: EnvironmentDefinition): EditableAmbienteFields {
+export function editableFieldsOfEnvironment(ambiente: EnvironmentDefinition): EditableAmbienteFields {
     return {
         nombre: ambiente.nombre,
         tagline: ambiente.tagline,
@@ -82,8 +82,8 @@ export function editableFieldsOf(ambiente: EnvironmentDefinition): EditableAmbie
  * Campos editables en blanco para el flujo "crear nuevo": conserva
  * el resto de la plantilla (tema, pestañas) pero limpia la identidad.
  */
-export function emptyEditableFields(template: EnvironmentDefinition): EditableAmbienteFields {
-    const base = editableFieldsOf(template);
+export function emptyEnvironmentEditableFields(template: EnvironmentDefinition): EditableAmbienteFields {
+    const base = editableFieldsOfEnvironment(template);
     base.nombre = '';
     base.tagline = '';
     base.icono = '';

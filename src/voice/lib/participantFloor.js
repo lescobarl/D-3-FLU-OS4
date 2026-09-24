@@ -30,7 +30,7 @@ export {
   setFluParticipantOverrides,
 }
 
-export function resolveFluParticipantLabel(key = '', language = 'es', config = FLU_CONFIG) {
+export function resolveParticipantFloorLabel(key = '', language = 'es', config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.[key] || {}
   const lang = resolveAppLanguage(language, entry.en || entry.es || '')
   return entry[lang] || entry.es || entry.en || ''

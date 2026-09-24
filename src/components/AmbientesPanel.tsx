@@ -39,8 +39,8 @@ import {
     type EnvironmentDefinition,
 } from '../core/environments/environmentRegistry';
 import {
-    editableFieldsOf,
-    emptyEditableFields,
+    editableFieldsOfEnvironment,
+    emptyEnvironmentEditableFields,
     type EditableAmbienteFields,
 } from '../core/environments/ambienteFactory';
 import { AmbienteEditorForm } from './AmbienteEditorForm';
@@ -149,11 +149,11 @@ export function AmbientesPanel({
 
     const startCreate = () => {
         const template = structuredClone(ENVIRONMENTS[0]);
-        setEditor({ mode: 'create', template, seed: emptyEditableFields(template) });
+        setEditor({ mode: 'create', template, seed: emptyEnvironmentEditableFields(template) });
     };
 
     const startClone = (builtin: EnvironmentDefinition) => {
-        const seed = editableFieldsOf(builtin);
+        const seed = editableFieldsOfEnvironment(builtin);
         seed.nombre = `${builtin.nombre}${ui.cloneNameSuffix || ' (copia)'}`;
         setEditor({ mode: 'create', template: builtin, seed });
     };
@@ -163,7 +163,7 @@ export function AmbientesPanel({
             mode: 'edit',
             id: ambiente.id,
             template: ambiente,
-            seed: editableFieldsOf(ambiente),
+            seed: editableFieldsOfEnvironment(ambiente),
         });
     };
 

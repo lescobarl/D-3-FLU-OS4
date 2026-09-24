@@ -245,7 +245,7 @@ export function normalizeMinuteKnowledgeRecord(record = {}) {
   }
 }
 
-export function buildMinuteKnowledgeBase2(records = []) {
+export function buildVoiceMinuteKnowledgeBase(records = []) {
   if (!Array.isArray(records) || !records.length) return ''
 
   const maxRows = Number(FLU_CONFIG.limits?.minuteKnowledgePromptMax)

@@ -185,33 +185,28 @@ const DEBUG_ALLOWLIST = new Set([
 // Nombres ya agrupados en D1..D5 (los cubre el detector catch-all D0 también).
 const KNOWN_GROUPS = new Set([...SCHEDULER, ...PARTICIPANT, ...MINUTE, ...STORAGE, ...UTILS_INTERNAL])
 // Colisiones de nombre verificadas como NO duplicación (dominio/forma distinta).
+// Colisiones de nombre verificadas como NO duplicacion (dominio/forma distinta).
+// VACIA desde 2026-09-24: las 24 entradas originales quedaron resueltas.
+//   - 11 eran OBSOLETAS: el sensor solo ve 1 definicion en src y el resto de apariciones
+//     son RE-EXPORTS (`export { x } from ...`) o single-source con alias, que no definen
+//     algoritmo. Retirarlas no oculta nada: D0 sigue midiendo 0.
+//   - 13 eran colisiones REALES y se eliminaron renombrando el "perdedor" (el fichero con
+//     menos importadores) a un nombre de su dominio, SIN unificar comportamiento:
+//       editableFieldsOf      -> editableFieldsOfEnvironment
+//       emptyEditableFields   -> emptyEnvironmentEditableFields
+//       uncheckAll            -> uncheckAllNotes
+//       buildGenerationPrompt -> buildVisualGenerationPrompt
+//       formatSpeakerLabel    -> formatListenSpeakerLabel
+//       getAsrSegmentationCfg -> getAsrTurnSegmentationCfg
+//       wouldShrinkLog        -> wouldShrinkListenLog
+//       resolveFluParticipantLabel -> resolveParticipantFloorLabel
+//       buildMinuteKnowledgeBase2  -> buildVoiceMinuteKnowledgeBase
+//       formatMinuteHistoryLabel   -> formatMinuteHistoryLabelForUi
+//       saveSessionState      -> writeSessionState (useSessionPersistence)
+//       loadSessionState      -> readSessionState  (useSessionPersistence)
+//       labelToSpeakerId      -> labelToSpeakerIdSimple
+// Sin allowlist, cualquier colision nueva la reporta el sensor en D0.
 const ALLOW_COLLISION = new Set([
-  'editableFieldsOf',        // paleta vs ambiente: distinta forma de dato
-  'emptyEditableFields',     // idem
-  'stripDiacritics',         // gameUtils (no lowercase) vs audioMath (lowercase): distinto comportamiento
-  'uncheckAll',              // ShoppingItem.checked vs Note.done: distinto dominio
-  'buildGenerationPrompt',   // docs (GenerationInput) vs visual (workspace): distinto dominio
-  'formatSpeakerLabel',      // activeListen (index,cfg) vs voiceIdentity (label,confidence)
-  'resolveConversationSpeaker', // activeListen (strings) vs voiceIdentity (objeto con firma)
-  'getAsrSegmentationCfg',   // fluTranscriptMotor (throw si falta) vs asrTurnSegmentation (default {})
-  // Pares verificados como MISMO NOMBRE pero DISTINTA logica (no unificar; seria regresion):
-  'normalizeForMatch',       // 3 impls (lower/collapse difieren)
-  'normalizeSpaces',         // textUtils String(s||'') vs audioMath String(x): difiere en null/undefined
-  'cleanForSpeech',          // idem normalizeSpaces
-  'dayKey',                  // number (dayRollover) vs Date (browserSession)
-  'wouldShrinkLog',          // activeListen (2 args) vs speechMerge (3 args + checks extra)
-  // Verificados como mismo nombre pero distinta logica (D2/D3, 2026-09-14):
-  'resolveFluParticipantLabel',      // fluParticipant.ts usa mapa hardcodeado; participantFloor.js lee config
-  'recordParticipantIntervention',   // fluParticipant.ts (state,now) vs theoryOfMind.ts (ToMState,name,text)
-  'findMinuteRecordBySequence',      // helpers ordena lexicografico; js usa compareMinuteHistoryCodeDesc
-  'resolveMinuteThemeForSpeech',     // helpers stub isGenericMinuteSessionTheme (siempre false); js config-based
-  'createMinuteDraftFromSummary',    // helpers tema_sesion=normalizeSpaces(theme); js usa summary?.tema_sesion||theme
-  'formatMinuteDraftText',           // helpers MINUTE_FIELDS hardcodeado; js FLU_CONFIG.ui.minuteFields
-  'buildMinuteKnowledgeBase2',       // helpers acepta options.diary; js no
-  'formatMinuteHistoryLabel',        // useMinuteKnowledge .trim() sin fallback; js normalizeSpaces+fallback titulo
-  'saveSessionState',                // useSessionPersistence (localStorage, SessionState UI) vs fluStorage (IDB voz: phase/history)
-  'loadSessionState',                // idem saveSessionState
-  'labelToSpeakerId',                // conversationRow (normaliza diacriticos + fallback SPEAKER_ID_CALCULATING) vs speakerCore (regex simple + fallback speaker_1)
 ])
 
 /** TODOS los símbolos exportados definidos en >1 archivo (catch-all). */

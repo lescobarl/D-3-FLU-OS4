@@ -5,7 +5,7 @@ import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
-  buildGenerationPrompt,
+  buildVisualGenerationPrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,
@@ -13,8 +13,8 @@ import {
 } from './fluVisualPipeline.js'
 
 export {
-  buildGenerationPrompt,
-  buildGenerationPrompt as buildWorkspaceImagePrompt,
+  buildVisualGenerationPrompt,
+  buildVisualGenerationPrompt as buildWorkspaceImagePrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,
@@ -63,7 +63,7 @@ function buildNotVisualTrace() {
 }
 
 export async function resolveWorkspaceAiImageSource({ workspace = {}, language = 'es' } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const subject = resolveVisualBriefCore(workspace)
   return {
     image_url: buildLocalSvgDataUrl(subject),
@@ -82,7 +82,7 @@ export async function resolveWorkspaceAiImageSource({ workspace = {}, language =
 export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es') {
   const c = getVisualPipelineConfig()
   const type = String(workspace.tipo || '').trim().toLowerCase()
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
 
   if (!prompt || !c.visualTypes.includes(type)) {
     return buildNotVisualTrace()
@@ -102,7 +102,7 @@ export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es
 }
 
 function buildWorkspaceImageRequestKey(workspace = {}, language = 'es') {
-  return `${language}::${buildGenerationPrompt(workspace, language)}`
+  return `${language}::${buildVisualGenerationPrompt(workspace, language)}`
 }
 
 async function resolveErrorFallback(workspace = {}, language = 'es', error = '') {
@@ -115,7 +115,7 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
         source: 'generation_failed',
         hasImage: false,
         error: error || 'unknown',
-        prompt: buildGenerationPrompt(workspace, language),
+        prompt: buildVisualGenerationPrompt(workspace, language),
       },
     }
   }
@@ -130,7 +130,7 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
 }
 
 export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es', apiKey = '' } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const c = getVisualPipelineConfig()
 
@@ -249,7 +249,7 @@ export async function fetchOpenRouterImageFallback({
   language = 'es',
   apiKey = '',
 } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

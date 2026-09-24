@@ -15,7 +15,7 @@ import {
   shouldRefreshStream,
   syncSpeakerIndexFromLabel,
   utterancesSameRevision,
-  wouldShrinkLog,
+  wouldShrinkListenLog,
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { finalizeTurnIdentityPipeline } from './turnIdentityPipeline.js'
@@ -155,7 +155,7 @@ export function handleConversationStreamSync(
   }
 
   if (!turnCommit) {
-    if (wouldShrinkLog(capture, publishedLiveRef.current)) {
+    if (wouldShrinkListenLog(capture, publishedLiveRef.current)) {
       if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'shrink-preview' })
       return
     }

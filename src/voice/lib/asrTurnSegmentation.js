@@ -6,7 +6,7 @@ import { cleanForSpeech, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 
-export function getAsrSegmentationCfg(config = FLU_CONFIG) {
+export function getAsrTurnSegmentationCfg(config = FLU_CONFIG) {
   return config.transcript?.asrSegmentation || {}
 }
 
@@ -65,7 +65,7 @@ export function collapseSnapshotSpeakerRuns(snapshots = []) {
 
 /** Fusiona bloques de 1 snapshot (ruido) y adyacentes con misma etiqueta. */
 export function stabilizeSpeakerRuns(runs = [], config = FLU_CONFIG) {
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   const minWeight = Number(segCfg.minSnapshotsPerRun) || 2
   if (!runs.length) return []
 
@@ -112,7 +112,7 @@ export function findEmbeddedPriorSegments(phrase = '', priorTexts = [], priorSpe
   const cleaned = cleanForSpeech(phrase)
   if (!cleaned) return null
 
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   const minChars = Number(segCfg.embeddedPriorMinChars) || 12
 
   const pairs = (Array.isArray(priorTexts) ? priorTexts : [])
@@ -142,7 +142,7 @@ export function findEmbeddedPriorSegments(phrase = '', priorTexts = [], priorSpe
 }
 
 function assignEmbeddedSegments(embedded, speakerRuns = [], fallbackSpeaker = '', config = FLU_CONFIG) {
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   const minWords = Number(segCfg.minWordsPerSegment) || 6
   const maxSegments = Number(segCfg.maxSegmentsPerFinal) || 2
   const fallback = normalizeSpeakerLabel(fallbackSpeaker) || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
@@ -181,7 +181,7 @@ export function planAsrTurnSegments({
   fallbackSpeaker = '',
   config = FLU_CONFIG,
 } = {}) {
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   if (segCfg.enabled === false) return []
 
   const capture = cleanForSpeech(phrase)

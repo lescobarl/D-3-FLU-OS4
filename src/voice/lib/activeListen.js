@@ -146,7 +146,7 @@ export function isRedundantFinal(finalText = '', context = {}) {
 }
 
 /** No acortar por ruido ASR; no bloquear sufijos sueltos («estas» tras frase larga). */
-export function wouldShrinkLog(capture = '', lastEmitted = '') {
+export function wouldShrinkListenLog(capture = '', lastEmitted = '') {
   const next = cleanForSpeech(capture)
   const prev = cleanForSpeech(lastEmitted)
   if (!next || !prev || next.length >= prev.length) return false
@@ -156,7 +156,7 @@ export function wouldShrinkLog(capture = '', lastEmitted = '') {
   return false
 }
 
-export function formatSpeakerLabel(index, speakersCfg) {
+export function formatListenSpeakerLabel(index, speakersCfg) {
   const template = speakersCfg.labelTemplate || 'Hablante {n}'
   return template.replace('{n}', String(index))
 }
@@ -164,7 +164,7 @@ export function formatSpeakerLabel(index, speakersCfg) {
 export function getSpeakerLabel(state) {
   const { speakers } = getActiveListenConfig()
   const index = Number(state?.speakerIndex)
-  return formatSpeakerLabel(Number.isFinite(index) && index >= 1 ? index : 1, speakers)
+  return formatListenSpeakerLabel(Number.isFinite(index) && index >= 1 ? index : 1, speakers)
 }
 
 export function shouldOpenNewParagraph(state, nowMs = Date.now()) {

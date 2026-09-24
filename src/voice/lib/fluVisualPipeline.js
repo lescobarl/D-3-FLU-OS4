@@ -89,7 +89,7 @@ function templateForType(tipo = '', language = 'es') {
 /**
  * Prompt de generación fiel al workspace (misma fuente para foto, diagrama y 3D).
  */
-export function buildGenerationPrompt(workspace = {}, language = 'es') {
+export function buildVisualGenerationPrompt(workspace = {}, language = 'es') {
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const core = resolveVisualBriefCore(workspace)
   if (!core) return ''

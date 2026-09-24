@@ -2,7 +2,7 @@ import { cleanForSpeech } from './audioMath.js'
 import { normalizeConfiguracion } from './configCommands.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
-import { buildGenerationPrompt } from './fluVisualPipeline.js'
+import { buildVisualGenerationPrompt } from './fluVisualPipeline.js'
 import {
   FALAI_DEFAULTS,
   OPENROUTER_DEFAULTS,
@@ -288,7 +288,7 @@ function buildSchemaFormatBlock(schema) {
 }
 
 export async function generateWorkspaceImage({ workspace, language = 'es' }) {
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   if (!prompt) {
     return {
       imageUrl: '',

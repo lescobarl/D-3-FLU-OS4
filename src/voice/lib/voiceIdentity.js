@@ -12,7 +12,7 @@
 export {
   normalizeEmbeddingVector,
   compareCosineSignatures,
-  labelToSpeakerId,
+  labelToSpeakerIdSimple,
   autoSpeakerLabel,
   nextAutoSpeakerLabel,
   getFallbackSpeaker,

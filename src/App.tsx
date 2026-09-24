@@ -40,7 +40,7 @@ import { useMinuteKnowledge } from './hooks/useMinuteKnowledge';
 import { useVoiceProfiles } from './hooks/useVoiceProfiles';
 import { useConversationPersistence, softDeleteConversationRows } from './hooks/useConversationPersistence';
 import { useFluParticipant } from './hooks/useFluParticipant';
-import { useSessionPersistence, loadSessionState, defaultSessionState } from './hooks/useSessionPersistence';
+import { useSessionPersistence, readSessionState, defaultSessionState } from './hooks/useSessionPersistence';
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
 import { useMinuteHandlers, type MinuteDraft } from './hooks/useMinuteHandlers';
 import { useNavigationCommands } from './hooks/useNavigationCommands';
@@ -703,7 +703,7 @@ function App() {
     // (ya no hay lectura localStorage sincrónica).
     useEffect(() => {
         let cancelled = false;
-        loadSessionState()
+        readSessionState()
             .then((stored) => {
                 if (cancelled || !stored) return;
                 if (stored.expandedFrameId) setExpandedFrameId(stored.expandedFrameId);
