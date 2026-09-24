@@ -2,6 +2,7 @@
  * Pipeline visual: brief de workspace IA → prompt de generación. Sin números mágicos aquí.
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
  */
+import { buildPollinationsImageUrl } from '../../core/config/sharedConfig'
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { normalizeSpaces, shortText } from '../../lib/textUtils'
 
@@ -120,17 +121,18 @@ export function hashPromptSeed(input = '') {
 export function buildPollinationsArtifact(prompt = '', { seedInput = '' } = {}) {
   const c = getVisualPipelineConfig()
   const seed = hashPromptSeed(seedInput || prompt)
-  const params = new URLSearchParams({
-    width: String(c.imageWidth),
-    height: String(c.imageHeight),
-    model: c.pollinationsModel,
-    seed: String(seed),
-  })
-  if (c.pollinationsNologo) params.set('nologo', 'true')
-  if (c.pollinationsEnhance) params.set('enhance', 'true')
-
+  // Ensamblado delegado al dueno (P7.6). Antes se construia aqui a mano y evadia
+  // transportSingleOwnerGuard porque usaba params.set('nologo', 'true') en vez del
+  // literal nologo=true que el guard buscaba.
   const base = c.pollinationsBaseUrl.replace(/\/$/, '')
-  const image_url = `${base}/prompt/${encodeURIComponent(prompt)}?${params.toString()}`
+  const image_url = buildPollinationsImageUrl(`${base}/prompt`, prompt, {
+    width: c.imageWidth,
+    height: c.imageHeight,
+    seed,
+    model: c.pollinationsModel,
+    nologo: c.pollinationsNologo,
+    enhance: c.pollinationsEnhance,
+  })
 
   return {
     image_url,

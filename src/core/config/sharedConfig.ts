@@ -348,16 +348,25 @@ export function joinApiUrl(baseUrl: string, endpoint: string): string {
 export function buildPollinationsImageUrl(
     baseUrl: string,
     prompt: string,
-    overrides: { width?: number; height?: number; seed?: number } = {},
+    overrides: {
+        width?: number;
+        height?: number;
+        seed?: number;
+        model?: string;
+        nologo?: boolean;
+        enhance?: boolean;
+    } = {},
 ): string {
     const encoded = encodeURIComponent(prompt);
     const width = overrides.width ?? POLLINATIONS_DEFAULTS.DEFAULT_WIDTH;
     const height = overrides.height ?? POLLINATIONS_DEFAULTS.DEFAULT_HEIGHT;
+    // El orden de los parametros se mantiene igual que antes para los llamadores que
+    // no pasan model/enhance: width, height, nologo, model, enhance, seed.
+    const nologo = overrides.nologo === false ? '' : '&' + POLLINATIONS_DEFAULTS.DEFAULT_PARAMS;
+    const model = overrides.model ? '&model=' + overrides.model : '';
+    const enhance = overrides.enhance ? '&enhance=true' : '';
     const seed = overrides.seed === undefined ? '' : '&seed=' + overrides.seed;
-    return (
-        baseUrl + '/' + encoded + '?width=' + width + '&height=' + height + '&' +
-        POLLINATIONS_DEFAULTS.DEFAULT_PARAMS + seed
-    );
+    return baseUrl + '/' + encoded + '?width=' + width + '&height=' + height + nologo + model + enhance + seed;
 }
 
 /**

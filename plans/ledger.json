@@ -477,9 +477,9 @@
     {
       "id": "P7.6",
       "titulo": "buildPollinations* : 3 constructores de la misma URL base",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "Auditoria externa #4. MEDIDO: src/core/config/appConfig.ts:621 (buildPollinationsUrl), src/core/config/sharedConfig.ts:348 (buildPollinationsImageUrl) y src/voice/lib/fluVisualPipeline.js:120 (buildPollinationsArtifact). Tres sitios construyen la URL base de Pollinations; cambiar el host o los parametros obliga a tocar tres ficheros y olvidar uno rompe solo una ruta."
+      "evidencia": "VEREDICTO: auditoria externa #4. La afirmacion \"3 constructores de la misma URL\" es IMPRECISA: medidos uno a uno, buildPollinationsUrl (appConfig) es un envoltorio que anade el override de localStorage y YA delegaba en buildPollinationsImageUrl; la BASE ya era unica (C7 pollinationsFuenteUnica). El defecto real era otro: buildPollinationsArtifact (fluVisualPipeline.js) ensamblaba la URL a mano Y EVADIA transportSingleOwnerGuard, porque construia la query con params.set('nologo','true') en vez del literal nologo=true que el guard buscaba. Arreglado: el dueno acepta model/nologo/enhance opcionales (salida historica intacta, comprobada byte a byte) y el artefacto delega. El guard se amplia a la forma URLSearchParams y ademas ignora comentarios (marcaba su propia explicacion). Cierra tests/pollinationsUrlBuilder.test.ts."
     },
     {
       "id": "P7.7",

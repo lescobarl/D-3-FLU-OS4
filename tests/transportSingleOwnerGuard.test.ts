@@ -33,7 +33,13 @@ export function apiKeyResolutionCopies(src: string, fileName: string): string[] 
 /** Construcciones a mano de la URL de Pollinations. */
 export function pollinationsUrlBuilders(src: string, fileName: string): string[] {
   if (fileName === POLLINATIONS_OWNER) return [];
-  return src.includes('nologo=true') ? [fileName] : [];
+  // Se ignora lo comentado: una explicacion que mencione la construccion no es la
+  // construccion (el propio comentario de P7.6 en fluVisualPipeline.js la nombra).
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  // Dos formas de la MISMA construccion a mano: la query cruda (`nologo=true`) y la
+  // de URLSearchParams (`params.set('nologo', 'true')`). La segunda evadia a la
+  // primera y por eso fluVisualPipeline.js paso el guard hasta P7.6.
+  return /nologo=true|['"]nologo['"]\s*,/.test(code) ? [fileName] : [];
 }
 /** Llamadas crudas a fetch en un modulo que debe usar el cliente resiliente. */
 export function rawFetchCalls(src: string): number {
@@ -66,6 +72,13 @@ describe('P4.1/P4.6/P4.7 transporte - el detector no es decorativo', () => {
   });
   it('marca una URL de Pollinations a mano y no marca al dueno', () => {
     expect(pollinationsUrlBuilders('?width=1024&nologo=true', 'src/services/x.ts')).toHaveLength(1);
+    // La evasion por URLSearchParams que dejo pasar a fluVisualPipeline.js (P7.6).
+    expect(pollinationsUrlBuilders("params.set('nologo', 'true')", 'src/voice/lib/x.js')).toHaveLength(1);
+    // Una mencion en un comentario NO es la construccion.
+    expect(pollinationsUrlBuilders("// antes: params.set('nologo', 'true')", 'src/voice/lib/x.js')).toEqual([]);
+    expect(pollinationsUrlBuilders('/* nologo=true */', 'src/voice/lib/x.js')).toEqual([]);
+    // Una URL no debe confundirse con un comentario `//` (http://).
+    expect(pollinationsUrlBuilders("const u = 'https://x/y?nologo=true'", 'src/x.ts')).toHaveLength(1);
     expect(pollinationsUrlBuilders("DEFAULT_PARAMS: 'nologo=true'", POLLINATIONS_OWNER)).toEqual([]);
   });
   it('cuenta las llamadas crudas a fetch', () => {
