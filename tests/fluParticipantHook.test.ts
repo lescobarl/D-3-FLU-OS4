@@ -11,10 +11,11 @@
 // monotónico (committedTurnsRef) independiente del store.
 // ============================================================
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { RefObject } from 'react';
 import { useFluParticipant } from '../src/hooks/useFluParticipant';
+import { STORAGE_KEYS } from '../src/core/config/appConfig';
 
 const { generateParticipantEvaluationMock } = vi.hoisted(() => ({
     generateParticipantEvaluationMock: vi.fn(),
@@ -44,6 +45,17 @@ describe('useFluParticipant — turno N con historial desacoplado (regresión OS
     beforeEach(() => {
         generateParticipantEvaluationMock.mockReset();
         generateParticipantEvaluationMock.mockResolvedValue(evaluationResponse);
+        // El hook solo agenda la evaluación si hasUsableTextBackend() es true (sin API key
+        // ni endpoint local no evalúa, por diseño: ver canScheduleParticipantEvaluation).
+        // La clave debe venir del test: resolveDeepSeekApiKey() lee primero este storage y
+        // luego OPENROUTER_CONFIG.API_KEY, constante de módulo ya evaluada al importar, así
+        // que vi.stubEnv no sirve aquí. Sin sembrar el storage, el resultado dependía de si
+        // la máquina tenía un .env SIN versionar y estos dos tests no evaluaban en CI.
+        localStorage.setItem(STORAGE_KEYS.TEXT_API_KEY, 'test-key');
+    });
+
+    afterEach(() => {
+        localStorage.removeItem(STORAGE_KEYS.TEXT_API_KEY);
     });
 
     it('evalúa en el 3er commit aunque el historial tenga <3 filas', async () => {

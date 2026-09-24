@@ -24,11 +24,19 @@ function stubLocalStorage(): void {
 
 describe('GeminiService — flujo real por proxy (motor único)', () => {
   beforeEach(() => {
+    // La clave debe venir del test, no del entorno. Este fichero corre en entorno
+    // `node` (sin cabecera @vitest-environment jsdom), así que `readStorage` —que lee
+    // window.localStorage— nunca veía el stubLocalStorage(): la key solo existía si la
+    // máquina tenía un .env SIN versionar con VITE_OPENROUTER_API_KEY. Sin ella,
+    // isAvailable() es false y el servicio devuelve el respaldo sin IA en vez de llamar
+    // al proxy, que es justo lo que este flujo quiere comprobar.
+    vi.stubEnv('VITE_OPENROUTER_API_KEY', 'test-key');
     stubLocalStorage();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 

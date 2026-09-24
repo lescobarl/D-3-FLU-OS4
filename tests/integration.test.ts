@@ -18,6 +18,12 @@
 // ============================================================
 
 import { describe, it, expect, beforeEach } from 'vitest';
+// NOTA (deuda resuelta): 7 tests de este fichero leian ficheros de los proyectos HERMANOS
+// (../D-3-FLU-OS1/flu-os, ../D-3-FLU-OS2/flu-voz), que solo existen en la maquina del autor.
+// En un checkout limpio (CI) fallaban con ENOENT y el CI no podia pasar nunca. Los hechos que
+// asertan son de ESTE repositorio, que tiene sus equivalentes en src/avatar/** y
+// src/voice/lib/fluSpeech.js, asi que ahora apuntan aqui. Ademas del cambio de ruta se
+// corrigieron 2 aserciones cuyo hecho vive en otro sitio: se indica inline en cada una.
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================================
@@ -1560,25 +1566,28 @@ describe('⚡ Velocidad de Animación (Phase 3)', () => {
     });
 
     it('BunnyModel.tsx debe suscribirse a animationSpeed del store', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/model/BunnyModel.tsx', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/model/BunnyModel.tsx', 'utf-8');
         expect(source).toContain('animationSpeed');
         expect(source).toContain('setTimeScale');
     });
 
     it('BunnyAnimator debe tener método setTimeScale', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/model/bunnyAnimator.ts', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/model/bunnyAnimator.ts', 'utf-8');
         expect(source).toContain('setTimeScale');
         expect(source).toContain('mixer.timeScale');
     });
 
     it('BunnyStore debe tener setAnimationSpeed action', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/store/bunnyStore.ts', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/store/bunnyStore.ts', 'utf-8');
         expect(source).toContain('setAnimationSpeed');
-        expect(source).toContain('Math.max(0.1, Math.min(10, speed))');
+        // El clamp [0.1, 10] no vive en el store sino en el animador (delegado a
+        // THREE.AnimationMixer.timeScale): se comprueba donde esta el hecho.
+        const animator = require('fs').readFileSync('./src/avatar/model/bunnyAnimator.ts', 'utf-8');
+        expect(animator).toContain('Math.max(0.1, Math.min(10, speed))');
     });
 
     it('BunnyControlState debe tener campo animationSpeed', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/types/bunny.ts', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/types/bunny.ts', 'utf-8');
         expect(source).toContain('animationSpeed');
     });
 });
@@ -1677,13 +1686,13 @@ describe('🧢 Configuración de Imagen — Gorra/Pelo (Phase 5)', () => {
 // -----------------------------------------------------------
 describe('🔊 Configuración de Voz (Phase 6)', () => {
     it('speakResponse debe usar voiceConfig desde fluentVoice', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS2/flu-voz/src/lib/fluSpeech.js', 'utf-8');
+        const source = require('fs').readFileSync('./src/voice/lib/fluSpeech.js', 'utf-8');
         expect(source).toContain('voiceConfig');
         expect(source).toContain('_cachedVoiceConfig');
     });
 
     it('fluSpeech debe tener refreshVoiceConfigCache', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS2/flu-voz/src/lib/fluSpeech.js', 'utf-8');
+        const source = require('fs').readFileSync('./src/voice/lib/fluSpeech.js', 'utf-8');
         expect(source).toContain('refreshVoiceConfigCache');
     });
 
@@ -2208,9 +2217,12 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
     // Test 8: crossFadeToBlended — stop old BEFORE creating new
     // ============================================================
     it('crossFadeToBlended debe detener blend actions viejas ANTES de crear nuevas', () => {
-        const src = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/model/bunnyAnimator.ts', 'utf-8');
+        const src = require('fs').readFileSync('./src/avatar/model/bunnyAnimator.ts', 'utf-8');
         // Buscar la sección de crossFadeToBlended
-        const blendedSection = src.split('crossFadeToBlended(anims:')[1]?.split('crossFadeTo(name:')[0] || '';
+        // La frontera es la ultima sentencia de la propia funcion. El split anterior cortaba
+        // en 'crossFadeTo(name:' (el metodo siguiente en OS1); aqui no hay metodo despues, asi
+        // que devolvia cadena vacia y el test fallaba aunque el invariante SI se cumple.
+        const blendedSection = src.split('crossFadeToBlended(anims:')[1]?.split('this.blendActions = newBlendActions;')[0] || '';
         // Verificar que stop ocurre ANTES de crear nuevas acciones
         const stopIndex = blendedSection.indexOf('action.stop()');
         const resetIndex = blendedSection.indexOf('action.reset()');
