@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'url';
+import { availableParallelism } from 'node:os';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
@@ -38,7 +39,15 @@ export default defineConfig({
         // (environment ~360-418s sumado vs tests ~16-20s), no la ejecución.
         // maxWorkers explícito aprovecha más CPUs sin saturar el wall-clock.
         pool: 'forks',
-        maxWorkers: 10,
+        // maxWorkers NO se fija a mano (antes: 10). Ese 10 estaba medido en una maquina de
+        // 12 CPUs logicas, pero CI corre en ubuntu-latest (4 vCPU): 10 workers sobre 4 CPUs
+        // se estorban entre si y el guard sincrono jsReferenceGuard (tsc checkJs sobre todo
+        // src/) paso de ~9s a 70s. Con un test bloqueando el event loop >60s, vitest aborta
+        // el RPC del worker y la corrida queda en rojo por 'Unhandled Error: Timeout calling
+        // onTaskUpdate' AUNQUE los 330 ficheros y los 3239 tests pasen. Derivarlo del
+        // hardware real mantiene 10 en la maquina del autor (12 CPUs -> 10, identico) y baja
+        // a 3 en un runner de 4 vCPU.
+        maxWorkers: Math.max(2, Math.min(10, availableParallelism() - 1)),
         minWorkers: 2,
     },
     resolve: {

@@ -47,18 +47,8 @@ jobs:
       # La cobertura de repo la dan los guards (lint), los tipos y la suite.
 
       - name: Suite completa de unit
-        run: |
-          set -o pipefail
-          npm run test:full 2>&1 | tee /tmp/t.txt
+        run: npm run test:full
 
-      # TEMPORAL: diagnostico de la PRIMERA corrida (no re-ejecuta la suite).
-      - name: Diagnostico suite (TEMPORAL)
-        if: failure()
-        run: |
-          printf '::error::SIZE %s\n' "$(wc -c < /tmp/t.txt)"
-          printf '::error::LINES %s\n' "$(wc -l < /tmp/t.txt)"
-          echo "::error::TAIL $(tail -16 /tmp/t.txt | base64 -w0)"
-          echo "::error::CRIT $(grep -a -B4 -A14 -iE 'unhandled|failed tests|test files.*failed|out of memory|killed' /tmp/t.txt | tail -40 | base64 -w0)"
       - name: Build
         run: npm run build
 
