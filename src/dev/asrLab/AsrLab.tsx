@@ -275,7 +275,8 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
   const runAll = useCallback(async () => {
     const order: ProbeId[] = ['whisper-tiny', 'whisper-base', 'gemini', 'vosk', 'chrome']
     for (const id of order) {
-      // eslint-disable-next-line no-await-in-loop
+      // Secuencial a proposito: los 5 motores comparten la grabacion y saturarian la
+      // CPU en paralelo. Sin eslint-disable: la regla no esta activa y src/dev/** no se lintea.
       await run(id)
     }
   }, [run])

@@ -563,6 +563,13 @@
       "estado": "done",
       "origen": "propio",
       "evidencia": "VEREDICTO: VEREDICTO: NO APLICA, y la auditoria lo lee al reves. specificDeadGuard.test.ts:121 afirma expect('logMicRaw' in listen).toBe(false): exige AUSENCIA. La linea 27 esta en la lista de nombres RETIRADOS. El alias ya no existe en src (retirado en P2.3)."
+    },
+    {
+      "id": "P7.19",
+      "titulo": "eslint-disable sin justificar (AsrLab.tsx)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: auditoria externa #11. La directiva no-await-in-loop de AsrLab.tsx resulto INERTE por dos motivos independientes: src/dev/** esta en los ignores de eslint.config.mjs y la regla no-await-in-loop no esta activada en la config. Se retiro la directiva y se dejo el porque en prosa. Cierra la clase con tests/eslintSuppressionGuard.test.ts: toda directiva eslint-disable* en src/ exige `-- motivo`. El detector distingue la directiva del literal `/eslint-disable/` que appAnalyzer.ts usa como patron, y tiene prueba de ello."
     }
   ],
   "done": [
