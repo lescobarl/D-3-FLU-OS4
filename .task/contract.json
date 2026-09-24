@@ -1,23 +1,23 @@
 {
-  "base": "2031615",
-  "task": "P6.16 - I5 del ledger: el id casa como palabra, no como subcadena",
-  "objective": "Que justificaCierre() no acepte una entrada cuyo commit solo mencione su id como SUBCADENA (hoy C2 queda justificado por un commit que dice C21).",
+  "base": "a8ad06d",
+  "task": "P6.17 - I5 del ledger: el id casa EXACTO (ni subcadena ni familia)",
+  "objective": "Que justificaCierre() no acepte una entrada cuyo commit solo mencione a OTRO hijo de su familia (P1.8 justificado por chore(P1.9)), y que un id con metacaracteres no tumbe la barrera.",
   "allow": [
     "scripts/task-ledger.mjs",
     "tests/taskLedgerGuard.test.ts",
     "plans/ledger.json"
   ],
   "maxFiles": 4,
-  "maxLines": 70,
+  "maxLines": 90,
   "dod": "node scripts/task-ledger.mjs check",
   "guard": "npx vitest run --no-file-parallelism --testTimeout=30000 --reporter=dot tests/taskLedgerGuard.test.ts",
   "invariant": {
-    "statement": "Ninguna entrada done se justifica porque el asunto del commit mencione su id como SUBCADENA (C2 por C21).",
+    "statement": "Ninguna entrada `done` se justifica con un commit que solo menciona a otro hijo de su familia.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('scripts/task-ledger.mjs','utf8');console.log((s.match(/subject\\.includes\\(id\\)/g)||[]).length)\"",
+      "command": "node -e \"const s=require('fs').readFileSync('scripts/task-ledger.mjs','utf8');console.log(s.split('familiaDe(id)}').length-1)\"",
       "target": 0
     },
-    "base": "2031615",
+    "base": "a8ad06d",
     "guardFiles": [
       "tests/taskLedgerGuard.test.ts"
     ]

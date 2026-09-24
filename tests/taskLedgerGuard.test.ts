@@ -143,6 +143,32 @@ describe('validateLedger - el detector discrimina (no aprueba por nombre)', () =
     expect(ok).toBe(false)
     expect(failures.join('\n')).toContain('no justificado')
   })
+
+  it('RECHAZA un cierre justificado por el commit de un HERMANO (I5)', () => {
+    // `\bP1\b` casa tambien con P1.9 (el punto no es caracter de palabra), asi
+    // que un item hijo quedaba justificado por el commit de OTRO hijo de su
+    // familia. Medido en el ledger real: P1.8 colgaba de chore(P1.9) y P0.4 de
+    // un commit que solo dice P0.5.
+    const l = {
+      items: [{ id: 'P1.8', titulo: 'x', estado: 'done', evidencia: 'sin-ruta' }],
+      done: [{ id: 'P1.8', commit: '6efbd50', titulo: 'y' }],
+    }
+    const subjects = new Map([['6efbd50', 'chore(P1.9): metrica del gate sin backslash']])
+    const { ok, failures } = validateLedger(l, { exists: () => true, subjects })
+    expect(ok).toBe(false)
+    expect(failures.join('\n')).toContain('no justificado')
+  })
+
+  it('NO se cae si el id trae un metacaracter de regex (I5)', () => {
+    // El id se interpolaba sin escapar: `new RegExp("\\bC1)\\b")` lanzaba
+    // SyntaxError y tumbaba la barrera con un stack trace en vez de reportar.
+    const l = {
+      items: [{ id: 'C1)', titulo: 'x', estado: 'done', evidencia: 'sin-ruta' }],
+      done: [{ id: 'C1)', commit: 'deadbee', titulo: 'y' }],
+    }
+    const subjects = new Map([['deadbee', 'fix(algo): texto sin el id']])
+    expect(() => validateLedger(l, { exists: () => true, subjects })).not.toThrow()
+  })
 })
 
 describe('parseClosureCommits - leer el codigo donde git lo escribe', () => {

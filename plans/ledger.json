@@ -29,7 +29,7 @@
       "id": "P0.4",
       "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md",
       "estado": "done",
-      "evidencia": "npm run gate -> exit 0",
+      "evidencia": "plans/contratos/PREPARACION-123.md: el artefacto de T1 que creo 91665a4. npm run gate -> exit 0 (con prueba de mutacion del propio control).",
       "origen": "plan-T"
     },
     {
@@ -931,7 +931,7 @@
     {
       "id": "P1.8",
       "titulo": "Veredicto: falso positivo (no hay almacen paralelo)",
-      "commit": "6efbd50"
+      "commit": "9374b30"
     },
     {
       "id": "P1.4",

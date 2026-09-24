@@ -2088,3 +2088,38 @@ Notas fuera de alcance (deuda, no tocada):
 - Hallazgo 4.3 (numeros desfasados dentro del campo evidencia: 117/119/12 en vez de 121/17):
   cosmetico, merece un contrato aparte (un contrato = un objetivo).
 
+
+## P6.17 - I5: el id casa EXACTO (2 cierres colgados de un hermano)
+
+Hallazgo de la 4a pasada: al usar el arreglo de P6.16 como sonda aparecio que
+justificaCierre() casa el id por FAMILIA (`\bP1\b`), y eso casa tambien con un
+HERMANO (`P1.9`), porque el punto no es caracter de palabra. Medido con el guard
+real sobre las 122 filas: 2 casos VIVOS.
+
+  P0.4 -> 91665a4 ("fix(T1): ..." -> menciona P0.5, su hermano)
+  P1.8 -> 6efbd50 ("chore(P1.9): metrica del gate sin backslash")
+
+Ninguno de los dos commits nombra el item que cita. Tercer efecto del mismo
+sitio: el id se interpolaba sin escapar, asi que `C1)` lanzaba SyntaxError y
+tumbaba la barrera.
+
+Reparacion (no se borra ningun registro):
+  - P0.4 CONSERVA su commit de trabajo 91665a4 (el que reparo la barrera) y pasa
+    a justificarse por la RUTA de su evidencia, que ahora cita el artefacto que
+    ese commit creo (plans/contratos/PREPARACION-123.md). Es el mecanismo que la
+    propia barrera documenta para los items cerrados sin ser citados (el mismo
+    que cubre P0.1/P0.2/P0.3 -> f23889d, y que el test ya prueba).
+  - P1.8 apunta a 9374b30, el commit que se creo para cerrarlo por veredicto.
+    Su fila se conserva: 3 items con VEREDICTO (P5.6/P5.7/P6.1) tambien la tienen,
+    y el ledger ya cita commits de registro (P0.1/P0.2/P0.3 -> f23889d).
+
+Se descarto reescribir las 2 filas hacia commits de registro (1f88a87/9374b30):
+para P0.4 eso sustituiria el commit que hizo el trabajo por uno de tramite,
+contradiciendo la intencion que 1f88a87 declara ("done[] += 91665a4").
+
+Guard: 2 casos nuevos en taskLedgerGuard.test.ts que FALLAN contra a8ad06d
+(uno por aceptar el hermano, otro por lanzar SyntaxError) y PASAN ahora. Metrica
+del contrato 1 -> 0, sin `$` (sobrevive a cmd.exe y a PowerShell).
+
+Enmienda formal (AGENTS.md B14): el contrato de esta tarea lo escribe el agente
+con autorizacion expresa del usuario, igual que en P6.16.

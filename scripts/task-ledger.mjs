@@ -198,10 +198,15 @@ export function familiaDe(id) {
  */
 export function justificaCierre(entry, subject, archivosDelCommit, evidencia) {
   const id = String(entry.id || '');
-  // El id casa como PALABRA, no como subcadena: sin `\b` la entrada
-  // `C2` quedaba justificada por un commit que solo menciona `C21`
-  // (C2..C6 son prefijo de C21..C60). La rama de familia ya usaba `\b`.
-  if (id && new RegExp(`\\b${familiaDe(id)}\\b`).test(subject)) return true;
+  // El id casa EXACTO y escapado. Dos defectos medidos de la version anterior:
+  //  - SUBCADENA: `C2` lo justificaba un commit que dice `C21`.
+  //  - FAMILIA: para un item hijo `\bP1\b` casa tambien con un HERMANO, asi
+  //    que P1.8 colgaba de `chore(P1.9)` y P0.4 de un commit que solo dice P0.5
+  //    (el punto no es caracter de palabra).
+  // Y sin escapar, un id con metacaracteres tumbaba la barrera: `C1)` lanzaba
+  // SyntaxError. El id exacto cubre los tres casos y conserva los items META
+  // (su id ES la familia, y `\bP3\b` casa con `P3.1`).
+  if (id && new RegExp(`\\b${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(subject)) return true;
   const ruta = String(evidencia || '').split(':')[0].trim();
   return Boolean(ruta && archivosDelCommit && archivosDelCommit.has(ruta));
 }
