@@ -53,7 +53,7 @@ export async function extractWithLocal(dataUrl: string): Promise<string> {
         const { data } = await worker.recognize(dataUrl);
         return String(data?.text || '').trim();
     } finally {
-        await worker.terminate().catch(() => undefined);
+        await worker.terminate().catch((e) => { logCaughtError('[catch] src/services/ocrService.ts', e); });
     }
 }
 
@@ -153,7 +153,7 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
             chunks.push(await extractWithLocal(canvas.toDataURL('image/png')));
         }
     } finally {
-        await loadingTask.destroy().catch(() => undefined);
+        await loadingTask.destroy().catch((e) => { logCaughtError('[catch] src/services/ocrService.ts', e); });
     }
     return { text: chunks.join('\n').trim(), engine: 'local', warnings };
 }

@@ -155,7 +155,7 @@ Genera la minuta en formato JSON.`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
+            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -205,7 +205,7 @@ Genera la minuta en formato JSON.`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
+            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -293,7 +293,7 @@ Responde como ${botName}:`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
+            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -324,7 +324,7 @@ Responde como ${botName}:`;
         }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.conversation });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
+            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -497,7 +497,7 @@ Responde como ${botName}:`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Proxy error' }));
+            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             const error = new Error(errorData.error || `Proxy returned ${response.status}`) as Error & {
                 code?: string;
                 status?: number;

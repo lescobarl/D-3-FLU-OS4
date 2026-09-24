@@ -163,7 +163,7 @@ async function postChatCompletion({
   )
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => '')
+    const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
     const error = new Error(`Gemini/OpenRouter error ${response.status}: ${detail || response.statusText}`)
     error.status = response.status
     error.detail = detail
@@ -391,7 +391,7 @@ export async function generateOpenRouterImage({
       REQUEST_TIMEOUT_PRESETS.image,
     )
     if (!response.ok) {
-      const detail = await response.text().catch(() => '')
+      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
       const message = `OpenRouter image error ${response.status}: ${String(detail).slice(0, 300)}`
       console.error('[gemini]', message)
       return {
@@ -1249,7 +1249,7 @@ export async function requestConversationSummary(params) {
   try {
     savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
-  } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+  } catch (err) { logCaughtError('[catch] src/voice/lib/gemini.js', err) }
   const body = {
     ...(params ?? {}),
     model: savedModel || undefined,
@@ -1794,7 +1794,7 @@ export async function generateVideoViaFal({
       }),
     })
     if (!submit.ok) {
-      const detail = await submit.text().catch(() => '')
+      const detail = await submit.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
       const message = `fal.ai submit error ${submit.status}: ${String(detail).slice(0, 300)}`
       console.error('[falai]', message)
       return {

@@ -146,7 +146,7 @@ export async function searchSongOnline(
     const url = item?.preview
     if (!url) continue
     // Solo se devuelve el candidato si su preview realmente se puede reproducir.
-    const streamable = await probe(url, probeTimeoutMs).catch(() => false)
+    const streamable = await probe(url, probeTimeoutMs).catch((e) => { logCaughtError('[catch] src/services/musicSearch.ts', e); return false; })
     if (streamable) {
       const id = String(item.id ?? url)
       return { identifier: id, title: item.title || id, url }

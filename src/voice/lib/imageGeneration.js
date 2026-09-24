@@ -169,7 +169,7 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
       })
 
       if (!response.ok) {
-        const detail = await response.text().catch(() => '')
+        const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
         return resolveErrorFallback(
           workspace,
           language,
@@ -267,7 +267,7 @@ export async function fetchOpenRouterImageFallback({
     })
 
     if (!response.ok) {
-      const detail = await response.text().catch(() => '')
+      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
       return {
         image_url: '',
         trace: {
@@ -351,7 +351,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
       body: JSON.stringify({ prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) }),
     })
     if (!response.ok) {
-      const detail = await response.text().catch(() => '')
+      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
       return {
         video_url: '',
         trace: {

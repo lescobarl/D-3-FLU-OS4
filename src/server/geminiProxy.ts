@@ -594,7 +594,7 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
             body: JSON.stringify(payload),
         });
         if (!response.ok) {
-            const detail = await response.text().catch(() => '');
+            const detail = await response.text().catch((e) => { logCaughtError('[catch] src/server/geminiProxy.ts', e); return ''; });
             console.error('[geminiProxy] /api/gemini/text upstream error:', response.status, detail.slice(0, 300));
             return sendJson(res, response.status, { error: 'gemini_api_error', detail: detail.slice(0, 500) });
         }

@@ -120,7 +120,8 @@ export function useOnboarding({
         setState(loaded);
         setReady(true);
       })
-      .catch(() => {
+      .catch((e) => {
+        logCaughtError('[catch] src/hooks/useOnboarding.ts', e);
         if (cancelled) return;
         setState(createInitialState());
         setReady(true);
@@ -147,7 +148,7 @@ export function useOnboarding({
       // persistForParticipant(); una sesion sin completar ya se descartaba antes
       // (auto-sanacion), asi que no se pierde nada al retirar el volcado a localStorage.
       if (!isPerUser) return;
-      if (participantId) serviceRef.current?.save(participantId, next).catch(() => undefined);
+      if (participantId) serviceRef.current?.save(participantId, next).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
     },
     [isPerUser, participantId],
   );
@@ -163,7 +164,7 @@ export function useOnboarding({
   // Hablar el saludo inicial al montar (una sola vez) cuando esté listo.
   useEffect(() => {
     if (!ready || !config.enabled || state.completed) return;
-    speak(initialSpeech(config.steps, lang, state.captured), lang).catch(() => undefined);
+    speak(initialSpeech(config.steps, lang, state.captured), lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
   }, [ready]);
 
   const handleAction = useCallback(async (result: AdvanceResult) => {
@@ -203,7 +204,7 @@ export function useOnboarding({
         handleAction(result);
       }
       if (result.speech) {
-        speak(result.speech, lang).catch(() => undefined);
+        speak(result.speech, lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
       }
     },
     [state, config, lang, speak, persistState, handleAction, isPerUser, notifyCompleted],
@@ -255,13 +256,13 @@ export function useOnboarding({
   const reset = useCallback(() => {
     const next = createInitialState();
     if (isPerUser && participantId) {
-      serviceRef.current?.reset(participantId).catch(() => undefined);
+      serviceRef.current?.reset(participantId).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
     }
     if (typeof window !== 'undefined' && config.nameKey) {
       localRemove(config.nameKey);
     }
     setState(next);
-    speak(initialSpeech(config.steps, lang, next.captured), lang).catch(() => undefined);
+    speak(initialSpeech(config.steps, lang, next.captured), lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
   }, [config, lang, speak, isPerUser, participantId]);
 
   /** Siembra el onboarding de un participante con un estado dado (o el más
@@ -273,7 +274,7 @@ export function useOnboarding({
     (id: string, stateToSave?: OnboardingState): Promise<void> => {
       if (!id || id === DEFAULT_ONBOARDING_USER) return Promise.resolve();
       const target = stateToSave ?? latestStateRef.current;
-      return serviceRef.current?.save(id, target).catch(() => undefined) ?? Promise.resolve();
+      return serviceRef.current?.save(id, target).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); }) ?? Promise.resolve();
     },
     [],
   );

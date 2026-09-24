@@ -209,7 +209,7 @@ export function createNotificationService(
       driver.isSupported() &&
       driver.getPermission() === 'granted'
     ) {
-      driver.showSystemNotification(notification).catch(() => undefined);
+      driver.showSystemNotification(notification).catch((e) => { logCaughtError('[catch] src/core/notifications/notificationService.ts', e); });
     }
 
     return delivery;

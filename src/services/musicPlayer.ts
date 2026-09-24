@@ -211,7 +211,7 @@ export async function playSong(
     // La URL del catálogo puede haber muerto (archive.org deja de responder
     // en algunas redes). Solo se reproduce si la sonda confirma que transmite;
     // si no, se cae a la búsqueda en línea (Deezer).
-    const streamable = await probe(local.url).catch(() => false)
+    const streamable = await probe(local.url).catch((e) => { logCaughtError('[catch] src/services/musicPlayer.ts', e); return false; })
     if (streamable) {
       keepAlive = true
       // El gap anti-bucle se mide desde el inicio de la reproducción.
@@ -220,7 +220,7 @@ export async function playSong(
       return { title: local.title, source: 'catalog' }
     }
   }
-  const found = await searchSongOnline(normalized, searchClient, probe).catch(() => null)
+  const found = await searchSongOnline(normalized, searchClient, probe).catch((e) => { logCaughtError('[catch] src/services/musicPlayer.ts', e); return null; })
   if (found?.url) {
     keepAlive = true
     // El gap anti-bucle se mide desde el inicio de la reproducción.

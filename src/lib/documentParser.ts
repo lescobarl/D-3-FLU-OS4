@@ -349,7 +349,7 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
         .join(' ');
       pages.push(`=== Página ${i} ===\n${text}`);
     }
-    await loadingTask.destroy().catch(() => undefined);
+    await loadingTask.destroy().catch((e) => { logCaughtError('[catch] src/lib/documentParser.ts', e); });
     return { rawText: pages.join('\n'), errores: [], qa_context: '', warnings: [] };
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);

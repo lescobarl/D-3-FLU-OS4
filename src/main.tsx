@@ -28,7 +28,7 @@ if (
     .register('/sw.js')
     .then((registration) => {
       // Fuerza la comprobación de una versión nueva del SW en cada arranque.
-      registration.update().catch(() => undefined);
+      registration.update().catch(() => { /* ignorado: la actualizacion del SW no debe romper el arranque */ });
     })
     .catch((err) => console.error('Error al registrar el Service Worker de la PWA:', err));
 

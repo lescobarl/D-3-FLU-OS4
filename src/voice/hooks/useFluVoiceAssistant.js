@@ -1334,7 +1334,7 @@ export function useFluVoiceAssistant({
 
     try {
       recognitionRef.current.stop()
-    } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+    } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
 
     await Promise.race([
       waitForEnd,
@@ -1935,35 +1935,35 @@ export function useFluVoiceAssistant({
     if (processorRef.current) {
       try {
         processorRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       processorRef.current = null
     }
 
     if (sourceRef.current) {
       try {
         sourceRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       sourceRef.current = null
     }
 
     if (analyserRef.current) {
       try {
         analyserRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       analyserRef.current = null
     }
 
     if (zeroGainRef.current) {
       try {
         zeroGainRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       zeroGainRef.current = null
     }
 
     if (audioContextRef.current) {
       try {
         await audioContextRef.current.close()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       audioContextRef.current = null
     }
 
@@ -1975,35 +1975,35 @@ export function useFluVoiceAssistant({
     if (processorRef.current) {
       try {
         processorRef.current.disconnect?.()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       processorRef.current = null
     }
 
     if (sourceRef.current) {
       try {
         sourceRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       sourceRef.current = null
     }
 
     if (analyserRef.current) {
       try {
         analyserRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       analyserRef.current = null
     }
 
     if (zeroGainRef.current) {
       try {
         zeroGainRef.current.disconnect()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       zeroGainRef.current = null
     }
 
     if (audioContextRef.current) {
       try {
         await audioContextRef.current.close()
-      } catch (err) { console.warn('[flu] fallo de teardown ignorado:', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
       audioContextRef.current = null
     }
 
@@ -3809,7 +3809,7 @@ export function useFluVoiceAssistant({
         lastSpeakerRef.current ||
         fallbackSpeaker
 
-      // Diarización pesada corriendo EN PARALELO con la API. .catch(() => null) la hace
+      // Diarización pesada corriendo EN PARALELO con la API. .catch((e) => { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e); return null; }) la hace
       // no-fatal (mismo policy que el lote conversacional vía Promise.allSettled): si la
       // diarización fallara, se degrada al orador rápido + firma calculada bajo demanda.
       const speakerPromise = resolveSpeaker(

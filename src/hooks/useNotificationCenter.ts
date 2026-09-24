@@ -6,6 +6,7 @@
 // voz (speak). Config-driven (FLU_CONFIG.notifications).
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { logCaughtError } from '../lib/caughtError';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import {
   createNotificationService,
@@ -164,7 +165,7 @@ export function useNotificationCenter({
       }
 
       if (shouldSpeak && typeof speak === 'function') {
-        speak(notification.body, lang).catch(() => undefined);
+        speak(notification.body, lang).catch((e) => { logCaughtError('[catch] src/hooks/useNotificationCenter.ts', e); });
       }
     };
 

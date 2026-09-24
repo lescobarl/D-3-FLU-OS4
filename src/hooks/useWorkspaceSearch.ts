@@ -240,7 +240,7 @@ export async function fetchTypeResults(
     params.set('max', String(maxResults));
     try {
         const response = await fetch(`${endpoint}?${params.toString()}`);
-        const data = await response.json().catch(() => null);
+        const data = await response.json().catch((e) => { logCaughtError('[catch] src/hooks/useWorkspaceSearch.ts', e); return null; });
         if (response.ok && data?.ok && Array.isArray(data.results)) {
             return {
                 ok: true,

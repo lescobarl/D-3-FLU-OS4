@@ -831,9 +831,9 @@ function App() {
                     deliveredByVoice = delivery === 'voice' || delivery === 'both';
                 }
                 if (!deliveredByVoice) {
-                    speakFluRef.current(dueBody, lang).catch(() => undefined);
+                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('[catch] src/App.tsx', e); });
                 }
-                agendaAudioDriver.play(sound).catch(() => undefined);
+                agendaAudioDriver.play(sound).catch((e) => { logCaughtError('[catch] src/App.tsx', e); });
             } else if (action === 'avisar') {
                 // Recordatorio: notificación + voz (como useReminders), sin tono.
                 const voiceDue = remindersVoice.due || 'Tienes un recordatorio pendiente:';
@@ -845,7 +845,7 @@ function App() {
                     deliveredByVoice = delivery === 'voice' || delivery === 'both';
                 }
                 if (!deliveredByVoice) {
-                    speakFluRef.current(dueBody, lang).catch(() => undefined);
+                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('[catch] src/App.tsx', e); });
                 }
             } else if (typeof notify === 'function') {
                 // Cita/junta/clase: notificación pasiva (toast), sin voz ni tono.
@@ -3825,7 +3825,7 @@ const {
             .where('speakerId')
             .equals(label)
             .primaryKeys()
-            .catch(() => [] as string[]);
+            .catch((e) => { logCaughtError('[catch] src/App.tsx', e); return [] as string[]; });
         if (speakerRows.length > 0) {
             await softDeleteConversationRows(speakerRows).catch(console.error);
         }
@@ -3834,13 +3834,13 @@ const {
         const legacyRows = await fluDb.conversations
             .filter((r) => String(r?.speakerName || '').trim() === label)
             .primaryKeys()
-            .catch(() => [] as string[]);
+            .catch((e) => { logCaughtError('[catch] src/App.tsx', e); return [] as string[]; });
         if (legacyRows.length > 0) {
             await softDeleteConversationRows(legacyRows).catch(console.error);
         }
 
         // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado lógico.
-        const localProfile = await findVoiceProfileByLabel(label).catch(() => null);
+        const localProfile = await findVoiceProfileByLabel(label).catch((e) => { logCaughtError('[catch] src/App.tsx', e); return null; });
         if (localProfile?.id) {
             await deleteVoiceProfile(localProfile.id).catch(console.error);
         }
