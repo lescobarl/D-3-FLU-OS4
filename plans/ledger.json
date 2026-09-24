@@ -465,6 +465,104 @@
       "estado": "todo",
       "origen": "propio",
       "evidencia": "MEDIDA, no estimada. eslint.config.mjs tiene react-hooks/exhaustive-deps en \"off\" y NO puede pasar a \"warn\" mientras lint:eslint use --max-warnings=0: cualquier warning rompe lint. Recuento real (npx eslint . -f json con la regla forzada a warn): 63 violaciones en 19 ficheros -> 37 \"missing dependency\", 21 expresiones complejas, 5 \"unnecessary dependency\". Concentracion: useFluVoiceAssistant.js 26, App.tsx 10, useOnboarding.ts 7, useAvatarVoiceSync.ts 3, resto 1 por fichero. El comentario decia \"~66\": el numero real es 63. POR QUE NO SE PAGA DE GOLPE: anadir o quitar deps en los efectos del flujo de voz cambia re-render y suscripciones, y la estabilidad de voz es justo lo que esta rama consolida; se paga por zonas y con test de comportamiento, no a ciegas. POR QUE ES ITEM: hasta ahora el comentario citaba \"P7.4\" y P7.4 no existia en items[] ni en done[], asi que la deuda era invisible para la fuente unica de verdad (el ledger podia decir \"0 pendientes\" mientras el codigo reconocia 63 problemas). P7.1, P7.2 y P7.3 si existian: P7.4 era el hermano que nunca se creo. Guard que cierra la clase de defecto: tests/taskLedgerReferenceGuard.test.ts."
+    },
+    {
+      "id": "P7.5",
+      "titulo": "resolveGeminiApiKey definida 3 veces con contratos distintos",
+      "estado": "todo",
+      "origen": "propio",
+      "evidencia": "Auditoria externa #3. MEDIDO: src/core/config/appConfig.ts:682 (sin args, devuelve string), src/services/gemini.ts:63 (recibe apiKey, devuelve {apiKey, apiKeySource}) y src/voice/lib/gemini.js:1299 (recibe apiKey). Tres funciones con el MISMO nombre y firmas/retornos distintos: importar la equivocada no falla al compilar, falla en runtime. No se unifico aun porque unificar exige decidir cual es el canonico y reescribir 14 puntos de uso en la capa de servicios/voz; renombrar por responsabilidad es la via."
+    },
+    {
+      "id": "P7.6",
+      "titulo": "buildPollinations* : 3 constructores de la misma URL base",
+      "estado": "todo",
+      "origen": "propio",
+      "evidencia": "Auditoria externa #4. MEDIDO: src/core/config/appConfig.ts:621 (buildPollinationsUrl), src/core/config/sharedConfig.ts:348 (buildPollinationsImageUrl) y src/voice/lib/fluVisualPipeline.js:120 (buildPollinationsArtifact). Tres sitios construyen la URL base de Pollinations; cambiar el host o los parametros obliga a tocar tres ficheros y olvidar uno rompe solo una ruta."
+    },
+    {
+      "id": "P7.7",
+      "titulo": "'openrouter' quemado en codigo (regla #1: sin hardcode)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 6148862. fluConfig.js:1196 y searchSession.ts:589 derivan ya de AI_PROVIDER_IDS, que ya existia y ya se usaba en el mismo fichero (linea 613). El hardcode era una inconsistencia interna, no una carencia de config."
+    },
+    {
+      "id": "P7.8",
+      "titulo": "los 4 window.__fluHandle* de App.tsx nunca se limpian",
+      "estado": "todo",
+      "origen": "propio",
+      "evidencia": "Auditoria externa #12, PARCIAL. MEDIDO: App.tsx asigna en 873/2813/2966/3079 y NO existe ningun \"delete window.__fluHandle\" ni reasignacion a undefined en src. Es una fuga real de tooling en prod. NO se gatean (la auditoria pedia gatearlos): devGlobalsGuard documenta que son PUENTES FUNCIONALES de despacho (diary/notas/compras/agenda los invocan), y gatearlos rompe el despacho en produccion. La accion correcta es limpiarlos en el unmount, que es lo que falta."
+    },
+    {
+      "id": "P7.9",
+      "titulo": "catchSilenciosoGuard acepta \"ignorado:\" sin binding y no cubre .catch de promesas",
+      "estado": "todo",
+      "origen": "propio",
+      "evidencia": "Auditoria externa #14. El guard C13 (endurecido en P2.1) declara como criterio que \"ignorado:\" es una omision deliberada declarada y que \".catch(() => {})\" con handler vacio es un trago silencioso. Pero no exige binding real en el caso de \"ignorado:\" ni cubre promesas con handler no vacio que descarta el error. Una barrera que acepta una marca de texto como sustituto del registro real mide la marca, no el hecho."
+    },
+    {
+      "id": "P7.10",
+      "titulo": "providerLiteralGuard solo ve literales entre comillas/arrays",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 6148862. providerLiteralGuard marca ahora posiciones de identidad (clave de objeto / comparacion) con criterio de ambiguedad: openrouter y deepseek en cualquier clave; gemini y local solo con clave especifica de proveedor. MEDIDO antes de acotarlo: la version ingenua daba 6 hits con 2 falsos positivos del dominio de almacenamiento de storyteller.ts; ese falso positivo es el que fijo el criterio."
+    },
+    {
+      "id": "P7.11",
+      "titulo": "token helpers unificados: la tokenizacion vive solo en gameUtils.ts (auditoria #1)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde. Se intento cubrirlo antes con un guard y el detector sobreconto: delegar no es duplicar, y los falsos positivos medidos (rango \"C1-C8\", dos guards reclamando C1, datos T1/T2) lo descartaron hasta acotarlo a P#.#."
+    },
+    {
+      "id": "P7.12",
+      "titulo": "mergeCaptureText retirado (auditoria #7)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde: la funcion @deprecated tenia CERO consumidores en todo el repo."
+    },
+    {
+      "id": "P7.13",
+      "titulo": "micRawConsole retirado (auditoria #8)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde: clave con CERO consumidores; arrastraba el @deprecated duplicado en dos lineas."
+    },
+    {
+      "id": "P7.14",
+      "titulo": "slugifyAmbiente no duplica slugifyPalette (auditoria #2)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. AmbienteFactory.ts:38 ya devuelve slugifyPalette(nombre); es delegacion, no copia. duplicationGuard lo comprueba con ambiente.toContain(\"slugifyPalette(nombre)\")."
+    },
+    {
+      "id": "P7.15",
+      "titulo": "streamLogThrottleMs no es codigo muerto (auditoria #9)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. Esta LEIDO en useFluVoiceAssistant.js:1756 y su valor gobierna la rama \"throttleMs > 0\" de 1761: es un interruptor vivo (hoy en 0). Con 0 la rama no se ejecuta, por eso parece muerto. Borrar la clave cambiaria el contrato de config."
+    },
+    {
+      "id": "P7.16",
+      "titulo": "el catch de gemini.js no esta vacio (auditoria #10)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. gemini.js:1326 captura, lee response.text() y RELANZA un Error con code \"gemini_api_error\". catchSilenciosoGuard lo acepta por su regla 2 (\"propaga -> ok\"), correctamente."
+    },
+    {
+      "id": "P7.17",
+      "titulo": "window.FLU_CONFIG ya esta gateado (auditoria #13)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. main.tsx:17-19 lo envuelve en if (import.meta.env.DEV). La auditoria cito la linea 18 sin el if de la 17."
+    },
+    {
+      "id": "P7.18",
+      "titulo": "specificDeadGuard exige que logMicRaw NO exista (auditoria #16)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA, y la auditoria lo lee al reves. specificDeadGuard.test.ts:121 afirma expect('logMicRaw' in listen).toBe(false): exige AUSENCIA. La linea 27 esta en la lista de nombres RETIRADOS. El alias ya no existe en src (retirado en P2.3)."
     }
   ],
   "done": [
