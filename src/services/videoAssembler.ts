@@ -62,16 +62,19 @@ export interface VideoAssemblyParams {
 // Imagen del sujeto (Bug #5): base de Pollinations desde appConfig (sin hardcode).
 import { POLLINATIONS_CONFIG, buildPollinationsUrl } from '../core/config/appConfig';
 import { logCaughtError } from '../lib/caughtError';
+import { hashPromptSeed } from '../voice/lib/fluVisualPipeline';
 
 /** URL de imagen del sujeto pedido por el usuario (p. ej. "un conejo saltando").
  *  Sin hardcode: la base sale de appConfig (POLLINATIONS_CONFIG.BASE_URL). */
-function buildSubjectImageUrl(prompt: string): string {
+export function buildSubjectImageUrl(prompt: string): string {
     if (!String(POLLINATIONS_CONFIG?.BASE_URL || '')) return '';
     const side = POLLINATIONS_CONFIG.VIDEO_SUBJECT_SIZE;
     return buildPollinationsUrl(prompt, {
         width: side,
         height: side,
-        seed: Math.floor(Math.random() * 999999),
+        // Semilla DERIVADA del prompt, misma politica que la ruta de imagen
+        // (imageGeneration): el mismo video da la misma imagen, no una al azar (C66).
+        seed: hashPromptSeed(prompt),
     });
 }
 
