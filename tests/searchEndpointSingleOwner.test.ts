@@ -15,6 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { SEARCH_ENDPOINT_DEFAULTS } from '../src/core/search/searchConfigOverrides'
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 
 const LITERAL_RE = /['"`]\/api\//
 const isComment = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
@@ -54,5 +55,29 @@ describe('C63 - rutas del proxy de busqueda con dueno unico', () => {
     for (const [k, v] of Object.entries(SEARCH_ENDPOINT_DEFAULTS)) {
       expect(v, `endpoint de ${k}`).toMatch(/^\/api\/search\/[a-z]+$/)
     }
+  })
+})
+
+describe('C64 - el alias search.endpoint no duplica la ruta en la config', () => {
+  const CONFIG = 'src/voice/lib/fluConfig.js'
+
+  it('cada ruta del proxy se declara UNA sola vez en la config', () => {
+    const src = readFileSync(join(process.cwd(), CONFIG), 'utf8')
+    const dup: string[] = []
+    for (const route of ['/api/search/web', '/api/search/images', '/api/search/video']) {
+      const n = src.split(route).length - 1
+      if (n !== 1) dup.push(`${route} x${n}`)
+    }
+    expect(
+      dup,
+      'Rutas declaradas mas de una vez en fluConfig.js (el alias duplica el literal):\n  ' +
+        dup.join('\n  '),
+    ).toEqual([])
+  })
+
+  it('search.endpoint, si existe, coincide con endpoints.web (sin deriva)', () => {
+    const s = FLU_CONFIG.browser.search as { endpoint?: string; endpoints?: Record<string, string> }
+    if (s.endpoint === undefined) return
+    expect(s.endpoints?.web, 'hay alias search.endpoint pero no endpoints.web').toBe(s.endpoint)
   })
 })

@@ -51,6 +51,11 @@ const CURATED_ALLOWLIST = ['wikipedia.org', 'educ.ar']
 /** Variante Familiar: la allowlist curada mas video. */
 const CURATED_ALLOWLIST_FAMILIAR = [...CURATED_ALLOWLIST, 'youtube.com']
 
+// Rutas del proxy de busqueda: fuente UNICA de los literales de ruta (C64).
+const SEARCH_PROXY_ENDPOINTS = {
+  web: '/api/search/web', images: '/api/search/images', video: '/api/search/video',
+};
+
 export const FLU_CONFIG = {
   sessionDefaults: {
     role: 'Asistente del Maestro',
@@ -1160,14 +1165,9 @@ export const FLU_CONFIG = {
     // viven aquí (config-driven) y pueden afinarse sin tocar código.
     search: {
       // Proxy server-side (mismo patrón que browser.fetch, evita CORS).
-      endpoint: '/api/search/web',
-      // F4 — Endpoints por tipo (el hook los usa; `endpoint` se conserva
-      // para compatibilidad con lecturas previas).
-      endpoints: {
-        web: '/api/search/web',
-        images: '/api/search/images',
-        video: '/api/search/video',
-      },
+      // Rutas: dueno unico por REFERENCIA (C64); `endpoint` es alias de endpoints.web.
+      endpoint: SEARCH_PROXY_ENDPOINTS.web,
+      endpoints: SEARCH_PROXY_ENDPOINTS,
       timeoutMs: 8000,
       providers: {
         // Proveedores web. El ORDEN es la cadena de respaldo: se agrupa por
