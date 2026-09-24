@@ -34,6 +34,13 @@ jobs:
       - name: Guards (lint rule pragmática del proyecto)
         run: npm run lint
 
+      # TEMPORAL: diagnostico. Emite el fallo como annotation (legible sin token).
+      - name: Diagnostico guards (TEMPORAL)
+        if: failure()
+        run: |
+          npm run lint > /tmp/g.txt 2>&1 || true
+          echo "::error::GUARDS-B64 $(tail -c 5000 /tmp/g.txt | base64 -w0)"
+
       - name: Puerta de tipos
         run: npm run typecheck
 
