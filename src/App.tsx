@@ -2497,7 +2497,7 @@ function App() {
             }
             onboarding.answer(text);
         },
-        [onboarding, participants.participants, activeParticipantId],
+        [onboarding, participants.participants],
     );
     // Rescate: si el onboarding quedó (p. ej. de una sesión previa ya abierta)
     // en la pregunta redundante "¿Eres niño o adulto?" (kind) con un NOMBRE ya
@@ -2595,7 +2595,7 @@ function App() {
                 // del estado activo; el listado ya se refrescó en participants.remove.
             }
         },
-        [activeParticipantId, browserProfiles, participants, onboarding, setActiveUser, setActiveParticipantId],
+        [activeParticipantId, browserProfiles, participants, onboarding, setActiveParticipantId],
     );
 
     const handleRemoveActiveUser = useCallback(async () => {
@@ -3883,7 +3883,6 @@ const {
         participants,
         activeParticipantId,
         onboarding,
-        setActiveUser,
         setActiveParticipantId,
     ]);
 

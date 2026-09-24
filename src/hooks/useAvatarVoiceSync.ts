@@ -599,7 +599,7 @@ export function useAvatarVoiceSync() {
 
         if (options.debug) {
         }
-    }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction, scheduleEmotionReset]);
+    }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction]);
 
     /**
      * Muestra una micro-expresión aleatoria para dar vida al avatar en estado idle.
