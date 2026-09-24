@@ -45,20 +45,31 @@ export const ITEMS_EXTERNOS = [
 ]
 
 /**
- * Items externos que NUNCA llevaron su numero escrito (los suyos estan entre el 5, el 6
- * y el 15). No es un olvido de este guard y NO se pueden recuperar del repo:
+ * CERRADO — no es un hueco abierto, es una conclusion con evidencia.
  *
- *  - 16 hallazgos -> 15 items. El hallazgo restante no llego a ser item.
- *  - De los 15 items, solo 13 citaron su numero.
- *  - El documento original de la auditoria era EXTERNO y nunca se commiteo: medido con
- *    `git log --all -S "auditoria externa"`, ningun cambio (ni alta ni baja) introdujo
- *    ese texto, y los unicos commits que lo contienen son los que registran el
- *    resultado. El propio ledger declara que "el chat y su resumen NO son fuente".
+ * Los tres numeros que no constan (5, 6 y 15) son los de los hallazgos que la
+ * auditoria dio por RESUELTOS con commit. Medido en f9ab7ac (el commit que registro
+ * las 16 conclusiones), su triage cuadra sin dejar nada sin mirar:
  *
- * O sea: los numeros 5, 6 y 15 existen, pero ya no hay de donde sacarlos. Asignarlos
- * seria inventar procedencia, que es justo lo que este guard impide. Se declaran para
- * que la falta sea VISIBLE y estable: si algun dia aparece el documento, aqui se
- * rellena y el guard lo exige.
+ *     5 items abiertos (P7.5..P7.9) + 3 resueltos con commit + 8 no-aplica = 16
+ *
+ * De esos 3 "resueltos con commit", DOS son items y estan cerrados con su veredicto:
+ * P7.7 y P7.10 (ambos "RESUELTO por 6148862"). El tercero se resolvio por commit y
+ * nunca llego a ser item. O sea: ningun hallazgo quedo sin disposicion y ninguno esta
+ * abierto; lo unico que falta es QUE numero era cual.
+ *
+ * Esa etiqueta no se puede recuperar, y esta comprobado por busqueda agotada (no por
+ * suposicion): el documento de la auditoria era EXTERNO, nunca se versiono, y no
+ * aparece en `git log --all -S`, ni entre los ficheros borrados de toda la historia,
+ * ni en stashes/reflog, ni en `.task/`, ni sin trackear. El propio ledger declara que
+ * "el chat y su resumen NO son fuente". La unica copia eran los items, y el numero
+ * solo lo llevaban 13.
+ *
+ * Por eso se cierra ASI: asignar un numero seria inventar procedencia, que es justo lo
+ * que este guard impide. Se declaran congelados para que la falta siga siendo visible
+ * y estable; si algun dia aparece el documento, aqui se rellena y el guard lo exige.
+ * La cobertura funcional ya no depende de esta auditoria: la da la auditoria in-house
+ * (`scripts/auditoria.mjs` + guards), que vive en el repo y se verifica sola.
  */
 export const ITEMS_SIN_NUMERO = ['P7.7', 'P7.10']
 
