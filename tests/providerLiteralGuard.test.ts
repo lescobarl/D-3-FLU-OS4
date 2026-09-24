@@ -32,6 +32,40 @@ const PROVIDER_LITERAL_RE = /['"](openrouter|gemini|deepseek|local)['"]/g
 const ARRAY_RE = /\[[^\]]*\]/gs
 
 /**
+ * Identidad ASIGNADA o COMPARADA (ampliacion de P7.10). El escaneo anterior solo miraba
+ * literales sueltos en los SELECTION_MODULES y arrays de >=2 nombres, asi que
+ * `id: 'openrouter'` (fluConfig.js) y `source: 'openrouter'` /
+ * `providerId === 'openrouter'` (searchSession.ts) pasaban de largo.
+ *
+ * El criterio distingue por AMBIGUEDAD del nombre, no por la mera presencia del literal:
+ *   - `openrouter` y `deepseek` solo significan un proveedor de IA -> cualquier posicion
+ *     de identidad (clave `id`/`source`/... o comparacion) es violacion.
+ *   - `gemini` y `local` tienen otros dominios (`local` = almacenamiento, `local`/`gemini`
+ *     como modos) -> solo cuentan con una clave ESPECIFICA de proveedor.
+ * MEDIDO antes de acotarlo asi: marcar todo literal en posicion de identidad daba 6
+ * hits, de los que 2 eran el dominio de almacenamiento de storyteller.ts
+ * (`source: 'local' | 'external'`, `source: 'local'`). Un guard que marca eso no sirve.
+ */
+const UNAMBIGUOUS = 'openrouter|deepseek'
+const ANY_PROVIDER = 'openrouter|gemini|deepseek|local'
+const IDENTITY_RES = [
+  new RegExp(`\\b(provider|providerId|aiProvider)\\s*[:=]{1,3}\\s*['"](?:${ANY_PROVIDER})['"]`, 'g'),
+  new RegExp(`\\b(id|source)\\s*[:=]{1,3}\\s*['"](?:${UNAMBIGUOUS})['"]`, 'g'),
+  new RegExp(`===?\\s*['"](?:${UNAMBIGUOUS})['"]`, 'g'),
+]
+
+function identityLiteralsIn(line: string): string[] {
+  // Un hit por linea: los patrones pueden solaparse (providerId === ya cubre el caso de
+  // comparacion) y la lista de infractores se agrupa por linea de todos modos.
+  for (const re of IDENTITY_RES) {
+    re.lastIndex = 0
+    const hit = line.match(re)
+    if (hit) return hit
+  }
+  return []
+}
+
+/**
  * Módulos que seleccionan/derivan el proveedor de IA. Cero literales de
  * proveedor permitidos: importan de `src/core/config/sharedConfig.ts`.
  */
@@ -93,6 +127,12 @@ describe('providerLiteralGuard — proveedores de IA solo desde config', () => {
         continue
       }
 
+      lines.forEach((line, i) => {
+        if (identityLiteralsIn(line).length > 0) {
+          offenders.push(`${relPath}:${i + 1}:${line.trim().slice(0, 120)}`)
+        }
+      })
+
       let match: RegExpExecArray | null
       ARRAY_RE.lastIndex = 0
       while ((match = ARRAY_RE.exec(stripped)) !== null) {
@@ -108,5 +148,23 @@ describe('providerLiteralGuard — proveedores de IA solo desde config', () => {
       `Literales de proveedor fuera de la config (N=${offenders.length}); usa ` +
         `AI_PROVIDERS / AI_PROVIDER_IDS / DEFAULT_AI_PROVIDER de sharedConfig.ts:\n  ${report}`,
     ).toEqual([])
+  })
+})
+
+describe('providerLiteralGuard - el detector no es decorativo', () => {
+  it('habria cazado los dos hardcodes reales que motivaron la ampliacion', () => {
+    // Las cadenas EXACTAS que estaban en el arbol antes de P7.7.
+    expect(identityLiteralsIn("            id: 'openrouter',")).toHaveLength(1)
+    expect(identityLiteralsIn("            source: 'openrouter',")).toHaveLength(1)
+    expect(identityLiteralsIn("    if (providerId === 'openrouter') return normalizeOpenRouter(raw);")).toHaveLength(1)
+  })
+
+  it('no marca el dominio de almacenamiento ni las uniones legitimas', () => {
+    // storyteller.ts: 'local' aqui es almacenamiento, no proveedor. Este fue el falso
+    // positivo medido que obligo a separar nombres inequivocos de ambiguos.
+    expect(identityLiteralsIn("    source: 'local' | 'external';")).toEqual([])
+    expect(identityLiteralsIn("      source: 'local',")).toEqual([])
+    // Una clave especifica SI cuenta aunque el nombre sea ambiguo.
+    expect(identityLiteralsIn("  provider: 'gemini',")).toHaveLength(1)
   })
 })

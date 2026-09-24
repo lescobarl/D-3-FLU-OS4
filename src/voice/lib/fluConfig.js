@@ -1,5 +1,5 @@
 /** Configuración central de FLU. */
-import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
+import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
@@ -1193,7 +1193,7 @@ export const FLU_CONFIG = {
             externalConfig: true,
           },
           {
-            id: 'openrouter',
+            id: AI_PROVIDER_IDS.OPENROUTER,
             label: 'OpenRouter (web)',
             enabled: true,
             method: 'POST',

@@ -587,7 +587,7 @@ function normalizeOpenRouter(raw: unknown): SearchResult[] {
             snippet: stripHtml(String(annotation.url_citation?.content || '')),
             url,
             host: extractHost(url),
-            source: 'openrouter',
+            source: AI_PROVIDER_IDS.OPENROUTER,
             allowed: true,
         });
     }
