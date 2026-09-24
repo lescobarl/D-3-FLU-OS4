@@ -47,6 +47,10 @@ export interface AgendaNotesProps {
 export interface AgendaPanelProps {
     items: readonly AgendaItem[];
     colors: AgendaColorMap;
+    /** testid del contenedor. Dos instancias del panel pueden convivir en el DOM
+     *  (Pizarron y Ajustes); sin ids distintos el locator resuelve a 2 elementos
+     *  y Playwright lo rechaza en modo estricto. */
+    testId?: string;
     /** Color de las notas (para su bolita y la leyenda). */
     noteColor?: string;
     /** Nombres legibles por tipo (config-driven; sin literales). Solo se usan
@@ -137,6 +141,7 @@ export function AgendaPanel({
     onAdd,
     onEdit,
     ringing,
+    testId = 'agenda-panel',
     onStop,
     now,
 }: AgendaPanelProps) {
@@ -306,7 +311,7 @@ export function AgendaPanel({
     );
 
     return (
-        <div className="hoy-panel" data-testid="agenda-panel">
+        <div className="hoy-panel" data-testid={testId}>
             <header className="hoy-panel__header">
                 <span className="hoy-panel__header-date">{formatDayLabel(nowMs)}</span>
             </header>

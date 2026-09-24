@@ -66,11 +66,16 @@ test.describe('Bug #7 — cita para mañana a las 10 agendada y visible', () => 
         await captureScreenshot(page, SHOTS_DIR, 'cita-persistida.png');
     });
 
-    // La cita persistida NO se refleja hoy en el panel de agenda del WorkspaceHub:
-    // el panel queda en 'agenda-empty' y '.agenda-item' cuenta 0. Ademas su testid
-    // 'agenda-panel' esta DUPLICADO (2 nodos), lo que rompe el modo estricto de
-    // Playwright. Son defectos REALES de producto, no del arnes: la asercion se
-    // conserva como fixme VISIBLE en vez de borrarse.
+    // La cita persistida NO se refleja en el panel de agenda del Pizarron. Causa
+    // medida, en dos capas:
+    //  (1) SIN usuario activo la app no tiene agenda (useAgenda.ts:117 fuerza
+    //      items=[] si no hay personId), asi que el panel queda en 'agenda-empty'.
+    //  (2) CON el participante activo los items persisten con el personId correcto,
+    //      pero el panel sigue sin listarlos: hueco de render/estado del panel sin
+    //      resolver. Ademas el seed de demo mete citas ya vencidas, que ensucian
+    //      cualquier asercion de 'ultimo registro'.
+    // La duplicacion de testid SI se arreglo (AgendaPanel acepta `testId`; Ajustes
+    // usa 'settings-agenda-panel'). La asercion se conserva como fixme VISIBLE.
     test.fixme('la cita agendada se ve en el panel de agenda del Pizarron', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);

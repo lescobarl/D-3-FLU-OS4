@@ -162,7 +162,7 @@ export function FluSettingsTabView({
                     role="tabpanel"
                     hidden={group !== 'management'}
                 >
-                    <AgendaPanel {...agenda} />
+<AgendaPanel {...agenda} testId="settings-agenda-panel" />
                     <ShoppingPanel {...shopping} />
                     <MateriaGrisPanel {...materiaGris} />
                 </div>

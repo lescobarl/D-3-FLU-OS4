@@ -172,9 +172,10 @@ test.describe('Matriz de comandos — escenarios productivos reales', () => {
         await captureScreenshot(page, SHOTS_DIR, '4-cita.png');
     });
 
-    // Defectos reales de producto (no del arnes): la cita persistida no se
-    // lista en el panel de agenda y 'agenda-panel' esta duplicado. Asercion
-    // conservada como fixme visible para no borrar el requisito.
+    // La cita persistida no se lista en el panel de agenda (P7.28 del ledger:
+    // sin usuario activo useAgenda fuerza items=[] por diseno; con usuario, hueco
+    // de render sin resolver). El testid duplicado SI se arreglo (AgendaPanel
+    // acepta `testId`; Ajustes usa 'settings-agenda-panel').
     test.fixme('4b. La cita agendada se ve en el panel de agenda del Pizarron', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
