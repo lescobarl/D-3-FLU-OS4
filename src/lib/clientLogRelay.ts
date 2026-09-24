@@ -22,23 +22,20 @@ function syncEnabled(): boolean {
 }
 
 /**
- * Reporta un fallo del PROPIO relay: consola y nada mas.
- * Deliberadamente NO usa `logCaughtError`: esa via reenvia por el relay
- * (caughtError.ts:42-43 -> relayLog), de modo que un fallo de entrega se convertia en
- * una entrada nueva que reintentaba la entrega que acababa de fallar: bucle infinito.
+ * El relay entrega a una ruta RELATIVA del origen del documento. Sin documento
+ * (Node, SSR) no hay origen que resolver: `fetch` no puede resolverla y el intento no
+ * entrega nada, solo mete ruido en la consola. Medido: era el TypeError que aparecia en
+ * la suite al importar modulos que registran logs (C68).
  */
-function reportOwnFailure(e: unknown): void {
-    try {
-        console.error('[catch] src/lib/clientLogRelay.ts', e);
-    } catch {
-        /* ignorado: la consola no esta disponible en este contexto */
-    }
+function hasDocumentOrigin(): boolean {
+    return typeof document !== 'undefined' && Boolean(document.baseURI);
 }
 
 function flush() {
     if (pending.length === 0) return;
     const batch = pending;
     pending = [];
+    if (!hasDocumentOrigin()) return;
     try {
         // Always send as array so server handler can iterate uniformly
         // Sending single object vs array causes server-side parsing failures
@@ -47,12 +44,14 @@ function flush() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(batch),
-        }).catch((e: unknown) => reportOwnFailure(e));
-    } catch (e) {
-        /* ignorado: el fallo del PROPIO relay se reporta a consola y NO va al registro
-           central a proposito, porque logCaughtError reenvia por el relay y esa es justo
-           la via de entrega que acaba de fallar (bucle de reintento, C67). */
-        reportOwnFailure(e);
+        }).catch(() => {
+            /* ignorado: un fallo de entrega NO se re-encola (bucle de reintento, C67) ni
+               se re-reporta por el registro central: ese registro ES este mismo relay,
+               asi que reportarlo desde aqui era justamente el bucle. */
+        });
+    } catch {
+        /* ignorado: sin servidor dev al que entregar (entorno de tests, preview
+           estatica, SSR) el intento es esperado; reportarlo metia ruido (C68). */
     }
 }
 
