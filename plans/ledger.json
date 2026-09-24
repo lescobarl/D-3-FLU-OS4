@@ -335,9 +335,9 @@
     },
     {
       "id": "P6.7",
-      "titulo": "allowJs:true sin checkJs (84 .js sin verificar)",
-      "estado": "todo",
-      "evidencia": "tsconfig.json | MEDIDO 2026-09-22: npx tsc -p tsconfig.json --noEmit --checkJs -> 1749 errores / 143 archivos (TS2339 745, TS7006 526, TS7031 107, TS2322 74, TS7005 60, TS7053 57). Caso real: resolveApiKey sin importar en src/voice/lib/gemini.js paso tsc -b en verde. No acotable en un lote.",
+      "titulo": "checkJs acotado: ningun nombre inexistente en src/ (TS2304/TS2552)",
+      "estado": "done",
+      "evidencia": "tsconfig.json - HECHO en c3838a5. CRITERIO FIJADO y medido antes de tocar nada: con `--checkJs` el proyecto da 1764 errores en 143 ficheros, pero 1735 son ruido de tipado incremental (TS2339 745 propiedades, TS7006 539 parametros implicitos, TS7031 107, TS2322 74, TS7005 61, TS7053 57...). Perseguirlos es anotar 143 ficheros JS sin tipos, no cerrar un item. La unica clase que significa \"esto revienta al ejecutarse\" es TS2304/TS2552 (\"Cannot find name\"): codigo que llama a algo que no existe. Acotado ahi, eran 8 en base 1e97530. SEIS REALES: (1) turnTranscript.js:49 usaba `getTranscriptDelta` desnudo mientras el import lo renombraba a `getTranscriptDeltaFromBoundary` -> stripCommittedPrefix lanzaba ReferenceError; (2) conversationStream.js usaba `countSpeechWords` en 4 sitios y el import lo renombraba a `countWordsFromPauseCfg` -> evaluateSrGapSegmentCommit (gap de 10 s por defecto, NO desactivado) lanzaba ReferenceError; (3) turnStream.js:37 usaba `readTurnLive` sin importarlo. Misma causa raiz en los tres, y por eso pasaban desapercibidos: `export { X } from \"./y\"` NO crea un binding local de X (comprobado con Node: da ReferenceError). El reexport hace el nombre visible a los demas modulos, pero dentro del fichero X sigue sin existir. tsc -b no lo veia porque no mira los .js. Los 2 restantes NO eran bugs: AudioWorkletProcessor y registerProcessor si existen, pero en el hilo de audio, y lib.dom no los declara; se declaran en src/voice/workers/micCapture.processor.d.ts (no se silencian). REPRODUCCION antes del arreglo, llamando al codigo real sin mocks: stripCommittedPrefix(\"aa bb\",\"xx yy zz\") -> ReferenceError: getTranscriptDelta is not defined; evaluateSrGapSegmentCommit({openLine:\"hola mundo\"},{sinceLastResultMs:10001}) -> ReferenceError: countSpeechWords is not defined. Despues devuelven \"xx yy zz\" y {flush:false,capture:\"hola mundo\",reason:\"too-short\"}. GUARD: tests/jsReferenceGuard.test.ts, registrado en lint:guards y con prueba de detector (en base los casos fallan con ReferenceError). Medidor: scripts/js-ref-metric.mjs, unica fuente para la metrica y el guard. HALLAZGO COLATERAL: un shebang en un .mjs que un test importa ROMPE la transformacion de Vite (hoistea los imports y deja el `#!` en medio del codigo -> SyntaxError: Invalid or unexpected token). Quitado de los dos scripts de metrica: no aportaba nada y en style-inline-metric.mjs solo sobrevivia por el orden casual de sus imports. VERIFICACION: npm run gate -> exit 0 (metrica base=8 actual=0 target=0, guard base=1 actual=0); npm run lint verde; npm run test:full -> 318 ficheros / 3171 tests / 0 fallos. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report.",
       "origen": "auditoria"
     },
     {
@@ -1073,6 +1073,11 @@
       "id": "P6.12",
       "commit": "57bb25c",
       "titulo": "Estilos inline extendidos: criterio (>3 declaraciones) y 10 sitios a CSS"
+    },
+    {
+      "id": "P6.7",
+      "commit": "c3838a5",
+      "titulo": "checkJs acotado: ningun nombre inexistente en src/ (TS2304/TS2552)"
     }
   ]
 }
