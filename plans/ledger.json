@@ -628,10 +628,10 @@
     },
     {
       "id": "P7.27",
-      "titulo": "testid duplicado: la celda del grid de imagen reusa el id de la tarjeta del feed",
+      "titulo": "testid duplicado 'result-feed-card-ia-imagen' en ImageGrid (celda dentro de la tarjeta del feed)",
       "estado": "todo",
       "origen": "propio",
-      "evidencia": "Evidencia: src/components/ImageGrid.tsx:97 asigna data-testid=result-feed-card-ia-imagen a la celda generada del grid, y ResultFeed.tsx:223 genera el MISMO id para la tarjeta (result-feed-card- + item.id). Como el grid se renderiza dentro de la tarjeta, Playwright falla por 'strict mode violation: getByTestId(result-feed-card-ia-imagen) resolved to 2 elements': el li de la tarjeta y el li de la celda. Un testid debe identificar UN elemento. Solo lo usa tests/e2e/pizarron-funcionalidades.spec.ts:295 (que quiere la celda, para abrir el overlay al hacer click). Arreglo propuesto: dar a la celda su propio id (p.ej. workspace-search-cell-ia-imagen) y actualizar esa linea del spec; no se aplica aqui por presupuesto y porque toca src junto al flujo de imagenes."
+      "evidencia": "Evidencia: src/components/ImageGrid.tsx:97 asigna data-testid=result-feed-card-ia-imagen a la celda generada del grid, y ResultFeed.tsx:223 genera el MISMO id para la tarjeta (result-feed-card- + item.id). Como el grid se renderiza dentro de la tarjeta, Playwright falla por 'strict mode violation: getByTestId(result-feed-card-ia-imagen) resolved to 2 elements': el li de la tarjeta y el li de la celda. Un testid debe identificar UN elemento. Solo lo usa tests/e2e/pizarron-funcionalidades.spec.ts:295 (que quiere la celda, para abrir el overlay al hacer click). Arreglo propuesto: dar a la celda su propio id (p.ej. workspace-search-cell-ia-imagen) y actualizar esa linea del spec; no se aplica aqui por presupuesto y porque toca src junto al flujo de imagenes. RESUELTO en 8b7a5d7: ImageGrid.tsx renombra la celda a 'workspace-search-cell-ia-imagen' y el spec se actualiza; 'result-feed-card-*' queda unico y el locator deja de resolver a 2 elementos. La entrada sigue 'todo' a proposito: el cierre formal exige commit con codigo C## y verificacion propia; el arreglo de codigo ya esta en el arbol."
     },
     {
       "id": "P7.28",
