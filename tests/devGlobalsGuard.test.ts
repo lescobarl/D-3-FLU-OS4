@@ -13,11 +13,17 @@
  * (a) estar dentro de un gate import.meta.env.DEV, o (b) ser un puente FUNCIONAL
  * documentado en FUNCTIONAL_BRIDGE y con un lector real que lo justifique.
  *
- * ALCANCE DELIBERADO: la regla cubre los puentes __fluHandle* y FLU_CONFIG (el sujeto
- * de P6.1/P6.3). NO cubre el subsistema de depuracion/traza (__fluDebug,
- * __FLU_DEBUG_ENABLED, __fluDev, __FLU_LISTEN_DEBUG, __bunnyPreloadDone), que es un
- * flag de diseño con relay remoto y fue el sujeto de P6.2 (ya cerrado): mezclarlo
- * aqui convertiria este guard en una lista de excepciones.
+ * ALCANCE: la regla cubre los puentes __fluHandle*, FLU_CONFIG y __bunnyPreloadDone.
+ * Este ultimo se INCORPORO en C62 (antes quedaba fuera, y era el unico con fuga real):
+ * BunnyModel.tsx:135 lo escribia SIN gate DEV, asi que un flag de test viajaba al build
+ * de produccion. MEDIDO: 0 lectores en todo el repo (solo 1 escritor y una declaracion
+ * de tipo), de modo que gatearlo no rompe nada. Desde entonces el detector lo vigila y,
+ * sin el gate, este guard nace ROJO (medido ANTES del arreglo).
+ *
+ * FUERA de alcance: el subsistema de depuracion/traza (__fluDebug, __FLU_DEBUG_ENABLED,
+ * __fluDev, __FLU_LISTEN_DEBUG), flag de diseno con relay remoto y sujeto de P6.2 (ya
+ * cerrado): mezclarlo aqui convertiria este guard en una lista de excepciones. Ese
+ * subsistema se blinda aparte con su propia lista explicita (C67).
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -31,7 +37,7 @@ export const FUNCTIONAL_BRIDGE: readonly string[] = [
 ]
 const DEV_GATE = 'import.meta.env.DEV'
 const GATE_LOOKBACK = 20
-const ASSIGN_RE = /window\s*\.\s*(__fluHandle[A-Za-z0-9_]*|FLU_CONFIG)\s*=(?!=)/
+const ASSIGN_RE = /window\s*\.\s*(__fluHandle[A-Za-z0-9_]*|FLU_CONFIG|__bunnyPreloadDone)\s*=(?!=)/
 const isCommentLine = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
 export interface GlobalAssignment {
   path: string

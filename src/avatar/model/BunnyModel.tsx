@@ -132,7 +132,9 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                     setLoading(false);
                     setPreloaded(true); // habilita la reproducción: el efecto re-ejecuta con el estado actual del store
                     try {
-                        window.__bunnyPreloadDone = true;
+                        if (import.meta.env.DEV) {
+                            window.__bunnyPreloadDone = true;
+                        }
                     } catch (e) {
         logCaughtError('[catch] src/avatar/model/BunnyModel.tsx', e);
                         /* ignore */
