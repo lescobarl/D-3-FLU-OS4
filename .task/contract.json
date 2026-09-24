@@ -1,33 +1,32 @@
 {
-  "base": "1949f0c",
-  "task": "P6.12 - estilo inline extendido: criterio (>3 declaraciones) y extraccion de los 10 sitios a CSS",
-  "objective": "Que ningun bloque style={{ }} de src/ pase de 3 declaraciones, con el criterio medido, guardado y con prueba de detector; y que los 10 sitios que hoy lo superan vivan en una clase CSS.",
+  "base": "1e97530",
+  "task": "P6.7 - checkJs acotado: eliminar las referencias a nombres que no existen en src/",
+  "objective": "Que ningun fichero de src/ llame a un nombre que no existe (TS2304/TS2552 con checkJs), con el criterio medido, guardado y con prueba de detector. Los 8 casos de base 7bf93f0 quedan en 0 y los 3 reales dejan de lanzar ReferenceError.",
   "allow": [
+    "src/voice/lib/turnTranscript.js",
+    "src/voice/lib/conversationStream.js",
+    "src/voice/lib/turnStream.js",
+    "src/voice/workers/micCapture.processor.d.ts",
+    "scripts/js-ref-metric.mjs",
     "scripts/style-inline-metric.mjs",
-    "tests/styleInlineGuard.test.ts",
-    "src/avatar/components/BunnyViewer.tsx",
-    "src/avatar/App.css",
-    "src/components/ThinkingIndicator.tsx",
-    "src/components/FluSettingsPanel.tsx",
-    "src/dev/asrLab/AsrLab.tsx",
-    "src/styles/unified.css",
+    "tests/jsReferenceGuard.test.ts",
     "package.json",
     "plans/ledger.json"
   ],
   "maxFiles": 11,
   "maxLines": 450,
   "dod": "npx tsc -b",
-  "guard": "npx vitest run --no-file-parallelism --testTimeout=30000 --reporter=dot tests/styleInlineGuard.test.ts",
+  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/jsReferenceGuard.test.ts",
   "invariant": {
-    "statement": "Ningun bloque style={{ }} de src/ tiene mas de 3 declaraciones.",
+    "statement": "En src/, ningun fichero referencia un nombre que no existe (TS2304/TS2552 con checkJs).",
     "metric": {
-      "command": "node scripts/style-inline-metric.mjs",
+      "command": "node scripts/js-ref-metric.mjs",
       "target": 0
     },
-    "base": "1949f0c",
+    "base": "1e97530",
     "guardFiles": [
-      "tests/styleInlineGuard.test.ts",
-      "scripts/style-inline-metric.mjs"
+      "tests/jsReferenceGuard.test.ts",
+      "scripts/js-ref-metric.mjs"
     ]
   }
 }

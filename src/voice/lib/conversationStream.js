@@ -110,7 +110,7 @@ export function isTailOnlyInterimCapture(capture = '', turnLive = '', lastCommit
     if (utterancesRelate(prior, cap) && cap.length < prior.length * ratio) return true
   }
   const maxWords = Number(cfg.tailOnlyMaxWords)
-  if (maxWords > 0 && countSpeechWords(cap) <= maxWords) {
+  if (maxWords > 0 && countWordsFromPauseCfg(cap) <= maxWords) {
     const maxChars = Number(cfg.tailOnlyMaxChars)
     if (!(maxChars > 0) || cap.length < maxChars) return true
   }
@@ -356,7 +356,7 @@ export function evaluateSrGapSegmentCommit(
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
   const minWords = Number(cfg.srGapCommitMinWords)
-  if (countSpeechWords(capture) < minWords) {
+  if (countWordsFromPauseCfg(capture) < minWords) {
     return { flush: false, capture, reason: 'too-short' }
   }
 
@@ -366,8 +366,8 @@ export function evaluateSrGapSegmentCommit(
   }
   const extensionChars = prior ? Math.max(0, capture.length - prior.length) : capture.length
   const extensionWords = prior
-    ? countSpeechWords(capture.slice(Math.min(prior.length, capture.length)))
-    : countSpeechWords(capture)
+    ? countWordsFromPauseCfg(capture.slice(Math.min(prior.length, capture.length)))
+    : countWordsFromPauseCfg(capture)
   if (
     prior &&
     utterancesSameRevision(prior, capture) &&

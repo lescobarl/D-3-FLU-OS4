@@ -46,7 +46,7 @@ export function stripCommittedPrefix(boundary = '', chunk = '') {
   if (!session) return text
   if (text === session) return ''
   if (text.startsWith(session)) return cleanForSpeech(text.slice(session.length))
-  return getTranscriptDelta(session, text)
+  return getTranscriptDeltaFromBoundary(session, text)
 }
 
 /** Aplica onresult ignorando texto ya registrado en el log de sesión. */

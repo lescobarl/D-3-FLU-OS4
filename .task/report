@@ -2151,3 +2151,58 @@ actual=0); npm run lint -> 40 guards / 241 tests / eslint 0; npm run test:full -
 317 ficheros / 3165 tests / 0 fallos; npx vite build OK con las clases en el
 bundle. Enmienda formal (AGENTS.md B14): contrato escrito por el agente con
 autorizacion expresa del usuario.
+## P6.7 - checkJs acotado: los nombres que no existen
+
+El item pedia "activar checkJs en 84 .js". Medido antes de tocar nada: con
+`--checkJs` el proyecto da 1764 errores en 143 ficheros, pero el desglose manda:
+
+    TS2339 745 (propiedades)   TS7006 539 (parametros implicitos)
+    TS7031 107                 TS2322 74      TS7005 61      TS7053 57
+    ... y TS2304 4 + TS2552 4
+
+1735 de los 1764 son ruido de tipado incremental: perseguirlos es anotar 143
+ficheros JS sin tipos, no cerrar un item. La unica clase que significa "esto
+revienta al ejecutarse" es TS2304/TS2552 ("Cannot find name"): codigo que llama a
+algo que no existe. Acotar ahi es lo que convierte una meta infinita en una tarea.
+
+Eran 8. SEIS REALES, y eran bugs de ejecucion de verdad:
+
+  1. turnTranscript.js:49 usaba `getTranscriptDelta` desnudo mientras el import lo
+     renombraba a `getTranscriptDeltaFromBoundary`. `stripCommittedPrefix` con un
+     fragmento que no empieza por lo ya registrado -> ReferenceError.
+  2. conversationStream.js usaba `countSpeechWords` en 4 sitios y el import lo
+     renombraba a `countWordsFromPauseCfg`. `evaluateSrGapSegmentCommit` (gap de
+     10 s por defecto, NO desactivado) -> ReferenceError.
+  3. turnStream.js:37 usaba `readTurnLive` sin importarlo.
+
+Los tres con la MISMA causa raiz, y por eso pasaban desapercibidos: `export { X }
+from './y'` NO crea un binding local de X (comprobado con Node: ReferenceError).
+El reexport hace el nombre visible a los demas modulos, pero dentro del fichero X
+sigue sin existir. Nada de esto lo veia `tsc -b`, que no mira los .js.
+
+Los 2 restantes NO eran bugs: `AudioWorkletProcessor` y `registerProcessor` si
+existen, pero en el hilo de audio, y lib.dom no los declara. Se declaran en
+src/voice/workers/micCapture.processor.d.ts (no se silencian).
+
+Evidencia de que eran reales y alcanzables, antes de arreglar (llamando al codigo
+real, sin mocks):
+  stripCommittedPrefix('aa bb','xx yy zz')            -> ReferenceError: getTranscriptDelta is not defined
+  evaluateSrGapSegmentCommit({openLine:'hola mundo'},
+      {sinceLastResultMs:10001})                      -> ReferenceError: countSpeechWords is not defined
+Despues: devuelven 'xx yy zz' y {flush:false,capture:'hola mundo',reason:'too-short'}.
+
+Hallazgo colateral del propio trabajo: poner un shebang en un .mjs que un test
+importa ROMPE la transformacion de Vite. Vite hoistea los imports y, segun el
+fichero, deja el `#!` en medio del codigo (`;#!/usr/bin/env node`) ->
+`SyntaxError: Invalid or unexpected token`. Se ha quitado el shebang de los dos
+scripts de metrica: no aporta nada (se invocan con `node scripts/...`) y en
+style-inline-metric.mjs solo sobrevivia por el orden casual de sus imports.
+
+Verificacion: npm run gate exit 0 (metrica base=8 actual=0 target=0, guard base=1
+actual=0); npm run lint verde; npm run test:full 318 ficheros / 3171 tests / 0
+fallos. Enmienda formal (AGENTS.md B14): contrato escrito por el agente con
+autorizacion expresa del usuario.
+
+Nota de proceso: el cierre de P6.12 dejo el item con la marca `noVerificado` y el
+guard frozen `decisionVerdictGuard` lo caza (done + noVerificado). Se corrigio
+enmendando ese commit de cierre; de ahi que la base de P6.7 sea 1e97530.

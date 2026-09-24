@@ -8,6 +8,7 @@ import { phrasesEquivalent } from './activeListen.js'
 import {
   archiveCommittedTurn,
   processListenPacket,
+  readTurnLive,
   resolveLogRowAction,
   shouldRefreshStream,
 } from './conversationStream.js'

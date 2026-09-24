@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * style-inline-metric - mide el criterio de P6.12 (SOLO LECTURA).
  *
