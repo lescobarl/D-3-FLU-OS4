@@ -445,6 +445,13 @@
       "estado": "done",
       "origen": "auditoria",
       "evidencia": "scripts/task-ledger.mjs:204 - HECHO en d674137. I5 (justificaCierre) casaba el id por SUBCADENA: `subject.includes(id)`. Con ids de 1 digito eso es un agujero real: la entrada `C2` quedaba justificada por un commit que solo dice `C21` (C2..C6 son prefijo de C21..C60; medido, 0 casos explotados hoy, el fallo era latente). Se retira esa rama y queda solo la de familia, que YA usaba \\b: familiaDe(C41)===C41, asi que el id exacto sigue cubierto y las 121 entradas reales siguen validando (ledger:check en exit 0). Hallazgo de la 3a pasada de la auditoria del ledger. Guard de comportamiento: caso nuevo en taskLedgerGuard.test.ts que FALLA contra el codigo anterior (expected true to be false) y PASA ahora; metrica del contrato 1 -> 0, recomputada por el gate en el worktree base, con el guard tambien fallando alli (base=1, actual=0). npm run gate -> exit 0. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report."
+    },
+    {
+      "id": "P6.17",
+      "titulo": "I5: el id de cierre casaba por FAMILIA (un item hijo colgaba del commit de un hermano)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "scripts/task-ledger.mjs:204 - HECHO en eff9907. Hallazgo de la 4a pasada: al usar el arreglo de P6.16 como sonda aparecio que justificaCierre() casaba el id por FAMILIA (`\\bP1\\b`), y el punto no es caracter de palabra, asi que `\\bP1\\b` casa tambien con un HERMANO (`P1.9`). Medido con el guard real sobre las 122 filas del ledger, 2 casos VIVOS (no latentes): P0.4 colgaba de 91665a4 (\"fix(T1): reparar la barrera\", que menciona P0.5) y P1.8 de 6efbd50 (\"chore(P1.9): metrica del gate sin backslash\"). Ninguno de los dos commits nombra el item que cita. Tercer efecto del mismo sitio: el id se interpolaba sin escapar, asi que `C1)` lanzaba SyntaxError y tumbaba la barrera con un stack trace. Se pasa a id EXACTO y escapado; conserva los items META porque su id ES la familia (`\\bP3\\b` casa con `P3.1`), que era lo unico que la rama de familia aportaba. Reparacion de datos sin borrar ningun registro: P0.4 CONSERVA su commit de trabajo 91665a4 y pasa a justificarse por la RUTA de su evidencia, que ahora cita el artefacto que ese commit creo (plans/contratos/PREPARACION-123.md) - es el mecanismo que la propia barrera documenta para items cerrados sin ser citados, el mismo que cubre P0.1/P0.2/P0.3; y P1.8 apunta a 9374b30, el commit creado para cerrarlo por veredicto. Se descarto reescribir ambas filas hacia commits de registro: para P0.4 sustituiria el commit que hizo el trabajo por uno de tramite, contradiciendo lo que 1f88a87 declara (\"done[] += 91665a4\"). Guard: 2 casos nuevos en taskLedgerGuard.test.ts que FALLAN contra a8ad06d (uno por aceptar el hermano, otro por lanzar SyntaxError) y PASAN ahora. Metrica del contrato 1 -> 0, recomputada por el gate en el worktree base, con el guard fallando alli (base=1, actual=0). npm run gate -> exit 0. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report."
     }
   ],
   "done": [
@@ -1057,6 +1064,11 @@
       "id": "P6.16",
       "commit": "d674137",
       "titulo": "I5 del ledger: el id casa como palabra, no como subcadena"
+    },
+    {
+      "id": "P6.17",
+      "commit": "eff9907",
+      "titulo": "I5 del ledger: el id casa exacto (ni subcadena ni familia)"
     }
   ]
 }
