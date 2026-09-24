@@ -439,7 +439,7 @@ const FINDINGS = [
   {
     id: 'N1', sev: 'info', info: true, title: 'Colisiones de nombre (distinto dominio) — NO unificar',
     target: 0, detect: () => [...ALLOW_COLLISION],
-    note: 'Mismo nombre, forma de dato/dominio distinto. Se dejan. Ver ALLOW_COLLISION.',
+    note: 'Mismo nombre en dominios distintos, ya sin allowlist: las 24 entradas de ALLOW_COLLISION se resolvieron el 2026-09-24 y el set quedo VACIA. Cualquier colision nueva la reporta D0.',
   },
   {
     id: 'N2', sev: 'info', info: true, title: 'Deuda reconocida en comentario (analysisFallbacks.ts)',
