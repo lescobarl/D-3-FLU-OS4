@@ -296,6 +296,9 @@ export const DEFAULT_RECOVERY_CONFIG: AutoRecoveryConfig = {
 // Implementación de acciones de recuperación
 // -----------------------------------------------------------
 
+/** Duracion simulada de un reintento (el ejecutor real ejecutaria la operacion fallida). */
+const SIMULATED_RETRY_MS = 100;
+
 class RecoveryActionExecutor {
     private executionHistory: Map<string, { count: number; lastExecution: number }> = new Map();
     
@@ -318,7 +321,7 @@ class RecoveryActionExecutor {
         }
         
         // Simular reintento (en implementación real, esto ejecutaría la operación fallida)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, SIMULATED_RETRY_MS));
         
         this.recordExecution(incident.id, 'retry_with_backoff');
         

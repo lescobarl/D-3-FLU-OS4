@@ -16,6 +16,8 @@ import { parseAllowlist } from './allowlist';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
+/** Base ficticia solo para parsear el URL del request; el host nunca se usa. */
+const PARSE_BASE_URL = 'http://localhost';
 
 /** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
 const sendJson = (res: ServerResponse, status: number, data: unknown) =>
@@ -74,7 +76,7 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   const rawUrl = req.url || '';
   let parsed: URL;
   try {
-    parsed = new URL(rawUrl, 'http://localhost');
+    parsed = new URL(rawUrl, PARSE_BASE_URL);
   } catch (e) {
         logCaughtError('[catch] src/server/browserProxy.ts', e);
     sendJson(res, 400, { ok: false, reason: 'invalid' });

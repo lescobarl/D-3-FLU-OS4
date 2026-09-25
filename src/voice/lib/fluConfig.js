@@ -340,8 +340,10 @@ export const FLU_CONFIG = {
      * turno dentro de este margen se considera re-captura/eco y NO se repite.
      */
     responseDedupWindowMs: 8000,
-    /** @deprecated Interinos ya no escriben al log; solo aplica a rutas legacy. */
+    /** Throttle del log de interinos. VIVO: useFluVoiceAssistant lo lee; 0 = sin throttle. */
     streamLogThrottleMs: 0,
+    /** Pausa tras cancelar el TTS antes del comando de control (era un 100 literal). */
+    speechCancelSettleMs: 100,
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 1400,
     /**
@@ -1276,6 +1278,7 @@ export const FLU_CONFIG = {
         enabled: true,
         maxChars: 2000,
         overviewMaxResults: 8,
+        temperature: 0.3, // resumen «Puntos clave»: factual, no creativo
       },
       // Clave de mensaje en search.ui: cuándo no hay resultados, FLU usa
       // este texto como respuesta en el Pizarrón (sin hardcode).

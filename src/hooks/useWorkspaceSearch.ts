@@ -190,7 +190,7 @@ export async function fetchAiOverview(
             personality: null,
             systemPrompt,
             userMessage: query,
-            temperature: 0.3,
+            temperature: FLU_CONFIG.browser.search.aiOverview.temperature,
         });
         if (!response.ok) return '';
         const data = await response.json();
