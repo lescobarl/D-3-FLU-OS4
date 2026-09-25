@@ -13,7 +13,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding, readAgenda, clearAgenda } from './_helpers';
+import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding, readAgenda, clearAgenda, seedActiveUser } from './_helpers';
 
 // Este spec NO valida el onboarding: su overlay se reabre async (estado
 // per-user en IndexedDB) y su backdrop intercepta clics. Se auto-omite para que
@@ -219,6 +219,7 @@ test.describe('Matriz de comandos — escenarios productivos reales', () => {
     test('7. Nota: "apunta en la lista super comprar conejos" persiste la nota', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
+    await seedActiveUser(page, 'Usuario E2E');
         await clearStore(page, 'notes');
 
         await driveTranscript(page, 'ok flu apunta en la lista super comprar conejos');

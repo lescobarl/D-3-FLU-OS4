@@ -6,13 +6,15 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 // CI (runner de 4 vCPU) no aguanta 4 chromium + Vite: la saturacion mataba
 // workers y sus tests salian como "did not run". MEDIDO en local (P7.25): el
-// mismo techo existe aqui -- con 4 workers, specs que pasan AISLADOS fallaban
-// por carga (.flu-shell no aparecia en 15 s; paginas cerradas a mitad de test)
-// y los timeouts duros mataban al worker, arrastrando "did not run". Con 1-2
-// workers esos mismos specs pasan. Local = CI = 2, para que el E2E local
-// reproduzca lo que corre en CI en vez de inventarse otro regimen.
+// mismo techo existe aqui, y es mas bajo de lo que parecia -- con 4 workers
+// specs que pasan AISLADOS fallaban por carga (.flu-shell no aparecia en 15 s;
+// paginas cerradas a mitad de test) y los timeouts duros mataban al worker,
+// arrastrando "did not run". Con 2 seguia habiendo flakiness real (el flujo de
+// onboarding, que tarda ~40 s, agotaba su timeout de 60 s en la corrida
+// paralela y pasa aislado). Con 1 es determinista. Local = CI = 1 hasta que
+// haya evidencia de que el runner aguanta mas.
 const CI = process.env.CI === '1' || process.env.CI === 'true';
-const WORKERS = 2;
+const WORKERS = 1;
 
 export default defineConfig({
   testDir: './tests/e2e',

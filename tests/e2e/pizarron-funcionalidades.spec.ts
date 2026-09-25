@@ -29,7 +29,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { gotoClean, stubLocalSpeech, captureScreenshot, autoSkipOnboarding } from './_helpers';
+import { gotoClean, stubLocalSpeech, captureScreenshot, autoSkipOnboarding, seedActiveUser } from './_helpers';
 
 // Este spec NO valida el onboarding: su overlay se reabre async (estado
 // per-user en IndexedDB) y su backdrop intercepta clics. Se auto-omite para que
@@ -183,6 +183,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
     test.describe('3. Imágenes del buscador (búsqueda → tarjeta imágenes del feed)', () => {
         test('3.1 La cuadrícula de imágenes se llena al buscar (tarjeta web-imagenes del feed)', async ({ page }) => {
             await gotoClean(page);
+    await seedActiveUser(page, 'Usuario E2E');
 
             // Mock determinista del endpoint de imágenes del buscador
             await page.route('**/api/search/images**', async (route) => {
@@ -460,6 +461,7 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
         test('7.1 Subir un documento .txt y generar un documento descargable', async ({ page }) => {
             await stubLocalSpeech(page);
             await gotoClean(page);
+    await seedActiveUser(page, 'Usuario E2E');
 
             // La zona de carga está siempre visible en el Pizarrón consolidado.
 

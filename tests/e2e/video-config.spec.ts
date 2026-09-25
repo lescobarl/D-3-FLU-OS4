@@ -18,17 +18,17 @@ async function openFlu(page: Page): Promise<void> {
         await page.waitForTimeout(300);
     }
     const settingsTab = page.locator('#flu-tab-settings');
-    await settingsTab.waitFor({ state: 'attached', timeout: 15000 });
+    await settingsTab.waitFor({ state: 'attached', timeout: 45000 });
     await settingsTab.click({ force: true });
     await page.waitForTimeout(400);
     const fluPill = page.locator('.flu-settings-groups__pill', { hasText: 'FLU' }).first();
-    await fluPill.waitFor({ state: 'attached', timeout: 15000 });
+    await fluPill.waitFor({ state: 'attached', timeout: 45000 });
     await fluPill.click({ force: true });
     await page.waitForTimeout(400);
 }
 
 test('Video (fal.ai): clave y modelo editables y persisten', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await gotoClean(page);
     await openFlu(page);
 

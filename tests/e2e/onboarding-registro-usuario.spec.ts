@@ -22,7 +22,7 @@ fs.mkdirSync(SHOTS_DIR, { recursive: true });
 
 async function completeOnboarding(page: Page, name: string): Promise<void> {
     // Paso 1 — captura del nombre: input libre.
-    await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 45000 });
     await page.fill('[data-testid="onboarding-input"]', name);
     await page.click('[data-testid="onboarding-submit"]');
     // Paso 2 — captura del rol (select con opciones niño/adulto).
@@ -43,8 +43,8 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
 
         // Vuelve a cargar con el registro limpio: el onboarding pide el nombre.
         await page.reload({ waitUntil: 'load' });
-        await page.waitForSelector('.flu-shell', { timeout: 15000 });
-        await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 15000 });
+        await page.waitForSelector('.flu-shell', { timeout: 45000 });
+        await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 45000 });
 
         await completeOnboarding(page, 'Adán');
 
@@ -85,8 +85,8 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
 
         // 5) Al volver a abrir el onboarding, Adán figura en las sugerencias.
         await page.reload({ waitUntil: 'load' });
-        await page.waitForSelector('.flu-shell', { timeout: 15000 });
-        await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 15000 });
+        await page.waitForSelector('.flu-shell', { timeout: 45000 });
+        await page.waitForSelector('[data-testid="onboarding-input"]', { timeout: 45000 });
         const suggestion = page.locator('[data-testid="onboarding-user-suggestions"] button', {
             hasText: 'Adán',
         });

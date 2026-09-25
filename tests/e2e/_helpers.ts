@@ -30,7 +30,7 @@ export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Pro
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto(BASE_URL, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForSelector('.flu-shell', { timeout: 15000 });
+    await page.waitForSelector('.flu-shell', { timeout: 45000 });
     // Limpia el estado volatil. El onboarding ya no se conserva/evita por
     // localStorage: su estado vive en Dexie (tabla onboardingStates).
     await page.evaluate(() => {
@@ -40,7 +40,7 @@ export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Pro
     // backdrop bloquea la interacción, así que se omite dentro del bucle.
     const skipBtn = page.locator('[data-testid="onboarding-skip"]');
     const tablistSelectors = ['nav[role="tablist"]', '[role="tablist"]', '.flu-shell-tabs'];
-    const timeout = 15000;
+    const timeout = 45000;
     const start = Date.now();
     let lastError: any;
     while (Date.now() - start < timeout) {
@@ -56,7 +56,7 @@ export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Pro
                     await loc.waitFor({ state: 'attached', timeout: 3000 });
                     await page.waitForTimeout(200);
                     if (waitWorkspaceHub) {
-                        await page.waitForSelector('.workspace-hub', { timeout: 10000 });
+                        await page.waitForSelector('.workspace-hub', { timeout: 30000 });
                     }
                     return errors;
                 } catch (e) {
@@ -238,4 +238,54 @@ export async function captureScreenshot(
     const file = path.join(dir, name);
     await page.screenshot({ path: file, animations: 'disabled' });
     return file;
+}
+
+/**
+ * Siembra un usuario ACTIVO por las rutas REALES de la app: escribe el
+ * participante en Dexie y lo activa desde el picker del header
+ * (handleSelectActiveUser), que es quien marca la sesion como lista.
+ *
+ * Por que existe: sin usuario activo la app NO lee ni escribe datos
+ * per-usuario (notas, agenda, documentos, historial, busqueda) -- es un rechazo
+ * deliberado del producto, no un bug. Un spec que valide esos dominios sin
+ * sembrar usuario mide ese rechazo y falla por una razon que no es la suya.
+ *
+ * Debe llamarse DESPUES de gotoClean: la app ya creo el esquema Dexie y el
+ * picker existe. Devuelve el id del usuario activado.
+ */
+export async function seedActiveUser(page: Page, name = 'Usuario E2E'): Promise<string> {
+  const id = await page.evaluate(
+    async ({ db, n }) => {
+      const now = Date.now();
+      const uid = (crypto as { randomUUID: () => string }).randomUUID();
+      const sync = { revision: 1, updated_at: new Date(now).toISOString(), deleted: false };
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open(db);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const database = request.result;
+          const tx = database.transaction(['participants', 'onboardingStates'], 'readwrite');
+          tx.objectStore('participants').put({
+            id: uid, name: n, role: 'adulto', createdAt: now, updatedAt: now, sync,
+          });
+          tx.objectStore('onboardingStates').put({
+            id: uid, stepIndex: 99, completed: true, captured: { name: n }, startedAt: now, updatedAt: now,
+          });
+          tx.oncomplete = () => { database.close(); resolve(); };
+          tx.onerror = () => { database.close(); reject(tx.error); };
+        };
+      });
+      return uid;
+    },
+    { db: DB_NAME, n: name },
+  );
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('.flu-shell', { timeout: 45000 });
+  const picker = page.locator('[data-testid="user-picker-select"]');
+  await picker.waitFor({ state: 'attached', timeout: 30000 });
+  await picker.selectOption(id);
+  await page.waitForFunction((uid) => localStorage.getItem('flu-active-user') === uid, id, {
+    timeout: 15000,
+  });
+  return id;
 }

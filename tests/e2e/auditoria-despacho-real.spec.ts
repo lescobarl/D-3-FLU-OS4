@@ -30,7 +30,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding, readAgenda, clearAgenda } from './_helpers';
+import { gotoClean, stubLocalSpeech, readStore, clearStore, captureScreenshot, autoSkipOnboarding, readAgenda, clearAgenda, seedActiveUser } from './_helpers';
 
 // Este spec NO valida el onboarding: su overlay se reabre async (estado
 // per-user en IndexedDB) y su backdrop intercepta clics. Se auto-omite para que
@@ -164,6 +164,7 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
     test('6. Nota: "apunta comprar pan" persiste (notes)', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
+    await seedActiveUser(page, 'Usuario E2E');
         await clearStore(page, 'notes');
 
         await driveTranscript(page, 'apunta comprar pan');
@@ -188,7 +189,11 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
         expect(entry.label.toLowerCase()).toContain('matemáticas');
         expect(entry.trigger?.daysOfWeek?.[0]).toBe(1); // lunes
         expect(entry.trigger?.timeOfDay).toBe('08:00');
-        expect(reply).toContain('agregué');
+        // La confirmacion del manejador es la autoridad (regla unica, App.tsx):
+        // nombra lo que se escribio de verdad. Se valida su CONTENIDO real
+        // (materia + hora), no la redaccion del `respuesta_voz`.
+        expect(reply).toContain('matemáticas');
+        expect(reply).toContain('08:00');
         await captureScreenshot(page, SHOTS_DIR, '7-horario.png');
     });
 });
