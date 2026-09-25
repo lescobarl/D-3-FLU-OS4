@@ -2296,3 +2296,47 @@ Verificacion: npm run gate exit 0 (Alcance OK / tamano OK / DoD OK / guard OK);
 npm run lint 51/51 guards / 314 tests + eslint 0 avisos; npx tsc -b OK;
 npm run ledger:check -> ledger OK: 5 pendientes (P7.25, P7.28, P7.29, P7.30, P7.31).
 
+## P7.25/P7.29/P7.31 - el E2E deja de fallar por arnes: 23 -> 35 passed, y los 6 que quedan son producto
+
+El job E2E estaba rojo por DOS causas mezcladas, y solo una era producto.
+
+SATURACION DEL ARNES (arreglado). Con los 4 workers que el config derivaba del
+hardware, specs que pasan AISLADOS fallaban por carga: `.flu-shell` no aparecia en
+15 s (auditoria-despacho-real 6, matriz 3) y paginas cerradas a mitad de test. Los
+timeouts duros (90 s video, 60 s pizarron 7.1) mataban al worker y los tests
+siguientes salian como "did not run" (13 en la medicion de partida). El comentario
+del config ya reconocia el techo en CI ("CI no aguanta 4 chromium + Vite") pero
+local derivaba 4 del hardware. Local = CI = 2.
+
+PRIORIDAD DEL REPLY (P7.29 + P7.31b, arreglado). No era un bug de conducta: era un
+COMENTARIO OBSOLETO contra el que se escribio un spec. App.tsx afirmaba tres cosas
+contradictorias en el mismo fichero:
+
+    ~1445  "respuesta_voz) tiene PRIORIDAD [sobre la confirmacion]"
+    ~1543  (contract.acciones) "su confirmacion reemplaza a la del LLM"
+    ~1657  (fallback) "la confirmacion del manejador es la AUTORIDAD... ESA gana"
+
+Dos dicen que gana el manejador, y una da la razon medida: el manejador conoce la
+hora y el tipo REALES y el LLM puede escribir "cita a las 1:27 de la madrugada pm".
+El outlier era 1445. Se corrige el COMENTARIO, no el comportamiento (cambiarlo
+habria roto la garantia de que la confirmacion nombra lo que de verdad se
+escribio). Neto 0 lineas: App.tsx 4685 -> 4685, tope de godFileSizeGuard 4686.
+
+MEDICION (mismo comando, `npx playwright test`):
+
+    antes:   23 passed /  9 failed /  3 skipped / 13 did not run
+    despues: 35 passed /  6 failed /  2 skipped /  5 did not run
+
+Los 6 restantes son PRODUCTO, reproducidos aislados y registrados:
+
+    notas no persisten por voz (P7.31a) ........ 3 tests, UNA causa raiz
+    pizarron 3.1  tarjeta web-imagenes .......... P7.33
+    pizarron 7.1  tarjeta ia-generacion ......... P7.34
+    onboarding Bug #1 participante nuevo ........ P7.35
+
+El job E2E sigue ROJO y no se cierra: cerrarlo exigiria arreglar esos 6, que es
+trabajo de producto, no de arnes. Lo que se cierra aqui es la parte que era del
+arnes y la que era un comentario mintiendo.
+
+Verificacion: npm run gate exit 0; npm run lint 51/51 guards + eslint 0 avisos;
+npx tsc -b OK; npm run ledger:check OK.
