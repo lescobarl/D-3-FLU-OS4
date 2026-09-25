@@ -66,21 +66,16 @@ test.describe('Bug #7 — cita para mañana a las 10 agendada y visible', () => 
         await captureScreenshot(page, SHOTS_DIR, 'cita-persistida.png');
     });
 
-    // La cita persistida NO se refleja en el panel. Causa medida, en dos capas:
+    // La cita persistida NO se refleja en el panel de agenda del Pizarron. Causa
+    // medida, en dos capas:
     //  (1) SIN usuario activo la app no tiene agenda (useAgenda.ts:117 fuerza
-    //      items=[] si no hay personId) -> el panel queda en 'agenda-empty'.
-    //  (2) CON usuario persistido el panel TAMPOCO leia: App.tsx:553 exige
-    //      `sessionReady` para definir realParticipantId, y solo lo encendian las dos
-    //      rutas de ELECCION explicita (handleSelectActiveUser / activateParticipant).
-    //      Saltar el onboarding (onSkip, App.tsx:4654) dejaba el gate apagado para
-    //      siempre: las ESCRITURAS usan activeParticipantId y las LECTURAS quedaban
-    //      en undefined. ARREGLADO (onSkip enciende la sesion); medido: el panel pasa
-    //      de 'Sin proximos.' a listar la agenda del usuario activo.
-    // Queda ABIERTO un segundo hueco, ya sin la capa (2): con el gate encendido el
-    // panel recibe solo una PARTE de la agenda (medido: Proximos poblado con las
-    // alarmas del usuario activo, pero la cita conducida de manana 10:00 no aparece,
-    // y en la BD ese registro esta pending con ese mismo personId). La asercion sigue
-    // como fixme VISIBLE hasta cerrar ese reparto.
+    //      items=[] si no hay personId), asi que el panel queda en 'agenda-empty'.
+    //  (2) CON el participante activo los items persisten con el personId correcto,
+    //      pero el panel sigue sin listarlos: hueco de render/estado del panel sin
+    //      resolver. Ademas el seed de demo mete citas ya vencidas, que ensucian
+    //      cualquier asercion de 'ultimo registro'.
+    // La duplicacion de testid SI se arreglo (AgendaPanel acepta `testId`; Ajustes
+    // usa 'settings-agenda-panel'). La asercion se conserva como fixme VISIBLE.
     test.fixme('la cita agendada se ve en el panel de agenda del Pizarron', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
