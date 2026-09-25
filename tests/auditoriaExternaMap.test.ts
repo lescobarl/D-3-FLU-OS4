@@ -65,15 +65,23 @@ export const ITEMS_EXTERNOS = [
  * "el chat y su resumen NO son fuente". La unica copia eran los items, y el numero
  * solo lo llevaban 13.
  *
- * Por eso se cierra ASI: asignar un numero seria inventar procedencia, que es justo lo
- * que este guard impide. Se declaran congelados para que la falta siga siendo visible
- * y estable; si algun dia aparece el documento, aqui se rellena y el guard lo exige.
- * La cobertura funcional ya no depende de esta auditoria: la da la auditoria in-house
+ * HUECO HISTORICO ARCHIVADO (decision del dueno, 2026-09-24). El expediente se cierra
+ * ASI: asignar un numero seria inventar procedencia, y eso es justo lo que este guard
+ * impide. Los 3 numeros (5, 6, 15) y los 2 items sin numero (P7.7, P7.10) quedan
+ * declarados y ESTABLES: no son un pendiente abierto ni una pregunta sin responder, son
+ * el hueco que deja una busqueda agotada. Si algun dia aparece el documento, aqui se
+ * rellena, y este guard lo exige.
+ *
+ * Lo que sigue VIGILADO --y por eso el guard no se retira-- es lo que si tiene arreglo:
+ * que los 13 numeros verificados no se pierdan al reescribir una evidencia, que ningun
+ * numero lo reclamen dos items y que no entre un numero inventado. La cobertura
+ * funcional ya no depende de esta auditoria: la da la auditoria in-house
  * (`scripts/auditoria.mjs` + guards), que vive en el repo y se verifica sola.
  */
+/** Items externos sin numero recuperable - ARCHIVADOS (ver cabecera: P7.7 y P7.10). */
 export const ITEMS_SIN_NUMERO = ['P7.7', 'P7.10']
 
-/** Hallazgos 1..16 que no constan en ningun item (ni con numero ni como item sin numero). */
+/** Hallazgos 1..16 que no constan en ningun item - ARCHIVADOS (ver cabecera: 5, 6, 15). */
 export const HALLAZGOS_SIN_ITEM = [5, 6, 15]
 
 const RE = /auditor[ií]a\s+(?:externa\s+)?#(\d+)/gi
@@ -94,7 +102,7 @@ function items(): Item[] {
   return JSON.parse(readFileSync(LEDGER, 'utf8')).items as Item[]
 }
 
-describe('Auditoria externa - la procedencia de los 16 hallazgos no se pierde en silencio', () => {
+describe('Auditoria externa - procedencia archivada: los 13 numerados no se pierden en silencio', () => {
   it('cada hallazgo del mapa sigue citado por su item (P7.5=#3 y P7.9=#14 incluidos)', () => {
     const porId = new Map(items().map((i) => [i.id, i]))
     const perdidos: string[] = []
@@ -147,7 +155,7 @@ describe('Auditoria externa - la procedencia de los 16 hallazgos no se pierde en
     expect(intrusos, 'item declarado como procedente de la auditoria sin serlo: ' + intrusos.join(', ')).toEqual([])
   })
 
-  it('16 hallazgos -> 15 items -> 13 numerados (la cuenta cuadra, y el hueco es estable)', () => {
+  it('16 hallazgos -> 15 items -> 13 numerados (la cuenta cuadra y el hueco queda archivado)', () => {
     const numerosDelLedger = new Set(items().flatMap((i) => numerosDe(i)))
     // 16 = 13 numerados + 2 items sin numero + 1 hallazgo que no llego a ser item.
     expect(Object.keys(MAPA).length, 'numeros mapeados').toBe(13)

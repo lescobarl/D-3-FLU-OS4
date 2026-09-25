@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { ResultFeed, type ResultFeedItem } from '../src/components/ResultFeed';
+import { ImageGrid } from '../src/components/ImageGrid';
 
 function item(overrides: Partial<ResultFeedItem> = {}): ResultFeedItem {
     return {
@@ -221,5 +222,37 @@ describe('ResultFeed — render del feed de resultados', () => {
         // El usuario pidió quitar el texto de estado vacío del Pizarrón.
         expect(container.querySelector('.result-feed__empty')).toBeNull();
         expect(container.querySelector('[data-testid="result-feed-list"]')).toBeNull();
+    });
+
+    it('la celda del grid no reusa el testid de la tarjeta del feed (P7.27)', () => {
+        const grid = (
+            <ImageGrid
+                results={[]}
+                loading={false}
+                generated={{
+                    title: 'Imagen IA',
+                    imageUrl: 'https://example.test/imagen.png',
+                    isLoading: false,
+                    isFailed: false,
+                    loadAttempt: 1,
+                    onExpand: () => {},
+                    onRetry: () => {},
+                }}
+            />
+        );
+        const { container } = render(
+            <ResultFeed
+                items={[item({ id: 'ia-imagen', origin: 'ia', kind: 'image', title: 'Imagen IA', body: grid })]}
+            />
+        );
+        // Composicion real (WorkspaceHub): la celda del grid vive DENTRO de la tarjeta del
+        // feed. La tarjeta genera `result-feed-card-<id>` para su li; la celda usaba el
+        // MISMO id (ImageGrid.tsx:97), asi que el locator resolvia a 2 nodos y Playwright
+        // caia en `strict mode violation`. Un testid identifica UN elemento.
+        expect(container.querySelectorAll('[data-testid="result-feed-card-ia-imagen"]').length).toBe(1);
+        expect(container.querySelectorAll('[data-testid="workspace-search-cell-ia-imagen"]').length).toBe(1);
+        const tarjeta = container.querySelector('[data-testid="result-feed-card-ia-imagen"]');
+        const celda = container.querySelector('[data-testid="workspace-search-cell-ia-imagen"]');
+        expect(tarjeta!.contains(celda!)).toBe(true);
     });
 });
