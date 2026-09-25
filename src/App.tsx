@@ -557,6 +557,7 @@ function App() {
         [sessionReady, activeParticipantId],
     );
     const realParticipantIdRef = useRef<string | undefined>(realParticipantId);
+    const demoSeededRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         realParticipantIdRef.current = realParticipantId;
     }, [realParticipantId]);
@@ -1039,18 +1040,17 @@ function App() {
         // Solo para un usuario real: el DEMO es por-usuario (no en onboarding).
         if (!realParticipantId) return;
         const pid = realParticipantId;
+        if (demoSeededRef.current.has(pid)) return;
+        demoSeededRef.current.add(pid);
         let cancelled = false;
         (async () => {
             try {
-                // Se listan TODOS los estados (no solo 'pending'): un demo
-                // cancelado queda en 'deleted' y, si solo se mirara pending,
-                // el seed lo volvería a crear (bug de registros que reaparecen).
+                // Sirve también 'deleted': un demo cancelado no debe reaparecer.
                 const existing = await agendaList({ personId: pid });
-                const firstRun = existing.length === 0;
                 for (const input of selectDemoAgendaInputs(existing, Date.now())) {
                     await agendaCreate({ ...input, personId: pid });
                 }
-                if (firstRun) {
+                if (existing.length === 0) {
                     for (const note of buildDemoNotes()) {
                         await notes.add({ label: note.label, body: note.body });
                     }
