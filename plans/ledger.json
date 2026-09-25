@@ -680,7 +680,7 @@
       "titulo": "'recuerdame <cosa>' SIN hora no matchea el arbitro y el turno se descarta en silencio",
       "estado": "todo",
       "origen": "propio",
-      "evidencia": "CAUSA RAIZ MEDIDA (enunciado inicial corregido). Hay DOS huecos distintos y solo uno era el del test: (a) el caso del test 8, \"tomar el medicamento a las 12:00\", SI trae hora; lo que falta es el sustantivo o el verbo del tipo (\"recuerdame\", \"recordatorio\"), que es de donde el parser deduce el kind. El LLM ya lo habia clasificado (dominio reminder) y ese dato se descartaba: el turno no se despachaba. CERRADO: el dominio clasificado entra al MISMO parser como pista de tipo (`parseAgendaCommand` options.kindHint, con `resolveDomainScopedIntent` movido a src/core/agenda/domainScopedIntent.ts, motor puro con test propio). El texto sigue siendo la autoridad del instante: sin hora el parser NO matchea, no se inventa nada. Medido: auditoria-acciones-llm 10/10 verde (3.2m). (b) lo que sigue ABIERTO y es lo que el titulo de este item describe: \"recuerdame <cosa>\" SIN hora. Medido con el parser: `parseAgendaCommand(\"recuerdame comprar el pan\")` -> handled:false tanto antes como despues del arreglo (el kindHint no exime del instante), y `...(\"recuerdame comprar leche a las 18:00\")` -> recordatorio correcto. No se cierra aqui porque exige DECISION DE PRODUCTO, no codigo: un recordatorio sin instante no es accionable con el modelo actual (trigger `absolute` con `at`), asi que o se pregunta la hora o se define un instante por defecto. La app tiene `FLU_CONFIG.reminders.defaultReminderOffsetMinutes` (10 min) que es el candidato natural, pero cablearlo cambia QUE HACE el producto y eso lo decide el usuario. Sin cambio de estado."
+      "evidencia": "CAUSA RAIZ MEDIDA (enunciado inicial corregido). Hay DOS huecos distintos y solo uno era el del test: (a) el caso del test 8, \"tomar el medicamento a las 12:00\", SI trae hora; lo que falta es el sustantivo o el verbo del tipo (\"recuerdame\", \"recordatorio\"), que es de donde el parser deduce el kind. El LLM ya lo habia clasificado (dominio reminder) y ese dato se descartaba: el turno no se despachaba. CERRADO: el dominio clasificado entra al MISMO parser como pista de tipo (`parseAgendaCommand` options.kindHint, con `resolveDomainScopedIntent` movido a src/core/agenda/domainScopedIntent.ts, motor puro con test propio). El texto sigue siendo la autoridad del instante: sin hora el parser NO matchea, no se inventa nada. Medido: auditoria-acciones-llm 10/10 verde (3.2m). (b) lo que sigue ABIERTO y es lo que el titulo de este item describe: \"recuerdame <cosa>\" SIN hora. Medido con el parser: `parseAgendaCommand(\"recuerdame comprar el pan\")` -> handled:false tanto antes como despues del arreglo (el kindHint no exime del instante), y `...(\"recuerdame comprar leche a las 18:00\")` -> recordatorio correcto. No se cierra aqui porque exige DECISION DE PRODUCTO, no codigo: un recordatorio sin instante no es accionable con el modelo actual (trigger `absolute` con `at`), asi que o se pregunta la hora o se define un instante por defecto. La app tiene `FLU_CONFIG.reminders.defaultReminderOffsetMinutes` (10 min) que es el candidato natural, pero cablearlo cambia QUE HACE el producto y eso lo decide el usuario. Sin cambio de estado. CORRECCION DEL CIERRE: el primer commit de esta ronda dijo \"trinquete de App.tsx apretado a 4633\". Eso NO es el estado final y no debe leerse asi: tests/godFileSizeGuard.test.ts esta CONGELADO (.task/frozen.json lo hashea) y tocar el criterio no es potestad del agente. Se revirtio. La solucion real fue extraer SOLO el camino nuevo (el tramo de agenda) a src/core/agenda/domainScopedIntent.ts y dejar note/diary intactos en App: App.tsx queda en 4686, EXACTAMENTE su techo, sin margen. Medido con `lineas()` del guard. Leccion registrada: si el techo no permite crecer, se extrae lo que UNO anade, no el codigo que ya estaba."
     },
     {
       "id": "P7.31",
@@ -688,6 +688,12 @@
       "estado": "done",
       "origen": "propio",
       "evidencia": "CAUSA RAIZ MEDIDA (sonda real en navegador, no inferencia): `useNotes.add` empieza con `if (!participantId) return { ok: false, reason: \"invalid-input\" }`: las notas son per-usuario, asi que SIN usuario activo la app RECHAZA la escritura a proposito. El manejador devolvia \"No pude crear la nota.\" y la tabla quedaba con 0 filas. NO era bug de producto: era el arnes, que nunca activaba usuario. Probado con sonda: mismo despacho con usuario sembrado -> reply \"Listo, lo agrege a las notas.\" y 1 fila con label \"comprar pan\". Cierre por SEED: `seedActiveUser` (tests/e2e/_helpers.ts) escribe el participante en Dexie y lo activa por el PICKER DEL HEADER (handleSelectActiveUser), que es la ruta de produccion que marca la sesion como lista; se aplica en los specs que validan dominios per-usuario. Los tests de notas pasan. Leccion registrada: sin usuario activo la app no lee ni escribe nada suyo (notas, agenda, documentos, historial, busqueda); un spec de esos dominios sin sembrar usuario mide el rechazo, no el dominio."
+    },
+    {
+      "id": "P7.36",
+      "estado": "done",
+      "titulo": "E2E acotado al bloque tocado (la suite entera no es la unidad de verificacion)",
+      "evidencia": "AGENTS.md ya lo exigia (\"Iteracion rapida (por cambio, no toda la suite)\") y se incumplia a mano: cada vuelta costaba ~19 min de suite completa para verificar un cambio de un fichero, y encima los rojos de CARGA (dev server compilando, worker muerto -> \"did not run\") se mezclaban con los de producto, obligando a repetir para distinguirlos. Entregado: scripts/e2e-scope.mjs (plan = specs modificados + los que el contrato declara por fichero de src/ tocado, en .task/contract.json -> e2eScope; FALLA si un src/ cambia sin spec declarado, para que el recorte no tape huecos), npm run e2e:plan (dry-run) / npm run e2e:scoped -- --filter=<substr> (ejecuta), tests/e2eScope.test.ts (6 casos del planificador puro) y tests/e2e/_globalSetup.ts (paga una vez el arranque en frio de Vite; Playwright levanta el dev server ANTES del globalSetup, que es el unico sitio donde calentar sirve). Medido: unit 3250/3250, lint limpio, guards verdes. Plan real de esta ronda: auditoria-acciones-llm (10/10 verde aislado, 3.2m) mas los 5 specs tocados."
     }
   ],
   "done": [
@@ -1441,6 +1447,16 @@
       "id": "P7.31",
       "commit": "04b9046",
       "titulo": "las notas no se perdian: la app rechaza datos per-usuario sin usuario activo; era el arnes, no el producto"
+    },
+    {
+      "id": "P7.36",
+      "commit": "08cc924",
+      "titulo": "la suite E2E entera no es la unidad de verificacion: corrida acotada al bloque tocado, con fallo explicito si un fichero de src/ cambia sin spec declarado"
+    },
+    {
+      "id": "P7.30",
+      "commit": "b86309f",
+      "titulo": "el dominio que el LLM ya clasifico cubre el tipo de agenda que el texto no trae (test 8 verde); queda abierto el recordatorio SIN hora, que es decision de producto"
     }
   ]
 }
