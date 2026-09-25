@@ -154,7 +154,7 @@ import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
-import { resolveAgendaDomainIntent } from './core/agenda/domainScopedIntent';
+import { resolveAgendaDomainIntent, askMissingInstant } from './core/agenda/domainScopedIntent';
 import {
     getVisibleTabIds,
     DEFAULT_AMBIENTE_ID,
@@ -910,7 +910,7 @@ function App() {
                 }
                 case 'agenda.create': {
                     if (!kind) return '';
-                    if (!cmd.trigger) return '';
+                    if (!cmd.trigger) return askMissingInstant(lang);
                     const result = await agendaCreate({
                         kind,
                         label: cmd.label || kind,

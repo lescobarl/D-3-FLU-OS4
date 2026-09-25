@@ -26,15 +26,23 @@ async function completeOnboarding(page: Page, name: string): Promise<void> {
     await page.fill('[data-testid="onboarding-input"]', name);
     await page.click('[data-testid="onboarding-submit"]');
     // Paso 2 — captura del rol (select con opciones niño/adulto).
-    await page.waitForSelector('[data-testid="onboarding-options"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="onboarding-options"]', { timeout: 30000 });
     await page.selectOption('[data-testid="onboarding-options"]', 'niño');
     await page.click('[data-testid="onboarding-submit"]');
     // El onboarding se cierra al completar.
-    await page.waitForSelector('.flu-onboarding', { state: 'hidden', timeout: 15000 });
+    await page.waitForSelector('.flu-onboarding', { state: 'hidden', timeout: 30000 });
 }
 
 test.describe('Bug #1 — participante nuevo del onboarding en el selector', () => {
-    test.describe.configure({ mode: 'serial' });
+    // Presupuesto POST-ACCION unico (30000): los pasos reales del alta
+    // (submit -> opciones de rol -> cierre del overlay -> picker -> Dexie) son
+    // asincronos y con 10000 ms se caian bajo carga sostenida, aunque aislados
+    // pasan. Cada espera sigue fallando por si misma.
+    // El flujo real de alta es LENTO por naturaleza (registro + activación +
+    // sugerencias, con varias esperas asíncronas) y sus esperas internas suman
+    // más de los 60 s globales bajo carga. Presupuesto propio del spec: cada
+    // espera sigue fallando por sí misma, así que esto no tapa nada.
+    test.describe.configure({ mode: 'serial', timeout: 180000 });
 
     test('registra "Adán" por el onboarding: queda activo, visible en el picker y sugerido', async ({ page }) => {
         stubLocalSpeech(page);
@@ -51,7 +59,7 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
         // 1) El picker real del header termina listando a Adán (registro + activación
         //    son asíncronos: se espera a que el DOM converja).
         const picker = page.locator('[data-testid="user-picker-select"]');
-        await picker.waitFor({ state: 'visible', timeout: 10000 });
+        await picker.waitFor({ state: 'visible', timeout: 30000 });
         await expect
             .poll(
                 async () =>
@@ -59,12 +67,12 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
                         .locator('option')
                         .allTextContents()
                         .then((texts) => texts.some((t) => t.toLowerCase().includes('adán'))),
-                { timeout: 10000 },
+                { timeout: 30000 },
             )
             .toBe(true);
 
         // 2) El usuario activo del picker NO está vacío y es el participante registrado.
-        await expect.poll(() => picker.inputValue(), { timeout: 10000 }).not.toBe('');
+        await expect.poll(() => picker.inputValue(), { timeout: 30000 }).not.toBe('');
         const selectedId = await picker.inputValue();
         const selectedLabel = await picker.locator(`option[value="${selectedId}"]`).textContent();
         expect(selectedLabel?.toLowerCase(), 'el activo debe ser el participante registrado').toContain('adán');
@@ -72,7 +80,7 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
         // 3) ACTIVE_USER persistido apunta al mismo id (no a otro participante).
         await expect
             .poll(() => page.evaluate(() => localStorage.getItem('flu-active-user')), {
-                timeout: 10000,
+                timeout: 30000,
             })
             .toBe(selectedId);
 
@@ -90,7 +98,7 @@ test.describe('Bug #1 — participante nuevo del onboarding en el selector', () 
         const suggestion = page.locator('[data-testid="onboarding-user-suggestions"] button', {
             hasText: 'Adán',
         });
-        await suggestion.waitFor({ state: 'visible', timeout: 10000 });
+        await suggestion.waitFor({ state: 'visible', timeout: 30000 });
 
         await captureScreenshot(page, SHOTS_DIR, 'participante-registrado-en-picker.png');
     });

@@ -230,7 +230,10 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             await page.locator('.workspace-search__go').click();
 
             // En el feed consolidado las imágenes viven en la tarjeta
-            // `web-imagenes` (no hay pestañas internas que conmutar).
+            // `web-imagenes`. Esa tarjeta es `onlyInKind`: el feed la publica
+            // SOLO bajo el filtro "Imágenes" (por diseño, ver resultFeed.test.tsx),
+            // así que hay que conmutar el filtro antes de asertarla.
+            await page.locator('[data-filter="image"]').click();
             const card = page.getByTestId('result-feed-card-web-imagenes');
             await expect(card).toBeVisible({ timeout: 15000 });
 
@@ -461,11 +464,30 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
         test('7.1 Subir un documento .txt y generar un documento descargable', async ({ page }) => {
             await stubLocalSpeech(page);
             await gotoClean(page);
-    await seedActiveUser(page, 'Usuario E2E');
+                await seedActiveUser(page, 'Usuario E2E');
 
             // La zona de carga está siempre visible en el Pizarrón consolidado.
 
-            // Subir un documento .txt
+            // Motor de generación determinista: sin esto la generación sale a la
+            // red (y el rojo parecería de producto, no de red).
+            await page.route('**/api/gemini/text**', async (route) => {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        ok: true,
+                        text: 'La fotosíntesis es el proceso por el cual las plantas convierten la luz en energía química.',
+                    }),
+                });
+            });
+            await page.route('**/api/gemini/contract**', async (route) => {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ ok: true, respuesta_voz: 'Generando el documento.' }),
+                });
+            });
+
             const docInput = page.locator('input[type="file"][accept*=".txt"]').first();
             await docInput.setInputFiles({
                 name: 'apuntes.txt',
@@ -474,11 +496,20 @@ test.describe('🟢 Pizarrón — Validación E2E REAL de TODAS las funcionalida
             });
             await page.waitForTimeout(500);
 
-            // Disparar el evento de generación de documento (mismo que la UI real)
-            await page.evaluate(() => {
-                window.dispatchEvent(new CustomEvent('flu:generate-document', {
-                    detail: { topic: 'Fotosíntesis' },
-                }));
+            // Disparar la generación por su RUTA REAL y ÚNICA: el comando de
+            // navegación GENERAR_DOCUMENTO → requestMedia('doc') en App. El bus
+            // `flu:generate-document` YA NO EXISTE (se eliminó a propósito para
+            // impedir una segunda ruta de generación, ver
+            // useDocumentGenerationBridge.ts), así que despacharlo era un no-op.
+            await page.evaluate(async () => {
+                const fn = (window as any).__fluOnContractResolved;
+                if (typeof fn !== 'function') throw new Error('__fluOnContractResolved no disponible');
+                await fn({
+                    contract: {
+                        navegacion: { comando: 'GENERAR_DOCUMENTO', destino: null, parametros: {} },
+                    },
+                    transcript: 'genera un documento sobre la fotosíntesis',
+                });
             });
             await page.waitForTimeout(800);
 

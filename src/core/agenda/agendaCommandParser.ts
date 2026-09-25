@@ -342,7 +342,11 @@ export function parseAgendaCommand(
     // recurrencia atiende clases y resto de kinds (sin dos gramáticas).
     const trigger = resolveRecurrence(cleaned, now, kind);
     if (!trigger && resolvedAction === 'agenda.create') {
-        return { handled: false, action: null, reply: '' };
+        // Sin instante NO se crea (el modelo exige `at`/recurrencia), pero el
+        // descarte deja de ser ciego: se devuelve la pista (kind+label) para que
+        // el carril de dominio pida la hora en vez de tirar el turno. Sigue
+        // `handled:false`: quien no mire `action` no crea nada.
+        return { handled: false, action: resolvedAction, kind, label: resolveLabel(cleaned), reply: '' };
     }
 
     const label = resolveLabel(cleaned);
