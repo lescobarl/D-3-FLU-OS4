@@ -4651,7 +4651,7 @@ const {
                 }))}
                 userSuggestions={onboardingUserSuggestions}
                 onAnswer={handleOnboardingAnswer}
-                onSkip={onboarding.skip}
+                onSkip={() => { onboarding.skip(); setSessionReady(true); }}
             />
 
             {/* Stack de notificaciones (toasts) */}

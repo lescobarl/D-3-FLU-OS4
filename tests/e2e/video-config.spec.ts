@@ -28,7 +28,11 @@ async function openFlu(page: Page): Promise<void> {
 }
 
 test('Video (fal.ai): clave y modelo editables y persisten', async ({ page }) => {
-    test.setTimeout(180000);
+    // MEDIDO: aislado necesita ~37 s, pero en la corrida sostenida compite por
+    // el dev server y agotaba el presupuesto: el test moria con la pagina ya
+    // cerrada en mitad de un waitForTimeout. Holgura para el arranque bajo
+    // carga; cada asercion sigue fallando por si misma.
+    test.setTimeout(420000);
     await gotoClean(page);
     await openFlu(page);
 
