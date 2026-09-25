@@ -274,6 +274,14 @@ de **0 nuevos**.
 - `npm test` ejecuta SOLO los tests del cambio (`--changed`); la suite completa es
   `npm run test:full`, reservada al gate de entrega (CI/push), nunca por commit.
 - `npm run test:file <ruta>` para el archivo en curso.
+- E2E acotado al bloque: `npm run e2e:plan` (dry-run) y `npm run e2e:scoped`
+  (ejecuta) corren SOLO los specs tocados, usando el reparto declarado en
+  `.task/contract.json -> e2eScope`. Si un fichero de `src/` cambia y no declara
+  qué spec lo cubre, el runner FALLA: nunca corre a ciegas ni recorta en silencio.
+  La suite E2E completa queda para el gate de entrega, igual que `test:full`.
+- EOL: el trinquete (`tests/eolGuard.test.ts`) compara el árbol con el índice de
+  git. Los editores pueden cambiar la clase EOL de un fichero al guardarlo; si eso
+  pasa, se normaliza al índice; no se "arregla" el guard.
 - Puerta de tipos (`npm run typecheck`) en cada iteración; un error de tipos es error
   de entrega.
 - Guard estructural del protocolo: `tests/protocolGuard.test.ts`.

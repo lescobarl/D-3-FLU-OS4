@@ -17,6 +17,8 @@ const CI = process.env.CI === '1' || process.env.CI === 'true';
 const WORKERS = 1;
 
 export default defineConfig({
+    // El arranque en frio de Vite se paga aqui, antes de los specs (ver el fichero).
+    globalSetup: './tests/e2e/_globalSetup.ts',
   testDir: './tests/e2e',
   timeout: 60000,
   fullyParallel: true,
