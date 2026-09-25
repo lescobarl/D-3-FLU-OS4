@@ -2,7 +2,34 @@
 
 Síntoma → causa raíz (evidencia) → regla/DoD. **Constraints obligatorios abajo.**
 
-## Casos
+## Estado verificado (2026-09-22) — los 11 están CERRADOS
+
+Comprobado caso por caso contra el código de hoy, no contra la memoria. Las rutas y
+líneas citadas abajo son HISTÓRICAS y ya no se corresponden (los ficheros se movieron:
+`HorarioPizarron.tsx` se eliminó, `dailyAgenda.ts` vive en `src/lib/`, el árbitro en
+`src/voice/lib/`). Evidencia: **21 ficheros de guard, 136 tests en verde**.
+
+| # | Caso | Estado | Guard / evidencia |
+|---|------|--------|-------------------|
+| 1 | Agenda del día incompleta | Cerrado | `tests/agendaQueryScenarios.test.ts`. Hoy hay agenda UNIFICADA: `AgendaKind = recordatorio \| cita \| junta \| clase \| alarma` (`src/core/agenda/agendaModel.ts`), consulta única hablable (`agendaSummary.ts`) y `appendPendingCalendar` fusiona el calendario al listado del día. DESVIACIÓN DOCUMENTADA: las **notas NO son agenda** (texto, sin fecha → no existe `kind 'nota'`); lo pide el DoD pero es correcto excluirlas: no tienen día. |
+| 2 | No limpia la imagen anterior | Cerrado | `tests/useWorkspaceImageClear.test.ts`, `tests/useWorkspaceSearchClearOnStart.test.ts` |
+| 3 | Minuta del día anterior no se guarda | Cerrado | `tests/minuteHandlersDayRollover.test.ts` |
+| 4 | No limpia el vídeo anterior | Cerrado | `tests/workspaceHubRestoreMedia.test.tsx`, `tests/workspaceMediaResetOnRequest.test.tsx` (restauración one-shot) |
+| 5 | Carta: contenido como título → TTS vacío | Cerrado | `tests/documentTextVsBinary.test.ts`, `tests/generationTitleFromBody.test.ts`, `tests/workspaceDocumentNormalize.test.ts` |
+| 6 | Alarma de mañana no se crea / dedup por hora | Cerrado | `tests/injectedValues.test.ts` («despiértame mañana a las 5:30» → `alarma`). Dedup hoy por `agendaDedupKey` = kind+label+**trigger serializado** (`agendaService.ts`), no por hora |
+| 7 | La alarma vuelve a sonar tras «detener» | Cerrado | `tests/audioAlertRepeat.test.ts` («suena una sola vez») |
+| 8 | Quitar campo COLOR de «ver horario completo» | MOOT | La vista que contenía ese campo **desapareció**: `HorarioPizarron.tsx` ya no existe; sus responsabilidades pasaron a `AgendaPanel.tsx`, que no expone campo Color. No hay nada que quitar |
+| 9 | Junta no se crea + petición duplicada sin hablante | Cerrado | `junta` es `AgendaKind` de primera clase (`agendaCommandParser.ts`); `tests/conversationTurnSingleRow.test.ts` fija una sola fila con hablante |
+| 10 | «borra la nota del súper» → «Gemini: respuesta inválida» | Cerrado | `notes.remove` YA existe (`src/voice/lib/deterministicArbiter.js`, `src/core/notes/notesService.ts`); `tests/noteRemoveIntent.test.ts`, `tests/notesClearEndToEnd.test.ts` |
+| 11 | «en la nota del súper incluye cloro» no agrega | Cerrado | `src/voice/lib/noteIntentParser.js` cubre el orden destino-primero; `tests/noteSuperDestFirst.test.ts` |
+
+**Ninguno quedó abierto.** Este documento se creyó 8 días "pendiente" solo porque nada
+lo miraba. La procedencia queda fijada por `tests/bugsProductoMap.test.ts`: si un caso
+pierde su guard o desaparece del documento, ese guard falla.
+
+---
+
+## Casos (texto original, rutas históricas)
 
 1. **Agenda del día incompleta.** `dailyAgenda.ts:86,175` + `App.tsx:1728-1748` juntan sólo minutas + recordatorios.
    DoD: “ok flu, ¿qué hay para hoy?” lista **citas, juntas, recordatorios, alarmas y notas** del día. Fuente única; acción determinista (no depender del LLM para el listado).

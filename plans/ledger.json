@@ -694,6 +694,12 @@
       "estado": "done",
       "titulo": "E2E acotado al bloque tocado (la suite entera no es la unidad de verificacion)",
       "evidencia": "AGENTS.md ya lo exigia (\"Iteracion rapida (por cambio, no toda la suite)\") y se incumplia a mano: cada vuelta costaba ~19 min de suite completa para verificar un cambio de un fichero, y encima los rojos de CARGA (dev server compilando, worker muerto -> \"did not run\") se mezclaban con los de producto, obligando a repetir para distinguirlos. Entregado: scripts/e2e-scope.mjs (plan = specs modificados + los que el contrato declara por fichero de src/ tocado, en .task/contract.json -> e2eScope; FALLA si un src/ cambia sin spec declarado, para que el recorte no tape huecos), npm run e2e:plan (dry-run) / npm run e2e:scoped -- --filter=<substr> (ejecuta), tests/e2eScope.test.ts (6 casos del planificador puro) y tests/e2e/_globalSetup.ts (paga una vez el arranque en frio de Vite; Playwright levanta el dev server ANTES del globalSetup, que es el unico sitio donde calentar sirve). Medido: unit 3250/3250, lint limpio, guards verdes. Plan real de esta ronda: auditoria-acciones-llm (10/10 verde aislado, 3.2m) mas los 5 specs tocados."
+    },
+    {
+      "id": "P7.37",
+      "estado": "done",
+      "titulo": "los 11 bugs de producto de 2026-09-14 estaban cerrados; faltaba el mapa que lo dijera",
+      "evidencia": "El documento plans/bugs-producto-2026-09-14.md citaba rutas y lineas que HOY no existen (HorarioPizarron.tsx eliminado, deterministicArbiter.js:94, App.tsx:4490) y el ledger no lo mencionaba NI UNA VEZ: los 11 casos se cerraron por trabajo posterior y el fichero envejecio en silencio, asi que \"¿siguen pendientes?\" no tenia respuesta. Verificado caso por caso contra el codigo de hoy (no contra la memoria): 21 ficheros de guard, 136 tests en verde. 10 casos tienen guard de comportamiento propio; el 8 quedo MOOT (la vista HorarioPizarron desaparecio, sus responsabilidades pasaron a AgendaPanel); el 1 pide incluir \"notas\" en el listado del dia y se cierra con DESVIACION DOCUMENTADA: las notas no tienen fecha, no son agenda (no existe kind 'nota'), y la agenda unificada ya cubre recordatorio/cita/junta/clase/alarma. Entregado: tabla de estado en el documento + tests/bugsProductoMap.test.ts, que fija la procedencia (caso -> guard, moot con motivo) y trae prueba de su propio detector (mutacion), ademas de registro en lint:guards. PROBADO rompiendo a proposito una entrada: el guard falla (\"guard ausente (N=1): #7\") y vuelve a verde al revertir."
     }
   ],
   "done": [
@@ -1457,6 +1463,11 @@
       "id": "P7.30",
       "commit": "b86309f",
       "titulo": "el dominio que el LLM ya clasifico cubre el tipo de agenda que el texto no trae (test 8 verde); queda abierto el recordatorio SIN hora, que es decision de producto"
+    },
+    {
+      "id": "P7.37",
+      "commit": "36f0dd5",
+      "titulo": "los 11 bugs de producto ya estaban cerrados; se les pone mapa de procedencia y prueba de detector para que no vuelvan a envejecer en silencio"
     }
   ]
 }
