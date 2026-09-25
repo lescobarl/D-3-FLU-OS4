@@ -1,28 +1,19 @@
 {
-  "base": "27bda1f",
-  "task": "P6.18 - los ficheros de texto de src/ son UTF-8 valido",
-  "objective": "Que ningun fichero de texto de src/ tenga bytes fuera de UTF-8. Hallazgo colateral de P6.7: src/styles/unified.css tenia 12 bytes en latin-1/cp1252 dentro de comentarios, lo que rompe la lectura del fichero con la herramienta normal y esconde los bytes siguientes.",
+  "base": "cb5b6861aaba1945269c367d3a4a4a86845a4915",
+  "task": "P7.26 + P7.27 + P7.32 - cierres mecanicos: re-congelado autorizado, guard del testid unico y archivo del hueco de la auditoria externa",
+  "objective": "Que la puerta task-gate deje de estar roja por los 5 guards cuyo cambio ya esta autorizado por sus propios commits, que el testid de la celda de imagen no pueda volver a duplicarse sin que nada lo detecte, y que el hueco historico de la auditoria externa quede archivado por decision del dueno en vez de leerse como asunto abierto.",
   "allow": [
-    "src/styles/unified.css",
-    "scripts/utf8-metric.mjs",
-    "tests/utf8Guard.test.ts",
-    "package.json",
+    "tests/auditoriaExternaMap.test.ts",
+    "tests/resultFeed.test.tsx",
     "plans/ledger.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 300,
-  "dod": "npx tsc -b",
-  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/utf8Guard.test.ts",
-  "invariant": {
-    "statement": "Ningun fichero de texto de src/ tiene bytes fuera de UTF-8.",
-    "metric": {
-      "command": "node scripts/utf8-metric.mjs",
-      "target": 0
-    },
-    "base": "27bda1f",
-    "guardFiles": [
-      "tests/utf8Guard.test.ts",
-      "scripts/utf8-metric.mjs"
-    ]
-  }
+  "maxFiles": 6,
+  "maxLines": 400,
+  "dod": "npm run ledger:check",
+  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/auditoriaExternaMap.test.ts tests/resultFeed.test.tsx tests/taskLedgerGuard.test.ts tests/taskLedgerReferenceGuard.test.ts tests/eolGuard.test.ts",
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "kilo.json"
+  ]
 }

@@ -2244,3 +2244,25 @@ npm run test:full -> 319 ficheros / 3174 tests / 0 fallos; npm run build OK.
 Nota: el bundle no sirve como evidencia aqui: el minificador de CSS elimina los
 comentarios en produccion, asi que no se pueden citar en dist/. Lo que se comprueba
 es la fuente, que es donde estaba el defecto.
+
+## Enmienda B.14 - re-congelado de .task/frozen.json (P7.26), autorizado por el dueno
+
+La puerta lleva roja desde la sesion de afinado: 5 guards CONGELADOS cambiaron de hash
+y .task/frozen.json no se re-congelo. Medido hoy (hash crudo, no normalizado a LF, para
+descartar el artefacto de EOL):
+
+  tests/catchSilenciosoGuard.test.ts        frozen=175e14e3...  actual=da0e6721...
+  tests/providerLiteralGuard.test.ts        frozen=bab7ad64...  actual=b92bb369...
+  tests/remoteResourceGuard.test.ts         frozen=776bac80...  actual=857068fd...
+  tests/transportSingleOwnerGuard.test.ts   frozen=fd8ee1ac...  actual=230dfbb...
+  tests/godFileSizeGuard.test.ts            frozen=64b88beb...  actual=456c0499...
+
+Los cambios NO son trabajo sin declarar: se editaron en dfe954a (P7.9), 6148862
+(P7.7/P7.10), 7724e8d (C65), a5f68c5 (P7.6) y f471594 (P7.8), y el ledger los recoge.
+
+El dueno autoriza el re-congelado (2026-09-24) y se aplica:
+  node scripts/task-gate-freeze.mjs <los 5>
+No se restaura el contenido anterior: revertir esos commits desharia trabajo aprobado.
+Lo que el congelado protegia --que el criterio de un guard no cambie a espaldas de
+nadie-- sigue intacto: el cambio de contenido esta justificado por commit y el hash
+queda al dia para que el siguiente cambio vuelva a saltar.
