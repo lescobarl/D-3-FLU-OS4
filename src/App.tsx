@@ -3722,7 +3722,7 @@ const {
                 // para permitir que la animación de boca termine naturalmente
                 cancelSpeech();
                 // Pequeña pausa para permitir transición de estado
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
             }
             
             const commandSpeech = getCommandSpeech('CERRAR_ESCUCHA', language);
@@ -3742,7 +3742,7 @@ const {
         // Solo cancelar si realmente hay speech activo
         if (isSpeechBusy()) {
             cancelSpeech();
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
         }
         
         const commandSpeech = getCommandSpeech('ABRIR_ESCUCHA', language);
@@ -3765,7 +3765,7 @@ const {
             // Solo cancelar si realmente hay speech activo
             if (isSpeechBusy()) {
                 cancelSpeech();
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
             }
             const commandSpeech = getCommandSpeech('INICIAR_CONVERSACION', language);
             if (commandSpeech) {
