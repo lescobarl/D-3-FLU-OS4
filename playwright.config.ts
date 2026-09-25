@@ -1,15 +1,18 @@
 import { defineConfig } from '@playwright/test';
-import { availableParallelism } from 'node:os';
 
 // Puerto del dev server: default único para E2E (override con PORT).
 const PORT = Number(process.env.PORT) || 5173;
 const BASE_URL = `http://localhost:${PORT}`;
 
 // CI (runner de 4 vCPU) no aguanta 4 chromium + Vite: la saturacion mataba
-// workers y sus tests salian como "did not run". Local se deriva del hardware
-// real (misma leccion que C74 en vitest): 12 cpus -> 4, identico a antes.
+// workers y sus tests salian como "did not run". MEDIDO en local (P7.25): el
+// mismo techo existe aqui -- con 4 workers, specs que pasan AISLADOS fallaban
+// por carga (.flu-shell no aparecia en 15 s; paginas cerradas a mitad de test)
+// y los timeouts duros mataban al worker, arrastrando "did not run". Con 1-2
+// workers esos mismos specs pasan. Local = CI = 2, para que el E2E local
+// reproduzca lo que corre en CI en vez de inventarse otro regimen.
 const CI = process.env.CI === '1' || process.env.CI === 'true';
-const WORKERS = CI ? 2 : Math.max(1, Math.min(4, availableParallelism() - 1));
+const WORKERS = 2;
 
 export default defineConfig({
   testDir: './tests/e2e',

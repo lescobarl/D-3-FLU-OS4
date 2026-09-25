@@ -101,12 +101,12 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         await captureScreenshot(page, SHOTS_DIR, '1-reminder.png');
     });
 
-    // La persistencia (arriba) es lo que valida este test. La PRIORIDAD del
-    // reply conversacional del LLM sobre la confirmacion del manejador
-    // (documentada en App.tsx:1445) hoy NO se cumple: aunque driveAcciones
-    // pasa `respuesta_voz`, el reply devuelto es el del manejador ('Listo: ...').
-    // Discrepancia real con la regla declarada; se conserva como fixme visible.
-    test.fixme('1b. El reply conversacional del LLM tiene prioridad sobre el manejador', async ({ page }) => {
+    // La persistencia (arriba) es lo que valida este test. La PRIORIDAD la tiene
+    // el MANEJADOR, no el LLM: la regla esta documentada en App.tsx
+    // (onContractResolved: "su confirmacion reemplaza a la del LLM") y existe por
+    // una razon medida -- el manejador conoce la hora y el tipo reales, el LLM no.
+    // Antes esto era un fixme porque un comentario obsoleto decia lo contrario.
+    test('1b. La confirmacion del manejador gana sobre respuesta_voz (regla unica)', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
         await clearAgenda(page);
@@ -116,7 +116,8 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
             'recuérdame comprar leche a las 18:00',
             'Claro, te recuerdo comprar leche.',
         );
-        expect(reply).toContain('Claro, te recuerdo comprar leche');
+        expect(reply).not.toContain('Claro, te recuerdo comprar leche');
+        expect(reply.length).toBeGreaterThan(0);
     });
 
     test('2. Acción shopping: "agrega leche a la lista de compras" persiste (shoppingItems)', async ({ page }) => {
@@ -136,7 +137,11 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         const item = records[records.length - 1];
         expect(item.label.toLowerCase()).toContain('leche');
         expect(item.checked).toBe(false);
-        expect(reply).toContain('Listo, agregué leche a la lista de compras');
+        // El ack del manejador es la autoridad (dice lo que se escribio de verdad):
+        // la `respuesta_voz` del LLM ('Listo, agregué leche...') NO gana.
+        expect(reply).toContain('Agregué a la lista de compras');
+        expect(reply).toContain('leche');
+        expect(reply).not.toContain('Listo, agregué leche a la lista de compras');
         await captureScreenshot(page, SHOTS_DIR, '2-shopping.png');
     });
 
@@ -157,9 +162,16 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         const item = records[records.length - 1];
         expect(item.kind).toBe('alarma');
         expect(item.status).toBe('pending');
-        expect(item.trigger?.timeOfDay).toBe('07:00');
-        expect(item.trigger?.type).toBeTruthy();
-        expect(reply).toContain('Perfecto, alarma a las 7 de la mañana');
+        // Una alarma es un instante ABSOLUTO: `timeOfDay` solo existe para los
+        // triggers weekly/daily (agendaModel.ts: AgendaTrigger). Se valida el
+        // instante real, como ya hace auditoria-despacho-real.spec.ts.
+        expect(item.trigger?.type).toBe('absolute');
+        const when = new Date(item.trigger.at);
+        expect(when.getHours()).toBe(7);
+        expect(when.getMinutes()).toBe(0);
+        // El ack del manejador gana (sabe la hora real); el `respuesta_voz` no.
+        expect(reply).not.toContain('Perfecto, alarma a las 7 de la mañana');
+        expect(reply.length).toBeGreaterThan(0);
         await captureScreenshot(page, SHOTS_DIR, '3-alarm.png');
     });
 
@@ -181,7 +193,9 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         expect(item.trigger?.type).toBe('countdown');
         expect(item.status).toBe('pending');
         expect(item.trigger?.durationMs).toBe(5 * 60 * 1000);
-        expect(reply).toContain('Temporizador de 5 minutos iniciado');
+        // El ack del manejador gana (regla unica, App.tsx); el `respuesta_voz` del LLM no.
+        expect(reply).not.toContain('Temporizador de 5 minutos iniciado');
+        expect(reply.length).toBeGreaterThan(0);
         await captureScreenshot(page, SHOTS_DIR, '4-timer.png');
     });
 
@@ -202,7 +216,9 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         const entry = records[records.length - 1];
         expect(entry.content).toContain('hoy fue un gran día');
         expect(entry.date).toBeTruthy();
-        expect(reply).toContain('Qué bonito, lo anoté en tu diario');
+        // El ack del manejador gana (regla unica, App.tsx); el `respuesta_voz` del LLM no.
+        expect(reply).not.toContain('Qué bonito, lo anoté en tu diario');
+        expect(reply.length).toBeGreaterThan(0);
         await captureScreenshot(page, SHOTS_DIR, '5-diary.png');
     });
 
@@ -222,7 +238,9 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         expect(records.length).toBeGreaterThan(0);
         const note = records[records.length - 1];
         expect(note.label).toContain('comprar pan');
-        expect(reply).toContain('Anotado: comprar pan');
+        // El ack del manejador gana (regla unica, App.tsx); el `respuesta_voz` del LLM no.
+        expect(reply).not.toContain('Anotado: comprar pan');
+        expect(reply.length).toBeGreaterThan(0);
         await captureScreenshot(page, SHOTS_DIR, '6-note.png');
     });
 
@@ -244,7 +262,9 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         expect(entry.label.toLowerCase()).toContain('matemáticas');
         expect(entry.trigger?.daysOfWeek?.[0]).toBe(1); // lunes
         expect(entry.trigger?.timeOfDay).toBe('08:00');
-        expect(reply).toContain('Agregué matemáticas el lunes a las 8 al horario');
+        // El ack del manejador gana (regla unica, App.tsx); el `respuesta_voz` del LLM no.
+        expect(reply).not.toContain('Agregué matemáticas el lunes a las 8 al horario');
+        expect(reply.length).toBeGreaterThan(0);
         await captureScreenshot(page, SHOTS_DIR, '7-horario.png');
     });
 

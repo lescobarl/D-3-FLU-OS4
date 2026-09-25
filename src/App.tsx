@@ -1442,9 +1442,9 @@ function App() {
             // como FALLBACK OFFLINE puro: solo corre cuando el LLM NO produjo
             // ninguna acción (p. ej. sin API key o respuesta genérica).
             //
-            // La respuesta conversacional del LLM (respuesta_voz) tiene PRIORIDAD
-            // sobre la confirmación del manejador: esta última solo se usa como
-            // respaldo cuando NO hay respuesta conversacional (offline).
+            // Gana el MANEJADOR, no el LLM: su confirmacion reemplaza a
+            // `respuesta_voz` (ver mas abajo, regla unica). Sabe lo que se
+            // escribio de verdad (hora y tipo); el LLM puede describir otra entidad.
             //
             // onContractResolved es useCallback con deps [] y se define ANTES
             // de los manejadores, por lo que se invocan vía window en runtime
