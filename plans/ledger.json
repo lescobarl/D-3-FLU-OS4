@@ -1450,7 +1450,7 @@
     },
     {
       "id": "P7.36",
-      "commit": "08cc924",
+      "commit": "3b0d9d0",
       "titulo": "la suite E2E entera no es la unidad de verificacion: corrida acotada al bloque tocado, con fallo explicito si un fichero de src/ cambia sin spec declarado"
     },
     {
