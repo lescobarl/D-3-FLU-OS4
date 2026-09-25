@@ -172,17 +172,29 @@ test.describe('Matriz de comandos — escenarios productivos reales', () => {
         await captureScreenshot(page, SHOTS_DIR, '4-cita.png');
     });
 
-    // La cita persistida no se lista en el panel de agenda (P7.28 del ledger:
-    // sin usuario activo useAgenda fuerza items=[] por diseno; con usuario, hueco
-    // de render sin resolver). El testid duplicado SI se arreglo (AgendaPanel
-    // acepta `testId`; Ajustes usa 'settings-agenda-panel').
-    test.fixme('4b. La cita agendada se ve en el panel de agenda del Pizarron', async ({ page }) => {
+    // P7.28 (CERRADO): la cita SI se lista. La causa era doble y ambas estan
+    // arregladas en App.tsx: (a) saltar el onboarding no encendia `sessionReady`,
+    // asi que las LECTURAS (realParticipantId) quedaban undefined mientras las
+    // ESCRITURAS usaban activeParticipantId; (b) el seed de DEMO se re-sembraba en
+    // bucle (efecto con `notes` en las dependencias + corridas async solapadas que
+    // leian `existing` antes de que ninguna escribiera) y metia cientos de
+    // duplicados: medido 538 registros con 8 labels distintos. Como Proximos es un
+    // top-10 por vencimiento, ese enjambre enterraba la cita real.
+    // Antes ROJO, ahora VERDE: se conserva como test REAL para que la regresion no
+    // vuelva. El testid duplicado tambien se arreglo (AgendaPanel acepta `testId`;
+    // Ajustes usa 'settings-agenda-panel').
+    test('4b. La cita agendada se ve en el panel de agenda del Pizarron', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
+        // Usuario activo REAL: sin el, useAgenda no tiene agenda por diseno.
+        await seedActiveUser(page, 'Usuario E2E');
         await clearAgenda(page);
         await driveTranscript(page, 'ok flu crea una cita para mañana a las 10');
         const item = page.locator('[data-testid="agenda-panel"] .agenda-item', { hasText: 'cita' }).first();
-        await expect(item).toBeVisible({ timeout: 10000 });
+        // El panel refresca por refresco inmediato de mutacion o por el polling de
+        // 15000 ms: se da mas de un tick para no depender de cual gane.
+        await expect(item).toBeVisible({ timeout: 20000 });
+        await captureScreenshot(page, SHOTS_DIR, '4b-cita-en-panel.png');
     });
 
     test('5. Alarma: "pon una alarma a las 11:23" persiste con timeOfDay 11:23', async ({ page }) => {
@@ -225,8 +237,13 @@ test.describe('Matriz de comandos — escenarios productivos reales', () => {
         await driveTranscript(page, 'ok flu apunta en la lista super comprar conejos');
 
         const records = await readStore(page, 'notes');
-        const note = records[records.length - 1];
-        expect(note.label.toLowerCase()).toContain('conejos');
+        // Se busca por CONTENIDO, no por posicion: el DEMO se siembra de forma
+        // asincrona al elegir usuario y sus notas pueden aterrizar despues del
+        // clearStore de este test. Tomar el ultimo registro a ciegas hacia que el
+        // veredicto dependiera del calendario (rojo o verde segun quien llegara
+        // antes). Mismo criterio que los casos 5 y 8 de esta matriz.
+        const note = records.find((n: any) => String(n.label).toLowerCase().includes('conejos'));
+        expect(note, 'debe persistir la nota de la lista super').toBeTruthy();
         await captureScreenshot(page, SHOTS_DIR, '7-nota.png');
     });
 
