@@ -1,25 +1,47 @@
 import { cleanForSpeech } from './audioMath.js'
 import { normalizeConfiguracion } from './configCommands.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { buildGenerationPrompt } from './fluVisualPipeline.js'
+import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
+import { buildVisualGenerationPrompt } from './fluVisualPipeline.js'
 import {
-  buildPollinationsUrl,
-  buildTextApiUrl,
-  isLocalTextEndpoint,
-  OPENROUTER_CONFIG,
-  resolveTextApiKey,
+  FALAI_DEFAULTS,
+  OPENROUTER_DEFAULTS,
   WORKSPACE_TIPOS,
-} from '../../core/config/appConfig'
+  TIMEOUT_POLICY_MS,
+  buildPollinationsImageUrl,
+  isLocalTextEndpoint,
+  joinApiUrl,
+  resolveServerPollinationsUrl,
+  resolveApiKey,
+  resolveServerTextApiKey,
+  resolveServerTextApiUrl,
+  resolveServerTextModel,
+} from '../../core/config/sharedConfig'
+import { STORAGE_KEYS } from '../../core/config/appConfig'
 
 import {
+  buildBareVisualFallbackWorkspace,
   buildVisualAnchorBlock,
+  isBareVisualRequest,
+  isVisualWorkspaceTipo,
   normalizeWorkspaceContract,
   selectConversationSummaryWindow,
 } from './workspaceContract.js'
-import { fetchTextEngine, fetchTextEngineResilient, resolveRequestTimeout } from '../../core/ai/httpClient'
+import {
+  fetchTextEngine,
+  fetchTextEngineResilient,
+  REQUEST_TIMEOUT_PRESETS,
+  resolveRequestTimeout,
+} from '../../core/ai/httpClient'
 import { buildAnimPrompt } from '../../core/anim/expressionRegistry'
 import { buildCapabilitiesPrompt } from '../../services/capabilities'
 import { buildConfiguracionPrompt } from '../../core/config/voiceConfigCatalog'
+import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
+import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
+import { postGeminiContractResilient } from '../../services/geminiContractClient'
+import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
+import { localGet } from '../../core/storage/localStore';
 
 export {
   buildVisualAnchorBlock,
@@ -30,10 +52,11 @@ export {
 } from './workspaceContract.js'
 
 // NOTA (OS4): Toda la generación de texto (voz, contrato, resumen, evaluación,
-// visión/OCR) se enruta por el motor único OpenAI-compatible definido en appConfig:
-//   buildTextApiUrl('/chat/completions') → OpenRouter → Google Gemini 2.5 Flash Lite
+// visión/OCR) se enruta por el motor único OpenAI-compatible (defaults/lógica en
+// sharedConfig.ts, sin import.meta.env en scope de módulo):
+//   joinApiUrl(resolveServerTextApiUrl(), '/chat/completions') → OpenRouter → Gemini
 //   (o el endpoint local / URL configurada en Ajustes → Texto).
-// Las imágenes se generan SIEMPRE con Pollinations.ai (buildPollinationsUrl).
+// Las imágenes se generan SIEMPRE con Pollinations.ai (buildPollinationsImageUrl).
 // Ya NO se usa la API nativa de Google (generativelanguage.googleapis.com).
 
 // ── Fase 1 (optimización de latencia): timeout de red ADAPTATIVO por tipo de
@@ -69,8 +92,9 @@ function getGeminiGenerationProfile(profile = 'contract') {
 function hasUsableVoiceBackend(apiKey) {
   if (apiKey) return true
   try {
-    return isLocalTextEndpoint(buildTextApiUrl('/chat/completions'))
-  } catch {
+    return isLocalTextEndpoint(joinApiUrl(resolveServerTextApiUrl(), '/chat/completions'))
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     return false
   }
 }
@@ -87,36 +111,59 @@ async function postChatCompletion({
   messages,
   temperature,
   topP,
-  maxTokens = 2048,
+  maxTokens = FLU_CONFIG.vision.maxOutputTokens,
   jsonMode = false,
   timeoutMs,
 }) {
-  const url = buildTextApiUrl('/chat/completions')
+  const url = joinApiUrl(resolveServerTextApiUrl(), '/chat/completions')
   const local = isLocalTextEndpoint(url)
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
+  // Normalizar mensajes antes de enviar (evita "Invalid prompt: The messages do
+  // not match the ModelMessage[] schema"): descarta entradas vacías/sin contenido
+  // y fuerza roles válidos. Único chokepoint de todas las llamadas de texto.
+  const safeMessages = (Array.isArray(messages) ? messages : [])
+    .map((message) => {
+      if (!message || typeof message !== 'object') return null
+      const role = String(message.role || '').toLowerCase()
+      const validRole =
+        role === 'system' || role === 'assistant' || role === 'user' || role === 'tool'
+          ? role
+          : 'user'
+      const content = message.content
+      const hasContent =
+        typeof content === 'string'
+          ? content.trim().length > 0
+          : Array.isArray(content)
+            ? content.length > 0
+            : content != null
+      if (!hasContent) return null
+      return { role: validRole, content }
+    })
+    .filter(Boolean)
+
   const body = {
     model,
-    messages,
+    messages: safeMessages,
     max_tokens: maxTokens,
     ...(temperature !== undefined && temperature !== null ? { temperature } : {}),
     ...(topP !== undefined && topP !== null ? { top_p: topP } : {}),
   }
   if (jsonMode && !local) body.response_format = { type: 'json_object' }
 
-  const response = await fetchTextEngine(
+  const response = await fetchTextEngineResilient(
     url,
     {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     },
-    timeoutMs,
+    { timeoutMs, retries: 1, retryDelayMs: 300 },
   )
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => '')
+    const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
     const error = new Error(`Gemini/OpenRouter error ${response.status}: ${detail || response.statusText}`)
     error.status = response.status
     error.detail = detail
@@ -176,10 +223,31 @@ export function buildMinimalContractSchema() {
     type: 'object',
     properties: {
       respuesta_voz: { type: 'string' },
+      ambiente: { type: 'string', nullable: true },
+      acciones: {
+        type: 'array',
+        description:
+          'Acciones ejecutables cuando el usuario pide crear/gestionar el calendario (agenda: alarmas, recordatorios, citas, juntas, clases), la lista de compras, notas o diario. Cada item: { dominio: "agenda"|"shopping"|"note"|"diary", texto: fragmento del mandato TAL COMO LO DIJO el usuario }. La app estructura el resto de forma determinista.',
+        items: {
+          type: 'object',
+          properties: {
+            dominio: {
+              type: 'string',
+              enum: ['agenda', 'shopping', 'note', 'diary'],
+            },
+            texto: { type: 'string' },
+          },
+          required: ['dominio', 'texto'],
+        },
+      },
       navegacion: {
         type: 'object',
         properties: {
-          comando: { type: 'string', nullable: true },
+          comando: {
+            type: 'string',
+            nullable: true,
+            description: `Valores válidos: ${GEMINI_INFERABLE_COMMAND_IDS.join(', ')} o null. Usa NAVEGAR cuando el usuario pida abrir/navegar/buscar un sitio curado.`,
+          },
           destino: { type: 'string', nullable: true },
           parametros: { type: 'object' },
         },
@@ -196,7 +264,7 @@ export function buildMinimalContractSchema() {
  *  - texto corto (< 20 palabras);
  *  - sin comando de navegación explícito (intent.comando null/undefined);
  *  - sin referencias a workspace/documentos/imágenes/música/configuración/
- *    minutas/resúmenes/participantes/vídeo;
+ *    minutas/resúmenes/participantes/vídeo/horario;
  *  - el idioma y las peticiones de traducción no fuerzan el pipeline completo:
  *    la IA resuelve la estructura de la conversación de forma natural.
  */
@@ -206,7 +274,7 @@ export function detectSimpleRequest({ transcript = '', intent = {} } = {}) {
   if (words > 20) return false
   if (intent?.comando) return false
   const complexReference =
-    /(workspace|documento|documentos|imagen|im[áa]genes|m[úu]sica|cancion|canciones|canta|cantar|toca|tocar|sing|configura|configurar|pantalla|minuta|minutas|resumen|resumir|participante|participantes|v[íi]deo|archivo|reproduce|reproducir|toma nota|actas)/i
+    /(workspace|documento|documentos|imagen|im[áa]genes|m[úu]sica|cancion|canciones|canta|cantar|baila|bailar|baile|bailamos|dance|toca|tocar|pon(?:me)?\s+m[úu]sica|sing|configura|configurar|pantalla|minuta|minutas|resumen|resumir|participante|participantes|v[íi]deo|archivo|reproduce|reproducir|toma nota|actas|horario|horarios|clase|clases)/i
   return !complexReference.test(transcript)
 }
 
@@ -219,8 +287,8 @@ function buildSchemaFormatBlock(schema) {
   ].join('\n')
 }
 
-export async function generateWorkspaceImage({ apiKey, workspace, language = 'es' }) {
-  const prompt = buildGenerationPrompt(workspace, language)
+export async function generateWorkspaceImage({ workspace, language = 'es' }) {
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   if (!prompt) {
     return {
       imageUrl: '',
@@ -234,9 +302,8 @@ export async function generateWorkspaceImage({ apiKey, workspace, language = 'es
   }
 
   // Pollinations.ai (stateless, sin API key): única vía de generación de imágenes.
-  // Ya no se usa la generación de imágenes nativa de Gemini (predict/generateContent).
   try {
-    const imageUrl = buildPollinationsUrl(prompt)
+    const imageUrl = buildPollinationsImageUrl(resolveServerPollinationsUrl(), prompt)
     return {
       imageUrl,
       trace: {
@@ -250,6 +317,7 @@ export async function generateWorkspaceImage({ apiKey, workspace, language = 'es
       },
     }
   } catch (error) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', error);
     return {
       imageUrl: '',
       trace: {
@@ -263,18 +331,218 @@ export async function generateWorkspaceImage({ apiKey, workspace, language = 'es
   }
 }
 
+/**
+ * Genera una imagen con la Image API de OpenRouter (POST /images) usando el
+ * modelo y endpoint centralizados en OPENROUTER_CONFIG (appConfig). Es el ÚNICO
+ * fallback de imagen: cuando la URL de Pollinations falla al cargar, se genera
+ * la imagen por OpenRouter (google/gemini-2.5-flash-image por defecto).
+ * Devuelve { imageUrl, trace }; imageUrl vacío si no hay key o falla.
+ */
+export async function generateOpenRouterImage({
+  apiKey = '',
+  prompt = '',
+  language = 'es',
+} = {}) {
+  if (!prompt) {
+    return {
+      imageUrl: '',
+      trace: {
+        provider: AI_PROVIDER_IDS.OPENROUTER,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+        kind: 'images',
+        source: 'empty_prompt',
+        hasImage: false,
+        prompt,
+      },
+    }
+  }
+
+  const url = joinApiUrl(resolveServerTextApiUrl(), OPENROUTER_DEFAULTS.IMAGE_ENDPOINT)
+  if (!apiKey || isLocalTextEndpoint(url)) {
+    return {
+      imageUrl: '',
+      trace: {
+        provider: AI_PROVIDER_IDS.OPENROUTER,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+        kind: 'images',
+        source: 'missing_api_key',
+        hasImage: false,
+        prompt,
+      },
+    }
+  }
+
+  try {
+    const response = await fetchTextEngine(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+          prompt,
+          n: 1,
+          aspect_ratio: OPENROUTER_DEFAULTS.IMAGE_ASPECT_RATIO,
+        }),
+      },
+      REQUEST_TIMEOUT_PRESETS.image,
+    )
+    if (!response.ok) {
+      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
+      const message = `OpenRouter image error ${response.status}: ${String(detail).slice(0, 300)}`
+      console.error('[gemini]', message)
+      return {
+        imageUrl: '',
+        trace: {
+          provider: AI_PROVIDER_IDS.OPENROUTER,
+          model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+          kind: 'images',
+          source: 'openrouter_image_error',
+          hasImage: false,
+          error: message,
+          prompt,
+          language,
+        },
+      }
+    }
+    const payload = await response.json()
+    const image = payload?.data?.[0]
+    const b64 = String(image?.b64_json || '')
+    if (!b64) {
+      return {
+        imageUrl: '',
+        trace: {
+          provider: AI_PROVIDER_IDS.OPENROUTER,
+          model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+          kind: 'images',
+          source: 'openrouter_image_empty',
+          hasImage: false,
+          prompt,
+          language,
+        },
+      }
+    }
+    const mediaType = String(image?.media_type || 'image/png')
+    return {
+      imageUrl: `data:${mediaType};base64,${b64}`,
+      trace: {
+        provider: AI_PROVIDER_IDS.OPENROUTER,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+        kind: 'images',
+        source: 'openrouter_image_fallback',
+        hasImage: true,
+        prompt,
+        language,
+      },
+    }
+  } catch (error) {
+    const message = error?.message || 'unknown'
+    logCaughtError('[gemini] OpenRouter image fallback error', message)
+    return {
+      imageUrl: '',
+      trace: {
+        provider: AI_PROVIDER_IDS.OPENROUTER,
+        model: OPENROUTER_DEFAULTS.IMAGE_MODEL,
+        kind: 'images',
+        source: 'openrouter_image_error',
+        hasImage: false,
+        error: message,
+        prompt,
+        language,
+      },
+    }
+  }
+}
+
+/** Intenta parsear; tolera comas finales. Devuelve `undefined` si no parsea. */
+function tryParseJsonCandidate(candidate) {
+  const text = String(candidate || '').trim()
+  if (!text) return undefined
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+    // ignore
+  }
+  try {
+    return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'))
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+    return undefined
+  }
+}
+
+/**
+ * Extrae el primer objeto/array JSON **balanceado** del texto, ignorando texto
+ * alrededor y respetando strings/escapes. Devuelve '' si no hay.
+ */
+function extractBalancedJson(text) {
+  const source = String(text || '')
+  const start = source.search(/[[{]/)
+  if (start < 0) return ''
+  const open = source[start]
+  const close = open === '{' ? '}' : ']'
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === open) depth += 1
+    else if (char === close) {
+      depth -= 1
+      if (depth === 0) return source.slice(start, index + 1)
+    }
+  }
+  return ''
+}
+
 export function extractJson(text) {
   const raw = String(text || '').trim()
   if (!raw) return null
 
+  const candidates = []
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fenced ? fenced[1].trim() : raw
+  if (fenced) candidates.push(fenced[1])
+  candidates.push(raw)
+  // JSON envuelto con texto/ruido alrededor (causa real de "respuesta inválida").
+  const balanced = extractBalancedJson(raw)
+  if (balanced) candidates.push(balanced)
 
-  try {
-    return JSON.parse(candidate)
-  } catch {
-    return null
+  for (const candidate of candidates) {
+    const parsed = tryParseJsonCandidate(candidate)
+    if (parsed !== undefined) return parsed
   }
+  return null
+}
+
+/**
+ * Coerciona el texto del modelo al contrato de voz sin lanzar nunca.
+ * Un JSON válido con `respuesta_voz` vacía NO es un JSON inválido: se devuelve
+ * `{ parsed, voice: '' }` para que el llamador decida reintentar. Confundir
+ * ambos casos es la causa de "Gemini: respuesta inválida".
+ */
+export function coerceFluContractPayload(text) {
+  const parsed = extractJson(text)
+  if (!parsed || typeof parsed !== 'object') {
+    return { parsed: null, voice: '' }
+  }
+  const voice = sanitizeVoiceText(
+    parsed.respuesta_voz || parsed.response_voz || parsed.text || '',
+  )
+  return { parsed, voice }
 }
 
 export function sanitizeVoiceText(text, maxWords = Number.POSITIVE_INFINITY) {
@@ -354,6 +622,13 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
       isEnglish
         ? 'Adapt your responses to reflect these traits and tone naturally in your language and style.'
         : 'Adapta tus respuestas para reflejar estos rasgos y tono de forma natural en tu lenguaje y estilo.',
+      // FASE P: desired explanation depth from the person's communication profile
+      ...(personality.explanationLevel
+        ? [isEnglish
+          ? `Explanation level: ${personality.explanationLevel}. Adjust the depth of your answers to match this level (simple = short and plain, detallado = thorough with steps and examples, avanzado = technical and advanced).`
+          : `Nivel de explicacion: ${personality.explanationLevel}. Ajusta la profundidad de tus respuestas a ese nivel (simple = breve y claro, detallado = a fondo con pasos y ejemplos, avanzado = tecnico).`
+        ]
+        : []),
       // Custom instructions from FLU Configurator (free text, e.g. "be more expressive, use animations, be kind")
       ...(personality.customInstructions
         ? [isEnglish
@@ -377,13 +652,27 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
   // comportamiento original para llamadas directas y pruebas.
   const configPrompt = includeConfig ? [buildConfiguracionPrompt(isEnglish ? 'en' : 'es')] : []
 
+  // Ambiente instructions — fuente de verdad ÚNICA: environmentRegistry (catálogo fusionado).
+  // Se inyecta SIEMPRE (no gated por shouldIncludeConfigPrompt): los ambientes son identidad
+  // central y el catálogo es compacto. El LLM interpreta la esencia de la orden y emite
+  // el id de ambiente cuando el usuario adopta un rol explícito (sin coincidencia literal).
+  const ambientePrompt = [buildAmbientePrompt(isEnglish ? 'en' : 'es')]
+
   return [
     // Startup prompt: profile-level personality definition injected at the top of the system prompt
     ...(startupPrompt
-      ? [isEnglish
-        ? `PROFILE PERSONALITY — You must embody the following character definition at all times: ${startupPrompt}`
-        : `PERSONALIDAD DEL PERFIL — Debes encarnar la siguiente definición de personaje en todo momento: ${startupPrompt}`
-      ]
+      ? [
+          isEnglish
+            ? `PROFILE PERSONALITY — You must embody the following character definition at all times: ${startupPrompt}`
+            : `PERSONALIDAD DEL PERFIL — Debes encarnar la siguiente definición de personaje en todo momento: ${startupPrompt}`,
+          // Proactividad del perfil (config): que ACTÚE su personalidad (chistes,
+          // juegos, baile, propuestas), no solo que la describa.
+          isEnglish
+            ? (FLU_CONFIG.personality?.proactiveDirectiveEn ||
+              'Be proactive: bring the profile personality to life by proposing a game, telling a short joke or suggesting a dance/activity when it fits, without being asked. Offer concrete, brief ideas.')
+            : (FLU_CONFIG.personality?.proactiveDirective ||
+              'Sé proactivo: haz viva la personalidad del perfil proponiendo un juego, contando un chiste breve o sugiriendo un baile/actividad cuando encaje, sin que te lo pidan. Ofrece ideas concretas y breves.'),
+        ]
       : []),
     isEnglish
       ? 'Respond ONLY in valid JSON, without markdown, bullet points or any extra text.'
@@ -403,9 +692,27 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
     isEnglish
       ? 'Return an object with respuesta_voz and navegacion. The app generates images or diagrams ONLY from workspace.tipo (image_prompt, diagram, 3d). Never rely on respuesta_voz text to trigger visuals.'
       : 'Devuelve un objeto con respuesta_voz y navegacion. La app genera imagenes o diagramas SOLO desde workspace.tipo (image_prompt, diagram, 3d). Nunca dependas del texto de respuesta_voz para activar visuales.',
+    // OS4 FASE CONVERSACIONAL: acciones ejecutables. El LLM es el cerebro: si el
+    // usuario pide crear/gestionar recordatorios, compras, alarmas, temporizadores,
+    // notas, diario u horario, DEBE emitir `acciones` (no solo confirmar en texto).
+    // App.tsx re-resuelve cada `texto` con los parsers deterministas (fuente de
+    // verdad del parseo temporal) y ejecuta el manejador __fluHandle*. La
+    // respuesta_voz debe confirmar de forma natural lo que se ejecutó.
+    isEnglish
+      ? 'ACTIONS — When the user asks to create/manage calendar items (alarms, reminders, appointments, meetings, classes), the shopping list, notes or diary, emit "acciones" as an array of { dominio, texto } where dominio is one of: agenda, shopping, note, diary and texto is the USER\'s command fragment as spoken (e.g. dominio:"agenda", texto:"crea una cita para mañana a las 10"). Emit the real action so the app can execute it; do NOT just describe it in respuesta_voz. For "shopping list" use dominio:"shopping" with texto like "agrega pan a la lista de compras".'
+      : 'ACCIONES — Cuando el usuario pida crear/gestionar el calendario (alarmas, recordatorios, citas, juntas, clases), la lista de compras, notas o diario, emite "acciones" como un arreglo de { dominio, texto } donde dominio es uno de: agenda, shopping, note, diary y texto es el fragmento del mandato TAL COMO LO DIJO el usuario (ej. dominio:"agenda", texto:"crea una cita para mañana a las 10"). Emite la acción REAL para que la app la ejecute; NO te limites a describirla en respuesta_voz. Para la lista de compras usa dominio:"shopping" con texto como "agrega pan a la lista de compras".',
     isEnglish
       ? 'Use workspace.tipo text (or omit workspace) for pure conversation, explanations, or when the user says without image / text only. Use image_prompt for photos, diagram for flowcharts, 3d for 3D scenes.'
       : 'Usa workspace.tipo text (u omite workspace) para platica, explicaciones o cuando el usuario diga sin imagen / solo texto. Usa image_prompt para fotos, diagram para diagramas de flujo, 3d para escenas 3D.',
+    isEnglish
+      ? 'BARE VISUAL REQUEST: when the user asks for an image without naming a subject (e.g. "generate me an image", "create an image", "show me a picture"), the topic is in the conversation thread. You MUST infer prompt_visual from the recent thread and set workspace.tipo = image_prompt. Do NOT reply "what image do you want?" when the thread has a topic — generate it. Only ask if the thread has no topic at all.'
+      : 'PETICIÓN VISUAL SIN SUJETO: cuando el usuario pida una imagen sin nombrar el sujeto (p. ej. "generame una imagen", "crea una imagen", "muéstrame una foto"), el tema está en el hilo de conversación. DEBES inferir prompt_visual del hilo reciente y fijar workspace.tipo = image_prompt. NO respondas "¿qué imagen quieres?" cuando el hilo tiene un tema — genérala. Solo pregunta si el hilo no tiene ningún tema.',
+    isEnglish
+      ? 'Use workspace.tipo horario with a modo (semana, dia, proxima or recordatorios) when the user asks about their class schedule ("show my schedule", "what classes do I have today", "next class"). The schedule renders in the Pizarrón from the horario table; return only the tipo and the modo, the app draws it.'
+      : 'Usa workspace.tipo horario con un modo (semana, dia, proxima o recordatorios) cuando el usuario pida su horario de clases ("muestra mi horario", "qué clases tengo hoy", "próxima clase"). El horario se dibuja en el Pizarrón desde la tabla horario; devuelve solo el tipo y el modo, la app lo dibuja.',
+    isEnglish
+      ? 'DOCUMENT/VIDEO GENERATION: use workspace.tipo = doc ONLY when the user explicitly asks for a written document/file to generate (a letter, essay, report, article, "write me a letter", "generate a document", "make a summary") and put the full content in workspace.contenido. NEVER route a SPOKEN step-by-step answer as a doc: recipes, tutorials, instructions, "how to ... step by step", home remedies, lists of steps — put the COMPLETE answer in respuesta_voz (spoken), not in a document. When the user asks to generate a video ("generate a video", "make a video about..."), set workspace.tipo = video with the topic in workspace.contenido.'
+      : 'GENERACIÓN DE DOCUMENTO/VIDEO: usa workspace.tipo = doc SOLO cuando el usuario pida explícitamente un documento/archivo escrito a generar (una carta, ensayo, informe, artículo, "escríbeme una carta", "genera un documento", "haz un resumen") y pon el contenido completo en workspace.contenido. NUNCA enrutes como documento una respuesta hablada paso a paso: recetas, tutoriales, instrucciones, "cómo hacer ... paso a paso", remedios caseros, listas de pasos — pon la respuesta COMPLETA en respuesta_voz (hablada), no en un documento. Cuando el usuario pida generar un video ("genera un video", "haz un video sobre..."), fija workspace.tipo = video con el tema en workspace.contenido. La app dispara el generador de documento/video desde estos tipos.',
     isEnglish
       ? 'When workspace.tipo is image_prompt, diagram or 3d, write prompt_visual as a self-contained renderable scene (concrete subject, setting, style). Example: "commercial passenger airplane in mid-flight above clouds, photorealistic". Never use a single generic noun alone. No wake words or command boilerplate. Never use generic abstract placeholders like "conceptual image" or "modern artistic composition".'
       : 'Cuando workspace.tipo sea image_prompt, diagram o 3d, escribe prompt_visual como escena renderizable autocontenida (sujeto concreto, entorno, estilo). Ejemplo: "avion comercial de pasajeros en pleno vuelo sobre nubes, fotorrealista". Nunca uses un solo sustantivo generico. Sin wake word ni muletillas del comando. Nunca uses placeholders abstractos genericos como "imagen conceptual" o "composicion abstracta".',
@@ -420,7 +727,14 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
     ...minuteRules,
     ...animPrompt,
     ...configPrompt,
+    ...ambientePrompt,
     buildCapabilitiesPrompt(isEnglish ? 'en' : 'es'),
+    // P1-B (§1.2): autoconocimiento — refuerza en el system prompt qué sabe hacer FLU.
+    // Bloque compacto compilado desde el registro real (nunca hardcode); el LLM responde
+    // "¿qué sabes hacer?" enumerando capacidades reales sin inventar.
+    // Nota: sin spread (...) — es una sola cadena; con spread el join(' ') la separaría
+    // letra a letra.
+    buildSelfManifestoPrompt(isEnglish ? 'en' : 'es'),
   ].join(' ')
 }
 
@@ -437,8 +751,19 @@ export function buildUserPrompt({
   knowledgeMode = 'general',
   recentMemory = '',
   agendaText = '',
+  selfKnowledgeText = '',
+  diaryContext = '',
+  notesContext = '',
+  horarioContext = '',
+  resultadosContext = '',
 }) {
   const isEnglish = language === 'en'
+
+  // Allowlist del navegador curado (Regla #1: desde config, sin hardcode).
+  // FLU_CONFIG ya está importado al tope de este módulo.
+  const browserAllowlist = Array.isArray(FLU_CONFIG?.browser?.defaultProfile?.allowlist)
+    ? FLU_CONFIG.browser.defaultProfile.allowlist
+    : []
 
   const useMinuteKnowledge = knowledgeMode === 'minutes'
   const activeKnowledgeBase = useMinuteKnowledge ? knowledgeBase2 : knowledgeBase
@@ -452,6 +777,12 @@ export function buildUserPrompt({
 
   return [
     `${isEnglish ? 'Clean transcript' : 'Transcripcion limpia'}: ${transcript}`,
+    // Ancla visual colocada AL INICIO del prompt de usuario (justo tras la
+    // transcripción) para que sea prominente y el modelo la pondere con más
+    // fuerza. Antes iba al final (tras KB/agenda/memoria/autoconocimiento) y
+    // el modelo la ignoraba, respondiendo "¿qué imagen quieres?" en vez de
+    // generar image_prompt cuando el usuario decía "generame una imagen".
+    buildVisualAnchorBlock(transcript, language),
     `${isEnglish ? 'Detected speaker' : 'Hablante detectado'}: ${speaker || (isEnglish ? 'Anonymous speaker' : 'Hablante anonimo')}`,
     `${isEnglish ? 'Central topic' : 'Tema central'}: ${theme || (isEnglish ? 'Undefined' : 'No definido')}`,
     `${isEnglish ? 'Role' : 'Rol'}: ${role || (isEnglish ? 'Undefined' : 'No definido')}`,
@@ -461,8 +792,17 @@ export function buildUserPrompt({
       ? 'Infer all navigation from the conversation context. Do not rely on fixed keywords.'
       : 'Infiere toda la navegacion desde el contexto de la conversacion. No dependas de palabras fijas.',
     isEnglish
-      ? 'Continue the current thread naturally and keep references from earlier turns.'
-      : 'Continua el hilo naturalmente y conserva las referencias de los turnos anteriores.',
+      ? `Valid navegacion.comando values: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Use "NAVEGAR" when the user asks to open, navigate to or search a curated site (e.g. "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") and fill navegacion.parametros.sitio with the site name.`
+      : `Valores válidos de navegacion.comando: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Usa "NAVEGAR" cuando el usuario pida abrir, navegar o buscar un sitio curado (ej: "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") y llena navegacion.parametros.sitio con el nombre del sitio.`,
+    isEnglish
+      ? `Curated browser allowlist: ${browserAllowlist.join(', ') || '(empty)'}. If the user asks which sites they have access to, enumerate these sites.`
+      : `Sitios permitidos del navegador curado (allowlist): ${browserAllowlist.join(', ') || '(vacía)'}. Si el usuario pregunta a qué sitios tiene acceso, enumera estos sitios.`,
+    isEnglish
+      ? 'Continue the current thread naturally using earlier turns only as context. NEVER re-execute, re-confirm or repeat actions (alarms, reminders, notes, appointments, searches) that were already executed or acknowledged in a previous turn; those belong to the past and must not be mentioned again as if new.'
+      : 'Continua el hilo naturalmente usando los turnos anteriores SOLO como contexto. NUNCA re-ejecutes, re-confirmes ni repitas acciones (alarmas, recordatorios, notas, citas, búsquedas) que ya se ejecutaron o confirmaron en un turno anterior: esas pertenecen al pasado y no deben volver a mencionarse como si fueran nuevas.',
+    isEnglish
+      ? 'Only act on the CURRENT user request. If the latest message asks for something else, do not reproduce stale confirmations from history.'
+      : 'Actúa SOLO sobre la petición ACTUAL del usuario. Si el último mensaje pide otra cosa, no reproduzcas confirmaciones viejas del historial.',
     isEnglish
       ? 'Do not include the wake word in workspace fields unless it is part of the actual content.'
       : 'No incluyas la wake word en los campos de workspace salvo que forme parte del contenido real.',
@@ -485,6 +825,14 @@ export function buildUserPrompt({
         : `Agenda del día (pendientes de sesiones anteriores):\n${agendaText}`
       ]
       : []),
+    // Autoconocimiento (§1.4): solo se inyecta cuando el turno es una petición
+    // de autoconocimiento (isSelfKnowledgeRequest decide en useFluVoiceAssistant).
+    ...(selfKnowledgeText
+      ? [isEnglish
+        ? `FLU SELF-KNOWLEDGE (answer what FLU can do using this only):\n${selfKnowledgeText}`
+        : `AUTOCONOCIMIENTO DE FLU (responde qué sabe hacer FLU usando SOLO esto):\n${selfKnowledgeText}`
+      ]
+      : []),
     // Optimización 1.4: el estado emocional del turno viaja en el user message
     // (contexto del turno), no en el system prompt (que debe permanecer estable
     // para el cache server-side). El texto es idéntico al que antes iba en system.
@@ -494,7 +842,32 @@ export function buildUserPrompt({
         : `CRÍTICO — En este momento estás experimentando esta emoción. NO es un evento pasado — es cómo te sientes ahora mismo. Debes EXPRESAR este sentimiento en tu respuesta_voz antes que cualquier otra cosa. No lo niegues, no lo sobrescribas con tu personalidad. Esta emoción es parte de ti ahora mismo: ${recentMemory}`
       ]
       : []),
-    buildVisualAnchorBlock(transcript, language),
+    // Radar de contexto (Pizarrón un solo objeto — Paso 5): bloques 6-9.
+    // Cada bloque es dinámico desde su fuente (Dexie) y se omite si está vacío.
+    ...(resultadosContext
+      ? [isEnglish
+        ? `Recent results (last query + feed):\n${resultadosContext}`
+        : `Resultados recientes (última consulta + feed):\n${resultadosContext}`
+      ]
+      : []),
+    ...(diaryContext
+      ? [isEnglish
+        ? `Personal diary (latest entry + mood):\n${diaryContext}`
+        : `Diario personal (última entrada + ánimo):\n${diaryContext}`
+      ]
+      : []),
+    ...(notesContext
+      ? [isEnglish
+        ? `Pending notes:\n${notesContext}`
+        : `Notas pendientes:\n${notesContext}`
+      ]
+      : []),
+    ...(horarioContext
+      ? [isEnglish
+        ? `Today's schedule (HOY):\n${horarioContext}`
+        : `Horario del día (HOY):\n${horarioContext}`
+      ]
+      : []),
   ]
     .filter(Boolean)
     .join('\n')
@@ -514,6 +887,11 @@ export function buildConversationMessages({
   knowledgeMode = 'general',
   recentMemory = '',
   agendaText = '',
+  selfKnowledgeText = '',
+  diaryContext = '',
+  notesContext = '',
+  horarioContext = '',
+  resultadosContext = '',
 }) {
   const messages = []
 
@@ -555,6 +933,11 @@ export function buildConversationMessages({
       knowledgeMode,
       recentMemory,
       agendaText,
+      selfKnowledgeText,
+      diaryContext,
+      notesContext,
+      horarioContext,
+      resultadosContext,
     }),
   })
 
@@ -599,7 +982,7 @@ export async function generateConversationSummary({
   theme = '',
   model: modelParam,
 }) {
-  const resolvedKey = resolveGeminiApiKey(apiKey)
+  const resolvedKey = resolveServerGeminiApiKey(apiKey)
   const model = modelParam || resolveGeminiModel()
 
   if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
@@ -614,7 +997,7 @@ export async function generateConversationSummary({
         siguientes_pasos: [],
       },
       diagnostics: {
-        provider: 'gemini',
+        provider: AI_PROVIDER_IDS.GEMINI,
         model,
         apiKeySource: resolvedKey.apiKeySource,
       },
@@ -649,7 +1032,7 @@ export async function generateConversationSummary({
       messages,
       temperature: profile?.temperature,
       topP: profile?.topP,
-      maxTokens: profile?.maxOutputTokens || 2048,
+      maxTokens: profile?.maxOutputTokens || FLU_CONFIG.vision.maxOutputTokens,
       jsonMode: true,
     })
   } catch (error) {
@@ -679,7 +1062,7 @@ export async function generateConversationSummary({
       siguientes_pasos: Array.isArray(parsed.siguientes_pasos) ? parsed.siguientes_pasos.filter(Boolean) : [],
     },
     diagnostics: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       model,
       apiKeySource: resolvedKey.apiKeySource,
     },
@@ -725,7 +1108,7 @@ export async function generateParticipantEvaluation({
   maxDraftChars = 420,
   model: modelParam,
 }) {
-  const resolvedKey = resolveGeminiApiKey(apiKey)
+  const resolvedKey = resolveServerGeminiApiKey(apiKey)
   const model = modelParam || resolveGeminiModel()
   const isEnglish = language === 'en'
 
@@ -739,7 +1122,7 @@ export async function generateParticipantEvaluation({
         confianza: 0,
       },
       diagnostics: {
-        provider: 'gemini',
+        provider: AI_PROVIDER_IDS.GEMINI,
         model,
         apiKeySource: resolvedKey.apiKeySource,
       },
@@ -797,7 +1180,7 @@ export async function generateParticipantEvaluation({
       confianza: Number(parsed.confianza) || 0,
     },
     diagnostics: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       model,
       apiKeySource: resolvedKey.apiKeySource,
     },
@@ -809,11 +1192,12 @@ export async function requestParticipantEvaluation(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
+    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
-  } catch {
+    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
   }
   const body = {
@@ -839,11 +1223,12 @@ export async function requestFluContract(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
+    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
-  } catch {
+    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
   }
   const body = {
@@ -851,15 +1236,9 @@ export async function requestFluContract(params) {
     model: savedModel || undefined,
     apiKey: String(params?.apiKey ?? '').trim() || savedApiKey || undefined,
   }
-  const response = await fetchTextEngineResilient(
-    '/api/gemini/contract',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    { timeoutMs: resolveClientRequestTimeout(params) },
-  )
+  const response = await postGeminiContractResilient(body, {
+    timeoutMs: resolveClientRequestTimeout(params),
+  })
   return parseGeminiApiResponse(response)
 }
 
@@ -868,9 +1247,9 @@ export async function requestConversationSummary(params) {
   let savedModel = ''
   let savedApiKey = ''
   try {
-    savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
-    savedApiKey = String(localStorage.getItem('flu-text-api-key') ?? '').trim()
-  } catch {}
+    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
+    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+  } catch (err) { logCaughtError('[catch] src/voice/lib/gemini.js', err) }
   const body = {
     ...(params ?? {}),
     model: savedModel || undefined,
@@ -917,47 +1296,28 @@ export function mapChatMessagesToGemini(messages) {
   }
 }
 
-export function resolveGeminiApiKey(apiKey = '') {
-  const direct = String(apiKey ?? '').trim()
-  if (direct) {
-    return { apiKey: direct, apiKeySource: 'localStorage' }
-  }
-
-  // Delegar a resolveTextApiKey() centralizado (appConfig): localStorage
-  // flu-text-api-key (configurador) → env (VITE_GEMINI_API_KEY >
-  // VITE_OPENROUTER_API_KEY > VITE_DEEPSEEK_API_KEY). Sin legado.
-  const textApiKey = resolveTextApiKey()
-  if (textApiKey) {
-    return { apiKey: textApiKey, apiKeySource: 'textConfig' }
-  }
-
-  return { apiKey: '', apiKeySource: 'missing' }
+export function resolveServerGeminiApiKey(apiKey = '') {
+  // Prioridad de la key central server-side: resolveServerTextApiKey().
+  return resolveApiKey(apiKey, resolveServerTextApiKey)
 }
 
-/** Modelo de texto (OpenRouter → Gemini 2.5 Flash) desde localStorage o Vite.
- *  El default final viene de OPENROUTER_CONFIG.MODEL en appConfig.ts
- *  (VITE_OPENROUTER_MODEL || 'google/gemini-2.5-flash').
- *  NO hardcodear modelo aquí — mantener alineado con OPENROUTER_CONFIG.MODEL.
+/**
+ * Modelo de texto (OpenRouter → Gemini 2.5 Flash) resuelto server-side.
+ * Prioridad: localStorage (client override) > VITE_OPENROUTER_MODEL del env
+ * server (loadEnv/process.env) > default.
+ * Default final: OPENROUTER_DEFAULTS.MODEL (sharedConfig).
+ * NO hardcodear modelo aquí — mantener alineado con OPENROUTER_DEFAULTS.MODEL.
  */
 export function resolveGeminiModel() {
-  if (typeof process !== 'undefined' && process.env?.GEMINI_MODEL) {
-    return String(process.env.GEMINI_MODEL).trim()
-  }
   try {
     // Leer modelo guardado en localStorage por el configurador UI (OS3 parity)
-    const savedModel = String(localStorage.getItem('flu-text-model') ?? '').trim()
+    const savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage (SSR / Node)
   }
-  try {
-    const fromEnv = String(import.meta.env?.VITE_OPENROUTER_MODEL ?? '').trim()
-    if (fromEnv) return fromEnv
-  } catch {
-    // entorno sin import.meta
-  }
-  // Fallback: mismo default que OPENROUTER_CONFIG.MODEL en appConfig.ts
-  return OPENROUTER_CONFIG.MODEL
+  return resolveServerTextModel()
 }
 
 async function parseGeminiApiResponse(response) {
@@ -1003,9 +1363,14 @@ export async function generateFluContract({
   recentMemory = '',
   startupPrompt = '',
   agendaText = '',
+  selfKnowledgeText = '',
+  diaryContext = '',
+  notesContext = '',
+  horarioContext = '',
+  resultadosContext = '',
   model: modelParam,
 }) {
-  const resolvedKey = resolveGeminiApiKey(apiKey)
+  const resolvedKey = resolveServerGeminiApiKey(apiKey)
   // Usar modelo enviado por el cliente (desde localStorage) si está presente
   const model = modelParam || resolveGeminiModel()
 
@@ -1048,12 +1413,9 @@ export async function generateFluContract({
   const buildActiveSystemPrompt = () =>
     simpleRequest ? systemPrompt + schemaFormatBlock : systemPrompt
 
-  console.log('[FLU-DEBUG] generateFluContract called. apiKey param present:', Boolean(apiKey), 'resolvedKey source:', resolvedKey.apiKeySource, 'resolvedKey length:', resolvedKey.apiKey.length, 'model:', model, 'transcript:', (transcript || '').slice(0, 80))
-
   if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
     // Graceful fallback: return a no-op contract instead of throwing.
     // The voice system will use local fallback responses and continue without blocking.
-    console.log('[FLU-DEBUG] generateFluContract: NO API KEY - returning graceful fallback')
     const fallbackText = language === 'en'
       ? 'API key not configured. Set it in the settings panel.'
       : 'API key no configurada. Configúrala en el panel de ajustes.'
@@ -1067,7 +1429,7 @@ export async function generateFluContract({
         },
         workspace: null,
         metadata: {
-          provider: 'gemini',
+          provider: AI_PROVIDER_IDS.GEMINI,
           promptRole: role,
           theme,
           phase,
@@ -1077,7 +1439,7 @@ export async function generateFluContract({
         },
       },
       diagnostics: {
-        provider: 'gemini',
+        provider: AI_PROVIDER_IDS.GEMINI,
         model,
         apiKeySource: resolvedKey.apiKeySource,
       },
@@ -1107,50 +1469,59 @@ export async function generateFluContract({
       knowledgeMode,
       recentMemory,
       agendaText,
+      selfKnowledgeText,
+      diaryContext,
+      notesContext,
+      horarioContext,
+      resultadosContext,
     }),
   ])
+
+  // El modelo puede devolver JSON envuelto en texto, truncado o con campos
+  // incompletos (p. ej. solo `acciones` sin `respuesta_voz`). Eso NO es un fallo
+  // definitivo: se reintenta UNA vez con una instrucción correctiva antes de
+  // rendirse. Es la defensa de fondo contra "Gemini: respuesta inválida".
+  const formatCorrection = {
+    role: 'user',
+    content:
+      language === 'en'
+        ? 'INVALID FORMAT. Reply with ONLY a JSON object that includes a non-empty "respuesta_voz" string. No text outside the JSON.'
+        : 'FORMATO INVÁLIDO. Responde SOLO con un objeto JSON que incluya el campo "respuesta_voz" (texto no vacío). Sin texto fuera del JSON.',
+  }
 
   let text = ''
   let parsed = null
   let rawResponseText = ''
 
-  try {
-    text = await postChatCompletion({
-      apiKey: resolvedKey.apiKey,
-      model,
-      messages,
-      temperature,
-      topP: profile?.topP,
-      maxTokens: profile?.maxOutputTokens || 2048,
-      jsonMode: true,
-      timeoutMs: requestTimeout,
-    })
-  } catch (error) {
-    error.apiKeySource = resolvedKey.apiKeySource
-    error.code = error.status === 429 ? 'gemini_quota_429' : error.status === 403 ? 'gemini_403' : `gemini_http_${error.status || 'unknown'}`
-    throw error
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const attemptMessages = attempt === 0 ? messages : [...messages, formatCorrection]
+    try {
+      text = await postChatCompletion({
+        apiKey: resolvedKey.apiKey,
+        model,
+        messages: attemptMessages,
+        temperature,
+        topP: profile?.topP,
+        maxTokens: profile?.maxOutputTokens || 2048,
+        jsonMode: true,
+        timeoutMs: requestTimeout,
+      })
+    } catch (error) {
+      error.apiKeySource = resolvedKey.apiKeySource
+      error.code = error.status === 429 ? 'gemini_quota_429' : error.status === 403 ? 'gemini_403' : `gemini_http_${error.status || 'unknown'}`
+      throw error
+    }
+
+    const coerced = coerceFluContractPayload(text)
+    parsed = coerced.parsed
+    rawResponseText = coerced.voice
+    if (parsed && typeof parsed === 'object' && rawResponseText) break
   }
 
-  const attemptParsed = extractJson(text)
-  parsed = attemptParsed
-  rawResponseText =
-    attemptParsed && typeof attemptParsed === 'object'
-      ? sanitizeVoiceText(attemptParsed.respuesta_voz || attemptParsed.response_voz || attemptParsed.text || '')
-      : ''
-
-  if (!parsed || typeof parsed !== 'object') {
+  if (!parsed || typeof parsed !== 'object' || !rawResponseText) {
     const error = new Error('invalid_json')
     error.code = 'invalid_json'
-    error.bodyPreview = text.slice(0, 200)
-    error.model = model
-    error.apiKeySource = resolvedKey.apiKeySource
-    throw error
-  }
-
-  if (!rawResponseText) {
-    const error = new Error('invalid_json')
-    error.code = 'invalid_json'
-    error.bodyPreview = text.slice(0, 200)
+    error.bodyPreview = String(text || '').slice(0, 200)
     error.model = model
     error.apiKeySource = resolvedKey.apiKeySource
     throw error
@@ -1158,7 +1529,7 @@ export async function generateFluContract({
 
   const responseText = rawResponseText
 
-  const workspace =
+  let workspace =
     parsed.workspace && typeof parsed.workspace === 'object'
       ? normalizeWorkspaceContract(
         {
@@ -1173,9 +1544,33 @@ export async function generateFluContract({
           puntos_clave: Array.isArray(parsed.workspace.puntos_clave)
             ? parsed.workspace.puntos_clave.map((item) => String(item || '').trim()).filter(Boolean)
             : [],
+          modo: String(parsed.workspace.modo || '').trim(),
+        },
+        {
+          transcript: cleanForSpeech(transcript),
         },
       )
       : null
+
+  // ── Fallback determinista para petición visual SIN sujeto ──────────────
+  // El modelo de texto por defecto tiene una fuerte tendencia a pedir
+  // aclaración ("¿sobre qué te gustaría la imagen?") cuando el usuario dice
+  // "generame una imagen" sin nombrar el sujeto. Aunque el ancla del prompt lo
+  // guía, no es fiable. Aquí, si el usuario hizo una petición visual sin sujeto
+  // y el modelo NO devolvió un workspace visual, construimos el workspace de
+  // forma determinista a partir del tema del hilo de conversación. Así la
+  // imagen SIEMPRE se genera cuando el hilo tiene un tema.
+  let fallbackRespuestaVoz = ''
+  if (
+    (!workspace || !isVisualWorkspaceTipo(workspace.tipo)) &&
+    isBareVisualRequest(transcript)
+  ) {
+    const fallbackWorkspace = buildBareVisualFallbackWorkspace(transcript, history, language)
+    if (fallbackWorkspace) {
+      workspace = fallbackWorkspace
+      fallbackRespuestaVoz = fallbackWorkspace._respuestaVoz || ''
+    }
+  }
 
   const navegacion = parsed.navegacion && typeof parsed.navegacion === 'object' ? parsed.navegacion : {}
   const comando =
@@ -1184,7 +1579,8 @@ export async function generateFluContract({
       navegacion.comando === 'ABRIR_ESCUCHA' ||
       navegacion.comando === 'CERRAR_ESCUCHA' ||
       navegacion.comando === 'INICIAR_CONVERSACION' ||
-      navegacion.comando === 'GENERAR_RESUMEN'
+      navegacion.comando === 'GENERAR_RESUMEN' ||
+      navegacion.comando === 'NAVEGAR'
       ? navegacion.comando
       : null
   const destino = typeof navegacion.destino === 'string' ? navegacion.destino : null
@@ -1203,8 +1599,40 @@ export async function generateFluContract({
   const musica = musicaFromModel || undefined
   const configuracion = normalizeConfiguracion(parsed?.configuracion)
 
+  // OS4 FASE CONVERSACIONAL: el LLM (cerebro conversacional) emite acciones
+  // estructuradas cuando el usuario pide, de forma natural, crear/consultar
+  // recordatorios, compras, alarmas, temporizadores, notas, diario u horario.
+  // Cada acción lleva el dominio y el texto del mandato tal como lo dijo el
+  // usuario; el despacho (App.tsx) re-resuelve ese texto con los parsers
+  // deterministas (fuente de verdad del parseo temporal/preciso) y ejecuta el
+  // mismo manejador __fluHandle* que usa el modo offline. Así FLU es
+  // conversacional (la IA entiende y responde) pero la ejecución es precisa.
+  const VALID_ACCION_DOMINIOS = ['agenda', 'shopping', 'diary', 'note']
+  const acciones = (() => {
+    const rawAcciones = Array.isArray(parsed.acciones) ? parsed.acciones : null
+    if (!rawAcciones || rawAcciones.length === 0) return undefined
+    const parsedAcciones = rawAcciones
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        const dominio = String(item.dominio || '').trim()
+        const texto = String(item.texto || '').trim()
+        if (!VALID_ACCION_DOMINIOS.includes(dominio) || !texto) return null
+        return { dominio, texto }
+      })
+      .filter(Boolean)
+    return parsedAcciones.length > 0 ? parsedAcciones : undefined
+  })()
+
+  // OS4 FASE A: el LLM interpreta la esencia de la orden y emite el id de ambiente.
+  // Sin validación aquí: normalizeEnvironment (App.tsx) es el único validador
+  // (id inválido → null → sin acción, seguro). El prompt guía con el catálogo real.
+  const ambiente =
+    typeof parsed.ambiente === 'string' ? parsed.ambiente.trim().toLowerCase() : null
+
   const contract = {
-    respuesta_voz: responseText,
+    // Si se aplicó el fallback determinista, la respuesta_voz confirma la
+    // generación de la imagen (en lugar del "¿sobre qué imagen?" del modelo).
+    respuesta_voz: fallbackRespuestaVoz || responseText,
     navegacion: {
       comando: comando || intent?.comando || null,
       destino: destino || intent?.destino || null,
@@ -1214,7 +1642,7 @@ export async function generateFluContract({
           : intent?.parametros || {},
     },
     metadata: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       promptRole: role,
       theme,
       phase,
@@ -1223,15 +1651,17 @@ export async function generateFluContract({
       rawText: text,
     },
     workspace,
+    ...(acciones ? { acciones } : {}),
     ...(animacion ? { animacion } : {}),
     ...(emocion ? { emocion } : {}),
     ...(musica ? { musica } : {}),
     ...(configuracion ? { configuracion } : {}),
+    ...(ambiente ? { ambiente } : {}),
   }
   return {
     contract,
     diagnostics: {
-      provider: 'gemini',
+      provider: AI_PROVIDER_IDS.GEMINI,
       model,
       apiKeySource: resolvedKey.apiKeySource,
     },
@@ -1245,7 +1675,7 @@ export async function generateFluContract({
 * @returns {Promise<{ materia: string, problemas: string[], instrucciones: string, nivel: string, texto_extraido: string }>}
 */
 export async function analyzeImage({ apiKey, imageBase64, mimeType, language = 'es', profile = 'tutor' }) {
-const resolvedKey = resolveGeminiApiKey(apiKey)
+const resolvedKey = resolveServerGeminiApiKey(apiKey)
 if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
   return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' }
 }
@@ -1293,7 +1723,7 @@ try {
     jsonMode: false,
   })
 } catch (error) {
-  console.warn('[analyzeImage] LLM error:', error?.status || error?.message)
+  logCaughtError('[analyzeImage] LLM error', error?.status || error?.message)
   return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' }
 }
 
@@ -1309,7 +1739,8 @@ try {
     nivel: String(parsed.nivel || parsed.level || '').trim(),
     texto_extraido: String(parsed.texto_extraido || parsed.extracted_text || '').trim(),
   }
-} catch {
+} catch (e) {
+        logCaughtError('[catch] src/voice/lib/gemini.js', e);
   // Si no se puede parsear JSON, devolver el texto crudo
   return {
     materia: '',
@@ -1319,4 +1750,98 @@ try {
     texto_extraido: text,
   }
 }
+}
+
+/**
+ * Genera un VIDEO real con fal.ai (text-to-video, queue API).
+ * Servidor-only: la apiKey se resuelve en el servidor y nunca se expone.
+ * Flujo: POST /{model} → status_url → poll status_url → GET response_url.
+ * Devuelve { videoUrl, trace }; videoUrl vacío si no hay key o falla.
+ */
+export async function generateVideoViaFal({
+  apiKey = '',
+  prompt = '',
+  language = 'es',
+  aspectRatio = '',
+  model: modelOverride = '',
+} = {}) {
+  const base = String(FALAI_DEFAULTS.VIDEO_ENDPOINT || '').replace(/\/$/, '')
+  // Modelo configurable (Ajustes → Video); default barato de FALAI_DEFAULTS.
+  const model = String(modelOverride || '').trim() || FALAI_DEFAULTS.VIDEO_MODEL
+  if (!prompt || !apiKey || !base) {
+    return {
+      videoUrl: '',
+      trace: {
+        provider: 'falai',
+        model,
+        source: !prompt ? 'empty_prompt' : 'missing_api_key',
+        hasVideo: false,
+        prompt,
+      },
+    }
+  }
+
+  try {
+    const submit = await fetch(`${base}/${model}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Key ${apiKey}`,
+      },
+      body: JSON.stringify({
+        prompt,
+        aspect_ratio: aspectRatio || FALAI_DEFAULTS.ASPECT_RATIO,
+      }),
+    })
+    if (!submit.ok) {
+      const detail = await submit.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
+      const message = `fal.ai submit error ${submit.status}: ${String(detail).slice(0, 300)}`
+      console.error('[falai]', message)
+      return {
+        videoUrl: '',
+        trace: { provider: 'falai', model, source: 'submit_error', hasVideo: false, error: message, prompt },
+      }
+    }
+    const payload = await submit.json()
+    const statusUrl = String(payload?.status_url || '')
+    if (!statusUrl) {
+      return { videoUrl: '', trace: { provider: 'falai', model, source: 'no_status_url', hasVideo: false, prompt } }
+    }
+
+    const deadline = Date.now() + FALAI_DEFAULTS.POLL_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      const statusRes = await fetch(statusUrl, { headers: { Authorization: `Key ${apiKey}` } })
+      if (statusRes.ok) {
+        const statusPayload = await statusRes.json()
+        if (statusPayload?.status === 'COMPLETED') {
+          const resultUrl = String(statusPayload?.response_url || '')
+          if (resultUrl) {
+            const resultRes = await fetch(resultUrl, { headers: { Authorization: `Key ${apiKey}` } })
+            const resultPayload = await resultRes.json()
+            const videoUrl = String(resultPayload?.video?.url || resultPayload?.url || '')
+            return {
+              videoUrl,
+              trace: {
+                provider: 'falai',
+                model,
+                source: videoUrl ? 'falai_video' : 'empty_video',
+                hasVideo: Boolean(videoUrl),
+                prompt,
+                language,
+              },
+            }
+          }
+        }
+        if (statusPayload?.status === 'FAILED' || statusPayload?.status === 'ERROR') {
+          return { videoUrl: '', trace: { provider: 'falai', model, source: 'job_failed', hasVideo: false, prompt } }
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, TIMEOUT_POLICY_MS.falVideoPoll))
+    }
+    return { videoUrl: '', trace: { provider: 'falai', model, source: 'poll_timeout', hasVideo: false, prompt } }
+  } catch (error) {
+    const message = error?.message || 'unknown'
+    logCaughtError('[falai] generateVideoViaFal error', message)
+    return { videoUrl: '', trace: { provider: 'falai', model, source: 'error', hasVideo: false, error: message, prompt } }
+  }
 }

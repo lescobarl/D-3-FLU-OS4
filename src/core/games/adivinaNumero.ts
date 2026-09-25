@@ -17,6 +17,14 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
+import {
+    clamp,
+    normalizeForMatch,
+    hasToken,
+    hasAnyToken,
+    resolveNumericAnswer,
+    adoptRandom,
+} from './gameUtils';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -39,13 +47,7 @@ const END_FRAMES: readonly string[] = Object.freeze([
     'cerrar el juego',
 ]);
 
-/** Números en letras (0-20) para robustez de ASR en voz. */
-const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
-    cero: 0, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6,
-    siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12,
-    trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17,
-    dieciocho: 18, diecinueve: 19, veinte: 20,
-});
+/** Números en letras (0-100) y su resolución: fuente única en gameUtils. */
 
 interface AdivinaNumeroConfig {
     min: number;
@@ -66,53 +68,17 @@ interface AdivinaNumeroState {
 
 type RandomSource = () => number;
 
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
 function pickNumber(min: number, max: number, rng: RandomSource): number {
     const range = max - min + 1;
     return min + Math.floor(rng() * range);
 }
 
 /**
- * Resuelve una respuesta numérica a partir del texto normalizado.
- * Espejo local del algoritmo de resolveNumberValue: primero dígitos
- * ("12", "3.5", "1,5") y, si no hay, un número escrito en letras.
+ * Resolución de respuesta numérica: fuente única en `gameUtils`
+ * (dígitos, palabras 0-100 y compuestos "treinta y cinco").
  */
-function resolveNumericAnswer(normalized: string): number | null {
-    const digits = normalized.match(/(\d+(?:[.,]\d+)?)/);
-    if (digits) {
-        const value = Number.parseFloat(digits[1].replace(',', '.'));
-        if (Number.isFinite(value)) return Math.round(value);
-    }
-    for (const token of normalized.split(/\s+/)) {
-        if (token in NUMBER_WORDS_ES) return NUMBER_WORDS_ES[token];
-    }
-    return null;
-}
 
-export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): GameEngine {
+export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): GameEngine<AdivinaNumeroState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): AdivinaNumeroConfig => {
@@ -126,17 +92,11 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         };
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     return {
         id: 'adivina_numero',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaNumeroState> {
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
             return {
                 id: 'adivina_numero',
@@ -156,9 +116,9 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            adoptRandom(optionsConfig);
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
-            const state = session.state as unknown as AdivinaNumeroState;
+            const state = session.state as AdivinaNumeroState;
             state.number = pickNumber(cfg.min, cfg.max, rng);
             state.min = cfg.min;
             state.max = cfg.max;
@@ -180,7 +140,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as AdivinaNumeroState;
+            const state = session.state as AdivinaNumeroState;
 
             if (state.phase === 'done') {
                 return {
@@ -195,9 +155,17 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
 
             const normalized = normalizeForMatch(text);
 
-            // ¿Pide pista (paridad)?
+            // ¿Pide pista? Progresiva: paridad → mayor/menor que el medio →
+            // rango cercano. Antes repetía la MISMA paridad hasta `pistasMax`.
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                if (state.pistasUsadas >= state.pistasMax) {
+                const half = Math.floor((state.min + state.max) / 2);
+                const margin = Math.max(1, Math.round((state.max - state.min) / 4));
+                const hints: string[] = [
+                    `mi número es ${state.number % 2 === 0 ? 'par' : 'impar'}`,
+                    `mi número es ${state.number > (state.min + state.max) / 2 ? 'mayor' : 'menor'} que ${half}`,
+                    `mi número está entre ${Math.max(state.min, state.number - margin)} y ${Math.min(state.max, state.number + margin)}`,
+                ];
+                if (state.pistasUsadas >= state.pistasMax || state.pistasUsadas >= hints.length) {
                     return {
                         prompt: 'Ya te di todas mis pistas. ¡Sigue adivinando!',
                         valid: false,
@@ -207,10 +175,10 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
                         emotion: 'neutral',
                     };
                 }
+                const hint = hints[state.pistasUsadas];
                 state.pistasUsadas += 1;
-                const par = state.number % 2 === 0 ? 'par' : 'impar';
                 return {
-                    prompt: `Te doy una pista: mi número es ${par}.`,
+                    prompt: `Te doy una pista: ${hint}.`,
                     valid: false,
                     gameOver: false,
                     score: session.score,
@@ -219,16 +187,17 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
                 };
             }
 
-            // ¿Se rinde / no sabe la respuesta?
+            // ¿Se rinde / no sabe la respuesta? → derrota (sin grito de victoria).
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 state.phase = 'done';
                 return {
-                    prompt: `¡El número era ${state.number}! Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                    prompt: `¡El número era ${state.number}! Terminamos con ${session.score} puntos. ¡Otra vez será!`,
                     valid: false,
                     gameOver: true,
+                    won: false,
                     score: session.score,
                     animation: 'Idle',
-                    emotion: 'happy',
+                    emotion: 'encouraging',
                 };
             }
 

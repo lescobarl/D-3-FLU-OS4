@@ -1,0 +1,28 @@
+{
+  "name": "FLU OS4 — Asistente Personal",
+  "short_name": "FLU",
+  "description": "FLU OS4 — Avatar 3D + Voz + Bitácora Inteligente",
+  "id": "flu-os4",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#08081a",
+  "theme_color": "#0a0a1a",
+  "lang": "es",
+  "categories": ["productivity", "education", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/flu-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/flu-icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

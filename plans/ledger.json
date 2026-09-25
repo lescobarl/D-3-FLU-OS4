@@ -1,0 +1,1553 @@
+{
+  "version": 1,
+  "updated": "2026-09-25",
+  "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
+  "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
+  "items": [
+    {
+      "id": "P0.1",
+      "titulo": "Ledger de pendientes en el repo (esta propia tarea)",
+      "estado": "done",
+      "evidencia": "plans/ledger.json",
+      "origen": "meta"
+    },
+    {
+      "id": "P0.2",
+      "titulo": "Guard de sincronia ledger<->git",
+      "estado": "done",
+      "evidencia": "tests/taskLedgerGuard.test.ts",
+      "origen": "meta"
+    },
+    {
+      "id": "P0.3",
+      "titulo": "Regla en AGENTS.md: arrancar leyendo el ledger",
+      "estado": "done",
+      "evidencia": "AGENTS.md",
+      "origen": "meta"
+    },
+    {
+      "id": "P0.4",
+      "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md",
+      "estado": "done",
+      "evidencia": "plans/contratos/PREPARACION-123.md: el artefacto de T1 que creo 91665a4. npm run gate -> exit 0 (con prueba de mutacion del propio control).",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.1",
+      "titulo": "T5 - Minutas a un solo almacen (Dexie registro; retirar integrationStore/flu-minute-history; backup real)",
+      "estado": "done",
+      "evidencia": "Las minutas viven SOLO en Dexie (doctrina C31, la misma que voiceProfiles y branding). backupSystem las trataba como localStorage: extractMinuteHistory leia localStorage[MINUTE_HISTORY] (clave que NINGUN otro modulo escribia, luego el backup salia siempre vacio) con fallback al espejo de integrationStore, y restoreMinuteHistory escribia esa clave muerta y ademas espejaba el resultado en el store (setState({minuteHistory})), un SEGUNDO publicador contra la doctrina de P1.2. Ahora extractMinuteHistory -> [] y restoreMinuteHistory -> false+void data, y se retira la clave muerta STORAGE_KEYS.MINUTE_HISTORY de appConfig.ts. Guard tests/minutesDexieOnlyGuard.test.ts (5 tests): prohibe la clave en todo src/, prohibe el espejo en el store fuera del store, y verifica que el backup aplica C31 analizando el cuerpo de los metodos con codeOnly (un comentario que nombra lo prohibido no lo comete). Metrica: sitios con la clave de minutas o el espejo fuera del store 5 -> 0, recomputada por el gate en el worktree base; gate exit 0.",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.2",
+      "titulo": "T2a - Guard de minutas ciego (no cubre useMinuteKnowledge.ts)",
+      "estado": "done",
+      "evidencia": "CERRADO commit ea91645. El guard C10 era ciego por partida doble (archivo hardcodeado useMinuteHandlers.ts + una sola forma): no veia useMinuteKnowledge.ts:265 (useIntegrationStore.getState().addMinute) ni App.tsx:4278. Ahora UN publicador: publishMinuteToStore() en el dueno; App pide publishAllToStore() en vez de espejar; integrationStore.addMinute dedupea por id (antes prepend ciego). Guard nuevo tests/minutosSinglePublisherGuard.test.ts (sin exclusiones, cubre ambas formas + prueba CONDUCTA del dedup); el C10 congelado no se toca. Gate: metrica base=2 actual=1 target=1, guard base=ROJO actual=VERDE, exit 0. tsc/eslint 0; test:full 298/3062/0.",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.3",
+      "titulo": "T6 - Onboarding a un solo almacen (retirar claves legacy)",
+      "estado": "done",
+      "evidencia": "El estado de onboarding tenia dos almacenes: la tabla Dexie onboardingStates (gateway unico, C44) y localStorage con flu-onboarding-completed/flu-onboarding-step para la fase sin participante, borradas a mano en tres sitios de App.tsx. El de localStorage casi no aportaba: la sesion incompleta ya se auto-sanaba al recargar y App re-pregunta el onboarding en cada entrada. Ahora la fase sin participante es EFIMERA (memoria) y el estado se persiste SOLO por el gateway al registrar al participante (App.onCompleted -> persistForParticipant siembra en Dexie). Retirados readLegacyOnboarding, las 2 claves de appConfig y las 6 lineas de removeItem de App.tsx; los tests del lector legacy sustituidos por el guard C45 (7 tests): prohibe las claves en src/, prohibe el lector retirado, exige que useOnboarding solo use localStorage para el espejo del nombre y que persista por el gateway. Metrica: referencias vivas a las claves legacy en src/ 16 -> 0, recomputada por el gate en el worktree base; gate exit 0. LIMITE: los e2e no se pudieron correr aqui (el dev server de vite falla al cargar vite.config.ts, fallo preexistente): el ajuste de los helpers e2e queda pendiente de corrida.",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.4",
+      "titulo": "T7 - Esquema Dexie: una sola fuente de la lista de tablas",
+      "estado": "done",
+      "evidencia": "El esquema Dexie pasa a ser la FUENTE UNICA de la lista de tablas. La lista de las 23 tablas estaba escrita tres veces en src/core/db/fluDatabase.ts: campos tipados, llamadas this.table(literal) una por tabla (23 lineas a mano) y el esquema de versiones. Las tres coincidian hoy, luego no habia bug activo: el defecto es la DERIVA, y la peor copia es this.table(), porque olvidarla deja fluDb.<tabla> a undefined en runtime y TypeScript no avisa (campos con !). Ahora el esquema son datos (const DEXIE_VERSIONS, 21 versiones v3..v23 con sus comentarios historicos) y de el salen la cadena de versiones y los handles, derivados en un bucle; se eliminan las 23 lineas a mano. Guard tests/dexieSingleSourceGuard.test.ts (6 tests): prohibe las llamadas a mano, contrasta los campos tipados con el esquema, ABRE la base con fake-indexeddb y compara con db.tables (verificacion contra Dexie de verdad, no contra el propio parseo), handles en runtime, anti-vacuidad y detector no decorativo. Metrica: this.table(literal) a mano 23 -> 0, recomputada por el gate en el worktree base; gate exit 0. [REPARADO 642095d] El guard C46 (dexieSchema) llevaba sordo desde esta tarea: medía llamadas `.stores({...})` y, al pasar el esquema a DEXIE_VERSIONS, el fichero real tiene 0 llamadas de ese tipo. Resolvia 0 tablas, asi que el test de 'no hay legacy vivas' pasaba por VACIEDAD (undefined !== 'declared') y el de 'debe quedar borrada' fallaba con undefined. Vivia fuera de lint:guards: rojo en HEAD sin que nadie lo viera. Ahora parsea DEXIE_VERSIONS (26 tablas resueltas) y exige anti-vaciedad: mas de 15 tablas resueltas y cada legacy vista declarada ANTES de verla borrada (reminders/horario declared->deleted; temporalItems declared,declared,deleted, porque v12 y v19 la redeclaraban). El esquema siempre estuvo bien (la v22 borra las tres con `: null`): lo roto era el criterio que lo vigilaba. Guard registrado en lint:guards y hash de frozen.json actualizado en el mismo commit (el criterio solo se endurece).",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.5",
+      "titulo": "brandingConfig en Dexie + flu-branding-* LS (mismo dato, 2 almacenes)",
+      "estado": "done",
+      "evidencia": "CERRADO commit 44ec3dc. DEFECTO REAL, no cosmetico: el branding (mode/activeSeason/birthday) vive en Dexie (fluDb.brandingConfig), que es lo que usa useSeasonalBranding, pero backupSystem lo leia de claves localStorage (flu-branding-*) y lo restauraba escribiendo ESAS claves, que ningun otro modulo toca. El backup registraba SIEMPRE los valores por defecto y el restore escribia donde nadie lee. Se aplica la doctrina ya bendecida por C31 para voiceProfiles (si el dato vive SOLO en Dexie, que ya es persistente, el backup no lo duplica): extract/restore dejan de tocar branding; se retira el campo branding de SystemSettingsData y las 3 claves LS muertas de appConfig. Guard nuevo tests/brandingDexieOnlyGuard.test.ts (plantilla C31, sin exclusiones, 5 tests) que ademas no confunde BRANDING_MODES ni .flu-branding-scope. Gate: metrica 9->0 (recomputada en el worktree base), guard base=ROJO actual=VERDE, exit 0. tsc/eslint 0; test:full 301/3074/0.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P1.6",
+      "titulo": "Indice muerto minutes.timestamp; stores() sin revision/deleted",
+      "estado": "done",
+      "evidencia": "CERRADO commit 03a7172. Indice muerto minutes.timestamp (arrastrado desde v3, sin consultas: la unica real es orderBy(\"sequence\")) eliminado con Dexie v23 (stores({minutes: \"id, sequence\"})). MIGRACION PROBADA con fake-indexeddb: se siembra el esquema v22 con una minuta, se reabre con FluDatabase y se comprueba que la fila SOBREVIVE, que timestamp DESAPARECE y que sequence PERMANECE. Guard nuevo tests/minutesDeadIndexPruneGuard.test.ts (4 tests). Gate: metrica 1->0 (esquema EFECTIVO, lee la ultima declaracion: la v3 historica no cuenta), guard base=ROJO actual=VERDE, exit 0. Segunda parte del item (stores() sin revision/deleted): EVALUADA Y RESUELTA COMO NO - indexar un booleano tiene selectividad nula y coste de escritura por put; el patron del repo es filtrar en JS tras leer (getAuditLogs). Decision razonada, no olvido.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P1.7",
+      "titulo": "indexedDB.open/deleteDatabase crudo fuera del singleton",
+      "estado": "done",
+      "evidencia": "CERRADO commit 06b249c. ANTES 1 archivo con acceso manual a indexedDB (healthMonitor.ts:450 open + :463 deleteDatabase; invisible al guard C30 por EXCLUDE nominal y patron solo-open) -> DESPUES 0. Sonda movida a la capa de datos: probeIndexedDb() en src/core/db/fluDatabase.ts (Dexie, base real). Guard nuevo tests/indexedDbRawOutsideSingletonGuard.test.ts (sin exclusiones, cubre open+deleteDatabase, detector probado) en lint:guards; el C30 congelado no se toca. Gate: metrica base=1 actual=0 target=0, guard base=ROJO actual=VERDE, exit 0.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P1.8",
+      "titulo": "Config de participante en LS paralela a Dexie",
+      "estado": "done",
+      "evidencia": "VEREDICTO: FALSO POSITIVO (verificado). El item afirmaba una config de participante en LS paralela a Dexie, y NO la hay: fluParticipantConfig.js gestiona el TUNING GLOBAL de intervencion proactiva (enabled, cooldownAfterInterventionMs, maxInterventionsPerSession/Hour, minConfidence...) en la clave flu-participant-settings, mientras que Dexie guarda otra cosa distinta: la IDENTIDAD del participante (tabla participants: name/role/birthday/speakerLabel/profileId) y el ESTILO de comunicacion (tabla communicationProfiles). Ninguna tabla Dexie almacena el tuning proactivo. La unica clave legacy (flu-participant-enabled) es un puente de MIGRACION deliberado y coherente: se lee al cargar (linea 129) para migrar, se mantiene en sync al escribir (145) y se borra en el reset (152); no es duplicado. Conclusion: no hay segundo almacen que unificar; el LS es aqui el almacen legitimo. Si algun dia se quiere el tuning POR participante, seria alcance nuevo (multiusuario), no la correccion de un duplicado. Accion: ninguna. | original: src/voice/lib/fluParticipantConfig.js:8,144",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P2.1",
+      "titulo": "T2 - catchSilenciosoGuard debe discriminar (hoy acepta logCaughtError sin excepcion)",
+      "estado": "done",
+      "evidencia": "tests/catchSilenciosoGuard.test.ts:21",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P2.2",
+      "titulo": "T2 - wakeWordRuntime guard con prueba de mutacion",
+      "estado": "done",
+      "evidencia": "tests/ (no existe)",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P2.3",
+      "titulo": "Guard blinda alias @deprecated (logMicRaw)",
+      "estado": "done",
+      "evidencia": "tests/specificDeadGuard.test.ts:114",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P2.4",
+      "titulo": "T2 - Prueba de mutacion obligatoria para los guards teatro",
+      "estado": "done",
+      "evidencia": "defecto inyectado -> ROJO",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P3.1",
+      "titulo": "console.warn teardown ignorado sin logCaughtError (12 sitios)",
+      "estado": "done",
+      "evidencia": "src/voice/hooks/useFluVoiceAssistant.js:1334,1935",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P3.2",
+      "titulo": ".catch(() => {}) vacios (13 sitios)",
+      "estado": "done",
+      "evidencia": "src/services/musicPlayer.ts:74",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P3.3",
+      "titulo": "logCaughtError sin contexto de excepcion (108 sitios)",
+      "estado": "done",
+      "evidencia": "src/App.tsx:3383,4351",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.1",
+      "titulo": "Dos clientes HTTP al mismo endpoint (participant-eval, workspace-image)",
+      "estado": "done",
+      "evidencia": "src/services/gemini.ts:320 vs src/voice/lib/gemini.js:1205",
+      "origen": "propio"
+    },
+    {
+      "id": "P4.3",
+      "titulo": "parseAllowlist identica x2",
+      "estado": "done",
+      "evidencia": "src/server/searchProxy.ts:41 = src/server/browserProxy.ts:23",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.4",
+      "titulo": "slugifyPalette = slugifyAmbiente",
+      "estado": "done",
+      "evidencia": "src/core/branding/paletaFactory.ts:28",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.5",
+      "titulo": "strip NFD reimplementado en 10 archivos",
+      "estado": "done",
+      "evidencia": "src/lib/textUtils.ts:36 (+9)",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.6",
+      "titulo": "resolveGeminiApiKey near-dupes x2 (contrato distinto en appConfig)",
+      "estado": "done",
+      "evidencia": "src/services/gemini.ts:61 vs src/voice/lib/gemini.js:1296",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.7",
+      "titulo": "buildPollinationsArtifact/ImageUrl/Url x3",
+      "estado": "done",
+      "evidencia": "src/voice/lib/fluVisualPipeline.js:120",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.8",
+      "titulo": "Cascada imagen workspace con 3 ordenes",
+      "estado": "done",
+      "evidencia": "src/hooks/useWorkspaceImage.ts:113,166",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.9",
+      "titulo": "allowlist wikipedia/educ.ar repetida x3",
+      "estado": "done",
+      "evidencia": "src/voice/lib/fluConfig.js:1061,1069,1076",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.10",
+      "titulo": "T3 - Clasificar los 16 simbolos repetidos con seccion 7.7",
+      "estado": "done",
+      "evidencia": "VEREDICTO: Ya satisfecho (item fantasma): la clasificacion se completo en los commits chore(criterio) que llenaron ALLOW_COLLISION/KNOWN_GROUPS de scripts/auditoria.mjs, y el catch-all D0 (simbolos exportados definidos en >1 archivo SIN clasificar) esta en 0 en todos los commits muestreados (16e3df8, ab0490b, 2fc1484, 44c2490, bbcb8e5, 5c2fb93, d5a3f17) y hoy. Universo recomputado hoy = 15 simbolos exportados duplicados (el item decia 16: uno se unifico despues), TODOS con veredicto §7.7 declarado: buildGenerationPrompt, buildMinuteKnowledgeBase2, editableFieldsOf, emptyEditableFields, formatMinuteHistoryLabel, formatSpeakerLabel, getAsrSegmentationCfg, hasToken, labelToSpeakerId, loadSessionState, resolveFluParticipantLabel, resolveGeminiApiKey, saveSessionState, uncheckAll, wouldShrinkLog. Los 15 son COLISION (mismo nombre, distinto dominio o forma del dato); 0 ruta doble. Comprobacion independiente (no me fie del comentario): comparacion de cuerpos normalizados de los 15 pares -> ningun par identico; inspeccion directa de labelToSpeakerId (conversationRow normaliza+parsea indice y cae a SPEAKER_ID_CALCULATING vs speakerCore regex + fallback speaker_1), uncheckAll (Note.done vs ShoppingItem.checked) y formatSpeakerLabel ((index,cfg) vs (label,confidence,config)) confirma logica distinta en los tres. Progresion medida del total de exportados duplicados en src/: 49 (16e3df8) -> 25 (d5a3f17) -> 15 (hoy). Las unificaciones reales de este dominio YA se hicieron (V18 12->0 en 5c2fb93, D1 scheduler, allowlists D2/D3/D4). Cierre SIN cambio de codigo, a proposito: no hay ruta doble que unificar, la metrica (no clasificados) ya esta en 0 y empujarla por el gate daria un hito cosmetico que §7.2/§7.5 prohiben. Evidencia reproducible: node scripts/auditoria.mjs --only D0 -> HOY=0. HALLAZGOS derivados (fuera de alcance; requieren decision del usuario): (a) la clasificacion la corre el auditor a mano, NO el gate (scripts/auditoria.mjs no esta en lint:guards): es prosa, no barrera; (b) el propio auditor declara su punto ciego \"duplicados NO exportados no se cuentan\": medidos 51 nombres de nivel superior duplicados con al menos una definicion interna, entre ellos ruta doble real visible: DATE_KEY_RE copiado en 4 servicios (contact/diary/habit/mood) y 4 helpers get* (getEmbeddingConfig/getMinSamples/getModelId/getTargetSampleRate) repetidos entre speakerEmbeddingCore.js y voiceId.worker.js.",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P4.11",
+      "titulo": "hasToken/findTokenIndex regex divergente (NO forzar)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: FALSO POSITIVO / YA CORREGIDO. La divergencia de regex ya no existe: findTokenIndex es la unica dueña del patron (gameUtils.ts:25-31) y hasToken se define como findTokenIndex(...)!==null (gameUtils.ts:33-35), con el comentario \"Fuente unica de hasToken\". No hay dos regex que reconciliar. Accion: ninguna; no forzar. (sin cambio de codigo: src/core/games/gameUtils.ts:25,33)",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.12",
+      "titulo": "uncheckAll parecido-pero-distinto (NO forzar)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: DIVERGENCIA DELIBERADA, SE MANTIENE. uncheckAll (notesList.ts:59-63) es una operacion EN LOTE: comparte un unico `now` para todas las notas, a diferencia de toggleNote por item (que daria un updatedAt distinto a cada una). Unificarlas cambiaria el dato observable. Accion: ninguna; queda documentado. (sin cambio de codigo: src/core/notes/notesList.ts:59)",
+      "origen": "propio"
+    },
+    {
+      "id": "P4.13",
+      "titulo": "PROVIDER_SYNONYMS re-declara catalogo",
+      "estado": "done",
+      "evidencia": "src/voice/lib/configCommands.js:277",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P4.14",
+      "titulo": "Ruta directa vs proxy en AsrLab (arquitectonica)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: YA CORRECTO. AsrLab es un laboratorio de comparacion de motores ASR, no codigo de produccion: se carga SOLO en main.tsx:48-55 tras flag (isAsrLab) y con React.lazy, asi que vive en un chunk aparte que produccion no importa; fluConfig.js:2149 documenta que produccion usa Chrome SpeechRecognition. La ruta directa al proveedor ES el proposito del banco (medir el motor crudo); pasar por el proxy invalidaria la comparacion. Mientras siga aislado en src/dev, no se cambia. (sin cambio de codigo: src/dev/asrLab/AsrLab.tsx:184)",
+      "origen": "propio"
+    },
+    {
+      "id": "P5.1",
+      "titulo": "Fallback wake word 'FLU' fuera de config",
+      "estado": "done",
+      "evidencia": "src/core/config/voiceConfigCatalog.ts:776",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.2",
+      "titulo": "sampleRate = 48000 quemado (~12 modulos)",
+      "estado": "done",
+      "evidencia": "src/voice/lib/asr/whisperRecognitionEngine.js:70",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.3",
+      "titulo": "maxTokens literales en logica (1800/900/2200/3000)",
+      "estado": "done",
+      "evidencia": "src/core/ai/aiServiceBase.ts:349,365,385,430,482",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.4",
+      "titulo": "temperature || 0.7, max_tokens 1000/500/300",
+      "estado": "done",
+      "evidencia": "src/services/deepseek.ts:200,201,285,286",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.5",
+      "titulo": "Locales BCP-47 fuera de localeConfig",
+      "estado": "done",
+      "evidencia": "src/core/search/searchLanguage.ts:134-135",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.6",
+      "titulo": "Literales de proveedor 'openrouter'/'gemini'/'local'",
+      "estado": "done",
+      "evidencia": "VEREDICTO: CORRECTO, pero la evidencia estaba MAL. La afirmacion (literales de proveedor sueltos) SI se corrigio: el codigo usa ahora la constante AI_PROVIDER_IDS (p.ej. gemini.js:349 AI_PROVIDER_IDS.OPENROUTER), no literales. La cita original \"gemini.js:347\" era una linea obsoleta (hoy es imageUrl). Se retira la bandera noVerificado: un cierre no puede quedar marcado como no verificado. | puntero original (obsoleto): src/voice/lib/gemini.js:347",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.7",
+      "titulo": "Defaults magicos 2048/0.3/1024",
+      "estado": "done",
+      "evidencia": "VEREDICTO: CORRECTO, pero la evidencia estaba MAL. Los defaults magicos se sustituyeron por configuracion del perfil: las lineas citadas (hoy 1032 y 1155) son \"temperature: profile?.temperature\" / \"topP: profile?.topP\", no numeros magicos. La cita original era obsoleta. Queda 2 usos de 2048 y 1 de 1024 en gemini.js como limites de tokens, que son valores de protocolo del proveedor, no \"defaults magicos\" de sampling. Se retira la bandera noVerificado. | puntero original (obsoleto): src/voice/lib/gemini.js:1032,1155",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.8",
+      "titulo": "Umbrales de autonomia inline",
+      "estado": "done",
+      "evidencia": "src/core/autonomy/decisionEngine.ts:383-401",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P5.9",
+      "titulo": "T9 - 123 localStorage + 104 style={{ -> gateway unico",
+      "estado": "done",
+      "evidencia": "CERRADO commit 2d4b5e3 (P5.9). El titular del item (123 localStorage) estaba mal medido: la metrica congelada `localstorage-directo` contaba 118 menciones reales al identificador en 22 ficheros de src/, no 123. Migradas TODAS a una unica puerta, src/core/storage/localStore.ts (localGet/localSet/localRemove/localKeys/hasLocalStorage + localStorePort), y retiradas las 4 invenciones locales de \"storage seguro\": resolveSafeStorage (store/storage.ts), readStorage/writeStorage (core/config/appConfig.ts), safeGet (core/search/searchConfigOverrides.ts) y getLocalStorage (core/onboarding/onboardingService.ts). El escalon de respaldo a sessionStorage de searchConfigOverrides SE MANTIENE a proposito: es una decision de diseno (cuota llena), no una copia de la misma ruta. Commits: ed4f026 (puerta + tests + metrica, 118), 7a60462 (core/ + services/, 118->47), 58710fb (hooks/stores/App/voz, 47->0), 2d4b5e3 (guard). Guard tests/localStorageGatewayGuard.test.ts (4 tests, registrado en lint:guards y congelado en .task/frozen.json): escanea git ls-files src y exige 0 ficheros fuera de la puerta, y trae prueba de detector por los dos lados. MUTACION VERIFICADA: localStorage.getItem inyectado en src/core/search/searchLanguage.ts -> metrica 1 y guard rojo (2 de 4); retirado -> 0. DEFECTO REAL encontrado por el camino (lo encontro la suite completa, no una lectura): la puerta resolvia el almacenamiento EN CADA ACCESO devolviendo un mapa NUEVO, asi que escribir y leer en el mismo acto perdia el dato (10 tests en rojo: localAi, searchConfigOverrides, searchOverridesStorage). Ahora la resolucion sigue siendo por acceso (los tests sustituyen el almacenamiento en caliente y tienen que mandar) pero el respaldo en memoria es UNO. Ademas store/storage.ts tenia su PROPIA copia del fallback (dos universos de memoria en el mismo proceso): ahora delega en la puerta, con regresion en tests/localStoreMemory.test.ts. Evidencia: node scripts/audit-metric.mjs localstorage-directo -> 0 (base 118). tsc -b -> 0. Suite completa vitest run -> 87 ficheros / 692 tests verde. lint:guards -> 37 ficheros / 217 tests verde. HONESTIDAD DE ALCANCE: el titular incluye tambien \"104 style={{ }}\" (estilos inline). Eso NO se toca aqui y este cierre no lo reclama: es el scope declarado de P6.12. Nota de metodo: el detector de la metrica se afino para no contar el TEXTO de una plantilla literal (el mensaje de log de searchConfigOverrides daba un falso positivo que impedia llegar a 0); las expresiones ${...} SIGUEN contando. Hash nuevo de scripts/audit-metric.mjs en .task/frozen.json: c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f.",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P6.1",
+      "titulo": "6 window.__fluHandle* en bundle sin gate DEV",
+      "estado": "done",
+      "evidencia": "VEREDICTO: FALSO POSITIVO (ya verificado). __fluHandle* vive en src/types/fluWindow.d.ts como DECLARACIONES de tipos (metodos opcionales de Window) y los manejadores reales se despachan en App.tsx (4 de los 6 son el despacho efectivo, leidos desde window en App.tsx:1157/1171-1194). Un gate DEV los rompe en produccion. Solo DeclaracionesType; nada que gatear. (sin cambio de codigo: FALSO POSITIVO verificado: 4 de los 6 (Diary/Note/Shopping/AgendaCommand) son el despacho real (App.tsx:1157 `const w = window` + 1171-1194 lee w.__fluHandle*Text); gatearlos rompe produccion. Solo ConocerFlu/DeviceAction estaban huerfanos (0 lectores en src/ ni tests/e2e) y pasan a DEV via App.exposeDevHook. Guard: tests/devGlobalsGuard.test.ts (mutacion verificada).)",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.2",
+      "titulo": "debug.enabled:true y relayToServer:true por defecto en build",
+      "estado": "done",
+      "evidencia": "src/voice/lib/fluConfig.js:2105,2126 (debug) y 2048,2054 (trace), gate IS_DEV",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.3",
+      "titulo": "window.FLU_CONFIG expuesto sin gate",
+      "estado": "done",
+      "evidencia": "src/main.tsx:16 -> window.FLU_CONFIG ahora dentro de if (import.meta.env.DEV); 0 lectores en src/",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.4",
+      "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)",
+      "estado": "done",
+      "evidencia": "src/voice/lib/listenLog.js:126-129",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.5",
+      "titulo": "src/modules/** inexistente (layout seccion 4)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: NO APLICA (nunca existio). src/modules/** = 0 coincidencias: la seccion 4 del layout describe una organizacion por modulos que el repositorio no adopto (usa src/core, src/hooks, src/voice, src/avatar). No hay codigo que mover. Se descarta como decision de arquitectura ya tomada de facto. (sin cambio de codigo: glob = 0)",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.6",
+      "titulo": "God files (SRP): App.tsx 5382, useFluVoiceAssistant.js 4576, fluConfig.js 2753, gemini.js 1857",
+      "estado": "done",
+      "evidencia": "CERRADO commit cc92168 (P6.6). MEDIDO al abrir: App.tsx 5391; al cerrar: 4684 (-707, -13%). Los otros tres god-files NO se tocan aqui (P6.7+ les toca) y quedan medidos y con techo: useFluVoiceAssistant.js 4579, fluConfig.js 2772, gemini.js 1848. QUE SE SACO Y POR QUE ESE ORDEN: primero los bloques de nivel superior SIN acoplamiento a los 28 guards congelados que apuntan a esos ficheros (los guards miden POR FICHERO: sacar codigo que un guard vigila lo deja mirando a otro sitio y en verde). (1) rutas de tab -> src/app/tabRoutes.ts (commit 4fd6610); (2) guardas de tipo BUNNY_COMPONENTS/isBunnyComponent/isAIProvider -> src/app/appTypeGuards.ts, con BUNNY_COMPONENTS privado (es la fuente runtime: el Record tipado obliga al compilador a exigir todos los miembros) (3d25a4d); (3) applyConfigAction + ApplyConfigContext -> src/app/configActions.ts, 409 lineas (cb6144f); (4) applyGameAction + ApplyGameContext -> src/app/gameActions.ts, 218 lineas (56d054b). Ninguno toca estado del componente: reciben setters/contexto por parametro. RED QUE CANTA LOS RESTOS: al moverse cada bloque, tsc con noUnusedLocals marca las importaciones que se quedan muertas (14 en total, entre ellas isBunnyComponent, el catalogo de config y seis del juego). Se retiran todas. Sin esa red, mover un bloque deja basura que nadie ve. TRINQUETE (tests/godFileSizeGuard.test.ts, 3 tests, registrado en lint:guards y congelado en .task/frozen.json): techos EXACTOS y shrink-only de los cuatro god-files; subir un techo es una decision que se ve en el diff. El detector trae prueba por los dos lados (una medida infractora tiene que marcarse; una por debajo, no) y ademas vigila el techo FLOJO: si un fichero baja de golpe y el techo no se aprieta, rojo. VERIFICACION: tsc -b -> 0. Suite COMPLETA vitest run -> 314 ficheros / 3141 tests verde, sin tocar un solo test existente. lint:guards -> 38 ficheros verde. npm run gate -> exit 0. HALLAZGO REAL que aparecio al correr la suite completa (no lo buscaba esta tarea) y que se arreglo aparte (commit 8ae18ce): taskLedgerGuard se puso ROJO con el ledger CORRECTO. Causa: commitExists lanzaba un `git cat-file` POR HASH, ~115 procesos por validacion; en solitario tardaba 6.0 s (limite 15 s) pero con la suite en carga pasaba de 15 s y caia por timeout. Es el mismo patron de barrera intermitente de P0.6. Ahora la primera llamada resuelve todo el ledger con un unico `git cat-file --batch-check` cacheado, misma semantica: 6.0 s -> 0.13 s. LIMITES HONESTOS DE ESTE ITEM: quedan sin trocear los dos monstruos, que son el 89% de lo que queda: la funcion App() (4157 lineas) y useFluVoiceAssistant() (4256). No son troceables por script: hay que cortar por responsabilidad con verificacion de UI/e2e detras, y eso es un lote propio. Lo extraido aqui eran bloques con destino claro; el item NO reclama haber resuelto el god-file de App.tsx, solo haberle quitado 707 lineas y haber dejado el trinquete para que no vuelvan.",
+      "origen": "propio"
+    },
+    {
+      "id": "P6.7",
+      "titulo": "checkJs acotado: ningun nombre inexistente en src/ (TS2304/TS2552)",
+      "estado": "done",
+      "evidencia": "tsconfig.json - HECHO en c3838a5. CRITERIO FIJADO y medido antes de tocar nada: con `--checkJs` el proyecto da 1764 errores en 143 ficheros, pero 1735 son ruido de tipado incremental (TS2339 745 propiedades, TS7006 539 parametros implicitos, TS7031 107, TS2322 74, TS7005 61, TS7053 57...). Perseguirlos es anotar 143 ficheros JS sin tipos, no cerrar un item. La unica clase que significa \"esto revienta al ejecutarse\" es TS2304/TS2552 (\"Cannot find name\"): codigo que llama a algo que no existe. Acotado ahi, eran 8 en base 1e97530. SEIS REALES: (1) turnTranscript.js:49 usaba `getTranscriptDelta` desnudo mientras el import lo renombraba a `getTranscriptDeltaFromBoundary` -> stripCommittedPrefix lanzaba ReferenceError; (2) conversationStream.js usaba `countSpeechWords` en 4 sitios y el import lo renombraba a `countWordsFromPauseCfg` -> evaluateSrGapSegmentCommit (gap de 10 s por defecto, NO desactivado) lanzaba ReferenceError; (3) turnStream.js:37 usaba `readTurnLive` sin importarlo. Misma causa raiz en los tres, y por eso pasaban desapercibidos: `export { X } from \"./y\"` NO crea un binding local de X (comprobado con Node: da ReferenceError). El reexport hace el nombre visible a los demas modulos, pero dentro del fichero X sigue sin existir. tsc -b no lo veia porque no mira los .js. Los 2 restantes NO eran bugs: AudioWorkletProcessor y registerProcessor si existen, pero en el hilo de audio, y lib.dom no los declara; se declaran en src/voice/workers/micCapture.processor.d.ts (no se silencian). REPRODUCCION antes del arreglo, llamando al codigo real sin mocks: stripCommittedPrefix(\"aa bb\",\"xx yy zz\") -> ReferenceError: getTranscriptDelta is not defined; evaluateSrGapSegmentCommit({openLine:\"hola mundo\"},{sinceLastResultMs:10001}) -> ReferenceError: countSpeechWords is not defined. Despues devuelven \"xx yy zz\" y {flush:false,capture:\"hola mundo\",reason:\"too-short\"}. GUARD: tests/jsReferenceGuard.test.ts, registrado en lint:guards y con prueba de detector (en base los casos fallan con ReferenceError). Medidor: scripts/js-ref-metric.mjs, unica fuente para la metrica y el guard. HALLAZGO COLATERAL: un shebang en un .mjs que un test importa ROMPE la transformacion de Vite (hoistea los imports y deja el `#!` en medio del codigo -> SyntaxError: Invalid or unexpected token). Quitado de los dos scripts de metrica: no aportaba nada y en style-inline-metric.mjs solo sobrevivia por el orden casual de sus imports. VERIFICACION: npm run gate -> exit 0 (metrica base=8 actual=0 target=0, guard base=1 actual=0); npm run lint verde; npm run test:full -> 318 ficheros / 3171 tests / 0 fallos. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.8",
+      "titulo": "Stack seccion 4 no implementado (WebLLM/Orama/Piper/Rhubarb = 0)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: DESCARTADO POR DECISION. WebLLM/Orama/Piper/Rhubarb = 0 implementaciones. El repositorio eligio otro stack: Gemini (via proxy server-side) para razonamiento y Chrome SpeechRecognition/Web Speech para voz, y lo documento (fluConfig.js:2149). Construir un stack local alternativo es una apuesta de producto, no un defecto: fuera de alcance hasta que se decida lo contrario. (sin cambio de codigo: grep = 0)",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.10",
+      "titulo": "plans/** 30+ artefactos de proceso versionados",
+      "estado": "done",
+      "evidencia": "CERRADO commit 38a097e. plans/ tenia 76 ficheros versionados y 50 eran artefactos de proceso: 43 en plans/contratos/** (el sistema de contratos por tarea que hoy vive en .task/contract.json + plans/ledger.json) y 7 informes estado-sesion-*/estado-entrega-*. Antes de borrar se verifico con git grep sobre scripts/, src/ y tests/ que nadie los referencia: la unica dependencia viva es plans/ledger.json (scripts/task-ledger.mjs, tests/decisionVerdictGuard.test.ts) y plans/unificacion-duplicados.md (scripts/hito.mjs), y ambos se conservan junto a los documentos de diseno (plan-*.md, propuesta-*.md). El historial sigue en git: no se pierde informacion, se deja de arrastrarla. Guard C52 tests/plansProcessArtifactsGuard.test.ts (5 tests): prohibe contratos viejos e informes de sesion/entrega, exige que el ledger siga presente, y prueba el detector por los dos lados (marca contratos e informes; NO marca ledger ni diseño). Registrado en lint:guards y congelado. Gate: metrica base=50 actual=0 target=0; guard base=ROJO (N=50) actual=verde. NOTA DE HONESTIDAD: el limite de tamaño del gate se declaro en 3400 lineas porque son 50 bajas (3176 lineas), y trocear no es viable: el invariante es todo-o-nada sobre plans/, un trozo dejaria el guard en rojo y el cierre a trozos seria teatro; ademas la regla de tamaño apunta a codigo autorado, no a retirar ficheros obsoletos.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.11",
+      "titulo": "37 archivos con aserciones ! (no-null)",
+      "estado": "done",
+      "evidencia": "CERRADO commit a6011aa (P6.11). El titular del item (37 archivos) estaba mal medido: el AST de TypeScript cuenta 51 aserciones no-null en 10 ficheros (20 en avatar/model/bunnyAnimator.ts y 20 en core/autonomy/autoOptimization.ts), no 37 ficheros; un regex sobre el texto daba 83 porque contaba tambien plantillas, comentarios y comparaciones !==. Retiradas las 51: bunnyAnimator gana resolveClip() (clip o error claro, y borra 4 ternarios duplicados sintetica/real), captura armRestPose en una const no-null (el narrowing se perdia al entrar en los closures) y destructura armQuats; autoOptimization sustituye metrics.x! por lt()/gt() con value !== undefined (misma semantica: undefined < t es false; un ?? 0 habria cambiado la decision); los otros 8 ficheros usan guard explicito, const local no-null, un solo acceso al mapa en vez de has()+get()!, y type predicate en el filtro de cumpleanos. Guard nuevo C51 tests/nonNullAssertionGuard.test.ts (4 tests): mide el AST (no el texto), trae prueba de detector y de mutacion, y exige que el universo medido sea todo src sin exclusiones silenciosas. Registrado en lint:guards y congelado en .task/frozen.json. Gate: metrica base=51 actual=0 target=0; guard base=ROJO (N=51) actual=verde; tsc -b -> 0; lint:guards 32 ficheros/180 tests verde. LIMITE (hallazgo, ajeno a esta tarea): dos guards existen pero NO estan registrados en lint:guards y estan ROJOS en HEAD: tsStrictGuard (un as unknown as en src/core/db/fluDatabase.ts:711) y dexieSchemaGuard (la version de Dexie que borra la tabla legacy reminders). Fuera de la barrera: se reportan, no se tocan aqui.",
+      "origen": "propio"
+    },
+    {
+      "id": "P6.12",
+      "titulo": "Estilos inline extendidos: criterio (>3 declaraciones) y extraccion de los 10 sitios a CSS",
+      "estado": "done",
+      "evidencia": "src/styles/unified.css + src/avatar/App.css - HECHO en 57bb25c. CRITERIO FIJADO (medible y guardado): \"extendido\" = bloque `style={{ }}` con MAS de 3 declaraciones. Sin umbral, \"quitar estilos inline\" es una meta infinita: de los 104 `style={{` de src/, 96 son de UNA declaracion y en su mayoria DINAMICOS (colors[kind], sig.color, isActive), y moverlos a CSS no es posible sin cambiar el diseno. Con el umbral en 3, los 2 sitios legitimamente dinamicos que el repo ya tenia quedan fuera: SignalPanel (variable CSS `--signal-color`) y FluAvatarVoiceBridge (alterna dos estados), con 2 declaraciones cada uno. MEDICION CORREGIDA: eran 10, no 8. La lista descriptiva del item solo miraba \"objeto de estilo a varias lineas\", asi que se le escapaban 4 sitios de UNA linea (FluSettingsPanel:1130 y AsrLab 353/358/372) y metia 2 que el criterio deja pasar. Recuento real por sitio (declaraciones): BunnyViewer 5 y 11, FluSettingsPanel 6/6/4, ThinkingIndicator 22/7, AsrLab 5/4/4. Los 10 salieron a clase CSS; los valores que vienen de bunnySceneConfig.ts entran como VARIABLES CSS (el idioma que el repo ya usaba con `--signal-color`), para que la config siga siendo la unica fuente y no quede DUPLICADA en el CSS. Lo dinamico (background: color, color del estado) se queda inline con 1-2 declaraciones. GUARD: tests/styleInlineGuard.test.ts, registrado en lint:guards (P2.4 exige prueba de detector: la tiene, con los dos casos que fueron puntos ciegos del primer medidor - el cast `} as React.CSSProperties}` no contiene `}}`, y la coma FINAL inflaba el recuento). El medidor vive en scripts/style-inline-metric.mjs: unica fuente para la metrica del contrato y para el guard, para que no puedan divergir. JSDOC: se SACA del titular. El item lo mencionaba, pero el repo no tiene metrica ni guard de cobertura de JSDoc (medido: scripts/audit-metric.mjs no la tiene), asi que era un requisito no verificable; inventar el criterio habria sido abrir trabajo sin evidencia de dano. VERIFICACION: npm run gate -> exit 0 (metrica base=10 actual=0 target=0, guard base=1 actual=0); npm run lint -> 40 guards / 241 tests / eslint 0 avisos; npm run test:full -> 317 ficheros / 3165 tests / 0 fallos; npx vite build -> OK y las clases aparecen en el bundle CSS; llaves de CSS balanceadas (0). El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.14",
+      "titulo": "Barrera del ledger: valida por hash, no ve duplicados ni cierres ajenos",
+      "estado": "done",
+      "evidencia": "HECHO en dc404cf. La barrera verifica el cierre, no solo que el hash este en alguna parte: I1b (todo codigo que git declara tiene entrada en done[], o la cubre su familia: P3 cubre P3.1; antes C53 -> 268e0c7 pasaba por estar dado de alta como P6.9), I5 (el commit citado nombra el id o toco el archivo de la evidencia; antes bastaba el hash, que es lo que dejaba colgarse de un commit ajeno), I6 (item done exige cierre registrado o VEREDICTO escrito) e I7. El parser lee el codigo del parentesis FINAL del asunto (solo el final: en medio de la prosa no declara cierre). El mensaje decia \"60 pendientes\" (era items.length, el total); ahora lista los pendientes reales: \"ledger OK: 4 pendientes (P6.7, P6.12, P6.14, P6.15)\". NO se hizo unico `done[].id`, y se documenta por que en el propio guard: es el CODIGO del hallazgo y un arreglo por tandas lo repite legitimamente (medido: fix(C54) x2, test(C40,C41) x3); unico es el par (id, commit) = 0 repetidos en 119 entradas. Prueba de mutacion en tests/taskLedgerGuard.test.ts (11 casos, uno por invariante); por tenerla, el guard sale de .task/guard-proof-baseline.json (el trinquete P2.4 solo encoge). Medicion que lo respalda: con los datos anteriores la barrera endurecida devuelve 12 fallos y exit 1; con los reparados, exit 0. CORRECCION DE RUMBO: el informe pedia pasar los cierres por veredicto a `decision`; al hacerlo cayo tests/decisionVerdictGuard.test.ts (CONGELADO), que exige lo contrario y explica por que: `decision` es una decision ABIERTA y los veredictos resueltos van en `done` citando su motivo. Reclasificar los reabria. Lo que se quito fue el commit ajeno, no el estado. decisionVerdictGuard: intacto. DoD: node scripts/task-ledger.mjs check -> exit 0.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.15",
+      "titulo": "Datos del ledger: duplicados en done[], cierres colgados, P0.1 y la fecha",
+      "estado": "done",
+      "evidencia": "HECHO en dc404cf. Datos reparados en plans/ledger.json (119 cierres): (1) 6 items colgaban de un commit ajeno para poder estar en `done`: P4.11/P4.12/P4.14/P6.5/P6.8 de e0d5a1c (\"cierre de P1.5 verificado por el gate\") y P4.10 de un commit de criterio; sus entradas en done[] se retiran porque su cierre es el VEREDICTO ya escrito en su evidencia, no un commit. (2) C40/C41 era un id compuesto que no existe en git (los 3 commits declaran (C40,C41)): cada codigo pasa a ser entrada propia. (3) Cierres que faltaban por completo: C53 -> 268e0c7, T1 -> 91665a4 (T1 se renombro a P0.4 sin dejar rastro del codigo viejo) y P0.1/P0.2/P0.3 -> f23889d, que estaban `done` SIN ninguna entrada en done[]; su commit es el que creo el ledger, su guard y la regla de AGENTS.md, los tres artefactos que esos items citan como evidencia. (4) P0.1 citaba \".task/ledger.json\", que no existe: ahora cita plans/ledger.json. CUATRO DEFECTOS MAS que la auditoria no listaba y aparecieron al medir: P4.10 (item fantasma colgado de un commit de criterio), T1 (codigo renombrado e invisible), P0.1/P0.2/P0.3 (cierres sin registro) y C53 (registrado con el hash de P6.9, codigo inexistente). NO se toco el estado `decision` (hoy 0 entradas) por la razon de P6.14. DoD: node scripts/task-ledger.mjs check -> exit 0 con 4 pendientes reales.",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P6.13",
+      "titulo": "npm run build no arranca: la config arrastra codigo de app que lee import.meta.env.DEV",
+      "estado": "done",
+      "evidencia": "CERRADO commit 1bbb47e (P6.13). El fallo era al CARGAR la config, no al compilar: Vite empaqueta vite.config.ts y lo importa en Node, donde `import.meta.env` no existe, y la cadena vite.config.ts -> src/server/* -> src/core/config/appConfig.ts lee sus VITE_* en scope de modulo (TypeError ... reading DEV, y detras VITE_APP_NAME). ARREGLO: shim de import.meta.env en el cuerpo del config + import() DINAMICO de los tres proxies dentro de la funcion de config; asi el env existe antes de que se inicialicen los modulos de app y el cliente no cambia (Vite sigue sustituyendo sus import.meta.env.VITE_X estaticos: medido, 0 referencias a import.meta.env en el bundle). EL PROPIO ITEM AVISABA de no romper prodDefaultsGuard ni devGlobalsGuard, y acerto: el primer intento (cambiar las lecturas a la guarda `Boolean(import.meta.env?.DEV)`) lo paro prodDefaultsGuard, que exige el literal `const IS_DEV = import.meta.env.DEV` en src/voice/lib/fluConfig.js porque es lo que Vite inyecta como false en produccion. Revertido: con el shim no hace falta tocar ninguna lectura literal. En src/voice/lib/listenLog.js si se adopta la guarda, porque es modulo de diagnostico como sus tres pares (fluDebug/fluDevConsole/fluTrace). DECISION QUE PEDIA EL ITEM (external): la lista venia del import inicial (979e412) y nunca se justifico. No hay importmap en index.html, asi que marcar react/three/react-dom/jsx-runtime/r3f/drei/zustand/@huggingface/transformers como external dejaba el dist con imports desnudos que el navegador no puede resolver: MEDIDO en el dist de antes, audioMath.js hacia `from\"@huggingface/transformers\"` con el paquete instalado en node_modules. Ahora se empaqueta todo (external: []). MEDICION DEL DIST (47 chunks): 0 imports desnudos; 0 referencias a import.meta.env en el cliente; composicion ya medible (lo que dejaba a medias P4.2b): index 1.27 MB, pdfkit.standalone 1.30 MB, workers de voz 0.55 MB cada uno, 22.5 MB de wasm de onnxruntime, 31.5 MB en total. npm run build -> exit 0. GUARD (tests/viteConfigNodeLoadGuard.test.ts, 3 tests, registrado en lint:guards y congelado): empaqueta el config como lo empaqueta Vite (esbuild --bundle --platform=node --packages=external) y lo importa en un PROCESO NODE HIJO, porque dentro de Vitest `import.meta.env` SI existe y medido ahi el fallo seria invisible (falso verde). Prueba de mutacion por los dos lados y ademas fija la decision: external no puede nombrar nada instalado en node_modules. VERIFICACION: suite completa 316 ficheros / 3147 tests verde; npm run gate -> exit 0.",
+      "origen": "propio"
+    },
+    {
+      "id": "P7.1",
+      "titulo": "npm run lint no lintea eslint (solo guards)",
+      "estado": "done",
+      "evidencia": "package.json:12",
+      "origen": "auditoria",
+      "auditoria": "V19"
+    },
+    {
+      "id": "P7.2",
+      "titulo": "Plugin react-hooks sin reglas (lint de hooks inerte)",
+      "estado": "done",
+      "evidencia": "eslint.config.mjs:18-32",
+      "origen": "auditoria"
+    },
+    {
+      "id": "P0.5",
+      "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md",
+      "estado": "done",
+      "evidencia": "tests/protocolGuard.test.ts:56-71",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P0.6",
+      "titulo": "Gate INTERMITENTE: la invocacion de guards base desde scripts/task-gate.mjs fallo 1 de 7 veces ([1/1] hardcodeGuard) y no se reprodujo en 5 corridas seguidas; task-gate.mjs es inmutable por el agente",
+      "estado": "done",
+      "evidencia": "npm run gate: 1/7 exit=1 (GUARDS BASE FALLARON); 5/5 exit=0 despues",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P0.7",
+      "titulo": "CRLF silencioso: core.autocrlf=false y NO existe .gitattributes, asi que editar un archivo lo reescribe en CRLF -> diff de miles de lineas (rompio f1a1ca6, hubo que rehacerlo) y cambia el hash que frozen.json vigila (hashea BYTES)",
+      "estado": "done",
+      "evidencia": "git ls-files --eol -> i/lf w/crlf tras editar; P2.3 normalizado a LF antes de congelar",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P0.8",
+      "titulo": "El pre-commit que documenta AGENTS.md no es el que corre: AGENTS.md:282 dice \"npm run gate\" pero .git/hooks/pre-commit ejecuta lint+typecheck, y ese hook NO esta versionado (no existe en CI ni en otro clon)",
+      "estado": "done",
+      "evidencia": "CERRADO commit 849bae5. AGENTS.md seccion Gates afirmaba DOS cosas falsas: (1) \"Pre-commit LIGERO (nunca la suite completa): npm run gate\" se contradecia a si misma; (2) atribuia npm run gate a CI, y el propio ci.yml documenta que NO lo corre. Ademas el hook real vivia en .git/hooks/pre-commit (no versionado: no existia en clon nuevo ni CI). Ahora: .githooks/pre-commit VERSIONADO (lint + typecheck, nunca suite ni gate) + scripts/install-hooks.mjs y script prepare que activa core.hooksPath=.githooks + AGENTS.md Gates reescrito con la barrera REAL (gate = cierre de tarea con contrato activo). Guard nuevo tests/preCommitBarrierGuard.test.ts (4 tests) verifica versionado, ligereza, activacion y coherencia del doc; nace ROJO en base. Gate: metrica hooks versionados 0->1, guard base=ROJO actual=VERDE, exit 0. El propio guard detecto un fallo en su primera version (contaba comandos dentro de comentarios del hook) y se corrigio el detector.",
+      "origen": "plan-T"
+    },
+    {
+      "id": "P1.9",
+      "titulo": "STORAGE_KEYS sin claves muertas (11 declaradas y nunca leidas)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "DESCUBIERTO Y CERRADO commit b6e81b2. STORAGE_KEYS declaraba 11 claves localStorage que NADIE referencia: las 6 del Configur r FLU (FLU_PROFILE/IMAGE/VOICE/ADVANCED_CONFIG, FLU_PERSONALITY_TRAITS/TONE) sustituidas por integrationStore; GEMINI_MODEL/GEMINI_API_URL y POLLINATIONS_URL/MODEL por la config de proveedor; NOTIFICATION_MUTED por NOTIFICATION_CHANNEL/PERMISSION. Verificado antes de borrar: 791 ficheros, los 11 literales solo en su declaracion, sin acceso dinamico STORAGE_KEYS[...]. Guard tests/storageKeysAliveGuard.test.ts (6 tests, con test anti-vacuidad) exige que toda clave declarada se referencie. El guard detecto un fallo real en su primera version (regex que exigia >=2 caracteres -> habria pasado vacio). Gate: metrica 11->0 en el worktree base; exit 0."
+    },
+    {
+      "id": "P6.16",
+      "titulo": "I5: el id de cierre casaba por SUBCADENA (C2 justificado por un commit que dice C21)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "scripts/task-ledger.mjs:204 - HECHO en d674137. I5 (justificaCierre) casaba el id por SUBCADENA: `subject.includes(id)`. Con ids de 1 digito eso es un agujero real: la entrada `C2` quedaba justificada por un commit que solo dice `C21` (C2..C6 son prefijo de C21..C60; medido, 0 casos explotados hoy, el fallo era latente). Se retira esa rama y queda solo la de familia, que YA usaba \\b: familiaDe(C41)===C41, asi que el id exacto sigue cubierto y las 121 entradas reales siguen validando (ledger:check en exit 0). Hallazgo de la 3a pasada de la auditoria del ledger. Guard de comportamiento: caso nuevo en taskLedgerGuard.test.ts que FALLA contra el codigo anterior (expected true to be false) y PASA ahora; metrica del contrato 1 -> 0, recomputada por el gate en el worktree base, con el guard tambien fallando alli (base=1, actual=0). npm run gate -> exit 0. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report."
+    },
+    {
+      "id": "P6.17",
+      "titulo": "I5: el id de cierre casaba por FAMILIA (un item hijo colgaba del commit de un hermano)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "scripts/task-ledger.mjs:204 - HECHO en eff9907. Hallazgo de la 4a pasada: al usar el arreglo de P6.16 como sonda aparecio que justificaCierre() casaba el id por FAMILIA (`\\bP1\\b`), y el punto no es caracter de palabra, asi que `\\bP1\\b` casa tambien con un HERMANO (`P1.9`). Medido con el guard real sobre las 122 filas del ledger, 2 casos VIVOS (no latentes): P0.4 colgaba de 91665a4 (\"fix(T1): reparar la barrera\", que menciona P0.5) y P1.8 de 6efbd50 (\"chore(P1.9): metrica del gate sin backslash\"). Ninguno de los dos commits nombra el item que cita. Tercer efecto del mismo sitio: el id se interpolaba sin escapar, asi que `C1)` lanzaba SyntaxError y tumbaba la barrera con un stack trace. Se pasa a id EXACTO y escapado; conserva los items META porque su id ES la familia (`\\bP3\\b` casa con `P3.1`), que era lo unico que la rama de familia aportaba. Reparacion de datos sin borrar ningun registro: P0.4 CONSERVA su commit de trabajo 91665a4 y pasa a justificarse por la RUTA de su evidencia, que ahora cita el artefacto que ese commit creo (plans/contratos/PREPARACION-123.md) - es el mecanismo que la propia barrera documenta para items cerrados sin ser citados, el mismo que cubre P0.1/P0.2/P0.3; y P1.8 apunta a 9374b30, el commit creado para cerrarlo por veredicto. Se descarto reescribir ambas filas hacia commits de registro: para P0.4 sustituiria el commit que hizo el trabajo por uno de tramite, contradiciendo lo que 1f88a87 declara (\"done[] += 91665a4\"). Guard: 2 casos nuevos en taskLedgerGuard.test.ts que FALLAN contra a8ad06d (uno por aceptar el hermano, otro por lanzar SyntaxError) y PASAN ahora. Metrica del contrato 1 -> 0, recomputada por el gate en el worktree base, con el guard fallando alli (base=1, actual=0). npm run gate -> exit 0. El contrato de la tarea lo escribio el agente con autorizacion expresa del usuario: enmienda formal (AGENTS.md B14) declarada en .task/report."
+    },
+    {
+      "id": "P6.18",
+      "titulo": "Los ficheros de texto de src/ son UTF-8 valido (unified.css con 12 bytes en latin-1/cp1252)",
+      "estado": "done",
+      "origen": "auditoria",
+      "evidencia": "src/styles/unified.css - HECHO en 91a048d. Hallazgo colateral de P6.7: unified.css NO era UTF-8 valido. MEDIDO en base 27bda1f: 12 bytes fuera de UTF-8, todos dentro de COMENTARIOS CSS: 0xED -> \"i\" acentuada (5), 0xF3 -> \"o\" acentuada (3), 0xF1 -> \"n\" con tilde (2), 0x97 -> guion largo en cp1252 (2). Los contextos no dejan duda porque son palabras enteras: \"Línea separadora\", \"Pizarrón\", \"pestañas\", \"próximos\", \"viñeta\", \"sólido\", \"por día\", \"multilínea\", \"SEMANA — columnas por día\". POR QUE ES ITEM Y NO DETALLE: (1) un fichero que no es UTF-8 no se lee con la herramienta normal; en esta sesion bloqueo lecturas reales (Python reventaba con UnicodeDecodeError y la consola mostraba \"L?nea separadora\"); (2) el error ESCONDE los demas, porque el decodificador se para en el primer byte malo, asi que un recuento se queda corto y devuelve un numero que PARECE respuesta: mi primer recuento dijo 5 bytes (solo 0xED) y eran 12, con tres valores mas. ARREGLO: reescrito en el sitio equivalente de cada byte (0xED->í, 0xF3->ó, 0xF1->ñ, 0x97->—), que es lo que el contexto dice que eran. git diff de unified.css: 9 lineas cambiadas, las 9 dentro de comentarios, CERO declaraciones. ENFORCEMENT: scripts/utf8-metric.mjs (medidor, unica fuente) y tests/utf8Guard.test.ts, registrado en lint:guards, con prueba de detector por bytes sinteticos (los 4 valores tienen que discriminar, no estar en verde por mirar otra cosa). VERIFICACION: npm run gate -> exit 0 (metrica base=1 actual=0 target=0, guard base=1 actual=0, con el guard fallando en base citando exactamente src/styles/unified.css); npm run lint verde (42 ficheros de guard / 250 tests, eslint 0 avisos); npm run test:full -> 319 ficheros / 3174 tests / 0 fallos; npm run build OK. NOTA: el bundle no vale como evidencia aqui porque el minificador de CSS elimina los comentarios en produccion; lo que se comprueba es la fuente, que es donde estaba el defecto."
+    },
+    {
+      "id": "P7.4",
+      "titulo": "react-hooks/exhaustive-deps: deuda PAGADA (59 -> 0) y regla ACTIVA en eslint",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO. La deuda esta PAGADA (0 violaciones, eran 59) y la regla queda ACTIVA en eslint.config.mjs, no como decision abierta. PAGADA (auditoria in-house). La deuda era real y estaba oculta: la regla react-hooks/exhaustive-deps estaba en 'off' en eslint.config.mjs, asi que lint podia estar verde con la deuda dentro. Recuento real con la regla forzada a warn: 0 violaciones (eran 59). DESGLOSE medido al empezar: 50 'missing dependency', 6 expresiones complejas, 3 'unnecessary' (este item declaraba 37/19/3: otro numero que habia envejecido sin nada que lo comprobara, y justo por eso el trinquete lo relee). COMO SE PAGO, por tipo y sin tocar a ciegas el flujo de voz: (1) 3 'unnecessary' -> se quitaron deps que el cuerpo NO lee (no pueden causar staleness); (2) 6 'complex' -> se memoizaron los valores que cambiaban de identidad por render (config de useOnboarding a useMemo, notifyCompleted a useCallback, ws de WorkspaceHub a useMemo, matchesFilter de ResultFeed a useCallback); (3) 50 'missing' -> la mayoria eran useCallback/useMemo YA memoizados, asi que listarlos solo cambia su identidad, NO la semantica de efecto (el miedo documentado de 'cambia re-render y suscripciones' no aplica a un useCallback: no re-ejecuta nada). El unico efecto de 'una sola vez' (saludo de onboarding) se blindo con guarda por ref, de modo que sus deps pueden ser honestas sin repetir el efecto. DOS EXCEPCIONES, no deuda escondida: App.tsx:2388 (dispatcher central) y useAutonomyIntegration.ts:320 (efecto de montaje) referencian helpers declarados DEBAJO; listarlos es un TDZ (tsc lo confirmo al intentarlo) y mover esos hooks cambiaria su orden. Se desactivan EN EL SITIO con el motivo escrito, y el trinquete exige que toda excepcion de exhaustive-deps lleve '-- motivo' (un disable mudo lo canta). CIERRE REAL: la regla queda ACTIVA en eslint.config.mjs (ya no 'off'); el trinquete baja de 59 a 0, asi que no cabe NI UNA violacion nueva; y se anade el detector de excepciones justificadas. Verificado: tsc 0, eslint --max-warnings=0 0, 0 violaciones."
+    },
+    {
+      "id": "P7.5",
+      "titulo": "resolveGeminiApiKey definida 3 veces con contratos distintos",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por renombrado por responsabilidad (auditoria externa #3). Habia 3 funciones con el MISMO nombre y contratos incompatibles: appConfig.ts:682 (sin args, devuelve string, prioriza la key dedicada), services/gemini.ts:63 (privada, recibe apiKey y devuelve {apiKey,apiKeySource}) y voice/lib/gemini.js:1299 (exportada, server-side). El cierre anterior las declaro NO APLICA y las metio en ALLOW_COLLISION de scripts/auditoria.mjs, alegando que renombrar seria cosmetico (7.2/7.5). Pero el hallazgo NO admite esa salida: pedia 'una sola fuente o renombrar por responsabilidad'. Y renombrar SI baja una invariante medida: nombres exportados duplicados en src/ 17 -> 16 (medido con el mismo criterio del auditor, que excluye los 2 pares .d.ts), asi que no es el hito cosmetico que 7.2/7.5 prohiben. Nombres nuevos: resolveDedicatedGeminiApiKey (appConfig), resolveGeminiKeyForRequest (services/gemini.ts), resolveServerGeminiApiKey (voice/lib/gemini.js). 0 referencias al nombre viejo en src/; la entrada de ALLOW_COLLISION se retiro por sobrar. tsc 0, sin cambios de comportamiento (rename puro).",
+      "auditoria": "D0"
+    },
+    {
+      "id": "P7.6",
+      "titulo": "buildPollinations* : 3 constructores de la misma URL base",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: auditoria externa #4. La afirmacion \"3 constructores de la misma URL\" es IMPRECISA: medidos uno a uno, buildPollinationsUrl (appConfig) es un envoltorio que anade el override de localStorage y YA delegaba en buildPollinationsImageUrl; la BASE ya era unica (C7 pollinationsFuenteUnica). El defecto real era otro: buildPollinationsArtifact (fluVisualPipeline.js) ensamblaba la URL a mano Y EVADIA transportSingleOwnerGuard, porque construia la query con params.set('nologo','true') en vez del literal nologo=true que el guard buscaba. Arreglado: el dueno acepta model/nologo/enhance opcionales (salida historica intacta, comprobada byte a byte) y el artefacto delega. El guard se amplia a la forma URLSearchParams y ademas ignora comentarios (marcaba su propia explicacion). Cierra tests/pollinationsUrlBuilder.test.ts."
+    },
+    {
+      "id": "P7.7",
+      "titulo": "'openrouter' quemado en codigo (regla #1: sin hardcode)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 6148862. fluConfig.js:1196 y searchSession.ts:589 derivan ya de AI_PROVIDER_IDS, que ya existia y ya se usaba en el mismo fichero (linea 613). El hardcode era una inconsistencia interna, no una carencia de config."
+    },
+    {
+      "id": "P7.8",
+      "titulo": "los 4 window.__fluHandle* de App.tsx nunca se limpian",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: auditoria externa #12. La FUGA es real (6 asignaciones, ninguna limpieza) pero la mitad del diagnostico era erroneo: la auditoria pedia gatearlos y eso ROMPERIA produccion, porque los 4 __fluHandle{Diary,Note,Shopping,AgendaCommand}Text son el mecanismo REAL de despacho que lee dispatchArbiterIntent (ya documentado en devGlobalsGuard.FUNCTIONAL_BRIDGE). Lo correcto era limpiarlos al desmontar. Nuevo src/app/fluBridges.ts con el ciclo de vida (snapshot/publish/clear) y App.tsx lo usa. La republicacion en el efecto es obligatoria: main.tsx monta en StrictMode (cleanup->effect sin re-render) y un borrado a secas los dejaria ausentes en desarrollo. Probado con el ciclo real en tests/fluBridges.test.ts. HONESTIDAD (barreras que me pararon a mi): al cerrarlo introduje 3 regresiones que los propios guards del repo cazaron, y las arregle en vez de esquivarlos. (1) tsStrictGuard C49: use window as unknown as BridgeTarget; rehice la API con FluBridgeHost (los 4 puentes opcionales, que Window satisface) y sin ningun cast. (2) guardMutationGuard P2.4: los tests nuevos eran teatro (sin prueba de detector); les anadi casos que falsifican. (3) godFileSizeGuard P6.6: App.tsx pasaba de 4684; saque el ciclo de vida a src/app/fluBridges.ts y aun asi quedaba +2, asi que SUBI el techo a 4686 de forma deliberada y justificada en el propio fichero (la opcion que el guard autoriza). Anotado aqui para que no parezca un cambio gratis."
+    },
+    {
+      "id": "P7.9",
+      "titulo": "catchSilenciosoGuard acepta \"ignorado:\" sin binding y no cubre .catch de promesas",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: auditoria externa #14. DOS agujeros reales, no uno. (1) `ignorado:` se aceptaba como SUBCADENA del cuerpo del catch, asi que el MENSAJE de un console.warn declaraba la omision: 12 sitios en src (11 en useFluVoiceAssistant.js, 1 en voice/lib/gemini.js) se colaban con el texto \"teardown ignorado:\" dentro de una CADENA; y un marcador sin motivo tambien pasaba. (2) .catch solo miraba el handler VACIO: `.catch(() => undefined)`, `.catch(() => '')`, `.catch(function () {})` y los handlers NO vacios que ignoran el rechazo pasaban sin decir nada. ENDURECIDO: IGN_DECL exige `ignorado: <motivo>` dentro de un COMENTARIO; y un handler de .catch se marca si no registra (logCaughtError), no propaga (throw) y ni siquiera USA el rechazo. Asimetria DELIBERADA y documentada: el bloque `catch` es estricto (registro central) pero un handler de .catch que al menos usa el rechazo no se marca, para no ensuciar los reporters propios. ARREGLADOS 47 sitios medidos con AST: 12 teardown -> logCaughtError('[catch] <fichero>', err) (misma linea); 34 .catch -> handler que registra y devuelve el mismo fallback (misma linea, god-files intactos); 1 .catch multilinea en useOnboarding.ts:116 (carga inicial del participante, que se tragaba el fallo y seguia como si nada). main.tsx:31 queda como OMISION DECLARADA con motivo, para no meter el logger en el punto de entrada. HALLAZGO EXTRA: el guard NO estaba en lint:guards, asi que llevaba tiempo sin correr (misma forma que P7.23); ya esta en la barrera. Pruebas de detector anadidas para cada regla nueva (16 en el fichero). VERIFICADO: lint:guards 48 ficheros/294 tests verdes, tsc 0, eslint 0. Nota de EOL: mis ediciones normalizaron 6 ficheros `mixta` a LF y eolGuard lo cazo; restaurada la clase exacta del indice."
+    },
+    {
+      "id": "P7.10",
+      "titulo": "providerLiteralGuard solo ve literales entre comillas/arrays",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 6148862. providerLiteralGuard marca ahora posiciones de identidad (clave de objeto / comparacion) con criterio de ambiguedad: openrouter y deepseek en cualquier clave; gemini y local solo con clave especifica de proveedor. MEDIDO antes de acotarlo: la version ingenua daba 6 hits con 2 falsos positivos del dominio de almacenamiento de storyteller.ts; ese falso positivo es el que fijo el criterio."
+    },
+    {
+      "id": "P7.11",
+      "titulo": "token helpers unificados: la tokenizacion vive solo en gameUtils.ts (auditoria #1)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde. Se intento cubrirlo antes con un guard y el detector sobreconto: delegar no es duplicar, y los falsos positivos medidos (rango \"C1-C8\", dos guards reclamando C1, datos T1/T2) lo descartaron hasta acotarlo a P#.#. ACOTACION MEDIDA (auditoria externa #1, hasToken): la tokenizacion NO vive solo en gameUtils.ts. src/voice/lib/configCommands.js define su propio hasToken (con findTokenIndex PRIVADO), eximido a proposito en tests/duplicationGuard.test.ts. El hallazgo permite 'importar de gameUtils o justificar dominio distinto', y aqui aplica la segunda: esa justificacion era PROSA en un comentario y ahora es barrera medida en tests/tokenHelperContract.test.ts, que fija las divergencias reales (no son la misma funcion): voz normaliza la FRASE ('ACTIVA' casa con 'activa el modo oscuro') y juegos exige frase ya normalizada ('ACTIVA' no casa); voz no admite puntuacion antes del token ('hola,activa' -> false) y juegos si (-> true). Unificar cambiaria el parseo de la capa de voz, que es lo que el hallazgo llama 'dominio distinto'; no se unifica a ciegas.",
+      "auditoria": "D5"
+    },
+    {
+      "id": "P7.12",
+      "titulo": "mergeCaptureText retirado (auditoria #7)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde: la funcion @deprecated tenia CERO consumidores en todo el repo."
+    },
+    {
+      "id": "P7.13",
+      "titulo": "micRawConsole retirado (auditoria #8)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: RESUELTO por 7792bde: clave con CERO consumidores; arrastraba el @deprecated duplicado en dos lineas."
+    },
+    {
+      "id": "P7.14",
+      "titulo": "slugifyAmbiente no duplica slugifyPalette (auditoria #2)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. AmbienteFactory.ts:38 ya devuelve slugifyPalette(nombre); es delegacion, no copia. duplicationGuard lo comprueba con ambiente.toContain(\"slugifyPalette(nombre)\")."
+    },
+    {
+      "id": "P7.15",
+      "titulo": "streamLogThrottleMs no es codigo muerto (auditoria #9)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. Esta LEIDO en useFluVoiceAssistant.js:1756 y su valor gobierna la rama \"throttleMs > 0\" de 1761: es un interruptor vivo (hoy en 0). Con 0 la rama no se ejecuta, por eso parece muerto. Borrar la clave cambiaria el contrato de config."
+    },
+    {
+      "id": "P7.16",
+      "titulo": "el catch de gemini.js no esta vacio (auditoria #10)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. gemini.js:1326 captura, lee response.text() y RELANZA un Error con code \"gemini_api_error\". catchSilenciosoGuard lo acepta por su regla 2 (\"propaga -> ok\"), correctamente."
+    },
+    {
+      "id": "P7.17",
+      "titulo": "window.FLU_CONFIG ya esta gateado (auditoria #13)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA. main.tsx:17-19 lo envuelve en if (import.meta.env.DEV). La auditoria cito la linea 18 sin el if de la 17."
+    },
+    {
+      "id": "P7.18",
+      "titulo": "specificDeadGuard exige que logMicRaw NO exista (auditoria #16)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: VEREDICTO: NO APLICA, y la auditoria lo lee al reves. specificDeadGuard.test.ts:121 afirma expect('logMicRaw' in listen).toBe(false): exige AUSENCIA. La linea 27 esta en la lista de nombres RETIRADOS. El alias ya no existe en src (retirado en P2.3)."
+    },
+    {
+      "id": "P7.19",
+      "titulo": "eslint-disable sin justificar (AsrLab.tsx)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: auditoria externa #11. La directiva no-await-in-loop de AsrLab.tsx resulto INERTE por dos motivos independientes: src/dev/** esta en los ignores de eslint.config.mjs y la regla no-await-in-loop no esta activada en la config. Se retiro la directiva y se dejo el porque en prosa. Cierra la clase con tests/eslintSuppressionGuard.test.ts: toda directiva eslint-disable* en src/ exige `-- motivo`. El detector distingue la directiva del literal `/eslint-disable/` que appAnalyzer.ts usa como patron, y tiene prueba de ello."
+    },
+    {
+      "id": "P7.20",
+      "titulo": "isAIProvider definido 2 veces con la misma logica (catch-all D0)",
+      "estado": "done",
+      "origen": "propio",
+      "auditoria": "D0",
+      "evidencia": "VEREDICTO: el medidor scripts/auditoria.mjs lo marcaba en su catch-all D0 (junto a 2 falsos positivos). MEDIDO: appTypeGuards.ts:32 y sharedConfig.ts:155 declaraban isAIProvider con la MISMA logica (includes sobre AI_PROVIDERS); la de sharedConfig es superset (acepta unknown + typeof). appTypeGuards ahora re-exporta del dueno. D0 pasa de 3 a 0."
+    },
+    {
+      "id": "P7.21",
+      "titulo": "catch-all D0: los .d.ts contaban como segunda definicion",
+      "estado": "done",
+      "origen": "propio",
+      "auditoria": "D0",
+      "evidencia": "VEREDICTO: de las 3 entradas de D0, 2 eran FALSOS POSITIVOS: whisperRecognitionEngine.d.ts y whisperWasmTranscriber.d.ts frente a sus .js hermanos. Un .d.ts DECLARA el simbolo que implementa su .js, no es una segunda definicion. El detector duplicateExportedSymbols los excluye ahora."
+    },
+    {
+      "id": "P7.22",
+      "titulo": "dos sistemas de seguimiento (sensor auditoria.mjs vs ledger) sin coser",
+      "estado": "done",
+      "origen": "propio",
+      "auditoria": "D0",
+      "evidencia": "VEREDICTO: RESUELTO: nuevo tests/auditLedgerSync.test.ts. Reparto explicito: auditoria.mjs es el SENSOR (HOY/META por id) y plans/ledger.json la unica fuente de ESTADO. El guard obliga a que todo hallazgo abierto del sensor tenga item de ledger no cerrado, y a que ningun item cerrado tenga su hallazgo por encima de META. Crosswalk documentado en el campo auditoria de los items (P7.1=V19, P7.11=D5, D0=P7.20/P7.21/P7.22)."
+    },
+    {
+      "id": "P7.23",
+      "titulo": "el catalogo de auditoria era prosa: no estaba en el gate",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: hallazgo derivado que el propio P4.6 declaro y dejo \"fuera de alcance\". scripts/auditoria.mjs (ALLOW_COLLISION, KNOWN_GROUPS, META por hallazgo) NO estaba en lint:guards: la clasificacion la aplicaba el auditor a mano, asi que nada impedia anadir un hallazgo y no mirarlo. Ahora tests/auditLedgerSync.test.ts ejecuta `auditoria.mjs --strict` dentro de lint:guards, que cuelga de `npm run lint`: un hallazgo por encima de su META rompe el lint. El sensor pasa de prosa a barrera."
+    },
+    {
+      "id": "P7.24",
+      "titulo": "el formato de clave de dia copiado en 5 modulos",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "VEREDICTO: segundo hallazgo derivado de P4.6 (su punto ciego declarado: \"duplicados NO exportados no se cuentan\"). Medido: el literal /^\\d{4}-\\d{2}-\\d{2}$/ estaba COPIADO 5 veces (contactService.ts:113, diaryService.ts:97, habitService.ts:138, moodService.ts:102 y participantRegistry.ts:182 inline). C58 habia unificado el FORMATEADOR dayKey() pero dejo el VALIDADOR sin dueno. Ahora vive en src/lib/dateKey.ts como isDayKey() (guarda de formato, no de calendario: se respeto la semantica previa) y los 5 importan de alli. Guard nuevo en tests/duplicationGuard.test.ts: el literal solo puede aparecer en el dueno y DATE_KEY_RE no puede reaparecer."
+    },
+    {
+      "id": "P7.25",
+      "titulo": "job E2E ya se ejecuta: arnes arreglado y fallos clasificados; la deuda real es de producto",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "Arnes E2E. Estado medido en la corrida COMPLETA final (workers=1, ~19 min): 43 passed / 3 failed / 2 skipped / 0 \"did not run\". Progreso real: 35 -> 41 -> 43 passed, y la clase de fallo de arnes desaparecio (ya no hay timeouts de carga ni workers muertos). Los 3 rojos son TODOS producto y preexistentes a la ronda: pizarron 3.1 y 7.1 (P7.33/P7.34) y video-config (carga: pasa AISLADO en 36.2 s con el presupuesto de arranque subido; vuelve a caer en la corrida larga porque compite por el dev server). NO se declara verde: el job no puede estarlo con producto rojo, y declararlo seria falsear la puerta. Para cerrar este item falta P7.33/P7.34 (producto) y estabilizar video-config (arnes). Sin cambio de estado. CIERRE: las dos condiciones que lo bloqueaban estan resueltas y VERIFICADAS. (a) Los 3 rojos eran producto y preexistentes: pizarron 3.1 y 7.1 (P7.33/P7.34, cerrados) y video-config. (b) video-config era el unico de arnes: MEDIDO que aislado necesita ~37 s pero en la corrida sostenida compite por el dev server y agotaba su presupuesto de 180000 ms, muriendo con la pagina ya cerrada en mitad de un waitForTimeout (\"Target page, context or browser has been closed\"); presupuesto a 420000 ms con el porque escrito al lado (commit de cierre). Verificado en la MISMA carga que lo tumbaba: `npx playwright test tests/e2e/pizarron-funcionalidades.spec.ts tests/e2e/video-config.spec.ts --workers=1` -> 13 passed (antes de la correccion: 12 passed / 1 failed) y la corrida ademas bajo de 7.6 a 4.8 min al no quemar los 180 s del fallo. NO se declara verde el job COMPLETO porque esa corrida entera no es la unidad de verificacion acordada (P7.36): queda para CI, que si lo corre entero."
+    },
+    {
+      "id": "P7.26",
+      "titulo": "5 guards congelados se editaron sin actualizar su hash: la puerta task-gate lleva roja desde entonces",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "Evidencia: 'npm run gate' (node scripts/task-gate.mjs) falla con 'Archivos CONGELADOS modificados (criterio inmutable): hash cambi??' en tests/catchSilenciosoGuard.test.ts, tests/providerLiteralGuard.test.ts, tests/remoteResourceGuard.test.ts, tests/transportSingleOwnerGuard.test.ts y tests/godFileSizeGuard.test.ts. NO lo introduce esta sesion: reproducido en un clon limpio del commit 9c5e593 (git clone --no-local, arbol sin cambios) con los mismos 5 ficheros, y mi unica escritura en .task/frozen.json de esta sesion fue la entrada de tests/geminiServiceFlow.test.ts. Comprobacion del hash: la puerta y el congelador hashean BYTES CRUDOS (scripts/task-gate-freeze.mjs: createHash('sha256').update(readFileSync(file))), y el valor registrado no coincide ni con el crudo ni con el normalizado a LF, luego el CONTENIDO cambio de verdad, no es artefacto de EOL. Trazado: esos guards se editaron en la sesion de afinado -- dfe954a (P7.9), 6148862 (P7.7/P7.10), 7724e8d (C65), a5f68c5 (P7.6), f471594 (P7.8) -- y .task/frozen.json no se ha vuelto a tocar para ellos desde entonces (sus ultimos commits son C72 y C75). O sea: los cambios estan documentados y justificados en el ledger por sus propios commits, pero el hash quedo desincronizado. NO se re-congela aqui a proposito: .task/** es inmutable salvo autorizacion con evidencia, y re-congelar a ciegas silenciaria justo la se??al que debe existir. Decision para el dueno: si las ediciones de esos 5 guards se consideran autorizadas (lo estan por commit), re-congelarlas con 'node scripts/task-gate-freeze.mjs <los 5>'; si no, restaurar el contenido anterior. Nota: taskGateInvariant y guardMutationGuard SI pasan (51/51 guards), la puerta que falla es la de task-gate. CIERRE (done): re-congelado APLICADO con autorizacion expresa del dueno (2026-09-24) y declarado como enmienda B.14 en .task/report con los 5 hashes antes/despues. Los 5 guards NO se restauran: sus ediciones estan justificadas por dfe954a (P7.9), 6148862 (P7.7/P7.10), 7724e8d (C65), a5f68c5 (P7.6) y f471594 (P7.8), y revertirlas desharia trabajo aprobado y tumbaria los guards vigentes. Verificado: npm run gate exit 1 ANTES (los 5, \"hash cambio\") -> exit 0 DESPUES (Alcance OK / tamano OK / DoD OK / guard OK)."
+    },
+    {
+      "id": "P7.27",
+      "titulo": "testid duplicado 'result-feed-card-ia-imagen' en ImageGrid (celda dentro de la tarjeta del feed)",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "Evidencia: src/components/ImageGrid.tsx:97 asigna data-testid=result-feed-card-ia-imagen a la celda generada del grid, y ResultFeed.tsx:223 genera el MISMO id para la tarjeta (result-feed-card- + item.id). Como el grid se renderiza dentro de la tarjeta, Playwright falla por 'strict mode violation: getByTestId(result-feed-card-ia-imagen) resolved to 2 elements': el li de la tarjeta y el li de la celda. Un testid debe identificar UN elemento. Solo lo usa tests/e2e/pizarron-funcionalidades.spec.ts:295 (que quiere la celda, para abrir el overlay al hacer click). Arreglo propuesto: dar a la celda su propio id (p.ej. workspace-search-cell-ia-imagen) y actualizar esa linea del spec; no se aplica aqui por presupuesto y porque toca src junto al flujo de imagenes. RESUELTO en 8b7a5d7: ImageGrid.tsx renombra la celda a 'workspace-search-cell-ia-imagen' y el spec se actualiza; 'result-feed-card-*' queda unico y el locator deja de resolver a 2 elementos. La entrada sigue 'todo' a proposito: el cierre formal exige commit con codigo C## y verificacion propia; el arreglo de codigo ya esta en el arbol. CIERRE (done): el defecto ya estaba arreglado en 8b7a5d7, pero nada lo comprobaba porque la composicion real (la celda del grid DENTRO de la tarjeta del feed) solo existe en el DOM de la app: era Playwright o nada. Ahora hay guard de COMPORTAMIENTO en tests/resultFeed.test.tsx (A7.12): monta ResultFeed con un item de imagen cuyo body es el ImageGrid real y exige que \"result-feed-card-ia-imagen\" resuelva a 1 elemento, que la celda tenga id propio y que la celda este DENTRO de la tarjeta. PRUEBA DEL DETECTOR (mutacion): se reintrodujo el defecto en ImageGrid.tsx y el guard se puso ROJO con \"expected 2 to be 1\"; restaurado y verde. El test nace verde por el fix de 8b7a5d7; lo que cierra es que un reuso futuro del id ya no pueda pasar desapercibido."
+    },
+    {
+      "id": "P7.32",
+      "titulo": "el hueco historico de los 16 hallazgos externos no era un pendiente: queda ARCHIVADO por decision del dueno",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "Evidencia: los 15 items que salieron de la auditoria externa (P7.5..P7.19) estan TODOS en done; ninguno abierto. Lo que seguia leyendose como asunto vivo eran los 3 numeros sin recuperar (5, 6, 15) y los 2 items sin numero (P7.7, P7.10), que tests/auditoriaExternaMap.test.ts declaraba congelados \"para que la falta siga siendo visible\". Medido: no hay trabajo pendiente ahi, porque el documento de la auditoria era EXTERNO y no esta en git (busqueda agotada: git log --all -S, ficheros borrados, stashes/reflog, .task/ y sin trackear), y asignar un numero seria inventar procedencia, que es justo lo que el guard impide. DECISION DEL DUENO (2026-09-24): el expediente se ARCHIVA; deja de ser un asunto abierto y pasa a ser el hueco estable que documenta una busqueda agotada. Implementado en el propio guard: la cabecera declara el archivo y los dos conjuntos (HALLAZGOS_SIN_ITEM, ITEMS_SIN_NUMERO) quedan comentados como archivados, con su contenido intacto. Lo que el guard SIGUE vigilando, y por eso no se retira: que los 13 numeros verificados no se pierdan al reescribir una evidencia (el defecto que lo creo: se perdieron #3 y #14 y nadie se entero), que ningun numero lo reclamen dos items y que no entre un numero inventado. Verificado: npx vitest run tests/auditoriaExternaMap.test.ts 6/6 passed; npm run lint 51/51 guards / 314 tests + eslint 0; npx tsc -b OK; npm run gate exit 0."
+    },
+    {
+      "id": "P7.33",
+      "titulo": "pizarron 3.1: la tarjeta 'result-feed-card-web-imagenes' nunca aparece",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "NO era bug de producto: era un spec desalineado. MEDIDO en navegador real con un spec de diagnostico temporal (borrado despues): con la busqueda lanzada, el feed SI publica la tarjeta (cardWeb=1, grid=1, testids=[\"result-feed-card-web-imagenes\"]) pero cardsAll=0 en \"Todo\". Causa: el item es onlyInKind (WorkspaceHub.tsx:645), asi que el feed lo publica SOLO bajo el filtro \"Imagenes\" (por diseno; lo fija tests/resultFeed.test.tsx:198 \"un video onlyInKind NUNCA aparece en Todo\"). El test 3.1 asertaba la tarjeta estando en \"Todo\", donde por diseno no puede estar. CIERRE: el spec conmuta al filtro \"Imagenes\" antes de asertar. Verificado: npx playwright test -g 3.1 verde."
+    },
+    {
+      "id": "P7.34",
+      "titulo": "pizarron 7.1: la tarjeta 'result-feed-card-ia-generacion' nunca aparece",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "NO era bug de producto: el spec despachaba un evento que ya no existe. MEDIDO: la tarjeta aparece por la RUTA REAL (iaGen=1) — contrato de navegacion GENERAR_DOCUMENTO -> useNavigationCommands -> requestMedia(\"doc\") -> App.requestMediaRef — no por el evento. \"flu:generate-document\" se ELIMINO del bus a proposito (useDocumentGenerationBridge.ts:46-48: \"GENERATE_DOCUMENT / GENERATE_VIDEO se eliminaron de este bus... el bus era la segunda ruta y permitia re-generar\"), asi que el window.dispatchEvent(new CustomEvent(\"flu:generate-document\")) del spec era un no-op. CIERRE: el spec drivea la ruta real por __fluOnContractResolved y anade mocks deterministas de /api/gemini/text y /api/gemini/contract (antes salia a la red). Verificado: npx playwright test -g 7.1 verde."
+    },
+    {
+      "id": "P7.35",
+      "titulo": "onboarding Bug #1: el participante nuevo no queda activo, visible en el picker ni sugerido",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "El flujo real de alta es lento por naturaleza. BASELINE: el spec PASA aislado (47.7s) y FALLA dentro del bloque por page.waitForSelector([data-testid=onboarding-options]) con timeout 10000 ms (linea 29) — carga, no producto. Los pasos post-submit (opciones de rol -> cierre del overlay -> picker -> Dexie) son asincronos y con 10000/15000 ms se caian bajo carga sostenida, mientras el propio spec ya usaba 45000 para el arranque. CIERRE: presupuesto post-accion unificado a 30000 ms y timeout propio del spec (180000) en vez del global 60000. No tapa nada: cada espera sigue fallando por si misma. Verificado: 13/13 verde en la corrida de los dos specs tocados."
+    },
+    {
+      "id": "P7.28",
+      "titulo": "agenda invisible en el panel: el gate de sesion dejaba las lecturas en undefined y el seed de DEMO se re-sembraba en bucle",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "CERRADO con DOS defectos reales, ambos en src/App.tsx y ambos verificados en navegador. (A) GATE DE SESION: App.tsx define realParticipantId como `sessionReady && activeParticipantId && !== DEFAULT_ONBOARDING_USER`, y setSessionReady(true) solo existia en las dos rutas de ELECCION explicita (handleSelectActiveUser / activateParticipant). El camino de SALTAR el onboarding no lo encendia: con usuario persistido las ESCRITURAS (activeParticipantId) ocurrian y las LECTURAS (personId=realParticipantId) quedaban desactivadas para siempre. MEDIDO antes: panel con innerText \"PRÓXIMOS Sin próximos.\" / \"HOY ... Sin pendientes.\" teniendo la BD del MISMO personId llena. ARREGLADO (onSkip enciende la sesion). (B) SEED DE DEMO NO REENTRANTE, y esta es la causa del sintoma que quedaba abierto: el efecto de seed (solo DEV) lista `notes` en las dependencias, que cambia de identidad en cada render, asi que el efecto se re-ejecutaba en bucle y varias corridas async concurrentes leian `existing` ANTES de que ninguna escribiera; cada una volvia a sembrar los 8 inputs. MEDIDO antes: 538 registros del usuario activo con 538 ids distintos pero SOLO 8 labels distintos (\"Llamar a mamá\" x240, \"Ciencias\" x127, \"Historia\" x89, \"Dentista\" x31...). Ese enjambre enterraba la agenda real: Próximos es top-10 por vencimiento y el polling es de 15 s, asi que una cita recien creada no entraba en el ranking y el panel iba siempre por detras. ARREGLADO con un guard de reentrancia por participante (demoSeededRef) mas compactar el bloque para no crecer. MEDIDO despues: 8 registros, 8 labels distintos, y el panel pinta los 8. VERIFICACION END-TO-END del sintoma original: al conducir \"cita para mañana a las 10\" el panel muestra \"mañana10:00cita\" (nodos por id = 2). RETRACTACION EXPLICITA: la version anterior de esta evidencia afirmaba \"QUEDA ABIERTO un segundo hueco: el panel recibe solo una PARTE de la agenda\" y lo atribuia a un hueco de render. ES FALSO y queda retirado. Dos errores de medicion mios: (1) comparaba el panel contra TODO el store, que acumula usuarios de corridas previas (seedActiveUser crea un uuid nuevo y no limpia), cuando lo unico comparable es la agenda del usuario ACTIVO; (2) mi sonda abria IndexedDB a mano SIN close(), lo que BLOQUEA la conexion de la app y dejaba sus ticks colgados, haciendo que el panel pareciera congelado a medias. Con el instrumento corregido (solo readStore, que cierra) el panel SÍ sigue al store y el scheduler SÍ dispara: medido 3 vencidos que pasan a `done` y el panel pasando de 4 a 34 nodos. No habia hueco de render. ALCANCE Y LIMITES: el gate de sesion exigia usuario REAL persistido; con el centinela DEFAULT_ONBOARDING_USER la lectura sigue apagada POR DISENO (aislamiento entre usuarios). El seed de DEMO es solo DEV (import.meta.env.DEV), asi que (B) nunca afecto a produccion, pero si envenenaba el desarrollo y los E2E, y es lo que hizo que P7.33/P7.34/P7.28 parecieran fallos de producto. El guard marca al participante como sembrado ANTES del trabajo async: deliberado, porque sin eso vuelve el bucle; si el primer seed falla no se reintenta en esa sesion (coste aceptable en un seed de desarrollo). src/App.tsx queda en 4686 lineas, EXACTAMENTE el techo del godFileSizeGuard: la proxima linea exige extraer, no anadir."
+    },
+    {
+      "id": "P7.29",
+      "titulo": "el reply conversacional del LLM no tiene prioridad sobre la confirmacion del manejador",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "Evidencia: App.tsx:1445 declara que 'La respuesta conversacional del LLM (respuesta_voz) tiene PRIORIDAD sobre la confirmacion del manejador'. Con la ruta de acciones activa (driveAcciones pasa contract.acciones Y respuesta_voz='Claro, te recuerdo comprar leche.'), el reply devuelto por __fluOnContractResolved es 'Listo: comprar leche jueves a las 6:00 p.m.' (el del manejador), no el del LLM. Discrepancia real con la regla declarada. La asercion se conservo como test.fixme VISIBLE en tests/e2e/auditoria-acciones-llm.spec.ts ('1b'); el test de persistencia (1) quedo verde. CIERRE (done): NO era un bug de conducta, era un COMENTARIO OBSOLETO contra el que se escribio un spec. App.tsx afirmaba tres cosas contradictorias: ~1445 \"respuesta_voz tiene PRIORIDAD\"; ~1543 (ruta contract.acciones) \"su confirmacion reemplaza a la del LLM\"; ~1657 (fallback) \"la confirmacion del manejador es la AUTORIDAD... ESA gana\". DOS dicen que gana el manejador y una da la razon medida (el manejador conoce la hora y el tipo REALES; el LLM puede escribir \"cita a las 1:27 de la madrugada pm\"). La conducta ya implementaba la regla documentada; el outlier era 1445. Se corrige el COMENTARIO, no el comportamiento: cambiarlo habria roto la garantia de que la confirmacion nombra lo que de verdad se escribio. Neto 0 lineas en App.tsx (4685 -> 4685, tope de godFileSizeGuard 4686). El spec pagaba el comentario: el fixme \"1b. El reply del LLM tiene prioridad\" afirmaba lo contrario de la regla real; ahora es un test que PASA y que VIGILA la regla (el texto del LLM no gana)."
+    },
+    {
+      "id": "P7.30",
+      "titulo": "'recuerdame <cosa>' SIN hora no matchea el arbitro y el turno se descarta en silencio",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "Medido: resolveAgendaDomainIntent(\"reminder\", \"recuerdame comprar el pan\") devolvia null y el turno se caia SIN respuesta (el modelo exige instante: resolveRecurrence null -> parseAgendaCommand devolvia {handled:false, action:null}, y el manejador agenda.create hacia \"if (!cmd.trigger) return ''\"). CIERRE: NO se inventa el instante (defaultReminderOffsetMinutes es decision de producto, no del agente): el parser conserva la pista (kind+label) aunque falte el instante, el carril de dominio la propaga y el manejador PREGUNTA la hora (askMissingInstant: \"¿Para cuándo te lo recuerdo? Dime la hora, por favor.\" / en). Nada se crea: el action no lleva trigger. Verificado: tests/domainScopedIntent.test.ts 8/8 (4 nuevos: pista conservada sin instante, etiqueta del texto propagada, dominio no-agenda sigue sin matchear, frase bilingue) + tests/agendaCommandParser.test.ts 16/16 + 321/321 suite + 52/52 guards + tsc -b limpio + eslint 0 + npm run gate exit 0. Commit 0f505fd."
+    },
+    {
+      "id": "P7.31",
+      "titulo": "notas no persisten por la ruta de voz y el ack de compras no coincide con el DSL",
+      "estado": "done",
+      "origen": "propio",
+      "evidencia": "CAUSA RAIZ MEDIDA (sonda real en navegador, no inferencia): `useNotes.add` empieza con `if (!participantId) return { ok: false, reason: \"invalid-input\" }`: las notas son per-usuario, asi que SIN usuario activo la app RECHAZA la escritura a proposito. El manejador devolvia \"No pude crear la nota.\" y la tabla quedaba con 0 filas. NO era bug de producto: era el arnes, que nunca activaba usuario. Probado con sonda: mismo despacho con usuario sembrado -> reply \"Listo, lo agrege a las notas.\" y 1 fila con label \"comprar pan\". Cierre por SEED: `seedActiveUser` (tests/e2e/_helpers.ts) escribe el participante en Dexie y lo activa por el PICKER DEL HEADER (handleSelectActiveUser), que es la ruta de produccion que marca la sesion como lista; se aplica en los specs que validan dominios per-usuario. Los tests de notas pasan. Leccion registrada: sin usuario activo la app no lee ni escribe nada suyo (notas, agenda, documentos, historial, busqueda); un spec de esos dominios sin sembrar usuario mide el rechazo, no el dominio."
+    },
+    {
+      "id": "P7.36",
+      "estado": "done",
+      "titulo": "E2E acotado al bloque tocado (la suite entera no es la unidad de verificacion)",
+      "evidencia": "AGENTS.md ya lo exigia (\"Iteracion rapida (por cambio, no toda la suite)\") y se incumplia a mano: cada vuelta costaba ~19 min de suite completa para verificar un cambio de un fichero, y encima los rojos de CARGA (dev server compilando, worker muerto -> \"did not run\") se mezclaban con los de producto, obligando a repetir para distinguirlos. Entregado: scripts/e2e-scope.mjs (plan = specs modificados + los que el contrato declara por fichero de src/ tocado, en .task/contract.json -> e2eScope; FALLA si un src/ cambia sin spec declarado, para que el recorte no tape huecos), npm run e2e:plan (dry-run) / npm run e2e:scoped -- --filter=<substr> (ejecuta), tests/e2eScope.test.ts (6 casos del planificador puro) y tests/e2e/_globalSetup.ts (paga una vez el arranque en frio de Vite; Playwright levanta el dev server ANTES del globalSetup, que es el unico sitio donde calentar sirve). Medido: unit 3250/3250, lint limpio, guards verdes. Plan real de esta ronda: auditoria-acciones-llm (10/10 verde aislado, 3.2m) mas los 5 specs tocados."
+    },
+    {
+      "id": "P7.37",
+      "estado": "done",
+      "titulo": "los 11 bugs de producto de 2026-09-14 estaban cerrados; faltaba el mapa que lo dijera",
+      "evidencia": "El documento plans/bugs-producto-2026-09-14.md citaba rutas y lineas que HOY no existen (HorarioPizarron.tsx eliminado, deterministicArbiter.js:94, App.tsx:4490) y el ledger no lo mencionaba NI UNA VEZ: los 11 casos se cerraron por trabajo posterior y el fichero envejecio en silencio, asi que \"¿siguen pendientes?\" no tenia respuesta. Verificado caso por caso contra el codigo de hoy (no contra la memoria): 21 ficheros de guard, 136 tests en verde. 10 casos tienen guard de comportamiento propio; el 8 quedo MOOT (la vista HorarioPizarron desaparecio, sus responsabilidades pasaron a AgendaPanel); el 1 pide incluir \"notas\" en el listado del dia y se cierra con DESVIACION DOCUMENTADA: las notas no tienen fecha, no son agenda (no existe kind 'nota'), y la agenda unificada ya cubre recordatorio/cita/junta/clase/alarma. Entregado: tabla de estado en el documento + tests/bugsProductoMap.test.ts, que fija la procedencia (caso -> guard, moot con motivo) y trae prueba de su propio detector (mutacion), ademas de registro en lint:guards. PROBADO rompiendo a proposito una entrada: el guard falla (\"guard ausente (N=1): #7\") y vuelve a verde al revertir."
+    },
+    {
+      "id": "P7.38",
+      "titulo": "temperature 0.3 quemada en useWorkspaceSearch (auditoria fresca #1)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/hooks/useWorkspaceSearch.ts:193 tenia `temperature: 0.3` literal en el contrato del resumen \"Puntos clave\". ARREGLADO: el valor vive ahora en FLU_CONFIG.browser.search.aiOverview.temperature, que es la seccion que la propia cabecera del fichero declara como fuente de config (\"endpoints, proveedores, tope y etiquetas viven en FLU_CONFIG.browser.search\"). El valor se conserva EXACTAMENTE en 0.3: NO se cablea a la creatividad del usuario porque el prompt pide vinetas factuales y con creatividad alta el resumen derivaria. CORRECCION A LA AUDITORIA: la ruta que cita (voiceConfigCatalog.ts:391) no es un valor sino una DESCRIPCION (\"Creatividad de la IA (temperature) (0-1)\") dentro del spec de un comando de voz (accion set_config, clave creativity), y ademas le falta el prefijo src/core/config/."
+    },
+    {
+      "id": "P7.39",
+      "titulo": "@deprecated enganoso en streamLogThrottleMs (auditoria fresca #3)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/voice/lib/fluConfig.js:344 marcaba `@deprecated Interinos ya no escriben al log; solo aplica a rutas legacy` y SIN EMBARGO tiene lector VIVO: src/voice/hooks/useFluVoiceAssistant.js:1757 hace Math.max(0, FLU_CONFIG.timing.streamLogThrottleMs) y esa variable gobierna la rama de throttle (lineas 1759-1773). Con 0 la rama no se toma, pero la clave es configurable y esta conectada. ARREGLADO: la marca se sustituye por un comentario veraz (\"VIVO: useFluVoiceAssistant lo lee; 0 = sin throttle\"), conservando la clave para no perder la capacidad. CORRECCION A LA AUDITORIA: la ruta del lector es src/voice/hooks/, no src/hooks/."
+    },
+    {
+      "id": "P7.40",
+      "titulo": "Base 'http://localhost' literal en los proxies (auditoria fresca #4)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/server/searchProxy.ts:142 y src/server/browserProxy.ts:77 pasaban \"http://localhost\" a new URL(rawUrl, ...). ARREGLADO: extraido a la constante PARSE_BASE_URL junto al resto de constantes de modulo. Alcance real: la base solo sirve para parsear el URL relativo del request; el host NUNCA se usa para fetch, asi que no habia riesgo funcional. Nota: hardcodeGuard ya allowlisteaba ^localhost como \"servidores de desarrollo locales\", o sea era una excepcion declarada, no un descuido; el cambio es de claridad. Ambas ediciones se hicieron a nivel de byte respetando el terminador local porque los dos ficheros tienen EOL MIXTA: eolGuard sigue verde (clase mixed conservada)."
+    },
+    {
+      "id": "P7.41",
+      "titulo": "setTimeout(resolve, 100) magico en 4 sitios (auditoria fresca #5)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/App.tsx:3725,3745,3768 y src/core/autonomy/autoRecovery.ts:321. ARREGLADO: los tres de App.tsx leen FLU_CONFIG.timing.speechCancelSettleMs (clave nueva, \"pausa tras cancelar el TTS antes del comando de control\"); NET-ZERO lineas en App.tsx, que sigue en 4686 lineas EXACTAS = techo del godFileSizeGuard (trinquete shrink-only, fichero CONGELADO: no se puede subir el techo). En autoRecovery.ts el 100 es la duracion SIMULADA de un reintento (el ejecutor es un stub), asi que se nombra con SIMULATED_RETRY_MS en vez de llevarlo a config de producto. fluConfig.js queda en 2772/2772 (su techo exacto). ANCLAJE: la clave de config y autoRecovery.ts entraron en b6f3f2d; los tres sitios de App.tsx, en 1f49991 (se quedaron FUERA del `git add` de b6f3f2d por un error mio al prepararlo; se commitearon aparte en vez de enmendar porque b6f3f2d ya estaba publicado y reescribir historia remota no es aceptable para arreglar un add olvidado)."
+    },
+    {
+      "id": "P7.42",
+      "titulo": "new GeminiService()/DeepSeekService()/FluDatabase()/BackupSystem() en logica (auditoria fresca #2) — NO APLICA",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "VEREDICTO: NO APLICA, sin cambio de codigo. MEDIDO los 4 sitios que cita: src/services/gemini.ts:597 `export const geminiService: GeminiService = new GeminiService()`; src/services/deepseek.ts:563 `export const deepseekService = new DeepSeekService()`; src/core/db/fluDatabase.ts:724 `export const fluDb = new FluDatabase()`; src/core/autonomy/backupSystem.ts:1105 `globalBackupSystem = new BackupSystem(...)` dentro de getBackupSystem(). Ninguno es una instanciacion dentro de logica de negocio: los tres primeros son singletons a nivel de MODULO (se construyen al importar, una vez) y el cuarto es un lazy singleton memoizado. Eso ES un composition root explicito, que es literalmente la alternativa que pide el hallazgo: inyectar por interfaz o declarar el composition root. Ademas getBackupSystem ya acepta inyeccion (config e IBackupManager), y geminiService se declara con tipo concreto a proposito para conservar generateFluContract. Convertirlos en inyeccion por constructor no arregla nada y anadiria cableado sin consumidor."
+    }
+  ],
+  "done": [
+    {
+      "id": "C41",
+      "commit": "168abdf",
+      "titulo": "URLs de proveedor solo en la config canonica"
+    },
+    {
+      "id": "C60",
+      "commit": "4e35f2a",
+      "titulo": "una sola lectura de rounds en los motores de juego"
+    },
+    {
+      "id": "C59",
+      "commit": "bbc9039",
+      "titulo": "una sola adopcion del RNG en los motores de juego"
+    },
+    {
+      "id": "C58",
+      "commit": "1e407f8",
+      "titulo": "una sola fuente para la clave de dia local (YYYY-MM-DD)"
+    },
+    {
+      "id": "C44",
+      "commit": "d4c5c60",
+      "titulo": "un solo escritor de onboardingStates"
+    },
+    {
+      "id": "C56",
+      "commit": "67944d9",
+      "titulo": "wake words solo desde config"
+    },
+    {
+      "id": "C48",
+      "commit": "0bea63c",
+      "titulo": "hosts remotos solo desde config"
+    },
+    {
+      "id": "C46",
+      "commit": "05f23c0",
+      "titulo": "esquema Dexie sin tablas legacy vivas"
+    },
+    {
+      "id": "C49",
+      "commit": "e6864b9",
+      "titulo": "TS estricto sin doble cast y sin codigo muerto"
+    },
+    {
+      "id": "C47",
+      "commit": "4c3537e",
+      "titulo": "locales de voz/escucha desde una fuente unica"
+    },
+    {
+      "id": "C42",
+      "commit": "f558a93",
+      "titulo": "stats de proveedor con claves de config; guard C8 ignora comentarios"
+    },
+    {
+      "id": "C8",
+      "commit": "a9b2f81",
+      "titulo": "fuente unica del recorte de turnos del interino; docs(C7,C9) distintos (D5)"
+    },
+    {
+      "id": "C54",
+      "commit": "f3c507a",
+      "titulo": "paridad de normalizeForMatch en musicPlayer (variante exacta) + test"
+    },
+    {
+      "id": "C54",
+      "commit": "6034236",
+      "titulo": "utilidades de texto unicas (textUtils)"
+    },
+    {
+      "id": "C55",
+      "commit": "7a64453",
+      "titulo": "guard de muertos mide codigo (no comentarios) y quita asercion vacia"
+    },
+    {
+      "id": "C55",
+      "commit": "fe55171",
+      "titulo": "eliminar codigo muerto y deps sin uso"
+    },
+    {
+      "id": "C45",
+      "commit": "8080550",
+      "titulo": "tupla de sync con fuente unica buildSyncTuple"
+    },
+    {
+      "id": "C42",
+      "commit": "5d40339",
+      "titulo": "proveedor IA desde config, sin literales"
+    },
+    {
+      "id": "C21",
+      "commit": "21d19c3",
+      "titulo": "subscribeSpeechVoices tolera mocks sin addEventListener"
+    },
+    {
+      "id": "C21",
+      "commit": "7ddc6a5",
+      "titulo": "un solo punto de sintesis TTS (fluSpeech)"
+    },
+    {
+      "id": "C23",
+      "commit": "3fd430d",
+      "titulo": "AGENTS.md alineado con el stack real"
+    },
+    {
+      "id": "C35",
+      "commit": "bec6912",
+      "titulo": "sin console.debug residual"
+    },
+    {
+      "id": "C34",
+      "commit": "10563ab",
+      "titulo": "elimina fallbackResponses muerto y sus tests"
+    },
+    {
+      "id": "C17",
+      "commit": "b51cae9",
+      "titulo": "elimina docs/utilidades huerfanas"
+    },
+    {
+      "id": "C16",
+      "commit": "555d698",
+      "titulo": "elimina modulos muertos de src/lib y tests huerfanos"
+    },
+    {
+      "id": "C13",
+      "commit": "6e18d51",
+      "titulo": "ningun catch silencioso (160 bloques registran)"
+    },
+    {
+      "id": "C33",
+      "commit": "6e2752b",
+      "titulo": "tupla de sync en MemoryItem"
+    },
+    {
+      "id": "C32",
+      "commit": "ab356dc",
+      "titulo": "invariante longTermMemory ya satisfecho por C30"
+    },
+    {
+      "id": "C31",
+      "commit": "c3aabda",
+      "titulo": "perfiles de voz solo en Dexie"
+    },
+    {
+      "id": "C30",
+      "commit": "919d957",
+      "titulo": "una sola base IndexedDB (flu-os3)"
+    },
+    {
+      "id": "C14",
+      "commit": "88f8b2a",
+      "titulo": "borrado logico en Dexie (sin delete/clear fisico)"
+    },
+    {
+      "id": "C11",
+      "commit": "b2e7a72",
+      "titulo": "una sola tabla/servicio de notas y listas + fix regresion C36"
+    },
+    {
+      "id": "C10",
+      "commit": "1899430",
+      "titulo": "sin doble escritura de minutas"
+    },
+    {
+      "id": "C9",
+      "commit": "1a0f997",
+      "titulo": "un solo backend de sesion (Dexie)"
+    },
+    {
+      "id": "C8",
+      "commit": "e8d89aa",
+      "titulo": "un solo escritor de conversacion"
+    },
+    {
+      "id": "C38",
+      "commit": "fbb9a22",
+      "titulo": "umbrales de autonomia y voz desde config"
+    },
+    {
+      "id": "C19",
+      "commit": "6e140d1",
+      "titulo": "cliente sin fetch directo a proveedor"
+    },
+    {
+      "id": "C18",
+      "commit": "89242af",
+      "titulo": "timeouts de red desde config central"
+    },
+    {
+      "id": "C39",
+      "commit": "a089d78",
+      "titulo": "motor no re-normaliza ni re-deriva"
+    },
+    {
+      "id": "C37",
+      "commit": "a5c0aff",
+      "titulo": "una sola ruta de finalizeTurnCommit"
+    },
+    {
+      "id": "C36",
+      "commit": "d4648ad",
+      "titulo": "consumidores no re-normalizan"
+    },
+    {
+      "id": "C28",
+      "commit": "0eab4b1",
+      "titulo": "una sola implementacion de strip de wake word"
+    },
+    {
+      "id": "C27",
+      "commit": "5908d37",
+      "titulo": "una sola derivacion de query"
+    },
+    {
+      "id": "C26",
+      "commit": "862781d",
+      "titulo": "un solo commit de turno"
+    },
+    {
+      "id": "C25",
+      "commit": "e0e89b9",
+      "titulo": "App no re-normaliza la frase canonica"
+    },
+    {
+      "id": "C29",
+      "commit": "6acb6fe",
+      "titulo": "sample rate desde FLU_CONFIG"
+    },
+    {
+      "id": "C24",
+      "commit": "a523fd7",
+      "titulo": "un solo default de modelo de texto"
+    },
+    {
+      "id": "C15",
+      "commit": "26e9e33",
+      "titulo": "IDs UUIDv4 al insertar"
+    },
+    {
+      "id": "C12",
+      "commit": "5eaa425",
+      "titulo": "claves de texto desde STORAGE_KEYS"
+    },
+    {
+      "id": "C7",
+      "commit": "67e8dc0",
+      "titulo": "base Pollinations unica desde sharedConfig"
+    },
+    {
+      "id": "C6",
+      "commit": "7873bad",
+      "titulo": "wake word runtime desde FLU_CONFIG"
+    },
+    {
+      "id": "C5",
+      "commit": "465e274",
+      "titulo": "API key de texto solo desde el resolver central"
+    },
+    {
+      "id": "C4",
+      "commit": "a3dfe79",
+      "titulo": "clave de proveedor solo desde STORAGE_KEYS"
+    },
+    {
+      "id": "C3",
+      "commit": "8bbad00",
+      "titulo": "un solo escritor de voiceProfiles"
+    },
+    {
+      "id": "C2",
+      "commit": "1d2e8fa",
+      "titulo": "allowlist de busqueda solo desde FLU_CONFIG"
+    },
+    {
+      "id": "v18",
+      "commit": "5c2fb93",
+      "titulo": "unifica cuerpos duplicados en un dueno unico (12->0)"
+    },
+    {
+      "id": "P7.1",
+      "commit": "62252ab",
+      "titulo": "npm run lint no lintea eslint (solo guards)"
+    },
+    {
+      "id": "P7.2",
+      "commit": "62252ab",
+      "titulo": "Plugin react-hooks sin reglas (lint de hooks inerte)"
+    },
+    {
+      "id": "P0.4",
+      "commit": "91665a4",
+      "titulo": "T1 - Reparar barrera: contrato real + baseline lista + guards desacoplados de AGENTS.md"
+    },
+    {
+      "id": "P2.2",
+      "commit": "e75605a",
+      "titulo": "T2 - wakeWordRuntime guard con prueba de mutacion"
+    },
+    {
+      "id": "P2.3",
+      "commit": "6de4bc9",
+      "titulo": "Guard blinda alias @deprecated (logMicRaw)"
+    },
+    {
+      "id": "P0.5",
+      "commit": "6533441",
+      "titulo": "T1 (resto, no cerrado) - Guards desacoplados de AGENTS.md: protocolGuard fija prosa del doc en CADA gate; stackDocGuard esta congelado leyendo AGENTS.md"
+    },
+    {
+      "id": "P0.7",
+      "commit": "d7f207d",
+      "titulo": "CRLF silencioso: core.autocrlf=false y NO existe .gitattributes, asi que editar un archivo lo reescribe en CRLF -> diff de miles de lineas (rompio f1a1ca6, hubo que rehacerlo) y cambia el hash que frozen.json vigila (hashea BYTES)"
+    },
+    {
+      "id": "P5.1",
+      "commit": "12718c9",
+      "titulo": "Fallback wake word 'FLU' fuera de config"
+    },
+    {
+      "id": "P6.3",
+      "commit": "34674e9",
+      "titulo": "window.FLU_CONFIG expuesto sin gate"
+    },
+    {
+      "id": "P6.1",
+      "commit": "34674e9",
+      "titulo": "6 window.__fluHandle* en bundle sin gate DEV"
+    },
+    {
+      "id": "P0.6",
+      "commit": "b4dc2f2",
+      "titulo": "Gate INTERMITENTE: la invocacion de guards base desde scripts/task-gate.mjs fallo 1 de 7 veces ([1/1] hardcodeGuard) y no se reprodujo en 5 corridas seguidas; task-gate.mjs es inmutable por el agente"
+    },
+    {
+      "id": "P2.4",
+      "commit": "b4dc2f2",
+      "titulo": "T2 - Prueba de mutacion obligatoria para los guards teatro"
+    },
+    {
+      "id": "P2.1",
+      "commit": "670c238",
+      "titulo": "T2 - catchSilenciosoGuard debe discriminar (hoy acepta logCaughtError sin excepcion)"
+    },
+    {
+      "id": "P3.1",
+      "commit": "670c238",
+      "titulo": "console.warn teardown ignorado sin logCaughtError (12 sitios)"
+    },
+    {
+      "id": "P3.2",
+      "commit": "670c238",
+      "titulo": ".catch(() => {}) vacios (13 sitios)"
+    },
+    {
+      "id": "P3.3",
+      "commit": "670c238",
+      "titulo": "logCaughtError sin contexto de excepcion (108 sitios)"
+    },
+    {
+      "id": "P5.2",
+      "commit": "6e0ba22",
+      "titulo": "sampleRate = 48000 quemado (~12 modulos)"
+    },
+    {
+      "id": "P5.3",
+      "commit": "6e0ba22",
+      "titulo": "maxTokens literales en logica (1800/900/2200/3000)"
+    },
+    {
+      "id": "P5.4",
+      "commit": "6e0ba22",
+      "titulo": "temperature || 0.7, max_tokens 1000/500/300"
+    },
+    {
+      "id": "P5.5",
+      "commit": "01d1d31",
+      "titulo": "Locales BCP-47 fuera de localeConfig"
+    },
+    {
+      "id": "P5.6",
+      "commit": "01d1d31",
+      "titulo": "Literales de proveedor 'openrouter'/'gemini'/'local'"
+    },
+    {
+      "id": "P5.7",
+      "commit": "01d1d31",
+      "titulo": "Defaults magicos 2048/0.3/1024"
+    },
+    {
+      "id": "P4.3",
+      "commit": "62c57a0",
+      "titulo": "parseAllowlist identica x2"
+    },
+    {
+      "id": "P4.4",
+      "commit": "62c57a0",
+      "titulo": "slugifyPalette = slugifyAmbiente"
+    },
+    {
+      "id": "P4.5",
+      "commit": "62c57a0",
+      "titulo": "strip NFD reimplementado en 10 archivos"
+    },
+    {
+      "id": "P4.9",
+      "commit": "62c57a0",
+      "titulo": "allowlist wikipedia/educ.ar repetida x3"
+    },
+    {
+      "id": "P4.13",
+      "commit": "62c57a0",
+      "titulo": "PROVIDER_SYNONYMS re-declara catalogo"
+    },
+    {
+      "id": "P4.1",
+      "commit": "a5c4490",
+      "titulo": "Dos clientes HTTP al mismo endpoint (participant-eval, workspace-image)"
+    },
+    {
+      "id": "P4.6",
+      "commit": "a5c4490",
+      "titulo": "resolveGeminiApiKey near-dupes x2 (contrato distinto en appConfig)"
+    },
+    {
+      "id": "P4.7",
+      "commit": "a5c4490",
+      "titulo": "buildPollinationsArtifact/ImageUrl/Url x3"
+    },
+    {
+      "id": "P4.8",
+      "commit": "12da3ea",
+      "titulo": "Cascada imagen workspace con 3 ordenes"
+    },
+    {
+      "id": "P5.8",
+      "commit": "12da3ea",
+      "titulo": "Umbrales de autonomia inline"
+    },
+    {
+      "id": "P6.2",
+      "commit": "601fdec",
+      "titulo": "debug.enabled:true y relayToServer:true por defecto en build"
+    },
+    {
+      "id": "P6.4",
+      "commit": "601fdec",
+      "titulo": "Codigo muerto/aliases (listenLog, turnTranscript, ControlsPanel stub)"
+    },
+    {
+      "id": "P1.7",
+      "commit": "06b249c",
+      "titulo": "indexedDB crudo fuera del singleton (sonda via Dexie)"
+    },
+    {
+      "id": "P1.2",
+      "commit": "ea91645",
+      "titulo": "Minutas: un solo publicador hacia integrationStore"
+    },
+    {
+      "id": "P1.6",
+      "commit": "03a7172",
+      "titulo": "minutes: indice muerto timestamp eliminado (migracion probada)"
+    },
+    {
+      "id": "P0.8",
+      "commit": "849bae5",
+      "titulo": "Barrera pre-commit versionada y doc alineada"
+    },
+    {
+      "id": "P1.5",
+      "commit": "44ec3dc",
+      "titulo": "Branding solo en Dexie: backup sin via LS muerta"
+    },
+    {
+      "id": "P1.9",
+      "commit": "b6e81b2",
+      "titulo": "STORAGE_KEYS sin claves muertas"
+    },
+    {
+      "id": "P1.8",
+      "titulo": "Veredicto: falso positivo (no hay almacen paralelo)",
+      "commit": "9374b30"
+    },
+    {
+      "id": "P1.4",
+      "commit": "40d8f04",
+      "titulo": "Dexie: una sola fuente de la lista de tablas"
+    },
+    {
+      "id": "P1.1",
+      "commit": "c73eacd",
+      "titulo": "Minutas: un solo almacen (Dexie), backup real"
+    },
+    {
+      "id": "P1.3",
+      "commit": "3d3542e",
+      "titulo": "Onboarding: un solo almacen (Dexie)"
+    },
+    {
+      "id": "P6.11",
+      "commit": "a6011aa",
+      "titulo": "Sin aserciones no-null en src: 51 -> 0 (guard C51)"
+    },
+    {
+      "id": "P6.10",
+      "commit": "38a097e",
+      "titulo": "plans/: 50 artefactos de proceso fuera, con guard C52"
+    },
+    {
+      "id": "P6.9",
+      "commit": "268e0c7",
+      "titulo": "Higiene medida: TODO y audit-metric eran falso positivo; LFS aplazado con VEREDICTO; 130 mojibakes UTF-8 reparados (guard C53)"
+    },
+    {
+      "id": "P7.3",
+      "commit": "2950343",
+      "titulo": "Sin `any` de tipo en src: 8 -> 0 (los .js del ASR tipados por .d.ts hermana; guard C49 endurecido)"
+    },
+    {
+      "id": "P4.2",
+      "commit": "de78579",
+      "titulo": "FBX: orquestacion 2->1 (f99661f) + bloqueo del parse MEDIDO con banco (204 ms, no 10-20 s) + VEREDICTO medido de Three en bundle (1 sola copia y external; el build roto pasa a P6.13)"
+    },
+    {
+      "id": "P5.9",
+      "commit": "2d4b5e3",
+      "titulo": "T9 - puerta unica de almacenamiento: 118 accesos directos a localStorage -> 0, 4 invenciones locales retiradas (resolveSafeStorage/readStorage-writeStorage/safeGet/getLocalStorage), guard con prueba de mutacion"
+    },
+    {
+      "id": "P6.6",
+      "commit": "cc92168",
+      "titulo": "P6.6 - App.tsx 5391 -> 4684: rutas de tab, guardas de tipo, accion de config y fast-path de juegos extraidos a src/app/*, con trinquete de tamano de god-files"
+    },
+    {
+      "id": "P6.13",
+      "commit": "1bbb47e",
+      "titulo": "P6.13 - npm run build arranca: config de Vite cargable en Node (shim + import() dinamico de los proxies) y external sin paquetes instalados (dist sin imports desnudos, composicion medible)"
+    },
+    {
+      "id": "C40",
+      "commit": "5f6f9bc",
+      "titulo": "flujo F1/F2/F3 Gemini; act() limpio; freeze: 7 guards congelados"
+    },
+    {
+      "id": "C41",
+      "commit": "5f6f9bc",
+      "titulo": "flujo F1/F2/F3 Gemini; act() limpio; freeze: 7 guards congelados"
+    },
+    {
+      "id": "C40",
+      "commit": "d1ccf70",
+      "titulo": "flujo Gemini ejecutado; docs(C54): grupos de texto no-unificados (D5)"
+    },
+    {
+      "id": "C41",
+      "commit": "d1ccf70",
+      "titulo": "flujo Gemini ejecutado; docs(C54): grupos de texto no-unificados (D5)"
+    },
+    {
+      "id": "C40",
+      "commit": "01671e0",
+      "titulo": "base unica IAIService, gemini/deepseek adapters"
+    },
+    {
+      "id": "C41",
+      "commit": "01671e0",
+      "titulo": "base unica IAIService, gemini/deepseek adapters"
+    },
+    {
+      "id": "C53",
+      "commit": "268e0c7",
+      "titulo": "chore(P6.9): auditoria de higiene medida + repara 130 mojibakes UTF-8 (C53)"
+    },
+    {
+      "id": "T1",
+      "commit": "91665a4",
+      "titulo": "P0.4 (antes T1): reparar la barrera (criterio re-congelado + baseline + contrato real) - frozen.json: re-congeladas las 2 entradas que C49 (e6864b9) dejo sin refrescar   (voiceOfflineFallback, providerLiteralGuard). El criterio no cambia: sus hashes   apuntaban a versiones anteriores (677ec0e / 5d40339). El gate fallaba SIEMPRE en   el paso 0 y ninguna tarea podia cerrar. - baseline.json: regenerado (1 archivo preexistente real en vez de 113 obsoletos). - contract.json: deja de describir C41 (ya cerrado, base 4e35f2a) y pasa a describir   T1 EN CURSO: base=HEAD, allow estrecho (6 archivos), maxFiles 8 / maxLines 400,   dod = taskGateInvariant + taskLedgerGuard + protocolGuard + ledger:check,   guard = taskGateInvariant (verde). - contract.json: ignore reducido a scripts/task-gate*.mjs + audit-metric + kilo.json.   Antes \"allow\" era subconjunto de \"ignore\", asi que el control de alcance no podia   fallar nunca (contrato hueco). Ahora es falsable. - plans/contratos/PREPARACION-123.md: se versiona el plan de preparacion (C1..C57). Validado contra (prueba de mutacion del propio control, AGENTS.md B11/B12):   npm run gate                                             -> 0 VERDE   + src/__gate_probe.tmp fuera de allow                    -> 1 ROJO \"FUERA de alcance\"   + 1 linea en tests/taskGateInvariant.test.ts (congelado) -> 1 ROJO \"hash cambio\"   restaurado                                               -> 0 VERDE, sin residuos.   npm run ledger:check -> OK (57 pendientes, 61 done, 59 cierres).   npm run test:full -> 287 archivos / 2967 tests / 0 fallos (sin cambios en codigo). No validado: \"guards desacoplados de AGENTS.md\" (3er punto del titulo de T1). Hoy protocolGuard (guard BASE, corre en cada gate) fija texto literal de AGENTS.md, y stackDocGuard esta CONGELADO leyendo ese documento. Desacoplarlo exige enmienda formal (nuevo hash + re-aprobacion) y retira aserciones que hoy mantienen el doc honesto: decision de politica, no fix. Registrado como P0.5. No se hizo unilateral. No validado (usuario): que el gate le sirva como barrera real en su flujo diario. Co-authored-by: openhands <openhands@all-hands.dev>"
+    },
+    {
+      "id": "P0.1",
+      "commit": "f23889d",
+      "titulo": "pendientes en el repo como fuente unica + guard"
+    },
+    {
+      "id": "P0.2",
+      "commit": "f23889d",
+      "titulo": "pendientes en el repo como fuente unica + guard"
+    },
+    {
+      "id": "P0.3",
+      "commit": "f23889d",
+      "titulo": "pendientes en el repo como fuente unica + guard"
+    },
+    {
+      "id": "P6.14",
+      "commit": "dc404cf",
+      "titulo": "Barrera del ledger: verifica el cierre (I1b/I5/I6), parser del parentesis final y mensaje honesto"
+    },
+    {
+      "id": "P6.15",
+      "commit": "dc404cf",
+      "titulo": "Datos del ledger: cierres por veredicto sin commit ajeno, codigos C53/T1, cierres de P0.1-3"
+    },
+    {
+      "id": "P6.16",
+      "commit": "d674137",
+      "titulo": "I5 del ledger: el id casa como palabra, no como subcadena"
+    },
+    {
+      "id": "P6.17",
+      "commit": "eff9907",
+      "titulo": "I5 del ledger: el id casa exacto (ni subcadena ni familia)"
+    },
+    {
+      "id": "P6.12",
+      "commit": "57bb25c",
+      "titulo": "Estilos inline extendidos: criterio (>3 declaraciones) y 10 sitios a CSS"
+    },
+    {
+      "id": "P6.7",
+      "commit": "c3838a5",
+      "titulo": "checkJs acotado: ningun nombre inexistente en src/ (TS2304/TS2552)"
+    },
+    {
+      "id": "P6.18",
+      "commit": "91a048d",
+      "titulo": "Los ficheros de texto de src/ son UTF-8 valido (unified.css con 12 bytes en latin-1/cp1252)"
+    },
+    {
+      "id": "C52",
+      "commit": "38a097e",
+      "titulo": "plans/: sin artefactos de proceso versionados (guard plansProcessArtifactsGuard)",
+      "evidencia": "tests/plansProcessArtifactsGuard.test.ts: guard que impide versionar contratos e informes de sesion en plans/. Creado en 38a097e junto a la retirada de los 50 artefactos. Se registra ahora porque el ledger tenia C53 pero no C52: un guard entero sin entrada en la fuente unica de verdad."
+    },
+    {
+      "id": "C51",
+      "commit": "a6011aa",
+      "titulo": "sin aserciones no-null en src (guard nonNullAssertionGuard)",
+      "evidencia": "tests/nonNullAssertionGuard.test.ts: fix(P6.11) saco las 51 aserciones no-null de src y dejo el guard. Se registra ahora porque su id vivia en el docstring y en el titulo describe del guard, pero nunca entro en done[]; C52 y C53 si lo estaban. Detectado por tests/taskLedgerReferenceGuard.test.ts."
+    },
+    {
+      "id": "C61",
+      "commit": "a7329fa",
+      "titulo": "el techo global de tests no falla por reloj bajo carga (era 15s)",
+      "evidencia": "vitest.config.ts: testTimeout 15_000 -> 120_000. MEDIDO: la suite mezcla guards de ms con guards que recorren el repo o lanzan subprocesos; en limpio, hookDepsRatchet 11.4s, jsReferenceGuard 8.8s, auditLedgerSync 5.8s, hygieneIndicators 4.6s, catchSilencioso 3.5s (reporter JSON). Bajo carga su latencia se multiplica: viteConfigNodeLoad, 1.6s en limpio, paso de 15s (~10x) y fallo con \"Test timed out in 15000ms\". El fallo no era de ningun guard: pasaban 5/5 en aislado. Se eligio el techo global y no un timeout por test porque en auditLedgerSync el spawnSync corre a nivel de MODULO (recoleccion), donde un timeout por test no llega. Prueba A/B: un test de 16s SIN timeout explicito pasa con 120_000 y falla con 15_000."
+    },
+    {
+      "id": "C62",
+      "commit": "75cd6ed",
+      "titulo": "el global __bunnyPreloadDone deja de fugarse a produccion",
+      "evidencia": "src/avatar/model/BunnyModel.tsx: window.__bunnyPreloadDone pasa a asignarse dentro de `if (import.meta.env.DEV)`, como el resto de globales de diagnostico. MEDIDO antes del arreglo: se escribia tambien en produccion y tenia 0 lectores, o sea ensuciaba window sin aportar nada. Guard: tests/devGlobalsGuard.test.ts ampliado para vigilarlo (142 -> 148 lineas) y probado ROJO antes del arreglo, nombrando BunnyModel.tsx:135. Verificado: tsc 0, eslint 0, guards 19/19."
+    },
+    {
+      "id": "C63",
+      "commit": "f9c7c53",
+      "titulo": "las rutas del proxy de busqueda dejan de estar copiadas en la capa que solo las consume",
+      "evidencia": "src/hooks/useWorkspaceSearch.ts:91-93 llevaba los 3 literales ('/api/search/web|images|video') como fallback. La ruta ya esta declarada en src/voice/lib/fluConfig.js y la PRODUCE src/server/searchProxy.ts:276-278: era una TERCERA copia escrita por la capa que solo consume, y el dia que cambie una ruta el hook apuntaria a la vieja sin que ningun gate lo note. MEDIDO antes de tocar: 0 tests fijaban ese fallback (buildRuntimeConfig no lo llama ningun test; solo lo usan SearchControlCenter y el propio hook). El valor por defecto pasa a SEARCH_ENDPOINT_DEFAULTS en src/core/search/searchConfigOverrides.ts, que ya se declara 'sin hardcode de URLs'. Guard nuevo tests/searchEndpointSingleOwner.test.ts, probado ROJO nombrando useWorkspaceSearch.ts:91, :92 y :93. Sin cambio de comportamiento: mismas rutas resueltas. Verificado: guard 2/2, searchConfigOverrides + los 2 tests del hook 32/32, tsc 0, eslint 0."
+    },
+    {
+      "id": "C64",
+      "commit": "d89c309",
+      "titulo": "search.endpoint pasa a ser alias por REFERENCIA, sin copia de la ruta",
+      "evidencia": "src/voice/lib/fluConfig.js declaraba la MISMA ruta dos veces: search.endpoint ('/api/search/web') y search.endpoints.web. MEDIDO antes del arreglo: el literal '/api/search/web' aparecia x2 en el fichero (images y video x1). Ahora los 3 literales viven en un unico const SEARCH_PROXY_ENDPOINTS y `endpoint` es `SEARCH_PROXY_ENDPOINTS.web` mientras `endpoints` es el MISMO objeto: el alias no puede derivar por construccion. Guard: tests/searchEndpointSingleOwner.test.ts, probado ROJO con '/api/search/web x2'. Cambio NET-NEUTRAL en lineas (2769 -> 2769), asi que no consume el trinquete de tests/godFileSizeGuard.test.ts (techo 2772, siguio 3/3). Sin cambio de comportamiento. Verificado: guards 85/85, tsc 0, eslint 0."
+    },
+    {
+      "id": "C65",
+      "commit": "7724e8d",
+      "titulo": "los placeholders no re-teclean URLs que ya viven en config",
+      "evidencia": "src/components/FluSettingsPanel.tsx:297 y :357 repetian textualmente URLs que ya tienen dueno en config. MEDIDO con un probe sobre todo src: de las 5 URLs declaradas en sharedConfig, exactamente 2 estaban re-tecleadas fuera de su dueno, y eran esas dos; ahora consumen OPENROUTER_DEFAULTS.API_URL y POLLINATIONS_DEFAULTS.BASE_URL (el panel queda con 0 URLs quemadas). El guard existente remoteResourceGuard (C48) excluia a proposito el texto de UI y esa exclusion tapaba justo este caso: se anade una regla C65 DISTINTA (no revierte C48, cuyo test del detector de hosts sigue intacto), probada ROJA nombrando FluSettingsPanel.tsx:297 y :357. Verificado: remoteResourceGuard 7/7, lint:guards 50/51 (el unico rojo era este registro del ledger, ultimo paso), tsc 0, eslint 0."
+    },
+    {
+      "id": "C66",
+      "commit": "1c10cfc",
+      "titulo": "la semilla del sujeto de video se DERIVA del prompt, no se sortea",
+      "evidencia": "src/services/videoAssembler.ts:74 sembraba con Math.floor(Math.random() * 999999) mientras el pipeline visual deriva la semilla del prompt (buildPollinationsArtifact -> hashPromptSeed) y la ruta de imagen hace lo mismo (imageGeneration.js:101): DOS politicas de semilla para lo mismo. MEDIDO: dos peticiones identicas del mismo prompt devolvian URLs con seeds distintos e irreproducibles (uno fue seed=165212). Ahora usa hashPromptSeed(prompt) importado del dueno. Guard nuevo tests/videoSubjectSeed.test.ts (buildSubjectImageUrl se exporta para poder vigilarlo desde un test de comportamiento), probado ROJO con esa divergencia antes del arreglo. tests/videoAssembler.test.ts sigue 14/14 sin tocar. Verificado: videoSubjectSeed 2/2, eolGuard + utf8Guard 11/11, tsc 0, eslint 0."
+    },
+    {
+      "id": "C67",
+      "commit": "98f35be",
+      "titulo": "el relay de traza dev deja de auto-reintentarse en bucle",
+      "evidencia": "src/lib/clientLogRelay.ts: flush() reportaba sus fallos de entrega con logCaughtError, y logCaughtError reenvia por el relay (caughtError.ts:42-43). El fallo se reportaba POR EL CANAL QUE ACABABA DE FALLAR, asi que cada fallo re-encolaba una entrada y armaba otro intento cada 200 ms (scheduleFlush) indefinidamente. Ese era el origen REAL del ruido 'Failed to parse URL from /__flu_client_log' que se habia atribuido a timing. MEDIDO: una entrada + una entrega fallida daba intentos=2 (re-encolada) en vez de 1. Arreglo: reportOwnFailure(e) (consola y nada mas) en las DOS vias de fallo, mas el import de logCaughtError que quedaba sin uso (desaparece la arista clientLogRelay -> caughtError). Guard nuevo tests/clientLogRelayNoLoop.test.ts, probado ROJO con intentos=2; instrumenta el fetch REAL, no lo falsea. Comprobado ademas que el gate de dev YA existia (FLU_CONFIG.debug.relayToServer = IS_DEV, fluConfig.js:2123): no habia fuga a produccion que arreglar. Verificado: guard 1/1, eolGuard + utf8Guard 10/10, tsc 0, eslint 0."
+    },
+    {
+      "id": "C68",
+      "commit": "c4dbf16",
+      "titulo": "el relay de traza dev no entrega sin origen ni reporta el fallo de entrega",
+      "evidencia": "Residuo declarado al cerrar C67. src/lib/clientLogRelay.ts entrega a la ruta RELATIVA /__flu_client_log, que se resuelve contra el origen del documento; fuera del navegador no hay origen y fetch lanzaba \"Failed to parse URL\". MEDIDO antes: el TypeError salia en la suite cada vez que un modulo importado registraba un log. Dos medidas, porque la clase de fallo difiere en cada entorno: (1) SIN documento (Node/SSR) cero intentos, con corte temprano en flush() via hasDocumentOrigin(), en vez de intentar y fallar; (2) CON documento pero sin servidor detras (los tests con jsdom, que SI tienen document) el intento falla igual y se re-reportaba por consola: se declina en silencio con \"ignorado: <motivo>\", que es la omision deliberada que el repo contempla, porque el canal de re-reporte del relay ES el propio relay (el bucle cortado en C67). Guard: tests/clientLogRelayNoLoop.test.ts pasa a 2 casos; C68 nace ROJO (medido 1 intento) y C67 fija ademas que no se re-reporte. Se conservo la clase EOL del fichero (i/mixed -> w/mixed): el primer intento la cambio a crlf y tests/eolGuard.test.ts lo cazo. MEDIDO despues, suite completa: 330/330 ficheros (3239 tests) y ruido del relay 2 -> 0 lineas. tsc 0, eslint 0."
+    },
+    {
+      "id": "C70",
+      "commit": "5ff43c3",
+      "titulo": "rename de los token helpers de voz: la colision de nombre desaparece (P7.11, via fuerte)",
+      "evidencia": "Hallazgo externo #1 (P7.11), cerrado ahora por la via fuerte (rename) y no solo por justificacion. Medido antes: hasToken/findTokenIndex existian con el mismo nombre en src/voice/lib/configCommands.js y src/core/games/gameUtils.ts con semantica distinta, y la colision estaba TOLERADA en tres sitios (ALLOW_COLLISION de scripts/auditoria.mjs, exencion de tests/duplicationGuard.test.ts y barrera tests/tokenHelperContract.test.ts) sin que ningun fichero la explotase: 0 ficheros importaban hasToken de AMBOS modulos. Medido despues: hasToken -> hasVoiceToken y findTokenIndex -> findVoiceTokenIndex en la capa de voz, la colision de nombre DESAPARECE, y 0 ficheros quedan con el nombre viejo (git grep \\bhasToken\\b|\\bfindTokenIndex\\b sobre src/voice y src/core/environments = 0). Se conservo el comportamiento: no se unifico (voz normaliza la frase y es case-insensitive; juegos exige frase normalizada y admite puntuacion previa), que es lo que el hallazgo llama dominio distinto. tests/tokenHelperContract.test.ts se reescribio como barrera de las dos cosas: que voz NO vuelva a exponer los nombres de juegos y que cada helper conserve su contrato (incluye el detector diverge(), que sigue exigiendo las 2 divergencias reales). VERIFICADO: suite completa 330/330 (3239 tests), guards 51/51 (314 tests), tsc 0, eslint 0, sensor sin hallazgos nuevos. ALCANCE: solo ficheros no congelados; quedan DOS artefactos CONGELADOS con la colision ya inexistente (la entrada 'hasToken' de ALLOW_COLLISION en scripts/auditoria.mjs y la exencion ya muerta de tests/duplicationGuard.test.ts), cuya retirada exige re-congelar .task/frozen.json y por eso NO se toco sin autorizacion."
+    },
+    {
+      "id": "C71",
+      "commit": "7c02f5c",
+      "titulo": "auditoria: retira la entrada obsoleta de ALLOW_COLLISION y corrige el falso positivo N2",
+      "evidencia": "Cierre de los dos avisos que quedaban del sensor, ambos en ficheros CONGELADOS por hash en .task/frozen.json (de ahi que la tarea requiriera autorizacion explicita del usuario para re-congelar). (1) ALLOW_COLLISION de scripts/auditoria.mjs: la entrada 'hasToken' era OBSOLETA porque C70 renombro el helper de voz a hasVoiceToken y la colision que toleraba ya no existe; retirada, y N1 pasa de 25 a 24 colisiones. (2) N2 era un FALSO POSITIVO del detector: la regex /parches duplicados/ casaba con el comentario \"Rule #2: sin parches duplicados\", que AFIRMA cumplimiento en vez de declarar deuda; corregida a /deuda (tecnica|reconocida|pendiente)/i, y como en src no hay ninguna deuda declarada (medido: 0 coincidencias de 'deuda'), N2 mide 0. Nota honesta: N2 es un hallazgo informativo (info: true), nunca estuvo en rojo ni bloqueo nada, asi que corregirlo retira una senal enganosa y no \"mejora una nota\". (3) tests/duplicationGuard.test.ts: retirada la exencion a src/voice/lib/configCommands.js y su comentario, INERTE tras C70 (la regex de redefiniciones busca hasToken/findTokenIndex/hasAnyToken y voz ya no define ninguno), con lo que el guard queda mas estricto y sin zona ciega. Se re-congelaron los dos ficheros con node scripts/task-gate-freeze.mjs; el diff de .task/frozen.json son exactamente 2 hashes y el resto queda intacto. MEDIDO despues: sensor 28/28 en META y 0 en rojo (N1 24, N2 0); suite completa 330/330 (3239 tests); guards 51/51 (314 tests); tsc 0; eslint 0; EOL preservado (i/lf w/lf en los tres ficheros)."
+    },
+    {
+      "id": "C72",
+      "commit": "c8d7a1b",
+      "titulo": "resuelve las 24 colisiones de nombre de N1: 11 obsoletas retiradas + 13 renombradas sin unificar",
+      "evidencia": "Resueltas las 24 colisiones de nombre que N1 venia reportando como \"no unificar\". Medido con la semantica exacta del sensor (srcFiles=walk('src'), sin .d.ts, su regex de exportaciones): solo 13 eran colisiones REALES (dos definiciones de verdad) y las otras 11 eran OBSOLETAS (el sensor ve 1 definicion; el resto de apariciones son RE-EXPORTS `export { x } from ...` o single-source con alias, verificados uno a uno: gameUtils.ts, audioMath.js, musicPlayer.ts, configCommands.js, voiceIdentity.js). Las 11 se retiraron del allowlist sin tocar codigo (retirarlas no oculta nada: D0 sigue midiendo 0). Las 13 reales se resolvieron renombrando el \"perdedor\" (el fichero con menos importadores) a un nombre de su dominio, SIN unificar comportamiento: editableFieldsOf->editableFieldsOfEnvironment, emptyEditableFields->emptyEnvironmentEditableFields, uncheckAll->uncheckAllNotes, buildGenerationPrompt->buildVisualGenerationPrompt, formatSpeakerLabel->formatListenSpeakerLabel, getAsrSegmentationCfg->getAsrTurnSegmentationCfg, wouldShrinkLog->wouldShrinkListenLog, resolveFluParticipantLabel->resolveParticipantFloorLabel, buildMinuteKnowledgeBase2->buildVoiceMinuteKnowledgeBase, formatMinuteHistoryLabel->formatMinuteHistoryLabelForUi, saveSessionState->writeSessionState, loadSessionState->readSessionState, labelToSpeakerId->labelToSpeakerIdSimple; se actualizaron sus 13 importadores, incluidos los re-exports. ALLOW_COLLISION queda VACIA y documentada: ya no hay allowlist capaz de tapar una colision futura; cualquier duplicado nuevo lo reporta D0. Detalle: los primeros nombres elegidos para el par de sesion (loadUiSessionState/saveUiSessionState) chocaban con funciones YA EXISTENTES de fluStorage.js y el sensor lo cazo al instante (D0=2); se renombraron a read/writeSessionState conservando intactas las llamadas internas a fluStorage. VERIFICADO: sensor 28/28 en META con N1=0 y D0=0 (antes N1=24); suite completa 330/330 (3239 tests); guards 51/51 (314 tests); tsc 0; eslint 0; EOL preservado en los 21 ficheros; 0 referencias residuales al nombre viejo dentro de cada modulo perdedor."
+    },
+    {
+      "id": "C73",
+      "commit": "220a7c4",
+      "titulo": "CI en rojo por clon superficial: fetch-depth 0 para que el ledger resuelva sus commits",
+      "evidencia": "El CI llevaba 7 runs en rojo (0 verdes) en la rama, incluido 4440a2d, ANTERIOR a la sesion de saneamiento: no lo causo C70/C71/C72 ni es de plataforma (npm run lint pasa en local, 51/51 guards + eslint 0). Causa reproducida: actions/checkout@v4 clona con fetch-depth:1 por defecto, asi que el clon de CI tiene UN solo commit; scripts/task-ledger.mjs enumera commits con git log --pretty=format:%h%x1f%s y valida cada cierre con git cat-file -e <hash>^{commit}, de modo que con 1 commit los 100+ commits referenciados no existen y la validacion falla. El paso que rompia era \"Guards (lint rule pragmatica del proyecto)\" = npm run lint, en su mitad de guards. Prueba con clon superficial real: git clone --depth 1 --no-local . oh-shallow -> git rev-list --count HEAD = 1 y node scripts/task-ledger.mjs check -> exit 1 con \"commit inexistente en git\" para c4dbf16 (C68), 5ff43c3 (C70), 7c02f5c (C71) y c8d7a1b (C72). Arreglo: fetch-depth: 0 en los dos checkouts (quality y e2e) con el motivo comentado al lado; YAML validado con parser y EOL CRLF preservado. Commit 220a7c4."
+    },
+    {
+      "id": "C74",
+      "commit": "9c5e593",
+      "titulo": "CI en rojo con la suite EN VERDE: maxWorkers 10 fijos ahogaban el runner de 4 vCPU",
+      "evidencia": "Con los 12 fallos de test ya corregidos, el paso 'Suite completa de unit' seguia en rojo. Log real de CI (leido con un paso temporal que reemitia la salida como annotation): Test Files 330 passed (330) / Tests 3239 passed (3239) / Errors 1 error / 'Unhandled Error: Error: [vitest-worker]: Timeout calling onTaskUpdate' / tests/jsReferenceGuard.test.ts (6 tests) 70573ms. Es decir: TODO pasaba y vitest salia 1: un unico error NO gestionado tumba la corrida. Causa: vitest.config.ts fijaba 'maxWorkers: 10' con el comentario de que estaba medido 'con 12 CPUs logicas' (maquina del autor); ubuntu-latest da 4 vCPU, asi que 10 workers se estorban y el unico guard sincrono (jsReferenceGuard, tsc checkJs sobre todo src/) pasa de ~9s a 70s; al bloquear el event loop mas de 60s (timeout del RPC de vitest) la corrida queda roja. El sintoma estaba tapado: antes la suite arrastraba ademas los 12 fallos reales y el error de RPC se leia como ruido. Arreglo: maxWorkers: Math.max(2, Math.min(10, availableParallelism() - 1)) -> 10 con 12 CPUs (IDENTICO a lo medido, no se pierde nada), 3 con 4 vCPU, 2 con 2 CPUs. Se retiro el diagnostico temporal en el mismo commit. Verificado: guards 51/51 + eslint 0 + suite 330/330 (3239 tests) exit 0 en local; CI 9c5e593: 'Unit + Guards + Build' SUCCESS (guards, tipos, suite y build). Commit 9c5e593."
+    },
+    {
+      "id": "C75",
+      "commit": "e67663c",
+      "titulo": "Suite hermetica: los 12 fallos de CI dependian de un .env sin versionar y de los repos hermanos",
+      "evidencia": "Los 12 fallos NO eran de plataforma. Reproducidos a voluntad con un clon limpio (git clone nunca copia ficheros no versionados): en /oh-ci2, sin .env y sin hermanos, fallaban 5 (3 de geminiServiceFlow + 2 de fluParticipantHook) y pasaban 2; con .env y hermanos presentes esos mismos tests pasaban. (1) tests/geminiServiceFlow.test.ts: corre en entorno node --sin cabecera jsdom--, asi que readStorage, que lee window.localStorage, nunca veia su propio stubLocalStorage(); la API key solo existia si la maquina tenia VITE_OPENROUTER_API_KEY en un .env no versionado. Sin key isAvailable() es false y el servicio devuelve el respaldo sin IA en vez de llamar al proxy: justo lo que el flujo quiere comprobar. Arreglo: vi.stubEnv('VITE_OPENROUTER_API_KEY') en beforeEach + vi.unstubAllEnvs en afterEach. (2) tests/fluParticipantHook.test.ts: el hook solo agenda si hasUsableTextBackend(); resolveDeepSeekApiKey lee primero localStorage y despues OPENROUTER_CONFIG.API_KEY, constante de modulo ya evaluada al importar, de modo que vi.stubEnv NO servia (comprobado: no arreglaba nada). Arreglo: sembrar STORAGE_KEYS.TEXT_API_KEY en beforeEach y limpiarlo en afterEach. El 3er test del fichero pasaba vacio (esperaba 0 llamadas y nunca se evaluaba). (3) tests/integration.test.ts: 7 tests leian ficheros de los proyectos HERMANOS ../D-3-FLU-OS1/flu-os y ../D-3-FLU-OS2/flu-voz, que solo existen en la maquina del autor: en un checkout limpio fallaban con ENOENT y el CI no podia pasar nunca. Los hechos que asertan son de ESTE repositorio, que tiene los equivalentes en src/avatar/** y src/voice/lib/fluSpeech.js, asi que ahora apuntan aqui; 2 aserciones se corrigieron ademas de la ruta porque su hecho vive en otro sitio (el clamp Math.max(0.1, Math.min(10, speed)) esta en bunnyAnimator/THREE.AnimationMixer.timeScale, no en bunnyStore; y la frontera del cuerpo de crossFadeToBlended cortaba en 'crossFadeTo(name:', metodo que aqui ya no sigue, dando cadena vacia). Se descarto marcar con skipIf: el sensor del repo lo caza ('V7 Tests deshabilitados (.skip/.todo) HOY=7 META=0') y auditLedgerSync lo exige registrado. Verificado en local (con .env y hermanos) y en clon fiel a CI (sin .env, sin hermanos, historial completo, core.autocrlf=false): 330/330 ficheros y 3239 tests, 0 skipped, exit 0 en ambos. .task/frozen.json recongelado para tests/geminiServiceFlow.test.ts (estaba congelado) y su EOL restaurado a LF, el del blob. Commit e67663c."
+    },
+    {
+      "id": "P7.26",
+      "commit": "61f6e9b",
+      "titulo": "re-congelado autorizado de los 5 guards (enmienda B.14)"
+    },
+    {
+      "id": "P7.27",
+      "commit": "bdde7ee",
+      "titulo": "guard de comportamiento: la celda del grid no reusa el testid de la tarjeta"
+    },
+    {
+      "id": "P7.32",
+      "commit": "bdde7ee",
+      "titulo": "archivo del hueco historico de la auditoria externa"
+    },
+    {
+      "id": "P7.29",
+      "commit": "8319c4e",
+      "titulo": "el reply del LLM no gana: era un comentario obsoleto, no la conducta"
+    },
+    {
+      "id": "P7.31",
+      "commit": "04b9046",
+      "titulo": "las notas no se perdian: la app rechaza datos per-usuario sin usuario activo; era el arnes, no el producto"
+    },
+    {
+      "id": "P7.36",
+      "commit": "3b0d9d0",
+      "titulo": "la suite E2E entera no es la unidad de verificacion: corrida acotada al bloque tocado, con fallo explicito si un fichero de src/ cambia sin spec declarado"
+    },
+    {
+      "id": "P7.30",
+      "commit": "0f505fd",
+      "titulo": "recuerdame sin hora: se pregunta la hora en vez de descartar el turno (el instante no se inventa)"
+    },
+    {
+      "id": "P7.37",
+      "commit": "ab59332",
+      "titulo": "los 11 bugs de producto ya estaban cerrados; se les pone mapa de procedencia y prueba de detector para que no vuelvan a envejecer en silencio"
+    },
+    {
+      "id": "P7.33",
+      "commit": "0f505fd",
+      "titulo": "3.1 no era bug de producto: la tarjeta es onlyInKind y el spec asertaba en \"Todo\""
+    },
+    {
+      "id": "P7.34",
+      "commit": "0f505fd",
+      "titulo": "7.1 no era bug de producto: el spec despachaba un evento eliminado del bus; ahora usa la ruta real"
+    },
+    {
+      "id": "P7.35",
+      "commit": "0f505fd",
+      "titulo": "el onboarding pasa aislado: era presupuesto post-accion de 10000 ms bajo carga, no el producto"
+    },
+    {
+      "id": "P7.25",
+      "commit": "836fa5c",
+      "titulo": "los 3 rojos del job E2E resueltos y verificados; video-config era presupuesto, no arnes"
+    },
+    {
+      "id": "P7.28",
+      "commit": "1024497",
+      "titulo": "agenda invisible en el panel: el gate de sesion dejaba las lecturas en undefined y el seed de DEMO se re-sembraba en bucle"
+    },
+    {
+      "id": "P7.38",
+      "commit": "b6f3f2d",
+      "titulo": "temperature 0.3 quemada en useWorkspaceSearch (auditoria fresca #1)"
+    },
+    {
+      "id": "P7.39",
+      "commit": "b6f3f2d",
+      "titulo": "@deprecated enganoso en streamLogThrottleMs (auditoria fresca #3)"
+    },
+    {
+      "id": "P7.40",
+      "commit": "b6f3f2d",
+      "titulo": "Base 'http://localhost' literal en los proxies (auditoria fresca #4)"
+    },
+    {
+      "id": "P7.41",
+      "commit": "b6f3f2d",
+      "titulo": "setTimeout(resolve, 100) magico en 4 sitios (auditoria fresca #5)"
+    }
+  ]
+}

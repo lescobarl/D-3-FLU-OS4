@@ -13,6 +13,7 @@ export interface AppAnalysisPanelProps {
     error?: string | null;
     onClear?: () => void;
     language?: string;
+    hideHeader?: boolean;
 }
 
 export default function AppAnalysisPanel({
@@ -21,6 +22,7 @@ export default function AppAnalysisPanel({
     error = null,
     onClear,
     language = 'es',
+    hideHeader = false,
 }: AppAnalysisPanelProps) {
     const isEn = language === 'en';
 
@@ -55,15 +57,17 @@ export default function AppAnalysisPanel({
 
     return (
         <div className="frame-content__app-analysis">
-            <div className="document-analysis__header">
-                <h4 className="document-analysis__title">
-                    🧭 {isEn ? 'App Analysis' : 'Análisis de la App'}
-                </h4>
-                <div className="document-analysis__meta">
-                    <span className="document-analysis__meta-item">{analysis.proyecto}</span>
-                    <span className="document-analysis__meta-item">{analysis.framework}</span>
+            {!hideHeader && (
+                <div className="document-analysis__header">
+                    <h4 className="document-analysis__title">
+                        🧭 {isEn ? 'App Analysis' : 'Análisis de la App'}
+                    </h4>
+                    <div className="document-analysis__meta">
+                        <span className="document-analysis__meta-item">{analysis.proyecto}</span>
+                        <span className="document-analysis__meta-item">{analysis.framework}</span>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {hasPantallas && (
                 <div className="document-analysis__sheets">

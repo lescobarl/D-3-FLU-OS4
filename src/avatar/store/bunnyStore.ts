@@ -16,6 +16,7 @@ import type {
 } from '../types/bunny';
 import { EXPRESSION_MAP } from '../expressionMap';
 import { relayLog } from '../../lib/clientLogRelay';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Helpers
@@ -129,7 +130,7 @@ interface BunnyStoreActions {
 
 export type BunnyStore = BunnyControlState & BunnyStoreActions;
 
-export const useBunnyStore = create<BunnyStore>((set, get) => ({
+export const useBunnyStore = create<BunnyStore>((set, _get) => ({
     // --- Estado ---
     ...initialState,
 
@@ -321,7 +322,6 @@ export const useBunnyStore = create<BunnyStore>((set, get) => ({
             const anims = EXPRESSION_MAP[expression];
             const firstAnim = anims && anims.length > 0 ? anims[0] : state.currentAnimation;
             const blendQueueStr = JSON.stringify(anims || []);
-            console.log(`[DIAG bunnyStore] setExpression("${expression}") → EXPRESSION_MAP=${blendQueueStr}, firstAnim=${firstAnim}`);
             relayLog('LOG', 'bunnyStore', `setExpression("${expression}") → anims=${blendQueueStr}, firstAnim=${firstAnim}`);
             return {
                 currentExpression: expression,
@@ -365,7 +365,6 @@ export const useBunnyStore = create<BunnyStore>((set, get) => ({
                 ]
                 : state.logs;
             const animsStr = anims.join(', ');
-            console.log(`[DIAG bunnyStore] blendAnimation([${animsStr}]) → currentAnimation=${anims.length > 0 ? anims[0] : state.currentAnimation}`);
             relayLog('LOG', 'bunnyStore', `blendAnimation([${animsStr}]) → currentAnimation=${anims.length > 0 ? anims[0] : state.currentAnimation}`);
             return {
                 blendQueue: anims,
@@ -399,7 +398,6 @@ export function ensureAvatarPantsVisible(): void {
     try {
         const state = useBunnyStore.getState();
         if (state.components && state.components.Bunny_pants === false) {
-            console.log('[Avatar Init] Making pants visible...');
             state.setComponentVisibility('Bunny_pants', true);
         }
         const pantsColor = state.componentColors?.Bunny_pants;
@@ -407,16 +405,15 @@ export function ensureAvatarPantsVisible(): void {
             const colorLower = pantsColor.toLowerCase();
             if (colorLower === '#ffffff' || colorLower === 'white' || colorLower === '#fff' ||
                 colorLower === 'transparent' || colorLower === 'rgba(255,255,255,0)') {
-                console.log('[Avatar Init] Setting visible pants color...');
                 state.setComponentColor('Bunny_pants', '#8B4513');
             }
         }
     } catch (error) {
-        console.warn('[Avatar Init] Could not check avatar pants:', error);
+        logCaughtError('[Avatar Init] Could not check avatar pants', error);
     }
 }
 
 // Exponer bunnyStore globalmente para E2E tests
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__bunnyStore = useBunnyStore;
+    window.__bunnyStore = useBunnyStore;
 }

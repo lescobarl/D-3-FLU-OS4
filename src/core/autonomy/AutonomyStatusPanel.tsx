@@ -5,11 +5,15 @@
 // y permite interacción con ellos.
 // ============================================================
 
-import React from 'react';
-import { useAutonomyIntegration } from './useAutonomyIntegration';
+import type { AutonomyState, AutonomyActions } from './useAutonomyIntegration';
 
-export function AutonomyStatusPanel() {
-    const [state, actions] = useAutonomyIntegration();
+export function AutonomyStatusPanel({
+    state,
+    actions,
+}: {
+    state: AutonomyState;
+    actions: AutonomyActions;
+}) {
     
     const getStatusColor = (status: string) => {
         switch (status) {

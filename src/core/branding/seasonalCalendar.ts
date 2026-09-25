@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // FLU OS4 — Calendario General de Temporalidades (Branding Inteligente)
 // ============================================================
@@ -299,7 +301,7 @@ export interface SeasonResult {
 export function getActiveSeason(
     userBirthday?: string | null,
     customEvents?: CustomEvent[],
-    celebrateAchievements?: boolean,
+    _celebrateAchievements?: boolean,
 ): SeasonResult {
     const now = new Date();
     const todayMonth = now.getMonth() + 1; // 1-12
@@ -351,7 +353,8 @@ export function getActiveSeason(
                     };
                 }
             }
-        } catch {
+        } catch (e) {
+        logCaughtError('[catch] src/core/branding/seasonalCalendar.ts', e);
             // Invalid date, skip birthday detection
         }
     }

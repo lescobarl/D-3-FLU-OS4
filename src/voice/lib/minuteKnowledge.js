@@ -1,27 +1,31 @@
 import { cleanForSpeech, normalizeSpaces } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import {
+  parseMinuteHistoryCode,
+  parseMinuteSequenceFromQuery,
+  findMinuteRecordBySequence,
+  formatMinuteDraftText,
+  createMinuteDraftFromSummary,
+  isGenericMinuteSessionTheme,
+  resolveMinuteThemeForSpeech,
+} from '../../lib/minuteKnowledgeHelpers'
+
+// D3: dueño canónico de estos parsers/helpers es src/lib/minuteKnowledgeHelpers.ts.
+// Se re-exportan (y se importan arriba para el uso interno del módulo).
+export {
+  parseMinuteHistoryCode,
+  parseMinuteSequenceFromQuery,
+  findMinuteRecordBySequence,
+  formatMinuteDraftText,
+  createMinuteDraftFromSummary,
+  isGenericMinuteSessionTheme,
+  resolveMinuteThemeForSpeech,
+}
 
 export const MINUTE_DESCRIPTION_LIMIT = 10
 
 function minuteTextLabels() {
   return FLU_CONFIG.ui.minuteFields
-}
-
-function listSection(label, items = []) {
-  if (!items.length) return `${label}:`
-  return `${label}:\n${items.map((item) => `- ${item}`).join('\n')}`
-}
-
-export function formatMinuteDraftText(draft = {}) {
-  const labels = minuteTextLabels()
-  return [
-    `${labels.title}: ${normalizeSpaces(draft?.titulo || '')}`,
-    `${labels.participants}: ${Array.isArray(draft?.participantes) ? draft.participantes.join(', ') : ''}`,
-    `${labels.summary}: ${normalizeSpaces(draft?.resumen || '')}`,
-    listSection(labels.agreements, Array.isArray(draft?.acuerdos) ? draft.acuerdos : []),
-    listSection(labels.pending, Array.isArray(draft?.pendientes) ? draft.pendientes : []),
-    listSection(labels.nextSteps, Array.isArray(draft?.siguientes_pasos) ? draft.siguientes_pasos : []),
-  ].join('\n\n')
 }
 
 export function parseMinuteDraftText(text = '', baseDraft = {}) {
@@ -96,85 +100,6 @@ export function formatMinuteHistoryCode(date = new Date(), sequence = 1) {
   return `${year}${month}${day}-${seq}`
 }
 
-export function parseMinuteHistoryCode(code = '') {
-  const normalized = normalizeSpaces(code)
-  const match = normalized.match(/^(\d{6})-(\d+)$/)
-  if (!match) {
-    return { date: normalized, sequence: 0 }
-  }
-  return {
-    date: match[1],
-    sequence: Number.parseInt(match[2], 10) || 0,
-  }
-}
-
-const MINUTE_NUMBER_WORDS = {
-  uno: 1,
-  one: 1,
-  dos: 2,
-  two: 2,
-  tres: 3,
-  three: 3,
-  cuatro: 4,
-  four: 4,
-  cinco: 5,
-  five: 5,
-  seis: 6,
-  six: 6,
-  siete: 7,
-  seven: 7,
-  ocho: 8,
-  eight: 8,
-  nueve: 9,
-  nine: 9,
-  diez: 10,
-  ten: 10,
-}
-
-const MINUTE_SEQUENCE_PATTERNS = [
-  /\b(?:la\s+)?minuta\s+(?:numero\s+)?(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/i,
-  /\bde\s+(?:la\s+)?minuta\s+(?:numero\s+)?(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\b/i,
-  /\bminute\s+(?:number\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i,
-]
-
-function parseMinuteSequenceToken(token = '') {
-  const normalized = normalizeSpaces(token).toLowerCase()
-  if (!normalized) return null
-  if (MINUTE_NUMBER_WORDS[normalized]) return MINUTE_NUMBER_WORDS[normalized]
-  const parsed = Number.parseInt(normalized, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
-}
-
-/** Extrae el número de minuta pedido en voz («minuta 2», «minuta dos», «minute 4»). */
-export function parseMinuteSequenceFromQuery(text = '') {
-  const normalized = cleanForSpeech(text)
-  if (!normalized) return null
-
-  for (const pattern of MINUTE_SEQUENCE_PATTERNS) {
-    const match = normalized.match(pattern)
-    const sequence = parseMinuteSequenceToken(match?.[1] || '')
-    if (sequence) return sequence
-  }
-
-  return null
-}
-
-/** Localiza la minuta cuyo historyCode termina en la secuencia pedida (p. ej. 2 → 260630-02). */
-export function findMinuteRecordBySequence(records = [], sequence = 0) {
-  const target = Number.parseInt(sequence, 10)
-  if (!Number.isFinite(target) || target <= 0 || !Array.isArray(records) || !records.length) {
-    return null
-  }
-
-  const matches = records.filter((record) => {
-    const { sequence: codeSequence } = parseMinuteHistoryCode(record?.historyCode || '')
-    return codeSequence === target
-  })
-
-  if (!matches.length) return null
-  return [...matches].sort(compareMinuteHistoryCodeDesc)[0] || null
-}
-
 function formatMinuteKnowledgeEntry(record = {}, { fallbackIndex = 0 } = {}) {
   const snapshot = record?.summarySnapshot || record
   const code = normalizeSpaces(record?.historyCode || '')
@@ -183,7 +108,9 @@ function formatMinuteKnowledgeEntry(record = {}, { fallbackIndex = 0 } = {}) {
   const header = code
     ? `[Minuta ${seqLabel} · ${code}] ${record?.description || snapshot?.titulo || ''}`.trim()
     : `[Minuta ${seqLabel}] ${record?.description || snapshot?.titulo || ''}`.trim()
-  const speechTheme = resolveMinuteThemeForSpeech(snapshot, record)
+  const speechTheme = resolveMinuteThemeForSpeech(snapshot, record, {
+    defaultTheme: FLU_CONFIG.sessionDefaults?.theme || '',
+  })
   const body = [
     snapshot?.titulo ? `Titulo: ${snapshot.titulo}` : '',
     speechTheme ? `Tema: ${speechTheme}` : '',
@@ -199,28 +126,12 @@ function formatMinuteKnowledgeEntry(record = {}, { fallbackIndex = 0 } = {}) {
   return `${header}\n${body}`.trim()
 }
 
-export function isGenericMinuteSessionTheme(theme = '') {
-  const normalized = cleanForSpeech(theme).toLowerCase()
-  if (!normalized) return true
-  const defaultTheme = cleanForSpeech(FLU_CONFIG.sessionDefaults?.theme || '').toLowerCase()
-  return normalized === defaultTheme
-}
-
 /** Al guardar minuta: tema real (titulo) si la sesion sigue en placeholder generico. */
 export function resolveMinuteThemeForSave({ titulo = '', sessionTheme = '' } = {}) {
   const title = normalizeSpaces(titulo)
   const session = normalizeSpaces(sessionTheme)
-  if (!isGenericMinuteSessionTheme(session)) return session
+  if (!isGenericMinuteSessionTheme(session, FLU_CONFIG.sessionDefaults?.theme || '')) return session
   return title
-}
-
-/** Tema util para voz/UI; omite placeholder generico y duplicado del titulo. */
-export function resolveMinuteThemeForSpeech(snapshot = {}, record = {}) {
-  const titulo = normalizeSpaces(snapshot?.titulo || record?.description || '')
-  const tema = normalizeSpaces(snapshot?.tema_sesion || '')
-  if (!tema || isGenericMinuteSessionTheme(tema)) return ''
-  if (titulo && cleanForSpeech(titulo).toLowerCase() === cleanForSpeech(tema).toLowerCase()) return ''
-  return tema
 }
 
 export function compareMinuteHistoryCodeDesc(left = {}, right = {}) {
@@ -269,27 +180,6 @@ export function createEmptyMinuteDraft(theme = '') {
     pendientes: [],
     siguientes_pasos: [],
     tema_sesion: normalizeSpaces(theme),
-  }
-}
-
-export function createMinuteDraftFromSummary(summary = {}, theme = '', id = '') {
-  return {
-    id: String(id || summary?.id || '').trim(),
-    titulo: normalizeSpaces(summary?.titulo || ''),
-    participantes: Array.isArray(summary?.participantes)
-      ? summary.participantes.map((item) => normalizeSpaces(item)).filter(Boolean)
-      : [],
-    resumen: normalizeSpaces(summary?.resumen || ''),
-    acuerdos: Array.isArray(summary?.acuerdos)
-      ? summary.acuerdos.map((item) => normalizeSpaces(item)).filter(Boolean)
-      : [],
-    pendientes: Array.isArray(summary?.pendientes)
-      ? summary.pendientes.map((item) => normalizeSpaces(item)).filter(Boolean)
-      : [],
-    siguientes_pasos: Array.isArray(summary?.siguientes_pasos)
-      ? summary.siguientes_pasos.map((item) => normalizeSpaces(item)).filter(Boolean)
-      : [],
-    tema_sesion: normalizeSpaces(summary?.tema_sesion || theme),
   }
 }
 
@@ -355,7 +245,7 @@ export function normalizeMinuteKnowledgeRecord(record = {}) {
   }
 }
 
-export function buildMinuteKnowledgeBase2(records = []) {
+export function buildVoiceMinuteKnowledgeBase(records = []) {
   if (!Array.isArray(records) || !records.length) return ''
 
   const maxRows = Number(FLU_CONFIG.limits?.minuteKnowledgePromptMax)

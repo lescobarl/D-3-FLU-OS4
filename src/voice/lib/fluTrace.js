@@ -1,9 +1,11 @@
 /**
  * Traza estructurada para diagnóstico (dev): ring buffer exportable.
- * Activar: localStorage.setItem('flu.trace','1') o __fluDev.trace.enable()
+ * Activar: localSet('flu.trace','1') o __fluDev.trace.enable()
  * Volcar: __fluDev.trace.dump() / __fluDev.trace.download()
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { hasLocalStorage, localGet, localSet } from '../../core/storage/localStore';
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const DEFAULT_MAX = Number(FLU_CONFIG.trace?.ringSize) || 800
@@ -25,12 +27,13 @@ const AGENT_SINK_MS = Number(FLU_CONFIG.trace?.agentSinkMs) || 1200
 let sentEventCount = 0
 
 function readStorageFlag() {
-  if (!IS_DEV || typeof localStorage === 'undefined') return
+  if (!IS_DEV || !hasLocalStorage()) return
   try {
-    const value = localStorage.getItem('flu.trace')
+    const value = localGet('flu.trace')
     if (value === '1') enabled = true
     if (value === '0') enabled = false
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     /* ignore */
   }
 }
@@ -103,7 +106,8 @@ function scheduleAgentSink() {
       }).catch((error) => {
         if (IS_DEV) console.warn('[Flu][trace] agent sink failed:', error?.message || error)
       })
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
       // ignore
     }
   }, AGENT_SINK_MS)
@@ -117,8 +121,9 @@ export function enableFluTrace() {
   if (!IS_DEV) return false
   enabled = true
   try {
-    localStorage.setItem('flu.trace', '1')
-  } catch {
+    localSet('flu.trace', '1')
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     /* ignore */
   }
   console.info('[Flu][trace] Encendido')
@@ -128,8 +133,9 @@ export function enableFluTrace() {
 export function disableFluTrace() {
   enabled = false
   try {
-    localStorage.setItem('flu.trace', '0')
-  } catch {
+    localSet('flu.trace', '0')
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     /* ignore */
   }
   console.info('[Flu][trace] Apagado')
@@ -175,7 +181,8 @@ export function getFluTraceSnapshot() {
   let session = {}
   try {
     session = sessionProvider?.() || {}
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluTrace.js', e);
     session = { sessionError: true }
   }
   return {

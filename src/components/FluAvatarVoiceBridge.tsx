@@ -21,20 +21,17 @@
 // se reciben a través de FluBridgeContext en lugar de prop drilling.
 // ============================================================
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { BunnyViewer, useBunnyStore } from '../avatar';
-import type { BunnyAnimation } from '../avatar';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { BunnyViewer } from '../avatar';
 import { speakResponse } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { useIntegrationStore, detectSentiment } from '../store/integrationStore';
+import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
-import { geminiService } from '../services/gemini';
-import { generateResponse } from '../services/fallbackResponses';
-import { WELCOME_MESSAGE } from '../core/config/appConfig';
-import { relayLog } from '../lib/clientLogRelay';
-import type { ConversationState } from '../types/bridge';
 import { useFluBridge } from '../context/FluBridgeContext';
 import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
+import { useEnvironmentStore } from '../store/environmentStore';
+import { getAmbiente } from '../core/environments/environmentRegistry';
+import { logCaughtError } from '../lib/caughtError';
 
 // -----------------------------------------------------------
 // Props — mínimas, el resto viene de FluBridgeContext
@@ -42,27 +39,16 @@ import { SeasonalDecoration } from '../core/branding/SeasonalDecoration';
 interface FluAvatarVoiceBridgeProps {
     height?: string;
     width?: string;
+    /**
+     * Frase visible canónica (§9.3): misma cadena que bitácora y barra.
+     * La deriva App una sola vez; el avatar no recalcula.
+     */
+    visiblePhrase?: string;
     /** Estado de branding para decoraciones estacionales del avatar */
     brandingMode?: 'auto' | 'manual' | 'disabled';
     brandingSeason?: string;
     brandingIsBirthday?: boolean;
     brandingCelebrandoA?: string;
-}
-
-// -----------------------------------------------------------
-// StatusOverlay — Indicador visual mínimo sobre el avatar
-// Solo muestra emoción cuando no es neutral (el estado ya está en el header)
-// -----------------------------------------------------------
-function StatusOverlay({ state, emotion }: { state: ConversationState; emotion: string }) {
-    return (
-        <div className="flu-bridge-status-overlay">
-            {emotion && emotion !== 'neutral' && (
-                <span className="flu-bridge-status-emotion">
-                    🎭 {emotion}
-                </span>
-            )}
-        </div>
-    );
 }
 
 // -----------------------------------------------------------
@@ -137,15 +123,14 @@ function useKeyboardShortcuts({
 // VoiceControls — Panel de control de voz
 // -----------------------------------------------------------
 interface VoiceControlsProps {
-    liveTranscript: string;
-    transcript: string;
+    /** Frase visible canónica (§9.3): misma cadena que bitácora y barra. */
+    visiblePhrase?: string;
 }
 
-function VoiceControls({
-    liveTranscript,
-    transcript,
-}: VoiceControlsProps) {
-    const displayText = liveTranscript || transcript || '';
+function VoiceControls({ visiblePhrase = '' }: VoiceControlsProps) {
+    // §9.3: la frase visible llega ya derivada desde App (misma que bitácora y
+    // barra). El avatar no vuelve a seleccionar ni normalizar.
+    const displayText = String(visiblePhrase || '');
     return (
         <div className="voice-controls">
             {/* Transcripción en vivo — siempre visible con scroll */}
@@ -176,7 +161,6 @@ function VoiceControls({
 //   1. Renderizar el avatar 3D (OS1) + controles de voz (UI)
 //   2. Conectar useFluVoiceAssistant al integrationStore (OS3)
 //   3. Sincronizar avatar con estado de conversación (useAvatarVoiceSync)
-//   4. Manejar input manual de texto (handleSpeak)
 //
 // Las props de voz (voiceStatus, voiceError, liveTranscript, etc.)
 // se obtienen de FluBridgeContext en lugar de props directas.
@@ -184,21 +168,25 @@ function VoiceControls({
 export function FluAvatarVoiceBridge({
     height = '100%',
     width = '100%',
+    visiblePhrase = '',
     brandingMode,
     brandingSeason,
     brandingIsBirthday,
     brandingCelebrandoA,
 }: FluAvatarVoiceBridgeProps) {
     const integrationStore = useIntegrationStore();
+    // Ambiente activo (rebranding por oficio): decoración con precedencia sobre la estacional
+    const activeAmbienteId = useEnvironmentStore((s) => s.activeAmbienteId);
+    const activeAmbiente = activeAmbienteId ? getAmbiente(activeAmbienteId) : null;
+    const environmentDecoration = activeAmbiente?.tema.decoracion ?? null;
     const storeRef = useRef(integrationStore);
     // Keep storeRef current without triggering re-renders
     storeRef.current = integrationStore;
     const [isListening, setIsListening] = useState(false);
-    const welcomeSpokenRef = useRef(false);
     // Ref para detectar transiciones de voiceError (evitar re-disparar en cada re-render)
     const prevVoiceErrorRef = useRef<string | null | undefined>(null);
     // Usar el hook de sincronización avatar-voz
-    const { syncAvatarToState, applyEmotion, triggerParticipantEmotion, applyContextualEmotion, pendingEmotionAnimsRef } = useAvatarVoiceSync();
+    const { triggerParticipantEmotion, applyContextualEmotion, pendingEmotionAnimsRef } = useAvatarVoiceSync();
 
     // ---- Obtener voice props desde FluBridgeContext ----
     const bridge = useFluBridge();
@@ -208,13 +196,10 @@ export function FluAvatarVoiceBridge({
         liveTranscript,
         onStartListening,
         onStopListening,
-        onToggleListening,
         onParticipantEmotionRef,
         onContextualEmotionRef,
         onEmotionAnimsRef,
-        apiKey,
         language,
-        welcomeMessage,
         onStateChange,
         onGeminiError,
     } = bridge;
@@ -283,12 +268,15 @@ export function FluAvatarVoiceBridge({
     }, [voiceStatus]);
 
     // -------------------------------------------------------
-    // Sincronizar liveTranscript al store
+    // Sincronizar liveTranscript al store (espejo FIEL: set y clear).
+    // Antes solo se escribía cuando liveTranscript tenía texto y el espejo
+    // quedaba con un interino INCOMPLETO tras limpiar live — contaminando
+    // las cadenas de display que caían al mirror. Las cadenas ya resuelven
+    // con lastTranscript + historial ANTES del mirror, así que limpiarlo
+    // no pierde la última frase real.
     // -------------------------------------------------------
     useEffect(() => {
-        if (liveTranscript) {
-            storeRef.current.setCurrentTranscript(liveTranscript);
-        }
+        storeRef.current.setCurrentTranscript(liveTranscript || '');
     }, [liveTranscript]);
 
     // -------------------------------------------------------
@@ -318,119 +306,6 @@ export function FluAvatarVoiceBridge({
     const handleStopListening = useCallback(async () => {
         await onStopListening?.({ closing: true });
     }, [onStopListening]);
-
-    const handleSpeak = useCallback((text: string) => {
-        const store = storeRef.current;
-        const botName = store.config.personality.name || 'FLU';
-        // User typed text manually — add to history first (not from speech recognition)
-        store.addUserMessage(text, botName);
-        store.setConversationState('THINKING');
-        // Indicador visual de procesamiento (se apaga en el finally de processText)
-        store.setThinking(true);
-        store.pushBridgeEvent({ type: 'thinking:start', timestamp: Date.now() });
-
-        // DATA-DRIVEN: aplicar expresión contextual basada en sentimiento del usuario
-        // Crea un arco emocional natural: usuario dice algo positivo → FLU reacciona feliz
-        // Usa el EmotionEngine (resolveContextualExpression) — NO hay switch hardcodeado
-        const sentiment = detectSentiment(text);
-        applyContextualEmotion(sentiment);
-
-        // Use Gemini if apiKey is available, otherwise use local response
-        const processText = async () => {
-            try {
-                let responseText = '';
-                let geminiEmocion: string | undefined;
-                let geminiAnimacion: string | undefined;
-                const hasStoredApiKey = (() => {
-                    try {
-                        return Boolean(String(localStorage.getItem('flu-text-api-key') ?? '').trim());
-                    } catch { return false; }
-                })();
-                // Key resuelta: prop de React o lectura fresca de localStorage
-                // (defiende contra desync prop↔storage — Fix "API key no configurada")
-                const resolvedApiKey = String(
-                    apiKey ||
-                    (() => {
-                        try { return localStorage.getItem('flu-text-api-key') ?? ''; } catch { return ''; }
-                    })()
-                ).trim();
-                if (resolvedApiKey) {
-                    try {
-                        const personality = store.config.personality;
-                        const contract = await geminiService.generateFluContract(
-                            {
-                                apiKey: resolvedApiKey,
-                                language,
-                                role: personality.profile,
-                                theme: '',
-                                traits: personality.traits,
-                                tone: personality.tone,
-                            },
-                            text,
-                            store.conversationHistory.map((e) => ({
-                                role: e.speakerName === personality.name ? 'assistant' : 'user',
-                                text: e.text || '',
-                                speakerName: e.speakerName,
-                            })),
-                        );
-                        responseText = contract.respuesta_voz;
-                        // Extraer animación/emoción del contrato para pasarlas al avatar
-                        geminiEmocion = contract.emocion;
-                        geminiAnimacion = contract.animacion;
-                    } catch (geminiError: any) {
-                        const errorMsg = geminiError?.message || String(geminiError);
-                        console.warn('[Bridge] Gemini error, falling back to local response:', errorMsg);
-                        onGeminiError?.(errorMsg);
-                        responseText = generateResponse(text, store.config.personality.name, store.conversationHistory, language);
-                    }
-                } else {
-                    responseText = generateResponse(text, store.config.personality.name, store.conversationHistory, language);
-                }
-
-                // CRÍTICO: NO aplicar animaciones de emoción durante THINKING.
-                // Hacerlo cambia currentAnimation y blendQueue, disparando una
-                // recarga completa de BunnyViewer (limpieza de huesos + recarga
-                // de FBX). Si luego cambiamos a SPEAKING, se dispara OTRA recarga,
-                // causando doble recarga en rápida sucesión → corrupción de
-                // Three.js → WebGL context loss → pantalla negra.
-                //
-                // Flujo correcto: ir directo a SPEAKING para que BunnyViewer
-                // cargue UNA SOLA VEZ Idle_2 + MouthMove.
-                const emotionLabel = geminiEmocion || geminiAnimacion || '';
-                const isSpeakingExpression = emotionLabel === 'hablando' || emotionLabel === 'hablando2';
-                relayLog('LOG', 'FluBridge', `handleSpeak: emotionLabel="${emotionLabel}", geminiEmocion="${geminiEmocion}", geminiAnimacion="${geminiAnimacion}" — yendo directo a SPEAKING`);
-
-                store.setLastResponse(responseText);
-                store.addFluMessage(responseText);
-
-                // Ir directo a SPEAKING — syncAvatarToState aplicará
-                // setExpression hablando/etc., que resuelve las animaciones del habla.
-                // Una sola recarga de BunnyViewer, sin doble carga.
-                store.setConversationState('SPEAKING');
-                store.setFluSpeaking(true);
-                store.incrementInteractionCount();
-                store.pushBridgeEvent({ type: 'speaking:start', timestamp: Date.now() });
-
-                await speakResponse(responseText, language);
-
-                // Transición de estado: SPEAKING → IDLE después de terminar de hablar
-                // Esto asegura que la animación de boca (MouthMove) se detenga
-                // y el avatar vuelva a su estado de reposo natural
-                store.setConversationState('IDLE');
-                store.setFluSpeaking(false);
-                store.pushBridgeEvent({ type: 'speaking:end', timestamp: Date.now() });
-            } catch (error) {
-                console.error('[Bridge] Error:', error);
-                store.setConversationState('ERROR');
-                store.pushBridgeEvent({ type: 'error', timestamp: Date.now(), payload: error });
-            } finally {
-                // Apagar el indicador de procesamiento SIEMPRE (éxito o error)
-                store.setThinking(false);
-            }
-        };
-
-        processText();
-    }, [apiKey, language, applyContextualEmotion, onGeminiError, pendingEmotionAnimsRef]);
 
     // -------------------------------------------------------
     // Push-to-talk: iniciar escucha
@@ -489,19 +364,19 @@ export function FluAvatarVoiceBridge({
         switch (cmd) {
             case 'start-listening':
                 onStartListening?.();
-                speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch(() => { });
+                speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
             case 'stop-listening':
                 onStopListening?.({ closing: true });
-                speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch(() => { });
+                speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
             case 'toggle-listening':
                 if (isListeningRef.current) {
                     onStopListening?.({ closing: true });
-                    speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch(() => { });
+                    speakResponse(FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.CERRAR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 } else {
                     onStartListening?.();
-                    speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch(() => { });
+                    speakResponse(FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA[langKey] || FLU_CONFIG.ui.commandSpeech.ABRIR_ESCUCHA.es, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 }
                 break;
             case 'start-conversation':
@@ -509,20 +384,10 @@ export function FluAvatarVoiceBridge({
                     onStartListening?.();
                 }
                 const iniciarText = FLU_CONFIG.ui.commandSpeech.INICIAR_CONVERSACION?.[langKey] || FLU_CONFIG.ui.commandSpeech.INICIAR_CONVERSACION?.es || 'Iniciando conversación';
-                speakResponse(iniciarText, language).catch(() => { });
-                break;
-            case 'process-transcript':
-                // Procesar el transcript actual (desde "Flu participa")
-                const transcript = integrationStore.currentTranscript;
-                if (transcript && transcript.trim()) {
-                    handleSpeak(transcript);
-                } else {
-                    const emptyText = FLU_CONFIG.ui.commandSpeech.FLU_ADELANTE_EMPTY[langKey] || FLU_CONFIG.ui.commandSpeech.FLU_ADELANTE_EMPTY.es;
-                    speakResponse(emptyText, language).catch(() => { });
-                }
+                speakResponse(iniciarText, language).catch((e: unknown) => { logCaughtError('[catch] src/components/FluAvatarVoiceBridge.tsx', e) });
                 break;
         }
-    }, [integrationStore.uiState.voiceCommand]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [integrationStore.uiState.voiceCommand, integrationStore, language, onStartListening, onStopListening]);
 
     // -------------------------------------------------------
     // Notificar cambios de estado
@@ -536,15 +401,18 @@ export function FluAvatarVoiceBridge({
     // -------------------------------------------------------
     return (
         <div className="flu-bridge-container" style={{ width, height }}>
-            {/* SeasonalDecoration — controla visibilidad de componentes del avatar según branding */}
-            {brandingMode && brandingSeason && (
+            {/* SeasonalDecoration — decoración 3D + señales/animaciones de celebración.
+                La visibilidad de la gorra/pelo la controla ÚNICAMENTE el perfil
+                (useAvatarVoiceSync → imageConfig). */}
+            {(brandingMode && brandingSeason) || environmentDecoration ? (
                 <SeasonalDecoration
-                    mode={brandingMode}
-                    activeSeason={brandingSeason}
+                    mode={brandingMode ?? 'disabled'}
+                    activeSeason={brandingSeason ?? ''}
                     isBirthday={brandingIsBirthday ?? false}
                     celebrandoA={brandingCelebrandoA}
+                    environmentDecoration={environmentDecoration}
                 />
-            )}
+            ) : null}
 
             {/* Contenedor del avatar 3D */}
             <div className="flu-bridge-avatar-area">
@@ -554,10 +422,7 @@ export function FluAvatarVoiceBridge({
             </div>
 
             {/* VoiceControls — Transcript display only (OS2 parity: live transcript from useFluVoiceAssistant) */}
-            <VoiceControls
-                liveTranscript={liveTranscript || ''}
-                transcript={integrationStore.currentTranscript}
-            />
+            <VoiceControls visiblePhrase={visiblePhrase} />
 
         </div>
     );

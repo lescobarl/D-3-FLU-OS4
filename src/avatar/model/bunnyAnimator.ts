@@ -52,16 +52,6 @@ const ANIMATION_PATHS: Record<string, string> = {
     'Dance': '/models/Animations/Bunny@Dance.fbx',
 };
 
-const ANIMATION_NAMES: BunnyAnimation[] = [
-    'Idle_1', 'Idle_2', 'Idle_3', 'Bind-pose',
-    'Walk', 'Walk_sneaky', 'Run', 'Jump_in_place', 'Jump_while_run',
-    'Emo_blink', 'Emo_neutral',
-    'Cap_back', 'Cap_front',
-    'Dance',
-    'MouthMove', // synthetic — no FBX file
-    'Palabra',  // synthetic — no FBX file
-];
-
 // ============================================================
 // shiftClipToZero — Desplaza todos los keyframes al origen
 // ============================================================
@@ -100,7 +90,6 @@ function shiftClipToZero(clip: THREE.AnimationClip): void {
 
     clip.duration -= minTime;
 
-    console.log(`[Animator] Shifted clip "${clip.name}" by ${minTime.toFixed(4)}s → new duration: ${clip.duration.toFixed(4)}s`);
 }
 
 // ============================================================
@@ -160,6 +149,21 @@ export class BunnyAnimator {
     /** Called each frame by useFrame to advance the mixer */
     update(delta: number): void {
         this.mixer.update(delta);
+    }
+
+    /**
+     * Clip por nombre: los sintéticos se generan al vuelo. Lanza si no existe
+     * (antes se asertaba con `!`, así que un clip ausente explotaba más tarde
+     * y con un error peor, dentro del mixer).
+     */
+    private resolveClip(name: BunnyAnimation): THREE.AnimationClip {
+        const clip = this.isSynthetic(name)
+            ? (name === 'MouthMove' ? this.ensureMouthClip() : this.ensurePalabraClip())
+            : this.clips.get(name) ?? null;
+        if (!clip) {
+            throw new Error(`[Animator] clip no disponible: ${name}`);
+        }
+        return clip;
     }
 
     /**
@@ -244,6 +248,7 @@ export class BunnyAnimator {
     private ensurePalabraClip(): THREE.AnimationClip | null {
         if (this.palabraClip) return this.palabraClip;
         if (!this.armRestPose) return null;
+        const rest = this.armRestPose;
 
         const duration = 2.0;
         const times = new Float32Array([0, 0.5, 2.0]);
@@ -269,27 +274,27 @@ export class BunnyAnimator {
         // Compute raised pose by applying scaled delta rotations to rest pose.
         // raisedPose = scaledDelta * restQuat (world-space delta)
         const raisedPose: ArmPose = {
-            clavicle_r: this.armRestPose!.clavicle_r.clone(),
+            clavicle_r: rest.clavicle_r.clone(),
             upperarm_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.upperarm_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.upperarm_r);
+                return scaled.multiply(rest.upperarm_r);
             })(),
             lowerarm_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.lowerarm_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.lowerarm_r);
+                return scaled.multiply(rest.lowerarm_r);
             })(),
             hand_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.hand_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.hand_r);
+                return scaled.multiply(rest.hand_r);
             })(),
         };
 
@@ -360,10 +365,8 @@ export class BunnyAnimator {
                                         );
                                         if (name === 'Idle_2') {
                                             this.mouthClosedPose = { jawQuat: quat };
-                                            console.log(`[Animator] Mouth CLOSED pose (Idle_2): [${quat.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                         } else {
                                             this.mouthOpenPose = { jawQuat: quat };
-                                            console.log(`[Animator] Mouth OPEN pose (Emo_blink): [${quat.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                         }
                                     }
                                 }
@@ -390,14 +393,9 @@ export class BunnyAnimator {
                                         }
                                     }
                                 }
-                                if (armQuats.clavicle_r && armQuats.upperarm_r && armQuats.lowerarm_r && armQuats.hand_r) {
-                                    this.armRestPose = {
-                                        clavicle_r: armQuats.clavicle_r!,
-                                        upperarm_r: armQuats.upperarm_r!,
-                                        lowerarm_r: armQuats.lowerarm_r!,
-                                        hand_r: armQuats.hand_r!,
-                                    };
-                                    console.log(`[Animator] Arm REST pose (Idle_2): clavicle_r=[${armQuats.clavicle_r!.toArray().map(v => v.toFixed(4)).join(', ')}], upperarm_r=[${armQuats.upperarm_r!.toArray().map(v => v.toFixed(4)).join(', ')}], lowerarm_r=[${armQuats.lowerarm_r!.toArray().map(v => v.toFixed(4)).join(', ')}], hand_r=[${armQuats.hand_r!.toArray().map(v => v.toFixed(4)).join(', ')}]`);
+                                const { clavicle_r, upperarm_r, lowerarm_r, hand_r } = armQuats;
+                                if (clavicle_r && upperarm_r && lowerarm_r && hand_r) {
+                                    this.armRestPose = { clavicle_r, upperarm_r, lowerarm_r, hand_r };
                                 }
                             }
                         }
@@ -523,9 +521,7 @@ export class BunnyAnimator {
         this.ensureAnimBones();
 
         // --- First animation: main action ---
-        const firstClip = this.isSynthetic(anims[0])
-            ? (anims[0] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-            : this.clips.get(anims[0])!;
+        const firstClip = this.resolveClip(anims[0]);
         const mainAction = this.mixer.clipAction(firstClip);
         mainAction.reset();
         mainAction.setLoop(THREE.LoopRepeat, Infinity);
@@ -536,9 +532,7 @@ export class BunnyAnimator {
         // --- Remaining animations: blend actions ---
         this.blendActions = [];
         for (let i = 1; i < anims.length; i++) {
-            const clip = this.isSynthetic(anims[i])
-                ? (anims[i] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-                : this.clips.get(anims[i])!;
+            const clip = this.resolveClip(anims[i]);
             const action = this.mixer.clipAction(clip);
             action.reset();
             action.setLoop(THREE.LoopRepeat, Infinity);
@@ -645,9 +639,7 @@ export class BunnyAnimator {
         this.ensureAnimBones();
 
         // --- First animation: main action ---
-        const firstClip = this.isSynthetic(anims[0])
-            ? (anims[0] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-            : this.clips.get(anims[0])!;
+        const firstClip = this.resolveClip(anims[0]);
         const mainAction = this.mixer.clipAction(firstClip);
         mainAction.reset();
         mainAction.setLoop(THREE.LoopRepeat, Infinity);
@@ -663,9 +655,7 @@ export class BunnyAnimator {
         // --- Remaining animations: blend actions ---
         const newBlendActions: THREE.AnimationAction[] = [];
         for (let i = 1; i < anims.length; i++) {
-            const clip = this.isSynthetic(anims[i])
-                ? (anims[i] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-                : this.clips.get(anims[i])!;
+            const clip = this.resolveClip(anims[i]);
             const action = this.mixer.clipAction(clip);
             action.reset();
             action.setLoop(THREE.LoopRepeat, Infinity);

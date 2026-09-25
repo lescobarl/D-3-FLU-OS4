@@ -16,6 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
+import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -25,7 +26,7 @@ export interface Riddle {
 
 export const RIDDLE_BANK: readonly Riddle[] = Object.freeze([
     {
-        pregunta: 'Soy amarillo por fuera y blanco por dentro, y me tienes que pelar para comerme.',
+        pregunta: 'Soy una fruta con forma de gota, mi piel es verde o amarilla y por dentro soy blanca y jugosa',
         respuesta: ['pera'],
         pista: 'Es una fruta que empieza con la letra "pe".',
     },
@@ -76,8 +77,8 @@ export const RIDDLE_BANK: readonly Riddle[] = Object.freeze([
     },
     {
         pregunta: 'Aparezco después de la lluvia, tengo siete colores y no puedes tocarme.',
-        respuesta: ['arcoiris'],
-        pista: 'Tiene los colores del arco en el cielo.',
+        respuesta: ['arcoiris', 'arco iris'],
+        pista: 'Aparezco en el cielo cuando llueve y brilla el sol.',
     },
     {
         pregunta: 'Tengo una llama arriba, me prenden en la torta y alumbro en la oscuridad.',
@@ -114,30 +115,6 @@ interface RiddlesState {
 
 type RandomSource = () => number;
 
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
 /** Baraja determinista (Fisher-Yates) de los índices del banco. */
 function shuffleOrder(rng: RandomSource): number[] {
     const order = RIDDLE_BANK.map((_, index) => index);
@@ -159,29 +136,17 @@ function currentPrompt(state: RiddlesState): string {
     return `${riddle.pregunta} ¿Qué soy?`;
 }
 
-export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine {
+export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: RiddlesState = {
             order: shuffleOrder(rng),
             cursor: 0,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -190,14 +155,14 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
     return {
         id: 'adivinanzas',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RiddlesState> {
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'adivinanzas',
                 state: {
                     order: shuffleOrder(rng),
                     cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,
@@ -208,7 +173,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             return {
-                prompt: `¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as unknown as RiddlesState)}`,
+                prompt: `¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as RiddlesState)}`,
                 valid: false,
                 gameOver: false,
                 score: session.score,
@@ -218,7 +183,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as RiddlesState;
+            const state = session.state as RiddlesState;
 
             if (state.phase === 'done') {
                 return {

@@ -2,7 +2,9 @@
  * Pipeline visual: brief de workspace IA → prompt de generación. Sin números mágicos aquí.
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
  */
+import { buildPollinationsImageUrl } from '../../core/config/sharedConfig'
 import { VISUAL_CONFIG } from './visualConfig.js'
+import { normalizeSpaces, shortText } from '../../lib/textUtils'
 
 export const VISUAL_PIPELINE_KEYS = [
   'primary',
@@ -65,23 +67,10 @@ export function listConfiguredVisualPipelineRules() {
   })
 }
 
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function shortText(value = '', max) {
-  const text = normalizeText(value)
-  const limit = Number.isFinite(max) && max > 0 ? max : text.length
-  if (text.length <= limit) return text
-  return `${text.slice(0, limit)}…`
-}
-
 /** Núcleo del brief: solo campos del workspace (decisión IA). */
 export function resolveVisualBriefCore(workspace = {}) {
   return shortText(
-    normalizeText(workspace.prompt_visual || workspace.contenido || workspace.titulo || ''),
+    normalizeSpaces(workspace.prompt_visual || workspace.contenido || workspace.titulo || ''),
     getVisualPipelineConfig().promptMaxSubjectChars,
   )
 }
@@ -100,7 +89,7 @@ function templateForType(tipo = '', language = 'es') {
 /**
  * Prompt de generación fiel al workspace (misma fuente para foto, diagrama y 3D).
  */
-export function buildGenerationPrompt(workspace = {}, language = 'es') {
+export function buildVisualGenerationPrompt(workspace = {}, language = 'es') {
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const core = resolveVisualBriefCore(workspace)
   if (!core) return ''
@@ -132,17 +121,18 @@ export function hashPromptSeed(input = '') {
 export function buildPollinationsArtifact(prompt = '', { seedInput = '' } = {}) {
   const c = getVisualPipelineConfig()
   const seed = hashPromptSeed(seedInput || prompt)
-  const params = new URLSearchParams({
-    width: String(c.imageWidth),
-    height: String(c.imageHeight),
-    model: c.pollinationsModel,
-    seed: String(seed),
-  })
-  if (c.pollinationsNologo) params.set('nologo', 'true')
-  if (c.pollinationsEnhance) params.set('enhance', 'true')
-
+  // Ensamblado delegado al dueno (P7.6). Antes se construia aqui a mano y evadia
+  // transportSingleOwnerGuard porque usaba params.set('nologo', 'true') en vez del
+  // literal nologo=true que el guard buscaba.
   const base = c.pollinationsBaseUrl.replace(/\/$/, '')
-  const image_url = `${base}/prompt/${encodeURIComponent(prompt)}?${params.toString()}`
+  const image_url = buildPollinationsImageUrl(`${base}/prompt`, prompt, {
+    width: c.imageWidth,
+    height: c.imageHeight,
+    seed,
+    model: c.pollinationsModel,
+    nologo: c.pollinationsNologo,
+    enhance: c.pollinationsEnhance,
+  })
 
   return {
     image_url,

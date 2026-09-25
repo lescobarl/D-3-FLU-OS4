@@ -1,0 +1,13 @@
+# CODEOWNERS — el criterio/gate es INMUTABLE sin aprobación del dueño.
+# Reemplazá @TU_USUARIO por tu handle real de GitHub para que aplique.
+# Objetivo: evitar RUTAS DOBLES impidiendo que el agente edite el guard/gate.
+
+/tests/voiceLiveSingleWriter.test.ts  @TU_USUARIO
+/tests/hardcodeGuard.test.ts          @TU_USUARIO
+/tests/protocolGuard.test.ts          @TU_USUARIO
+/tests/stability-guards.test.ts       @TU_USUARIO
+/tests/voiceSingleSourceGuard.test.ts @TU_USUARIO
+/tests/searchSingleRouteGuard.test.ts @TU_USUARIO
+/scripts/task-gate.mjs                @TU_USUARIO
+/scripts/task-gate-baseline.mjs       @TU_USUARIO
+/.task/**                             @TU_USUARIO

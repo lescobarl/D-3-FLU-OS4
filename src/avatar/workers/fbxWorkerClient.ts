@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig';
 
 /**
  * Cliente del Web Worker de parseo FBX (espejo de voiceIdWorkerClient.js).
@@ -16,7 +17,7 @@ import * as THREE from 'three';
  *    El respaldo produce el MISMO resultado, solo que bloqueante.
  */
 
-const WORKER_REQUEST_TIMEOUT_MS = 45000;
+const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS;
 
 interface PendingEntry {
   resolve: (json: unknown) => void;
@@ -84,27 +85,21 @@ function postLoad(url: string): Promise<unknown> {
       if (!pending.has(id)) return;
       pending.delete(id);
       reject(new Error(`fbx worker timeout (${url})`));
-    }, WORKER_REQUEST_TIMEOUT_MS);
+    }, workerRequestMs);
     entry.timer = timer;
     w.postMessage({ id, url });
   });
 }
 
 /**
- * Fallback main-thread: mismo flujo (fetch + parseFbxBuffer + toJSON) pero en
+ * Fallback main-thread: llama a la MISMA orquestacion compartida (fetchFbxJson) pero en
  * el hilo principal. Es bloqueante, pero garantiza que la app funciona aunque
  * el worker no arranque. En main thread `installDomShim()` es no-op (document
  * existe), de modo que el comportamiento es idéntico al FBXLoader.load actual.
  */
 async function runMainThreadFallback(url: string): Promise<unknown> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`fetch FBX falló: HTTP ${response.status} para ${url}`);
-  }
-  const buffer = await response.arrayBuffer();
-  const { parseFbxBuffer } = await import('../lib/fbxParse');
-  const group = parseFbxBuffer(buffer, url);
-  return group.toJSON();
+  const { fetchFbxJson } = await import('../lib/fbxParse');
+  return fetchFbxJson(url);
 }
 
 /**

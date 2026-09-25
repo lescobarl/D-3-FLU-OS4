@@ -1,7 +1,11 @@
 import { VISUAL_CONFIG } from './visualConfig.js'
+import { TIMEOUT_POLICY_MS } from '../../core/config/appConfig'
+import { shortText } from '../../lib/textUtils'
 import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
-  buildGenerationPrompt,
+  buildVisualGenerationPrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,
@@ -9,8 +13,8 @@ import {
 } from './fluVisualPipeline.js'
 
 export {
-  buildGenerationPrompt,
-  buildGenerationPrompt as buildWorkspaceImagePrompt,
+  buildVisualGenerationPrompt,
+  buildVisualGenerationPrompt as buildWorkspaceImagePrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,
@@ -18,24 +22,12 @@ export {
 
 const workspaceImageSourceCache = new Map()
 
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 function escapeXml(value = '') {
   return String(value || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-}
-
-function shortText(value = '', max = 260) {
-  const text = normalizeText(value)
-  if (text.length <= max) return text
-  return `${text.slice(0, max)}…`
 }
 
 function buildLocalSvgDataUrl(subject = '') {
@@ -71,7 +63,7 @@ function buildNotVisualTrace() {
 }
 
 export async function resolveWorkspaceAiImageSource({ workspace = {}, language = 'es' } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const subject = resolveVisualBriefCore(workspace)
   return {
     image_url: buildLocalSvgDataUrl(subject),
@@ -90,7 +82,7 @@ export async function resolveWorkspaceAiImageSource({ workspace = {}, language =
 export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es') {
   const c = getVisualPipelineConfig()
   const type = String(workspace.tipo || '').trim().toLowerCase()
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
 
   if (!prompt || !c.visualTypes.includes(type)) {
     return buildNotVisualTrace()
@@ -106,15 +98,11 @@ export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es
     }
   }
 
-  if (c.primary === 'pollinations') {
-    return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
-  }
-
   return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
 }
 
 function buildWorkspaceImageRequestKey(workspace = {}, language = 'es') {
-  return `${language}::${buildGenerationPrompt(workspace, language)}`
+  return `${language}::${buildVisualGenerationPrompt(workspace, language)}`
 }
 
 async function resolveErrorFallback(workspace = {}, language = 'es', error = '') {
@@ -127,7 +115,7 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
         source: 'generation_failed',
         hasImage: false,
         error: error || 'unknown',
-        prompt: buildGenerationPrompt(workspace, language),
+        prompt: buildVisualGenerationPrompt(workspace, language),
       },
     }
   }
@@ -142,7 +130,7 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
 }
 
 export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es', apiKey = '' } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const c = getVisualPipelineConfig()
 
@@ -181,7 +169,7 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
       })
 
       if (!response.ok) {
-        const detail = await response.text().catch(() => '')
+        const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
         return resolveErrorFallback(
           workspace,
           language,
@@ -243,7 +231,156 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
     }
     return resolved
   } catch (error) {
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
     workspaceImageSourceCache.delete(cacheKey)
     return resolveErrorFallback(workspace, language, error?.message || 'unknown')
+  }
+}
+
+/**
+ * Fallback real de imagen por OpenRouter (servidor). Se invoca cuando la
+ * imagen de Pollinations falla al cargar en el navegador (onError del <img>),
+ * para no dejar el placeholder «chipote».
+ * POST /api/openrouter-image → { imageUrl (data URL), trace }.
+ * Devuelve { image_url, trace }; image_url vacío si no hay key o falla.
+ */
+export async function fetchOpenRouterImageFallback({
+  workspace = {},
+  language = 'es',
+  apiKey = '',
+} = {}) {
+  const prompt = buildVisualGenerationPrompt(workspace, language)
+  const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch('/api/openrouter-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        prompt,
+        language,
+        ...(apiKey ? { apiKey } : {}),
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+      return {
+        image_url: '',
+        trace: {
+          provider: AI_PROVIDER_IDS.OPENROUTER,
+          model: '',
+          kind: 'images',
+          source: 'proxy_error',
+          hasImage: false,
+          error: detail || `openrouter_image_http_${response.status}`,
+          prompt,
+        },
+      }
+    }
+
+    const payload = await response.json()
+    if (!payload?.imageUrl) {
+      return {
+        image_url: '',
+        trace: payload?.trace || {
+          provider: AI_PROVIDER_IDS.OPENROUTER,
+          model: '',
+          kind: 'images',
+          source: 'empty_response',
+          hasImage: false,
+          prompt,
+        },
+      }
+    }
+
+    return {
+      image_url: payload.imageUrl,
+      trace: payload.trace || {
+        provider: AI_PROVIDER_IDS.OPENROUTER,
+        model: '',
+        kind: 'images',
+        source: 'openrouter_image_fallback',
+        hasImage: true,
+        prompt,
+        language,
+      },
+    }
+  } catch (error) {
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
+    return {
+      image_url: '',
+      trace: {
+        provider: AI_PROVIDER_IDS.OPENROUTER,
+        model: '',
+        kind: 'images',
+        source: error?.name === 'AbortError' ? 'openrouter_image_timeout' : 'generation_failed',
+        hasImage: false,
+        error: error?.message || 'unknown',
+        prompt,
+      },
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Video REAL con fal.ai (text-to-video). Se invoca desde la generación de
+ * video (GENERAR_VIDEO) con el tema/prompt del usuario.
+ * POST /api/fal-video → { videoUrl (url del clip), trace }.
+ * Devuelve { video_url, trace }; video_url vacío si no hay key o falla.
+ */
+export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '', model = '' } = {}) {
+  if (!prompt.trim()) {
+    return {
+      video_url: '',
+      trace: { provider: 'falai', source: 'empty_prompt', hasVideo: false, prompt },
+    }
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.falVideoFetchAbort)
+  try {
+    const response = await fetch('/api/fal-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) }),
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+      return {
+        video_url: '',
+        trace: {
+          provider: 'falai',
+          source: 'proxy_error',
+          hasVideo: false,
+          error: detail || `fal_video_http_${response.status}`,
+          prompt,
+        },
+      }
+    }
+    const payload = await response.json()
+    return {
+      video_url: payload?.videoUrl || '',
+      trace: payload?.trace || { provider: 'falai', source: 'empty_response', hasVideo: false, prompt },
+    }
+  } catch (error) {
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
+    return {
+      video_url: '',
+      trace: {
+        provider: 'falai',
+        source: error?.name === 'AbortError' ? 'fal_video_timeout' : 'generation_failed',
+        hasVideo: false,
+        error: error?.message || 'unknown',
+        prompt,
+      },
+    }
+  } finally {
+    clearTimeout(timer)
   }
 }

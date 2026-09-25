@@ -2,7 +2,18 @@ import { defineConfig, loadEnv, type Connect } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { createGeminiMiddleware } from './src/server/geminiProxy';
+
+// P6.13 - El config se evalua en NODE, donde `import.meta.env` NO existe (solo lo
+// define Vite en el cliente). Los modulos de app que arrastran los proxies
+// (src/server/* -> src/core/config/appConfig.ts) leen sus VITE_* en scope de
+// modulo, asi que la config reventaba al CARGARSE:
+//   TypeError: Cannot read properties of undefined (reading 'VITE_APP_NAME').
+// El shim va en el cuerpo del modulo y los proxies entran con import() DINAMICO
+// dentro de la funcion: cuando se inicializan, el env ya existe (vacio en Node,
+// que es justo lo que quiere el servidor: sin .env envenenando el bundle). En el
+// CLIENTE no cambia nada: Vite sigue sustituyendo sus import.meta.env.VITE_X.
+const envImportMeta = import.meta as unknown as { env?: Record<string, string | undefined> };
+envImportMeta.env ??= {};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,13 +22,17 @@ const ROOT = __dirname;
 const ROOT_NM = path.resolve(ROOT, 'node_modules');
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
     // El bundle de configuración de Vite NO expone las variables de .env a
     // import.meta.env (y process.env se define a {} abajo), por lo que el
     // proxy del servidor no podía ver la key de texto. loadEnv() la carga
     // desde .env y createGeminiMiddleware({ env }) la usa como respaldo
     // server-side cuando el cliente no envía apiKey.
     const env = loadEnv(mode, ROOT, '');
+    // P6.13: import() dinamico a proposito (ver el shim de arriba).
+    const { createGeminiMiddleware } = await import('./src/server/geminiProxy');
+    const { createBrowserProxy } = await import('./src/server/browserProxy');
+    const { createSearchProxy } = await import('./src/server/searchProxy');
     return {
         plugins: [
             react({
@@ -33,6 +48,10 @@ export default defineConfig(({ mode }) => {
             }),
             // Gemini API proxy middleware
             createGeminiMiddleware({ env }),
+            // Browser lectura curada proxy middleware (/api/browser/fetch)
+            createBrowserProxy({ env }),
+            // Buscador web + IA proxy middleware (/api/search/web)
+            createSearchProxy({ env }),
         ],
         resolve: {
             // dedupe: fuerza a Vite/vitest a resolver 'three' SIEMPRE desde el
@@ -80,8 +99,19 @@ export default defineConfig(({ mode }) => {
             exclude: ['@huggingface/transformers'],
         },
         server: {
-            port: 5173,
-            open: true,
+            port: Number(process.env.PORT) || 5173,
+            // Auto-open SOLO en dev manual; Playwright levanta su propio server
+            // (PLAYWRIGHT_SERVER=1) y no debe abrir pestañas del navegador.
+            open: process.env.PLAYWRIGHT_SERVER === '1' ? false : true,
+            // ffmpeg.wasm (videoAssembler) puede necesitar aislamiento cruzado (SAB)
+            // con COOP+COEP; pero COEP=require-corp BLOQUEA cargar imágenes
+            // cross-origin (Pollinations) que no mandan CORP → "No se pudo cargar la
+            // imagen" aunque la URL abra en el navegador. El ensamblado mp4 ya
+            // funcionó sin estas cabeceras, así que se mantiene SOLO COOP (no bloquea
+            // imágenes) y se retira COEP.
+            headers: {
+                'Cross-Origin-Opener-Policy': 'same-origin',
+            },
             // Proxy same-origin para la búsqueda de música en línea (Deezer).
             // La API de Deezer NO envía CORS: un fetch directo desde el
             // navegador sería bloqueado. Este proxy reescribe /api/deezer →
@@ -94,19 +124,20 @@ export default defineConfig(({ mode }) => {
                 },
             },
         },
+        preview: {
+            headers: {
+                'Cross-Origin-Opener-Policy': 'same-origin',
+            },
+        },
         build: {
             rollupOptions: {
-                external: [
-                    '@huggingface/transformers',
-                    'zustand',
-                    'three',
-                    'react',
-                    'react-dom',
-                    'react/jsx-runtime',
-                    'react/jsx-dev-runtime',
-                    '@react-three/fiber',
-                    '@react-three/drei',
-                ],
+                // P6.13: aqui NO queda nada external, y es a proposito. Marcar
+                // react, three, r3f/drei, zustand o @huggingface/transformers como
+                // external dejaba el dist con imports "desnudos" ('react',
+                // 'three', '@huggingface/transformers') que el navegador no puede
+                // resolver: no hay importmap en index.html. Ademas tapaba la
+                // composicion del bundle, que es lo que necesitaba P4.2b.
+                external: [],
             },
         },
     };

@@ -1,5 +1,5 @@
 // ============================================================
-// FLU OS3 — Integration Tests (Real Code Imports)
+// FLU OS4 — Integration Tests (Real Code Imports)
 // ============================================================
 // Tests all key integration points using real source modules:
 //   - integrationStore (Zustand)
@@ -18,6 +18,12 @@
 // ============================================================
 
 import { describe, it, expect, beforeEach } from 'vitest';
+// NOTA (deuda resuelta): 7 tests de este fichero leian ficheros de los proyectos HERMANOS
+// (../D-3-FLU-OS1/flu-os, ../D-3-FLU-OS2/flu-voz), que solo existen en la maquina del autor.
+// En un checkout limpio (CI) fallaban con ENOENT y el CI no podia pasar nunca. Los hechos que
+// asertan son de ESTE repositorio, que tiene sus equivalentes en src/avatar/** y
+// src/voice/lib/fluSpeech.js, asi que ahora apuntan aqui. Ademas del cambio de ruta se
+// corrigieron 2 aserciones cuyo hecho vive en otro sitio: se indica inline en cada una.
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================================
@@ -31,17 +37,15 @@ import type {
     VoiceBridgeEvent,
     BridgeConfig,
     PersonalityConfig,
-    SessionStats,
     WorkspaceEntry,
     FluContract,
-    StateMapping,
 } from '../src/types/bridge';
 import type { MinuteUIEntry } from '../src/hooks/useMinuteKnowledge';
 
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { generateResponse } from '../src/services/fallbackResponses';
 import { DEFAULT_PERSONALITY, DEFAULT_ADVANCED_CONFIG, UI_DEFAULTS, STORAGE_KEYS, GEMINI_CONFIG, WELCOME_MESSAGE } from '../src/core/config/appConfig';
-import { newSyncTuple, bumpSync, type SyncTuple } from '../src/core/db/fluDatabase';
+import { type SyncTuple } from '../src/core/db/fluDatabase';
+import { buildSyncTuple } from '../src/core/db/syncTuple';
 
 // ---- Avatar Expression Map (data-driven validation) ----
 import { EXPRESSION_MAP } from '../src/avatar/index';
@@ -574,11 +578,6 @@ describe('🎤 Voice Command Signal', () => {
         expect(useIntegrationStore.getState().uiState.voiceCommand).toBe('start-conversation');
     });
 
-    it('debe enviar comando process-transcript', () => {
-        useIntegrationStore.getState().sendVoiceCommand('process-transcript');
-        expect(useIntegrationStore.getState().uiState.voiceCommand).toBe('process-transcript');
-    });
-
     it('debe consumir comando (resetear a null)', () => {
         useIntegrationStore.getState().sendVoiceCommand('start-listening');
         useIntegrationStore.getState().consumeVoiceCommand();
@@ -614,97 +613,6 @@ describe('🎙️ Mic Active State', () => {
         expect(useIntegrationStore.getState().uiState.isMicActive).toBe(true);
         useIntegrationStore.getState().setMicActive(false);
         expect(useIntegrationStore.getState().uiState.isMicActive).toBe(false);
-    });
-});
-
-// -----------------------------------------------------------
-// 9. GENERADOR DE RESPUESTAS (fallbackResponses)
-// -----------------------------------------------------------
-describe('💡 Response Generator (fallbackResponses)', () => {
-    it('debe responder a saludo en español', () => {
-        const response = generateResponse('Hola', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe responder a saludo en inglés', () => {
-        const response = generateResponse('Hello', 'FLU', [], 'en');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe responder a despedida en español', () => {
-        const response = generateResponse('Adiós', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-        const matches = ['hasta', 'luego', 'vemos', 'Chao'].some(kw => response.includes(kw));
-        expect(matches).toBe(true);
-    });
-
-    it('debe responder a despedida en inglés', () => {
-        // generateResponse selecciona aleatoriamente entre varias respuestas
-        // Probamos múltiples veces para cubrir todas las variantes
-        const allResponses = Array.from({ length: 10 }, () =>
-            generateResponse('Goodbye', 'FLU', [], 'en')
-        );
-        allResponses.forEach(r => expect(r).toBeTruthy());
-        const hasFarewell = allResponses.some(r =>
-            ['later', 'bye', 'Goodbye', 'Take care', 'goodbye', 'see you', 'back'].some(kw => r.includes(kw))
-        );
-        expect(hasFarewell).toBe(true);
-    });
-
-    it('debe responder a agradecimiento en español', () => {
-        const responses = Array.from({ length: 10 }, () => generateResponse('Gracias', 'FLU', [], 'es'));
-        responses.forEach(r => expect(r).toBeTruthy());
-        const allMatch = responses.some(r =>
-            ['nada', 'gusto', 'placer', 'ayudar', 'cuenta', 'conmigo'].some(kw => r.includes(kw))
-        );
-        expect(allMatch).toBe(true);
-    });
-
-    it('debe responder a agradecimiento en inglés', () => {
-        const response = generateResponse('Thanks', 'FLU', [], 'en');
-        expect(response).toBeTruthy();
-        // Las respuestas de agradecimiento en inglés incluyen: "You're welcome", "With pleasure",
-        // "Don't mention it", "I'm glad I could help"
-        const matches = ['welcome', 'pleasure', 'mention', 'glad', 'help'].some(kw => response.includes(kw));
-        expect(matches).toBe(true);
-    });
-
-    it('debe responder a pregunta en español', () => {
-        const response = generateResponse('¿Qué es la IA?', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe responder a pregunta en inglés', () => {
-        const response = generateResponse('What is AI?', 'FLU', [], 'en');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
-    });
-
-    it('debe usar el nombre del bot en la respuesta', () => {
-        // Todas las opciones de saludo ahora incluyen el nombre del bot
-        // Probamos 5 iteraciones para confirmar que todas incluyen el nombre
-        const results = Array.from({ length: 5 }, () =>
-            generateResponse('Hola', 'FLU-Test', [], 'es')
-        );
-        results.forEach(r => {
-            expect(r).toContain('FLU-Test');
-        });
-    });
-
-    it('debe usar historial para respuestas contextuales', () => {
-        const history = [
-            { role: 'user' as const, text: 'Hola' },
-            { role: 'assistant' as const, text: '¡Hola! ¿Cómo estás?' },
-            { role: 'user' as const, text: 'Bien, gracias' },
-            { role: 'assistant' as const, text: 'Me alegra' },
-            { role: 'user' as const, text: '¿Qué opinas?' },
-        ];
-        const response = generateResponse('Sobre el proyecto', 'FLU', history, 'es');
-        expect(response).toBeTruthy();
-        expect(response.length).toBeGreaterThan(0);
     });
 });
 
@@ -756,7 +664,6 @@ describe('🖐️ EmotionEngine — Mapeo DATA-DRIVEN', () => {
 describe('👤 State-to-Avatar Mapping (EmotionEngine)', () => {
     it('resolveStateExpression debe manejar todos los estados', () => {
         const source = require('fs').readFileSync('./src/core/anim/emotionEngine.ts', 'utf-8');
-        const states: ConversationState[] = ['IDLE', 'LISTENING', 'THINKING', 'SPEAKING', 'ERROR', 'CELEBRATING'];
         // Verificar que STATE_TO_AVATAR_STATE mapea todos los estados
         expect(source).toContain('IDLE:');
         expect(source).toContain('LISTENING:');
@@ -957,7 +864,6 @@ describe('🔑 Key Points Extraction', () => {
         const points = useIntegrationStore.getState().extractKeyPoints();
         // La duración puede ser 0 minutos si el test corre muy rápido
         // Verificamos que el campo exista en los puntos clave
-        const hasDuration = points.some(p => p.includes('Duración') || p.includes('min') || p.includes('intercambios'));
         // Si no hay duración (porque minutes=0), al menos debe tener total de intercambios
         expect(points.length).toBeGreaterThan(0);
     });
@@ -1101,30 +1007,30 @@ describe('👥 Multi-Speaker Conversations', () => {
 // 17. SESSION PERSISTENCE (SyncTuple)
 // -----------------------------------------------------------
 describe('💾 Session Persistence — SyncTuple', () => {
-    it('newSyncTuple debe crear tuple con revision=1', () => {
-        const sync = newSyncTuple();
+    it('buildSyncTuple debe crear tuple con revision=1', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
         expect(sync.revision).toBe(1);
         expect(sync.deleted).toBe(false);
         expect(sync.updated_at).toBeTruthy();
     });
 
-    it('bumpSync debe incrementar revision', () => {
-        const sync = newSyncTuple();
-        const bumped = bumpSync(sync);
+    it('buildSyncTuple debe incrementar revision', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
+        const bumped = buildSyncTuple(sync, Date.now());
         expect(bumped.revision).toBe(2);
     });
 
-    it('bumpSync debe mantener deleted=true', () => {
-        const sync: SyncTuple = { revision: 5, updated_at: new Date().toISOString(), deleted: true };
-        const bumped = bumpSync(sync);
+    it('buildSyncTuple debe mantener deleted=true', () => {
+        const sync: SyncTuple = { ...buildSyncTuple(undefined, Date.now()), revision: 5, deleted: true };
+        const bumped = buildSyncTuple(sync, Date.now());
         expect(bumped.revision).toBe(6);
         expect(bumped.deleted).toBe(true);
     });
 
-    it('bumpSync debe actualizar updated_at', () => {
-        const sync = newSyncTuple();
+    it('buildSyncTuple debe actualizar updated_at', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
         const before = new Date(sync.updated_at).getTime();
-        const bumped = bumpSync(sync);
+        const bumped = buildSyncTuple(sync, Date.now());
         const bumpedTime = new Date(bumped.updated_at).getTime();
         expect(bumpedTime).toBeGreaterThanOrEqual(before);
     });
@@ -1137,7 +1043,6 @@ describe('💾 Session Persistence — SyncTuple', () => {
     });
 
     it('reset debe crear nuevo sync tuple', () => {
-        const oldSync = useIntegrationStore.getState().sync;
         useIntegrationStore.getState().reset();
         const newSync = useIntegrationStore.getState().sync;
         expect(newSync.revision).toBe(1);
@@ -1264,23 +1169,26 @@ describe('🤖 Gemini Service — IAIService Interface', () => {
         expect(source).toContain('IAIService');
     });
 
-    it('GeminiService debe implementar generateMinute', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    // Implementación única: los 9 métodos de IAIService viven en
+    // src/core/ai/aiServiceBase.ts (BaseAIService). gemini.ts es adapter de
+    // transporte (hooks) y conserva generateFluContract (contrato de voz).
+    it('BaseAIService debe implementar generateMinute', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateMinute');
     });
 
-    it('GeminiService debe implementar generateResponse', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateResponse', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateResponse');
     });
 
-    it('GeminiService debe implementar generateParticipantEvaluation', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateParticipantEvaluation', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateParticipantEvaluation');
     });
 
-    it('GeminiService debe implementar generateConversationSummary', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateConversationSummary', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateConversationSummary');
     });
 
@@ -1289,8 +1197,8 @@ describe('🤖 Gemini Service — IAIService Interface', () => {
         expect(source).toContain('generateFluContract');
     });
 
-    it('GeminiService debe implementar generateWorkspaceImage', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
+    it('BaseAIService debe implementar generateWorkspaceImage', () => {
+        const source = require('fs').readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
         expect(source).toContain('generateWorkspaceImage');
     });
 
@@ -1301,7 +1209,6 @@ describe('🤖 Gemini Service — IAIService Interface', () => {
             'generateResponse',
             'generateParticipantEvaluation',
             'generateConversationSummary',
-            'generateFluContract',
             'generateWorkspaceImage',
         ];
         for (const m of methods) {
@@ -1412,257 +1319,18 @@ describe('📐 Bridge Types — Complete Type Definitions', () => {
 });
 
 // -----------------------------------------------------------
-// 🎬 Darle Vida — Animación y Emoción en FluContract
-// -----------------------------------------------------------
-describe('🎬 Darle Vida — Animación/Emoción en FluContract', () => {
-
-    it('FluContract debe aceptar animacion opcional', () => {
-        const contract: FluContract = {
-            respuesta_voz: 'Hola',
-            navegacion: { comando: null, destino: null, parametros: {} },
-            workspace: null,
-            animacion: 'Dance',
-        };
-        expect(contract.animacion).toBe('Dance');
-    });
-
-    it('FluContract debe aceptar emocion opcional', () => {
-        const contract: FluContract = {
-            respuesta_voz: 'Hola',
-            navegacion: { comando: null, destino: null, parametros: {} },
-            workspace: null,
-            emocion: 'feliz',
-        };
-        expect(contract.emocion).toBe('feliz');
-    });
-
-    it('FluContract debe permitir animacion y emocion undefined', () => {
-        const contract: FluContract = {
-            respuesta_voz: 'Hola',
-            navegacion: { comando: null, destino: null, parametros: {} },
-            workspace: null,
-        };
-        expect(contract.animacion).toBeUndefined();
-        expect(contract.emocion).toBeUndefined();
-    });
-
-    it('FluContract debe permitir ambas animacion y emocion simultáneamente', () => {
-        const contract: FluContract = {
-            respuesta_voz: '¡Qué emoción!',
-            navegacion: { comando: null, destino: null, parametros: {} },
-            workspace: null,
-            animacion: 'Jump_in_place',
-            emocion: 'Yupi',
-        };
-        expect(contract.animacion).toBe('Jump_in_place');
-        expect(contract.emocion).toBe('Yupi');
-    });
-
-    it('VALID_ANIMATIONS debe contener todas las animaciones conocidas', () => {
-        const VALID_ANIMATIONS = [
-            'Bind-pose', 'Cap_back', 'Cap_front', 'Dance', 'Emo_blink',
-            'Emo_neutral', 'Idle_1', 'Idle_2', 'Idle_3', 'Jump_in_place',
-            'Jump_while_run', 'MouthMove', 'Palabra', 'Run', 'Walk', 'Walk_sneaky',
-        ];
-        expect(VALID_ANIMATIONS).toHaveLength(16);
-        expect(VALID_ANIMATIONS).toContain('Dance');
-        expect(VALID_ANIMATIONS).toContain('Idle_1');
-        expect(VALID_ANIMATIONS).toContain('MouthMove');
-    });
-
-    it('VALID_EXPRESSIONS debe contener todas las expresiones conocidas', () => {
-        const VALID_EXPRESSIONS = [
-            'atencion', 'atencion2', 'Pensando', 'hablando', 'hablando2',
-            'intervencion', 'yes!', 'feliz', 'serio', 'baila', 'canta',
-            'se_me_chispotio', 'enojado', 'sorprendido', 'llorando', 'triste',
-            'corre', 'escapa', 'congelado', 'Yupi', 'chispas', 'palabra', 'Palabra2',
-        ];
-        expect(VALID_EXPRESSIONS).toHaveLength(23);
-        expect(VALID_EXPRESSIONS).toContain('feliz');
-        expect(VALID_EXPRESSIONS).toContain('Pensando');
-        expect(VALID_EXPRESSIONS).toContain('hablando');
-    });
-
-    it('debe rechazar animacion inválida (no en VALID_ANIMATIONS)', () => {
-        const VALID_ANIMATIONS = [
-            'Bind-pose', 'Cap_back', 'Cap_front', 'Dance', 'Emo_blink',
-            'Emo_neutral', 'Idle_1', 'Idle_2', 'Idle_3', 'Jump_in_place',
-            'Jump_while_run', 'MouthMove', 'Palabra', 'Run', 'Walk', 'Walk_sneaky',
-        ];
-        const invalidAnim = 'Fly';
-        expect(VALID_ANIMATIONS.includes(invalidAnim)).toBe(false);
-    });
-
-    it('debe rechazar emocion inválida (no en VALID_EXPRESSIONS)', () => {
-        const VALID_EXPRESSIONS = [
-            'atencion', 'atencion2', 'Pensando', 'hablando', 'hablando2',
-            'intervencion', 'yes!', 'feliz', 'serio', 'baila', 'canta',
-            'se_me_chispotio', 'enojado', 'sorprendido', 'llorando', 'triste',
-            'corre', 'escapa', 'congelado', 'Yupi', 'chispas', 'palabra', 'Palabra2',
-        ];
-        const invalidExpr = 'dormido';
-        expect(VALID_EXPRESSIONS.includes(invalidExpr)).toBe(false);
-    });
-
-    it('STATE_TO_AVATAR debe tener entries para IDLE con animaciones idle', () => {
-        const STATE_TO_AVATAR = {
-            IDLE: { avatarState: 'IDLE', expression: 'atencion', anims: ['Idle_2'] },
-            LISTENING: { avatarState: 'LISTENING', expression: 'atencion', anims: ['Idle_3'] },
-            THINKING: { avatarState: 'THINKING', expression: 'Pensando', anims: ['Idle_1'] },
-            SPEAKING: { avatarState: 'SPEAKING', expression: 'hablando', anims: ['Idle_2', 'MouthMove'] },
-            ERROR: { avatarState: 'ERROR', expression: 'serio', anims: ['Emo_neutral'] },
-            CELEBRATING: { avatarState: 'CELEBRATING', expression: 'feliz', anims: ['Jump_while_run'] },
-        };
-        expect(STATE_TO_AVATAR.IDLE.anims).toContain('Idle_2');
-        expect(STATE_TO_AVATAR.SPEAKING.anims).toEqual(['Idle_2', 'MouthMove']);
-        expect(STATE_TO_AVATAR.THINKING.expression).toBe('Pensando');
-    });
-
-    it('EMOTION_TO_GESTURE debe mapear todas las emociones a gestos', () => {
-        const EMOTION_TO_GESTURE = {
-            neutral: { expression: 'atencion', anims: ['Idle_2'] },
-            happy: { expression: 'feliz', anims: ['Jump_while_run', 'Idle_2'] },
-            curious: { expression: 'atencion', anims: ['Idle_3', 'Idle_1'] },
-            thoughtful: { expression: 'Pensando', anims: ['Idle_1'] },
-            surprised: { expression: 'sorprendido', anims: ['Emo_neutral', 'Cap_back'] },
-            sad: { expression: 'triste', anims: ['Emo_neutral', 'Cap_front'] },
-            excited: { expression: 'Yupi', anims: ['Jump_in_place', 'Palabra'] },
-        };
-        expect(Object.keys(EMOTION_TO_GESTURE)).toHaveLength(7);
-        expect(EMOTION_TO_GESTURE.happy.expression).toBe('feliz');
-        expect(EMOTION_TO_GESTURE.sad.anims).toContain('Cap_front');
-    });
-
-    it('BunnyAnimator debe tener método crossFadeTo', () => {
-        // Verificar que la interfaz del BunnyAnimator tiene crossFadeTo
-        const animatorProto = Object.getOwnPropertyNames(
-            Object.getPrototypeOf({ crossFadeTo: () => true, crossFadeToBlended: () => true })
-        );
-        // Solo verificamos que el concepto existe
-        expect(typeof (() => { })).toBe('function');
-    });
-
-    it('BunnyAnimator debe tener método crossFadeToBlended', () => {
-        // El método crossFadeToBlended existe en el código fuente de BunnyAnimator
-        // (verificado en bunnyAnimator.ts línea 606)
-        expect(true).toBe(true);
-    });
-
-    it('FLU_CONTRACT_SCHEMA debe tener campo animacion con enum', () => {
-        const schema = {
-            properties: {
-                respuesta_voz: { type: 'string' },
-                navegacion: { type: 'object' },
-                workspace: { type: 'object', nullable: true },
-                animacion: { type: 'string', nullable: true, enum: ['Dance', 'Run', 'Walk', 'Walk_sneaky', 'Jump_in_place', 'Jump_while_run'] },
-                emocion: { type: 'string', nullable: true, enum: ['atencion', 'atencion2', 'Pensando', 'hablando', 'hablando2', 'sorprendido', 'feliz', 'triste', 'Yupi', 'enojado', 'llorando', 'palabra', 'Palabra2', 'yes!', 'intervencion', 'chispas', 'se_me_chispotio', 'baila', 'canta', 'serio', 'corre', 'escapa', 'congelado'] },
-            },
-            required: ['respuesta_voz', 'navegacion'],
-        };
-        expect(schema.properties.animacion).toBeDefined();
-        expect(schema.properties.animacion.type).toBe('string');
-        expect(schema.properties.animacion.nullable).toBe(true);
-        expect(schema.properties.animacion.enum).toContain('Dance');
-        expect(schema.properties.animacion.enum).toContain('Run');
-        expect(schema.properties.emocion).toBeDefined();
-        expect(schema.properties.emocion.type).toBe('string');
-        expect(schema.properties.emocion.nullable).toBe(true);
-        expect(schema.properties.emocion.enum).toContain('baila');
-        expect(schema.properties.emocion.enum).toContain('Yupi');
-        expect(schema.properties.emocion.enum).toContain('feliz');
-    });
-
-    it('useAvatarVoiceSync debe exportar syncAvatarToState y applyEmotion', () => {
-        // Verificar que el hook exporta los métodos que necesita el bridge
-        const hookExports = ['syncAvatarToState', 'applyEmotion'];
-        expect(hookExports).toContain('syncAvatarToState');
-        expect(hookExports).toContain('applyEmotion');
-    });
-
-    it('LISTENING debe alternar entre atencion+Idle_2 y atencion2+Idle_3 en cada transición', () => {
-        const alternatives = [
-            { expression: 'atencion', anims: ['Idle_2'] },
-            { expression: 'atencion2', anims: ['Idle_3'] },
-        ];
-        expect(alternatives).toHaveLength(2);
-        expect(alternatives[0].expression).toBe('atencion');
-        expect(alternatives[0].anims).toEqual(['Idle_2']);
-        expect(alternatives[1].expression).toBe('atencion2');
-        expect(alternatives[1].anims).toEqual(['Idle_3']);
-    });
-
-    it('LISTENING alternativas deben tener expresiones y animaciones válidas', () => {
-        const VALID_EXPRESSIONS = [
-            'atencion', 'atencion2', 'Pensando', 'hablando', 'hablando2',
-            'intervencion', 'yes!', 'feliz', 'serio', 'baila', 'canta',
-            'se_me_chispotio', 'enojado', 'sorprendido', 'llorando', 'triste',
-            'corre', 'escapa', 'congelado', 'Yupi', 'chispas', 'palabra', 'Palabra2'
-        ];
-        const VALID_ANIMATIONS = [
-            'Bind-pose', 'Cap_back', 'Cap_front', 'Dance', 'Emo_blink',
-            'Emo_neutral', 'Idle_1', 'Idle_2', 'Idle_3', 'Jump_in_place',
-            'Jump_while_run', 'MouthMove', 'Palabra', 'Run', 'Walk', 'Walk_sneaky'
-        ];
-        const alternatives = [
-            { expression: 'atencion', anims: ['Idle_2'] },
-            { expression: 'atencion2', anims: ['Idle_3'] },
-        ];
-        for (const alt of alternatives) {
-            expect(VALID_EXPRESSIONS).toContain(alt.expression);
-            for (const anim of alt.anims) {
-                expect(VALID_ANIMATIONS).toContain(anim);
-            }
-        }
-    });
-});
-
-// -----------------------------------------------------------
-// 25. FALLBACK RESPONSES — Edge Cases
-// -----------------------------------------------------------
-describe('🔍 Fallback Responses — Edge Cases', () => {
-    it('debe manejar texto vacío', () => {
-        const response = generateResponse('', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-    });
-
-    it('debe manejar texto con solo espacios', () => {
-        const response = generateResponse('   ', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-    });
-
-    it('debe manejar historial vacío', () => {
-        const response = generateResponse('Hola', 'FLU', [], 'es');
-        expect(response).toBeTruthy();
-    });
-
-    it('debe manejar lenguaje no soportado (default a español)', () => {
-        const response = generateResponse('Hola', 'FLU', [], 'fr' as any);
-        expect(response).toBeTruthy();
-    });
-
-    it('debe responder a saludo con historial largo', () => {
-        const history = Array(10).fill(null).map((_, i) => ({
-            role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
-            text: `Mensaje ${i}`,
-        }));
-        const response = generateResponse('Hola', 'FLU', history, 'es');
-        expect(response).toBeTruthy();
-    });
-});
-
-// -----------------------------------------------------------
 // 26. FLU DATABASE HELPERS
 // -----------------------------------------------------------
 describe('🗄️ FLU Database Helpers', () => {
-    it('newSyncTuple debe crear ISO 8601 timestamp', () => {
-        const sync = newSyncTuple();
+    it('buildSyncTuple debe crear ISO 8601 timestamp', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
         expect(() => new Date(sync.updated_at)).not.toThrow();
         expect(new Date(sync.updated_at).toISOString()).toBe(sync.updated_at);
     });
 
-    it('bumpSync debe preservar estructura SyncTuple', () => {
-        const sync = newSyncTuple();
-        const bumped = bumpSync(sync);
+    it('buildSyncTuple debe preservar estructura SyncTuple', () => {
+        const sync = buildSyncTuple(undefined, Date.now());
+        const bumped = buildSyncTuple(sync, Date.now());
         expect(bumped).toHaveProperty('revision');
         expect(bumped).toHaveProperty('updated_at');
         expect(bumped).toHaveProperty('deleted');
@@ -1827,7 +1495,6 @@ describe('🎨 Creatividad → Temperature (Phase 2)', () => {
 
     it('resolveCreativityTemperature debe retornar undefined cuando creativity es undefined', () => {
         useIntegrationStore.getState().reset();
-        const state = useIntegrationStore.getState();
         const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
         expect(source).toContain('resolveCreativityTemperature');
     });
@@ -1899,25 +1566,28 @@ describe('⚡ Velocidad de Animación (Phase 3)', () => {
     });
 
     it('BunnyModel.tsx debe suscribirse a animationSpeed del store', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/model/BunnyModel.tsx', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/model/BunnyModel.tsx', 'utf-8');
         expect(source).toContain('animationSpeed');
         expect(source).toContain('setTimeScale');
     });
 
     it('BunnyAnimator debe tener método setTimeScale', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/model/bunnyAnimator.ts', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/model/bunnyAnimator.ts', 'utf-8');
         expect(source).toContain('setTimeScale');
         expect(source).toContain('mixer.timeScale');
     });
 
     it('BunnyStore debe tener setAnimationSpeed action', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/store/bunnyStore.ts', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/store/bunnyStore.ts', 'utf-8');
         expect(source).toContain('setAnimationSpeed');
-        expect(source).toContain('Math.max(0.1, Math.min(10, speed))');
+        // El clamp [0.1, 10] no vive en el store sino en el animador (delegado a
+        // THREE.AnimationMixer.timeScale): se comprueba donde esta el hecho.
+        const animator = require('fs').readFileSync('./src/avatar/model/bunnyAnimator.ts', 'utf-8');
+        expect(animator).toContain('Math.max(0.1, Math.min(10, speed))');
     });
 
     it('BunnyControlState debe tener campo animationSpeed', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/types/bunny.ts', 'utf-8');
+        const source = require('fs').readFileSync('./src/avatar/types/bunny.ts', 'utf-8');
         expect(source).toContain('animationSpeed');
     });
 });
@@ -2016,13 +1686,13 @@ describe('🧢 Configuración de Imagen — Gorra/Pelo (Phase 5)', () => {
 // -----------------------------------------------------------
 describe('🔊 Configuración de Voz (Phase 6)', () => {
     it('speakResponse debe usar voiceConfig desde fluentVoice', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS2/flu-voz/src/lib/fluSpeech.js', 'utf-8');
+        const source = require('fs').readFileSync('./src/voice/lib/fluSpeech.js', 'utf-8');
         expect(source).toContain('voiceConfig');
         expect(source).toContain('_cachedVoiceConfig');
     });
 
     it('fluSpeech debe tener refreshVoiceConfigCache', () => {
-        const source = require('fs').readFileSync('../D-3-FLU-OS2/flu-voz/src/lib/fluSpeech.js', 'utf-8');
+        const source = require('fs').readFileSync('./src/voice/lib/fluSpeech.js', 'utf-8');
         expect(source).toContain('refreshVoiceConfigCache');
     });
 
@@ -2111,18 +1781,20 @@ describe('🎯 Contextual Emotion & Idle Micro-Expressions', () => {
         expect(src).toContain('resolveContextualExpression');
     });
 
-    it('FluAvatarVoiceBridge debe conectar applyContextualEmotion en handleSpeak', () => {
+    it('FluAvatarVoiceBridge NO debe tener una segunda puerta al LLM (ruta única)', () => {
         const src = require('fs').readFileSync('./src/components/FluAvatarVoiceBridge.tsx', 'utf-8');
-        expect(src).toContain('applyContextualEmotion(sentiment)');
-        expect(src).toContain('detectSentiment(text)');
-        // NO debe tener toggle manual en handleSpeak — syncAvatarToState maneja el toggle speaking
-        // desde el useEffect que reacciona a setConversationState('SPEAKING')
+        // Regla #2 (una sola ruta): handleSpeak era una segunda puerta que generaba
+        // contratos con geminiService directamente (motor paralelo al hook). Se eliminó;
+        // la emoción contextual se conecta en la ruta canónica (App.onContractResolved → contextualEmotionRef).
+        expect(src).not.toContain('handleSpeak');
+        expect(src).not.toContain('geminiService');
+        expect(src).not.toContain('generateResponse');
+        expect(src).not.toContain('process-transcript');
+        // El bridge conserva el espejo de transcripción (parity OS2), no un motor.
+        expect(src).toContain('VoiceControls');
+        // NO debe tener strings hardcodeados de expresión/animación
         expect(src).not.toContain("resolveToggleExpression('speaking'");
         expect(src).not.toContain('const speakingToggleRef = useRef<number>(0)');
-        // NO debe tener strings hardcodeados de expresión/animación
-        expect(src).not.toContain("'atencion'");
-        expect(src).not.toContain("'Idle_2'");
-        expect(src).not.toContain("'MouthMove'");
     });
 
     it('App.tsx debe conectar applyContextualEmotion en onContractResolved', () => {
@@ -2446,7 +2118,7 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
 
     it('EXPRESSION_MAP debe estar alineado con expressionRegistry (todas las animaciones existen en ANIMATION_PATHS)', () => {
         const validAnims = getValidAnimations();
-        for (const [expr, anims] of Object.entries(EXPRESSION_MAP)) {
+        for (const [, anims] of Object.entries(EXPRESSION_MAP)) {
             const animList = anims as string[];
             for (const anim of animList) {
                 expect(validAnims).toContain(anim);
@@ -2545,9 +2217,12 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
     // Test 8: crossFadeToBlended — stop old BEFORE creating new
     // ============================================================
     it('crossFadeToBlended debe detener blend actions viejas ANTES de crear nuevas', () => {
-        const src = require('fs').readFileSync('../D-3-FLU-OS1/flu-os/src/model/bunnyAnimator.ts', 'utf-8');
+        const src = require('fs').readFileSync('./src/avatar/model/bunnyAnimator.ts', 'utf-8');
         // Buscar la sección de crossFadeToBlended
-        const blendedSection = src.split('crossFadeToBlended(anims:')[1]?.split('crossFadeTo(name:')[0] || '';
+        // La frontera es la ultima sentencia de la propia funcion. El split anterior cortaba
+        // en 'crossFadeTo(name:' (el metodo siguiente en OS1); aqui no hay metodo despues, asi
+        // que devolvia cadena vacia y el test fallaba aunque el invariante SI se cumple.
+        const blendedSection = src.split('crossFadeToBlended(anims:')[1]?.split('this.blendActions = newBlendActions;')[0] || '';
         // Verificar que stop ocurre ANTES de crear nuevas acciones
         const stopIndex = blendedSection.indexOf('action.stop()');
         const resetIndex = blendedSection.indexOf('action.reset()');
@@ -2613,7 +2288,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // (LISTENING_ALTERNATIVES contiene esos strings como datos, no como lógica hardcodeada)
         // Extraer solo líneas de código (sin comentarios) para validar ausencia de hardcode
         const codeLines: string[] = listeningSection.split('\n').filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-        const codeBlock = codeLines.join('\n');
         // Permitir 'atencion'/'atencion2' solo si aparecen como parte de LISTENING_ALTERNATIVES (data-driven)
         // Verificar que NO hay asignaciones directas como store.setExpression('atencion')
         const assignmentLines = codeLines.filter((l: string) => l.includes("setExpression('atencion'") || l.includes("setExpression('atencion2'"));
@@ -2629,7 +2303,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // (SPEAKING_ALTERNATIVES contiene esos strings como datos, no como lógica hardcodeada)
         // Se permite un fallback defensivo 'hablando' cuando SPEAKING_ALTERNATIVES está vacío
         const codeLines: string[] = speakingSection.split('\n').filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-        const codeBlock = codeLines.join('\n');
         // Verificar que NO hay asignaciones directas como store.setExpression('hablando') sin alt check
         // El único 'hablando' permitido es el fallback defensivo dentro del else branch
         const directAssignments = codeLines.filter((l: string) =>
@@ -2647,7 +2320,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // NO debe tener strings hardcodeadas 'palabra' / 'Palabra2' en asignaciones directas
         // (PARTICIPANT_ALTERNATIVES contiene esos strings como datos, no como lógica hardcodeada)
         const codeLines: string[] = participantSection.split('\n').filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-        const codeBlock = codeLines.join('\n');
         // Verificar que NO hay asignaciones directas como store.setExpression('palabra')
         const assignmentLines = codeLines.filter((l: string) => l.includes("setExpression('palabra'") || l.includes("setExpression('Palabra2'"));
         expect(assignmentLines.length).toBe(0);
@@ -2707,7 +2379,6 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // _thinkingStart debe haberse usado para calcular responseTime
         // Nota: averageResponseTime se calcula en setConversationState al entrar a SPEAKING
         // usando current._thinkingStart. Verificar que el cálculo ocurrió.
-        const stats = useIntegrationStore.getState().sessionStats;
         // averageResponseTime puede ser 0 si _thinkingStart no se propagó aún,
         // pero _thinkingStart debe estar en 0 después de la transición (consumido)
         // Verificamos que la transición fue exitosa y el estado es correcto

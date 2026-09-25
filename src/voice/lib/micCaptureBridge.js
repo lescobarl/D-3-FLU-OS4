@@ -3,6 +3,8 @@
  */
 import { encodePcmChunk } from './pcmAudio.js'
 import { nowPerf } from './audioSegmentClock.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 const WORKLET_NAME = 'flu-mic-capture'
 
@@ -35,7 +37,7 @@ export async function wireMicCapturePipeline({
   source,
   onPcmBlock,
   pushSttPcm,
-  sampleRate = 48000,
+  sampleRate = DEFAULT_SAMPLE_RATE,
   sttTargetRate = 16000,
   processEvery = 1,
 } = {}) {
@@ -82,12 +84,14 @@ export async function wireMicCapturePipeline({
       try {
         workletNode.port.onmessage = null
         workletNode.disconnect()
-      } catch {
+      } catch (e) {
+        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js', e);
         // ignore
       }
       try {
         zeroGain.disconnect()
-      } catch {
+      } catch (e) {
+        logCaughtError('[catch] src/voice/lib/micCaptureBridge.js', e);
         // ignore
       }
     },

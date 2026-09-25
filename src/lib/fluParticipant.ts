@@ -6,6 +6,7 @@
 // evaluation scheduling, hand-raise timeout, cooldown,
 // rate limiting, and UI presentation.
 // ============================================================
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
 // -----------------------------------------------------------
 // Types
@@ -156,7 +157,7 @@ export function buildParticipantLogWindow(
     for (let index = start; index < count; index += 1) {
         const text = String(texts[index] || '').trim();
         if (!text) continue;
-        const speaker = String(speakers[index] || speakers[speakers.length - 1] || 'Hablante 1').trim() || 'Hablante 1';
+        const speaker = String(speakers[index] || speakers[speakers.length - 1] || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker).trim() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
         rows.push({ speaker, text });
     }
 
@@ -260,7 +261,8 @@ export function canScheduleParticipantEvaluation(
 // Normalize Gemini evaluation response
 // -----------------------------------------------------------
 
-export function normalizeParticipantEvaluation(raw: Record<string, unknown>, cfg: ParticipantConfig): ParticipantEvaluation {
+export function normalizeParticipantEvaluation(input: unknown, cfg: ParticipantConfig): ParticipantEvaluation {
+    const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
     const minConf = Number(cfg.minConfidence);
     const minChars = Number(cfg.minDraftChars);
     const maxChars = Number(cfg.maxDraftChars);
@@ -310,7 +312,7 @@ export function applyParticipantEvaluation(
 // Dismiss raised hand
 // -----------------------------------------------------------
 
-export function dismissRaisedHand(state: ParticipantState, now: number = Date.now()): ParticipantState {
+export function dismissRaisedHand(state: ParticipantState, _now: number = Date.now()): ParticipantState {
     return {
         ...state,
         phase: 'idle',

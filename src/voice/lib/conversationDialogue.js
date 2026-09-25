@@ -1,11 +1,13 @@
 /**
  * Turnos de conversación: un participante = una fila en log + contexto Gemini.
- * Flu usa el mismo mecanismo que Hablante 1, 2, … (sin canal paralelo).
+ * Flu usa el mismo mecanismo que los hablantes automáticos (sin canal paralelo).
  */
 import { cleanForSpeech } from './audioMath.js'
 import { phrasesEquivalent } from './activeListen.js'
 import { utterancesRelate } from './conversationStream.js'
 import { FLU_CONFIG } from './fluConfig.js'
+
+const FALLBACK_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
 export const FLU_DIALOGUE_SPEAKER = 'Flu'
 
@@ -47,7 +49,7 @@ export function appendDialogueEntry(history = [], entry = {}, max = FLU_CONFIG.l
 
   const speaker =
     String(entry.speaker || '').trim() ||
-    (entry.role === 'assistant' ? FLU_DIALOGUE_SPEAKER : 'Hablante 1')
+    (entry.role === 'assistant' ? FLU_DIALOGUE_SPEAKER : FALLBACK_SPEAKER)
 
   const normalized = {
     role: entry.role === 'assistant' || isFluSpeaker(speaker) ? 'assistant' : 'user',
@@ -77,7 +79,7 @@ function appendDialogueTurn(
     )
   }
 
-  const speakerLabel = String(speaker || '').trim() || 'Hablante 1'
+  const speakerLabel = String(speaker || '').trim() || FALLBACK_SPEAKER
   const last = history[history.length - 1]
 
   if (replaceLast && last?.role === 'user' && last.speaker === speakerLabel) {
@@ -122,7 +124,7 @@ export function recordConversationTurn(
   const cleaned = cleanForSpeech(text)
   if (!cleaned) return dialogueHistory
 
-  const speakerLabel = String(speaker || '').trim() || 'Hablante 1'
+  const speakerLabel = String(speaker || '').trim() || FALLBACK_SPEAKER
   const lastText = logTexts[logTexts.length - 1] || ''
 
   if (replaceLast && logTexts.length && utterancesRelate(lastText, cleaned)) {
@@ -188,6 +190,68 @@ export function recordConversationExchange(
   return nextDialogue
 }
 
+/**
+ * §9 ÚNICA FUENTE DE VERDAD: deriva el diálogo de Gemini DESDE el store
+ * `conversationHistory`. No existe un almacén de diálogo independiente; el motor
+ * de voz consume estas vistas de solo lectura.
+ */
+export function deriveDialogueHistory(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  return list.map((entry) => ({
+    role: entry?.role === 'flu' ? 'assistant' : entry?.role === 'system' ? 'system' : 'user',
+    speaker: entry?.speakerName || (entry?.role === 'flu' ? FLU_DIALOGUE_SPEAKER : FALLBACK_SPEAKER),
+    text: entry?.text || '',
+    phase: entry?.phase || 'SESION_ACTIVA',
+    source: DIALOGUE_SOURCE.LOG,
+  }))
+}
+
+/** Textos de las filas de usuario commiteadas, derivados del store. */
+export function deriveUserRowTexts(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  return list.filter((entry) => entry?.role === 'user').map((entry) => entry?.text || '')
+}
+
+/** Hablantes de las filas de usuario commiteadas, derivados del store. */
+export function deriveUserRowSpeakers(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  return list
+    .filter((entry) => entry?.role === 'user')
+    .map((entry) => entry?.speakerName || FALLBACK_SPEAKER)
+}
+
+/**
+ * §9.3: Última frase de usuario commiteada, derivada del store (fuente única de
+ * la frase visible). Reemplaza el escaneo inline duplicado en App/consumidores.
+ */
+export function deriveUserLastText(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const entry = list[index]
+    if (!entry) continue
+    const role = String(entry.role || '').toLowerCase()
+    const speaker = String(entry.speakerName || '')
+    if (role === 'user' || (speaker && speaker !== FLU_DIALOGUE_SPEAKER)) {
+      return String(entry.text || '').trim()
+    }
+  }
+  return ''
+}
+
+/**
+ * §9.3: ÚNICA derivación de la frase visible (burbuja · bitácora · barra).
+ * Todas las vistas la consumen con los MISMOS insumos → misma cadena exacta.
+ * No normaliza: solo selecciona la fuente vigente por prioridad.
+ */
+export function selectVisiblePhrase({
+  live = '',
+  lastTranscript = '',
+  lastUserText = '',
+  currentTranscript = '',
+} = {}) {
+  return String(live || lastTranscript || lastUserText || currentTranscript || '').trim()
+}
+
 export function getDialogueContextSlice(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {
   return trimDialogueHistory(history, max)
 }
@@ -202,17 +266,31 @@ export function findLastFluDialogueTurn(history = []) {
   return null
 }
 
-/** Filas de audit log: pregunta/comando humano + respuesta Flu (sin campo response pegado). */
-export function buildFluSpeechAuditRows({
-  timestamp,
-  humanSpeaker = '',
-  humanTranscript = '',
-  fluText = '',
-  phase = 'SESION_ACTIVA',
-  signature = null,
-  navigation = {},
-  navigationComando = null,
-} = {}) {
+/**
+ * Filas de audit log: pregunta/comando humano + respuesta Flu (sin campo response pegado).
+ *
+ * @param {{
+ *   timestamp?: string,
+ *   humanSpeaker?: string,
+ *   humanTranscript?: string,
+ *   fluText?: string,
+ *   phase?: string,
+ *   signature?: unknown,
+ *   navigation?: object,
+ *   navigationComando?: string | null,
+ * }} [params]
+ */
+export function buildFluSpeechAuditRows(params = {}) {
+  const {
+    timestamp,
+    humanSpeaker = '',
+    humanTranscript = '',
+    fluText = '',
+    phase = 'SESION_ACTIVA',
+    signature = null,
+    navigation = {},
+    navigationComando = null,
+  } = params
   const rows = []
   const humanText = cleanForSpeech(humanTranscript)
   const fluSpeech = cleanForSpeech(fluText)
@@ -220,7 +298,7 @@ export function buildFluSpeechAuditRows({
   if (humanText) {
     rows.push({
       timestamp,
-      speaker: humanSpeaker || 'Hablante 1',
+      speaker: humanSpeaker || FALLBACK_SPEAKER,
       transcript: humanText,
       response: '',
       navigation: { ...navigation, comando: navigationComando },

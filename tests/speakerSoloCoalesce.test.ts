@@ -26,7 +26,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js';
-import { assignSpeakerStrictCosine } from '../src/voice/lib/speakerCosineStrict.js';
+import { assignSpeaker } from '../src/voice/lib/speakerCore.js';
 import { anchorResolvedToLastLogged } from '../src/voice/lib/speakerPolicy.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 
@@ -70,8 +70,8 @@ const BASE = {
     allowNewCluster: true,
 };
 
-describe('resolveConversationSpeaker — solo coalesce (main thread)', () => {
-    it('solo (1 cluster) sim 0.60 (borde, 0.5576–0.68) → coalesce a Hablante 1', () => {
+describe('resolveConversationSpeaker — separación sin relajación de solo (main thread)', () => {
+    it('solo (1 cluster) sim 0.60 (voz distinta) → separa a Hablante 2', () => {
         const clusters: any[] = [{ label: 'Hablante 1', signature: E1 }];
         const diagnosis: Record<string, unknown> = {};
         const r = resolveConversationSpeaker({
@@ -82,9 +82,9 @@ describe('resolveConversationSpeaker — solo coalesce (main thread)', () => {
             lastSignature: E1,
             diagnosis,
         } as any);
-        expect(r).toBe('Hablante 1');
-        expect(clusters.map((c) => c.label)).toEqual(['Hablante 1']);
-        expect(diagnosis.reason).toBe('production-solo-coalesce');
+        expect(r).toBe('Hablante 2');
+        expect(clusters.map((c) => c.label)).toEqual(['Hablante 1', 'Hablante 2']);
+        expect(diagnosis.reason).toMatch(/forced-new-voice|new-voice/);
     });
 
     it('solo (1 cluster) sim 0.50 (genuinamente distinta < 0.5576) → abre Hablante 2', () => {
@@ -103,7 +103,7 @@ describe('resolveConversationSpeaker — solo coalesce (main thread)', () => {
         expect(diagnosis.reason).toBe('production-forced-new-voice');
     });
 
-    it('solo (1 cluster) sim 0.60 con lastSignature ausente → usa cluster de lastSpeaker y coalesce', () => {
+    it('solo (1 cluster) sim 0.60 con lastSignature ausente → separa a Hablante 2', () => {
         const clusters: any[] = [{ label: 'Hablante 1', signature: E1 }];
         const r = resolveConversationSpeaker({
             ...BASE,
@@ -112,7 +112,7 @@ describe('resolveConversationSpeaker — solo coalesce (main thread)', () => {
             lastSpeaker: 'Hablante 1',
             lastSignature: null,
         } as any);
-        expect(r).toBe('Hablante 1');
+        expect(r).toBe('Hablante 2');
     });
 
     it('multi-hablante (2 clusters) sim 0.60 → abre Hablante 3 (no alterado)', () => {
@@ -131,7 +131,7 @@ describe('resolveConversationSpeaker — solo coalesce (main thread)', () => {
     });
 });
 
-describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
+describe('assignSpeaker — solo coalesce (worker path)', () => {
     const workerBase = {
         continuityThreshold: 0.70,
         newVoiceThreshold: 0.68,
@@ -140,7 +140,7 @@ describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
     };
 
     it('solo (1 cluster) sim 0.60 → solo-coalesce / Hablante 1', () => {
-        const r = assignSpeakerStrictCosine(query(0.6), {
+        const r = assignSpeaker(query(0.6), {
             ...workerBase,
             clusters: [{ label: 'Hablante 1', signature: E1 }],
             lastSpeaker: 'Hablante 1',
@@ -152,7 +152,7 @@ describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
     });
 
     it('solo (1 cluster) sim 0.50 → abre Hablante 2 (voz genuina)', () => {
-        const r = assignSpeakerStrictCosine(query(0.5), {
+        const r = assignSpeaker(query(0.5), {
             ...workerBase,
             clusters: [{ label: 'Hablante 1', signature: E1 }],
             lastSpeaker: 'Hablante 1',
@@ -163,7 +163,7 @@ describe('assignSpeakerStrictCosine — solo coalesce (worker path)', () => {
     });
 
     it('multi-hablante (2 clusters) sim 0.60 → abre Hablante 3 (no alterado)', () => {
-        const r = assignSpeakerStrictCosine(query(0.6), {
+        const r = assignSpeaker(query(0.6), {
             ...workerBase,
             clusters: [
                 { label: 'Hablante 1', signature: E1 },
@@ -206,16 +206,16 @@ describe('anchorResolvedToLastLogged — coalesce de commit solitario', () => {
 });
 
 describe('config — soloNewVoiceFactor (sin hardcode)', () => {
-    it('roomCapture.soloNewVoiceFactor = 0.82 y classroomMultiSpeaker = true', () => {
+    it('roomCapture.soloNewVoiceFactor = 1.0 y classroomMultiSpeaker = true', () => {
         const room = FLU_CONFIG.voiceIdentity?.capture?.roomCapture;
-        expect(room?.soloNewVoiceFactor).toBe(0.82);
+        expect(room?.soloNewVoiceFactor).toBe(1.0);
         expect(room?.classroomMultiSpeaker).toBe(true);
     });
 
-    it('thresholds de producción: NEW_VOICE 0.64, CONTINUITY 0.70, REUSE 0.70', () => {
+    it('thresholds de producción: NEW_VOICE 0.75, CONTINUITY 0.80, REUSE 0.78', () => {
         const thresholds = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds;
-        expect(thresholds?.cosineNewVoiceThreshold).toBe(0.64);
-        expect(thresholds?.cosineContinuityThreshold).toBe(0.70);
-        expect(thresholds?.productionClusterReuseThreshold).toBe(0.70);
+        expect(thresholds?.cosineNewVoiceThreshold).toBe(0.75);
+        expect(thresholds?.cosineContinuityThreshold).toBe(0.80);
+        expect(thresholds?.productionClusterReuseThreshold).toBe(0.78);
     });
 });

@@ -3,8 +3,7 @@
  * Único lugar con lógica de negocio de transcripción en conversación.
  */
 import {
-  processBrowserConversationIngress,
-  processStreamConversationIngress,
+  processMicConversationIngress,
   flushSrGapSegmentThroughIngress,
   flushRecognitionEndThroughIngress,
 } from './transcriptIngress.js'
@@ -27,15 +26,7 @@ export function createTranscriptConsumer({ getCtx, onAfterEvent } = {}) {
       return flushRecognitionEndThroughIngress(ctx)
     }
 
-    if (event.source === 'stream') {
-      return processStreamConversationIngress({
-        text: event.text || '',
-        isFinal: Boolean(event.isFinal),
-        ctx,
-      })
-    }
-
-    return processBrowserConversationIngress({
+    return processMicConversationIngress({
       interimChunks: event.interimChunks || (event.kind === 'interim' && event.text ? [event.text] : []),
       finalChunks: event.finalChunks || (event.kind === 'final' && event.text ? [event.text] : []),
       ctx,

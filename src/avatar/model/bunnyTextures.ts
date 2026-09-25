@@ -6,6 +6,7 @@
 // ============================================================
 
 import * as THREE from 'three';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Mapa de texturas: asocia nombre de malla a texturas
@@ -58,13 +59,13 @@ const TEXTURE_MAP: Record<string, TextureSet> = {
 const textureCache = new Map<string, THREE.Texture>();
 
 export function getTexture(path: string): THREE.Texture {
-    if (!textureCache.has(path)) {
-        const loader = new THREE.TextureLoader();
-        const tex = loader.load(path);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        textureCache.set(path, tex);
-    }
-    return textureCache.get(path)!;
+    const cached = textureCache.get(path);
+    if (cached) return cached;
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load(path);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    textureCache.set(path, tex);
+    return tex;
 }
 
 // -----------------------------------------------------------
@@ -119,7 +120,7 @@ export function applyTextures(material: THREE.MeshStandardMaterial, meshName: st
         material.needsUpdate = true;
         return true;
     } catch (e) {
-        console.warn(`[Textures] Error loading textures for ${meshName}:`, e);
+        logCaughtError(`[Textures] Error loading textures for ${meshName}:`, e);
         return false;
     }
 }

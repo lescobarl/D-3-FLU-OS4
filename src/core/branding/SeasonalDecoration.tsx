@@ -5,21 +5,32 @@
 // aplica decoraciones visuales al avatar Bunny mediante
 // el useBunnyStore (Zustand).
 //
-// Mapeo decoration → acción en el avatar:
-//   santa-hat  → Bunny_cap visible + señal NONE
-//   party-hat  → Bunny_cap visible + señal CELEBRATE
-//   marigold   → Bunny_cap visible (flores) + señal NONE
-//   flag       → Bunny_cap visible + señal HIGHLIGHT
-//   crown      → Bunny_cap visible + señal HIGHLIGHT
-//   sparkle    → Bunny_cap oculto + señal CELEBRATE
-//   heart      → Bunny_cap visible + señal HIGHLIGHT
-//   flower     → Bunny_cap visible + señal NONE
-//   clover     → Bunny_cap visible + señal HIGHLIGHT
-//   leaf       → Bunny_cap visible + señal NONE
-//   sun        → Bunny_cap visible + señal NONE
-//   pumpkin    → Bunny_cap visible + señal HIGHLIGHT
-//   snowflake  → Bunny_cap visible + señal NONE
-//   undefined  → Bunny_cap según estado base + señal NONE
+// IMPORTANTE (arquitectura): la visibilidad de la gorra (Bunny_cap) y del
+// pelo (Bunny_bangs) la controla ÚNICAMENTE el perfil activo a través de
+// useAvatarVoiceSync (imageConfig.capVisible / hairVisible). Este componente
+// NO toca la visibilidad de componentes del avatar: solo gestiona la
+// decoración 3D (setDecoration → DecorationsRenderer) y las señales /
+// animaciones de celebración, que son mecanismos independientes y temporales.
+//
+// Mapeo decoration → señal en el avatar:
+//   santa-hat  → señal NONE
+//   party-hat  → señal CELEBRATE
+//   marigold   → señal NONE
+//   flag       → señal HIGHLIGHT
+//   crown      → señal HIGHLIGHT
+//   sparkle    → señal CELEBRATE
+//   heart      → señal HIGHLIGHT
+//   flower     → señal NONE
+//   clover     → señal HIGHLIGHT
+//   leaf       → señal NONE
+//   sun        → señal NONE
+//   pumpkin    → señal HIGHLIGHT
+//   snowflake  → señal NONE
+//   undefined  → señal NONE
+//
+// Precedencia ambiente > temporada: cuando el ambiente activo (rebranding
+// por oficio) define una decoración, esa decoración controla la decoración
+// 3D y la paleta estacional solo aporta su tema.
 //
 // También reproduce animaciones especiales en eventos:
 //   - Cumpleaños: animación Dance + señal CELEBRATE
@@ -48,6 +59,8 @@ export interface SeasonalDecorationProps {
     isBirthday: boolean;
     /** Nombre de la persona que cumple años (opcional) */
     celebrandoA?: string;
+    /** Decoración del ambiente activo (rebranding por oficio) — precedencia sobre la estacional */
+    environmentDecoration?: string | null;
 }
 
 // -----------------------------------------------------------
@@ -55,68 +68,53 @@ export interface SeasonalDecorationProps {
 // -----------------------------------------------------------
 
 interface DecorationAction {
-    capVisible: boolean;
     signal: 'NONE' | 'CELEBRATE' | 'HIGHLIGHT' | 'WAVE';
     animation?: BunnyAnimation;
 }
 
 const DECORATION_MAP: Record<string, DecorationAction> = {
     'santa-hat': {
-        capVisible: true,
         signal: 'NONE',
     },
     'party-hat': {
-        capVisible: true,
         signal: 'CELEBRATE',
     },
     marigold: {
-        capVisible: true,
         signal: 'NONE',
     },
     flag: {
-        capVisible: true,
         signal: 'HIGHLIGHT',
     },
     crown: {
-        capVisible: true,
         signal: 'HIGHLIGHT',
     },
     sparkle: {
-        capVisible: false,
         signal: 'CELEBRATE',
     },
     heart: {
-        capVisible: true,
         signal: 'HIGHLIGHT',
     },
     flower: {
-        capVisible: true,
         signal: 'NONE',
     },
     clover: {
-        capVisible: true,
         signal: 'HIGHLIGHT',
     },
     leaf: {
-        capVisible: true,
         signal: 'NONE',
     },
     sun: {
-        capVisible: true,
         signal: 'NONE',
     },
     pumpkin: {
-        capVisible: true,
         signal: 'HIGHLIGHT',
     },
     snowflake: {
-        capVisible: true,
         signal: 'NONE',
     },
 };
 
 const DEFAULT_ACTION: DecorationAction = {
-    capVisible: true,
     signal: 'NONE',
 };
 
@@ -156,15 +154,26 @@ export function SeasonalDecoration({
     activeSeason,
     isBirthday,
     celebrandoA,
+    environmentDecoration,
 }: SeasonalDecorationProps) {
     const prevSeasonRef = useRef<string | null>(null);
     const prevBirthdayRef = useRef(false);
 
     useEffect(() => {
-        if (mode === 'disabled') {
-            // Modo disabled: restaurar estado base del avatar
-            const store = useBunnyStore.getState();
-            store.setComponentVisibility('Bunny_cap', true);
+        // Precedencia ambiente > temporada: la decoración del ambiente activo
+        // controla la decoración 3D; la paleta estacional solo aporta su tema.
+        // NOTA: la visibilidad de la gorra (Bunny_cap) y el pelo (Bunny_bangs)
+        // la controla ÚNICAMENTE el perfil activo vía useAvatarVoiceSync.
+        const environmentDecorationResolved =
+            environmentDecoration && DECORATION_MAP[environmentDecoration] !== undefined
+                ? environmentDecoration
+                : null;
+
+        const store = useBunnyStore.getState();
+
+        if (mode === 'disabled' && !environmentDecorationResolved) {
+            // Modo disabled sin decoración de ambiente: restaurar el estado base
+            // de la decoración 3D y la señal. La gorra la sigue controlando el perfil.
             store.setSignal('NONE');
             store.setDecoration(null);
             prevSeasonRef.current = null;
@@ -173,25 +182,24 @@ export function SeasonalDecoration({
         }
 
         const palette = getPalette(activeSeason);
-        const decoration = palette.decoration;
+
+        // La decoración del ambiente gana sobre la estacional para la decoración 3D.
+        const decoration = environmentDecorationResolved
+            ? environmentDecorationResolved
+            : palette.decoration;
         const action = decoration ? DECORATION_MAP[decoration] : DEFAULT_ACTION;
 
-        const store = useBunnyStore.getState();
-
-        // 1. Aplicar visibilidad del cap según decoración
-        store.setComponentVisibility('Bunny_cap', action.capVisible);
-
-        // 2. Aplicar señal visual
+        // 1. Aplicar señal visual
         store.setSignal(action.signal);
 
-        // 3. Aplicar decoración 3D (catálogo) anclada a la cabeza
+        // 2. Aplicar decoración 3D (catálogo) anclada a la cabeza
         store.setDecoration(decoration ?? null);
 
-        // 3. Eventos especiales (solo al activarse, no en cada render)
+        // 3. Eventos especiales estacionales (solo con branding activo y al activarse)
         const seasonChanged = prevSeasonRef.current !== activeSeason;
         const birthdayJustActivated = isBirthday && !prevBirthdayRef.current;
 
-        if (seasonChanged) {
+        if (mode !== 'disabled' && seasonChanged) {
             const specialEvent = SPECIAL_EVENTS[activeSeason];
             if (specialEvent) {
                 store.playAnimation(specialEvent.animation);
@@ -199,21 +207,20 @@ export function SeasonalDecoration({
             }
         }
 
-        if (birthdayJustActivated && isBirthday) {
+        if (mode !== 'disabled' && birthdayJustActivated && isBirthday) {
             // Reproducir animación de celebración por cumpleaños
             store.playAnimation('Dance');
             store.setSignal('CELEBRATE');
 
             // Log opcional
             if (celebrandoA) {
-                console.log(`[SeasonalDecoration] 🎂 Celebrando cumpleaños de ${celebrandoA}`);
             }
         }
 
         // Actualizar refs
         prevSeasonRef.current = activeSeason;
         prevBirthdayRef.current = isBirthday;
-    }, [mode, activeSeason, isBirthday, celebrandoA]);
+    }, [mode, activeSeason, isBirthday, celebrandoA, environmentDecoration]);
 
     // Este componente no renderiza nada visual directamente
     return null;

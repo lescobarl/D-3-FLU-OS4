@@ -34,6 +34,7 @@ import { applyComponentVisibility, applyComponentColor } from './bunnyComponents
 import { loadFbx } from '../workers/fbxWorkerClient';
 import { DecorationsRenderer } from '../decorations/DecorationsRenderer';
 import type { BunnyAnimation } from '../types/bunny';
+import { logCaughtError } from '../../lib/caughtError';
 
 export default function BunnyModel({ orientation = 0.525 }: { orientation?: number }) {
     // ---- Refs (no causan re-render) ----
@@ -84,9 +85,8 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 if (disposed) return;
 
                 // 1. Unify skeletons
-                const result = unifySkeletons(object);
+                unifySkeletons(object);
                 if (logsEnabledRef.current) {
-                    console.log(`[BunnyViewer] Skeleton unification: ${result.success ? 'OK' : 'FAIL'}`);
                 }
 
                 // 2. Repair materials with textures
@@ -104,8 +104,7 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 object.position.set(-center.x, -center.y, -center.z);
 
                 // 4. Create animator (creates mixer internally)
-                const animator = new BunnyAnimator(object, (msg) => {
-                    if (logsEnabledRef.current) console.log(msg);
+                const animator = new BunnyAnimator(object, (_msg) => {
                 });
                 animatorRef.current = animator;
 
@@ -130,18 +129,19 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 });
 
                 animator.preloadAll().then(() => {
-                    if (logsEnabledRef.current) console.log('[BunnyViewer] All animations preloaded');
                     setLoading(false);
                     setPreloaded(true); // habilita la reproducción: el efecto re-ejecuta con el estado actual del store
                     try {
-                        (window as any).__bunnyPreloadDone = true;
-                    } catch {
+                        if (import.meta.env.DEV) {
+                            window.__bunnyPreloadDone = true;
+                        }
+                    } catch (e) {
+        logCaughtError('[catch] src/avatar/model/BunnyModel.tsx', e);
                         /* ignore */
                     }
                 });
 
                 if (logsEnabledRef.current) {
-                    console.log('[BunnyViewer] Modelo listo');
                 }
             })
             .catch((err) => {
@@ -158,7 +158,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 animatorRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // ← Intencionalmente vacío: el modelo se carga UNA VEZ
 
     // ============================================================
@@ -225,7 +224,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 prevBlendRef.current = blendKey;
                 prevPlayingRef.current = true;
                 if (logsEnabledRef.current) {
-                    console.log(`[BunnyViewer] Cross-fade blend: ${blendQueue.join(' + ')}`);
                 }
             }
             return;
@@ -242,7 +240,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 prevBlendRef.current = '';
                 prevPlayingRef.current = true;
                 if (logsEnabledRef.current) {
-                    console.log(`[BunnyViewer] Cross-fade to: ${currentAnimation}`);
                 }
             }
         } else if (!isPlaying && prevPlayingRef.current) {
@@ -262,7 +259,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
         if (!animator) return;
         animator.setTimeScale(animationSpeed);
         if (logsEnabledRef.current) {
-            console.log(`[BunnyViewer] Animation speed: ${animationSpeed.toFixed(2)}`);
         }
     }, [animationSpeed]);
 

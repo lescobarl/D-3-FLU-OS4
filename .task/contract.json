@@ -1,0 +1,55 @@
+{
+  "base": "36f0dd51f378849ed843f6b14439e6149dd9855f",
+  "task": "P7.25/P7.29/P7.31 + P7.30 - cierre autonomo: dominio del LLM como pista de tipo en el parser de agenda (reminder), estabilidad del arnes E2E y SEED de usuario activo.",
+  "objective": "Que la regla de prioridad del reply no este contradicha por un comentario obsoleto ni por un spec escrito contra el, que el ack de compras quede cubierto por su conducta real, y que el suite E2E deje de fallar por saturacion del arnes.",
+  "allow": [
+    "AGENTS.md",
+    "package.json",
+    "plans/bugs-producto-2026-09-14.md",
+    "plans/ledger.json",
+    "playwright.config.ts",
+    "scripts/e2e-scope.mjs",
+    "src/App.tsx",
+    "src/core/agenda/agendaCommandParser.ts",
+    "src/core/agenda/domainScopedIntent.ts",
+    "src/core/autonomy/autoRecovery.ts",
+    "src/hooks/useWorkspaceSearch.ts",
+    "src/server/browserProxy.ts",
+    "src/server/searchProxy.ts",
+    "src/voice/lib/fluConfig.js",
+    "tests/auditoriaExternaMap.test.ts",
+    "tests/bugsProductoMap.test.ts",
+    "tests/domainScopedIntent.test.ts",
+    "tests/e2e/_globalSetup.ts",
+    "tests/e2e/_helpers.ts",
+    "tests/e2e/auditoria-acciones-llm.spec.ts",
+    "tests/e2e/auditoria-despacho-real.spec.ts",
+    "tests/e2e/matriz-comandos-productivos.spec.ts",
+    "tests/e2e/onboarding-registro-usuario.spec.ts",
+    "tests/e2e/pizarron-funcionalidades.spec.ts",
+    "tests/e2e/video-config.spec.ts",
+    "tests/e2eScope.test.ts",
+    "tests/godFileSizeGuard.test.ts",
+    "tests/resultFeed.test.tsx"
+  ],
+  "maxFiles": 25,
+  "maxLines": 600,
+  "dod": "npm run ledger:check",
+  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/auditoriaExternaMap.test.ts tests/resultFeed.test.tsx tests/taskLedgerGuard.test.ts tests/taskLedgerReferenceGuard.test.ts tests/eolGuard.test.ts tests/godFileSizeGuard.test.ts",
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "kilo.json"
+  ],
+  "e2eScope": {
+    "src/App.tsx": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/core/agenda/agendaCommandParser.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/core/agenda/domainScopedIntent.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ]
+  }
+}

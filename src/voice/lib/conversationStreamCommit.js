@@ -6,7 +6,7 @@ import { cleanForSpeech, detectWakeIntroducedName, formatClock } from './audioMa
 import { resolveInlineWakeAtCommit } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { resolveMicCommitAction } from './turnStream.js'
+import { resolveMicCommitAction, isDuplicateTurnCommit } from './turnStream.js'
 import {
   advancePublishedDisplay,
   detectNextSpeakerPhrase,
@@ -15,7 +15,7 @@ import {
   shouldRefreshStream,
   syncSpeakerIndexFromLabel,
   utterancesSameRevision,
-  wouldShrinkLog,
+  wouldShrinkListenLog,
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { finalizeTurnIdentityPipeline } from './turnIdentityPipeline.js'
@@ -61,6 +61,7 @@ import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
  * @property {import('react').MutableRefObject<number>} activeTurnIdRef
  * @property {() => void} flushPcmAfterTurnCommit
  * @property {import('react').MutableRefObject<number>} lastCommitAtRef
+ * @property {import('react').MutableRefObject<number>} lastOnresultAtRef
  * @property {import('react').MutableRefObject<number>} turnAudioStartSampleRef
  * @property {import('react').MutableRefObject<number>} chunkTotalSamplesRef
  * @property {import('react').MutableRefObject<boolean>} preflightScheduledForTurnRef
@@ -115,6 +116,7 @@ export function handleConversationStreamSync(
     activeTurnIdRef,
     flushPcmAfterTurnCommit,
     lastCommitAtRef,
+    lastOnresultAtRef,
     turnAudioStartSampleRef,
     chunkTotalSamplesRef,
     preflightScheduledForTurnRef,
@@ -127,6 +129,7 @@ export function handleConversationStreamSync(
     lastLoggedSpeakerRef,
     logRowSpeakersRef,
     speakerClustersRef,
+    setSpeakerClusters,
     lastSpeakerRef,
     lastTurnSignatureRef,
     lastLogLineTextRef,
@@ -152,7 +155,7 @@ export function handleConversationStreamSync(
   }
 
   if (!turnCommit) {
-    if (wouldShrinkLog(capture, publishedLiveRef.current)) {
+    if (wouldShrinkListenLog(capture, publishedLiveRef.current)) {
       if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'shrink-preview' })
       return
     }
@@ -189,6 +192,23 @@ export function handleConversationStreamSync(
   }
   capture = inlineWake.capture
 
+  // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
+  // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión
+  // del mismo turno, no una fila nueva.
+  if (
+    isDuplicateTurnCommit(capture, {
+      lastEmitted: lastEmittedTranscriptRef?.current || '',
+      lastCommitted: lastCommittedRow,
+      lastResultAt: lastOnresultAtRef?.current || 0,
+      lastCommitAt: lastCommitAtRef?.current || 0,
+    })
+  ) {
+    if (import.meta.env.DEV && debugHotPath) {
+      fluDebugHot('stream-skip', { reason: 'duplicate-turn-commit', capture })
+    }
+    return
+  }
+
   const finalizeTurnCommit = () => {
     turnCommitIdRef.current += 1
     const turnId = activeTurnIdRef.current || turnCommitIdRef.current
@@ -209,6 +229,14 @@ export function handleConversationStreamSync(
         fluTailAfterCommit.action,
       )
     }
+  }
+
+  // §9.5 — RUTA ÚNICA de cierre de turno: finalize + aviso al participante.
+  // Las dos ramas (segmentada y simple) cierran por aquí; no se invoca
+  // `finalizeTurnCommit` en más de un punto.
+  const finalizeAndNotify = () => {
+    finalizeTurnCommit()
+    fluParticipantRef.current?.onTurnCommitted?.()
   }
 
   const {
@@ -349,6 +377,7 @@ export function handleConversationStreamSync(
           lastLoggedSpeakerRef,
           sessionPrimarySpeakerRef,
           speakerClustersRef,
+          setSpeakerClusters,
         },
       )
       if (resolved.signatureVector?.length) {
@@ -381,8 +410,7 @@ export function handleConversationStreamSync(
     }
 
     lastEmittedTranscriptRef.current = capture
-    finalizeTurnCommit()
-    fluParticipantRef.current?.onTurnCommitted?.()
+    finalizeAndNotify()
 
     if (import.meta.env.DEV && debugHotPath) {
       fluDebugHot('stream-commit-segmented', {
@@ -401,6 +429,7 @@ export function handleConversationStreamSync(
       lastLoggedSpeakerRef,
       sessionPrimarySpeakerRef,
       speakerClustersRef,
+      setSpeakerClusters,
     },
   )
   if (resolved.signatureVector?.length) {
@@ -429,8 +458,7 @@ export function handleConversationStreamSync(
   if (!delivered) {
     lastEmittedTranscriptRef.current = capture
   }
-  finalizeTurnCommit()
-  fluParticipantRef.current?.onTurnCommitted?.()
+  finalizeAndNotify()
 
   if (import.meta.env.DEV && debugHotPath) {
     fluDebugHot('stream-commit', {

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // Tests para useConfigPersistence
 // ============================================================
@@ -5,7 +6,7 @@
 // Mockea localStorage y verifica carga/guardado de configuraciones
 // ============================================================
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test as vitestTest, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConfigPersistence } from '../../src/hooks/useConfigPersistence';
 
@@ -39,6 +40,18 @@ Object.defineProperty(window, 'speechSynthesis', {
   value: mockSpeechSynthesis,
   writable: true,
 });
+
+// Envuelve cada test para drenar DENTRO de act() el refresh() asíncrono de
+// useAuditLog (su IndexedDB no existe en jsdom): sin esto, su setLoading(false)
+// resuelve después del cuerpo síncrono y React emite "not wrapped in act(...)".
+// No cambia aserciones: solo añade el flush posterior al cuerpo del test.
+const test = (name: string, fn: () => void) =>
+  vitestTest(name, async () => {
+    fn();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  });
 
 describe('useConfigPersistence', () => {
   beforeEach(() => {
@@ -205,6 +218,31 @@ describe('useConfigPersistence', () => {
     expect(result.current.imageApiUrl).toBe('https://api.pollinations.ai');
   });
 
+  test('11. handleGeminiApiKeyCommit guarda clave de Gemini dedicada', () => {
+    const { result } = renderHook(() => useConfigPersistence());
+
+    act(() => {
+      result.current.handleGeminiApiKeyCommit('gemini-key-xyz');
+    });
+
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+      'flu-gemini-api-key',
+      'gemini-key-xyz'
+    );
+    expect(result.current.geminiApiKey).toBe('gemini-key-xyz');
+  });
+
+  test('12. geminiApiKey carga desde localStorage dedicado y hace fallback a la clave de texto', () => {
+    // Sin clave dedicada: geminiApiKey cae a resolveTextApiKey() (vacío en test)
+    const { result: emptyResult } = renderHook(() => useConfigPersistence());
+    expect(emptyResult.current.geminiApiKey).toBe('');
+
+    // Con clave dedicada: se usa la clave de Gemini
+    mockLocalStorage.store['flu-gemini-api-key'] = 'dedicated-gemini-key';
+    const { result: dedicatedResult } = renderHook(() => useConfigPersistence());
+    expect(dedicatedResult.current.geminiApiKey).toBe('dedicated-gemini-key');
+  });
+
   test('13. handleOcrApiKeyCommit guarda clave de OCR', () => {
     const { result } = renderHook(() => useConfigPersistence());
 
@@ -247,7 +285,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.ocrApiUrl).toBe('https://ocr.endpoint.ai');
   });
 
-  test('11. Valores por defecto cuando localStorage está vacío', () => {
+  test('16. Valores por defecto cuando localStorage está vacío', () => {
     // localStorage vacío
     mockLocalStorage.store = {};
 
@@ -256,6 +294,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.apiKey).toBe('');
     expect(result.current.textModel).toBe('');
     expect(result.current.textApiUrl).toBe('');
+    expect(result.current.geminiApiKey).toBe('');
     expect(result.current.imageApiKey).toBe('');
     expect(result.current.imageModel).toBe('');
     expect(result.current.imageApiUrl).toBe('');
@@ -266,7 +305,7 @@ describe('useConfigPersistence', () => {
     expect(result.current.sessionRole).toBe('Asistente del Maestro');
   });
 
-  test('12. Manejo de errores en localStorage', () => {
+  test('17. Manejo de errores en localStorage', () => {
     // Simular error en localStorage.getItem
     mockLocalStorage.getItem.mockImplementation(() => {
       throw new Error('LocalStorage error');

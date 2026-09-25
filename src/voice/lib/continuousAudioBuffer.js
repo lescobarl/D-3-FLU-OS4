@@ -10,6 +10,7 @@ import {
   getVoiceIdentityCaptureConfig,
 } from './micCapture.js'
 import { flattenChunksTail } from './voiceIdentity.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 function sumChunkLengths(chunks = []) {
   return chunks.reduce((sum, chunk) => sum + (chunk?.length || 0), 0)
@@ -17,11 +18,11 @@ function sumChunkLengths(chunks = []) {
 
 export class ContinuousAudioBuffer {
   constructor({
-    sampleRate = 48000,
+    sampleRate = DEFAULT_SAMPLE_RATE,
     maxBufferMs = getPassiveBufferMs(),
     minRetainMs = getTurnAudioOverlapMs(),
   } = {}) {
-    this.sampleRate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : 48000
+    this.sampleRate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE
     this.maxBufferMs =
       Number.isFinite(maxBufferMs) && maxBufferMs > 0 ? maxBufferMs : getPassiveBufferMs()
     this.minRetainMs =
@@ -239,13 +240,13 @@ export function extractTurnAudioSnapshot(buffer, sampleRate, options = {}) {
 }
 
 /** Cola de solapamiento (ms) desde chunks legacy o ContinuousAudioBuffer. */
-export function extractTurnAudioOverlapTail(chunks = [], sampleRate = 48000, overlapMs = 800) {
+export function extractTurnAudioOverlapTail(chunks = [], sampleRate = DEFAULT_SAMPLE_RATE, overlapMs = 800) {
   if (chunks?.snapshotTurnWindow) {
-    const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : 48000
+    const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE
     const ms = Number.isFinite(overlapMs) && overlapMs > 0 ? overlapMs : 800
     const maxSamples = Math.floor(rate * (ms / 1000))
     return chunks.copySampleRange(Math.max(0, chunks.getTotalSamples() - maxSamples), chunks.getTotalSamples())
   }
-  const tail = flattenChunksTail(chunks, Math.floor((sampleRate || 48000) * (overlapMs / 1000)))
+  const tail = flattenChunksTail(chunks, Math.floor((sampleRate || DEFAULT_SAMPLE_RATE) * (overlapMs / 1000)))
   return tail.length ? new Float32Array(tail) : null
 }

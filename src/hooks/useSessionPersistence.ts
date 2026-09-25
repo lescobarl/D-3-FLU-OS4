@@ -1,18 +1,18 @@
 // ============================================================
 // useSessionPersistence — Save/restore session state across reloads
 // ============================================================
-// OS2-style: session state (active tab, language, role, participant
-// state, workspace image, etc.) is persisted to localStorage so
-// the UI returns to the same state after a page reload.
-//
-// This hook is complementary to useConversationPersistence (which
-// persists conversation history to IndexedDB). This one handles
-// ephemeral UI state via localStorage.
+// C9 — Un ÚNICO backend de sesión: IndexedDB (Dexie, vía fluStorage).
+// El estado de interfaz (tab/idioma/rol/frames) se persiste en la misma base
+// que la sesión de voz; ya NO existe una ruta localStorage duplicada.
 // ============================================================
 
 import { useEffect, useRef } from 'react';
-
-const SESSION_STORAGE_KEY = 'flu-session-state';
+import { logCaughtError } from '../lib/caughtError';
+import {
+    loadUiSessionState,
+    saveUiSessionState,
+    clearUiSessionState,
+} from '../voice/lib/fluStorage';
 
 export interface SessionState {
     activeTab: string;
@@ -36,43 +36,45 @@ const DEFAULT_SESSION: SessionState = {
     workspaceImageExpanded: false,
 };
 
+/** Valores por defecto (para hidratación síncrona inicial de la UI). */
+export function defaultSessionState(): SessionState {
+    return { ...DEFAULT_SESSION };
+}
+
 /**
- * Load session state from localStorage.
+ * Load session state from the Dexie session store (fluStorage).
  */
-export function loadSessionState(): SessionState {
+export async function readSessionState(): Promise<SessionState> {
     try {
-        const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            return { ...DEFAULT_SESSION, ...parsed };
-        }
+        const stored = await loadUiSessionState();
+        if (stored) return { ...DEFAULT_SESSION, ...stored };
     } catch (err) {
-        console.warn('[SessionPersistence] loadSessionState failed:', err);
+        logCaughtError('[SessionPersistence] readSessionState failed', err);
     }
     return { ...DEFAULT_SESSION };
 }
 
 /**
- * Save session state to localStorage.
+ * Save session state to the Dexie backend (merge con lo ya persistido).
  */
-export function saveSessionState(state: Partial<SessionState>): void {
+export async function writeSessionState(state: Partial<SessionState>): Promise<void> {
     try {
-        const current = loadSessionState();
-        const merged = { ...current, ...state };
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(merged));
+        const current = await loadUiSessionState();
+        const merged = { ...DEFAULT_SESSION, ...(current || {}), ...state };
+        await saveUiSessionState(merged);
     } catch (err) {
-        console.warn('[SessionPersistence] saveSessionState failed:', err);
+        logCaughtError('[SessionPersistence] writeSessionState failed', err);
     }
 }
 
 /**
- * Clear session state from localStorage.
+ * Clear session state from the Dexie backend.
  */
-export function clearSessionState(): void {
+export async function clearSessionState(): Promise<void> {
     try {
-        localStorage.removeItem(SESSION_STORAGE_KEY);
+        await clearUiSessionState();
     } catch (err) {
-        console.warn('[SessionPersistence] clearSessionState failed:', err);
+        logCaughtError('[SessionPersistence] clearSessionState failed', err);
     }
 }
 
@@ -98,7 +100,7 @@ export function useSessionPersistence(state: {
             isInitialMount.current = false;
             return;
         }
-        saveSessionState(state);
+        void writeSessionState(state);
     }, [
         state.activeTab,
         state.language,
@@ -108,5 +110,6 @@ export function useSessionPersistence(state: {
         state.participantPhase,
         state.participantTurnCount,
         state.workspaceImageExpanded,
+      state,
     ]);
 }

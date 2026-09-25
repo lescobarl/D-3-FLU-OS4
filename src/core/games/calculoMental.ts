@@ -15,6 +15,16 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
+import {
+    clamp,
+    normalizeForMatch,
+    hasToken,
+    hasAnyToken,
+    pickRandom,
+    resolveNumericAnswer,
+    adoptRandom,
+    readRounds,
+} from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -40,13 +50,7 @@ const END_FRAMES: readonly string[] = Object.freeze([
     'cerrar el juego',
 ]);
 
-/** Números en letras (0-20) para robustez de ASR en voz. */
-const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
-    cero: 0, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6,
-    siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12,
-    trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17,
-    dieciocho: 18, diecinueve: 19, veinte: 20,
-});
+/** Números en letras y su resolución: fuente única en `gameUtils`. */
 
 interface CalculoMentalConfig {
     maxSuma: number;
@@ -65,34 +69,6 @@ interface CalculoMentalState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
-function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
-    return items[Math.floor(rng() * items.length)];
-}
 
 /**
  * Genera una operación determinista: suma acotada por maxSuma
@@ -118,24 +94,7 @@ function operationPrompt(state: CalculoMentalState): string {
     return `¿Cuánto es ${state.a} ${OP_WORD[state.op]} ${state.b}?`;
 }
 
-/**
- * Resuelve una respuesta numérica a partir del texto normalizado.
- * Espejo local del algoritmo de resolveNumberValue: primero dígitos
- * ("12", "3.5") y, si no, un número escrito en letras.
- */
-function resolveNumericAnswer(normalized: string): number | null {
-    const digits = normalized.match(/(\d+(?:[.,]\d+)?)/);
-    if (digits) {
-        const value = Number.parseFloat(digits[1].replace(',', '.'));
-        if (Number.isFinite(value)) return Math.round(value);
-    }
-    for (const token of normalized.split(/\s+/)) {
-        if (token in NUMBER_WORDS_ES) return NUMBER_WORDS_ES[token];
-    }
-    return null;
-}
-
-export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine {
+export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine<CalculoMentalState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): CalculoMentalConfig => {
@@ -149,29 +108,17 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
             operaciones: operaciones.length > 0 ? operaciones : [...DEFAULT_OPERACIONES],
         };
     };
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CalculoMentalState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const config = readConfig(cfg);
         const state: CalculoMentalState = {
             ...generateOperation(config.operaciones, config.maxSuma, rng),
             maxSuma: config.maxSuma,
             operaciones: config.operaciones,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -180,8 +127,8 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
     return {
         id: 'calculo_mental',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CalculoMentalState> {
+            rng = adoptRandom(rng, optionsConfig);
             const config = readConfig(optionsConfig);
             return {
                 id: 'calculo_mental',
@@ -189,7 +136,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                     ...generateOperation(config.operaciones, config.maxSuma, rng),
                     maxSuma: config.maxSuma,
                     operaciones: config.operaciones,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,
@@ -199,7 +146,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as CalculoMentalState;
+            const state = session.state as CalculoMentalState;
             return {
                 prompt: `¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`,
                 valid: false,
@@ -211,7 +158,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as CalculoMentalState;
+            const state = session.state as CalculoMentalState;
 
             if (state.phase === 'done') {
                 return {

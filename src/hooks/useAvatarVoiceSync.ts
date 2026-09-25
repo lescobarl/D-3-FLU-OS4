@@ -19,13 +19,14 @@
 //   - Micro-expresiones para comportamiento idle (dar vida)
 //
 // NOTA: El ciclo de vida SPEAKING (incluyendo monitoreo de fin de habla)
-// es manejado por FluAvatarVoiceBridge.tsx a través de onContractResolved
-// y handleSpeak, que hacen await speakResponse() directamente.
+// es manejado por FluAvatarVoiceBridge.tsx a través de onContractResolved,
+// que hace await speakResponse() directamente.
 // Este hook SOLO sincroniza el estado del avatar (expresión + animación).
 // ============================================================
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useBunnyStore, EXPRESSION_MAP } from '../avatar';
+import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
+import { useBunnyStore } from '../avatar';
 import type { BunnyStore, BunnyAnimation, BunnyComponent, AvatarExpression } from '../avatar';
 import { useIntegrationStore } from '../store/integrationStore';
 import { relayLog } from '../lib/clientLogRelay';
@@ -33,7 +34,6 @@ import { isMusicPlaying } from '../services/musicPlayer';
 import type { ConversationState, EmotionalState } from '../types/bridge';
 import {
     getGroupExpressions,
-    getTriggerExpressions,
     ACTION_ANIMS,
 } from '../core/anim/expressionRegistry';
 import {
@@ -220,7 +220,6 @@ export function useAvatarVoiceSync() {
             // fuerza currentExpression=null para que el restore SIEMPRE se ejecute.
             bunny.clearExpression();
             bunny.setExpression(restoreExpression);
-            console.log(`[AvatarVoiceSync] 7s emoción terminada → restore setExpression(${restoreExpression})`);
         }, 7000);
     }, [clearEmotionReset]);
 
@@ -256,9 +255,7 @@ export function useAvatarVoiceSync() {
         const store = bunnyActionsRef.current;
         const options = getEngineOptions();
 
-        // DIAGNÓSTICO: siempre loguear llamadas a syncAvatarToState
         const emotionAnimsStr = emotionAnims ? `[${emotionAnims.join(', ')}]` : 'undefined';
-        console.log(`[DIAG] syncAvatarToState(state=${state}, emotionAnims=${emotionAnimsStr})`);
         relayLog('LOG', 'AvatarVoiceSync', `syncAvatarToState(state=${state}, emotionAnims=${emotionAnimsStr})`);
 
         // Use EmotionEngine to resolve state expression (for avatarState only)
@@ -276,7 +273,6 @@ export function useAvatarVoiceSync() {
                 const remain = sustained.sustainUntilSong
                     ? '∞ (canción sonando)'
                     : `${Math.round((sustained.until - Date.now()) / 1000)}s`;
-                console.log(`[DIAG] LISTENING → sustained action [${sustained.anims.join(', ')}] (+${remain})`);
                 relayLog('LOG', 'AvatarVoiceSync', `LISTENING → sustained action [${sustained.anims.join(', ')}] (+${remain})`);
                 return;
             }
@@ -295,9 +291,7 @@ export function useAvatarVoiceSync() {
             // igual que el restore de acciones sostenidas (2026-08-16).
             store.clearExpression();
             store.setExpression(alt.expression);
-            console.log(`[DIAG] LISTENING → setExpression(${alt.expression}) → EXPRESSION_MAP: [${alt.anims.join(', ')}]`);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DATA-DRIVEN: ${alt.expression}, anims: [${alt.anims.join(', ')}])`);
             }
             return;
         }
@@ -339,10 +333,8 @@ export function useAvatarVoiceSync() {
                 store.blendAnimation(blended);
                 // Guardar el estado previo para que el reset de 7s (solo IA) lo restaure.
                 emotionRestoreRef.current = alt?.expression ?? 'hablando';
-                console.log(`[DIAG] SPEAKING EMOTION → blendAnimation([${blended.join(', ')}])`);
                 relayLog('LOG', 'AvatarVoiceSync', `SPEAKING EMOTION → blendAnimation([${blended.join(', ')}])`);
                 if (options.debug) {
-                    console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (EMOTION: blendAnimation([${blended.join(', ')}]))`);
                 }
                 return;
             }
@@ -368,18 +360,14 @@ export function useAvatarVoiceSync() {
             if (alt) {
                 store.setExpression(alt.expression);
                 const altAnimsStr = alt.anims.join(', ');
-                console.log(`[DIAG] SPEAKING → setExpression(${alt.expression}) → EXPRESSION_MAP: [${altAnimsStr}]`);
                 relayLog('LOG', 'AvatarVoiceSync', `SPEAKING → setExpression(${alt.expression}) → anims=[${altAnimsStr}]`);
                 if (options.debug) {
-                    console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DATA-DRIVEN: setExpression(${alt.expression}) → EXPRESSION_MAP[${altAnimsStr}])`);
                 }
             } else {
                 // Fallback defensivo: setExpression ya resuelve 'hablando' → ['Idle_2','MouthMove']
                 store.setExpression('hablando');
-                console.log(`[DIAG] SPEAKING FALLBACK → setExpression(hablando)`);
                 relayLog('WARN', 'AvatarVoiceSync', `SPEAKING FALLBACK → setExpression(hablando) — alt era null`);
                 if (options.debug) {
-                    console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (FALLBACK: setExpression(hablando))`);
                 }
             }
             return;
@@ -389,7 +377,6 @@ export function useAvatarVoiceSync() {
             // DIRECT: bypass reactivity engine
             store.setExpression('Pensando');
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (DIRECT: Pensando)`);
             }
             return;
         }
@@ -406,7 +393,6 @@ export function useAvatarVoiceSync() {
         }
 
         if (options.debug) {
-            console.log(`[AvatarVoiceSync] ${prevStateRef.current} → ${state} (avatar: ${resolved.avatarState}, expr: ${resolved.expression}, anims: [${resolved.anims.join(', ')}])`);
         }
     }, [getEngineOptions]);
 
@@ -444,7 +430,6 @@ export function useAvatarVoiceSync() {
                 const overCap = Date.now() - startedAt >= SONG_SUSTAIN_MAX_MS;
                 if (overCap) {
                     sustainedActionRef.current = null;
-                    console.log(`[AvatarVoiceSync] Acción sostenida terminada (tope de ${SONG_SUSTAIN_MAX_MS / 60000} min) → restaura blend del estado actual`);
                     const currentState = useIntegrationStore.getState().conversationState;
                     if (currentState === 'LISTENING') {
                         // FIX 2026-08-16: clearExpression() fuerza currentExpression=null
@@ -466,7 +451,6 @@ export function useAvatarVoiceSync() {
                 const withinStartupGrace = Date.now() - startedAt < SONG_START_GRACE_MS;
                 if (songOver && !withinStartupGrace) {
                     sustainedActionRef.current = null;
-                    console.log(`[AvatarVoiceSync] Acción sostenida terminada (canción terminó) → restaura blend del estado actual`);
                     const currentState = useIntegrationStore.getState().conversationState;
                     if (currentState === 'LISTENING') {
                         bunnyActionsRef.current.clearExpression();
@@ -476,16 +460,15 @@ export function useAvatarVoiceSync() {
                 }
                 // La canción sigue sonando (o aún está arrancando) → seguir
                 // sosteniendo y re-chequear en 1s.
-                sustainedActionTimerRef.current = window.setTimeout(checkSong, 1000);
+                sustainedActionTimerRef.current = window.setTimeout(checkSong, TIMEOUT_POLICY_MS.sustainedActionRecheck);
             };
-            sustainedActionTimerRef.current = window.setTimeout(checkSong, 1000);
+            sustainedActionTimerRef.current = window.setTimeout(checkSong, TIMEOUT_POLICY_MS.sustainedActionRecheck);
             return;
         }
         sustainedActionRef.current = { anims, until: Date.now() + SUSTAINED_ACTION_MS };
         sustainedActionTimerRef.current = window.setTimeout(() => {
             sustainedActionTimerRef.current = null;
             sustainedActionRef.current = null;
-            console.log(`[AvatarVoiceSync] Acción sostenida terminada (${SUSTAINED_ACTION_MS / 1000}s) → restaura blend del estado actual`);
             const currentState = useIntegrationStore.getState().conversationState;
             if (currentState === 'LISTENING') {
                 // FIX 2026-08-16: igual que en modo 'song', clearExpression() antes
@@ -503,7 +486,6 @@ export function useAvatarVoiceSync() {
      * NO tiene IFs de reactividad — el engine escala según intensity + reactivity.
      */
     const applyEmotion = useCallback((emotion: EmotionalState) => {
-        const store = bunnyActionsRef.current;
         const options = getEngineOptions();
 
         // Don't override expression during SPEAKING (mouth movement is critical)
@@ -514,7 +496,6 @@ export function useAvatarVoiceSync() {
         if (resolved.expression) {
             applyResolved(resolved);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] Emoción aplicada: ${emotion} → ${resolved.expression}, anims: [${resolved.anims.join(', ')}]`);
             }
         }
     }, [conversationState, getEngineOptions, applyResolved]);
@@ -534,7 +515,6 @@ export function useAvatarVoiceSync() {
         if (resolved.expression) {
             applyResolved(resolved);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] Contextual: sentiment=${sentiment} → ${resolved.expression}`);
             }
         }
     }, [conversationState, getEngineOptions, applyResolved]);
@@ -555,7 +535,6 @@ export function useAvatarVoiceSync() {
             const alt = PARTICIPANT_ALTERNATIVES[toggleIndex];
             store.setExpression(alt.expression);
             if (options.debug) {
-                console.log(`[AvatarVoiceSync] Participante mano levantada → DATA-DRIVEN: ${alt.expression}`);
             }
             return;
         }
@@ -569,7 +548,6 @@ export function useAvatarVoiceSync() {
             // del usuario, no "no le hicieron caso").
             store.setExpression('atencion');
             if (options.debug) {
-                console.log('[AvatarVoiceSync] Participante mano bajada (dismiss) → expresión neutral atencion');
             }
             return;
         }
@@ -620,9 +598,8 @@ export function useAvatarVoiceSync() {
         }
 
         if (options.debug) {
-            console.log(`[AvatarVoiceSync] Participante evento=${event} → expresión=${resolved.expression}, anims=[${resolved.anims.join(', ')}] (canal ÚNICO pendingEmotionAnims)`);
         }
-    }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction, scheduleEmotionReset]);
+    }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction]);
 
     /**
      * Muestra una micro-expresión aleatoria para dar vida al avatar en estado idle.
@@ -635,7 +612,6 @@ export function useAvatarVoiceSync() {
         applyResolved(resolved);
 
         if (options.debug) {
-            console.log(`[AvatarVoiceSync] Micro-expresión idle → ${resolved.expression}${forceVisible ? ' (visible)' : ''}`);
         }
     }, [getEngineOptions, applyResolved]);
 
@@ -831,8 +807,7 @@ export function useAvatarVoiceSync() {
             startIdleMicroExpressions();
         }
         // Intencional: solo debe ejecutarse al montar.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [conversationState, startIdleMicroExpressions]);
 
     // -------------------------------------------------------
     // Efecto: aplicar configuración de imagen (gorra/pelo) al avatar
@@ -847,9 +822,8 @@ export function useAvatarVoiceSync() {
         store.setComponentVisibility('Bunny_bangs' as BunnyComponent, hairVisible);
 
         if (debugMode) {
-            console.log(`[AvatarVoiceSync] Imagen aplicada: cap=${capVisible}, hair=${hairVisible}`);
         }
-    }, [imageConfig.capVisible, imageConfig.hairVisible, debugMode]);
+    }, [imageConfig.capVisible, imageConfig.hairVisible, debugMode, imageConfig]);
 
     // -------------------------------------------------------
     // Efecto: sincronizar velocidad de animación
@@ -859,7 +833,6 @@ export function useAvatarVoiceSync() {
         store.setAnimationSpeed(animationSpeed);
 
         if (debugMode) {
-            console.log(`[AvatarVoiceSync] Animation speed aplicada: ${animationSpeed.toFixed(2)}`);
         }
     }, [animationSpeed, debugMode]);
 

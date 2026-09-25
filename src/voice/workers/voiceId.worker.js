@@ -5,10 +5,15 @@
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import {
-  assignSpeakerStrictCosine,
+  assignSpeaker,
   compareCosineSignatures,
-  normalizeSignatureVector,
-} from '../lib/speakerCosineStrict.js'
+  getFallbackSpeaker,
+  labelToSpeakerIdSimple,
+  normalizeEmbeddingVector as normalizeVector,
+} from '../lib/speakerCore.js'
+import { downsampleTo16k, tensorToEmbeddingVector } from '../lib/embeddingFrames.js'
+import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const DEFAULT_MATCH_THRESHOLD = 0.85
 
@@ -37,27 +42,6 @@ function getMinSamples(cfg = getEmbeddingConfig()) {
   return Math.floor(getTargetSampleRate(cfg) * safeRatio)
 }
 
-function downsampleTo16k(samples, sampleRate, targetRate) {
-  if (!samples?.length) return new Float32Array(0)
-  const safeTargetRate = Number(targetRate) > 0 ? Number(targetRate) : 16000
-  if (sampleRate <= safeTargetRate) {
-    return samples instanceof Float32Array ? samples : new Float32Array(samples)
-  }
-  const ratio = sampleRate / safeTargetRate
-  const length = Math.max(1, Math.floor(samples.length / ratio))
-  const result = new Float32Array(length)
-  for (let index = 0; index < length; index += 1) {
-    result[index] = samples[Math.min(samples.length - 1, Math.floor(index * ratio))]
-  }
-  return result
-}
-
-function tensorToEmbeddingVector(output) {
-  const tensor = output?.embeddings ?? output?.logits
-  if (!tensor?.data) return []
-  return Array.from(tensor.data)
-}
-
 async function ensureModel(modelId = getModelId(), quantized = true) {
   if (!modelBundlePromise) {
     const dtype = quantized === false ? 'fp32' : 'q8'
@@ -67,36 +51,6 @@ async function ensureModel(modelId = getModelId(), quantized = true) {
     ]).then(([processor, model]) => ({ processor, model, modelId }))
   }
   return modelBundlePromise
-}
-
-/** Coseno L2 explícito entre embeddings normalizados. */
-function compareAudioSignatures(sig1 = [], sig2 = []) {
-  return compareCosineSignatures(sig1, sig2)
-}
-
-function normalizeVector(vector = []) {
-  return normalizeSignatureVector(vector)
-}
-
-function samplesFromTransfer(payload = {}) {
-  const { audioBuffer, samples, byteOffset = 0, sampleCount } = payload
-  if (audioBuffer instanceof ArrayBuffer) {
-    const count =
-      Number.isFinite(sampleCount) && sampleCount > 0
-        ? sampleCount
-        : Math.floor((audioBuffer.byteLength - byteOffset) / 4)
-    return count > 0 ? new Float32Array(audioBuffer, byteOffset, count) : new Float32Array(0)
-  }
-  if (samples instanceof ArrayBuffer) {
-    const count =
-      Number.isFinite(sampleCount) && sampleCount > 0
-        ? sampleCount
-        : Math.floor(samples.byteLength / 4)
-    return count > 0 ? new Float32Array(samples, byteOffset, count) : new Float32Array(0)
-  }
-  if (samples instanceof Float32Array) return samples
-  if (Array.isArray(samples)) return new Float32Array(samples)
-  return new Float32Array(0)
 }
 
 async function embedAudio(payload = {}) {
@@ -115,32 +69,9 @@ async function embedAudio(payload = {}) {
   return raw.length ? normalizeVector(raw) : []
 }
 
-function labelToSpeakerId(label = '') {
-  const text = String(label || '').trim()
-  const match = text.match(/^Hablante\s+(\d+)$/i)
-  if (match) return `speaker_${match[1]}`
-  const slug = text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-  return slug ? `speaker_name_${slug}` : 'speaker_1'
-}
-
-function assignSpeakerStrict(vector, options = {}) {
-  const assignment = assignSpeakerStrictCosine(vector, options)
-  return {
-    ...assignment,
-    speakerId: labelToSpeakerId(assignment.speakerName),
-  }
-}
-
 self.onmessage = async (event) => {
   const { id, type, payload = {} } = event.data || {}
-  const reply = (ok, result, error) => {
-    self.postMessage({ id, ok, result, error: error ? String(error?.message || error) : '' })
-  }
+  const reply = createWorkerReply(id)
 
   try {
     if (type === 'preload') {
@@ -157,7 +88,7 @@ self.onmessage = async (event) => {
     }
 
     if (type === 'compare') {
-      const similarity = compareAudioSignatures(payload.a || [], payload.b || [])
+      const similarity = compareCosineSignatures(payload.a || [], payload.b || [])
       reply(true, { similarity })
       return
     }
@@ -172,10 +103,11 @@ self.onmessage = async (event) => {
             : DEFAULT_MATCH_THRESHOLD
 
       if (!vector.length) {
-        const fallbackLabel = String(payload.fallbackSpeaker || 'Hablante 1').trim() || 'Hablante 1'
+        const fallbackLabel =
+          String(payload.fallbackSpeaker || getFallbackSpeaker()).trim() || getFallbackSpeaker()
         reply(true, {
           vector: [],
-          speakerId: labelToSpeakerId(fallbackLabel),
+          speakerId: labelToSpeakerIdSimple(fallbackLabel),
           speakerName: fallbackLabel,
           similarity: 0,
           reason: 'no-vector',
@@ -183,7 +115,7 @@ self.onmessage = async (event) => {
         return
       }
 
-      const assignment = assignSpeakerStrict(vector, {
+      const assignment = assignSpeaker(vector, {
         clusters: payload.clusters || [],
         matchThreshold,
         reservedLabels: payload.reservedLabels || [],
@@ -208,6 +140,7 @@ self.onmessage = async (event) => {
 
     reply(false, null, new Error(`unknown worker message type: ${type}`))
   } catch (error) {
+        logCaughtError('[catch] src/voice/workers/voiceId.worker.js', error);
     reply(false, null, error)
   }
 }

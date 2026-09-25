@@ -1,15 +1,11 @@
 /**
  * Guardas de ingress: relajar shrink/redundante y forzar filas nuevas en el log.
  */
-import { cleanForSpeech, compareAudioSignatures } from './audioMath.js'
+import { cleanForSpeech, compareCosineSignatures, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getIngressGuardsCfg, getSpeakerThresholdsCfg } from './fluTranscriptMotor.js'
 import { utterancesAsrProgress, utterancesRelate, utterancesSameRevision } from './conversationStream.js'
-
-function speechWords(text = '') {
-  return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
-}
 
 /** Cambio abrupto de hablante (etiqueta o embedding 512-D L2-normalizado). */
 export function isSpeakerVoiceAbruptChange(context = {}) {
@@ -37,7 +33,7 @@ export function isSpeakerVoiceAbruptChange(context = {}) {
   }
 
   const thresholds = getSpeakerThresholdsCfg()
-  const similarity = compareAudioSignatures(finalSig, previewSig)
+  const similarity = compareCosineSignatures(finalSig, previewSig)
   const continuity = Number(context.continuityThreshold ?? thresholds.cosineContinuityThreshold)
   const floor = Number(context.abruptSimilarityFloor ?? thresholds.cosineNewVoiceThreshold)
   const drop = Number(context.abruptSimilarityDrop ?? thresholds.abruptSimilarityDrop)

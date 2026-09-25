@@ -2,7 +2,6 @@
  * ingestFinalChunk: flush absoluto + final-only + commit async vía hook.
  */
 import { cleanForSpeech, pickBestRecognitionTranscript } from './audioMath.js'
-import { mergeTranscriptText } from './transcriptDelta.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   analyzeWakeTurn,
@@ -27,20 +26,19 @@ import {
 } from './activeListen.js'
 import {
   micPublishedParityOk,
-  collapseMisorderedMicMerge,
   buildPriorRowsForStrip,
   clearInterimOpenLineClock,
   readTurnLive,
   evaluateSrGapSegmentCommit,
   isCommittedInterimEcho,
-  peelCommittedPrefixFromInterim,
   clearStaleCommittedEchoFromState,
   resolveCommitCapture,
   mergePreviewIntoFinalCapture,
   mergeTurnBridgeWithInterim,
   mergeLivePreviewIntoFinalCommit,
   shouldMergeLivePreviewIntoFinal,
-  utterancesAsrProgress,
+  resolveIngressCaptureText,
+  isProgressiveExtension,
 } from './conversationStream.js'
 import { fluTrace } from './fluTrace.js'
 import { shouldDiarizeInterimAtTurnBoundary } from './speakerPolicy.js'
@@ -56,19 +54,32 @@ function buildFinalCommitList(finalChunks = []) {
   if (normalized.length <= 1) return normalized
 
   const commits = []
+  // Canoniza quitando espacios: Chrome manda alternativas del MISMO result con
+  // distinto espaciado ("1 2 3" vs "123") que no deben contarse como frases nuevas.
+  const canon = (value) => String(value || '').replace(/\s+/g, '').toLowerCase()
   for (const capture of normalized) {
     const last = commits.at(-1) || ''
     if (!last) {
       commits.push(capture)
       continue
     }
+    const cLast = canon(last)
+    const cCapture = canon(capture)
     if (
       capture === last ||
       capture.startsWith(last) ||
+      last.startsWith(capture) ||
+      cCapture === cLast ||
+      cLast.startsWith(cCapture) ||
+      cCapture.startsWith(cLast) ||
       utterancesSameRevision(last, capture) ||
       utterancesRelate(last, capture)
     ) {
-      commits[commits.length - 1] = capture
+      // Misma revisión: Chrome manda alternativas del MISMO result y la más
+      // corta puede llegar al final ("1 2 3" → "123" → "1 2"; "… frases" →
+      // "ok flu"). Nunca encoger: la alternativa más completa gana. Encoger
+      // aquí borraba lo ya dictado (la interacción se perdía).
+      if (cCapture.length >= cLast.length) commits[commits.length - 1] = capture
       continue
     }
     commits.push(capture)
@@ -76,7 +87,7 @@ function buildFinalCommitList(finalChunks = []) {
   return commits
 }
 
-export function collectBrowserResultChunks(event) {
+export function collectRecognitionResultChunks(event) {
   const interimChunks = []
   const finalChunks = []
   if (!event?.results?.length) {
@@ -301,14 +312,8 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   )
   let capture = cleanForSpeech(finalChunk)
   if (lastCommittedRow && !isCommittedInterimEcho(capture, lastCommittedRow)) {
-    const progressiveExtension =
-      capture.length > lastCommittedRow.length &&
-      (capture.toLowerCase().startsWith(lastCommittedRow.toLowerCase()) ||
-        utterancesAsrProgress(lastCommittedRow, capture))
-    if (!progressiveExtension) {
-      const peeledFinal = cleanForSpeech(peelCommittedPrefixFromInterim(capture, lastCommittedRow))
-      if (peeledFinal) capture = peeledFinal
-    }
+    // §9: ÚNICA FUENTE DE VERDAD del texto del turno (misma que interims).
+    capture = resolveIngressCaptureText(capture, lastCommittedRow)
   }
   if (!capture) return { handled: false, capture: '' }
 
@@ -399,9 +404,7 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   }
 
   const {
-    openPreviewTurnRef,
     logRowsTextRef,
-    lastEmittedTranscriptRef,
     lastLoggedSpeakerRef,
     tryDispatch,
     debugHotPath,
@@ -442,7 +445,6 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     ctx.fluDebugHot('mic-fragment-mismerge', {
       mic: commitCapture,
       published: packet.published,
-      collapsed: collapseMisorderedMicMerge(packet.published),
     })
   }
 
@@ -496,11 +498,6 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   return { handled: false, capture: published, redundant: false }
 }
 
-function flushPublishedLaneOnly(ctx) {
-  if (ctx.publishedLiveRef) ctx.publishedLiveRef.current = ''
-  if (ctx.lastStreamPreviewRef) ctx.lastStreamPreviewRef.current = ''
-}
-
 function ingestInterimChunk({ interim, ctx }) {
   const {
     listenState,
@@ -533,10 +530,9 @@ function ingestInterimChunk({ interim, ctx }) {
   const exactCommittedEcho =
     lastCommitted && cleanedInterim && cleanedInterim === lastCommitted
 
+  // §9: criterio ÚNICO de "emisión que crece" (mismo que usa el resolver).
   const extendsCommitted =
-    lastCommitted &&
-    cleanedInterim.length > lastCommitted.length &&
-    cleanedInterim.toLowerCase().startsWith(lastCommitted.toLowerCase())
+    Boolean(lastCommitted) && isProgressiveExtension(cleanedInterim, lastCommitted)
 
   const atFreshVoice =
     turnBoundary ||
@@ -565,18 +561,8 @@ function ingestInterimChunk({ interim, ctx }) {
     return { handled: false }
   }
 
-  let interimForPacket = cleanedInterim
-  if (lastCommitted) {
-    const priorLower = lastCommitted.toLowerCase()
-    const chunkLower = cleanedInterim.toLowerCase()
-    if (chunkLower.startsWith(priorLower)) {
-      const prefixPeel = cleanForSpeech(cleanedInterim.slice(lastCommitted.length))
-      if (prefixPeel) interimForPacket = prefixPeel
-    } else if (!atFreshVoice) {
-      const peeled = peelCommittedPrefixFromInterim(cleanedInterim, lastCommitted)
-      if (peeled) interimForPacket = peeled
-    }
-  }
+  // §9: ÚNICA FUENTE DE VERDAD del texto del turno (misma que finales).
+  let interimForPacket = resolveIngressCaptureText(cleanedInterim, lastCommitted, { atFreshVoice })
   if (pendingBridge) {
     interimForPacket = mergeTurnBridgeWithInterim(pendingBridge, interimForPacket)
   }
@@ -659,39 +645,16 @@ function ingestInterimChunk({ interim, ctx }) {
   return { handled: false }
 }
 
-export function processBrowserConversationIngress({ interimChunks = [], finalChunks = [], ctx }) {
+export function processMicConversationIngress({ interimChunks = [], finalChunks = [], ctx }) {
   if (!ctx?.conversationActive) return { handled: false }
   const interimPreview = pickBestMicInterim(interimChunks.map((t) => cleanForSpeech(t)))
   const commitList = buildFinalCommitList(finalChunks)
-  const finalPreview = commitList.at(-1) || ''
-
-  if (ctx.skipConversationLog) {
-    const blockedPhrase = finalPreview || interimPreview
-    if (blockedPhrase) {
-      ctx.fluDebugHot?.('ingress-browser-blocked', {
-        text: blockedPhrase.slice(0, 160),
-        source: 'browser',
-        ingestStream: Boolean(ctx.ingestStream),
-      })
-    }
-    if (finalPreview && ctx.tryDispatch(finalPreview, { interim: false, source: 'final' })) {
-      return { handled: true, commandsOnly: true }
-    }
-    if (interimPreview && ctx.tryDispatch(interimPreview, { interim: true, source: 'interim' })) {
-      return { handled: true, commandsOnly: true }
-    }
-    return { handled: false, commandsOnly: true }
-  }
-
-  if (ctx.ingestBrowser === false) {
-    return { handled: false, reason: 'browser-log-disabled' }
-  }
 
   const interim = interimPreview
   let interimAbsorbedByFinal = false
 
   ctx.interimAbsorbedByFinal = false
-  ctx.ingressSource = 'browser'
+  ctx.ingressSource = 'mic'
 
   for (const finalChunk of commitList) {
     interimAbsorbedByFinal =
@@ -721,19 +684,3 @@ export function processBrowserConversationIngress({ interimChunks = [], finalChu
   return { handled: false }
 }
 
-export function processStreamConversationIngress({ text = '', isFinal = false, ctx }) {
-  if (!ctx?.conversationActive || !ctx.ingestStream) return { handled: false }
-
-  const phrase = String(text ?? '').trim()
-  if (!phrase) return { handled: false }
-
-  ctx.ingressSource = 'stream'
-
-  if (isFinal) {
-    const result = ingestFinalChunk({ finalChunk: phrase, ctx })
-    return { handled: result.handled, source: 'stream' }
-  }
-
-  const interimResult = ingestInterimChunk({ interim: phrase, ctx })
-  return { handled: interimResult.handled, source: 'stream' }
-}

@@ -51,42 +51,11 @@ export function ThinkingIndicator() {
             role="status"
             aria-live="polite"
             aria-label="FLU está pensando"
-            style={{
-                position: 'fixed',
-                left: '50%',
-                bottom: '28px',
-                transform: 'translateX(-50%)',
-                zIndex: 9999,
-                pointerEvents: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px 18px',
-                borderRadius: '999px',
-                background: 'rgba(15, 15, 25, 0.82)',
-                border: '1px solid rgba(139, 92, 246, 0.45)',
-                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.35)',
-                color: '#e9e6ff',
-                fontFamily: 'inherit',
-                fontSize: '14px',
-                fontWeight: 600,
-                letterSpacing: '0.2px',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
-                animation: 'flu-thinking-pulse 1.6s ease-in-out infinite',
-            }}
+            className="thinking-indicator"
         >
             <span
                 aria-hidden="true"
-                style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    border: '2px solid rgba(139, 92, 246, 0.35)',
-                    borderTopColor: '#a78bfa',
-                    animation: 'flu-thinking-spin 0.8s linear infinite',
-                    flexShrink: 0,
-                }}
+                className="thinking-indicator__spinner"
             />
             <span>FLU está pensando...</span>
             <style>{`

@@ -8,9 +8,11 @@
 // Cumple:
 //   - Rule #1: NO HARDCODE — configurable via FLU_CONFIG
 //   - Pure functions — no React dependencies
+//   - Fase 2 (B5): fusiona recordatorios pendientes en la agenda
 // ============================================================
 
 import { normalizeSpaces } from './textUtils';
+import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
 
 // -----------------------------------------------------------
 // Types
@@ -25,6 +27,8 @@ export interface DailyAgendaItem {
     pendingItems: string[];
     /** Siguientes pasos de esa sesión */
     nextSteps: string[];
+    /** Líneas de recordatorios pendientes fusionadas (Fase 2 — B5) */
+    reminders?: string[];
     /** Código de historial (fecha + secuencia, ej. 260713-01) */
     sourceDate: string;
 }
@@ -38,6 +42,8 @@ export interface DailyAgendaConfig {
     injectOnStartup: boolean;
     /** Si FLU puede recordar proactivamente los pendientes */
     proactiveReminder: boolean;
+    /** Máximo de recordatorios a fusionar en la agenda (Fase 2 — B5) */
+    maxReminders?: number;
 }
 
 export const DEFAULT_AGENDA_CONFIG: DailyAgendaConfig = {
@@ -45,6 +51,7 @@ export const DEFAULT_AGENDA_CONFIG: DailyAgendaConfig = {
     minImportance: 0.3,
     injectOnStartup: true,
     proactiveReminder: true,
+    maxReminders: 5,
 };
 
 // -----------------------------------------------------------
@@ -76,7 +83,7 @@ function parseHistoryDate(code: string = ''): number {
  * @returns Array de items de agenda, vacío si no hay pendientes
  */
 export function buildDailyAgenda(
-    records: any[] = [],
+    records: readonly MinuteUIEntry[] = [],
     config: Partial<DailyAgendaConfig> = {},
 ): DailyAgendaItem[] {
     const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
@@ -90,13 +97,13 @@ export function buildDailyAgenda(
         const pendingItems: string[] = (
             Array.isArray(snapshot?.pendientes) ? snapshot.pendientes : []
         )
-            .map((item: any) => normalizeSpaces(String(item)))
+            .map((item: string) => normalizeSpaces(String(item)))
             .filter(Boolean);
 
         const nextSteps: string[] = (
             Array.isArray(snapshot?.siguientes_pasos) ? snapshot.siguientes_pasos : []
         )
-            .map((item: any) => normalizeSpaces(String(item)))
+            .map((item: string) => normalizeSpaces(String(item)))
             .filter(Boolean);
 
         // Solo incluir si hay al menos un pendiente o siguiente paso
@@ -118,6 +125,138 @@ export function buildDailyAgenda(
 
     // Limitar a maxItems
     return items.slice(0, cfg.maxItems);
+}
+
+// -----------------------------------------------------------
+// Merge Reminders into Agenda (Fase 2 — B5)
+// -----------------------------------------------------------
+
+/**
+ * Formatea un vencimiento (epoch ms) como texto legible según el idioma.
+ * Determinista: no depende de la librería de fechas, solo de Date nativo.
+ */
+function formatReminderWhen(at: number, language: 'es' | 'en'): string {
+    const date = new Date(at);
+    const now = new Date();
+    const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+    if (date.toDateString() === now.toDateString()) {
+        return language === 'en' ? `today at ${time}` : `hoy a las ${time}`;
+    }
+
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    if (date.toDateString() === tomorrow.toDateString()) {
+        return language === 'en' ? `tomorrow at ${time}` : `mañana a las ${time}`;
+    }
+
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return language === 'en'
+        ? `on ${yyyy}-${mm}-${dd} at ${time}`
+        : `el ${dd}/${mm}/${yyyy} a las ${time}`;
+}
+
+/**
+ * Forma mínima de un recordatorio pendiente que la fusión necesita leer.
+ * Estructural: acepta `ReminderRecord` (legacy) y los items del calendario
+ * unificado mapeados a `{ text, dueAt, status }` (una sola fuente).
+ */
+export interface AgendaReminderLike {
+    text?: string;
+    dueAt?: number;
+    status?: string;
+}
+
+/** Entrada del calendario pendiente con su etiqueta de tipo (contexto IA). */
+export interface PendingCalendarEntry extends AgendaReminderLike {
+    kindLabel?: string;
+}
+
+/**
+ * Fusiona los recordatorios pendientes en la agenda del día.
+ * Agrega un item sintético ("Recordatorios pendientes") al final del
+ * array, ordenado por vencimiento ascendente y limitado a maxReminders.
+ *
+ * No muta el array original; devuelve una copia con el item agregado.
+ *
+ * @param items - Agenda previa (de buildDailyAgenda)
+ * @param reminders - Registros de recordatorios pendientes (text/dueAt/status)
+ * @param config - Configuración opcional (usa defaults si no se provee)
+ * @param language - 'es' | 'en' para las etiquetas de tiempo
+ * @returns La agenda con el item de recordatorios fusionado
+ */
+function buildPendingSection(
+    items: DailyAgendaItem[],
+    entries: ReadonlyArray<PendingCalendarEntry>,
+    title: string,
+    maxItems: number | undefined,
+    language: 'es' | 'en',
+): DailyAgendaItem[] {
+    if (!Array.isArray(entries) || entries.length === 0) return items;
+
+    const pending = entries
+        .filter((entry) => entry && entry.status === 'pending')
+        .slice()
+        .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
+
+    if (pending.length === 0) return items;
+
+    const top = pending.slice(0, maxItems);
+
+    const lines = top.map((entry) => {
+        const text = normalizeSpaces(entry.text || '');
+        const kindLabel = normalizeSpaces(entry.kindLabel || '');
+        const labeled = text && kindLabel ? `${text} (${kindLabel})` : text;
+        const when = formatReminderWhen(entry.dueAt ?? 0, language);
+        return labeled ? `${when} — ${labeled}` : when;
+    });
+
+    const sectionItem: DailyAgendaItem = {
+        minuteId: '',
+        title,
+        pendingItems: [],
+        nextSteps: [],
+        reminders: lines,
+        sourceDate: '',
+    };
+
+    return [...items, sectionItem];
+}
+
+export function mergeRemindersIntoAgenda(
+    items: DailyAgendaItem[],
+    reminders: ReadonlyArray<AgendaReminderLike> = [],
+    config: Partial<DailyAgendaConfig> = {},
+    language: 'es' | 'en' = 'es',
+): DailyAgendaItem[] {
+    const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
+    return buildPendingSection(
+        items,
+        reminders,
+        language === 'en' ? 'Pending reminders' : 'Recordatorios pendientes',
+        cfg.maxReminders,
+        language,
+    );
+}
+
+/**
+ * Sección del prompt con TODO el calendario pendiente (cualquier kind), con su
+ * etiqueta de tipo. Fuente ÚNICA del contexto de agenda para la IA: sin filtro
+ * de kinds (antes solo llegaban recordatorio/cita; alarma/junta/clase futura
+ * no estaban y la IA no podía responder por intención).
+ */
+export function appendPendingCalendar(
+    items: DailyAgendaItem[],
+    entries: ReadonlyArray<PendingCalendarEntry> = [],
+    config: Partial<DailyAgendaConfig> = {},
+    language: 'es' | 'en' = 'es',
+    title?: string,
+): DailyAgendaItem[] {
+    const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
+    const sectionTitle = title || (language === 'en' ? 'Pending calendar' : 'Calendario pendiente');
+    return buildPendingSection(items, entries, sectionTitle, cfg.maxReminders, language);
 }
 
 // -----------------------------------------------------------
@@ -157,7 +296,16 @@ export function formatAgendaForPrompt(
                 : `\n   Siguientes pasos: ${item.nextSteps.join(' | ')}`)
             : '';
 
-        return `${index + 1}. ${title}${dateLabel}${pendingText}${nextText}`;
+        const reminders = item.reminders && item.reminders.length > 0
+            ? item.reminders
+            : [];
+        const remindersText = reminders.length > 0
+            ? (isEnglish
+                ? `\n   Reminders: ${reminders.join(' | ')}`
+                : `\n   Recordatorios: ${reminders.join(' | ')}`)
+            : '';
+
+        return `${index + 1}. ${title}${dateLabel}${pendingText}${nextText}${remindersText}`;
     });
 
     const header = isEnglish
@@ -184,6 +332,7 @@ export function countPendingItems(items: DailyAgendaItem[]): number {
     for (const item of items) {
         count += item.pendingItems.length;
         count += item.nextSteps.length;
+        count += item.reminders?.length ?? 0;
     }
     return count;
 }

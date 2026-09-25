@@ -21,10 +21,21 @@ function syncEnabled(): boolean {
     return FLU_CONFIG.debug?.relayToServer !== false;
 }
 
+/**
+ * El relay entrega a una ruta RELATIVA del origen del documento. Sin documento
+ * (Node, SSR) no hay origen que resolver: `fetch` no puede resolverla y el intento no
+ * entrega nada, solo mete ruido en la consola. Medido: era el TypeError que aparecia en
+ * la suite al importar modulos que registran logs (C68).
+ */
+function hasDocumentOrigin(): boolean {
+    return typeof document !== 'undefined' && Boolean(document.baseURI);
+}
+
 function flush() {
     if (pending.length === 0) return;
     const batch = pending;
     pending = [];
+    if (!hasDocumentOrigin()) return;
     try {
         // Always send as array so server handler can iterate uniformly
         // Sending single object vs array causes server-side parsing failures
@@ -34,10 +45,13 @@ function flush() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(batch),
         }).catch(() => {
-            // Silently ignore — server may not be available
+            /* ignorado: un fallo de entrega NO se re-encola (bucle de reintento, C67) ni
+               se re-reporta por el registro central: ese registro ES este mismo relay,
+               asi que reportarlo desde aqui era justamente el bucle. */
         });
     } catch {
-        // Silently ignore
+        /* ignorado: sin servidor dev al que entregar (entorno de tests, preview
+           estatica, SSR) el intento es esperado; reportarlo metia ruido (C68). */
     }
 }
 
@@ -84,7 +98,7 @@ export function flushLogs(): void {
 
 // Exponer control en window para调试 desde consola del navegador (solo DEV)
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__fluClientLog = {
+    window.__fluClientLog = {
         enable: (on: boolean) => setRelayEnabled(on),
         flush: flushLogs,
         status: () => ({ enabled, relayToServer: syncEnabled() }),

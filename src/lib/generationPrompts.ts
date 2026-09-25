@@ -72,6 +72,20 @@ export function buildGenerationPrompt(payload: GenerationInput, language = 'es')
     ].join('\n');
 }
 
+/** Ref seguro para el cuerpo del documento de respaldo: la conversación nunca
+    se vuelca en crudo (evita que el PDF salga con el texto de una respuesta
+    anterior de FLU, p. ej. "Procederé a generar un video…" — Bug #6). */
+function safeFuenteLabel(fuente: { tipo?: string; ref?: string } | undefined, index: number): string {
+    if (!fuente) return '';
+    const tipo = String(fuente.tipo || '').toLowerCase();
+    const ref = String(fuente.ref || '').trim();
+    if (tipo === 'conversacion') {
+        // La conversación se cita como referencia genérica, nunca su texto.
+        return `Conversación reciente (${index + 1})`;
+    }
+    return ref ? `${tipo}: ${ref.slice(0, 160)}` : `${tipo} (${index + 1})`;
+}
+
 /** Contenido de respaldo cuando no hay LLM disponible (degradación elegante). */
 export function buildGenerationFallbackContent(payload: GenerationInput, language = 'es'): string {
     const langInstr = language === 'en'
@@ -86,7 +100,7 @@ export function buildGenerationFallbackContent(payload: GenerationInput, languag
                     rows: [
                         ['Sección', 'Detalle'],
                         ['Tema', tema],
-                        ['Fuente', (payload.fuentes || []).map((f) => f.ref).join(', ') || '—'],
+                        ['Fuente', 'Conversación reciente'],
                         ['Estado', langInstr],
                     ],
                 },
@@ -101,7 +115,7 @@ export function buildGenerationFallbackContent(payload: GenerationInput, languag
         return JSON.stringify({
             tema,
             formato: payload.formato,
-            fuentes: payload.fuentes || [],
+            fuentes: (payload.fuentes || []).map((f, i) => safeFuenteLabel(f, i)),
             nota: langInstr,
         });
     }
@@ -122,28 +136,45 @@ export function buildGenerationFallbackContent(payload: GenerationInput, languag
         ].join('\r\n');
     }
     if (payload.formato === 'pptx') {
-        const fuentes = (payload.fuentes || []).map((f) => f.ref).join(', ') || '—';
         return [
             `# ${tema}`,
             `- ${langInstr}`,
-            `- Fuentes: ${fuentes}`,
             `## Contexto`,
-            `- Documento generado por FLU sin conexión a IA.`,
+            `- Documento generado por FLU sin conexión a IA sobre el tema "${tema}".`,
+            `## Fuentes`,
+            ...(payload.fuentes || []).map((f, i) => `- ${safeFuenteLabel(f, i)}`),
             `## Siguientes pasos`,
             `- Proporciona una clave de API para generar contenido completo.`,
         ].join('\n');
     }
-    const fuentes = (payload.fuentes || []).map((f) => f.ref).join(', ') || '—';
+    if (payload.formato === 'video') {
+        return [
+            `# ${tema}`,
+            ``,
+            `## Escena 1 — Introducción`,
+            `Hoy te contamos sobre "${tema}".`,
+            ``,
+            `## Escena 2 — Explicación`,
+            `Repasamos los puntos principales del tema "${tema}" de forma sencilla.`,
+            ``,
+            `## Escena 3 — Cierre`,
+            `Recuerda: pregunta a FLU para profundizar en "${tema}".`,
+        ].join('\n');
+    }
+    const fuentes = (payload.fuentes || []).map((f, i) => safeFuenteLabel(f, i));
     return [
         `# ${tema}`,
         ``,
         `> ${langInstr}`,
         ``,
-        `## Resumen`,
-        `Documento generado por FLU en formato ${payload.formato} sin conexión a IA.`,
+        `## Introducción`,
+        `Este documento de FLU aborda el tema "${tema}".`,
         ``,
-        `## Fuentes`,
-        fuentes,
+        `## Desarrollo`,
+        `Respaldo sin conexión: se incluye el encuadre del tema; para un desarrollo completo conecta una clave de API de IA.`,
+        ``,
+        `## Fuentes consultadas`,
+        ...(fuentes.length ? fuentes : ['Ninguna fuente explícita']),
         ``,
         `## Estado`,
         `Proporciona una clave de API para generar contenido completo enriquecido.`,

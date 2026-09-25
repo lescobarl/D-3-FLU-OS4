@@ -16,18 +16,24 @@
 // ============================================================
 
 import type { IncomingMessage, ServerResponse } from 'http';
+import type { MiddlewareHost } from './httpJson';
+import { logCaughtError } from '../lib/caughtError';
 import {
-    OPENROUTER_CONFIG,
-    buildTextApiUrl,
+    OPENROUTER_DEFAULTS,
     isLocalTextEndpoint,
-    resolveTextApiKey,
-} from '../core/config/appConfig';
+    joinApiUrl,
+    resolveServerTextApiKey,
+    resolveServerTextApiUrl,
+    setServerEnv,
+} from '../core/config/sharedConfig';
 
 // ─── Import canonical implementations from OS2 ──────────────
 // These are the exact same functions OS2 uses in its Express server.
 import {
     generateFluContract,
     generateConversationSummary,
+    generateOpenRouterImage,
+    generateVideoViaFal,
     generateParticipantEvaluation,
     generateWorkspaceImage,
     analyzeImage,
@@ -38,8 +44,56 @@ import {
 // - Contract/response cache: 30s TTL (conversación dinámica) — Fase 6
 // - Participant eval cache: 30s TTL (same conversation window)
 
+/**
+ * Cuerpo JSON aceptado por los endpoints del proxy (campos conocidos).
+ *
+ * `history`, `personality` y `creativity` replican los tipos que infiere
+ * TypeScript para los parámetros de `voice/lib/gemini.js` (módulo JS sin
+ * declaraciones): `never[]` y `null`. El valor real llega del JSON parseado,
+ * por lo que en runtime no se restringe.
+ */
+interface ProxyBody {
+    apiKey?: string;
+    transcript?: string;
+    history?: never[];
+    language?: string;
+    mode?: string;
+    knowledgeMode?: string;
+    personality?: null;
+    creativity?: null;
+    role?: string;
+    theme?: string;
+    intent?: string;
+    speaker?: string;
+    phase?: string;
+    model?: string;
+    conversationLog?: string;
+    maxDraftChars?: number;
+    prompt?: string;
+    system?: string;
+    maxTokens?: number;
+    temperature?: number;
+    imageBase64?: string;
+    mimeType?: string;
+    profile?: string;
+    workspace?: unknown;
+    count?: number;
+    delta?: boolean;
+    level?: string;
+    tag?: string;
+    message?: string;
+    data?: unknown;
+    [key: string]: unknown;
+}
+
+/** Lee un campo de un error lanzado sin asumir su forma (nunca lanza). */
+function errorField(err: unknown, key: string): unknown {
+    if (err && typeof err === 'object') return Reflect.get(err, key);
+    return undefined;
+}
+
 interface CacheEntry {
-    data: any;
+    data: unknown;
     timestamp: number;
 }
 
@@ -56,11 +110,7 @@ const VISION_CACHE_TTL_MS = 300_000;        // 5 min (imagen repetida = mismo an
 const VISION_CACHE_MAX = 20;
 
 // ─── IMAGE GENERATION CACHE ───────────────────────────────────
-const IMAGE_CACHE = new Map<string, CacheEntry>();
-const IMAGE_CACHE_TTL_MS = 300_000;        // 5 min (imágenes repetidas)
-const IMAGE_CACHE_MAX = 20;
-
-function getCachedResponse(cache: Map<string, CacheEntry>, key: string, ttl: number): any | null {
+function getCachedResponse(cache: Map<string, CacheEntry>, key: string, ttl: number): unknown | null {
     const entry = cache.get(key);
     if (!entry) return null;
     if (Date.now() - entry.timestamp > ttl) {
@@ -70,7 +120,7 @@ function getCachedResponse(cache: Map<string, CacheEntry>, key: string, ttl: num
     return entry.data;
 }
 
-function setCachedResponse(cache: Map<string, CacheEntry>, key: string, data: any, max: number): void {
+function setCachedResponse(cache: Map<string, CacheEntry>, key: string, data: unknown, max: number): void {
     if (cache.size >= max) {
         const oldest = cache.entries().next().value;
         if (oldest) cache.delete(oldest[0]);
@@ -97,7 +147,7 @@ function simpleHash(input: string): string {
  *  - config fingerprint (personality + creativity): invalida la caché al cambiar
  *    la configuración del asistente (Fase 6, punto 3).
  */
-function buildContractCacheKey(body: any): string {
+function buildContractCacheKey(body: ProxyBody | null): string {
     const transcript = body?.transcript || '';
     const history = body?.history || [];
     const language = body?.language || 'es';
@@ -108,7 +158,7 @@ function buildContractCacheKey(body: any): string {
     const transcriptHash = simpleHash(transcript);
     const historyHash = simpleHash(
         history
-            .map((h: any) => `${h?.role || h?.speaker || ''}:${h?.text ?? h?.respuesta_voz ?? ''}`)
+            .map((h: Record<string, unknown>) => `${h?.role || h?.speaker || ''}:${h?.text ?? h?.respuesta_voz ?? ''}`)
             .join('\n'),
     );
     // Fase 6 — invalidación por cambio de configuración (personality / creativity).
@@ -120,17 +170,17 @@ function buildContractCacheKey(body: any): string {
  * Build a hash key for participant evaluation caching (OPTIMIZATION C).
  * The evaluation depends on the conversation log content and config.
  */
-function buildEvalCacheKey(body: any): string {
-    const { conversationLog, language, role, theme, maxDraftChars } = body || {};
+function buildEvalCacheKey(body: ProxyBody | null): string {
+    const conversationLog = body?.conversationLog;
     // Use first 200 chars of conversationLog as fingerprint (enough to detect changes)
     const logFingerprint = (conversationLog || '').slice(0, 200);
-    return `${logFingerprint}|${language || 'es'}|${role || ''}|${theme || ''}|${maxDraftChars || 420}`;
+    return `${logFingerprint}|${body?.language || 'es'}|${body?.role || ''}|${body?.theme || ''}|${body?.maxDraftChars || 420}`;
 }
 
 // ─── Shared helpers ──────────────────────────────────────────
 
-function parseBody(req: IncomingMessage): Promise<any> {
-    return new Promise((resolve, reject) => {
+function parseBody<T = ProxyBody>(req: IncomingMessage): Promise<T | null> {
+    return new Promise<T | null>((resolve, reject) => {
         const chunks: Buffer[] = [];
         req.on('data', (chunk: Buffer) => chunks.push(chunk));
         req.on('end', () => {
@@ -138,7 +188,8 @@ function parseBody(req: IncomingMessage): Promise<any> {
             const body = Buffer.concat(chunks).toString('utf-8');
             try {
                 resolve(JSON.parse(body));
-            } catch {
+            } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e);
                 resolve(null);
             }
         });
@@ -146,7 +197,21 @@ function parseBody(req: IncomingMessage): Promise<any> {
     });
 }
 
-function sendJson(res: ServerResponse, status: number, data: any) {
+/**
+ * Lee el cuerpo crudo como texto (para sinks que envían NDJSON, no JSON).
+ * @param req Petición entrante.
+ * @returns El cuerpo completo como string UTF-8.
+ */
+function readRawBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => chunks.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+        req.on('error', (err) => reject(err));
+    });
+}
+
+function sendJson(res: ServerResponse, status: number, data: unknown) {
     // FIX estabilidad: si el socket ya se cerró (el cliente navegó / recargó a
     // mitad de petición), writeHead/end lanzan. Como sendJson suele llamarse
     // dentro de un bloque catch, ese throw se convertiría en una unhandled
@@ -155,8 +220,9 @@ function sendJson(res: ServerResponse, status: number, data: any) {
         if (res.writableEnded || res.destroyed) return;
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(data));
-    } catch (err: any) {
-        console.warn('[geminiProxy] sendJson: respuesta no entregada (socket cerrado):', err?.message || err);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        logCaughtError('[geminiProxy] sendJson: respuesta no entregada (socket cerrado)', message, err);
     }
 }
 
@@ -176,7 +242,7 @@ let serverEnvApiKey = '';
 // body con la apiKey resuelta para que gemini.js (fuente canónica OS2) la
 // reciba por su parámetro documentado y nunca caiga en el fallback "API key no
 // configurada".
-function resolveServerApiKey(body: any): any {
+function resolveServerApiKey(body: ProxyBody | null): ProxyBody | null {
     if (serverEnvApiKey) {
         return { ...(body || {}), apiKey: serverEnvApiKey };
     }
@@ -191,8 +257,22 @@ function resolveServerApiKey(body: any): any {
  * Genera el contrato FLU completo (modo por defecto, paridad OS2).
  * @param body — Cuerpo de la petición con transcript, history, config, etc.
  */
-async function handleContractMode(body: any): Promise<any> {
-    return generateFluContract(body || {});
+async function handleContractMode(body: ProxyBody | null): Promise<unknown> {
+    return generateFluContract({
+        apiKey: body?.apiKey,
+        transcript: body?.transcript,
+        intent: body?.intent,
+        speaker: body?.speaker,
+        theme: body?.theme,
+        role: body?.role,
+        phase: body?.phase,
+        model: body?.model,
+        language: body?.language,
+        history: body?.history,
+        knowledgeMode: body?.knowledgeMode,
+        personality: body?.personality,
+        creativity: body?.creativity,
+    });
 }
 
 /**
@@ -200,7 +280,7 @@ async function handleContractMode(body: any): Promise<any> {
  * Usado por GeminiService.generateResponse() para Push-to-Talk fallback.
  * @param body — Cuerpo de la petición con transcript, language, role, theme, history, etc.
  */
-async function handleResponseMode(body: any): Promise<any> {
+async function handleResponseMode(body: ProxyBody | null): Promise<{ respuesta_voz: string; text: string }> {
     const fullResult = await generateFluContract({
         apiKey: body?.apiKey,
         transcript: body?.transcript || '',
@@ -225,7 +305,7 @@ async function handleResponseMode(body: any): Promise<any> {
  * Usado por GeminiService.generateMinute().
  * @param body — Cuerpo de la petición con history, language, role, theme, model.
  */
-async function handleMinuteMode(body: any): Promise<any> {
+async function handleMinuteMode(body: ProxyBody | null): Promise<unknown> {
     const summaryResult = await generateConversationSummary({
         apiKey: body?.apiKey,
         history: body?.history || [],
@@ -257,13 +337,12 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
             contractCacheKey = buildContractCacheKey(body);
             const cached = getCachedResponse(CONTRACT_CACHE, contractCacheKey, CONTRACT_CACHE_TTL_MS);
             if (cached) {
-                console.log('[FLU-DEBUG-PROXY] handleContract cache HIT for transcript:', (body.transcript || '').slice(0, 80));
                 return sendJson(res, 200, cached);
             }
         }
 
         // ── Dispatch por modo (cada modo es una función separada) ──
-        let result: any;
+        let result: unknown;
         if (mode === 'response') {
             result = await handleResponseMode(body);
         } else if (mode === 'minute') {
@@ -278,21 +357,23 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
         }
 
         sendJson(res, 200, result);
-    } catch (error: any) {
-        console.error('[FLU-DEBUG-PROXY] handleContract ERROR:', error.message, {
-            code: error.code,
+    } catch (caught: unknown) {
+        const error = { status: Number(errorField(caught, 'status')) || 500 };
+        const message = errorField(caught, 'message');
+        logCaughtError('[geminiProxy] handleContract ERROR', message, {
+            code: errorField(caught, 'code'),
             status: error.status,
-            apiKeySource: error.apiKeySource,
-            model: error.model,
-            detail: error.detail,
+            apiKeySource: errorField(caught, 'apiKeySource'),
+            model: errorField(caught, 'model'),
+            detail: errorField(caught, 'detail'),
         });
         sendJson(res, error.status || 500, {
-            error: error.message,
-            code: error.code || 'unknown',
-            detail: error.detail || '',
-            model: error.model || '',
-            apiKeySource: error.apiKeySource || '',
-            bodyPreview: error.bodyPreview || '',
+            error: message,
+            code: errorField(caught, 'code') || 'unknown',
+            detail: errorField(caught, 'detail') || '',
+            model: errorField(caught, 'model') || '',
+            apiKeySource: errorField(caught, 'apiKeySource') || '',
+            bodyPreview: errorField(caught, 'bodyPreview') || '',
         });
     }
 }
@@ -301,7 +382,14 @@ async function handleSummary(req: IncomingMessage, res: ServerResponse) {
     try {
         let body = await parseBody(req);
         body = resolveServerApiKey(body);
-        const result = await generateConversationSummary(body || {});
+        const result = await generateConversationSummary({
+            apiKey: body?.apiKey,
+            history: body?.history || [],
+            language: body?.language || 'es',
+            role: body?.role || '',
+            theme: body?.theme || '',
+            model: body?.model || undefined,
+        });
 
         // OS2 returns { summary: { titulo, ... }, diagnostics: {...} }
         // Normalize: flatten summary if nested
@@ -313,15 +401,15 @@ async function handleSummary(req: IncomingMessage, res: ServerResponse) {
             : result;
 
         sendJson(res, 200, normalized);
-    } catch (error: any) {
-        console.error('[geminiProxy] /api/gemini/summary error:', error.message);
-        sendJson(res, error.status || 500, {
-            error: error.message,
-            code: error.code || 'unknown',
-            detail: error.detail || '',
-            model: error.model || '',
-            apiKeySource: error.apiKeySource || '',
-            bodyPreview: error.bodyPreview || '',
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/gemini/summary error', errorField(error, 'message'));
+        sendJson(res, Number(errorField(error, 'status')) || 500, {
+            error: errorField(error, 'message'),
+            code: errorField(error, 'code') || 'unknown',
+            detail: errorField(error, 'detail') || '',
+            model: errorField(error, 'model') || '',
+            apiKeySource: errorField(error, 'apiKeySource') || '',
+            bodyPreview: errorField(error, 'bodyPreview') || '',
         });
     }
 }
@@ -338,12 +426,19 @@ async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) 
             const cacheKey = buildEvalCacheKey(body);
             const cached = getCachedResponse(EVAL_CACHE, cacheKey, EVAL_CACHE_TTL_MS);
             if (cached) {
-                console.log('[FLU-DEBUG-PROXY] handleParticipantEval cache HIT');
                 return sendJson(res, 200, cached);
             }
         }
 
-        const result = await generateParticipantEvaluation(body || {});
+        const result = await generateParticipantEvaluation({
+            apiKey: body?.apiKey,
+            conversationLog: body?.conversationLog || '',
+            language: body?.language || 'es',
+            role: body?.role || '',
+            theme: body?.theme || '',
+            maxDraftChars: body?.maxDraftChars || 420,
+            model: body?.model || undefined,
+        });
 
         // OS2 returns { evaluation: { intervenir, ... }, diagnostics: {...} }
         // Normalize: flatten evaluation if nested
@@ -361,15 +456,15 @@ async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) 
         }
 
         sendJson(res, 200, normalized);
-    } catch (error: any) {
-        console.error('[geminiProxy] /api/gemini/participant-eval error:', error.message);
-        sendJson(res, error.status || 500, {
-            error: error.message,
-            code: error.code || 'unknown',
-            detail: error.detail || '',
-            model: error.model || '',
-            apiKeySource: error.apiKeySource || '',
-            bodyPreview: error.bodyPreview || '',
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/gemini/participant-eval error', errorField(error, 'message'));
+        sendJson(res, Number(errorField(error, 'status')) || 500, {
+            error: errorField(error, 'message'),
+            code: errorField(error, 'code') || 'unknown',
+            detail: errorField(error, 'detail') || '',
+            model: errorField(error, 'model') || '',
+            apiKeySource: errorField(error, 'apiKeySource') || '',
+            bodyPreview: errorField(error, 'bodyPreview') || '',
         });
     }
 }
@@ -378,11 +473,39 @@ async function handleWorkspaceImage(req: IncomingMessage, res: ServerResponse) {
     try {
         let body = await parseBody(req);
         body = resolveServerApiKey(body);
-        const result = await generateWorkspaceImage(body || {});
+        const result = await generateWorkspaceImage({ workspace: body?.workspace, language: body?.language });
         sendJson(res, 200, result);
-    } catch (error: any) {
-        console.error('[geminiProxy] /api/workspace-image error:', error.message);
-        sendJson(res, error.status || 500, { error: error.message });
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/workspace-image error', errorField(error, 'message'));
+        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+    }
+}
+
+// Paso 5: fallback de imagen por OpenRouter (único fallback real cuando la
+// URL de Pollinations falla al cargar en el navegador). La apiKey se resuelve
+// en el servidor (env > cliente) y nunca se expone al browser.
+async function handleOpenRouterImage(req: IncomingMessage, res: ServerResponse) {
+    try {
+        let body = await parseBody(req);
+        body = resolveServerApiKey(body);
+        const result = await generateOpenRouterImage(body || {});
+        sendJson(res, 200, result);
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/openrouter-image error', errorField(error, 'message'));
+        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+    }
+}
+
+// Video real con fal.ai (text-to-video). La apiKey viaja del cliente (FALAI_CONFIG.API_KEY)
+// o de env; nunca se resuelve con la clave de texto/OpenRouter.
+async function handleFalVideo(req: IncomingMessage, res: ServerResponse) {
+    try {
+        const body = await parseBody(req);
+        const result = await generateVideoViaFal(body || {});
+        sendJson(res, 200, result);
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/fal-video error', errorField(error, 'message'));
+        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
     }
 }
 
@@ -390,7 +513,11 @@ async function handleVisionAnalysis(req: IncomingMessage, res: ServerResponse) {
     try {
         let body = await parseBody(req);
         body = resolveServerApiKey(body);
-        const { apiKey, imageBase64, mimeType, language, profile } = body || {};
+        const apiKey = body?.apiKey ?? '';
+        const imageBase64 = body?.imageBase64;
+        const mimeType = body?.mimeType ?? '';
+        const language = body?.language;
+        const profile = body?.profile;
 
         if (!imageBase64) {
             return sendJson(res, 400, { error: 'imageBase64 is required' });
@@ -400,16 +527,15 @@ async function handleVisionAnalysis(req: IncomingMessage, res: ServerResponse) {
         const cacheKey = `vision:${(imageBase64 || '').slice(0, 100)}`;
         const cached = getCachedResponse(VISION_CACHE, cacheKey, VISION_CACHE_TTL_MS);
         if (cached) {
-            console.log('[FLU-DEBUG-PROXY] handleVisionAnalysis cache HIT');
             return sendJson(res, 200, cached);
         }
 
         const result = await analyzeImage({ apiKey, imageBase64, mimeType, language, profile });
         setCachedResponse(VISION_CACHE, cacheKey, result, VISION_CACHE_MAX);
         sendJson(res, 200, result);
-    } catch (error: any) {
-        console.error('[geminiProxy] /api/gemini/vision error:', error.message);
-        sendJson(res, error.status || 500, { error: error.message });
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/gemini/vision error', errorField(error, 'message'));
+        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
     }
 }
 
@@ -428,13 +554,13 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
         if (!prompt) {
             return sendJson(res, 400, { error: 'missing_prompt', detail: 'El campo "prompt" es obligatorio.' });
         }
-        const apiKey = String(body?.apiKey || '').trim() || resolveTextApiKey();
-        const url = buildTextApiUrl('/chat/completions');
+        const apiKey = String(body?.apiKey || '').trim() || resolveServerTextApiKey();
+        const url = joinApiUrl(resolveServerTextApiUrl(), '/chat/completions');
         const local = isLocalTextEndpoint(url);
         if (!apiKey && !local) {
             return sendJson(res, 503, { error: 'no_api_key', detail: 'Sin API key de texto configurada (OpenRouter/Gemini).' });
         }
-        const model = String(body?.model || '').trim() || OPENROUTER_CONFIG.MODEL;
+        const model = String(body?.model || '').trim() || OPENROUTER_DEFAULTS.MODEL;
         const system = String(body?.system || '').trim();
         const maxTokens = Number(body?.maxTokens || 2048);
         const temperatureRaw = body?.temperature;
@@ -442,7 +568,7 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
             ? Number(temperatureRaw)
             : undefined;
 
-        const messages: any[] = [];
+        const messages: Array<{ role: string; content: string }> = [];
         if (system) {
             messages.push({ role: 'system', content: system });
         }
@@ -452,7 +578,7 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
         if (apiKey) {
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
-        const payload: any = {
+        const payload: Record<string, unknown> = {
             model,
             messages,
             max_tokens: maxTokens,
@@ -468,16 +594,16 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
             body: JSON.stringify(payload),
         });
         if (!response.ok) {
-            const detail = await response.text().catch(() => '');
+            const detail = await response.text().catch((e) => { logCaughtError('[catch] src/server/geminiProxy.ts', e); return ''; });
             console.error('[geminiProxy] /api/gemini/text upstream error:', response.status, detail.slice(0, 300));
             return sendJson(res, response.status, { error: 'gemini_api_error', detail: detail.slice(0, 500) });
         }
         const data = await response.json();
         const text = String(data?.choices?.[0]?.message?.content || '');
         return sendJson(res, 200, { text });
-    } catch (error: any) {
-        console.error('[geminiProxy] /api/gemini/text ERROR:', error?.message || error);
-        return sendJson(res, 500, { error: 'internal_error', detail: error?.message || 'Unknown error' });
+    } catch (error: unknown) {
+        logCaughtError('[geminiProxy] /api/gemini/text ERROR', errorField(error, 'message') || error);
+        return sendJson(res, 500, { error: 'internal_error', detail: errorField(error, 'message') || 'Unknown error' });
     }
 }
 
@@ -485,126 +611,168 @@ async function handleText(req: IncomingMessage, res: ServerResponse) {
 
 export function createGeminiMiddleware({ env = {} }: { env?: Record<string, string> } = {}) {
     // Capturar la key de texto desde .env (inyectada vía loadEnv en vite.config.ts).
-    // Misma prioridad que resolveTextApiKey(): VITE_OPENROUTER > VITE_GEMINI > VITE_DEEPSEEK.
-    serverEnvApiKey = String(
-        env.VITE_OPENROUTER_API_KEY || env.VITE_GEMINI_API_KEY || env.VITE_DEEPSEEK_API_KEY || ''
-    ).trim();
-    if (serverEnvApiKey) {
-        console.log('[FLU-DEBUG-PROXY] server env API key loaded (length):', serverEnvApiKey.length);
-    }
+    // Prioridad única (sharedConfig): VITE_OPENROUTER > VITE_GEMINI > VITE_DEEPSEEK.
+    setServerEnv(env);
+    serverEnvApiKey = resolveServerTextApiKey();
     return {
         name: 'gemini-proxy',
-        configureServer(server: any) {
+        configureServer(server: MiddlewareHost) {
             // POST /api/gemini/contract — OS2's requestFluContract()
-            server.middlewares.use('/api/gemini/contract', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/api/gemini/contract', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     await handleContract(req, res);
-                } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/contract:', err?.message || err);
-                    sendJson(res, 500, { error: 'internal_error', detail: err?.message || 'Unknown error' });
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/contract', errorField(err, 'message') || err);
+                    sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
             // POST /api/gemini/summary — OS2's requestConversationSummary()
-            server.middlewares.use('/api/gemini/summary', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/api/gemini/summary', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     await handleSummary(req, res);
-                } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/summary:', err?.message || err);
-                    sendJson(res, 500, { error: 'internal_error', detail: err?.message || 'Unknown error' });
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/summary', errorField(err, 'message') || err);
+                    sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
             // POST /api/gemini/participant-eval — OS2's requestParticipantEvaluation()
-            server.middlewares.use('/api/gemini/participant-eval', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/api/gemini/participant-eval', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     await handleParticipantEval(req, res);
-                } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/participant-eval:', err?.message || err);
-                    sendJson(res, 500, { error: 'internal_error', detail: err?.message || 'Unknown error' });
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/participant-eval', errorField(err, 'message') || err);
+                    sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
             // POST /api/workspace-image — OS2's fetchWorkspaceImageSource()
-            server.middlewares.use('/api/workspace-image', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/api/workspace-image', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     await handleWorkspaceImage(req, res);
-                } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/workspace-image:', err?.message || err);
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/workspace-image', errorField(err, 'message') || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: 'internal_error', detail: err?.message || 'Unknown error' }));
-                    } catch { /* ignore write errors after connection close */ }
+                        res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
+                }
+            });
+            // POST /api/openrouter-image — fallback de imagen por OpenRouter
+            // (único fallback real cuando la URL de Pollinations falla al cargar).
+            server.middlewares.use('/api/openrouter-image', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+                if (req.method !== 'POST') return next();
+                try {
+                    await handleOpenRouterImage(req, res);
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/openrouter-image', errorField(err, 'message') || err);
+                    try {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
+                }
+            });
+            // POST /api/fal-video — video real con fal.ai (text-to-video)
+            server.middlewares.use('/api/fal-video', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+                if (req.method !== 'POST') return next();
+                try {
+                    await handleFalVideo(req, res);
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/fal-video', errorField(err, 'message') || err);
+                    try {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
                 }
             });
             // POST /api/gemini/vision — OCR analysis of uploaded images
-            server.middlewares.use('/api/gemini/vision', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/api/gemini/vision', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     await handleVisionAnalysis(req, res);
-                } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/vision:', err?.message || err);
-                    sendJson(res, 500, { error: 'internal_error', detail: err?.message || 'Unknown error' });
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/vision', errorField(err, 'message') || err);
+                    sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
             // POST /api/gemini/text — generic text generation (F1/F2/F3/F4)
-            server.middlewares.use('/api/gemini/text', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/api/gemini/text', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     await handleText(req, res);
-                } catch (err: any) {
-                    console.error('[geminiProxy] Unhandled error in /api/gemini/text:', err?.message || err);
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/text', errorField(err, 'message') || err);
                     try {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: 'internal_error', detail: err?.message || 'Unknown error' }));
-                    } catch { /* ignore write errors after connection close */ }
+                        res.end(JSON.stringify({ error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' }));
+                    } catch (e) {
+        logCaughtError('[catch] src/server/geminiProxy.ts', e); /* ignore write errors after connection close */ }
                 }
             });
             // POST /__flu_agent_trace — OS2's fluTrace.js agent sink (accepted, logged)
-            server.middlewares.use('/__flu_agent_trace', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/__flu_agent_trace', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
                     const body = await parseBody(req);
-                    console.log('[geminiProxy] /__flu_agent_trace received:', JSON.stringify(body).slice(0, 500));
-                } catch {
-                    console.log('[geminiProxy] /__flu_agent_trace received (unparseable body)');
+                    const count = Number(body?.count) || 0;
+                    console.info(
+                        `[geminiProxy] agent trace aceptado (no persistido): count=${count} delta=${body?.delta === true}`,
+                    );
+                } catch (err: unknown) {
+                    // El sink es de diagnóstico: un body ilegible no debe romper la app,
+                    // pero tampoco se silencia (queda contexto en el log del servidor).
+                    logCaughtError('[geminiProxy] agent trace: body ilegible, se acepta igual', errorField(err, 'message') || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'trace logged but not persisted' }));
             });
             // POST /__flu_listen_log — OS2's listenLog.js (accepted, logged)
-            server.middlewares.use('/__flu_listen_log', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/__flu_listen_log', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
-                    const body = await parseBody(req);
-                    console.log('[geminiProxy] /__flu_listen_log received:', JSON.stringify(body).slice(0, 500));
-                } catch {
-                    console.log('[geminiProxy] /__flu_listen_log received (unparseable body)');
+                    const raw = await readRawBody(req);
+                    const lines = raw.split(/\r?\n/).filter(Boolean);
+                    if (env.FLU_LISTEN_TRACE === '1' || env.FLU_LISTEN_TRACE === 'true') {
+                        for (const line of lines) {
+                            console.info(`[flu-listen] ${line}`);
+                        }
+                    }
+                    console.info(`[geminiProxy] listen log aceptado (no persistido): ${lines.length} línea(s)`);
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] listen log: body ilegible, se acepta igual', errorField(err, 'message') || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true, note: 'listen log logged but not persisted' }));
             });
             // POST /__flu_client_log — Frontend log relay (BunnyViewer, avatar, etc.)
             // Roo (assistant) reads these from the server terminal to debug without browser access.
-            server.middlewares.use('/__flu_client_log', async (req: any, res: any, next: any) => {
+            server.middlewares.use('/__flu_client_log', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
-                    const body = await parseBody(req);
+                    const body = await parseBody<ProxyBody | ProxyBody[]>(req);
                     // Client sends arrays of log entries. Handle both array and single-object formats.
                     const entries = Array.isArray(body) ? body : [body];
                     for (const entry of entries) {
-                        const { level, tag, message, data } = entry || {};
+                        const level = entry?.level;
+                        const tag = entry?.tag;
+                        const message = entry?.message;
+                        const data = entry?.data;
                         const ts = new Date().toISOString().slice(11, 23);
                         const safeMessage = message ?? '';
-                        if (data) {
-                            console.log(`[CLIENT-LOG][${ts}][${level || 'LOG'}][${tag || ''}] ${safeMessage}`, JSON.stringify(data).slice(0, 300));
+                        if (data !== undefined) {
+                            console.info(`[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`, data);
                         } else {
-                            console.log(`[CLIENT-LOG][${ts}][${level || 'LOG'}][${tag || ''}] ${safeMessage}`);
+                            console.info(`[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`);
                         }
                     }
-                } catch {
-                    console.log('[geminiProxy] /__flu_client_log received (unparseable body)');
+                } catch (err: unknown) {
+                    // Relay de diagnóstico: no se silencia el fallo de parseo.
+                    logCaughtError('[geminiProxy] client log: body ilegible, se acepta igual', errorField(err, 'message') || err);
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ accepted: true }));

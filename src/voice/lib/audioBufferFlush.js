@@ -1,5 +1,5 @@
 /**
- * Vaciado sincronizado del búfer PCM al recibir FINAL (STT o Chrome).
+ * Vaciado sincronizado del búfer PCM al recibir FINAL.
  */
 export function flushAudioAccumulationOnFinal({
   audioBuffer = null,
@@ -7,12 +7,7 @@ export function flushAudioAccumulationOnFinal({
   chunkTotalSamplesRef = null,
   turnAudioStartSampleRef = null,
   micBridgeRef = null,
-  streamSttClient = null,
 } = {}) {
-  if (streamSttClient && typeof streamSttClient.flushPcm === 'function') {
-    streamSttClient.flushPcm()
-  }
-
   if (micBridgeRef?.current && typeof micBridgeRef.current.resetSampleIndex === 'function') {
     micBridgeRef.current.resetSampleIndex()
   }

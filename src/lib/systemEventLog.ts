@@ -24,7 +24,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { ConversationEntry } from '../types/bridge';
-import { SYSTEM_EVENT_CONFIG, DEFAULT_ADVANCED_CONFIG } from '../core/config/appConfig';
+import { DEFAULT_ADVANCED_CONFIG } from '../core/config/appConfig';
 
 // ------------------------------------------------------------
 // Tipos de eventos del sistema que FLU debe recordar
@@ -120,7 +120,6 @@ export function formatSystemEvent(event: SystemEvent, language: 'es' | 'en' = 'e
     const who = event.participantName || (isEn ? 'someone' : 'alguien');
     switch (event.type) {
         case 'participant_ignored': {
-            const waitedSec = Math.round(event.waitedMs / 1000);
             return isEn
                 ? `[FLU remembers] I got upset because I raised my hand, waited a reasonable time, and nobody gave me the floor. I felt ignored... sniff.....`
                 : `[FLU recuerda] Me enojé porque levanté la mano, esperé un tiempo razonable y nadie me cedió la palabra. Me sentí ignorado... snif.....`;
@@ -179,9 +178,8 @@ function eventSentiment(type: SystemEventType): 'positive' | 'negative' | 'neutr
  * para que flu-voz la clasifique como assistant y Gemini la
  * vea como un mensaje propio de FLU en el historial.
  *
- * La entrada se inyecta TANTO en integrationStore.conversationHistory
- * (UI) como en dialogueHistoryRef (contexto Gemini) vía el
- * método injectDialogueEntry expuesto por flu-voz.
+ * La entrada se inyecta en integrationStore.conversationHistory (única fuente
+ * de verdad); el contexto de Gemini se DERIVA de ese store.
  */
 export function buildSystemConversationEntry(
     event: SystemEvent,

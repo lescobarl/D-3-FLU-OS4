@@ -5,7 +5,7 @@
 // cuando el modelo solo verbaliza (o emite `configuracion` incompleto),
 // este módulo deriva el contrato a partir del texto transcrito.
 //
-// - Única fuente de verdad: VOICE_CONFIG_CATALOG + PALETTES (data-driven).
+// - Única fuente de verdad: VOICE_CONFIG_CATALOG + catálogo fusionado de paletas (data-driven).
 // - Sin rutas dobles: el resultado se inyecta como `contract.configuracion`
 //   y se despacha por la ÚNICA ruta existente (App.tsx applyConfigAction).
 // - Guardia estricta (sin afectación): requiere verbo de directiva + clave
@@ -13,19 +13,19 @@
 //   dispararse en conversación casual.
 // ============================================================
 
-import { stripDiacritics } from './audioMath.js'
-import { PALETTES } from '../../core/branding/seasonalPalettes'
+import { getFusedPalettes } from '../../core/branding/seasonalPalettes'
 import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
 import { isGameId } from '../../core/games/gameCatalog'
+import { normalizeForMatch } from '../../lib/textUtils'
+import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_SYNONYMS } from '../../core/config/sharedConfig'
 
 // ------------------------------------------------------------
 // Normalización de texto
 // ------------------------------------------------------------
 
 /** Normaliza un texto para comparación: minúsculas, sin acentos, espacios colapsados. */
-export function normalizeForMatch(text = '') {
-  return stripDiacritics(text).replace(/\s+/g, ' ').trim()
-}
+export { normalizeForMatch }
 
 /**
  * Localiza `phrase` como token independiente (con límites de palabra) dentro
@@ -34,7 +34,7 @@ export function normalizeForMatch(text = '') {
  * o "set" dentro de "settings". La posición permite priorizar el sustantivo
  * principal (el que aparece primero en la frase) de forma determinista.
  */
-function findTokenIndex(normalized = '', phrase = '') {
+function findVoiceTokenIndex(normalized = '', phrase = '') {
   const clean = normalizeForMatch(phrase)
   if (!clean || !normalized) return null
   const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -46,9 +46,10 @@ function findTokenIndex(normalized = '', phrase = '') {
  * Verifica que `phrase` aparezca como token independiente (con límites de
  * palabra) dentro de `normalized`. Evita coincidencias parciales tipo
  * "activa" dentro de "desactiva" o "set" dentro de "settings".
+ * Nombre acotado a la voz: el hasToken de gameUtils tiene otro contrato.
  */
-export function hasToken(normalized = '', phrase = '') {
-  return findTokenIndex(normalized, phrase) != null
+export function hasVoiceToken(normalized = '', phrase = '') {
+  return findVoiceTokenIndex(normalized, phrase) != null
 }
 
 // ------------------------------------------------------------
@@ -64,6 +65,7 @@ const DIRECTIVE_VERBS = Object.freeze([
   'pon', 'ponle', 'ponme', 'poner', 'ponga', 'pongas', 'ponla', 'ponlo', 'ponlos', 'ponlas',
   'activa', 'activen', 'activar', 'activemos', 'activame',
   'desactiva', 'desactiven', 'desactivar', 'desactivame',
+  'deshabilita', 'deshabilitar', 'deshabilitame',
   'configura', 'configurame', 'configurar', 'configures', 'configurarme',
   'ajusta', 'ajustar', 'ajustame',
   'selecciona', 'seleccionar', 'seleccioname',
@@ -84,6 +86,37 @@ const DIRECTIVE_VERBS = Object.freeze([
   'activate', 'activated', 'enable', 'enabled', 'disable', 'disabled', 'turn', 'make', 'select', 'adjust',
   'add', 'create', 'register', 'save', 'remove', 'delete', 'clean', 'clear',
 ])
+
+// ------------------------------------------------------------
+// Verbos de encendido/apagado del branding (toggle genérico)
+// ------------------------------------------------------------
+// Cuando se dice "activa/desactiva la estación/branding" SIN nombrar una
+// temporada concreta, se interpreta como encender (→ auto, detecta por
+// calendario) o apagar (→ disabled) el branding estacional global.
+
+/** Verbos que ENCIENDEN el branding estacional (genérico → auto). */
+const BRANDING_ON_VERBS = Object.freeze([
+  'activa', 'activen', 'activar', 'activemos', 'activame',
+  'enciende', 'encender',
+  'activate', 'enable', 'enabled', 'turn on',
+])
+
+/** Verbos que APAGAN el branding estacional (→ disabled). */
+const BRANDING_OFF_VERBS = Object.freeze([
+  'desactiva', 'desactiven', 'desactivar', 'desactivame',
+  'apaga', 'apagar',
+  'quita', 'quitar', 'quitame', 'quitale', 'quitemos',
+  'elimina', 'eliminar', 'eliminame',
+  'borra', 'borrar', 'borrame',
+  'remueve', 'remover', 'saca', 'sacar',
+  'deshabilita', 'deshabilitar', 'deshabilitame',
+  'disable', 'disabled', 'turn off', 'off', 'remove', 'delete', 'clear',
+])
+
+/** ¿El texto contiene alguno de los verbos de la lista dada? */
+function hasBrandingIntent(normalized = '', verbs = []) {
+  return verbs.some((verb) => hasVoiceToken(normalized, verb))
+}
 
 // ------------------------------------------------------------
 // Sustantivos de configuración → clave del catálogo (data-driven)
@@ -172,7 +205,7 @@ const NOUN_PAIRS = Object.entries(CONFIG_NOUNS).flatMap(([clave, nouns]) =>
 function findConfigEntry(normalized = '') {
   let best = null
   for (const [clave, noun] of NOUN_PAIRS) {
-    const index = findTokenIndex(normalized, noun)
+    const index = findVoiceTokenIndex(normalized, noun)
     if (index == null) continue
     const entry = VOICE_CONFIG_CATALOG.find((e) => e.clave === clave)
     if (!entry || entry.handler === 'unsupported') continue
@@ -185,7 +218,7 @@ function findConfigEntry(normalized = '') {
 // Resolución de valores (selects)
 // ------------------------------------------------------------
 
-/** Construye el mapa de sinónimos de temporadas desde PALETTES (fuente de verdad). */
+/** Construye el mapa de sinónimos de temporadas desde el catálogo fusionado de paletas. */
 function buildSeasonAliases() {
   const aliases = []
   const extra = {
@@ -211,10 +244,10 @@ function buildSeasonAliases() {
     invierno: ['invierno', 'winter'],
     ecologico: ['ecologico', 'eco', 'ecologia'],
   }
-  for (const key of Object.keys(PALETTES)) {
-    aliases.push([normalizeForMatch(key), key])
-    const name = normalizeForMatch(PALETTES[key].name || '')
-    if (name && name !== normalizeForMatch(key)) aliases.push([name, key])
+  for (const palette of getFusedPalettes()) {
+    aliases.push([normalizeForMatch(palette.id), palette.id])
+    const name = normalizeForMatch(palette.name || '')
+    if (name && name !== normalizeForMatch(palette.id)) aliases.push([name, palette.id])
   }
   for (const [key, syns] of Object.entries(extra)) {
     for (const syn of syns) aliases.push([normalizeForMatch(syn), key])
@@ -222,13 +255,11 @@ function buildSeasonAliases() {
   return aliases.sort((a, b) => b[0].length - a[0].length)
 }
 
-const SEASON_ALIASES = buildSeasonAliases()
-
-/** Resuelve una temporada del branding (clave de PALETTES) desde el texto. */
+/** Resuelve una temporada del branding (clave de paleta) desde el texto. */
 export function matchSeason(text = '') {
   const normalized = normalizeForMatch(text)
-  for (const [syn, key] of SEASON_ALIASES) {
-    if (hasToken(normalized, syn)) return key
+  for (const [syn, key] of buildSeasonAliases()) {
+    if (hasVoiceToken(normalized, syn)) return key
   }
   return null
 }
@@ -243,13 +274,6 @@ const LANGUAGE_SYNONYMS = {
   es: ['espanol', 'castellano', 'spanish'],
   en: ['ingles', 'english'],
   both: ['ambos', 'both', 'bilingue', 'bilingual'],
-}
-
-const PROVIDER_SYNONYMS = {
-  openrouter: ['openrouter', 'open router'],
-  gemini: ['gemini', 'google'],
-  deepseek: ['deepseek', 'deep seek'],
-  local: ['local', 'offline', 'servidor local'],
 }
 
 const EMOTION_SYNONYMS = {
@@ -270,7 +294,7 @@ function resolveFromSynonyms(text = '', map = {}) {
   }
   pairs.sort((a, b) => b[0].length - a[0].length)
   for (const [syn, key] of pairs) {
-    if (hasToken(normalized, syn)) return key
+    if (hasVoiceToken(normalized, syn)) return key
   }
   return null
 }
@@ -284,7 +308,7 @@ export function matchLanguage(text = '') {
 }
 
 export function matchProvider(text = '') {
-  return resolveFromSynonyms(text, PROVIDER_SYNONYMS)
+  return resolveFromSynonyms(text, AI_PROVIDER_SYNONYMS)
 }
 
 export function matchEmotion(text = '') {
@@ -300,7 +324,7 @@ export function resolveSelectValue(text = '', entry = {}) {
   if (entry.clave === 'aiProvider') return matchProvider(normalized)
   if (entry.clave === 'defaultEmotion') return matchEmotion(normalized)
   for (const opt of entry.opciones || []) {
-    if (hasToken(normalized, String(opt))) return String(opt)
+    if (hasVoiceToken(normalized, String(opt))) return String(opt)
   }
   return null
 }
@@ -316,10 +340,10 @@ const BOOLEAN_FALSE = ['no', 'desactivar', 'desactiva', 'desactivado', 'desactiv
 export function resolveBooleanValue(text = '') {
   const normalized = normalizeForMatch(text)
   for (const tok of BOOLEAN_FALSE) {
-    if (hasToken(normalized, tok)) return 'false'
+    if (hasVoiceToken(normalized, tok)) return 'false'
   }
   for (const tok of BOOLEAN_TRUE) {
-    if (hasToken(normalized, tok)) return 'true'
+    if (hasVoiceToken(normalized, tok)) return 'true'
   }
   return null
 }
@@ -460,8 +484,8 @@ const MUTATION_REMOVE_VERBS = ['quita', 'quitar', 'elimina', 'eliminar', 'borra'
 export function resolveConfigSubvalor(text = '', entry = {}) {
   if (!entry.requiereSubvalor) return undefined
   const normalized = normalizeForMatch(text)
-  if (MUTATION_REMOVE_VERBS.some((v) => hasToken(normalized, v))) return 'remove'
-  if (MUTATION_ADD_VERBS.some((v) => hasToken(normalized, v))) return 'add'
+  if (MUTATION_REMOVE_VERBS.some((v) => hasVoiceToken(normalized, v))) return 'remove'
+  if (MUTATION_ADD_VERBS.some((v) => hasVoiceToken(normalized, v))) return 'add'
   return undefined
 }
 
@@ -593,7 +617,7 @@ function resolveColorValue(text = '', entry = {}) {
     hex = `#${hex}`
   } else {
     for (const name of Object.keys(COLOR_NAME_HEX)) {
-      if (hasToken(normalized, name)) {
+      if (hasVoiceToken(normalized, name)) {
         hex = COLOR_NAME_HEX[name]
         break
       }
@@ -603,7 +627,7 @@ function resolveColorValue(text = '', entry = {}) {
   if (entry.clave === 'avatarColor') {
     let component = 'Bunny_body'
     for (const alias of Object.keys(AVATAR_COMPONENT_ALIASES)) {
-      if (hasToken(normalized, alias)) {
+      if (hasVoiceToken(normalized, alias)) {
         component = AVATAR_COMPONENT_ALIASES[alias]
         break
       }
@@ -652,11 +676,29 @@ export function resolveConfigCommandFromText(text = '', _options = {}) {
   const normalized = normalizeForMatch(text)
   if (!normalized) return null
 
-  const hasDirective = DIRECTIVE_VERBS.some((verb) => hasToken(normalized, verb))
+  const hasDirective = DIRECTIVE_VERBS.some((verb) => hasVoiceToken(normalized, verb))
   if (!hasDirective) return null
 
   const entry = findConfigEntry(normalized)
   if (!entry) return null
+
+  // Toggle genérico del branding estacional (sustantivo estación/branding):
+  //   "apaga/desactiva la estación/branding" → mode=disabled (apagado)
+  //   "activa la estación de X"               → activeSeason=X (manual)
+  //   "activa/enciende la estación/branding"  → mode=auto (detecta por calendario)
+  if (entry.clave === 'activeSeason') {
+    if (hasBrandingIntent(normalized, BRANDING_OFF_VERBS)) {
+      return { accion: 'set_branding', componente: 'branding', clave: 'mode', valor: 'disabled' }
+    }
+    const season = matchSeason(normalized)
+    if (season) {
+      return { accion: 'set_branding', componente: 'branding', clave: 'activeSeason', valor: season }
+    }
+    if (hasBrandingIntent(normalized, BRANDING_ON_VERBS)) {
+      return { accion: 'set_branding', componente: 'branding', clave: 'mode', valor: 'auto' }
+    }
+    return null
+  }
 
   const valor = resolveValueForEntry(normalized, entry)
   if (valor == null) return null
@@ -691,7 +733,8 @@ export function normalizeConfiguracion(raw = null) {
     if (!trimmed) return null
     try {
       parsed = JSON.parse(trimmed)
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/configCommands.js', e);
       return null
     }
   }
@@ -749,7 +792,8 @@ export function normalizeJuego(raw = null) {
     if (!trimmed) return null
     try {
       parsed = JSON.parse(trimmed)
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/configCommands.js', e);
       return null
     }
   }
@@ -760,7 +804,14 @@ export function normalizeJuego(raw = null) {
   if (!gameId || !isGameId(gameId)) return null
 
   const action = String(parsed.action || parsed.accion || '').trim()
-  if (action !== 'start' && action !== 'turn' && action !== 'end' && action !== 'narrate') return null
+  if (
+    action !== 'start'
+    && action !== 'turn'
+    && action !== 'end'
+    && action !== 'narrate'
+    && action !== 'menu'
+    && action !== 'switch'
+  ) return null
 
   const result = {
     gameId,

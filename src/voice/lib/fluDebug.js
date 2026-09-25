@@ -10,6 +10,7 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { rowDuplicatesPrior, utterancesRelate, validateLogRowsNoPrefixDup } from './conversationStream.js'
 import { sortSessionSpeakers } from './voiceIdentity.js'
+import { logCaughtError } from '../../lib/caughtError';
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const VIOLATION_RING = 40
@@ -54,11 +55,6 @@ const state = {
   finalShorterThanInterim: 0,
   commandDispatches: 0,
   commandSkips: 0,
-  streamSttConnected: false,
-  streamSttProvider: '',
-  streamSttEvents: 0,
-  streamSttErrors: 0,
-  lastStreamSttText: '',
   lastCommandPlan: '',
   lastCommandId: '',
   /** @type {string[]} */
@@ -544,21 +540,6 @@ export function fluDebugHot(action, payload = {}) {
           reason: String(payload.reason || ''),
         })
         break
-      case 'stream-stt-status':
-        state.streamSttConnected = Boolean(payload.connected)
-        state.streamSttProvider = String(payload.provider || '')
-        break
-      case 'stream-stt-transcript':
-        state.streamSttEvents += 1
-        state.lastStreamSttText = String(payload.text || '')
-        break
-      case 'stream-stt-error':
-        state.streamSttErrors += 1
-        recordViolation('stream-stt-error', payload)
-        break
-      case 'ingress-browser-blocked':
-        recordViolation('ingress-browser-blocked', payload)
-        break
       case 'speaker-change-commit':
         state.speakerChangeCommits = (state.speakerChangeCommits || 0) + 1
         break
@@ -579,6 +560,7 @@ export function fluDebugHot(action, payload = {}) {
         break
     }
   } catch (error) {
+        logCaughtError('[catch] src/voice/lib/fluDebug.js', error);
     recordViolation('debug-hot-crash', {
       action,
       message: String(error?.message || error),
@@ -798,28 +780,6 @@ export function runFluDebugChecks() {
     detail: state.workspaceImageRequests
       ? `${state.workspaceImageSuccess}/${state.workspaceImageRequests} ok, ${state.workspaceImageFail} fail · ${state.workspaceImageLastSource || 'n/a'}`
       : 'sin requests',
-  })
-
-  checks.push({
-    id: 'stream-stt-pipeline',
-    label: 'STT streaming (mic nativo)',
-    pass:
-      !state.streamSttErrors ||
-      state.streamSttEvents > 0 ||
-      (state.streamSttProvider === 'mock' && state.streamSyncs > 0),
-    detail: state.streamSttConnected
-      ? `${state.streamSttProvider || 'connected'} / ${state.streamSttEvents} evt stream, ${state.streamSyncs} sync UI`
-      : 'sin conexión stream',
-  })
-
-  checks.push({
-    id: 'hybrid-mock-chrome',
-    label: 'Hybrid mock: Chrome alimenta UI',
-    pass: !state.violations.some((v) => v.checkId === 'ingress-browser-blocked'),
-    detail:
-      state.streamSttProvider === 'mock'
-        ? `${state.streamSyncs} sync · mic ${(state.lastMicFinal || state.lastMicInterim || '').slice(0, 28)}`
-        : state.streamSttProvider || 'n/a',
   })
 
   const tvStallMs = FLU_CONFIG.activeListen?.restart?.stallMs || 28000

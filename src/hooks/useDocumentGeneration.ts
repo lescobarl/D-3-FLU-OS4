@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { aiService } from '../services/aiServiceFactory';
 import { useIntegrationStore } from '../store/integrationStore';
 import { assembleVideo, type VideoAssemblyResult } from '../services/videoAssembler';
+import { fetchFalVideo } from '../voice/lib/imageGeneration';
+import { resolveFalApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import type {
     GenerationFormato,
     GenerationParams,
@@ -20,6 +22,7 @@ import type {
     GenerationJob,
 } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
+import { safeFileName } from '../lib/formatAdapters';
 
 export interface DocumentGenerationState {
     isGenerating: boolean;
@@ -52,8 +55,6 @@ const STATE_PROGRESS: Record<string, number> = {
 export function useDocumentGeneration(language: string): DocumentGenerationState {
     const generationJob = useIntegrationStore((s) => s.generationJob);
     const setGenerationJob = useIntegrationStore((s) => s.setGenerationJob);
-    const documentArtifact = useIntegrationStore((s) => s.documentArtifact);
-    const appAnalysisArtifact = useIntegrationStore((s) => s.appAnalysisArtifact);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -116,37 +117,113 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                 const fuentes = opts?.fuentes && opts.fuentes.length > 0 ? opts.fuentes : buildDefaultFuentes();
                 const parametros = opts?.parametros ?? {};
 
+                // El contenido de conversación NO debe ir como contenido_analizado:
+                // eso dispara el atajo que serializa el texto crudo sin pasar por el
+                // LLM (el video no capturaba el tema). Se alimenta al LLM como fuente
+                // de contexto para que genere un guion coherente con el tema.
+                const contenido = (opts?.contenido || '').trim();
+                let fuentesFinal = fuentes;
+                if (contenido) {
+                    // Reemplaza la fuente 'conversacion' por defecto (que solo trae la
+                    // última respuesta) por el contexto completo (pregunta + respuesta),
+                    // evitando duplicar la conversación en el prompt del LLM.
+                    fuentesFinal = [
+                        ...fuentes.filter((f) => f.tipo !== 'conversacion'),
+                        { tipo: 'conversacion', ref: contenido.slice(0, 1200) },
+                    ];
+                }
+
                 setJob('analizando', formato);
                 const docResult = await aiService.generateDocument(
                     {
                         formato,
                         parametros: parametros as GenerationInputParams,
-                        fuentes,
-                        contenido_analizado: opts?.contenido,
+                        fuentes: fuentesFinal,
+                        // Solo se usa cuando hay contenido genuinamente pre-analizado
+                        // (flujo F3 de documento analizado); nunca la conversación cruda.
+                        contenido_analizado: undefined,
                     },
                     language,
                 );
                 setJob('escribiendo', formato, { progreso: 60 });
 
+                // Nombre de descarga legible: el TEMA pedido, no el contenido
+                // (antes el archivo se llamaba con el texto de la carta).
+                const temaNombre = String((parametros as GenerationInputParams).tema || '').trim();
+                const nombreTema = temaNombre
+                    ? safeFileName(temaNombre, docResult.ext || 'txt')
+                    : '';
+                const namedResult =
+                    nombreTema && nombreTema.length > 4
+                        ? { ...docResult, nombre: nombreTema }
+                        : docResult;
+
                 if (formato === 'video') {
                     setJob('ensamblando', formato, { progreso: 85 });
+                    // 1) Video REAL con fal.ai (text-to-video). El prompt es el tema
+                    //    pedido por el usuario ("un conejo saltando"); si no hay tema,
+                    //    se usa el contenido del guion (truncado).
+                    const temaPrompt = String((parametros as GenerationInputParams).tema || '').trim();
+                    const falPrompt = temaPrompt || (docResult.content || '').trim().slice(0, 500);
+                    const falApiKey = resolveFalApiKey();
+                    if (!falApiKey) {
+                        console.warn(
+                            '[useDocumentGeneration] Falta la API key de fal.ai (Ajustes → Video): se genera solo guion/storyboard.',
+                        );
+                    }
+                    const fal = falApiKey
+                        ? await fetchFalVideo({
+                              prompt: falPrompt,
+                              language,
+                              apiKey: falApiKey,
+                              model: resolveFalVideoModel(),
+                          })
+                        : {
+                              video_url: '',
+                              trace: {
+                                  provider: 'falai',
+                                  source: 'missing_api_key',
+                                  hasVideo: false,
+                                  prompt: falPrompt,
+                              },
+                          };
+                    if (fal.video_url) {
+                        const realVideo: VideoAssemblyResult = {
+                            url: fal.video_url,
+                            script: docResult.content || '',
+                            storyboard: [],
+                            estimatedSeconds: 0,
+                            degraded: false,
+                            warnings: [],
+                        };
+                        setVideoResult(realVideo);
+                        setJob('listo', formato, { progreso: 100, url_resultado: realVideo.url });
+                        return namedResult;
+                    }
+                    // 2) Fallback: ensamblado offline (ffmpeg.wasm walkthrough).
                     const video = await assembleVideo(docResult.content || '', {
                         calidad: parametros.calidad,
                         duracion_min: parametros.duracion_min,
                         orientacion: parametros.orientacion,
                         tema: parametros.tema,
                     }, language);
+                    if (!falApiKey) {
+                        video.warnings = [
+                            ...(video.warnings || []),
+                            'Falta la API key de fal.ai (Ajustes → Video). Sin ella no hay video real; se generó guion/storyboard.',
+                        ];
+                    }
                     setVideoResult(video);
-                    setJob('listo', formato, { progreso: 100 });
-                    return docResult;
+                    setJob('listo', formato, { progreso: 100, url_resultado: video.url });
+                    return namedResult;
                 }
 
                 setJob('listo', formato, {
                     progreso: 100,
                     url_resultado: docResult.url,
                 });
-                setResult(docResult);
-                return docResult;
+                setResult(namedResult);
+                return namedResult;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.warn('[useDocumentGeneration] Generación falló:', err);

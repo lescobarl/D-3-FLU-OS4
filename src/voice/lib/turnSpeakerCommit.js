@@ -48,15 +48,10 @@ export function resolveCommitRowSignature({
   return normalizeRowSignature(lastSignature) || null
 }
 
-/** @deprecated Usar resolveTurnSpeakerAtCommit con preflight del pipeline continuo. */
-export function resolveOptimisticSpeakerAtCommit(options = {}) {
-  return resolveTurnSpeakerAtCommit({ ...options, preflight: options.preflight ?? null })
-}
-
 export function resolveTurnSpeakerAtCommit({
   phrase = '',
   wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [],
-  stickyFallback = 'Hablante 1',
+  stickyFallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
   sessionPrimary = '',
   lastLogged = '',
   sameRevisionReplace = false,
@@ -102,8 +97,8 @@ export function resolveTurnSpeakerAtCommit({
   if (explicitNext) {
     const labels = Array.isArray(knownSpeakerLabels) ? knownSpeakerLabels.filter(Boolean) : []
     const nextName = normalizeSpeakerLabel(nextSpeakerLabel(labels))
-    const fallbackName = normalizeSpeakerLabel(lastLogged || stickyFallback || 'Hablante 1')
-    const name = nextName || fallbackName || 'Hablante 1'
+    const fallbackName = normalizeSpeakerLabel(lastLogged || stickyFallback || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker)
+    const name = nextName || fallbackName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     return {
       speakerId: labelToSpeakerId(name),
       speakerName: name,
@@ -168,13 +163,13 @@ export function resolveTurnSpeakerAtCommit({
   }
 
   const sticky = normalizeSpeakerLabel(
-    cleanForSpeech(stickyFallback) || lastLogged || sessionPrimary || 'Hablante 1',
+    cleanForSpeech(stickyFallback) || lastLogged || sessionPrimary || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
   )
   const labels = Array.isArray(knownSpeakerLabels) ? knownSpeakerLabels.filter(Boolean) : []
   const name =
     sticky ||
     normalizeSpeakerLabel(nextSpeakerLabel(labels)) ||
-    'Hablante 1'
+    FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
   return {
     speakerId: labelToSpeakerId(name),
@@ -192,7 +187,12 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   if (refs.sessionPrimarySpeakerRef && !refs.sessionPrimarySpeakerRef.current) {
     refs.sessionPrimarySpeakerRef.current = name
   }
-  if (resolved.workingClusters?.length && refs.speakerClustersRef) {
-    refs.speakerClustersRef.current = resolved.workingClusters
+  if (resolved.workingClusters?.length) {
+    // §9: el único escritor de clusters es `setSpeakerClusters`; fallback al ref.
+    if (typeof refs.setSpeakerClusters === 'function') {
+      refs.setSpeakerClusters(resolved.workingClusters)
+    } else if (refs.speakerClustersRef) {
+      refs.speakerClustersRef.current = resolved.workingClusters
+    }
   }
 }

@@ -1,7 +1,6 @@
 /**
  * Resolución de hablante desde audio: vectores 512-D en clusters y filas (campo signature).
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import {
   getConversationMinVoicedForNewSamples,
   getConversationMinVoicedSamples,
@@ -12,7 +11,8 @@ import {
   labelToSpeakerId,
   resolveSpeakerNameFromId,
 } from './conversationRow.js'
-import { resolveConversationSpeaker as matchSpeakerByVoice } from './voiceIdentity.js'
+import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**
  * @param {number[]} vector — embedding 512-D (solo capa diarización)
@@ -24,9 +24,9 @@ export function resolveSpeakerIdentityFromVector(
     speakerClusters = [],
     lastSpeaker = '',
     lastSignature = null,
-    fallbackSpeaker = 'Hablante 1',
+    fallbackSpeaker = getFallbackSpeaker(),
     utteranceText = '',
-    sampleRate = 48000,
+    sampleRate = DEFAULT_SAMPLE_RATE,
     voicedSampleCount = 0,
     atTurnBoundary = true,
     allowNewCluster = false,

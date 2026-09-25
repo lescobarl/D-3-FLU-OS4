@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit LIGERO (AGENTS.md seccion 5): guards + tipos. Rapido, por commit.
+#
+# Versionado a proposito: antes vivia SOLO en .git/hooks/pre-commit, que no viaja
+# con el repo (no existe en un clon nuevo ni en CI). Ahora se activa con
+# core.hooksPath=.githooks (script prepare de npm) y el mismo contenido existe para
+# todo el equipo.
+#
+# Lo que NO va por commit:
+#   - suite completa   -> npm run test:full   (CI / push)
+#   - gate de contrato -> npm run gate       (cierre de tarea, requiere contrato activo)
+npm run lint || exit 1
+npm run typecheck || exit 1

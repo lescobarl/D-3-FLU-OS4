@@ -10,7 +10,7 @@ export type GameId =
     | 'quien_soy' | 'ahorcado' | 'memoria_secuencias' | 'trabalenguas'
     | 'trivia' | 'ordena_secuencia' | 'adivina_cancion' | 'cuentacuentos'
     | 'cuento_colaborativo' | 'repite_traduce' | 'cuenta_conmigo'
-    | 'abecedario' | 'loteria' | 'respiracion';
+    | 'abecedario' | 'loteria' | 'respiracion' | 'karaoke';
 
 export type AvatarAnimation =
     | 'Dance' | 'Run' | 'Walk' | 'Jump_in_place' | 'Idle';
@@ -24,16 +24,35 @@ export interface GameTurnResult {
     animation?: AvatarAnimation;
     emotion?: string;
     error?: string;          // mensaje amigable si el turno no se entendió
+    /**
+     * Resultado de la partida cuando `gameOver` es true: `true` = victoria,
+     * `false` = derrota/rendición. Permite que la voz celebre solo victorias
+     * (antes TODO `gameOver` se gritaba como triunfo).
+     */
+    won?: boolean;
 }
 
-export interface GameSession {
+export interface GameSession<TState = unknown> {
     id: GameId;
-    state: Record<string, unknown>; // estado específico del juego (serializable)
+    state: TState; // estado específico del juego (serializable)
     score: number;
     round: number;
+    /**
+     * Estado POR JUGADOR (multiusuario): clave = participantId. Los juegos de
+     * un solo jugador lo dejan vacío; los de fiesta (lotería, etc.) guardan
+     * aquí la tabla/puntaje de cada participante. Fuente única de aislamiento.
+     */
+    players?: Record<string, Record<string, unknown>>;
 }
 
-export type GameActionType = 'start' | 'turn' | 'end' | 'narrate';
+/** Contexto opcional de un turno: quién habla. */
+export interface GameTurnContext {
+    playerId?: string;
+    /** Nombre legible del jugador (para anunciar ganador sin exponer el id). */
+    playerName?: string;
+}
+
+export type GameActionType = 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch';
 
 export interface GameNarrativeScene {
     texto: string;
@@ -45,6 +64,7 @@ export interface GameContract {
     gameId: GameId;
     action: GameActionType;
     playerText?: string;   // respuesta del jugador (turn)
+    playerId?: string;     // hablante del turno (multiusuario)
     narrative?: {          // solo para cuentacuentos / cuento colaborativo
         scenes: GameNarrativeScene[];
     };

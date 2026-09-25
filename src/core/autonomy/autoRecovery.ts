@@ -20,11 +20,51 @@
 // ============================================================
 
 // Importar servicios de IA para cambio automático de proveedor
-import { getPreferredAIProvider, setPreferredAIProvider } from '../../services/aiServiceFactory';
+import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
+import { DEFAULT_AI_FALLBACK_ORDER } from '../../core/config/sharedConfig';
+import { emitAutonomyEvent } from './autonomyEvents';
+import { v4 as uuidv4 } from 'uuid';
+import type { ComponentHealth, HealthMonitor } from './healthMonitor';
+import { logCaughtError } from '../../lib/caughtError';
+import { localGet, localSet } from '../storage/localStore';
 
 // -----------------------------------------------------------
 // Tipos
 // -----------------------------------------------------------
+
+/** Valor primitivo admisible en las métricas de un componente de salud. */
+export type MetricValue = number | string | boolean;
+
+/** Operadores de comparación admitidos en las condiciones de métricas. */
+export type MetricOperator = '>' | '<' | '>=' | '<=' | '===' | '!==';
+
+/**
+ * Parámetros de una acción de recuperación. Cada acción consume el subconjunto
+ * de propiedades que le aplica; el resto se ignora.
+ */
+export interface RecoveryActionParams {
+    // retry_with_backoff
+    initialDelay?: number;
+    maxDelay?: number;
+    multiplier?: number;
+    // switch_ai_provider
+    fallbackOrder?: AIProvider[];
+    maxSwitchAttempts?: number;
+    // restart_component
+    component?: string;
+    force?: boolean;
+    method?: string;
+    // enable_degraded_mode
+    mode?: string;
+    features?: string[];
+    // restore_from_backup
+    backupSource?: string;
+    maxAgeHours?: number;
+    // notify_user / escalate_to_admin
+    message?: string;
+    type?: string;
+    channels?: string[];
+}
 
 export type RecoveryAction = 
     | 'retry_with_backoff'
@@ -42,7 +82,7 @@ export interface RecoveryRule {
     /** Acción a ejecutar */
     action: RecoveryAction;
     /** Parámetros específicos de la acción */
-    params?: Record<string, any>;
+    params?: RecoveryActionParams;
     /** Prioridad (mayor = más importante) */
     priority: number;
     /** Máximo de ejecuciones por incidente */
@@ -63,8 +103,8 @@ export interface RecoveryCondition {
     /** Métricas específicas a verificar */
     metricConditions?: Array<{
         metric: string;
-        operator: '>' | '<' | '>=' | '<=' | '===' | '!==';
-        value: number | string | boolean;
+        operator: MetricOperator;
+        value: MetricValue;
     }>;
 }
 
@@ -84,7 +124,7 @@ export interface RecoveryIncident {
     /** Estado actual del incidente */
     status: 'active' | 'resolved' | 'escalated';
     /** Métricas al momento de detección */
-    metricsAtDetection: Record<string, any>;
+    metricsAtDetection: Record<string, MetricValue>;
 }
 
 export interface RecoveryResult {
@@ -99,7 +139,7 @@ export interface RecoveryResult {
     /** Tiempo tomado (ms) */
     durationMs: number;
     /** Métricas después de la recuperación */
-    metricsAfter?: Record<string, any>;
+    metricsAfter?: Record<string, MetricValue>;
 }
 
 export interface AutoRecoveryConfig {
@@ -134,7 +174,7 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         },
         action: 'switch_ai_provider',
         params: {
-            fallbackOrder: ['openrouter', 'gemini'],
+            fallbackOrder: [...DEFAULT_AI_FALLBACK_ORDER],
             maxSwitchAttempts: 3,
         },
         priority: 10,
@@ -256,10 +296,13 @@ export const DEFAULT_RECOVERY_CONFIG: AutoRecoveryConfig = {
 // Implementación de acciones de recuperación
 // -----------------------------------------------------------
 
+/** Duracion simulada de un reintento (el ejecutor real ejecutaria la operacion fallida). */
+const SIMULATED_RETRY_MS = 100;
+
 class RecoveryActionExecutor {
     private executionHistory: Map<string, { count: number; lastExecution: number }> = new Map();
     
-    async executeRetryWithBackoff(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeRetryWithBackoff(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
         const { initialDelay = 1000, maxDelay = 10000, multiplier = 2 } = params;
         
@@ -267,20 +310,18 @@ class RecoveryActionExecutor {
         const attemptCount = this.getExecutionCount(incident.id, 'retry_with_backoff');
         const delay = Math.min(initialDelay * Math.pow(multiplier, attemptCount), maxDelay);
         
-        if (this.executionHistory.has(incident.id)) {
-            const history = this.executionHistory.get(incident.id)!;
-            if (Date.now() - history.lastExecution < delay) {
-                return {
-                    success: false,
-                    action: 'retry_with_backoff',
-                    message: `Esperando delay de backoff: ${delay}ms`,
-                    durationMs: Date.now() - startTime,
-                };
-            }
+        const history = this.executionHistory.get(incident.id);
+        if (history && Date.now() - history.lastExecution < delay) {
+            return {
+                success: false,
+                action: 'retry_with_backoff',
+                message: `Esperando delay de backoff: ${delay}ms`,
+                durationMs: Date.now() - startTime,
+            };
         }
         
         // Simular reintento (en implementación real, esto ejecutaría la operación fallida)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, SIMULATED_RETRY_MS));
         
         this.recordExecution(incident.id, 'retry_with_backoff');
         
@@ -292,9 +333,9 @@ class RecoveryActionExecutor {
         };
     }
     
-    async executeSwitchAIProvider(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeSwitchAIProvider(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
-        const { fallbackOrder = ['openrouter', 'gemini'], maxSwitchAttempts = 3 } = params;
+        const { fallbackOrder = [...DEFAULT_AI_FALLBACK_ORDER] } = params;
         
         try {
             // Obtener proveedor actual usando la API oficial
@@ -309,7 +350,6 @@ class RecoveryActionExecutor {
             setPreferredAIProvider(nextProvider);
             
             // Forzar recarga del servicio
-            console.log(`Cambiando proveedor de IA de ${currentProvider} a ${nextProvider}`);
             
             this.recordExecution(incident.id, 'switch_ai_provider');
             
@@ -321,6 +361,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'switch_ai_provider',
@@ -330,7 +371,7 @@ class RecoveryActionExecutor {
         }
     }
     
-    async executeRestartComponent(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeRestartComponent(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
         const { component = 'unknown', method = 'soft-restart' } = params;
         
@@ -339,28 +380,26 @@ class RecoveryActionExecutor {
                 case 'application':
                     if (method === 'soft-restart') {
                         // Reinicio suave: recargar estado sin recargar página
-                        console.log('Ejecutando reinicio suave de la aplicación');
                         // En una implementación real, esto resetearía stores y estados
-                        if (typeof window !== 'undefined') {
-                            // Disparar evento para que componentes se reinicien
-                            window.dispatchEvent(new CustomEvent('flu-soft-restart'));
-                        }
+                        // Notificar el reinicio vía bus central de autonomía
+                        emitAutonomyEvent({
+                            type: 'soft-restart',
+                            level: 'info',
+                            message: 'Reinicio suave de la aplicación ejecutado',
+                        });
                     }
                     break;
                     
                 case 'speech-recognition':
                     // Reiniciar reconocimiento de voz
-                    console.log('Reiniciando componente de reconocimiento de voz');
                     break;
                     
                 case 'speech-synthesis':
                     // NOTA: No reiniciamos speech-synthesis porque interfiere con el habla en curso
                     // y detiene la animación de boca. Este componente es manejado por useFluVoiceAssistant.
-                    console.log('Componente speech-synthesis excluido de reinicio automático');
                     break;
                     
                 default:
-                    console.log(`Reiniciando componente: ${component}`);
             }
             
             this.recordExecution(incident.id, 'restart_component');
@@ -372,6 +411,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'restart_component',
@@ -381,21 +421,22 @@ class RecoveryActionExecutor {
         }
     }
     
-    async executeEnableDegradedMode(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeEnableDegradedMode(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
         const { mode = 'text-only', features = [] } = params;
         
         try {
             // Activar modo degradado
-            localStorage.setItem('flu-degraded-mode', mode);
-            localStorage.setItem('flu-degraded-features', JSON.stringify(features));
+            localSet('flu-degraded-mode', mode);
+            localSet('flu-degraded-features', JSON.stringify(features));
             
-            // Notificar a la aplicación
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('flu-degraded-mode-changed', {
-                    detail: { mode, features }
-                }));
-            }
+            // Notificar la activación del modo degradado vía bus central de autonomía
+            emitAutonomyEvent({
+                type: 'degraded-mode-changed',
+                level: 'warning',
+                message: `Modo degradado activado: ${mode}`,
+                detail: { mode, features },
+            });
             
             this.recordExecution(incident.id, 'enable_degraded_mode');
             
@@ -407,6 +448,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'enable_degraded_mode',
@@ -416,30 +458,26 @@ class RecoveryActionExecutor {
         }
     }
     
-    async executeRestoreFromBackup(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeRestoreFromBackup(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
-        const { backupSource = 'localStorage', maxAgeHours = 24 } = params;
+        const { backupSource = 'localStorage' } = params;
         
         try {
-            console.log(`Restaurando desde backup: ${backupSource}`);
             
             // En una implementación real, esto restauraría datos desde backup
             switch (backupSource) {
                 case 'localStorage':
                     // Restaurar desde localStorage backup
                     const backupKey = 'flu-backup-' + new Date().toISOString().split('T')[0];
-                    const backupData = localStorage.getItem(backupKey);
+                    const backupData = localGet(backupKey);
                     
                     if (backupData) {
-                        console.log('Backup encontrado, restaurando...');
                         // Aquí se restaurarían los datos
                     } else {
-                        console.log('No se encontró backup, creando uno nuevo');
                     }
                     break;
                     
                 default:
-                    console.log(`Fuente de backup no soportada: ${backupSource}`);
             }
             
             this.recordExecution(incident.id, 'restore_from_backup');
@@ -451,6 +489,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'restore_from_backup',
@@ -460,28 +499,20 @@ class RecoveryActionExecutor {
         }
     }
     
-    async executeNotifyUser(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeNotifyUser(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
         const { message = 'Se detectó un problema en el sistema', type = 'info' } = params;
         
         try {
-            // Mostrar notificación al usuario
-            if (typeof window !== 'undefined') {
-                // Usar sistema de notificaciones existente o crear uno básico
-                const notificationEvent = new CustomEvent('flu-user-notification', {
-                    detail: {
-                        message,
-                        type,
-                        component: incident.component,
-                        timestamp: Date.now(),
-                    }
-                });
-                window.dispatchEvent(notificationEvent);
-                
-                // También mostrar en consola para debugging
-                console.log(`[Notificación al usuario] ${type.toUpperCase()}: ${message}`);
-            }
-            
+            // Notificar al usuario vía bus central de autonomía (la UI lo
+            // convierte en notificación del panel de autonomía).
+            emitAutonomyEvent({
+                type: 'system-notification',
+                level: type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info',
+                message,
+                detail: { component: incident.component },
+            });
+
             this.recordExecution(incident.id, 'notify_user');
             
             return {
@@ -491,6 +522,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'notify_user',
@@ -500,7 +532,7 @@ class RecoveryActionExecutor {
         }
     }
     
-    async executeEscalateToAdmin(params: any, incident: RecoveryIncident): Promise<RecoveryResult> {
+    async executeEscalateToAdmin(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
         const { channels = ['console'], message = 'Incidente crítico requiere atención' } = params;
         
@@ -512,14 +544,14 @@ class RecoveryActionExecutor {
                         console.error(`[ESCALACIÓN] ${message}`, incident);
                         break;
                     case 'localStorage':
-                        const escalations = JSON.parse(localStorage.getItem('flu-escalations') || '[]');
+                        const escalations = JSON.parse(localGet('flu-escalations') || '[]');
                         escalations.push({
                             incidentId: incident.id,
                             message,
                             timestamp: Date.now(),
                             component: incident.component,
                         });
-                        localStorage.setItem('flu-escalations', JSON.stringify(escalations));
+                        localSet('flu-escalations', JSON.stringify(escalations));
                         break;
                 }
             });
@@ -533,6 +565,7 @@ class RecoveryActionExecutor {
                 durationMs: Date.now() - startTime,
             };
         } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
             return {
                 success: false,
                 action: 'escalate_to_admin',
@@ -580,7 +613,7 @@ class RecoveryActionExecutor {
 class ConditionEvaluator {
     evaluateCondition(
         condition: RecoveryCondition,
-        componentHealth: any,
+        componentHealth: ComponentHealth,
         incidentHistory: RecoveryIncident[]
     ): boolean {
         // Verificar componente
@@ -638,9 +671,9 @@ class ConditionEvaluator {
     }
     
     private evaluateMetricCondition(
-        actual: any,
-        operator: string,
-        expected: any
+        actual: MetricValue,
+        operator: MetricOperator,
+        expected: MetricValue
     ): boolean {
         switch (operator) {
             case '>':
@@ -671,19 +704,32 @@ export class AutoRecoverySystem {
     private conditionEvaluator: ConditionEvaluator;
     private activeIncidents: Map<string, RecoveryIncident> = new Map();
     private incidentHistory: RecoveryIncident[] = [];
-    private healthMonitor: any; // Referencia al Health Monitor
     
-    constructor(config: Partial<AutoRecoveryConfig> = {}) {
+    /** Punto de composición de dependencias (§2.4). */
+    static create(
+        config: Partial<AutoRecoveryConfig> = {},
+        deps: { actionExecutor?: RecoveryActionExecutor; conditionEvaluator?: ConditionEvaluator } = {},
+    ): AutoRecoverySystem {
+        return new AutoRecoverySystem(config, {
+            actionExecutor: deps.actionExecutor ?? new RecoveryActionExecutor(),
+            conditionEvaluator: deps.conditionEvaluator ?? new ConditionEvaluator(),
+        });
+    }
+
+    constructor(
+        config: Partial<AutoRecoveryConfig> = {},
+        deps: { actionExecutor: RecoveryActionExecutor; conditionEvaluator: ConditionEvaluator },
+    ) {
         this.config = { ...DEFAULT_RECOVERY_CONFIG, ...config };
-        this.actionExecutor = new RecoveryActionExecutor();
-        this.conditionEvaluator = new ConditionEvaluator();
+        this.actionExecutor = deps.actionExecutor;
+        this.conditionEvaluator = deps.conditionEvaluator;
     }
     
-    setHealthMonitor(monitor: any): void {
-        this.healthMonitor = monitor;
+    setHealthMonitor(_monitor: HealthMonitor): void {
+        // Retenido por compatibilidad de API; AutoRecoverySystem no consulta el monitor hoy.
     }
     
-    async evaluateAndRecover(componentHealth: any): Promise<RecoveryResult | null> {
+    async evaluateAndRecover(componentHealth: ComponentHealth): Promise<RecoveryResult | null> {
         if (!this.config.enabled) {
             return null;
         }
@@ -709,7 +755,6 @@ export class AutoRecoverySystem {
         const executionCount = this.getRuleExecutionCount(incidentId, selectedRule.action);
         
         if (executionCount >= selectedRule.maxExecutions) {
-            console.log(`Regla ${selectedRule.action} alcanzó máximo de ejecuciones (${selectedRule.maxExecutions})`);
             return null;
         }
         
@@ -729,23 +774,13 @@ export class AutoRecoverySystem {
         // Actualizar estado del incidente
         this.updateIncidentStatus(incidentId, componentHealth, selectedRule.action, result.success);
         
-        // Loggear resultado
-        if (this.config.verboseLogging) {
-            console.log('AutoRecovery ejecutado:', {
-                component: componentHealth.name,
-                rule: selectedRule.action,
-                success: result.success,
-                message: result.message,
-            });
-        }
-        
         return result;
     }
     
     private async executeRecoveryAction(
         action: RecoveryAction,
-        params: any,
-        componentHealth: any,
+        params: RecoveryActionParams,
+        componentHealth: ComponentHealth,
         incidentId: string
     ): Promise<RecoveryResult> {
         const incident = this.activeIncidents.get(incidentId) || this.createIncident(componentHealth, incidentId);
@@ -782,7 +817,7 @@ export class AutoRecoverySystem {
         }
     }
     
-    private getOrCreateIncidentId(componentHealth: any): string {
+    private getOrCreateIncidentId(componentHealth: ComponentHealth): string {
         // Buscar incidente activo para este componente
         for (const [id, incident] of this.activeIncidents) {
             if (incident.component === componentHealth.name && incident.status === 'active') {
@@ -794,8 +829,8 @@ export class AutoRecoverySystem {
         return this.createIncident(componentHealth).id;
     }
     
-    private createIncident(componentHealth: any, id?: string): RecoveryIncident {
-        const incidentId = id || `incident-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    private createIncident(componentHealth: ComponentHealth, id?: string): RecoveryIncident {
+        const incidentId = id || `incident-${uuidv4()}`;
         
         const incident: RecoveryIncident = {
             id: incidentId,
@@ -820,7 +855,7 @@ export class AutoRecoverySystem {
     
     private updateIncidentStatus(
         incidentId: string,
-        componentHealth: any,
+        componentHealth: ComponentHealth,
         action: RecoveryAction,
         success: boolean
     ): void {
@@ -899,9 +934,9 @@ export class AutoRecoverySystem {
 
 export function createIntegratedAutonomySystem(
     healthConfig?: Partial<AutoRecoveryConfig>
-): { healthMonitor: any; recoverySystem: AutoRecoverySystem } {
+): { healthMonitor: HealthMonitor | null; recoverySystem: AutoRecoverySystem } {
     // En una implementación real, esto integraría ambos sistemas
-    const recoverySystem = new AutoRecoverySystem(healthConfig);
+    const recoverySystem = AutoRecoverySystem.create(healthConfig);
     
     // El Health Monitor se crearía y conectaría aquí
     // Por ahora retornamos un objeto con ambos sistemas
@@ -919,7 +954,7 @@ let globalRecoverySystem: AutoRecoverySystem | null = null;
 
 export function getAutoRecoverySystem(config?: Partial<AutoRecoveryConfig>): AutoRecoverySystem {
     if (!globalRecoverySystem) {
-        globalRecoverySystem = new AutoRecoverySystem(config);
+        globalRecoverySystem = AutoRecoverySystem.create(config);
     }
     return globalRecoverySystem;
 }

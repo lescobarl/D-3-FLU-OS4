@@ -12,11 +12,14 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
+import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { resolveSafeStorage } from './storage';
 import { v4 as uuidv4 } from 'uuid';
 import { relayLog } from '../lib/clientLogRelay';
-import { newSyncTuple, type SyncTuple } from '../core/db/fluDatabase';
+import { type SyncTuple } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
 import {
     DEFAULT_PERSONALITY,
     UI_DEFAULTS,
@@ -24,9 +27,6 @@ import {
     TOPIC_KEYWORDS,
     FLU_PROFILES,
     getDefaultProfile,
-    DEFAULT_IMAGE_CONFIG,
-    DEFAULT_VOICE_CONFIG,
-    DEFAULT_ADVANCED_CONFIG,
 } from '../core/config/appConfig';
 import { resolveContextualExpression } from '../core/anim/emotionEngine';
 import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
@@ -93,7 +93,7 @@ export interface UIState {
      * FluAvatarVoiceBridge observa esta señal en un useEffect y ejecuta la acción.
      * Se resetea a null después de ser consumida.
      */
-    voiceCommand: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation' | 'process-transcript' | null;
+    voiceCommand: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation' | null;
     /**
      * Indicador de que FLU está procesando una solicitud de IA (pensando).
      * Alimenta el indicador visual de procesamiento (ThinkingIndicator).
@@ -110,10 +110,18 @@ export interface IntegrationState {
     lastBridgeEvent: VoiceBridgeEvent | null;
     /** Transcripción actual (lo que el usuario está diciendo) */
     currentTranscript: string;
+    /** §9 Última frase canónica commiteada (fuente única de la frase visible) */
+    lastCommittedTranscript: string;
     /** Texto de la última respuesta de FLU */
     lastResponse: string;
     /** Historial completo de la conversación */
     conversationHistory: ConversationEntry[];
+    /**
+     * Contador de resets INTENCIONALES del historial (iniciar/limpiar conversación).
+     * Fuente única para que la persistencia borre lo guardado SOLO cuando el
+     * usuario lo pide, nunca por un historial vacío transitorio.
+     */
+    conversationEpoch: number;
     /** Estado emocional actual del avatar */
     emotionalState: EmotionalState;
     /** Historial de eventos (para depuración) */
@@ -136,6 +144,12 @@ export interface IntegrationState {
     appAnalysisArtifact: AppAnalysisContract | null;
     /** Job activo de generación de documento/video (F3/F4) */
     generationJob: GenerationJob | null;
+    /**
+     * Participante activo del pizarrón (aislamiento multiusuario). Se sella en
+     * las entradas del historial y en el artefacto del workspace; al cambiar se
+     * limpia el artefacto para no mostrar el del usuario anterior.
+     */
+    activePersonId?: string;
     /** Timestamps para calcular tiempo de respuesta */
     _thinkingStart: number;
     /** Última emoción/animación devuelta por Gemini (para monitoreo) */
@@ -165,15 +179,28 @@ export interface IntegrationActions {
     pushBridgeEvent: (event: VoiceBridgeEvent) => void;
     /** Actualizar la transcripción actual */
     setCurrentTranscript: (transcript: string) => void;
+    /** §9 Escribir la última frase canónica commiteada (fuente única visible) */
+    setLastCommittedTranscript: (transcript: string) => void;
     /** Registrar la última respuesta de FLU */
     setLastResponse: (response: string) => void;
+
     /** Añadir una entrada al historial de conversación */
     addConversationEntry: (entry: ConversationEntry) => void;
+    /**
+     * Fijar el hablante de una entrada existente (sin agregar otra fila).
+     * Lo usa el commit ÚNICO de fila de turno para completar el hablante del
+     * commit temprano en vez de duplicar la frase.
+     */
+    setConversationEntrySpeaker: (id: string, speakerName: string) => void;
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
     addFluMessage: (text: string) => void;
+    /** Añadir un mensaje de sistema al historial de conversación */
+    addSystemMessage: (text: string) => void;
     /** Cargar historial completo desde DB (sin side effects) */
     batchLoadHistory: (entries: ConversationEntry[]) => void;
+    /** Eliminar del historial todas las entradas de un hablante (por speakerName) */
+    removeConversationEntriesBySpeaker: (label: string) => void;
     /** Cambiar estado emocional */
     setEmotionalState: (state: EmotionalState) => void;
     /** Detectar emoción automática según el texto */
@@ -206,6 +233,8 @@ export interface IntegrationActions {
     setPendingEmotionAnims: (anims: string[], source?: EmotionSource, sustainMode?: 'fixed' | 'song' | null) => void;
     /** Establecer el artifacto activo del workspace (OS2 parity: workspaceArtifact) */
     setWorkspaceArtifact: (entry: WorkspaceEntry | null) => void;
+    /** Establecer el participante activo (aislamiento multiusuario del pizarrón) */
+    setActivePersonId: (personId?: string) => void;
     /** Limpiar el artifacto del workspace */
     clearWorkspace: () => void;
     /** Establecer el artifacto del análisis de documentos (F1) */
@@ -217,7 +246,7 @@ export interface IntegrationActions {
     /** Extraer puntos clave del historial de conversación */
     extractKeyPoints: () => string[];
     /** Enviar un comando de voz que FluAvatarVoiceBridge consumirá */
-    sendVoiceCommand: (command: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation' | 'process-transcript') => void;
+    sendVoiceCommand: (command: 'start-listening' | 'stop-listening' | 'toggle-listening' | 'start-conversation') => void;
     /** Consumir el comando de voz actual (lo resetea a null) */
     consumeVoiceCommand: () => void;
 
@@ -247,6 +276,25 @@ export type IntegrationStore = IntegrationState & IntegrationActions;
 /** Generar UUIDv4 — Obligación #6 */
 function nextId(): string {
     return uuidv4();
+}
+
+/**
+ * Recorta el historial de conversación al tope configurado (§ UI_DEFAULTS).
+ * Sin esto el historial crecía sin límite y cada backup lo duplicaba.
+ */
+function capConversationHistory(entries: ConversationEntry[]): ConversationEntry[] {
+    const limit = UI_DEFAULTS.CONVERSATION_HISTORY_LIMIT;
+    return entries.length > limit ? entries.slice(-limit) : entries;
+}
+
+/**
+ * Sella una entrada con el participante activo (aislamiento multiusuario).
+ * Solo se sella cuando hay participante; sin él, la entrada queda sin
+ * `personId` (ruta legacy/global) para no romper los guards de voz.
+ */
+function withActivePersonId(entry: ConversationEntry, personId?: string): ConversationEntry {
+    if (!personId) return entry;
+    return { ...entry, personId };
 }
 
 /**
@@ -306,8 +354,10 @@ const initialState: IntegrationState = {
     conversationState: 'IDLE',
     lastBridgeEvent: null,
     currentTranscript: '',
+    lastCommittedTranscript: '',
     lastResponse: '',
     conversationHistory: [],
+    conversationEpoch: 0,
     emotionalState: 'neutral',
     eventLog: [],
     config: defaultConfig,
@@ -334,9 +384,10 @@ const initialState: IntegrationState = {
     documentArtifact: null,
     appAnalysisArtifact: null,
     generationJob: null,
+    activePersonId: undefined,
     lastGeminiEmotion: '',
     _thinkingStart: 0,
-    sync: newSyncTuple(),
+    sync: buildSyncTuple(undefined, Date.now()),
     // FLU Configurator — estado inicial
     profile: defaultProfile.id,
     imageConfig: { ...defaultProfile.image },
@@ -358,7 +409,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 const now = Date.now();
                 const prevState = current.conversationState;
                 relayLog('LOG', 'IntegrationStore', `setConversationState(${state}) — prev=${prevState}`);
-                const patch: Record<string, any> = { conversationState: state };
+                const patch: Partial<IntegrationState> = { conversationState: state };
 
                 // Si estamos entrando a THINKING, registrar el timestamp
                 if (state === 'THINKING') {
@@ -401,28 +452,52 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 set({ currentTranscript: transcript });
             },
 
+            setLastCommittedTranscript: (transcript: string) => {
+                set({ lastCommittedTranscript: transcript });
+            },
+
             setLastResponse: (response: string) => {
                 set({ lastResponse: response });
             },
 
             addConversationEntry: (entry: ConversationEntry) => {
+                const tagged = withActivePersonId(entry, get().activePersonId);
                 set((current) => ({
-                    conversationHistory: [...current.conversationHistory, entry],
+                    conversationHistory: capConversationHistory([...current.conversationHistory, tagged]),
+                }));
+            },
+
+            setConversationEntrySpeaker: (id: string, speakerName: string) => {
+                if (!id) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.map((entry) =>
+                        entry.id === id ? { ...entry, speakerName } : entry,
+                    ),
                 }));
             },
 
             batchLoadHistory: (entries: ConversationEntry[]) => {
-                set({ conversationHistory: entries });
+                set({ conversationHistory: capConversationHistory(entries) });
+            },
+
+            removeConversationEntriesBySpeaker: (label: string) => {
+                const normalized = String(label || '').trim();
+                if (!normalized) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.filter(
+                        (entry) => String(entry.speakerName || '').trim() !== normalized,
+                    ),
+                }));
             },
 
             addUserMessage: (text: string, speakerName?: string) => {
                 const sentiment = detectSentiment(text);
-                // OS2 parity: default speaker label is 'Hablante 1', not 'Usuario'
+                // OS2 parity: default speaker label is the configured fallback, not 'Usuario'
                 // OS2's activeListen.js resolveConversationSpeaker falls back to
-                // cleanForSpeech(lastSpeaker) || speakers.defaultLabel ('Hablante 1')
-                const resolvedSpeaker = speakerName || 'Hablante 1';
+                // cleanForSpeech(lastSpeaker) || speakers.defaultLabel (fallback configurado)
+                const resolvedSpeaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
                 const emotion = sentimentToEmotion(sentiment);
-                const entry: ConversationEntry = {
+                const entry: ConversationEntry = withActivePersonId({
                     role: 'user',
                     text,
                     timestamp: Date.now(),
@@ -430,7 +505,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     id: nextId(),
                     speakerName: resolvedSpeaker,
                     response: '', // will be filled by addFluMessage
-                };
+                }, get().activePersonId);
                 // Single set() call — combine conversation update + emotional state
                 // to avoid two separate Zustand state updates (and two re-renders).
                 set((current) => {
@@ -439,7 +514,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     const emoKey = sentiment || 'neutral';
                     emoDist[emoKey] = (emoDist[emoKey] || 0) + 1;
                     return {
-                        conversationHistory: [...current.conversationHistory, entry],
+                        conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                         emotionalState: emotion,
                         sessionStats: {
                             ...stats,
@@ -452,26 +527,26 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             addSystemMessage: (text: string) => {
-                const entry: ConversationEntry = {
+                const entry: ConversationEntry = withActivePersonId({
                     role: 'system',
                     text,
                     timestamp: Date.now(),
                     id: nextId(),
                     speakerName: '⚙️ Sistema',
-                };
+                }, get().activePersonId);
                 set((current) => ({
-                    conversationHistory: [...current.conversationHistory, entry],
+                    conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                 }));
             },
 
             addFluMessage: (text: string) => {
-                const entry: ConversationEntry = {
+                const entry: ConversationEntry = withActivePersonId({
                     role: 'flu',
                     text,
                     timestamp: Date.now(),
                     id: nextId(),
                     speakerName: 'FLU',
-                };
+                }, get().activePersonId);
                 set((current) => {
                     const history = current.conversationHistory;
                     const lastUserIdx = history.length - 1;
@@ -537,26 +612,34 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             clearHistory: () => {
-                set({ conversationHistory: [] });
+                set((current) => ({
+                    conversationHistory: [],
+                    conversationEpoch: current.conversationEpoch + 1,
+                }));
             },
 
             resetConversationHistory: () => {
-                set({
+                set((current) => ({
                     conversationHistory: [],
+                    conversationEpoch: current.conversationEpoch + 1,
                     lastResponse: '',
                     currentTranscript: '',
+                    lastCommittedTranscript: '',
                     sessionStats: {
                         ...initialState.sessionStats,
                         sessionStartTime: Date.now(),
                     },
                     interactionCount: 0,
                     workspaceArtifact: null,
-                });
+                }));
             },
 
             addMinute: (minute: MinuteUIEntry) => {
                 set((current) => ({
-                    minuteHistory: [minute, ...current.minuteHistory],
+                    // Dedup por id: republicar la misma minuta (p.ej. al actualizarla)
+                    // no debe duplicarla en el historial. El prepend ciego permitia que
+                    // cualquier segundo escritor duplicara filas.
+                    minuteHistory: [minute, ...current.minuteHistory.filter((m) => m.id !== minute.id)],
                 }));
             },
 
@@ -567,7 +650,22 @@ export const useIntegrationStore = create<IntegrationStore>()(
             },
 
             setWorkspaceArtifact: (entry: WorkspaceEntry | null) => {
-                set({ workspaceArtifact: entry });
+                const personId = get().activePersonId;
+                set({
+                    workspaceArtifact: entry && personId ? { ...entry, personId } : entry,
+                });
+            },
+
+            setActivePersonId: (personId?: string) => {
+                const normalized = personId ? String(personId) : undefined;
+                const current = get();
+                if (current.activePersonId === normalized) return;
+                set({
+                    activePersonId: normalized,
+                    // Aislamiento multiusuario: al cambiar de usuario se limpia el
+                    // artefacto activo del pizarrón para no mostrar el del anterior.
+                    workspaceArtifact: null,
+                });
             },
 
             clearWorkspace: () => {
@@ -630,7 +728,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 set({
                     ...initialState,
                     sessionStats: { ...initialState.sessionStats, sessionStartTime: Date.now() },
-                    sync: newSyncTuple(),
+                    sync: buildSyncTuple(undefined, Date.now()),
                 });
             },
 
@@ -740,15 +838,15 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 // Log startupPrompt as system message in conversation history
                 if (profile.startupPrompt) {
                     const label = profile.label || profile.id;
-                    const entry: ConversationEntry = {
+                    const entry: ConversationEntry = withActivePersonId({
                         role: 'system',
                         text: `🧠 Perfil "${label}" activado — ${profile.startupPrompt}`,
                         timestamp: Date.now(),
                         id: nextId(),
                         speakerName: '⚙️ Sistema',
-                    };
+                    }, get().activePersonId);
                     set((current) => ({
-                        conversationHistory: [...current.conversationHistory, entry],
+                        conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                     }));
                 }
             },
@@ -772,26 +870,9 @@ export const useIntegrationStore = create<IntegrationStore>()(
         {
             name: 'flu-integration-store',
             version: 1,
-            // Use createJSONStorage with a fallback that gracefully handles
-            // environments without localStorage (e.g., Node.js test runner).
-            // This eliminates the "[zustand persist middleware] Unable to update
-            // item" warnings in vitest.
-            storage: createJSONStorage(() => {
-                try {
-                    if (typeof window !== 'undefined' && window.localStorage) {
-                        return window.localStorage;
-                    }
-                } catch {
-                    // localStorage not available (Node.js, SSR, etc.)
-                }
-                // In-memory fallback: still works but doesn't persist across reloads
-                const store = new Map<string, string>();
-                return {
-                    getItem: (key: string) => store.get(key) ?? null,
-                    setItem: (key: string, value: string) => { store.set(key, value); },
-                    removeItem: (key: string) => { store.delete(key); },
-                };
-            }),
+            // Almacenamiento con fallback en memoria para entornos sin
+            // localStorage (Node.js test runner). Fuente única en ./storage.
+            storage: createJSONStorage(resolveSafeStorage),
             partialize: (state) => ({
                 profile: state.profile,
                 imageConfig: state.imageConfig,
@@ -814,5 +895,5 @@ export const useIntegrationStore = create<IntegrationStore>()(
 // Exposición global para tests E2E (Playwright)
 // -----------------------------------------------------------
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__fluStore = useIntegrationStore;
+    window.__fluStore = useIntegrationStore;
 }

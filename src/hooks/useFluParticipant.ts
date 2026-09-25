@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService } from '../services/aiServiceFactory';
 import { hasUsableTextBackend } from '../services/deepseek';
+import { isSpeechBusy } from '../voice/lib/fluSpeech';
+import { logCaughtError } from '../lib/caughtError';
 import {
     applyParticipantEvaluation,
     advanceParticipantTurnCounter,
@@ -205,7 +207,7 @@ export function useFluParticipant({
 
             if (generation !== evalGenerationRef.current) return false;
 
-            const normalized = normalizeParticipantEvaluation(result as unknown as Record<string, unknown>, cfg);
+            const normalized = normalizeParticipantEvaluation(result, cfg);
             stateRef.current = applyParticipantEvaluation(stateRef.current, normalized);
 
             if (stateRef.current.phase === 'raised') {
@@ -219,14 +221,14 @@ export function useFluParticipant({
             if (generation !== evalGenerationRef.current) return false;
             stateRef.current = { ...stateRef.current, phase: 'idle' };
             if (import.meta.env.DEV) {
-                console.warn('[Flu][participant] evaluation failed', error);
+                logCaughtError('[Flu][participant] evaluation failed', error);
             }
         } finally {
             bumpUi();
         }
 
         return false;
-    }, [apiKey, bumpUi, conversationActiveRef, getLogSnapshot, language, scheduleHandTimeout, session.role, session.theme]);
+    }, [apiKey, bumpUi, conversationActiveRef, getLogSnapshot, language, scheduleHandTimeout, session.role, session.theme, onEmotion]);
 
     // -----------------------------------------------------------
     // Evaluate on demand (manual "Flu Participa" click)
@@ -341,8 +343,7 @@ export function useFluParticipant({
         // solo mirara `speaking`, el click/la orden cederían la palabra y el borrador se
         // consumiría SIN hablarse (intervención tragada). Bloquear la concesión mientras
         // pending evita ese hueco: el usuario reintenta cuando el TTS esté libre.
-        const synth = window.speechSynthesis;
-        const speechActive = Boolean(synth && (synth.speaking || synth.pending));
+        const speechActive = isSpeechBusy();
         return shouldIgnoreParticipantFloorGrant(stateRef.current, {
             speechActive,
             lastGrantAt: lastFloorGrantAtRef.current,

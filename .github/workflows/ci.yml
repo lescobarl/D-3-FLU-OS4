@@ -1,0 +1,92 @@
+# ============================================================
+# CI — Gate de entrega (suite completa + build + E2E)
+# ============================================================
+# La suite completa NO corre en cada commit (pre-commit ligero:
+# AGENTS.md §6). Corre aquí, una vez por push/PR.
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  quality:
+    name: Unit + Guards + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El ledger valida con `git cat-file -e` que cada commit C## existe y
+          # `git log` cuenta commits. Con el fetch-depth:1 por defecto el clon
+          # solo tiene 1 commit -> taskLedgerGuard falla en CI (pasaba en local).
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30 declara engines ^22.22.2 || ^24.15.0 || >=26. Hay guards con
+          # '// @vitest-environment jsdom' (p.ej. minutosSinglePublisherGuard): con Node 20
+          # jsdom no carga y TODA la corrida de guards muere con
+          # 'TypeError: webidl.util.markAsUncloneable is not a function'.
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Guards (lint rule pragmática del proyecto)
+        run: npm run lint
+
+      - name: Puerta de tipos
+        run: npm run typecheck
+
+      # El gate de contrato (`npm run gate`) verifica UN contrato de tarea
+      # (.task/contract.json) contra su base. No es un gate de repo: en CI
+      # fallaria siempre que el arbol haya avanzado respecto a esa base.
+      # La cobertura de repo la dan los guards (lint), los tipos y la suite.
+
+      - name: Suite completa de unit
+        run: npm run test:full
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E Playwright (UI)
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El ledger valida con `git cat-file -e` que cada commit C## existe y
+          # `git log` cuenta commits. Con el fetch-depth:1 por defecto el clon
+          # solo tiene 1 commit -> taskLedgerGuard falla en CI (pasaba en local).
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30 declara engines ^22.22.2 || ^24.15.0 || >=26. Hay guards con
+          # '// @vitest-environment jsdom' (p.ej. minutosSinglePublisherGuard): con Node 20
+          # jsdom no carga y TODA la corrida de guards muere con
+          # 'TypeError: webidl.util.markAsUncloneable is not a function'.
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar navegadores Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (portal en 5173, reuse del dev server)
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            reports/
+            playwright-report/
+          retention-days: 7

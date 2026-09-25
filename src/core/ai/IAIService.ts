@@ -10,7 +10,6 @@
 //   - Obligación #1: Inyección de Dependencias
 // ============================================================
 
-import type { FluContract } from '../../types/bridge';
 import type {
     AppAnalysisContract,
     DocumentContract,
@@ -29,6 +28,8 @@ export interface AIRequestOptions {
     traits?: string[];
     /** Communication tone to inject into the system prompt (Phase 1) */
     tone?: string;
+    /** Nivel de explicación (FASE P: simple | detallado | avanzado) */
+    explanationLevel?: string;
 }
 
 /**
@@ -136,12 +137,19 @@ export interface GenerationInput {
  * Resultado de generateDocument (F3) — contenido serializado listo para descargar.
  */
 export interface GeneratedDocumentResult {
+    /** Artefacto serializado: texto plano para formatos nativos, data URL para binarios. */
     content: string;
     mime: string;
     ext: string;
     nombre: string;
     bytes?: number;
     url?: string;
+    /**
+     * Contenido textual de origen (el cuerpo que produjo el LLM), independiente
+     * del serializado. Es la fuente narrable/legible cuando `content` es un
+     * binario (p. ej. data URL de PDF); sin él, TTS y descarga no tienen texto.
+     */
+    text?: string;
 }
 
 /**
@@ -176,13 +184,6 @@ export interface IAIService {
         options: AIRequestOptions,
         history: AIHistoryEntry[],
     ): Promise<AISummaryResult>;
-
-    /** Generate a Gemini contract for conversation */
-    generateFluContract(
-        options: AIRequestOptions,
-        transcript: string,
-        history: AIHistoryEntry[],
-    ): Promise<FluContract>;
 
     /** Generate a workspace image from a prompt */
     generateWorkspaceImage(

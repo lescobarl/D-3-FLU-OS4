@@ -16,6 +16,7 @@ import { useIntegrationStore } from '../store/integrationStore';
 import { extractTextFromPdf } from '../services/ocrService';
 import type { DocumentContract } from '../types/documentContracts';
 import type { DocumentAnalysisInput } from '../core/ai/IAIService';
+import { logCaughtError } from '../lib/caughtError';
 
 export interface DocumentAnalysisState {
     /** Si el análisis está en curso */
@@ -61,7 +62,7 @@ export function useDocumentAnalysis(language: string): DocumentAnalysisState {
                     const ocr = await extractTextFromPdf(await file.arrayBuffer());
                     if (ocr.text) rawText = `[OCR]\n${ocr.text}`;
                 } catch (ocrErr) {
-                    console.warn('[useDocumentAnalysis] OCR de PDF escaneado falló:', ocrErr);
+                    logCaughtError('[useDocumentAnalysis] OCR de PDF escaneado falló', ocrErr);
                 }
             }
 

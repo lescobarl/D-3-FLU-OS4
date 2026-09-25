@@ -31,6 +31,9 @@
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* .hoy-panel (unified.css) referencia --font-ui: alias a la misma familia
+     para que el panel lateral NO caiga a system-ui (tipografía divergente). */
+  --font-ui: var(--font-sans);
 
   /* ---- Unified Typography Scale (settings module standard) ---- */
   --text-xs:   10px;  /* badges, vector previews, error details */
@@ -695,4 +698,29 @@ body,
     flex-wrap: wrap;
     gap: 8px;
   }
+}
+
+/* --- BunnyViewer: overlays de senal y de estado (P6.12) ---
+   Los valores que salen de bunnySceneConfig.ts entran como variables CSS: la
+   config sigue siendo la unica fuente, y el estilo vive aqui. */
+.bunny-signal-overlay {
+    font-size: var(--bunny-signal-font);
+    animation: var(--bunny-signal-pulse);
+    filter: drop-shadow(0 0 20px var(--bunny-signal-color));
+    pointer-events: none;
+    user-select: none;
+}
+
+.bunny-state-indicator {
+    background: var(--bunny-state-bg);
+    color: var(--bunny-state-color);
+    border: 1px solid var(--bunny-state-color);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: bold;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
 }

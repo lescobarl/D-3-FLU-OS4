@@ -19,35 +19,38 @@
 // ============================================================
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { 
     HealthMonitor, 
-    getHealthMonitor, 
     startGlobalHealthMonitoring,
-    SystemHealth 
+    SystemHealth,
+    type HealthMonitorConfig
 } from './healthMonitor';
 import { 
     AutoRecoverySystem, 
-    getAutoRecoverySystem, 
     startGlobalAutoRecovery,
-    RecoveryResult 
+    type AutoRecoveryConfig,
+    type RecoveryIncident
 } from './autoRecovery';
 import { 
     DecisionEngine, 
-    getDecisionEngine, 
     startGlobalDecisionEngine,
-    AutonomousDecision 
+    AutonomousDecision,
+    type DecisionEngineConfig
 } from './decisionEngine';
 import { 
     AutoOptimizationSystem, 
-    getAutoOptimizationSystem, 
-    startGlobalAutoOptimization 
+    startGlobalAutoOptimization,
+    type AutoOptimizationConfig
 } from './autoOptimization';
-import { 
-    BackupSystem, 
-    getBackupSystem, 
+import {
+    BackupSystem,
     startGlobalBackupSystem,
-    RestoreResult 
+    RestoreResult,
+    type BackupSystemConfig
 } from './backupSystem';
+import { onAutonomyEvent, emitAutonomyEvent, type AutonomyEvent } from './autonomyEvents';
+import { logCaughtError } from '../../lib/caughtError';
 
 // -----------------------------------------------------------
 // Tipos
@@ -67,7 +70,7 @@ export interface AutonomyState {
     /** Métricas de salud actuales */
     healthMetrics: SystemHealth | null;
     /** Incidentes activos de recuperación */
-    activeIncidents: any[];
+    activeIncidents: RecoveryIncident[];
     /** Decisiones autónomas recientes */
     recentDecisions: AutonomousDecision[];
     /** Estadísticas de backups */
@@ -93,6 +96,27 @@ export interface AutonomyNotification {
     };
 }
 
+/** Configuración tipada de cada sistema autónomo integrado. */
+export interface AutonomySystemConfigs {
+    healthMonitor: HealthMonitorConfig;
+    autoRecovery: AutoRecoveryConfig;
+    decisionEngine: DecisionEngineConfig;
+    autoOptimization: AutoOptimizationConfig;
+    backupSystem: BackupSystemConfig;
+}
+
+/**
+ * Configuración parcial aceptada por `updateSystemConfig`. Cada sistema
+ * consume el subconjunto de propiedades que le aplica y descarta el resto.
+ */
+export type AutonomySystemConfigUpdate = Partial<
+    HealthMonitorConfig &
+    AutoRecoveryConfig &
+    DecisionEngineConfig &
+    AutoOptimizationConfig &
+    BackupSystemConfig
+>;
+
 export interface AutonomyActions {
     /** Iniciar todos los sistemas de autonomía */
     startAllSystems: () => void;
@@ -111,9 +135,9 @@ export interface AutonomyActions {
     /** Marcar notificación como leída */
     markNotificationAsRead: (id: string) => void;
     /** Obtener configuración de sistemas */
-    getSystemConfig: () => Record<string, any>;
+    getSystemConfig: () => Partial<AutonomySystemConfigs>;
     /** Actualizar configuración de sistema */
-    updateSystemConfig: (system: string, config: any) => void;
+    updateSystemConfig: (system: string, config: AutonomySystemConfigUpdate) => void;
 }
 
 // -----------------------------------------------------------
@@ -262,7 +286,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
                 }
 
             } catch (error) {
-                console.error('Error inicializando sistemas de autonomía:', error);
+                logCaughtError('Error inicializando sistemas de autonomía', error);
                 setState(prev => ({
                     ...prev,
                     status: 'degraded',
@@ -293,6 +317,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
                 backupSystemRef.current.stop();
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- efecto de montaje: los helpers (addNotification, mapHealthStatusToAutonomyStatus, updateBackupStats) se declaran DEBAJO (L326+) y listarlos aqui seria un TDZ (tsc lo confirmo); moverlos cambiaria el orden de hooks.
     }, []);
 
     // -----------------------------------------------------------
@@ -302,7 +327,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     const addNotification = useCallback((notification: Omit<AutonomyNotification, 'id' | 'timestamp' | 'read'>) => {
         const newNotification: AutonomyNotification = {
             ...notification,
-            id: `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `notification-${uuidv4()}`,
             timestamp: Date.now(),
             read: false,
         };
@@ -312,11 +337,42 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
             notifications: [newNotification, ...prev.notifications].slice(0, 20), // Limitar a 20 notificaciones
         }));
 
-        // Disparar evento para UI
-        window.dispatchEvent(new CustomEvent('flu-autonomy-notification', {
-            detail: newNotification
-        }));
+        // Propagar al bus central (solo para suscriptores externos; este hook
+        // ignora su propio tipo 'autonomy-notification' para evitar bucles).
+        emitAutonomyEvent({
+            type: 'autonomy-notification',
+            level: notification.type,
+            message: `${notification.title} — ${notification.message}`,
+        });
     }, []);
+
+    // -----------------------------------------------------------
+    // Puente motor → UI: los eventos de los sistemas autónomos se
+    // convierten en notificaciones del estado del hook (antes eran
+    // CustomEvent 'flu-*' en window sin NINGÚN listener: muertos).
+    // -----------------------------------------------------------
+    useEffect(() => {
+        const titles: Record<AutonomyEvent['type'], string> = {
+            'ai-provider-changed': 'Proveedor de IA cambiado',
+            'system-notification': 'Notificación del sistema',
+            'soft-restart': 'Reinicio suave',
+            'degraded-mode-changed': 'Modo degradado',
+            'parameter-rollback': 'Optimización revertida',
+            'parameter-changed': 'Parámetro aplicado',
+            'autonomy-notification': 'FLU',
+        };
+
+        const unsubscribe = onAutonomyEvent((event) => {
+            if (event.type === 'autonomy-notification') return;
+            addNotification({
+                type: event.level || 'info',
+                title: titles[event.type] || 'Autonomía',
+                message: event.message,
+            });
+        });
+
+        return unsubscribe;
+    }, [addNotification]);
 
     const updateBackupStats = useCallback(() => {
         if (backupSystemRef.current) {
@@ -426,7 +482,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
             });
         } catch (err) {
             // No debe poder tumbar la app aunque el componente esté desmontándose
-            console.warn('[Autonomy] stopAllSystems: actualización de estado omitida durante unmount:', err);
+            logCaughtError('[Autonomy] stopAllSystems: actualización de estado omitida durante unmount', err);
         }
     }, [addNotification]);
 
@@ -573,7 +629,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     }, []);
 
     const getSystemConfig = useCallback(() => {
-        const configs: Record<string, any> = {};
+        const configs: Partial<AutonomySystemConfigs> = {};
         
         if (healthMonitorRef.current) {
             configs.healthMonitor = healthMonitorRef.current.getConfig();
@@ -594,7 +650,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
         return configs;
     }, []);
 
-    const updateSystemConfig = useCallback((system: string, config: any) => {
+    const updateSystemConfig = useCallback((system: string, config: AutonomySystemConfigUpdate) => {
         switch (system) {
             case 'healthMonitor':
                 if (healthMonitorRef.current) {

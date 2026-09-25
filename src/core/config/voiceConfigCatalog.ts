@@ -14,8 +14,9 @@
 // de forma automática, sin tocar el prompt ni el despachador.
 // ============================================================
 
-import { PALETTES } from '../branding/seasonalPalettes';
-import { AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES } from './appConfig';
+import { getPaletteKeys } from '../branding/seasonalPalettes';
+import { AI_PROVIDERS, AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig';
+import { getCanonicalWakeWord } from '../../voice/lib/fluConfig';
 
 // ------------------------------------------------------------
 // Tipos del catálogo
@@ -110,8 +111,8 @@ export interface ConfigCatalogEntry {
 // Opciones dinámicas (fuente de verdad derivada de los datos reales)
 // ------------------------------------------------------------
 
-/** Temporadas reales del branding (Object.keys(PALETTES), 21 paletas). */
-export const BRANDING_SEASONS: readonly string[] = Object.keys(PALETTES);
+/** Temporadas reales del branding (claves del catálogo fusionado de paletas). */
+export const BRANDING_SEASONS: readonly string[] = getPaletteKeys();
 
 /** Modos del branding estacional. */
 export const BRANDING_MODES: readonly string[] = ['auto', 'manual', 'disabled'] as const;
@@ -119,8 +120,8 @@ export const BRANDING_MODES: readonly string[] = ['auto', 'manual', 'disabled'] 
 /** Idiomas de la interfaz. */
 export const UI_LANGUAGES: readonly string[] = ['es', 'en', 'both'] as const;
 
-/** Motores de IA disponibles (aiServiceFactory). */
-export const AI_PROVIDERS: readonly string[] = ['openrouter', 'gemini', 'deepseek', 'local'] as const;
+/** Motores de IA disponibles (fuente única: sharedConfig.ts). */
+export { AI_PROVIDERS };
 
 /** Estados emocionales válidos (PersonalityConfig.defaultEmotion). */
 export const PERSONALITY_EMOTIONS: readonly string[] = [
@@ -198,8 +199,8 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
         accion: 'set_config',
         handler: 'textModel',
         tipo: 'text',
-        descripcionEs: 'Modelo de texto (ej. gemini-2.5-flash-lite).',
-        descripcionEn: 'Text model (e.g. gemini-2.5-flash-lite).',
+        descripcionEs: `Modelo de texto (ej. ${OPENROUTER_DEFAULTS.MODEL}).`,
+        descripcionEn: `Text model (e.g. ${OPENROUTER_DEFAULTS.MODEL}).`,
     },
     {
         clave: 'textApiUrl',
@@ -771,6 +772,8 @@ function formatValueEn(entry: ConfigCatalogEntry): string {
  */
 export function buildConfiguracionPrompt(language: 'es' | 'en' = 'es'): string {
     const isEnglish = language === 'en';
+    // Wake word canónica desde config (§9.4): nunca un literal en runtime.
+    const wakeWord = getCanonicalWakeWord();
     const brandingEntries = VOICE_CONFIG_CATALOG.filter(
         (e) => e.accion === 'set_branding' && e.handler !== 'unsupported',
     );
@@ -798,8 +801,8 @@ export function buildConfiguracionPrompt(language: 'es' | 'en' = 'es'): string {
             ? 'You can also use the "configuracion" field when the user explicitly asks to change settings.'
             : 'Tambien puedes usar el campo "configuracion" cuando el usuario pida explicitamente cambiar ajustes.',
         isEnglish
-            ? 'Use configuracion ONLY for explicit configuration commands like: "OK FLU set...", "FLU change...", "set theme to...", "activate...", "configure...".'
-            : 'Usa configuracion SOLO para comandos explicitos de configuracion como: "OK FLU configura...", "FLU cambia...", "pon tema de...", "activa...", "configura...".',
+            ? `Use configuracion ONLY for explicit configuration commands like: "${wakeWord} set...", "FLU change...", "set theme to...", "activate...", "configure...".`
+            : `Usa configuracion SOLO para comandos explicitos de configuracion como: "${wakeWord} configura...", "FLU cambia...", "pon tema de...", "activa...", "configura...".`,
         isEnglish
             ? 'Available actions: "set_branding" (change visual theme/season), "set_config" (change any other setting).'
             : 'Acciones disponibles: "set_branding" (cambiar tema visual/temporada), "set_config" (cambiar cualquier otro ajuste).',

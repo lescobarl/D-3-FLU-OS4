@@ -25,7 +25,7 @@ describe('palabrasEncadenadas — inicio de partida', () => {
     test('start anuncia la primera palabra (avion → N)', () => {
         const { session, startResult } = freshPalabras();
         expect(startResult.prompt).toBe(
-            '¡Vamos a jugar a palabras encadenadas! Empiezo yo con avion. Di una palabra que empiece con la letra N.'
+            '¡Vamos a jugar a palabras encadenadas! Empiezo yo con avión. Di una palabra que empiece con la letra N.'
         );
         expect(startResult.valid).toBe(false);
         expect(startResult.gameOver).toBe(false);

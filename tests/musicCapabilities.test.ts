@@ -12,15 +12,7 @@ import {
     getPlaylist,
     resolveTrack,
     findTrack,
-    playMusic,
-    playMusicUrl,
-    pauseMusic,
-    resumeMusic,
-    stopMusic,
-    isMusicPlaying,
-    setMusicVolume,
     normalizeForMatch,
-    playSong,
 } from '../src/services/musicPlayer';
 import type { MusicSearchClient } from '../src/services/musicSearch';
 import {
@@ -306,11 +298,12 @@ describe('musicPlayer — playSong (catálogo → en línea → not_found honest
 });
 
 describe('capabilities — catálogo honesto', () => {
-    test('FLU_CAPABILITIES expone 7 capacidades y CAPABILITY_IDS coincide', () => {
-        expect(FLU_CAPABILITIES).toHaveLength(7);
+    test('FLU_CAPABILITIES expone 8 capacidades y CAPABILITY_IDS coincide', () => {
+        expect(FLU_CAPABILITIES).toHaveLength(8);
         expect(CAPABILITY_IDS).toEqual(FLU_CAPABILITIES.map((c) => c.id));
         expect(CAPABILITY_IDS).toContain('play_music');
         expect(CAPABILITY_IDS).toContain('buscar_cancion');
+        expect(CAPABILITY_IDS).toContain('acciones');
     });
 
     test('buildCapabilitiesPrompt(es) lista play_music, todo el playlist y la guardia de honestidad', () => {
@@ -324,6 +317,8 @@ describe('capabilities — catálogo honesto', () => {
         expect(prompt).toContain('no puedes navegar por internet');
         expect(prompt).toContain('buscar_cancion');
         expect(prompt).toContain('NO inventes otras');
+        expect(prompt).toContain('REGLA DE ACCIONES (OBLIGATORIA)');
+        expect(prompt).toContain('"acciones"');
     });
 
     test('buildCapabilitiesPrompt(en) usa cabecera y guardia en inglés con el mismo playlist', () => {
@@ -332,6 +327,8 @@ describe('capabilities — catálogo honesto', () => {
         expect(prompt).toContain('cannot browse');
         expect(prompt).toContain('buscar_cancion');
         expect(prompt).toContain('do NOT invent');
+        expect(prompt).toContain('ACCIONES RULE (MANDATORY)');
+        expect(prompt).toContain('"acciones"');
         for (const t of FLU_PLAYLIST) {
             expect(prompt).toContain(t.id);
             expect(prompt).toContain(t.title);

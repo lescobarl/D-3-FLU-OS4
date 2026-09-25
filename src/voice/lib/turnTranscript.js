@@ -46,7 +46,7 @@ export function stripCommittedPrefix(boundary = '', chunk = '') {
   if (!session) return text
   if (text === session) return ''
   if (text.startsWith(session)) return cleanForSpeech(text.slice(session.length))
-  return getTranscriptDelta(session, text)
+  return getTranscriptDeltaFromBoundary(session, text)
 }
 
 /** Aplica onresult ignorando texto ya registrado en el log de sesión. */
@@ -131,6 +131,15 @@ function collapseStutterPass(text = '', minWords = 2) {
 
 export function normalizeTranscriptText(text = '') {
   return collapseStutterRepeat(collapseInlineRepeat(text, 24), 2)
+}
+
+/**
+ * §9.2 — Captura canónica del turno para commit: UNA sola normalización.
+ * En conversación basta `cleanForSpeech`; fuera de conversación se colapsa
+ * además el eco/repetición. Único punto que decide la normalización del motor.
+ */
+export function normalizeTurnCapture(turnCapture = '', { conversationActive = false } = {}) {
+  return conversationActive ? cleanForSpeech(turnCapture) : normalizeTranscriptText(turnCapture)
 }
 
 /** Colapsa párrafos repetidos consecutivos (ASR tras pausa). */
@@ -219,14 +228,8 @@ export function getTurnCommitText(state, pendingSpill = '') {
   return mergeTranscriptText(spill, confirmed)
 }
 
-export function getTranscriptDelta(previous = '', next = '') {
-  return getTranscriptDeltaFromBoundary(previous, next)
-}
-
-/** @deprecated Usar getTurnCommitText / appendSpillText. Conservado por compatibilidad temporal. */
-export function mergeCaptureText(...parts) {
-  return appendSpillText(...parts)
-}
+// Dueño canónico: transcriptDelta.js. Se re-exporta para no duplicar.
+export { getTranscriptDelta } from './transcriptDelta.js'
 
 /** Une spill y fragmentos conservando prefijos acumulativos del reconocedor. */
 export function appendSpillText(...parts) {

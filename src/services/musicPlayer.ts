@@ -13,6 +13,9 @@ import {
   type StreamProbe,
   probeStream,
 } from './musicSearch'
+import { MUSIC_CATALOG } from '../core/config/musicCatalog'
+import { normalizeForMatchExact as normalizeForMatch } from '../lib/textUtils'
+import { logCaughtError } from '../lib/caughtError';
 
 export interface MusicTrack {
   id: string
@@ -35,48 +38,9 @@ export interface MusicOptions {
 // pueden dejar de responder en algunas redes; playSong() los verifica con
 // la sonda y, si fallan, cae a la búsqueda en línea (Deezer).
 // Catálogo estático y honesto — solo listamos pistas reales y verificadas.
-// Base URL de las muestras SoundHelix (uso libre para demo). Extraída para
-// evitar la duplicación de la ruta base en cada pista (Rule #1: NO HARDCODE).
-const SOUNDHELIX_BASE_URL = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-'
-
-export const FLU_PLAYLIST: MusicTrack[] = [
-  // --- Muestras instrumentales (SoundHelix, uso libre para demo) ---
-  { id: 'sueño', title: 'Sueño de Bunny', url: `${SOUNDHELIX_BASE_URL}1.mp3` },
-  { id: 'baila', title: 'Baila Bunny', url: `${SOUNDHELIX_BASE_URL}2.mp3` },
-  { id: 'canta', title: 'Canta Bunny', url: `${SOUNDHELIX_BASE_URL}3.mp3` },
-  { id: 'fiesta', title: 'Fiesta Bunny', url: `${SOUNDHELIX_BASE_URL}4.mp3` },
-  // --- Canciones comunes de dominio público (Internet Archive, EN LÍNEA) ---
-  {
-    id: 'cumpleaños',
-    title: 'Cumpleaños Feliz',
-    url: 'https://archive.org/download/78_happy-birthday-song_gbia0534279/01%20-%20HAPPY%20BIRTHDAY%20SONG%20-%20Part%201.mp3',
-    source: 'Internet Archive (Great 78 Project, dominio público)',
-  },
-  {
-    id: 'mañanitas',
-    title: 'Las Mañanitas',
-    url: 'https://archive.org/download/78_las-mananitas_lola-beltran-los-charros-de-ameca-de-roman-palomar_gbia0020855b/Las%20Mananitas%20-%20Lola%20Beltran%20-%20Los%20Charros%20de%20Ameca%20de%20Roman%20Palomar-restored.mp3',
-    source: 'Internet Archive (Great 78 Project, dominio público)',
-  },
-  {
-    id: 'estrellita',
-    title: 'Estrellita',
-    url: 'https://archive.org/download/TwinkleTwinkleLittleStarPlain/Twinkle_Twinkle_Little_Star_plain.mp3',
-    source: 'Internet Archive (dominio público)',
-  },
-  {
-    id: 'elisa',
-    title: 'Para Elisa',
-    url: 'https://archive.org/download/BeethovenFrElise-Schnabel/Beethoven-FrEliseWoo59.mp3',
-    source: 'Internet Archive (dominio público)',
-  },
-  {
-    id: 'cielito',
-    title: 'Cielito Lindo',
-    url: 'https://archive.org/download/dussolina-gianini-cielito-lindo-mexicanfolksong-victor-1195/DussolinaGianini%2CCielitoLindo%2CMexicanfolksong%2CVictor1195.mp3',
-    source: 'Internet Archive (Great 78 Project, dominio público)',
-  },
-]
+// Playlist: la fuente de datos vive en config (src/core/config/musicCatalog.ts).
+// Este servicio solo la expone y la reproduce (Rule #1: NO HARDCODE).
+export const FLU_PLAYLIST: MusicTrack[] = MUSIC_CATALOG
 
 const DEFAULT_VOLUME = 0.6
 
@@ -94,11 +58,12 @@ const MIN_RESTART_GAP_MS = 3000
 
 function getAudio(): HTMLAudioElement {
   if (!audioRef) {
-    audioRef = new Audio()
-    audioRef.preload = 'auto'
-    audioRef.volume = DEFAULT_VOLUME
+    const audio = new Audio()
+    audioRef = audio
+    audio.preload = 'auto'
+    audio.volume = DEFAULT_VOLUME
     // Auto-recuperación del stream (guard: algunos mocks no implementan eventos).
-    if (typeof audioRef.addEventListener === 'function') {
+    if (typeof audio.addEventListener === 'function') {
       const restartStream = () => {
         if (!keepAlive) return
         const now = Date.now()
@@ -106,9 +71,10 @@ function getAudio(): HTMLAudioElement {
         lastRestartAt = now
         console.warn('[musicPlayer] stream interrumpido → reiniciando para seguir cantando')
         try {
-          audioRef!.currentTime = 0
-          audioRef!.play().catch(() => {})
-        } catch {
+          audio.currentTime = 0
+          audio.play().catch((e: unknown) => { logCaughtError('[catch] src/services/musicPlayer.ts', e) })
+        } catch (e) {
+        logCaughtError('[catch] src/services/musicPlayer.ts', e);
           /* ignore */
         }
       }
@@ -134,14 +100,8 @@ export function getPlaylist(): MusicTrack[] {
   return FLU_PLAYLIST.map((t) => ({ ...t }))
 }
 
-/** Normaliza texto para comparar insensible a acentos y mayúsculas. */
-export function normalizeForMatch(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-}
+// Fuente única: src/lib/textUtils.ts. Re-exportado para no duplicar el algoritmo.
+export { normalizeForMatch }
 
 /**
  * Busca una pista del catálogo por id o título (insensible a acentos y
@@ -251,7 +211,7 @@ export async function playSong(
     // La URL del catálogo puede haber muerto (archive.org deja de responder
     // en algunas redes). Solo se reproduce si la sonda confirma que transmite;
     // si no, se cae a la búsqueda en línea (Deezer).
-    const streamable = await probe(local.url).catch(() => false)
+    const streamable = await probe(local.url).catch((e) => { logCaughtError('[catch] src/services/musicPlayer.ts', e); return false; })
     if (streamable) {
       keepAlive = true
       // El gap anti-bucle se mide desde el inicio de la reproducción.
@@ -260,7 +220,7 @@ export async function playSong(
       return { title: local.title, source: 'catalog' }
     }
   }
-  const found = await searchSongOnline(normalized, searchClient, probe).catch(() => null)
+  const found = await searchSongOnline(normalized, searchClient, probe).catch((e) => { logCaughtError('[catch] src/services/musicPlayer.ts', e); return null; })
   if (found?.url) {
     keepAlive = true
     // El gap anti-bucle se mide desde el inicio de la reproducción.

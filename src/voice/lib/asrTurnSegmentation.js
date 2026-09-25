@@ -2,16 +2,12 @@
  * Un final ASR → varias filas solo cuando hay evidencia fuerte (prior embebido + timbre distinto).
  * No trocea monólogos/TV; evita alternancia H2/H3 por ruido de snapshots.
  */
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 
-export function getAsrSegmentationCfg(config = FLU_CONFIG) {
+export function getAsrTurnSegmentationCfg(config = FLU_CONFIG) {
   return config.transcript?.asrSegmentation || {}
-}
-
-function speechWords(text = '') {
-  return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
 function snapshotVector(entry = {}) {
@@ -69,7 +65,7 @@ export function collapseSnapshotSpeakerRuns(snapshots = []) {
 
 /** Fusiona bloques de 1 snapshot (ruido) y adyacentes con misma etiqueta. */
 export function stabilizeSpeakerRuns(runs = [], config = FLU_CONFIG) {
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   const minWeight = Number(segCfg.minSnapshotsPerRun) || 2
   if (!runs.length) return []
 
@@ -116,7 +112,7 @@ export function findEmbeddedPriorSegments(phrase = '', priorTexts = [], priorSpe
   const cleaned = cleanForSpeech(phrase)
   if (!cleaned) return null
 
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   const minChars = Number(segCfg.embeddedPriorMinChars) || 12
 
   const pairs = (Array.isArray(priorTexts) ? priorTexts : [])
@@ -146,10 +142,10 @@ export function findEmbeddedPriorSegments(phrase = '', priorTexts = [], priorSpe
 }
 
 function assignEmbeddedSegments(embedded, speakerRuns = [], fallbackSpeaker = '', config = FLU_CONFIG) {
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   const minWords = Number(segCfg.minWordsPerSegment) || 6
   const maxSegments = Number(segCfg.maxSegmentsPerFinal) || 2
-  const fallback = normalizeSpeakerLabel(fallbackSpeaker) || 'Hablante 1'
+  const fallback = normalizeSpeakerLabel(fallbackSpeaker) || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
   const firstSpeaker = speakerRuns[0]?.speaker || fallback
   const lastSpeaker = speakerRuns[speakerRuns.length - 1]?.speaker || fallback
 
@@ -185,7 +181,7 @@ export function planAsrTurnSegments({
   fallbackSpeaker = '',
   config = FLU_CONFIG,
 } = {}) {
-  const segCfg = getAsrSegmentationCfg(config)
+  const segCfg = getAsrTurnSegmentationCfg(config)
   if (segCfg.enabled === false) return []
 
   const capture = cleanForSpeech(phrase)

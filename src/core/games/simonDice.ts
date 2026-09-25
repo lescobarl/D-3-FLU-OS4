@@ -15,6 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
+import { normalizeForMatch, adoptRandom } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -77,14 +78,6 @@ function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
 function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
     return items[Math.floor(rng() * items.length)];
 }
@@ -135,7 +128,7 @@ function growSequence(current: readonly AvatarAnimation[], verbos: readonly Avat
     return [...current, next];
 }
 
-export function createSimonDiceEngine(options?: { random?: RandomSource }): GameEngine {
+export function createSimonDiceEngine(options?: { random?: RandomSource }): GameEngine<SimonDiceState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): SimonDiceConfig => {
@@ -152,17 +145,11 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         };
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     return {
         id: 'simon_dice',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<SimonDiceState> {
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
             return {
                 id: 'simon_dice',
@@ -178,10 +165,10 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             };
         },
 
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            adoptRandom(optionsConfig);
+        start(session: GameSession<SimonDiceState>, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
+            rng = adoptRandom(rng, optionsConfig);
             const cfg = readConfig(optionsConfig);
-            const state = session.state as unknown as SimonDiceState;
+            const state = session.state as SimonDiceState;
             state.verbos = cfg.verbos;
             state.maxRounds = cfg.rounds;
             state.longMax = cfg.longMax;
@@ -192,8 +179,8 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             return announcePrompt(state.sequence);
         },
 
-        turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as SimonDiceState;
+        turn(session: GameSession<SimonDiceState>, text = ''): GameTurnResult {
+            const state = session.state as SimonDiceState;
 
             if (state.phase === 'done') {
                 return {

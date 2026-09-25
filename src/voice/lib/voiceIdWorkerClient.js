@@ -2,14 +2,17 @@
  * Cliente Web Worker: zero-copy (Transferable) + drop policy (solo el audio más reciente).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig'
 import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 let worker = null
 let seq = 0
 const pending = new Map()
-const WORKER_REQUEST_TIMEOUT_MS = 45000
+const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
 const EMBED_TYPES = new Set(['embed', 'embedAndMatch'])
 
 let embedInFlight = false
@@ -115,7 +118,7 @@ function postImmediate(type, payload = {}, transfer = []) {
       if (!pending.has(id)) return
       pending.delete(id)
       reject(new Error(`voiceId worker timeout (${type})`))
-    }, WORKER_REQUEST_TIMEOUT_MS)
+    }, workerRequestMs)
     entry.timer = timer
     w.postMessage({ id, type, payload }, transfer)
   })
@@ -172,7 +175,7 @@ async function runMainThreadFallback(type, payload) {
     if (type === 'embed') {
       return { vector, dim: vector.length, fallback: true }
     }
-    const speakerName = payload.fallbackSpeaker || 'Hablante 1'
+    const speakerName = payload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     return {
       vector,
       speakerId: labelToSpeakerId(speakerName),
@@ -182,8 +185,8 @@ async function runMainThreadFallback(type, payload) {
     }
   }
   if (type === 'compare') {
-    const { compareAudioSignatures } = await import('./voiceIdentity.js')
-    return { similarity: compareAudioSignatures(payload.a, payload.b), fallback: true }
+    const { compareCosineSignatures } = await import('./voiceIdentity.js')
+    return { similarity: compareCosineSignatures(payload.a, payload.b), fallback: true }
   }
   throw new Error(`voiceId fallback unsupported: ${type}`)
 }
@@ -200,7 +203,7 @@ function samplesFromPayload(payload = {}) {
   return new Float32Array(0)
 }
 
-async function embedAudioInternal(samples, sampleRate = 48000) {
+async function embedAudioInternal(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(samples)
   if (!sampleCount) return []
   const payload = {
@@ -238,10 +241,10 @@ function resolveIdentityIdle(vector, matchPayload, sampleRate, sourceLength) {
   )
 }
 
-export async function resolveSpeakerFromAudio(samples, sampleRate = 48000, matchPayload = {}) {
+export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMPLE_RATE, matchPayload = {}) {
   const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(samples)
   const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
-  const fallbackName = matchPayload.fallbackSpeaker || 'Hablante 1'
+  const fallbackName = matchPayload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
   if (!sampleCount) {
     return {
@@ -290,6 +293,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = 48000, match
       }
     }
   } catch (error) {
+        logCaughtError('[catch] src/voice/lib/voiceIdWorkerClient.js', error);
     if (String(error?.message || error).includes('dropped-stale')) {
       return {
         speakerId: labelToSpeakerId(fallbackName),
@@ -355,7 +359,7 @@ export function preloadVoiceIdWorker() {
   })
 }
 
-export async function embedAudioForDiarization(samples, sampleRate = 48000) {
+export async function embedAudioForDiarization(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   return embedAudioInternal(samples, sampleRate)
 }
 

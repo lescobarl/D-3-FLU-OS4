@@ -3,6 +3,8 @@
  * Defaults en fluConfig.fluParticipant; overrides en localStorage (flu-participant-settings).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { hasLocalStorage, localGet, localRemove, localSet } from '../../core/storage/localStore';
 
 export const FLU_PARTICIPANT_STORAGE_KEY = 'flu-participant-settings'
 const LEGACY_ENABLED_KEY = 'flu-participant-enabled'
@@ -66,13 +68,14 @@ function pickDefaultsFrom(config = FLU_CONFIG) {
 }
 
 function readStorageOverrides() {
-  if (typeof localStorage === 'undefined') return {}
+  if (!hasLocalStorage()) return {}
   try {
-    const raw = localStorage.getItem(FLU_PARTICIPANT_STORAGE_KEY)
+    const raw = localGet(FLU_PARTICIPANT_STORAGE_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluParticipantConfig.js', e);
     return {}
   }
 }
@@ -123,8 +126,8 @@ export function getFluParticipantConfig(config = FLU_CONFIG) {
       merged[key] = coerceParticipantValue(key, overrides[key])
     }
   }
-  if (typeof localStorage !== 'undefined') {
-    const legacy = localStorage.getItem(LEGACY_ENABLED_KEY)
+  if (hasLocalStorage()) {
+    const legacy = localGet(LEGACY_ENABLED_KEY)
     if (legacy === '0') merged.enabled = false
     if (legacy === '1') merged.enabled = true
   }
@@ -132,22 +135,22 @@ export function getFluParticipantConfig(config = FLU_CONFIG) {
 }
 
 export function setFluParticipantOverrides(partial = {}) {
-  if (typeof localStorage === 'undefined') return getFluParticipantConfig()
+  if (!hasLocalStorage()) return getFluParticipantConfig()
   const current = readStorageOverrides()
   const next = { ...current }
   for (const [key, value] of Object.entries(partial)) {
     if (!FLU_PARTICIPANT_CONFIG_KEYS.includes(key)) continue
     next[key] = coerceParticipantValue(key, value)
   }
-  localStorage.setItem(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify(next))
-  localStorage.setItem(LEGACY_ENABLED_KEY, next.enabled === false ? '0' : '1')
+  localSet(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify(next))
+  localSet(LEGACY_ENABLED_KEY, next.enabled === false ? '0' : '1')
   return getFluParticipantConfig()
 }
 
 export function resetFluParticipantOverrides() {
-  if (typeof localStorage === 'undefined') return getFluParticipantConfig()
-  localStorage.removeItem(FLU_PARTICIPANT_STORAGE_KEY)
-  localStorage.removeItem(LEGACY_ENABLED_KEY)
+  if (!hasLocalStorage()) return getFluParticipantConfig()
+  localRemove(FLU_PARTICIPANT_STORAGE_KEY)
+  localRemove(LEGACY_ENABLED_KEY)
   return getFluParticipantConfig()
 }
 

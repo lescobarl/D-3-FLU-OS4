@@ -1,12 +1,13 @@
 /**
  * Fusión de texto ASR (interinos acumulativos y finales).
  */
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, speechWords } from './audioMath.js'
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getShortFinalKeywordSet, getSpeechMergeCfg } from './fluTranscriptMotor.js'
 import { getTranscriptDelta, mergeTranscriptText } from './transcriptDelta.js'
 
-function utterancesRelateLocal(previous = '', next = '') {
+/** Misma frase acumulativa de Chrome o revisión ASR (cola), no un turno nuevo. Dueño único (V18). */
+export function utterancesRelate(previous = '', next = '') {
   const prev = cleanForSpeech(previous)
   const nxt = cleanForSpeech(next)
   if (!prev || !nxt) return true
@@ -16,10 +17,6 @@ function utterancesRelateLocal(previous = '', next = '') {
   if (prev.length > nxt.length && (prev.endsWith(nxt) || prev.includes(` ${nxt}`))) return true
   if (nxt.length > prev.length && (nxt.endsWith(prev) || nxt.includes(` ${prev}`))) return true
   return false
-}
-
-function speechWords(text = '') {
-  return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
 function countSharedPrefixWords(a = '', b = '') {
@@ -70,24 +67,18 @@ export function collapseRepeatedSpeech(text = '') {
 }
 
 /**
- * Chrome a veces manda un sufijo suelto («ahí») en otro evento tras «estás»,
- * produciendo «ahí estás ahí». Colapsa prefijo huérfano repetido.
+ * Chrome a veces manda un sufijo suelto («ahí») en un evento previo y luego la
+ * frase completa («estás ahí»). El fragmento previo es huérfano: la frase
+ * entrante ya lo contiene como palabra final. Se descarta `prev` y NUNCA se
+ * recorta la entrante — así una primera palabra legítima repetida al cierre
+ * («hola ya hola») sobrevive. Solo aplica con `prev` de UNA palabra.
  */
-export function collapseMisorderedMicMerge(text = '') {
-  let cur = cleanForSpeech(text)
-  if (!cur) return ''
-
-  const words = cur.split(/\s+/).filter(Boolean)
-  if (words.length >= 3) {
-    const first = words[0].toLowerCase()
-    const last = words[words.length - 1].toLowerCase()
-    if (first === last && first.length >= 2) {
-      const inner = words.slice(1).join(' ')
-      if (inner.length >= first.length) return inner
-    }
-  }
-
-  return cur
+function dropOrphanSuffixFragment(prev = '', next = '') {
+  const pw = prev.split(/\s+/).filter(Boolean)
+  const nw = next.split(/\s+/).filter(Boolean)
+  if (pw.length !== 1 || nw.length < 2) return ''
+  if (pw[0].toLowerCase() !== nw[nw.length - 1].toLowerCase()) return ''
+  return next
 }
 
 function hasRepeatedWordBlock(words = [], minSize = 4) {
@@ -143,9 +134,9 @@ export function normalizeMicText(text = '') {
   const base = cleanForSpeech(text)
   if (!base) return ''
   if (base.length < 48) {
-    return collapseMisorderedMicMerge(collapseRepeatedSpeech(base))
+    return collapseRepeatedSpeech(base)
   }
-  return collapseMisorderedMicMerge(collapseAsrStutter(base))
+  return collapseAsrStutter(base)
 }
 
 function tryAsrProgressiveMerge(prev = '', next = '') {
@@ -165,8 +156,15 @@ function tryAsrProgressiveMerge(prev = '', next = '') {
   const nw = nLow.split(/\s+/)[0] || ''
   if (pw.length >= 2 && nw.startsWith(pw) && next.length >= prev.length) return next
   if (nw.length >= 2 && pw.startsWith(nw) && prev.length >= next.length) return prev
-  if (hasSpeechAnchor(prev, next) && next.length >= Math.floor(prev.length * 0.5)) return next
-  if (hasSpeechAnchor(next, prev) && prev.length >= Math.floor(next.length * 0.5)) return prev
+  if (hasSpeechAnchor(prev, next) && next.length >= Math.floor(prev.length * 0.5)) {
+    // Ventana deslizada: si la primera palabra de `prev` NO está en `next`, `next`
+    // no es un superconjunto sino el mismo turno sin su cabeza → no descartar
+    // `prev` (se pierde la primera palabra); se cae a la fusión que la conserva.
+    if (!pw || nLow.includes(pw)) return next
+  }
+  if (hasSpeechAnchor(next, prev) && prev.length >= Math.floor(next.length * 0.5)) {
+    if (!nw || pLow.includes(nw)) return prev
+  }
   return ''
 }
 
@@ -228,6 +226,8 @@ export function resolveMicFragmentMerge(previous = '', incoming = '') {
   if (!next) return prev
   const progressive = tryAsrProgressiveMerge(prev, next)
   if (progressive) return progressive
+  const orphanDropped = dropOrphanSuffixFragment(prev, next)
+  if (orphanDropped) return orphanDropped
   return mergeSpeechTextBlind(prev, next, { keepAll: true })
 }
 
@@ -237,7 +237,7 @@ export function mergeSpeechText(base = '', incoming = '', { keepAll = false } = 
   if (!next) return prev
   if (!prev) return normalizeMicText(next)
   const progressive = tryAsrProgressiveMerge(prev, next)
-  if (progressive) return progressive.length >= 48 ? normalizeMicText(progressive) : collapseMisorderedMicMerge(collapseRepeatedSpeech(progressive))
+  if (progressive) return progressive.length >= 48 ? normalizeMicText(progressive) : collapseRepeatedSpeech(progressive)
   return normalizeMicText(mergeSpeechTextBlind(prev, next, { keepAll }))
 }
 
@@ -371,7 +371,7 @@ export function shouldPreferShortFinalRow(next = '', prior = '', context = {}) {
   const minConf = Number(getSpeechMergeCfg().minKeywordConfidence)
   if (confidence < minConf) return false
 
-  const related = utterancesRelateLocal(prev, fin)
+  const related = utterancesRelate(prev, fin)
 
   /** Interrupción tras monólogo TV: frase corta no relacionada (p. ej. «hola»). */
   if (!related && finWords.length <= 3) {
@@ -399,7 +399,7 @@ export function wouldShrinkLog(capture = '', lastEmitted = '', context = {}) {
   if (!next || !prev || next.length >= prev.length) return false
   if (context.relaxShrinkGuards === true) return false
   if (shouldPreferShortFinalRow(next, prev, context)) return false
-  if (!utterancesRelateLocal(prev, next)) return false
+  if (!utterancesRelate(prev, next)) return false
   if (prev.startsWith(next)) return true
   if (prev.endsWith(` ${next}`)) return true
   return false

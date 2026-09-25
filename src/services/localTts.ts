@@ -1,8 +1,8 @@
 // ============================================================
 // localTts — Text-to-Speech 100% local
 // ============================================================
-// Usa la Web Speech API (speechSynthesis) con las voces locales
-// del sistema operativo. No requiere servidor externo ni API key.
+// Consume la API ÚNICA de síntesis de voz expuesta por fluSpeech
+// (C21: un solo módulo toca el motor del navegador).
 //
 // Cumple:
 //   - Modo 100% local: las voces son locales del SO (localService)
@@ -10,6 +10,14 @@
 //   - Funciones puras (buildLocalNarrationSegments, pickBestLocalVoice)
 //     testables sin navegador real.
 // ============================================================
+
+import {
+    cancelSpeech,
+    getSpeechVoices,
+    isSpeechBusy,
+    isSpeechSupported,
+    speakResponse,
+} from '../voice/lib/fluSpeech';
 
 export interface LocalTtsOptions {
     lang?: string;
@@ -34,10 +42,9 @@ export interface NarrationSegment {
     text: string;
 }
 
-export function getSpeechSynthesis(): SpeechSynthesis | null {
-    if (typeof window === 'undefined') return null;
-    if (!('speechSynthesis' in window)) return null;
-    return window.speechSynthesis;
+/** True si el motor TTS del navegador esta reproduciendo o tiene cola. */
+export function isTtsSpeaking(): boolean {
+    return isSpeechBusy();
 }
 
 function mapVoice(voice: SpeechSynthesisVoice): LocalTtsVoiceInfo {
@@ -56,9 +63,7 @@ function mapVoice(voice: SpeechSynthesisVoice): LocalTtsVoiceInfo {
  * flag, devuelve todas las voces como fallback.
  */
 export function getLocalVoices(): LocalTtsVoiceInfo[] {
-    const synth = getSpeechSynthesis();
-    if (!synth) return [];
-    const voices = synth.getVoices();
+    const voices = getSpeechVoices();
     if (!Array.isArray(voices) || voices.length === 0) return [];
     const mapped = voices.map(mapVoice);
     const local = mapped.filter((v) => v.localService);
@@ -107,50 +112,49 @@ export interface SpeakResult {
  * un código de error legible (sin excepciones).
  */
 export function speakLocal(text: string, options: LocalTtsOptions = {}): SpeakResult {
-    const synth = getSpeechSynthesis();
-    if (!synth) return { started: false, error: 'speechSynthesis-unavailable' };
+    // Motor UNICO: esta capa NO construye utterances; delega en fluSpeech.
+    if (!isSpeechSupported()) return { started: false, error: 'tts-unavailable' };
     const clean = (text || '').trim();
     if (!clean) return { started: false, error: 'empty-text' };
-    const voices = getLocalVoices();
-    const voice = pickBestLocalVoice(voices, options.lang || 'es');
+    const voice = pickBestLocalVoice(getLocalVoices(), options.lang || 'es');
     if (!voice) return { started: false, error: 'no-local-voice' };
 
-    let utterance: SpeechSynthesisUtterance;
-    try {
-        utterance = new SpeechSynthesisUtterance(clean);
-    } catch {
-        return { started: false, error: 'utterance-unsupported' };
-    }
-
-    const matched = synth.getVoices().find((v) => v.voiceURI === voice.voiceURI);
-    if (matched) utterance.voice = matched;
-    utterance.lang = voice.lang;
-    if (typeof options.rate === 'number') utterance.rate = options.rate;
-    if (typeof options.pitch === 'number') utterance.pitch = options.pitch;
-
-    utterance.onstart = () => options.onStart?.();
-    utterance.onend = () => options.onEnd?.();
-    utterance.onerror = (event) => {
-        // cancel() dispara un evento 'canceled' que no debe tratarse como error.
-        if (event && event.error === 'canceled') {
-            options.onEnd?.();
-            return;
-        }
-        options.onError?.(event);
-    };
-
-    // Evita solapamiento con reproducciones anteriores.
-    synth.cancel();
-    synth.speak(utterance);
+    options.onStart?.();
+    speakResponse(clean, options.lang || 'es', {
+        rate: options.rate,
+        pitch: options.pitch,
+    }).then(
+        () => options.onEnd?.(),
+        (error: unknown) => options.onError?.(error),
+    );
     return { started: true };
 }
 
 /** Detiene cualquier reproducción de voz local en curso. */
 export function stopLocalSpeech(): void {
-    const synth = getSpeechSynthesis();
-    if (synth) {
-        synth.cancel();
-    }
+    // Motor UNICO: delega en fluSpeech (C21).
+    cancelSpeech();
+}
+
+/**
+ * Limpia markdown/símbolos para NARRAR: evita leer "slash slash", viñetas,
+ * almohadillas o separadores de tabla. Fuente única de la narración (el TTS
+ * nunca habla marcas).
+ */
+export function sanitizeForNarration(text = ''): string {
+    return String(text || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/`([^`]*)`/g, '$1')
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/^#{1,6}\s*/gm, '')
+        .replace(/^\s*[-+*]\s+/gm, '')
+        .replace(/^\s*\d+[.)]\s+/gm, '')
+        .replace(/[*_~>|;]/g, ' ')
+        .replace(/\//g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 }
 
 /**
@@ -168,7 +172,7 @@ export function buildLocalNarrationSegments(content: string, _language = 'es'): 
     let index = 0;
 
     const flush = () => {
-        const text = buffer.join('\n').trim();
+        const text = sanitizeForNarration(buffer.join('\n'));
         if (text) {
             segments.push({ index: index, title, text });
             index += 1;
@@ -180,7 +184,7 @@ export function buildLocalNarrationSegments(content: string, _language = 'es'): 
         const match = heading.exec(line.trim());
         if (match) {
             flush();
-            title = match[1].replace(/[*_`#]/g, '').trim() || 'Sección';
+            title = sanitizeForNarration(match[1]) || 'Sección';
         } else {
             buffer.push(line);
         }
@@ -188,7 +192,7 @@ export function buildLocalNarrationSegments(content: string, _language = 'es'): 
     flush();
 
     if (segments.length === 0 && content.trim()) {
-        segments.push({ index: 0, title: 'Introducción', text: content.trim() });
+        segments.push({ index: 0, title: 'Introducción', text: sanitizeForNarration(content) });
     }
     return segments;
 }

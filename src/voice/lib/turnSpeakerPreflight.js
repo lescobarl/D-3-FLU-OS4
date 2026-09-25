@@ -7,6 +7,7 @@ import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 const preflightByTurn = new Map()
 
@@ -140,7 +141,7 @@ export function createTurnSpeakerAudioResolver({
   getAudioStartedAtMs,
 } = {}) {
   return () => {
-    const sampleRate = getSampleRate?.() || 48000
+    const sampleRate = getSampleRate?.() || DEFAULT_SAMPLE_RATE
     const audioStartSample = getAudioStartSample?.() ?? getTurnStartSample?.() ?? 0
     const audioStartedAtMs = getAudioStartedAtMs?.() || 0
     const buffer = getAudioBuffer?.()
@@ -150,7 +151,7 @@ export function createTurnSpeakerAudioResolver({
           atTurnBoundary,
         })
       : new Float32Array(0)
-    const fallback = getFallbackSpeaker?.() || 'Hablante 1'
+    const fallback = getFallbackSpeaker?.() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     if (!audio.length) {
       return Promise.resolve({
         speakerId: labelToSpeakerId(fallback),

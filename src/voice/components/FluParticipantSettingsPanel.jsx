@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useIntegrationStore } from '../../store/integrationStore'
+import { useSettingsSaveRegistration } from '../../components/SettingsSaveContext'
 import { resolveAppLanguage } from '../lib/audioMath.js'
-import { resolveFluParticipantLabel } from '../lib/participantFloor.js'
-import { FLU_CONFIG } from '../lib/fluConfig.js'
+import { resolveParticipantFloorLabel } from '../lib/participantFloor.js'
+import { speakResponse } from '../lib/fluSpeech.js'
+import { logCaughtError } from '../../lib/caughtError';
 import {
   FLU_PARTICIPANT_EDITABLE_FIELDS,
   getFluParticipantConfig,
@@ -46,36 +48,35 @@ export default function FluParticipantSettingsPanel({
   voices,
 }) {
   const lang = resolveAppLanguage(language, '')
-  const [savedFlash, setSavedFlash] = useState(false)
   const [draft, setDraft] = useState(() => buildDraftFromConfig(getFluParticipantConfig()))
 
   const updateField = useCallback((key, value) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
-    setSavedFlash(false)
   }, [])
 
   const handleSave = useCallback(() => {
     const next = setFluParticipantOverrides(serializeDraftForSave(draft))
     setDraft(buildDraftFromConfig(next))
-    setSavedFlash(true)
     onConfigChange?.(next)
   }, [draft, onConfigChange])
 
   const handleReset = useCallback(() => {
     const next = resetFluParticipantOverrides()
     setDraft(buildDraftFromConfig(next))
-    setSavedFlash(true)
     onConfigChange?.(next)
   }, [onConfigChange])
+
+  // Guardar/Restablecer GLOBAL del configurador (barra al pie de Configuración).
+  useSettingsSaveRegistration('flu-participant', { commit: handleSave, reset: handleReset })
 
   const integrationStore = useIntegrationStore?.() ?? null
   const safeVoices = Array.isArray(voices) ? voices : []
 
   return (
-    <details className="flu-settings-image-config" open>
+    <details className="flu-settings-image-config">
       <summary className="flu-settings-image-config__summary">
         <span className="flu-settings-image-config__icon">🔊</span>
-        <span>{resolveFluParticipantLabel('panelTitle', lang)}</span>
+        <span>{resolveParticipantFloorLabel('panelTitle', lang)}</span>
       </summary>
       <div className="flu-settings-image-config__body">
         {/* ---- Voz: selector global ---- */}
@@ -107,16 +108,15 @@ export default function FluParticipantSettingsPanel({
                 className="flu-btn flu-btn--primary"
                 style={{ whiteSpace: 'nowrap' }}
                 onClick={() => {
-                  const selected = safeVoices.find(v => v.voiceURI === integrationStore?.voiceConfig?.voiceURI);
-                  const utterance = new SpeechSynthesisUtterance(
+                  // §9: el preview de voz usa la ruta ÚNICA de TTS (speakResponse),
+                  // sin tocar el motor de síntesis directo. Así respeta el estado
+                  // de voz (eco/barge-in) y suspende la escucha como el resto de FLU.
+                  speakResponse(
                     lang === 'en'
                       ? 'Hello, I am FLU. This is my voice.'
-                      : 'Hola, soy FLU. Esta es mi voz.'
-                  );
-                  if (selected) utterance.voice = selected;
-                  utterance.rate = integrationStore?.voiceConfig?.rate ?? 1.0;
-                  utterance.lang = lang === 'en' ? 'en-US' : 'es-MX';
-                  window.speechSynthesis.speak(utterance);
+                      : 'Hola, soy FLU. Esta es mi voz.',
+                    lang === 'en' ? 'en' : 'es'
+                  ).catch((e) => { logCaughtError('[catch] src/voice/components/FluParticipantSettingsPanel.jsx', e) });
                 }}
               >
                 ▶ Probar
@@ -167,21 +167,6 @@ export default function FluParticipantSettingsPanel({
                 </label>
               )
             })}
-          </div>
-        </div>
-
-        {/* ---- Botones de acción ---- */}
-        <div className="flu-settings-image-config__group" style={{ marginTop: 12 }}>
-          <div className="flu-settings-row" style={{ gap: 8 }}>
-            <button type="button" className="flu-btn flu-btn--primary" onClick={handleSave}>
-              {resolveFluParticipantLabel('saveButton', lang)}
-            </button>
-            <button type="button" className="flu-btn" onClick={handleReset}>
-              {resolveFluParticipantLabel('resetButton', lang)}
-            </button>
-            {savedFlash ? (
-              <span className="flu-settings-hint" style={{ marginLeft: 8 }}>{resolveFluParticipantLabel('savedHint', lang)}</span>
-            ) : null}
           </div>
         </div>
       </div>

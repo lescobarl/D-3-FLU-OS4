@@ -10,7 +10,6 @@ import {
   isMinuteGenerationRequest,
   isMinuteSaveRequest,
   planConversationDispatch,
-  resolveFinalConversationAction,
 } from './audioMath.js'
 
 export const NAVIGATION_COMMAND_IDS = Object.freeze([
@@ -27,6 +26,25 @@ export const NAVIGATION_COMMAND_IDS = Object.freeze([
   'ANALIZAR_APP',
   'GENERAR_DOCUMENTO',
   'GENERAR_VIDEO',
+  'NAVEGAR',
+  'BUSCAR',
+  // P1-C (§1.3.1) — autoconocimiento por voz (fast-path local sin IA).
+  'CONOCER_FLU',
+])
+
+/**
+ * Subconjunto de comandos que Gemini puede emitir como safety net.
+ * Los fast-paths locales (BUSCAR, CONOCER_FLU, GENERAR_VIDEO, etc.) NO deben
+ * llegar a Gemini: se resuelven antes en detectUiVoiceCommand/detectSessionVoiceCommand.
+ * Esta lista es la única fuente de verdad para gemini.js (schema + user prompt),
+ * de modo que añadir/eliminar un comando inferible se sincroniza automáticamente.
+ */
+export const GEMINI_INFERABLE_COMMAND_IDS = Object.freeze([
+  'FLU_WAKE',
+  'INICIAR_CONVERSACION',
+  'CERRAR_ESCUCHA',
+  'ABRIR_ESCUCHA',
+  'NAVEGAR',
 ])
 
 export function getVoiceCommands(config = FLU_CONFIG) {
@@ -80,7 +98,15 @@ export function planVoiceCommandDispatch(
 }
 
 export function resolveVoiceConversationAction(text = '', voiceCommands = getVoiceCommands()) {
-  return resolveFinalConversationAction(text, voiceCommands)
+  // Derivación ÚNICA: delega en el planificador canónico, el único que llama a
+  // deriveQueryFromRow. Fallback no-nulo con la misma forma.
+  return (
+    planConversationDispatch(text, voiceCommands).action ?? {
+      kind: 'log',
+      question: '',
+      searchQuery: '',
+    }
+  )
 }
 
 export function getCommandSpeech(
@@ -104,9 +130,4 @@ export function getCommandSpeech(
     text = text.replace(/\{name\}/gi, name)
   }
   return text
-}
-
-/** @deprecated Usar getCommandSpeech */
-export function getNavigationCommandSpeech(comando = '', language = 'es') {
-  return getCommandSpeech(comando, language)
 }

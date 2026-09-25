@@ -6,7 +6,6 @@
 import { describe, it, expect } from 'vitest';
 import {
     collapseRepeatedSpeech,
-    collapseMisorderedMicMerge,
     collapseEchoPhrase,
     collapseAsrStutter,
     normalizeMicText,
@@ -18,7 +17,7 @@ import {
     micPublishedParityOk,
     hasSpeechAnchor,
 } from '../src/voice/lib/speechMerge.js';
-import { collectBrowserResultChunks } from '../src/voice/lib/transcriptIngress.js';
+import { collectRecognitionResultChunks } from '../src/voice/lib/transcriptIngress.js';
 
 describe('speechMerge — collapseRepeatedSpeech', () => {
     it('colapsa bloque contiguo repetido', () => {
@@ -27,12 +26,6 @@ describe('speechMerge — collapseRepeatedSpeech', () => {
 
     it('texto corto sin repetición se conserva', () => {
         expect(collapseRepeatedSpeech('hola como estas')).toBe('hola como estas');
-    });
-});
-
-describe('speechMerge — collapseMisorderedMicMerge', () => {
-    it('quita el prefijo huérfano inicial «ahí» y conserva el sufijo «estás ahí»', () => {
-        expect(collapseMisorderedMicMerge('ahí estás ahí')).toBe('estás ahí');
     });
 });
 
@@ -51,14 +44,30 @@ describe('speechMerge — collapseAsrStutter', () => {
 });
 
 describe('speechMerge — normalizeMicText', () => {
-    it('corto: pipeline quita el prefijo huérfano inicial y conserva el sufijo', () => {
-        expect(normalizeMicText('ahí estás ahí')).toBe('estás ahí');
-    });
-
     it('largo: colapsa stutter ASR sin perder el resto', () => {
         expect(
             normalizeMicText('hoy vamos a la escuela hoy vamos a la escuela y luego jugamos'),
         ).toBe('hoy vamos a la escuela y luego jugamos');
+    });
+});
+
+describe('speechMerge — invariante: no eliminar una palabra cuya repetición no es contigua', () => {
+    it('conserva la primera palabra legítima («hola ya hola»)', () => {
+        expect(normalizeMicText('hola ya hola')).toBe('hola ya hola');
+    });
+
+    it('conserva el arranque aunque la frase sea más larga', () => {
+        expect(normalizeMicText('hola ya estamos listos hola')).toBe('hola ya estamos listos hola');
+    });
+
+    it('no recorta nada cuando no hay duplicado contiguo', () => {
+        expect(normalizeMicText('ahí estás ahí')).toBe('ahí estás ahí');
+    });
+});
+
+describe('speechMerge — prefijo huérfano se descarta en el empalme (no en el texto)', () => {
+    it('un fragmento de una palabra que reaparece al final de la frase completa se descarta', () => {
+        expect(mergeMicChunks(['ahí', 'estás ahí'])).toBe('estás ahí');
     });
 });
 
@@ -115,8 +124,8 @@ describe('speechMerge — wouldShrinkLog', () => {
 });
 
 describe('speechMerge — micPublishedParityOk', () => {
-    it('detecta prefijo huérfano «ahí estás ahí» vs mic «estás ahí»', () => {
-        expect(micPublishedParityOk('ahí estás ahí', 'estás ahí')).toBe(true);
+    it('detecta prefijo huérfano «ahí estás ahí» vs mic «estás ahí» (ya no se enmascara)', () => {
+        expect(micPublishedParityOk('ahí estás ahí', 'estás ahí')).toBe(false);
     });
 
     it('marca no paridad cuando no hay relación', () => {
@@ -161,7 +170,7 @@ describe('speechMerge — reempalme por re-escucha del ASR (wake word duplicado)
     });
 });
 
-describe('transcriptIngress — collectBrowserResultChunks', () => {
+describe('transcriptIngress — collectRecognitionResultChunks', () => {
     it('separa interinos y finales respetando resultIndex', () => {
         const event = {
             resultIndex: 0,
@@ -171,7 +180,7 @@ describe('transcriptIngress — collectBrowserResultChunks', () => {
                 1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
             },
         };
-        expect(collectBrowserResultChunks(event)).toEqual({
+        expect(collectRecognitionResultChunks(event)).toEqual({
             interimChunks: ['hola como'],
             finalChunks: ['hola como estas'],
         });
@@ -186,14 +195,14 @@ describe('transcriptIngress — collectBrowserResultChunks', () => {
                 1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
             },
         };
-        expect(collectBrowserResultChunks(event)).toEqual({
+        expect(collectRecognitionResultChunks(event)).toEqual({
             interimChunks: [],
             finalChunks: ['hola como estas'],
         });
     });
 
     it('evento vacío → listas vacías sin pérdida de datos', () => {
-        expect(collectBrowserResultChunks({})).toEqual({ interimChunks: [], finalChunks: [] });
-        expect(collectBrowserResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
+        expect(collectRecognitionResultChunks({})).toEqual({ interimChunks: [], finalChunks: [] });
+        expect(collectRecognitionResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
     });
 });

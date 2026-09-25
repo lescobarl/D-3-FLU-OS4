@@ -1,18 +1,19 @@
 /**
  * Traza consola (dev) + ring opcional (__FLU_LISTEN_DEBUG).
  * Panel mic: solo vía micIngressLog.js (texto publicado en ingress).
- * Consola chrome-raw / stream-stt: opcional, no alimenta el panel.
+ * Consola chrome-raw: opcional, no alimenta el panel.
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 
 export { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
+import { logCaughtError } from '../../lib/caughtError';
 
-const IS_DEV = import.meta.env.DEV
+const IS_DEV = Boolean(import.meta.env?.DEV)
 const RING_MAX = 200
 const SIM_STAGES = new Set(['sim-start', 'sim-done', 'sim-abort'])
-const FILE_STAGES = new Set(['chrome-raw', 'stream-stt', 'stream', 'final', 'mic-ingress'])
+const FILE_STAGES = new Set(['chrome-raw', 'final', 'mic-ingress'])
 
 const ring = new Array(RING_MAX)
 let ringHead = 0
@@ -20,16 +21,18 @@ let ringCount = 0
 let devFlushTimer = null
 const devPending = []
 let chromeRawSeq = 0
-let streamSttSeq = 0
 
 function syncListenLogGlobals() {
-  if (typeof window === 'undefined') return
+  if (!IS_DEV || typeof window === 'undefined') return
   window.__fluListenLog = getListenLogRing()
   window.__fluListenLogStats = getListenStats()
 }
 
 export function isListenTraceEnabled() {
-  return IS_DEV && typeof window !== 'undefined' && window.__FLU_LISTEN_DEBUG === true
+  if (!IS_DEV || typeof window === 'undefined') return false
+  if (window.__FLU_LISTEN_DEBUG === false) return false
+  if (window.__FLU_LISTEN_DEBUG === true) return true
+  return FLU_CONFIG.debug?.listenTrace !== false
 }
 
 export function isChromeRawConsoleEnabled() {
@@ -41,18 +44,6 @@ export function isChromeRawConsoleEnabled() {
   return FLU_CONFIG.debug?.chromeRawConsole !== false
 }
 
-export function isStreamSttConsoleEnabled() {
-  if (!IS_DEV || typeof window === 'undefined') return false
-  if (window.__FLU_STREAM_STT_CONSOLE === false) return false
-  if (window.__FLU_STREAM_STT_CONSOLE === true) return true
-  return FLU_CONFIG.debug?.streamSttConsole !== false
-}
-
-/** @deprecated Usar isChromeRawConsoleEnabled */
-export function isMicRawConsoleEnabled() {
-  return isChromeRawConsoleEnabled()
-}
-
 function shouldRecord(stage) {
   if (!IS_DEV || typeof window === 'undefined') return false
   if (SIM_STAGES.has(stage)) return true
@@ -62,7 +53,8 @@ function shouldRecord(stage) {
 function serialize(entry) {
   try {
     return JSON.stringify(entry)
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/listenLog.js', e);
     return JSON.stringify({ t: Date.now(), stage: 'log-serialize-error' })
   }
 }
@@ -98,13 +90,9 @@ export function fluEvent(stage, data = {}) {
   pushRing({ t: Date.now(), stage: String(stage || ''), ...data })
 }
 
-export function listenLog(stage, data = {}) {
-  return fluEvent(stage, data)
-}
 
 function logChromeRawConsole(channel, kind, text, seq) {
-  const tag = channel === 'stream-stt' ? '[Flu][stream-stt]' : '[Flu][chrome-raw]'
-  console.info(`${tag} #${seq} ${kind} ${text}`)
+  console.info(`[Flu][chrome-raw] #${seq} ${kind} ${text}`)
 }
 
 /** Consola dev: fragmentos Chrome sin procesar (no alimenta panel ingress). */
@@ -132,35 +120,6 @@ export function logChromeSpeechResult(event) {
   }
 }
 
-/** Consola dev: STT streaming sin procesar (no alimenta panel ingress). */
-export function logStreamSttText(text = '', isFinal = false) {
-  if (typeof window === 'undefined' || !isStreamSttConsoleEnabled()) return
-  const kind = isFinal ? 'final' : 'interim'
-  streamSttSeq += 1
-  logChromeRawConsole('stream-stt', kind, text, streamSttSeq)
-  pushRing({
-    t: Date.now(),
-    stage: 'stream-stt',
-    seq: streamSttSeq,
-    kind,
-    text,
-  })
-}
-
-/** @deprecated Usar logChromeSpeechResult */
-export function logMicRaw(event) {
-  logChromeSpeechResult(event)
-}
-
-export function logMicPacket() {}
-
-export function logStreamPublish() {}
-
-export function resetMicConsole() {
-  chromeRawSeq = 0
-  streamSttSeq = 0
-}
-
 export function getListenLogRing() {
   if (!ringCount) return []
   if (ringCount < RING_MAX) return ring.slice(0, ringCount)
@@ -174,9 +133,5 @@ export function clearListenLogRing() {
 }
 
 export function getListenStats() {
-  return { chromeRawSeq, streamSttSeq }
-}
-
-export function printListenSummary() {
-  return {}
+  return { chromeRawSeq }
 }

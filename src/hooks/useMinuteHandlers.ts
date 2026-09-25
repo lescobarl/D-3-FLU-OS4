@@ -17,31 +17,37 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { createMinuteDraftFromSummary } from '../lib/minuteKnowledgeHelpers';
 import type { IntegrationStore } from '../store/integrationStore';
 import type { MinuteUIEntry } from './useMinuteKnowledge';
+import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
+import { logCaughtError } from '../lib/caughtError';
+
+/** Draft de minuta producido por `createMinuteDraftFromSummary`. */
+export type MinuteDraft = ReturnType<typeof createMinuteDraftFromSummary>;
 
 export interface MinuteHandlers {
     isGeneratingMinute: boolean;
     isSummarizing: boolean;
     handleGenerateMinute: () => Promise<void>;
-    handleGenerateSummary: (opts?: { announce?: boolean }) => Promise<void>;
-    handleSaveMinute: (draftOverride?: any, opts?: { announce?: boolean }) => Promise<void>;
-    handleSelectMinuteHistory: (entry: any) => void;
+    handleGenerateSummary: (opts?: { announce?: boolean; save?: boolean }) => Promise<boolean>;
+    handleSaveMinute: (draftOverride?: MinuteDraft | null, opts?: { announce?: boolean }) => Promise<void>;
+    handleSaveConversationSummary: (opts?: { announce?: boolean }) => Promise<void>;
+    handleSelectMinuteHistory: (entry: MinuteUIEntry) => void;
 }
 
 export interface MinuteHandlersDeps {
     integrationStore: IntegrationStore;
     minuteKnowledge: {
         minutes: MinuteUIEntry[];
-        addMinute: (snapshot: any) => Promise<MinuteUIEntry>;
+        addMinute: (snapshot: MinuteSummarySnapshot, options?: { profileId?: string; userId?: string; kind?: 'minuta' | 'conversacion' | 'diario' }) => Promise<MinuteUIEntry>;
     };
     auditLog: {
-        logEvent: (type: string, category: string, id: string, data: any, description: string) => Promise<any>;
+        logEvent: (type: string, category: string, id: string, data: unknown, description: string) => Promise<AuditLogEntry>;
     };
     language: string;
     apiKey: string;
     sessionRole: string;
     voiceStatus: string;
-    minuteDraft: any;
-    setMinuteDraft: (draft: any) => void;
+    minuteDraft: MinuteDraft | null;
+    setMinuteDraft: (draft: MinuteDraft | null) => void;
     setSelectedMinuteId: (id: string | null) => void;
     os2StartListening: (opts?: { resume?: boolean }) => Promise<void>;
     os2StopListening: (opts?: { closing?: boolean }) => Promise<void>;
@@ -97,16 +103,16 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     tema_sesion: result.tema_sesion || '',
                 };
                 // Add to IndexedDB via minuteKnowledge (expects MinuteSummarySnapshot)
+                // C10: la publicación en integrationStore la hace el dueño de la
+                // minuta (useMinuteKnowledge.addMinute); aquí NO se espeja.
                 const persisted = await minuteKnowledge.addMinute(snapshot);
-                // Add to integration store (expects MinuteUIEntry)
-                integrationStore.addMinute(persisted);
                 // OS2 parity: speak the minute title after generation
                 const speechText = getCommandSpeech('GUARDAR_MINUTA', language);
                 if (speechText) {
                     try {
                         await speakResponse(`${speechText} ${snapshot.titulo || ''}`, language);
                     } catch (speechErr) {
-                        console.warn('[useMinuteHandlers] Minute generation speech failed:', speechErr);
+                        logCaughtError('[useMinuteHandlers] Minute generation speech failed', speechErr);
                     }
                 }
                 auditLog.logEvent('minute:generated', 'minute', persisted.id, {
@@ -115,7 +121,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 }, 'Minute generated from conversation').catch(console.error);
             }
         } catch (error) {
-            console.error('[useMinuteHandlers] Error generating minute:', error);
+            logCaughtError('[useMinuteHandlers] Error generating minute:', error);
             auditLog.logEvent('minute:error', 'minute', uuidv4(), {
                 error: String(error),
             }, 'Minute generation failed').catch(console.error);
@@ -129,10 +135,12 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
     // ============================================================
     // handleGenerateSummary
+    // `save: true` persiste la minuta (cierre de día). Devuelve true
+    // sólo si se guardó, para que el llamante marque el día con evidencia.
     // ============================================================
-    const handleGenerateSummary = useCallback(async ({ announce = false }: { announce?: boolean } = {}) => {
+    const handleGenerateSummary = useCallback(async ({ announce = false, save = false }: { announce?: boolean; save?: boolean } = {}): Promise<boolean> => {
         const history = integrationStore.conversationHistory;
-        if (history.length === 0 || isSummarizing) return;
+        if (history.length === 0 || isSummarizing) return false;
 
         if (announce) {
             try {
@@ -141,13 +149,13 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     await speakResponse(speechText, language);
                 }
             } catch (speechErr) {
-                console.warn('[useMinuteHandlers] GENERAR_RESUMEN command speech failed:', speechErr);
+                logCaughtError('[useMinuteHandlers] GENERAR_RESUMEN command speech failed', speechErr);
             }
         }
 
         const wasListening = voiceStatus === 'listening';
         if (wasListening) {
-            await os2StopListening({ closing: true }).catch(() => { });
+            await os2StopListening({ closing: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useMinuteHandlers.ts', e) });
         }
 
         // FLU "Pensando" (Idle_1) while generating the summary — deterministic
@@ -157,6 +165,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             integrationStore.setConversationState('THINKING');
         }
         setIsSummarizing(true);
+        let saved = false;
         try {
             const result = await aiService.generateConversationSummary({ apiKey, language, role: sessionRole }, history);
 
@@ -164,6 +173,21 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 const draft = createMinuteDraftFromSummary(result, sessionRole);
                 setMinuteDraft(draft);
                 setSelectedMinuteId('');
+
+                if (save) {
+                    const snapshot = {
+                        titulo: String(result.titulo || 'Minuta').trim(),
+                        participantes: Array.isArray(result.participantes) ? result.participantes : [],
+                        resumen: String(result.resumen || '').trim(),
+                        acuerdos: Array.isArray(result.acuerdos) ? result.acuerdos : [],
+                        pendientes: Array.isArray(result.pendientes) ? result.pendientes : [],
+                        siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
+                        tema_sesion: String(sessionRole || '').trim(),
+                    };
+                    const persisted = await minuteKnowledge.addMinute(snapshot);
+                    setSelectedMinuteId(persisted.id);
+                    saved = true;
+                }
 
                 // OS2 parity: buildSummarySpeechText + speakResponse (Gap 25)
                 const summaryParts: string[] = [];
@@ -177,7 +201,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     try {
                         await speakResponse(speechText, language);
                     } catch (speechErr) {
-                        console.warn('[useMinuteHandlers] Summary speech failed:', speechErr);
+                        logCaughtError('[useMinuteHandlers] Summary speech failed', speechErr);
                     }
                 }
 
@@ -187,7 +211,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 }, 'Summary generated').catch(console.error);
             }
         } catch (error) {
-            console.error('[useMinuteHandlers] Error generating summary:', error);
+            logCaughtError('[useMinuteHandlers] Error generating summary:', error);
             setMinuteDraft(
                 createMinuteDraftFromSummary({
                     titulo: FLU_CONFIG.ui.workspace.summaryUnavailableTitle || 'Resumen no disponible',
@@ -208,15 +232,16 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 integrationStore.setConversationState('IDLE');
             }
             if (wasListening) {
-                os2StartListening({ resume: true }).catch(() => { });
+                os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useMinuteHandlers.ts', e) });
             }
         }
-    }, [apiKey, integrationStore, language, sessionRole, voiceStatus, os2StartListening, os2StopListening, auditLog, isSummarizing, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
+        return saved;
+    }, [apiKey, integrationStore, minuteKnowledge, language, sessionRole, voiceStatus, os2StartListening, os2StopListening, auditLog, isSummarizing, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
 
     // ============================================================
     // handleSaveMinute
     // ============================================================
-    const handleSaveMinute = useCallback(async (draftOverride?: any, { announce = true }: { announce?: boolean } = {}) => {
+    const handleSaveMinute = useCallback(async (draftOverride?: MinuteDraft | null, { announce = true }: { announce?: boolean } = {}) => {
         const sourceDraft = draftOverride || minuteDraft;
         if (!sourceDraft) return;
 
@@ -252,7 +277,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 try {
                     await speakResponse(speechText, language);
                 } catch (speechErr) {
-                    console.warn('[useMinuteHandlers] GUARDAR_MINUTA speech failed:', speechErr);
+                    logCaughtError('[useMinuteHandlers] GUARDAR_MINUTA speech failed', speechErr);
                 }
             }
 
@@ -260,7 +285,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 titulo: persisted.summarySnapshot.titulo || '',
             }, 'Minute saved').catch(console.error);
         } catch (error) {
-            console.error('[useMinuteHandlers] Error saving minute:', error);
+            logCaughtError('[useMinuteHandlers] Error saving minute:', error);
             auditLog.logEvent('minute:save-error', 'minute', uuidv4(), {
                 error: String(error),
             }, 'Minute save failed').catch(console.error);
@@ -268,9 +293,58 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
     }, [minuteDraft, minuteKnowledge, language, sessionRole, auditLog, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
 
     // ============================================================
+    // handleSaveConversationSummary
+    // Guarda el resumen de la conversación UNA sola vez como
+    // conocimiento de tipo 'conversacion' (Paso 6: memoria con kind).
+    // ============================================================
+    const handleSaveConversationSummary = useCallback(async ({ announce = false }: { announce?: boolean } = {}) => {
+        const history = integrationStore.conversationHistory;
+        if (history.length === 0) return;
+
+        try {
+            const result = await aiService.generateConversationSummary({ apiKey, language, role: sessionRole }, history);
+            if (!result) return;
+
+            const snapshot = {
+                titulo: String(result.titulo || 'Conversación').trim(),
+                participantes: Array.isArray(result.participantes) ? result.participantes : [],
+                resumen: String(result.resumen || '').trim(),
+                acuerdos: Array.isArray(result.acuerdos) ? result.acuerdos : [],
+                pendientes: Array.isArray(result.pendientes) ? result.pendientes : [],
+                siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
+                tema_sesion: String(sessionRole || '').trim(),
+            };
+            const persisted = await minuteKnowledge.addMinute(snapshot, { kind: 'conversacion' });
+
+            if (announce) {
+                const speechText = getCommandSpeech('GUARDAR_MINUTA', language);
+                const savedTitle = String(persisted.summarySnapshot.titulo || '').trim();
+                if (speechText) {
+                    try {
+                        await speakResponse(savedTitle ? `${speechText} ${savedTitle}` : speechText, language);
+                    } catch (speechErr) {
+                        logCaughtError('[useMinuteHandlers] Conversation summary speech failed', speechErr);
+                    }
+                }
+            }
+
+            auditLog.logEvent('conversation:summary-saved', 'summary', persisted.id, {
+                titulo: persisted.summarySnapshot.titulo || '',
+                historyLength: history.length,
+                kind: 'conversacion',
+            }, 'Conversation summary saved on close').catch(console.error);
+        } catch (error) {
+            logCaughtError('[useMinuteHandlers] Error saving conversation summary:', error);
+            auditLog.logEvent('conversation:summary-save-error', 'summary', uuidv4(), {
+                error: String(error),
+            }, 'Conversation summary save failed').catch(console.error);
+        }
+    }, [integrationStore, minuteKnowledge, auditLog, language, apiKey, sessionRole, getCommandSpeech]);
+
+    // ============================================================
     // handleSelectMinuteHistory
     // ============================================================
-    const handleSelectMinuteHistory = useCallback((entry: any) => {
+    const handleSelectMinuteHistory = useCallback((entry: MinuteUIEntry) => {
         if (!entry) return;
         setSelectedMinuteId(entry.id);
         const snapshot = entry.summarySnapshot || entry;
@@ -286,6 +360,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         handleGenerateMinute,
         handleGenerateSummary,
         handleSaveMinute,
+        handleSaveConversationSummary,
         handleSelectMinuteHistory,
     };
 }

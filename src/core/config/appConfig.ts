@@ -1,3 +1,5 @@
+import { logCaughtError } from '../../lib/caughtError';
+
 // ============================================================
 // AppConfig — Centralized Application Configuration
 // ============================================================
@@ -11,33 +13,92 @@
 // ============================================================
 
 // -----------------------------------------------------------
+// Variables de entorno (Vite) — tipado real
+// -----------------------------------------------------------
+// Declara las VITE_* usadas con su tipo real (`string | undefined`) para
+// acceder a `import.meta.env` sin casts. El acceso debe ser estático
+// (`import.meta.env.VITE_X`): así Vite/Vitest puede inlinearlo en transform.
+declare global {
+    interface ImportMetaEnv {
+        readonly VITE_APP_NAME?: string;
+        readonly VITE_APP_VERSION?: string;
+        readonly VITE_GEMINI_MODEL?: string;
+        readonly VITE_GEMINI_API_URL?: string;
+        readonly VITE_GEMINI_PREDICT_URL?: string;
+        readonly VITE_GEMINI_API_KEY?: string;
+        readonly VITE_DEEPSEEK_MODEL?: string;
+        readonly VITE_DEEPSEEK_VISION_MODEL?: string;
+        readonly VITE_DEEPSEEK_URL?: string;
+        readonly VITE_DEEPSEEK_API_KEY?: string;
+        readonly VITE_OPENROUTER_MODEL?: string;
+        readonly VITE_OPENROUTER_URL?: string;
+        readonly VITE_OPENROUTER_API_KEY?: string;
+        readonly VITE_OPENROUTER_IMAGE_MODEL?: string;
+        readonly VITE_FALAI_VIDEO_ENDPOINT?: string;
+        readonly VITE_FALAI_VIDEO_MODEL?: string;
+        readonly VITE_FALAI_API_KEY?: string;
+        readonly VITE_WHATSAPP_WEB_BASE?: string;
+        readonly VITE_POLLINATIONS_URL?: string;
+        readonly VITE_NETWORK_PROBE_URLS?: string;
+    }
+}
+
+// -----------------------------------------------------------
+// Config compartida server-safe (fuente única de defaults/lógica)
+// -----------------------------------------------------------
+// El CLIENTE sigue leyendo import.meta.env.VITE_X ESTÁTICO más abajo;
+// los defaults y la lógica pura (isLocalTextEndpoint, prioridad de keys,
+// URL/modelo OpenRouter) viven en sharedConfig.ts y se re-exportan aquí
+// para no romper a los importadores existentes.
+// -----------------------------------------------------------
+import {
+    OPENROUTER_DEFAULTS,
+    FALAI_DEFAULTS,
+    POLLINATIONS_DEFAULTS,
+    joinApiUrl,
+    buildPollinationsImageUrl,
+    resolveTextApiKeyFromEnv,
+} from './sharedConfig';
+import { hasLocalStorage, localGet, localSet } from '../storage/localStore';
+
+export {
+    WORKSPACE_TIPOS,
+    VALID_VISUAL_TIPOS,
+    TIMEOUT_POLICY_MS,
+    isLocalTextEndpoint,
+    DEFAULT_ADVANCED_CONFIG,
+    AVAILABLE_TRAITS,
+    AVAILABLE_TONES,
+    FLU_PROFILES,
+    getProfileById,
+    getDefaultProfile,
+} from './sharedConfig';
+
+// -----------------------------------------------------------
 // Storage Keys
 // -----------------------------------------------------------
 export const STORAGE_KEYS = {
-    GEMINI_MODEL: 'flu-gemini-model',
-    GEMINI_API_URL: 'flu-gemini-api-url',
     LANGUAGE: 'flu-language',
     SESSION_ROLE: 'flu-session-role',
-    POLLINATIONS_URL: 'flu-pollinations-url',
-    POLLINATIONS_MODEL: 'flu-pollinations-model',
     // New image config keys
     TEXT_API_URL: 'flu-text-api-url',
     TEXT_MODEL: 'flu-text-model',
     TEXT_API_KEY: 'flu-text-api-key',
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    GEMINI_API_KEY: 'flu-gemini-api-key',
     IMAGE_API_URL: 'flu-image-api-url',
     IMAGE_MODEL: 'flu-image-model',
     IMAGE_API_KEY: 'flu-image-api-key',
+    // Video (fal.ai) — key configurable desde Ajustes (video real text-to-video)
+    FALAI_API_KEY: 'flu-falai-api-key',
+    FALAI_VIDEO_MODEL: 'flu-falai-video-model',
+    /** Último día cerrado (rollover de sesión): evita mezclar días. */
+    LAST_SESSION_DAY: 'flu-last-session-day',
     // OCR configuration (local Tesseract default + remote endpoint opcional)
     OCR_API_KEY: 'flu-ocr-api-key',
     OCR_MODEL: 'flu-ocr-model',
     OCR_API_URL: 'flu-ocr-api-url',
-    // FLU Configurator keys
-    FLU_PROFILE: 'flu-profile',
-    FLU_IMAGE_CONFIG: 'flu-image-config',
-    FLU_VOICE_CONFIG: 'flu-voice-config',
-    FLU_ADVANCED_CONFIG: 'flu-advanced-config',
-    FLU_PERSONALITY_TRAITS: 'flu-personality-traits',
-    FLU_PERSONALITY_TONE: 'flu-personality-tone',
+    // Configurador FLU: sin claves localStorage — vive en integrationStore (zustand persist).
     // Creativity configuration
     CREATIVITY: 'flu-creativity',
     // DeepSeek configuration
@@ -62,10 +123,7 @@ export const STORAGE_KEYS = {
     AVATAR_PANTS_COLOR: 'flu-avatar-pants-color',
     AVATAR_BODY_COLOR: 'flu-avatar-body-color',
     AVATAR_FACE_COLOR: 'flu-avatar-face-color',
-    // Branding
-    BRANDING_MODE: 'flu-branding-mode',
-    BRANDING_ACTIVE_SEASON: 'flu-branding-active-season',
-    BRANDING_BIRTHDAY: 'flu-branding-birthday',
+    // Branding: sin claves localStorage — vive en Dexie (fluDb.brandingConfig).
     // Autonomy
     AUTONOMY_HEALTH_MONITORING: 'flu-health-monitoring',
     AUTONOMY_AUTO_RECOVERY: 'flu-auto-recovery',
@@ -75,7 +133,6 @@ export const STORAGE_KEYS = {
     PERFORMANCE_LOGGING_LEVEL: 'flu-logging-level',
     PERFORMANCE_ANALYTICS_ENABLED: 'flu-analytics-enabled',
     // Business data
-    MINUTE_HISTORY: 'flu-minute-history',
     VOICE_PROFILES: 'flu-voice-profiles',
     // Backup metadata
     BACKUP_LAST_TIMESTAMP: 'flu-last-backup-timestamp',
@@ -83,14 +140,25 @@ export const STORAGE_KEYS = {
     BACKUP_LIST: 'flu-backup-list',
     BACKUP_SIZE_STATS: 'flu-backup-size-stats',
     BACKUP_PREFIX: 'flu-backup-',
+    // Onboarding & asistente personal (Fase 1)
+    USER_NAME: 'flu-user-name',
+    ACTIVE_USER: 'flu-active-user',
+    NOTIFICATION_PERMISSION: 'flu-notification-permission',
+    NOTIFICATION_CHANNEL: 'flu-notification-channel',
+    DND_ENABLED: 'flu-dnd-enabled',
+    DND_SCHEDULE: 'flu-dnd-schedule',
+    DND_ALLOW_URGENT: 'flu-dnd-allow-urgent',
+    // F5 — Centro de Control del Buscador (overrides + límite diario)
+    SEARCH_CONFIG_OVERRIDES: 'flu-search-config-overrides',
+    SEARCH_DAILY_USAGE: 'flu-search-daily-usage',
 } as const;
 
 // -----------------------------------------------------------
 // Application Branding
 // -----------------------------------------------------------
 export const APP_BRANDING = {
-    NAME: (import.meta as any)?.env?.VITE_APP_NAME || 'FLU OS4',
-    VERSION: (import.meta as any)?.env?.VITE_APP_VERSION || 'v4.0',
+    NAME: import.meta.env.VITE_APP_NAME || 'FLU OS4',
+    VERSION: import.meta.env.VITE_APP_VERSION || 'v4.0',
     ICON: '🐰',
 } as const;
 
@@ -98,9 +166,9 @@ export const APP_BRANDING = {
 // Gemini Configuration
 // -----------------------------------------------------------
 export const GEMINI_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_GEMINI_MODEL || 'gemini-3.1-flash-lite',
-    API_URL: (import.meta as any)?.env?.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-    PREDICT_API_URL: (import.meta as any)?.env?.VITE_GEMINI_PREDICT_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:predict',
+    MODEL: import.meta.env.VITE_GEMINI_MODEL || OPENROUTER_DEFAULTS.MODEL.replace(/^.*\//, ''),
+    API_URL: import.meta.env.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+    PREDICT_API_URL: import.meta.env.VITE_GEMINI_PREDICT_URL || 'https://generativelanguage.googleapis.com/v1beta/models/{model}:predict',
     DEFAULT_TEMPERATURE: 0.7,
     DEFAULT_TOP_K: 40,
     DEFAULT_TOP_P: 0.95,
@@ -111,10 +179,10 @@ export const GEMINI_CONFIG = {
 // DeepSeek Configuration (legacy — only used as fallback/backup)
 // -----------------------------------------------------------
 export const DEEPSEEK_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_DEEPSEEK_MODEL || 'deepseek-chat',
-    VISION_MODEL: (import.meta as any)?.env?.VITE_DEEPSEEK_VISION_MODEL || 'deepseek-vl',
-    API_URL: (import.meta as any)?.env?.VITE_DEEPSEEK_URL || 'https://api.deepseek.com/v1',
-    API_KEY: (import.meta as any)?.env?.VITE_DEEPSEEK_API_KEY || '',
+    MODEL: import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat',
+    VISION_MODEL: import.meta.env.VITE_DEEPSEEK_VISION_MODEL || 'deepseek-vl',
+    API_URL: import.meta.env.VITE_DEEPSEEK_URL || 'https://api.deepseek.com/v1',
+    API_KEY: import.meta.env.VITE_DEEPSEEK_API_KEY || '',
     CREATIVITY: 0.7,
     DEFAULT_MAX_TOKENS: 1000,
 } as const;
@@ -132,41 +200,67 @@ export const DEEPSEEK_CONFIG = {
 // (TEXT_API_URL / TEXT_MODEL / TEXT_API_KEY).
 // -----------------------------------------------------------
 export const OPENROUTER_CONFIG = {
-    MODEL: (import.meta as any)?.env?.VITE_OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite',
-    API_URL: (import.meta as any)?.env?.VITE_OPENROUTER_URL || 'https://openrouter.ai/api/v1',
-    API_KEY: (import.meta as any)?.env?.VITE_OPENROUTER_API_KEY || '',
-    DEFAULT_TEMPERATURE: 0.7,
-    DEFAULT_MAX_TOKENS: 1200,
+    MODEL: import.meta.env.VITE_OPENROUTER_MODEL || OPENROUTER_DEFAULTS.MODEL,
+    API_URL: import.meta.env.VITE_OPENROUTER_URL || OPENROUTER_DEFAULTS.API_URL,
+    API_KEY: import.meta.env.VITE_OPENROUTER_API_KEY || '',
+    DEFAULT_TEMPERATURE: OPENROUTER_DEFAULTS.DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_TOKENS: OPENROUTER_DEFAULTS.DEFAULT_MAX_TOKENS,
+    /** Modelo de la Image API de OpenRouter (respaldo real cuando Pollinations falla). */
+    IMAGE_MODEL: import.meta.env.VITE_OPENROUTER_IMAGE_MODEL || OPENROUTER_DEFAULTS.IMAGE_MODEL,
+    /** Endpoint relativo de la Image API de OpenRouter (relativo a API_URL). */
+    IMAGE_ENDPOINT: OPENROUTER_DEFAULTS.IMAGE_ENDPOINT,
+    IMAGE_ASPECT_RATIO: OPENROUTER_DEFAULTS.IMAGE_ASPECT_RATIO,
 } as const;
 
 // -----------------------------------------------------------
-// Shared Domain Constants (Rule #1: NO HARDCODE)
+// Fal.ai — generación de VIDEO real (text-to-video)
 // -----------------------------------------------------------
-// Single source of truth for workspace "tipo" values and the STT
-// dev-server URL, previously duplicated across:
-//   - src/services/gemini.ts
-//   - src/services/deepseek.ts
-//   - src/voice/lib/gemini.js
-//   - src/voice/lib/fluConfig.js / transcriptConfig.js
+// API de video independiente de OpenRouter/Texto: el video NO lo genera
+// ni Pollinations ni la Image API. Configurable (Rule #1: NO HARDCODE).
+// El endpoint/modelo/key salen de env (VITE_*) con defaults seguros.
+export const FALAI_CONFIG = {
+    /** Endpoint del servicio de video (queue de fal.ai). */
+    VIDEO_ENDPOINT: import.meta.env.VITE_FALAI_VIDEO_ENDPOINT || FALAI_DEFAULTS.VIDEO_ENDPOINT,
+    /** Modelo text-to-video. Default BARATO: Wan 2.5 ($0.05/s en 480p). */
+    VIDEO_MODEL: import.meta.env.VITE_FALAI_VIDEO_MODEL || FALAI_DEFAULTS.VIDEO_MODEL,
+    /** Clave de fal.ai (nunca se expone al browser: se resuelve en servidor). */
+    API_KEY: import.meta.env.VITE_FALAI_API_KEY || '',
+    ASPECT_RATIO: FALAI_DEFAULTS.ASPECT_RATIO,
+    /** Tiempo máximo de espera del job (ms). */
+    POLL_TIMEOUT_MS: FALAI_DEFAULTS.POLL_TIMEOUT_MS,
+} as const;
+
 // -----------------------------------------------------------
+// Generation Timeout (F4 — documentos / video)
+// -----------------------------------------------------------
+// Generar un guion de video o un documento completo pide al LLM hasta
+// 3000 tokens de salida (buildGenerationPrompt + maxTokens 3000). Eso puede
+// tardar más de los 45s del timeout de red por defecto (AI_REQUEST_TIMEOUT_MS),
+// que aborta la petición antes de que el LLM termine → cae al contenido de
+// respaldo genérico y el video "no captura el tema" / "no le da tiempo".
+// Este timeout ampliado se aplica SOLO a la generación de documentos/video
+// (Rule #1: NO HARDCODE — centralizado aquí).
+export const GENERATION_TIMEOUT_MS = 120_000;
 
-/** Valores válidos para workspace.tipo (contrato FLU). */
-export const WORKSPACE_TIPOS: readonly string[] = ['text', 'image_prompt', 'diagram', '3d'];
-
-/** Tipos visuales que activan generación de imagen (Pollinations). */
-export const VALID_VISUAL_TIPOS: readonly string[] = ['image_prompt', 'diagram', '3d'];
-
-/** URL del servidor STT standalone de desarrollo (devServerUrl). */
-export const STREAM_STT_DEV_URL = (import.meta as any)?.env?.VITE_STREAM_STT_DEV_URL || 'ws://127.0.0.1:8787';
+// -----------------------------------------------------------
+// Device Actions — WhatsApp web base (Rule #1: NO HARDCODE)
+// -----------------------------------------------------------
+// Base URL de enlaces profundos de WhatsApp (wa.me), centralizada aquí
+// como fuente única de verdad (el guard de hardcode exige que los hosts
+// de servicios reales vivan en appConfig). Los demás esquemas de acción
+// (tel:, sms:, mailto:) son estándares del sistema y no usan host remoto.
+// Configurable vía VITE_WHATSAPP_WEB_BASE.
+// -----------------------------------------------------------
+export const DEVICE_ACTIONS_CONFIG = {
+    WHATSAPP_WEB_BASE: import.meta.env.VITE_WHATSAPP_WEB_BASE || 'https://wa.me',
+} as const;
 
 // -----------------------------------------------------------
 // Pollinations.ai Image Generation
 // -----------------------------------------------------------
 export const POLLINATIONS_CONFIG = {
-    BASE_URL: (import.meta as any)?.env?.VITE_POLLINATIONS_URL || 'https://image.pollinations.ai/prompt',
-    DEFAULT_WIDTH: 1024,
-    DEFAULT_HEIGHT: 768,
-    DEFAULT_PARAMS: 'nologo=true',
+    ...POLLINATIONS_DEFAULTS,
+    BASE_URL: import.meta.env.VITE_POLLINATIONS_URL || POLLINATIONS_DEFAULTS.BASE_URL,
 } as const;
 
 // -----------------------------------------------------------
@@ -186,8 +280,8 @@ const DEFAULT_NETWORK_PROBE_URLS: readonly string[] = [
 ];
 
 export const NETWORK_PROBE_URLS: readonly string[] = (
-    (import.meta as any)?.env?.VITE_NETWORK_PROBE_URLS
-        ? (import.meta as any)?.env?.VITE_NETWORK_PROBE_URLS.split(',').map((s: string) => s.trim()).filter(Boolean)
+    import.meta.env.VITE_NETWORK_PROBE_URLS
+        ? String(import.meta.env.VITE_NETWORK_PROBE_URLS).split(',').map((s: string) => s.trim()).filter(Boolean)
         : DEFAULT_NETWORK_PROBE_URLS
 );
 
@@ -224,199 +318,6 @@ export const DEFAULT_VOICE_CONFIG = {
     pitch: 1.0,
     volume: 1.0,
 };
-
-/**
- * Valores por defecto para la configuración avanzada.
- * NOTE: Uses inline literals to avoid hoisting issues with const enums
- * defined later in this file. The canonical values are in the individual
- * config objects below (USER_EMOTION_CONFIG, THEORY_OF_MIND_CONFIG, SYSTEM_EVENT_CONFIG).
- */
-export const DEFAULT_ADVANCED_CONFIG = {
-    animationSpeed: 1.0,
-    emotionalReactivity: 1.0,
-    creativity: 0.7,
-    orientation: 0.525,
-    // User Emotion Detector thresholds (inline defaults — canonical values below)
-    emotionMinConfidence: 0.3,
-    emotionMaxBoost: 0.2,
-    emotionBoostPerMatch: 0.1,
-    emotionBaseDetectionConfidence: 0.8,
-    emotionLowInterruptionConfidence: 0.4,
-    emotionShortUtteranceWordCount: 3,
-    emotionTopicChangeOverlapRatio: 0.05,
-    emotionTopicChangeMinWords: 2,
-    emotionTopicChangeExplicitConfidence: 0.8,
-    emotionTopicChangeOverlapConfidence: 0.5,
-    // Theory of Mind limits (inline defaults — canonical values below)
-    tomMaxParticipants: 10,
-    tomMaxTopicsPerParticipant: 20,
-    tomMaxEmotionsPerParticipant: 10,
-    tomParticipantInactivityMs: 30 * 60 * 1000,
-    tomMinTopicWordLength: 4,
-    tomSummaryDisplayLimit: 3,
-    tomMaxQuestionsPerParticipant: 10,
-    // System Event Log config (inline defaults — canonical values below)
-    systemEventWindowMs: 5 * 60 * 1000,
-    systemEventDedupBucketMs: 3000,
-};
-
-// -----------------------------------------------------------
-// FLU Configurator — Perfiles Variables
-// -----------------------------------------------------------
-// Los perfiles son VARIABLES y configurables.
-// En el futuro vendrán de un CRUD/mantenimiento.
-// Cada perfil define: imagen (gorra/pelo), personalidad, voz y avanzado.
-// -----------------------------------------------------------
-
-import type { FluProfileDefinition } from '../../types/bridge';
-
-/**
- * Perfiles predefinidos de FLU.
- * Array — no hardcodeado como 3 objetos fijos.
- * En futuro: CRUD maintenance para agregar/editar/eliminar perfiles.
- */
-export const FLU_PROFILES: FluProfileDefinition[] = [
-    {
-        id: 'administrativo',
-        label: 'Administrativo',
-        description: 'Formal y profesional, ideal para juntas y reuniones de trabajo.',
-        image: {
-            capVisible: false,
-            hairVisible: false,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['formal', 'profesional', 'servicial', 'eficiente'],
-            tone: 'formal',
-            proactivity: 0.2,
-            defaultEmotion: 'neutral',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Formal (default)',
-            rate: 1.0,
-            pitch: 1.0,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.0,
-            emotionalReactivity: 0.8,
-            creativity: 0.5,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, un asistente administrativo formal y profesional. Tu rol es apoyar en juntas y reuniones de trabajo con seriedad y eficiencia. Responde con claridad, precisión y mantén un tono profesional en todo momento. Sé servicial pero directo, evitando informalidades o comentarios fuera de lugar.',
-    },
-    {
-        id: 'profesor',
-        label: 'Profesor / Asistente',
-        description: 'Informativo y didáctico, ideal para asistencia en clase.',
-        image: {
-            capVisible: false,
-            hairVisible: true,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['informativo', 'didáctico', 'paciente', 'curioso'],
-            tone: 'friendly',
-            proactivity: 0.4,
-            defaultEmotion: 'curious',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Amigable (default)',
-            rate: 1.0,
-            pitch: 1.0,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.0,
-            emotionalReactivity: 1.0,
-            creativity: 0.6,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, un asistente educativo informativo y didáctico. Tu misión es ayudar en el aprendizaje con paciencia y claridad. Explica conceptos de forma sencilla, fomenta la curiosidad y adapta tu lenguaje al nivel del estudiante. Sé amigable y accesible, pero mantén el enfoque en el aprendizaje.',
-    },
-    {
-        id: 'estudiante',
-        label: 'Estudiante',
-        description: 'Casual y enérgico, ideal para aprendizaje informal.',
-        image: {
-            capVisible: true,
-            hairVisible: true,
-        },
-        personality: {
-            name: 'FLU',
-            traits: ['casual', 'enérgico', 'rebelde', 'carismático', 'chusco'],
-            tone: 'playful',
-            proactivity: 0.6,
-            defaultEmotion: 'happy',
-        },
-        voice: {
-            voiceURI: '',
-            voiceName: 'Voz Casual (default)',
-            rate: 1.2,
-            pitch: 1.0,
-            volume: 1.0,
-        },
-        advanced: {
-            ...DEFAULT_ADVANCED_CONFIG,
-            animationSpeed: 1.3,
-            emotionalReactivity: 0.8,
-            creativity: 0.8,
-        },
-        orientation: 0.525,
-        startupPrompt: 'Eres FLU, un estudiante casual, enérgico y carismático. Tu personalidad es rebelde y chusca, te gusta aprender de forma divertida y dinámica. Usa un lenguaje relajado y juvenil, sé expresivo y no temas ser creativo o sarcástico. Mantén la conversación entretenida pero sin perder el hilo del aprendizaje.',
-    },
-];
-
-/**
- * Obtiene un perfil por su ID.
- * Retorna undefined si no se encuentra.
- */
-export function getProfileById(id: string): FluProfileDefinition | undefined {
-    return FLU_PROFILES.find((p) => p.id === id);
-}
-
-/**
- * Obtiene el perfil por defecto (primer perfil del array).
- */
-export function getDefaultProfile(): FluProfileDefinition {
-    return FLU_PROFILES[0];
-}
-
-/**
- * Rasgos de personalidad disponibles para selección.
- */
-export const AVAILABLE_TRAITS = [
-    'formal',
-    'informal',
-    'profesional',
-    'rebelde',
-    'curioso',
-    'inteligente',
-    'cómico',
-    'carismático',
-    'agradable',
-    'chusco',
-    'brillante',
-    'enérgico',
-    'paciente',
-    'didáctico',
-    'servicial',
-    'eficiente',
-] as const;
-
-/**
- * Tonos de voz disponibles.
- */
-export const AVAILABLE_TONES = [
-    'friendly',
-    'formal',
-    'playful',
-    'calm',
-] as const;
 
 // -----------------------------------------------------------
 // Welcome Message
@@ -636,7 +537,6 @@ export const INTERRUPTION_KEYWORDS: string[] = [
     'espera', 'esperate', 'para', 'detente', 'alto', 'calma', 'un momento',
     'wait', 'hold on', 'stop', 'hang on', 'one moment', 'hold it',
     'no no no', 'no no', 'no por favor', 'no espera',
-    'oye flu', 'hey flu', 'listen flu', 'look flu', 'oye tú', 'hey you', 'listen tú', 'look tú',
     'déjame', 'déjame decir', 'let me', 'let me speak',
 ];
 
@@ -688,16 +588,15 @@ export const SYSTEM_EVENT_CONFIG = {
  * Returns the default value if reading fails or value is not found.
  */
 export function readStorage<T>(key: string, defaultValue: T): T {
-    // En entornos sin localStorage (Node/SSR/proxy del dev server), no hay
-    // storage: devolver el default SIN lanzar ni loguear. Evita el
-    // ReferenceError + construcción del stack trace en CADA llamada de IA
-    // (buildGeminiApiUrl se ejecuta también en el servidor).
-    if (typeof localStorage === 'undefined') return defaultValue;
+    // Fuera del navegador la puerta responde desde memoria: no hay almacen que
+    // leer, y se devuelve el default SIN lanzar ni loguear.
+    if (!hasLocalStorage()) return defaultValue;
     try {
-        const raw = localStorage.getItem(key);
+        const raw = localGet(key);
         if (raw === null) return defaultValue;
-        return raw as unknown as T;
-    } catch {
+        return raw as T;
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/appConfig.ts', e);
         return defaultValue;
     }
 }
@@ -706,10 +605,11 @@ export function readStorage<T>(key: string, defaultValue: T): T {
  * Write a value to localStorage safely.
  */
 export function writeStorage(key: string, value: string): void {
-    if (typeof localStorage === 'undefined') return;
+    if (!hasLocalStorage()) return;
     try {
-        localStorage.setItem(key, value);
-    } catch {
+        localSet(key, value);
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/appConfig.ts', e);
         // Silencioso: el storage puede no estar disponible (privacidad/quota)
     }
 }
@@ -718,30 +618,12 @@ export function writeStorage(key: string, value: string): void {
  * Build the image API URL from a prompt.
  * Reads localStorage override for image API URL; falls back to POLLINATIONS_CONFIG.
  */
-export function buildPollinationsUrl(prompt: string): string {
+export function buildPollinationsUrl(
+    prompt: string,
+    overrides: { width?: number; height?: number; seed?: number } = {},
+): string {
     const baseUrl = readStorage(STORAGE_KEYS.IMAGE_API_URL, POLLINATIONS_CONFIG.BASE_URL);
-    const encoded = encodeURIComponent(prompt);
-    return `${baseUrl}/${encoded}?width=${POLLINATIONS_CONFIG.DEFAULT_WIDTH}&height=${POLLINATIONS_CONFIG.DEFAULT_HEIGHT}&${POLLINATIONS_CONFIG.DEFAULT_PARAMS}`;
-}
-
-/**
- * Build the text (Gemini) API URL for a given model.
- * Reads localStorage override for text API URL and model; falls back to GEMINI_CONFIG.
- */
-export function buildGeminiApiUrl(model?: string): string {
-    const apiUrl = readStorage(STORAGE_KEYS.TEXT_API_URL, GEMINI_CONFIG.API_URL);
-    const resolvedModel = model || readStorage(STORAGE_KEYS.TEXT_MODEL, GEMINI_CONFIG.MODEL);
-    return apiUrl.replace('{model}', resolvedModel);
-}
-
-/**
- * Build the Gemini "predict" API URL for a given model (image generation endpoint).
- * Uses GEMINI_CONFIG.PREDICT_API_URL; the model is URL-encoded to match the
- * previous inline behavior in src/voice/lib/gemini.js.
- */
-export function buildGeminiPredictUrl(model?: string): string {
-    const resolvedModel = model || readStorage(STORAGE_KEYS.TEXT_MODEL, GEMINI_CONFIG.MODEL);
-    return GEMINI_CONFIG.PREDICT_API_URL.replace('{model}', encodeURIComponent(resolvedModel));
+    return buildPollinationsImageUrl(baseUrl, prompt, overrides);
 }
 
 /**
@@ -766,45 +648,96 @@ export function buildDeepSeekApiUrl(endpoint: string): string {
  */
 export function buildTextApiUrl(endpoint: string): string {
     const baseUrl = readStorage(STORAGE_KEYS.TEXT_API_URL, OPENROUTER_CONFIG.API_URL);
-    // Remove trailing slash from baseUrl if present
-    const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    // Remove leading slash from endpoint if present
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    return `${cleanBase}${cleanEndpoint}`;
-}
-
-/**
- * Detect whether a text API URL points to a local (self-hosted) endpoint.
- * Local endpoints (Ollama, LM Studio, vLLM, etc.) do NOT require an API key
- * and may not support OpenAI's `response_format` JSON mode.
- */
-export function isLocalTextEndpoint(url: string): boolean {
-    try {
-        const host = new URL(url).hostname.toLowerCase();
-        return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
-    } catch {
-        return /localhost|127\.0\.0\.1|::1/i.test(url);
-    }
+    return joinApiUrl(baseUrl, endpoint);
 }
 
 /**
  * Resolve the text API key from localStorage (configurador) or env.
  * Priority: localStorage (flu-text-api-key) > env var > empty.
- * Env order: VITE_GEMINI_API_KEY > VITE_OPENROUTER_API_KEY > VITE_DEEPSEEK_API_KEY.
+ * Env order: VITE_OPENROUTER_API_KEY > VITE_GEMINI_API_KEY > VITE_DEEPSEEK_API_KEY
+ * (prioridad única definida en sharedConfig.resolveTextApiKeyFromEnv).
  * Nota: el legado flu-gemini-api-key se ELIMINÓ — la única fuente del
  * configurador es flu-text-api-key (0 parches, sin migraciones residuales).
  */
 export function resolveTextApiKey(): string {
     const key = readStorage(STORAGE_KEYS.TEXT_API_KEY, '');
     if (key) return key;
-    // Fallback: check env vars
-    try {
-        const envKey = String((import.meta as any)?.env?.VITE_GEMINI_API_KEY ?? '').trim();
-        if (envKey) return envKey;
-        const orKey = String((import.meta as any)?.env?.VITE_OPENROUTER_API_KEY ?? '').trim();
-        if (orKey) return orKey;
-        const dsKey = String((import.meta as any)?.env?.VITE_DEEPSEEK_API_KEY ?? '').trim();
-        if (dsKey) return dsKey;
-    } catch { /* ignore */ }
-    return '';
+    // Fallback: env (prioridad única en sharedConfig; acceso ESTÁTICO a
+    // import.meta.env.VITE_X para que vi.stubEnv siga funcionando).
+    return resolveTextApiKeyFromEnv({
+        VITE_OPENROUTER_API_KEY: import.meta.env.VITE_OPENROUTER_API_KEY,
+        VITE_GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY,
+        VITE_DEEPSEEK_API_KEY: import.meta.env.VITE_DEEPSEEK_API_KEY,
+    });
 }
+
+/**
+ * Resolve the Gemini native API key (paso 5 — fallback de imagen).
+ * Priority: flu-gemini-api-key (campo dedicado del configurador) >
+ *           resolveTextApiKey() (flu-text-api-key > env VITE_OPENROUTER_API_KEY >
+ *           VITE_GEMINI_API_KEY > VITE_DEEPSEEK_API_KEY).
+ * Permite usar una clave de Gemini dedicada sin romper la compatibilidad con
+ * la clave de texto compartida existente.
+ */
+export function resolveDedicatedGeminiApiKey(): string {
+    const dedicated = readStorage(STORAGE_KEYS.GEMINI_API_KEY, '').trim();
+    if (dedicated) return dedicated;
+    return resolveTextApiKey();
+}
+
+/**
+ * Resolve the fal.ai API key (video real text-to-video).
+ * Priority: localStorage (flu-falai-api-key — configurable en Ajustes) >
+ *           env VITE_FALAI_API_KEY. Sin key, no hay video real (solo guion).
+ */
+export function resolveFalApiKey(): string {
+    const override = readStorage(STORAGE_KEYS.FALAI_API_KEY, '').trim();
+    if (override) return override;
+    try {
+        return String(import.meta.env.VITE_FALAI_API_KEY ?? '').trim();
+    } catch (e) {
+        logCaughtError('[catch] src/core/config/appConfig.ts', e);
+        return '';
+    }
+}
+
+/**
+ * Resolve el modelo text-to-video de fal.ai.
+ * Priority: localStorage (flu-falai-video-model — Ajustes) >
+ *           env VITE_FALAI_VIDEO_MODEL > default barato (Wan 2.5, $0.05/s).
+ */
+export function resolveFalVideoModel(): string {
+    const override = readStorage(STORAGE_KEYS.FALAI_VIDEO_MODEL, '').trim();
+    if (override) return override;
+    return FALAI_CONFIG.VIDEO_MODEL;
+}
+
+/**
+ * Presupuestos de tokens de las llamadas de texto. Un solo origen para los
+ * limites que antes estaban quemados en la logica de aiServiceBase. (P5.3)
+ */
+export const TEXT_TOKEN_BUDGETS = {
+    /** Documento corto: una sola llamada de resumen. */
+    single: 1800,
+    /** Fase map: una llamada por chunk. */
+    mapChunk: 900,
+    /** Fase reduce: fusion de los parciales. */
+    reduce: 1800,
+    /** Analisis de estructura de app. */
+    appAnalysis: 2200,
+    /** Generacion de documento final. */
+    generation: 3000,
+} as const
+
+/** Temperatura por defecto de las llamadas de texto. (P5.4) */
+export const TEXT_TEMPERATURE_DEFAULT = 0.7
+
+/** Limites de tokens de los transportes de texto. (P5.4) */
+export const TEXT_TOKEN_LIMITS = {
+    /** Respuesta JSON estructurada. */
+    json: 1000,
+    /** Conversacion libre. */
+    chat: 500,
+    /** Respuesta breve. */
+    brief: 300,
+} as const

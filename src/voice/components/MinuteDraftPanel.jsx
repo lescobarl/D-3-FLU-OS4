@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
-import { FLU_CONFIG } from '../lib/fluConfig'
 import { formatMinuteDraftText, parseMinuteDraftText } from '../lib/minuteKnowledge'
 
 export const MinuteDraftPanel = forwardRef(function MinuteDraftPanel(
@@ -11,7 +10,7 @@ export const MinuteDraftPanel = forwardRef(function MinuteDraftPanel(
 
   useEffect(() => {
     setText(formatMinuteDraftText(draft))
-  }, [draftKey])
+  }, [draftKey, draft])
 
   const handleSave = () => {
     if (!draft) return

@@ -14,23 +14,27 @@
 //   - formatGeminiUserMessage  → mensaje representativo
 // ============================================================
 
-export const AI_REQUEST_TIMEOUT_MS = 45_000
+import { REQUEST_TIMEOUT_DEFAULTS } from '../config/sharedConfig'
+
+export const AI_REQUEST_DEADLINE_MS = REQUEST_TIMEOUT_DEFAULTS.AI_TEXT_MS
 
 /**
  * Presets de timeout adaptativo por tipo de petición (Fase 1 de optimización
  * de latencia). Se combinan con la carga real de cada petición en
  * resolveRequestTimeout() para devolver un deadline ajustado sin romper las
  * peticiones complejas (documentos / imágenes) que sí necesitan holgura.
- * El valor por defecto (AI_REQUEST_TIMEOUT_MS) se mantiene intacto para no
+ * El valor por defecto (AI_REQUEST_DEADLINE_MS) se mantiene intacto para no
  * alterar el comportamiento de las capas que no usan el resolver.
  */
 export const REQUEST_TIMEOUT_PRESETS = Object.freeze({
   /** Conversación / consulta general → respuesta rápida esperada. */
-  conversation: 15_000,
+  conversation: REQUEST_TIMEOUT_DEFAULTS.CONVERSATION_MS,
   /** Consulta de minutas → lookups cortos sobre la base local. */
-  minutes: 10_000,
+  minutes: REQUEST_TIMEOUT_DEFAULTS.MINUTES_MS,
   /** Documentos / imágenes / peticiones pesadas → fallback al default. */
-  complex: 45_000,
+  complex: REQUEST_TIMEOUT_DEFAULTS.AI_TEXT_MS,
+  /** Generación de imagen nativa (Gemini generateContent/predict) → más lenta. */
+  image: REQUEST_TIMEOUT_DEFAULTS.IMAGE_MS,
 })
 
 /** Umbrales de carga para escalar el timeout por volumen de contexto. */
@@ -75,7 +79,7 @@ export function buildTimeoutError(timeoutMs: number, url: string): TextEngineTim
 export async function fetchTextEngine(
   url: string,
   init: RequestInit = {},
-  timeoutMs: number = AI_REQUEST_TIMEOUT_MS,
+  timeoutMs: number = AI_REQUEST_DEADLINE_MS,
 ): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -133,7 +137,7 @@ export async function fetchTextEngineResilient(
   init: RequestInit = {},
   options: { timeoutMs?: number; retries?: number; retryDelayMs?: number } = {},
 ): Promise<Response> {
-  const { timeoutMs = AI_REQUEST_TIMEOUT_MS, retries = 1, retryDelayMs = 300 } = options
+  const { timeoutMs = AI_REQUEST_DEADLINE_MS, retries = 1, retryDelayMs = 300 } = options
   let attempt = 0
   for (;;) {
     try {

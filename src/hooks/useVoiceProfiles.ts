@@ -6,7 +6,9 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { fluDb, newId, newSyncTuple, bumpSync, type VoiceProfileRecord } from '../core/db/fluDatabase';
+import { fluDb, newId, type VoiceProfileRecord } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
+import { logCaughtError } from '../lib/caughtError';
 
 /**
  * Perfil de voz en formato de UI.
@@ -16,6 +18,19 @@ export interface VoiceProfileUI {
     label: string;
     speakerId: string;
     timestamp: number;
+}
+
+/**
+ * Puerta ÚNICA de escritura de `fluDb.voiceProfiles` (C3).
+ * Ningún otro módulo toca la tabla: si necesita escribir, llama a estas
+ * funciones. Así el hook y el almacenamiento legacy comparten un solo escritor.
+ */
+export async function insertVoiceProfile(record: VoiceProfileRecord): Promise<void> {
+    await fluDb.voiceProfiles.add(record);
+}
+
+export async function persistVoiceProfile(record: VoiceProfileRecord): Promise<void> {
+    await fluDb.voiceProfiles.put(record);
 }
 
 function toUI(record: VoiceProfileRecord): VoiceProfileUI {
@@ -44,7 +59,7 @@ export function useVoiceProfiles() {
                 .toArray();
             setProfiles(records.filter((r) => !r.sync.deleted).map(toUI));
         } catch (err) {
-            console.error('[useVoiceProfiles] Error loading profiles:', err);
+            logCaughtError('[useVoiceProfiles] Error loading profiles', err);
         } finally {
             setLoading(false);
         }
@@ -63,9 +78,9 @@ export function useVoiceProfiles() {
             signature: null,
             embedding: null,
             timestamp: Date.now(),
-            sync: newSyncTuple(),
+            sync: buildSyncTuple(undefined, Date.now()),
         };
-        await fluDb.voiceProfiles.add(record);
+        await insertVoiceProfile(record);
         const ui = toUI(record);
         setProfiles((prev) => [ui, ...prev]);
         return ui;
@@ -79,9 +94,9 @@ export function useVoiceProfiles() {
         const updated: VoiceProfileRecord = {
             ...existing,
             label: newLabel,
-            sync: bumpSync(existing.sync),
+            sync: buildSyncTuple(existing.sync, Date.now()),
         };
-        await fluDb.voiceProfiles.put(updated);
+        await persistVoiceProfile(updated);
         setProfiles((prev) => prev.map((p) => (p.id === id ? toUI(updated) : p)));
     }, []);
 
@@ -92,9 +107,9 @@ export function useVoiceProfiles() {
 
         const updated: VoiceProfileRecord = {
             ...existing,
-            sync: { ...bumpSync(existing.sync), deleted: true },
+            sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
         };
-        await fluDb.voiceProfiles.put(updated);
+        await persistVoiceProfile(updated);
         setProfiles((prev) => prev.filter((p) => p.id !== id));
     }, []);
 

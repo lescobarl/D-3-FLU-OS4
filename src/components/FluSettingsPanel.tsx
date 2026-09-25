@@ -13,25 +13,18 @@
 import React from 'react';
 import type { FluProfile } from '../types/bridge';
 import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES } from '../core/config/appConfig';
+import { OPENROUTER_DEFAULTS, POLLINATIONS_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER } from '../core/config/sharedConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
-import { PALETTES } from '../core/branding/seasonalPalettes';
+import { getAllPalettes, getPalette } from '../core/branding/seasonalPalettes';
 import { useBunnyStore } from '../avatar/store/bunnyStore';
-import type { BunnyComponent } from '../avatar/types/bunny';
 import type { VoiceConfig } from '../types/bridge';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { useConfigPersistence } from '../hooks/useConfigPersistence';
 import { useAuditLog } from '../hooks/useAuditLog';
+import { loadSearchConfigOverrides, saveSearchConfigOverrides, getLastStorageError, type SearchConfigOverrides } from '../core/search/searchConfigOverrides';
+import { useSettingsSaveRegistration } from './SettingsSaveContext';
 
-// Declare global window types
-declare global {
-    interface Window {
-        FLU_CONFIG?: typeof FLU_CONFIG;
-    }
-}
-
-interface FluSettingsPanelProps {
+export interface FluSettingsPanelProps {
     // External Services Config props
     voiceConfig?: VoiceConfig;
     setVoiceConfig?: (config: Partial<VoiceConfig>) => void;
@@ -47,13 +40,21 @@ interface FluSettingsPanelProps {
     apiKey: string;
     textModel: string;
     textApiUrl: string;
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    geminiApiKey: string;
     imageModel: string;
     imageApiKey: string;
     imageApiUrl: string;
-    voices: any[];
+    // Video (fal.ai) — key para video real text-to-video
+    falApiKey?: string;
+    handleFalApiKeyCommit?: (val: string) => void;
+    falVideoModel?: string;
+    handleFalVideoModelCommit?: (val: string) => void;
+    voices: SpeechSynthesisVoice[];
     handleTextModelCommit: (val: string) => void;
     handleTextApiKeyCommit: (val: string) => void;
     handleTextApiUrlCommit: (val: string) => void;
+    handleGeminiApiKeyCommit: (val: string) => void;
     handleImageModelCommit: (val: string) => void;
     handleImageApiKeyCommit: (val: string) => void;
     handleImageApiUrlCommit: (val: string) => void;
@@ -62,7 +63,14 @@ interface FluSettingsPanelProps {
     setWakeWords: (value: string) => void;
     debugLogsEnabled: boolean;
     setDebugLogsEnabled: (enabled: boolean) => void;
-    handleParticipantConfigChange: (overrides: Record<string, any>) => void;
+    handleParticipantConfigChange: (overrides: Record<string, unknown>) => void;
+    /** Overrides del buscador (comparte fuente con el Centro de Control). */
+    searchOverrides?: SearchConfigOverrides;
+    /** Persiste overrides del buscador (mismo handler que el Centro de Control).
+     *  Acepta un updater `(prev) => next` para componer con otros commits globales. */
+    onSearchOverridesChange?: (
+        next: SearchConfigOverrides | ((prev: SearchConfigOverrides) => SearchConfigOverrides),
+    ) => void;
     // Branding props
     brandingMode?: BrandingMode;
     brandingSeason?: string;
@@ -79,13 +87,19 @@ export function FluSettingsPanel({
     apiKey,
     textModel,
     textApiUrl,
+    geminiApiKey,
     imageModel,
     imageApiKey,
     imageApiUrl,
+    falApiKey,
+    handleFalApiKeyCommit,
+    falVideoModel,
+    handleFalVideoModelCommit,
     voices,
     handleTextModelCommit,
     handleTextApiKeyCommit,
     handleTextApiUrlCommit,
+    handleGeminiApiKeyCommit,
     handleImageModelCommit,
     handleImageApiKeyCommit,
     handleImageApiUrlCommit,
@@ -105,8 +119,6 @@ export function FluSettingsPanel({
     onBrandingBirthdayChange,
     onBrandingCelebrateAchievementsChange,
     // External Services props
-    voiceConfig,
-    setVoiceConfig,
     ocrApiKey,
     handleOcrApiKeyCommit,
     ocrModel,
@@ -115,14 +127,487 @@ export function FluSettingsPanel({
     handleOcrApiUrlCommit,
     aiProvider,
     setAiProvider,
+    searchOverrides,
+    onSearchOverridesChange,
 }: FluSettingsPanelProps) {
     const integrationStore = useIntegrationStore();
     const { componentColors, setComponentColor, resetComponentColors } = useBunnyStore();
+    const audit = useAuditLog();
+
+    // ── Búsqueda web: la clave/modelo se escriben DIRECTAMENTE en la fuente de
+    // verdad (localStorage) en cada cambio. No depende del wiring de App, de
+    // blur ni de un botón "Guardar".
+    const readWebDraft = React.useCallback(() => {
+        const stored = loadSearchConfigOverrides();
+        const web = stored?.providers?.web || searchOverrides?.providers?.web;
+        return {
+            tavilyKey: String(web?.tavily?.key || ''),
+            openrouterKey: String(web?.openrouter?.key || ''),
+            openrouterModel: String(web?.openrouter?.model || ''),
+        };
+    }, [searchOverrides]);
+
+    const [webDraft, setWebDraft] = React.useState(readWebDraft);
+    const webDraftRef = React.useRef(webDraft);
+    webDraftRef.current = webDraft;
+    // Revelado controlado (el re-render no debe re-ocultar).
+    const [revealWeb, setRevealWeb] = React.useState({ tavily: false, openrouter: false });
+    const [revealFalKey, setRevealFalKey] = React.useState(false);
+    // Resultado de la verificación de guardado (lectura real desde localStorage).
+    const [webSave, setWebSave] = React.useState<{ chars: number; failed: boolean; error: string }>({
+        chars: readWebDraft().openrouterKey.length,
+        failed: false,
+        error: '',
+    });
+
+    /**
+     * Escribe la clave/modelo DIRECTAMENTE en localStorage (fuente de verdad),
+     * sin depender de App, blur ni botón, y luego sincroniza el estado de App
+     * para que la búsqueda use esta config.
+     */
+    const persistWeb = React.useCallback(
+        (draft: { tavilyKey: string; openrouterKey: string; openrouterModel: string }): void => {
+            const stored = loadSearchConfigOverrides();
+            const providers = { ...(stored.providers || {}) };
+            const web = { ...(providers.web || {}) };
+            const tavily = { ...(web.tavily || {}) };
+            const openrouter = { ...(web.openrouter || {}) };
+            const tavilyKey = draft.tavilyKey.trim();
+            const openrouterKey = draft.openrouterKey.trim();
+            const openrouterModel = draft.openrouterModel.trim();
+            if (tavilyKey) tavily.key = tavilyKey; else delete tavily.key;
+            if (openrouterKey) openrouter.key = openrouterKey; else delete openrouter.key;
+            if (openrouterModel) openrouter.model = openrouterModel; else delete openrouter.model;
+            web.tavily = tavily;
+            web.openrouter = openrouter;
+            providers.web = web;
+            const merged = { ...stored, providers };
+            saveSearchConfigOverrides(merged);
+            // Verificación: releer lo realmente persistido (no confiar en el borrador).
+            const persistedKey = String(loadSearchConfigOverrides()?.providers?.web?.openrouter?.key || '');
+            const failed = openrouterKey.length > 0 && persistedKey !== openrouterKey;
+            setWebSave({
+                chars: persistedKey.length,
+                failed,
+                error: failed ? getLastStorageError() : '',
+            });
+            onSearchOverridesChange?.(merged);
+        },
+        [onSearchOverridesChange],
+    );
+
+    const setWebField = (field: keyof typeof webDraft, value: string): void => {
+        const next = { ...webDraftRef.current, [field]: value };
+        webDraftRef.current = next;
+        setWebDraft(next);
+        // Guardado inmediato al escribir.
+        persistWeb(next);
+    };
+
+    // Commit global + Restablecer (el Restablecer del buscador limpia la clave).
+    useSettingsSaveRegistration('search-web', {
+        commit: () => persistWeb(webDraftRef.current),
+        reset: () => {
+            const empty = { tavilyKey: '', openrouterKey: '', openrouterModel: '' };
+            webDraftRef.current = empty;
+            setWebDraft(empty);
+        },
+    });
 
     return (
         <section className="flu-settings-panel">
-            {/* ---- 🎭 Configurador de FLU ---- */}
+            {/* ---- 🔌 Servicios Externos (APIs/llaves) — sección principal ---- */}
             <details className="flu-settings-image-config" open>
+                <summary className="flu-settings-image-config__summary">
+                    <span className="flu-settings-image-config__icon">🔌</span>
+                    <span>Configuración de Servicios Externos</span>
+                </summary>
+                <div className="flu-settings-image-config__body">
+                    <div className="flu-settings-image-config__group">
+                        {/* Proveedor de IA */}
+                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                            <span>Proveedor de IA</span>
+                            <select
+                                value={aiProvider === AI_PROVIDER_IDS.DEEPSEEK ? AI_PROVIDER_IDS.OPENROUTER : (aiProvider || DEFAULT_AI_PROVIDER)}
+                                onChange={(e) => setAiProvider?.(e.target.value)}
+                                className="flu-settings-image-config__input"
+                            >
+                                <option value={AI_PROVIDER_IDS.OPENROUTER}>Gemini 2.5 Flash Lite (OpenRouter) — por defecto</option>
+                                <option value={AI_PROVIDER_IDS.LOCAL}>Local (Ollama / LM Studio)</option>
+                            </select>
+                        </label>
+
+                        {/* ---- 📝 Texto (Gemini) ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">📝 Texto (Gemini 2.5 Flash Lite vía OpenRouter)</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'Model' : 'Modelo'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input"
+                                        style={{ fontFamily: 'monospace' }}
+                                        placeholder={OPENROUTER_DEFAULTS.MODEL}
+                                        defaultValue={textModel}
+                                        onChange={(e) => handleTextModelCommit(e.target.value)}
+                                    />
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'API Key (optional)' : 'API Key (opcional)'}
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type="password"
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder={language === 'en' ? 'Optional: OpenRouter API key' : 'Opcional: OpenRouter API key'}
+                                            defaultValue={apiKey}
+                                            onChange={(e) => handleTextApiKeyCommit(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={(e) => {
+                                                const row = (e.currentTarget as HTMLButtonElement).closest('.flu-settings-row');
+                                                const input = row?.querySelector('input[type="password"]') as HTMLInputElement | null;
+                                                if (input) {
+                                                    input.type = input.type === 'password' ? 'text' : 'password';
+                                                }
+                                            }}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                    {apiKey && (
+                                        <span className="flu-settings-api-badge">
+                                            ✅ {language === 'en' ? 'API key configured' : 'API key configurada'}
+                                        </span>
+                                    )}
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'API URL' : 'URL de API'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
+                                        placeholder={OPENROUTER_DEFAULTS.API_URL}
+                                        defaultValue={textApiUrl}
+                                        onChange={(e) => handleTextApiUrlCommit(e.target.value)}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* ---- 🖼️ Imagen (Pollinations) ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🖼️ Imagen (Pollinations)</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'Model' : 'Modelo'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input"
+                                        style={{ fontFamily: 'monospace' }}
+                                        placeholder={language === 'en' ? 'Pollinations (default)' : 'Pollinations (default)'}
+                                        defaultValue={imageModel}
+                                        onChange={(e) => handleImageModelCommit(e.target.value)}
+                                    />
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'API Key' : 'API Key'}
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type="password"
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder={language === 'en' ? 'Optional API key for image service' : 'API key opcional para servicio de imagen'}
+                                            defaultValue={imageApiKey}
+                                            onChange={(e) => handleImageApiKeyCommit(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={(e) => {
+                                                const row = (e.currentTarget as HTMLButtonElement).closest('.flu-settings-row');
+                                                const input = row?.querySelector('input[type="password"]') as HTMLInputElement | null;
+                                                if (input) {
+                                                    input.type = input.type === 'password' ? 'text' : 'password';
+                                                }
+                                            }}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'API URL' : 'URL de API'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
+                                        placeholder={POLLINATIONS_DEFAULTS.BASE_URL}
+                                        defaultValue={imageApiUrl}
+                                        onChange={(e) => handleImageApiUrlCommit(e.target.value)}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* ---- 🖼️ Imagen Gemini (fallback) ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🖼️ Imagen Gemini (fallback)</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en' ? 'Gemini API Key (dedicated)' : 'Gemini API Key (dedicada)'}
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type="password"
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder={language === 'en' ? 'Optional: Gemini native API key' : 'Opcional: Gemini API key nativa'}
+                                            defaultValue={geminiApiKey}
+                                            onChange={(e) => handleGeminiApiKeyCommit(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={(e) => {
+                                                const row = (e.currentTarget as HTMLButtonElement).closest('.flu-settings-row');
+                                                const input = row?.querySelector('input[type="password"]') as HTMLInputElement | null;
+                                                if (input) {
+                                                    input.type = input.type === 'password' ? 'text' : 'password';
+                                                }
+                                            }}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                                    {language === 'en'
+                                        ? 'If empty, falls back to the OpenRouter key. Image fallback is generated via OpenRouter using the cheapest model (google/gemini-2.5-flash-image) and activates automatically when a key is set.'
+                                        : 'Si está vacía, se usa la API key de OpenRouter. La imagen se genera via OpenRouter con el modelo más barato (google/gemini-2.5-flash-image) y se activa automáticamente cuando hay una clave configurada.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* ---- 🔤 OCR ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🔤 OCR</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span>Clave API de OCR</span>
+                                    <input
+                                        type="password"
+                                        className="flu-settings-image-config__input"
+                                        defaultValue={ocrApiKey || ''}
+                                        onChange={(e) => handleOcrApiKeyCommit?.(e.target.value)}
+                                    />
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span>Modelo de OCR</span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input"
+                                        defaultValue={ocrModel || ''}
+                                        onChange={(e) => handleOcrModelCommit?.(e.target.value)}
+                                    />
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span>URL de API de OCR</span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input"
+                                        defaultValue={ocrApiUrl || ''}
+                                        onChange={(e) => handleOcrApiUrlCommit?.(e.target.value)}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* ---- 🎬 Video ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🎬 Video</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span>{language === 'en' ? 'fal.ai API key' : 'Clave API de fal.ai'}</span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type={revealFalKey ? 'text' : 'password'}
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder="key-id:key-secret"
+                                            defaultValue={falApiKey || ''}
+                                            data-testid="video-falai-key"
+                                            onChange={(e) => handleFalApiKeyCommit?.(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={() => setRevealFalKey((prev) => !prev)}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
+                                    {language === 'en'
+                                        ? 'Without a key, video generation produces only script/storyboard.'
+                                        : 'Sin clave, la generación de video produce solo guion/storyboard (no video real).'}
+                                </p>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span>{language === 'en' ? 'Video model (fal.ai)' : 'Modelo de video (fal.ai)'}</span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input flu-settings-input-mono"
+                                        placeholder="fal-ai/wan-25-preview/text-to-video"
+                                        defaultValue={falVideoModel || ''}
+                                        data-testid="video-falai-model"
+                                        onChange={(e) => handleFalVideoModelCommit?.(e.target.value)}
+                                    />
+                                </label>
+                                <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
+                                    {language === 'en'
+                                        ? 'Cheap: fal-ai/wan-25-preview/text-to-video ($0.05/s). Veo3 costs $0.40/s.'
+                                        : 'Barato: fal-ai/wan-25-preview/text-to-video ($0.05/s). Veo3 cuesta $0.40/s.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* ---- 🔎 Búsqueda web (Tavily + OpenRouter) ---- */}
+                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
+                            <h4 className="flu-settings-section__title">🔎 Búsqueda web</h4>
+                            <div className="flu-settings-section__body">
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                                    <span className="flu-settings-image-config__section-label">
+                                        Clave API de Tavily
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type={revealWeb.tavily ? 'text' : 'password'}
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder="tvly-…"
+                                            value={webDraft.tavilyKey}
+                                            data-testid="search-web-tavily-key"
+                                            onChange={(e) => setWebField('tavilyKey', e.target.value)}
+                                            onBlur={() => persistWeb(webDraftRef.current)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={() => setRevealWeb((prev) => ({ ...prev, tavily: !prev.tavily }))}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en'
+                                            ? 'OpenRouter API key (web search)'
+                                            : 'Clave API de OpenRouter (búsqueda web)'}
+                                    </span>
+                                    <div className="flu-settings-row">
+                                        <input
+                                            type={revealWeb.openrouter ? 'text' : 'password'}
+                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            style={{ flex: 1 }}
+                                            placeholder="sk-or-…"
+                                            value={webDraft.openrouterKey}
+                                            data-testid="search-web-openrouter-key"
+                                            onChange={(e) => setWebField('openrouterKey', e.target.value)}
+                                            onBlur={() => persistWeb(webDraftRef.current)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="flu-settings-reveal-btn"
+                                            onClick={() => setRevealWeb((prev) => ({ ...prev, openrouter: !prev.openrouter }))}
+                                        >
+                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                        </button>
+                                    </div>
+                                    {webSave.failed ? (
+                                        <span
+                                            className="flu-settings-api-badge"
+                                            style={{ color: 'var(--accent-red, #e5484d)', borderColor: 'var(--accent-red, #e5484d)' }}
+                                            data-testid="search-web-save-error"
+                                        >
+                                            ⚠️{' '}
+                                            {language === 'en'
+                                                ? `Key NOT saved (${webSave.error || 'storage error'})`
+                                                : `La clave NO se guardó (${webSave.error || 'error de almacenamiento'})`}
+                                        </span>
+                                    ) : null}
+                                </label>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                    <span className="flu-settings-image-config__section-label">
+                                        {language === 'en'
+                                            ? 'OpenRouter model (web search)'
+                                            : 'Modelo de OpenRouter (búsqueda web)'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
+                                        style={{ fontFamily: 'monospace' }}
+                                        placeholder={`${OPENROUTER_DEFAULTS.MODEL}:online`}
+                                        value={webDraft.openrouterModel}
+                                        data-testid="search-web-openrouter-model"
+                                        onChange={(e) => setWebField('openrouterModel', e.target.value)}
+                                        onBlur={() => persistWeb(webDraftRef.current)}
+                                    />
+                                </label>
+                                <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                                    {language === 'en'
+                                        ? 'Web search chain: Tavily → OpenRouter → Wikipedia. Keys are stored in the search settings (same source as the Search Control Center).'
+                                        : 'Cadena de búsqueda web: Tavily → OpenRouter → Wikipedia. Las claves se guardan en la configuración del buscador (misma fuente que el Centro de Control).'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Limpiar caché y recargar */}
+                        {onClearCache && (
+                            <div className="flu-settings-row" style={{ marginTop: 12, gap: 8 }}>
+                                <button
+                                    type="button"
+                                    className="flu-settings-clear-cache-btn"
+                                    onClick={() => {
+                                        const confirmed = window.confirm(
+                                            language === 'en'
+                                                ? 'Clear app cache and reload? Your API key and essential settings will be kept.'
+                                                : '¿Limpiar caché de la app y recargar? Se conservarán tu API key y ajustes esenciales.'
+                                        );
+                                        if (confirmed) onClearCache();
+                                    }}
+                                >
+                                    🧹 {language === 'en' ? 'Clear cache & reload' : 'Limpiar caché y recargar'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </details>
+
+            {/* ---- 🤖 Gobernado por IA (personalidad + branding estacional) ---- */}
+            <details className="flu-settings-image-config">
+                <summary className="flu-settings-image-config__summary">
+                    <span className="flu-settings-image-config__icon">🤖</span>
+                    <span>Gobernado por IA</span>
+                </summary>
+                <div className="flu-settings-image-config__body">
+                    {/* ---- 🎭 Configurador de FLU ---- */}
+            <details className="flu-settings-image-config">
                 <summary className="flu-settings-image-config__summary flu-settings-image-config__summary--with-profile">
                     <span className="flu-settings-image-config__icon">🎭</span>
                     <span>Configurador de FLU</span>
@@ -180,8 +665,10 @@ export function FluSettingsPanel({
                                 <select
                                     value={integrationStore.config.personality.tone}
                                     onChange={(e) => {
+                                        const tone = AVAILABLE_TONES.find((t) => t === e.target.value);
+                                        if (!tone) return;
                                         integrationStore.setConfig({
-                                            personality: { ...integrationStore.config.personality, tone: e.target.value as any },
+                                            personality: { ...integrationStore.config.personality, tone },
                                         });
                                     }}
                                     className="flu-settings-image-config__input"
@@ -488,8 +975,8 @@ export function FluSettingsPanel({
                                 onChange={(e) => onBrandingSeasonChange?.(e.target.value)}
                                 className="flu-settings-image-config__input"
                             >
-                                {Object.entries(PALETTES).map(([key, palette]) => (
-                                    <option key={key} value={key}>
+                                {getAllPalettes().map((palette) => (
+                                    <option key={palette.id} value={palette.id}>
                                         {palette.name}
                                     </option>
                                 ))}
@@ -521,31 +1008,18 @@ export function FluSettingsPanel({
                     </label>
 
                     {/* Preview de paleta activa */}
-                    {brandingMode !== 'disabled' && brandingSeason && PALETTES[brandingSeason] && (
-                        <div style={{
-                            marginTop: 8,
-                            padding: '8px 10px',
-                            background: 'var(--bg-secondary)',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: 'var(--text-xs)',
-                            color: 'var(--text-secondary)',
-                        }}>
+                    {brandingMode !== 'disabled' && brandingSeason && (
+                        <div className="flu-settings-branding-preview">
                             <div style={{ marginBottom: 4 }}>
-                                <strong>Paleta activa:</strong> {PALETTES[brandingSeason].name}
+                                <strong>Paleta activa:</strong> {getPalette(brandingSeason).name}
                             </div>
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                {Object.entries(PALETTES[brandingSeason].colors).slice(0, 6).map(([key, color]) => (
+                                {Object.entries(getPalette(brandingSeason).colors).slice(0, 6).map(([key, color]) => (
                                     <span
                                         key={key}
                                         title={key}
-                                        style={{
-                                            display: 'inline-block',
-                                            width: 20,
-                                            height: 20,
-                                            borderRadius: 4,
-                                            background: color,
-                                            border: '1px solid var(--border-color)',
-                                        }}
+                                        className="flu-settings-branding-swatch"
+                                        style={{ background: color }}
                                     />
                                 ))}
                             </div>
@@ -553,12 +1027,14 @@ export function FluSettingsPanel({
                     )}
                 </div>
             </details>
+                </div>
+            </details>
 
-            {/* ---- 🎤 Editor de Comandos de Voz ---- */}
+            {/* ---- 🎤 Palabras de Activación ---- */}
             <details className="flu-settings-image-config">
                 <summary className="flu-settings-image-config__summary">
                     <span className="flu-settings-image-config__icon">🎤</span>
-                    <span>Editor de Comandos Personalizados</span>
+                    <span>Palabras de Activación</span>
                 </summary>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
@@ -589,40 +1065,34 @@ export function FluSettingsPanel({
                 </summary>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
-                        {/* Estado de logs */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <button
-                                    type="button"
-                                    className="flu-settings-btn"
-                                    onClick={() => {
-                                        // Limpiar logs
-                                        console.clear();
-                                        alert('Logs de depuración limpiados correctamente');
-                                    }}
-                                >
-                                    🧹 Limpiar logs de depuración
-                                </button>
-                                <button
-                                    type="button"
-                                    className="flu-settings-btn"
-                                    onClick={() => {
-                                        // Exportar logs
-                                        const logs = JSON.stringify(window.FLU_CONFIG?.debug || {}, null, 2);
-                                        const blob = new Blob([logs], { type: 'application/json' });
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = 'flu-debug-logs.json';
-                                        a.click();
-                                        URL.revokeObjectURL(url);
-                                        alert('Logs de auditoría exportados correctamente');
-                                    }}
-                                >
-                                    💾 Exportar logs de auditoría
-                                </button>
-                            </div>
-                        </label>
+                        {/* Acciones de auditoría */}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                className="flu-settings-btn"
+                                onClick={async () => {
+                                    await audit.clearAll();
+                                    alert('Registro de auditoría limpiado correctamente');
+                                }}
+                            >
+                                🧹 Limpiar registro de auditoría
+                            </button>
+                            <button
+                                type="button"
+                                className="flu-settings-btn"
+                                onClick={() => {
+                                    const blob = new Blob([JSON.stringify(audit.logs, null, 2)], { type: 'application/json' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = 'flu-audit-logs.json';
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                            >
+                                💾 Exportar registro de auditoría
+                            </button>
+                        </div>
 
                         {/* Configuración de logs */}
                         <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 16 }}>
@@ -635,49 +1105,32 @@ export function FluSettingsPanel({
                                 />
                             </div>
                         </label>
-                    </div>
-                </div>
-            </details>
 
-            {/* ---- 🧠 Configuración Avanzada de Memoria ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🧠</span>
-                    <span>Configuración Avanzada de Memoria</span>
-                </summary>
-                <div className="flu-settings-image-config__body">
-                    <div className="flu-settings-image-config__group">
-                        {/* Curva de olvido */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                            <span>Curva de olvido (segundos)</span>
-                            <input
-                                type="number"
-                                className="flu-settings-image-config__input"
-                                defaultValue={3600}
-                            />
-                            <small style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
-                                Tiempo en segundos para que la memoria se olvide de la información
-                            </small>
-                        </label>
-
-                        {/* Tamaño máximo de memoria */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 16 }}>
-                            <span>Tamaño máximo de memoria</span>
-                            <input
-                                type="number"
-                                className="flu-settings-image-config__input"
-                                defaultValue={100}
-                            />
-                            <small style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
-                                Número máximo de entradas en la memoria de conversación
-                            </small>
-                        </label>
+                        {/* Vista previa de auditoría */}
+                        <div style={{ marginTop: 16 }}>
+                            <span className="flu-settings-sub-title">Últimos eventos registrados</span>
+                            {audit.loading ? (
+                                <small style={{ color: 'var(--text-secondary)' }}>Cargando registro de auditoría…</small>
+                            ) : audit.logs.length === 0 ? (
+                                <small style={{ color: 'var(--text-secondary)' }}>Sin eventos registrados todavía.</small>
+                            ) : (
+                                <ul className="flu-settings-audit-list">
+                                    {audit.logs.slice(0, 8).map((entry) => (
+                                        <li key={entry.id} style={{ marginBottom: 4 }}>
+                                            <strong>{entry.action}</strong> · {entry.entity}
+                                            {entry.context ? ` — ${entry.context}` : ''}
+                                            <span style={{ opacity: 0.7 }}> · {new Date(entry.timestamp).toLocaleString()}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
                     </div>
                 </div>
             </details>
 
             {/* ---- 🎨 Personalización del Avatar ---- */}
-            <details className="flu-settings-image-config" open>
+            <details className="flu-settings-image-config">
                 <summary className="flu-settings-image-config__summary">
                     <span className="flu-settings-image-config__icon">🎨</span>
                     <span>Personalización del Avatar</span>
@@ -746,209 +1199,6 @@ export function FluSettingsPanel({
                                 🎨 Restablecer colores originales
                             </button>
                         </div>
-                    </div>
-                </div>
-            </details>
-
-            {/* ---- 🔌 Servicios Externos ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🔌</span>
-                    <span>Configuración de Servicios Externos</span>
-                </summary>
-                <div className="flu-settings-image-config__body">
-                    <div className="flu-settings-image-config__group">
-                        {/* Proveedor de IA */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                            <span>Proveedor de IA</span>
-                            <select
-                                value={aiProvider === 'deepseek' ? 'openrouter' : (aiProvider || 'openrouter')}
-                                onChange={(e) => setAiProvider?.(e.target.value)}
-                                className="flu-settings-image-config__input"
-                            >
-                                <option value="openrouter">Gemini 2.5 Flash Lite (OpenRouter) — por defecto</option>
-                                <option value="local">Local (Ollama / LM Studio)</option>
-                            </select>
-                        </label>
-
-                        {/* ---- 📝 Texto (Gemini) ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">📝 Texto (Gemini 2.5 Flash Lite vía OpenRouter)</h4>
-                            <div className="flu-settings-section__body">
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                    <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'Model' : 'Modelo'}
-                                    </span>
-                                    <input
-                                        type="text"
-                                        className="flu-settings-image-config__input"
-                                        style={{ fontFamily: 'monospace' }}
-                                        placeholder={language === 'en' ? 'google/gemini-2.5-flash-lite' : 'google/gemini-2.5-flash-lite'}
-                                        defaultValue={textModel}
-                                        onChange={(e) => handleTextModelCommit(e.target.value)}
-                                    />
-                                </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API Key (optional)' : 'API Key (opcional)'}
-                                    </span>
-                                    <div className="flu-settings-row">
-                                        <input
-                                            type="password"
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
-                                            style={{ flex: 1 }}
-                                            placeholder={language === 'en' ? 'Optional: OpenRouter API key' : 'Opcional: OpenRouter API key'}
-                                            defaultValue={apiKey}
-                                            onChange={(e) => handleTextApiKeyCommit(e.target.value)}
-                                        />
-                                        <button
-                                            type="button"
-                                            className="flu-settings-reveal-btn"
-                                            onClick={(e) => {
-                                                const row = (e.currentTarget as HTMLButtonElement).closest('.flu-settings-row');
-                                                const input = row?.querySelector('input[type="password"]') as HTMLInputElement | null;
-                                                if (input) {
-                                                    input.type = input.type === 'password' ? 'text' : 'password';
-                                                }
-                                            }}
-                                        >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
-                                        </button>
-                                    </div>
-                                    {apiKey && (
-                                        <span className="flu-settings-api-badge">
-                                            ✅ {language === 'en' ? 'API key configured' : 'API key configurada'}
-                                        </span>
-                                    )}
-                                </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API URL' : 'URL de API'}
-                                    </span>
-                                    <input
-                                        type="text"
-                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
-                                        placeholder="https://openrouter.ai/api/v1"
-                                        defaultValue={textApiUrl}
-                                        onChange={(e) => handleTextApiUrlCommit(e.target.value)}
-                                    />
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* ---- 🖼️ Imagen (Pollinations) ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🖼️ Imagen (Pollinations)</h4>
-                            <div className="flu-settings-section__body">
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                    <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'Model' : 'Modelo'}
-                                    </span>
-                                    <input
-                                        type="text"
-                                        className="flu-settings-image-config__input"
-                                        style={{ fontFamily: 'monospace' }}
-                                        placeholder={language === 'en' ? 'Pollinations (default)' : 'Pollinations (default)'}
-                                        defaultValue={imageModel}
-                                        onChange={(e) => handleImageModelCommit(e.target.value)}
-                                    />
-                                </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API Key' : 'API Key'}
-                                    </span>
-                                    <div className="flu-settings-row">
-                                        <input
-                                            type="password"
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
-                                            style={{ flex: 1 }}
-                                            placeholder={language === 'en' ? 'Optional API key for image service' : 'API key opcional para servicio de imagen'}
-                                            defaultValue={imageApiKey}
-                                            onChange={(e) => handleImageApiKeyCommit(e.target.value)}
-                                        />
-                                        <button
-                                            type="button"
-                                            className="flu-settings-reveal-btn"
-                                            onClick={(e) => {
-                                                const row = (e.currentTarget as HTMLButtonElement).closest('.flu-settings-row');
-                                                const input = row?.querySelector('input[type="password"]') as HTMLInputElement | null;
-                                                if (input) {
-                                                    input.type = input.type === 'password' ? 'text' : 'password';
-                                                }
-                                            }}
-                                        >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
-                                        </button>
-                                    </div>
-                                </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API URL' : 'URL de API'}
-                                    </span>
-                                    <input
-                                        type="text"
-                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
-                                        placeholder="https://image.pollinations.ai/prompt"
-                                        defaultValue={imageApiUrl}
-                                        onChange={(e) => handleImageApiUrlCommit(e.target.value)}
-                                    />
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* ---- 🔤 OCR ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🔤 OCR</h4>
-                            <div className="flu-settings-section__body">
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                    <span>Clave API de OCR</span>
-                                    <input
-                                        type="password"
-                                        className="flu-settings-image-config__input"
-                                        defaultValue={ocrApiKey || ''}
-                                        onChange={(e) => handleOcrApiKeyCommit?.(e.target.value)}
-                                    />
-                                </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span>Modelo de OCR</span>
-                                    <input
-                                        type="text"
-                                        className="flu-settings-image-config__input"
-                                        defaultValue={ocrModel || ''}
-                                        onChange={(e) => handleOcrModelCommit?.(e.target.value)}
-                                    />
-                                </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span>URL de API de OCR</span>
-                                    <input
-                                        type="text"
-                                        className="flu-settings-image-config__input"
-                                        defaultValue={ocrApiUrl || ''}
-                                        onChange={(e) => handleOcrApiUrlCommit?.(e.target.value)}
-                                    />
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* Limpiar caché y recargar */}
-                        {onClearCache && (
-                            <div className="flu-settings-row" style={{ marginTop: 12, gap: 8 }}>
-                                <button
-                                    type="button"
-                                    className="flu-settings-clear-cache-btn"
-                                    onClick={() => {
-                                        const confirmed = window.confirm(
-                                            language === 'en'
-                                                ? 'Clear app cache and reload? Your API key and essential settings will be kept.'
-                                                : '¿Limpiar caché de la app y recargar? Se conservarán tu API key y ajustes esenciales.'
-                                        );
-                                        if (confirmed) onClearCache();
-                                    }}
-                                >
-                                    🧹 {language === 'en' ? 'Clear cache & reload' : 'Limpiar caché y recargar'}
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
             </details>

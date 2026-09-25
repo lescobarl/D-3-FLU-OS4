@@ -14,9 +14,12 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey } from '../core/config/appConfig';
+import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveDedicatedGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
+import { logCaughtError } from '../lib/caughtError';
+import { localGet, localKeys, localRemove, localSet } from '../core/storage/localStore';
 
 // ============================================================
 // Tipos
@@ -27,10 +30,15 @@ export interface ConfigPersistence {
     apiKey: string;
     textModel: string;
     textApiUrl: string;
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    geminiApiKey: string;
     // Image (Pollinations) Config
     imageApiKey: string;
     imageModel: string;
     imageApiUrl: string;
+    // Video (fal.ai) — key para video real text-to-video
+    falApiKey: string;
+    falVideoModel: string;
     // OCR Config (local Tesseract default + endpoint remoto opcional)
     ocrApiKey: string;
     ocrModel: string;
@@ -47,9 +55,12 @@ export interface ConfigPersistence {
     handleTextApiKeyCommit: (key: string) => void;
     handleTextModelCommit: (model: string) => void;
     handleTextApiUrlCommit: (url: string) => void;
+    handleGeminiApiKeyCommit: (key: string) => void;
     handleImageApiKeyCommit: (key: string) => void;
     handleImageModelCommit: (model: string) => void;
     handleImageApiUrlCommit: (url: string) => void;
+    handleFalApiKeyCommit: (key: string) => void;
+    handleFalVideoModelCommit: (model: string) => void;
     handleOcrApiKeyCommit: (key: string) => void;
     handleOcrModelCommit: (model: string) => void;
     handleOcrApiUrlCommit: (url: string) => void;
@@ -75,9 +86,10 @@ export interface ConfigPersistence {
  */
 function loadString(key: string, fallback = ''): string {
     try {
-        const val = localStorage.getItem(key);
+        const val = localGet(key);
         return val ?? fallback;
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
         return fallback;
     }
 }
@@ -87,8 +99,9 @@ function loadString(key: string, fallback = ''): string {
  */
 function saveString(key: string, value: string): void {
     try {
-        localStorage.setItem(key, value);
-    } catch {
+        localSet(key, value);
+    } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
         // Silently ignore storage errors (quota exceeded, private mode, etc.)
     }
 }
@@ -108,10 +121,17 @@ export function useConfigPersistence(): ConfigPersistence {
     const [textModel, setTextModel] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_MODEL));
     const [textApiUrl, setTextApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_API_URL));
 
+    // ---- Gemini nativo (paso 5): clave dedicada + toggle del fallback de imagen ----
+    // Usa resolveDedicatedGeminiApiKey() centralizado desde appConfig (Rule #1: NO HARDCODE).
+    const [geminiApiKey, setGeminiApiKey] = useState<string>(() => resolveDedicatedGeminiApiKey());
+
     // ---- Image (Pollinations) Config ----
     const [imageApiKey, setImageApiKey] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_KEY));
     const [imageModel, setImageModel] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_MODEL));
     const [imageApiUrl, setImageApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_URL));
+    // ---- Video (fal.ai) ----
+    const [falApiKey, setFalApiKey] = useState<string>(() => loadString(STORAGE_KEYS.FALAI_API_KEY));
+    const [falVideoModel, setFalVideoModel] = useState<string>(() => resolveFalVideoModel());
 
     // ---- OCR Config (local Tesseract default + endpoint remoto opcional) ----
     const [ocrApiKey, setOcrApiKey] = useState<string>(() => loadString(STORAGE_KEYS.OCR_API_KEY));
@@ -121,9 +141,10 @@ export function useConfigPersistence(): ConfigPersistence {
     // ---- Language ----
     const [language, setLanguage] = useState<'es' | 'en' | 'both'>(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
+            const saved = localGet(STORAGE_KEYS.LANGUAGE);
             if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
-        } catch { /* ignore */ }
+        } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         return UI_DEFAULTS.LANGUAGE;
     });
 
@@ -138,7 +159,7 @@ export function useConfigPersistence(): ConfigPersistence {
     );
     const [debugLogsEnabled, setDebugLogsEnabledState] = useState<boolean>(() => {
         const saved = loadString(STORAGE_KEYS.DEBUG_LOGS_ENABLED);
-        return saved === '' ? (FLU_CONFIG.debug.enabled ?? true) : saved === 'true';
+        return saved === '' ? (FLU_CONFIG.debug.enabled ?? false) : saved === 'true';
     });
     const wakeWordsRef = useRef(wakeWords);
     wakeWordsRef.current = wakeWords;
@@ -153,12 +174,11 @@ export function useConfigPersistence(): ConfigPersistence {
     const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
     useEffect(() => {
         const load = () => {
-            const available = window.speechSynthesis.getVoices();
+            const available = getSpeechVoices();
             if (available.length > 0) setVoices(available);
         };
         load();
-        window.speechSynthesis.onvoiceschanged = load;
-        return () => { window.speechSynthesis.onvoiceschanged = null; };
+        return subscribeSpeechVoices(load);
     }, []);
 
     // ---- Persist language changes ----
@@ -218,6 +238,14 @@ export function useConfigPersistence(): ConfigPersistence {
         auditLog.logChange('config', 'text-api-url', prev, url, 'Text API URL updated').catch(console.error);
     }, [textApiUrl, auditLog]);
 
+    // ---- Gemini nativo (paso 5) config handlers ----
+    const handleGeminiApiKeyCommit = useCallback((key: string) => {
+        const prev = geminiApiKey;
+        setGeminiApiKey(key);
+        saveString(STORAGE_KEYS.GEMINI_API_KEY, key);
+        auditLog.logChange('config', 'gemini-api-key', prev, key, 'Gemini API Key updated').catch(console.error);
+    }, [geminiApiKey, auditLog]);
+
     // ---- Image (Pollinations) config handlers ----
     const handleImageApiKeyCommit = useCallback((key: string) => {
         const prev = imageApiKey;
@@ -225,6 +253,20 @@ export function useConfigPersistence(): ConfigPersistence {
         saveString(STORAGE_KEYS.IMAGE_API_KEY, key);
         auditLog.logChange('config', 'image-api-key', prev, key, 'Image API Key updated').catch(console.error);
     }, [imageApiKey, auditLog]);
+
+    const handleFalApiKeyCommit = useCallback((key: string) => {
+        const prev = falApiKey;
+        setFalApiKey(key);
+        saveString(STORAGE_KEYS.FALAI_API_KEY, key);
+        auditLog.logChange('config', 'falai-api-key', prev, key, 'Fal.ai Video API Key updated').catch(console.error);
+    }, [falApiKey, auditLog]);
+
+    const handleFalVideoModelCommit = useCallback((model: string) => {
+        const prev = falVideoModel;
+        setFalVideoModel(model);
+        saveString(STORAGE_KEYS.FALAI_VIDEO_MODEL, model);
+        auditLog.logChange('config', 'falai-video-model', prev, model, 'Fal.ai Video model updated').catch(console.error);
+    }, [falVideoModel, auditLog]);
 
     const handleImageModelCommit = useCallback((model: string) => {
         const prev = imageModel;
@@ -283,6 +325,7 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.TEXT_API_KEY,
             STORAGE_KEYS.TEXT_MODEL,
             STORAGE_KEYS.TEXT_API_URL,
+            STORAGE_KEYS.GEMINI_API_KEY,
             STORAGE_KEYS.IMAGE_API_KEY,
             STORAGE_KEYS.IMAGE_MODEL,
             STORAGE_KEYS.IMAGE_API_URL,
@@ -293,15 +336,15 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.SESSION_ROLE,
             STORAGE_KEYS.WAKE_WORDS,
             STORAGE_KEYS.DEBUG_LOGS_ENABLED,
+            // Config del buscador (llaves/modelo de proveedores web). Sin esto,
+            // "Limpiar caché" borraba la key de OpenRouter/Tavily.
+            STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES,
         ]);
         try {
-            const toRemove: string[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && !keep.has(key)) toRemove.push(key);
-            }
-            toRemove.forEach((k) => localStorage.removeItem(k));
-        } catch { /* ignore */ }
+            const toRemove = localKeys().filter((key) => !keep.has(key));
+            toRemove.forEach((k) => localRemove(k));
+        } catch (e) {
+        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         // Rehidratar el estado desde la fuente de verdad (localStorage)
         setApiKey(resolveTextApiKey());
         window.location.reload();
@@ -311,9 +354,12 @@ export function useConfigPersistence(): ConfigPersistence {
         apiKey,
         textModel,
         textApiUrl,
+        geminiApiKey,
         imageApiKey,
         imageModel,
         imageApiUrl,
+        falApiKey,
+        falVideoModel,
         ocrApiKey,
         ocrModel,
         ocrApiUrl,
@@ -325,9 +371,12 @@ export function useConfigPersistence(): ConfigPersistence {
         handleTextApiKeyCommit,
         handleTextModelCommit,
         handleTextApiUrlCommit,
+        handleGeminiApiKeyCommit,
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,
+        handleFalApiKeyCommit,
+        handleFalVideoModelCommit,
         handleOcrApiKeyCommit,
         handleOcrModelCommit,
         handleOcrApiUrlCommit,

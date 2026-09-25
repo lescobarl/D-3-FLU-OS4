@@ -15,6 +15,7 @@ export interface DocumentResultPanelProps {
     error?: string | null;
     onClear?: () => void;
     language?: string;
+    hideHeader?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -42,12 +43,13 @@ export default function DocumentResultPanel({
     error = null,
     onClear,
     language = 'es',
+    hideHeader = false,
 }: DocumentResultPanelProps) {
     const isEn = language === 'en';
 
     if (isAnalyzing) {
         return (
-            <div className="frame-content__document-analysis">
+            <div className="frame-content__document-analysis" data-testid="document-analysis" data-state="analyzing">
                 <p className="flu-upload-zone__analyzing">
                     {isEn ? '🔍 Analyzing document with AI...' : '🔍 Analizando documento con IA...'}
                 </p>
@@ -57,7 +59,11 @@ export default function DocumentResultPanel({
 
     if (error) {
         return (
-            <div className="frame-content__document-analysis frame-content__document-analysis--error">
+            <div
+                className="frame-content__document-analysis frame-content__document-analysis--error"
+                data-testid="document-analysis"
+                data-state="error"
+            >
                 <p className="frame-content__document-error">{error}</p>
                 {onClear && (
                     <button type="button" className="flu-btn flu-btn--small" onClick={onClear}>
@@ -78,21 +84,23 @@ export default function DocumentResultPanel({
     const hasEscenarios = Array.isArray(document.escenarios) && document.escenarios.length > 0;
 
     return (
-        <div className="frame-content__document-analysis">
-            <div className="document-analysis__header">
-                <h4 className="document-analysis__title">
-                    📄 {isEn ? 'Document Analysis' : 'Análisis de Documento'}
-                </h4>
-                <div className="document-analysis__meta">
-                    <span className="document-analysis__meta-item">
-                        {TIPO_LABEL[document.tipo] || document.tipo}
-                    </span>
-                    <span className="document-analysis__meta-item" title={document.nombre}>
-                        {document.nombre}
-                    </span>
-                    <span className="document-analysis__meta-item">{formatBytes(document.tamaño)}</span>
+        <div className="frame-content__document-analysis" data-testid="document-analysis" data-state="done">
+            {!hideHeader && (
+                <div className="document-analysis__header">
+                    <h4 className="document-analysis__title">
+                        📄 {isEn ? 'Document Analysis' : 'Análisis de Documento'}
+                    </h4>
+                    <div className="document-analysis__meta">
+                        <span className="document-analysis__meta-item">
+                            {TIPO_LABEL[document.tipo] || document.tipo}
+                        </span>
+                        <span className="document-analysis__meta-item" title={document.nombre}>
+                            {document.nombre}
+                        </span>
+                        <span className="document-analysis__meta-item">{formatBytes(document.tamaño)}</span>
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="homework-analysis__detail">
                 <span className="homework-analysis__label">

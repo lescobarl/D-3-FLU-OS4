@@ -17,6 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -90,12 +91,14 @@ export const VEO_VEO_BANK: readonly VeoVeoItem[] = Object.freeze([
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = VEO_VEO_BANK.length;
 
+// "no sé" = el niño está atascado → PISTA de la categoría (documentado).
+// Se elimina de SKIP: tenerlo en ambas listas era código muerto (HINT gana).
 const HINT_FRAMES: readonly string[] = Object.freeze([
     'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'otra', 'siguiente', 'paso', 'no se', 'no sé',
+    'otra', 'siguiente', 'paso', 'me rindo',
 ]);
 
 const END_FRAMES: readonly string[] = Object.freeze([
@@ -115,29 +118,9 @@ interface VeoVeoState {
 
 type RandomSource = () => number;
 
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
 
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
 
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
 
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
 
 /** Baraja determinista (Fisher-Yates) de los índices del banco. */
 function shuffleOrder(rng: RandomSource): number[] {
@@ -159,33 +142,26 @@ function itemLetter(item: VeoVeoItem): string {
     return stripDiacritics(item.nombre).trim()[0]?.toUpperCase() ?? '?';
 }
 
+/**
+ * Pista del juego. En el veo-veo real se adivina entre lo que ambos VEN; aquí
+ * no hay escena compartida, así que la letra sola es injugable ("algo con G").
+ * Por eso la pista SIEMPRE incluye la categoría del banco (fuente única de datos).
+ */
 function itemPrompt(item: VeoVeoItem): string {
-    return `Veo una cosita que empieza con la letra ${itemLetter(item)}. ¿Qué es?`;
+    return `Veo una cosita que empieza con la letra ${itemLetter(item)} y es ${item.categoria}. ¿Qué es?`;
 }
 
-export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine {
+export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine<VeoVeoState> {
     let rng: RandomSource = options?.random ?? Math.random;
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
     const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState => {
-        adoptRandom(cfg);
+        rng = adoptRandom(rng, cfg);
         const state: VeoVeoState = {
             order: shuffleOrder(rng),
             cursor: 0,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
+        session.state = state;
         session.score = 0;
         session.round = 1;
         return state;
@@ -194,14 +170,14 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
     return {
         id: 'veo_veo',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<VeoVeoState> {
+            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'veo_veo',
                 state: {
                     order: shuffleOrder(rng),
                     cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
+                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
                 score: 0,
@@ -211,7 +187,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            const state = session.state as unknown as VeoVeoState;
+            const state = session.state as VeoVeoState;
             const item = itemAt(state);
             return {
                 prompt: `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`,
@@ -224,7 +200,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as VeoVeoState;
+            const state = session.state as VeoVeoState;
 
             if (state.phase === 'done') {
                 return {

@@ -56,6 +56,12 @@ export interface ConversationEntry {
     id: string;
     /** Nombre del hablante (OS2: speakerName / speaker) */
     speakerName?: string;
+    /**
+     * Participante dueño de la entrada (aislamiento multiusuario del pizarrón).
+     * Se sella al crear la fila con el participante activo; sin participante
+     * queda sin definir (ruta legacy/global).
+     */
+    personId?: string;
     /** Respuesta de FLU a este mensaje (OS2: response) */
     response?: string;
     /** Metadatos adicionales (OS2: meta.response) */
@@ -102,7 +108,8 @@ export type EmotionalState =
 export type FluProfile =
     | 'administrativo'
     | 'profesor'
-    | 'estudiante';
+    | 'estudiante'
+    | 'animador';
 
 /**
  * Configuración de imagen del avatar (componentes visuales).
@@ -317,18 +324,28 @@ export interface MinuteEntry {
  */
 export interface WorkspaceEntry {
     id: string;
+    /**
+     * Participante dueño del artefacto (aislamiento multiusuario del pizarrón).
+     * Se sella al establecer el artefacto con el participante activo; sin
+     * participante queda sin definir (ruta legacy/global).
+     */
+    personId?: string;
     /** Texto de la respuesta de FLU */
     respuesta: string;
     /** Título del contenido workspace (desde Gemini contract) */
     titulo?: string;
     /** Tipo de contenido workspace (desde Gemini contract) */
-    tipo?: 'text' | 'image_prompt' | 'diagram' | '3d' | null;
+    tipo?: 'text' | 'image_prompt' | 'diagram' | '3d' | 'horario' | 'doc' | 'video' | null;
+    /** Modo de visualización del horario de clases (solo cuando tipo === 'horario') */
+    modo?: 'semana' | 'dia' | 'proxima' | 'recordatorios';
     /** Contenido textual del workspace (desde Gemini contract) */
     contenido?: string;
     /** Prompt visual para generación de imágenes (desde Gemini contract) */
     prompt_visual?: string;
     /** Puntos clave extraídos de la conversación */
     puntos_clave: string[];
+    /** Origen del contenido: 'web' (navegación/búsqueda) o 'ia' (respuesta de Gemini) */
+    origen?: 'web' | 'ia';
     /** Timestamp de generación */
     timestamp: number;
 }
@@ -356,6 +373,24 @@ export interface FluDiagnostics {
 }
 
 /**
+ * Acción estructurada emitida por la IA (el "cerebro conversacional") cuando el
+ * usuario pide, de forma natural, crear/consultar recordatorios, compras,
+ * alarmas, temporizadores, notas, diario u horario.
+ *
+ * La IA decide la INTENCIÓN (dominio) y deja el TEXTO del mandato tal como lo
+ * dijo el usuario; el despacho re-resuelve ese texto con los parsers
+ * deterministas (fuente de verdad del parseo temporal/preciso) y ejecuta el
+ * mismo manejador __fluHandle* que usa el modo offline. Así FLU es
+ * conversacional (la IA entiende y responde) pero la ejecución es precisa.
+ */
+export interface FluAccion {
+    /** Dominio al que pertenece la acción (calendario, compras, diario, nota). */
+    dominio: 'agenda' | 'shopping' | 'diary' | 'note';
+    /** Fragmento del mandato del usuario que dispara la acción (ej. "recuérdame comprar leche a las 7"). */
+    texto: string;
+}
+
+/**
  * FLU Contract — structured response from AI (Gemini).
  * Contains spoken response, navigation commands, and optional workspace content.
  */
@@ -373,6 +408,14 @@ export interface FluContract {
         prompt_visual: string;
         puntos_clave: string[];
     } | null;
+    /**
+     * Acciones estructuradas que la IA emite cuando el usuario pide, de forma
+     * conversacional, crear/consultar recordatorios, compras, alarmas,
+     * temporizadores, notas, diario u horario. Cada acción lleva el dominio y
+     * el texto del mandato; el despacho las ejecuta con los parsers
+     * deterministas (misma fuente de verdad que el modo offline).
+     */
+    acciones?: FluAccion[];
     /** Animación sugerida por Gemini para el avatar (darle vida) */
     animacion?: string;
     /** Expresión sugerida por Gemini para el avatar (darle vida) */

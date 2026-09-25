@@ -6,15 +6,13 @@ import { FLU_CONFIG } from './fluConfig.js'
 import {
   collapseRepeatedSpeech,
   mergeSpeechText,
-  collapseEchoPhrase,
-  collapseMisorderedMicMerge,
   resolveMicFragmentMerge,
-  collapseAsrStutter,
   normalizeMicText,
   hasSpeechAnchor,
   preferNewRowForShortFinal,
+  utterancesRelate,
 } from './speechMerge.js'
-import { shouldForceNewLogRowOnCommit, shouldRelaxIngressTextGuards } from './ingressGuards.js'
+import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg } from './fluTranscriptPause.js'
 
 export {
@@ -23,26 +21,13 @@ export {
   collapseEchoPhrase,
   mergeMicChunks,
   pickBestMicInterim,
-  collapseMisorderedMicMerge,
   micPublishedParityOk,
   resolveMicFragmentMerge,
   collapseAsrStutter,
   normalizeMicText,
   hasSpeechAnchor,
+  utterancesRelate,
 } from './speechMerge.js'
-
-/** Misma frase acumulativa de Chrome o revisión ASR (cola), no un turno nuevo. */
-export function utterancesRelate(previous = '', next = '') {
-  const prev = cleanForSpeech(previous)
-  const nxt = cleanForSpeech(next)
-  if (!prev || !nxt) return true
-  const pLow = prev.toLowerCase()
-  const nLow = nxt.toLowerCase()
-  if (nLow.startsWith(pLow) || pLow.startsWith(nLow)) return true
-  if (prev.length > nxt.length && (prev.endsWith(nxt) || prev.includes(` ${nxt}`))) return true
-  if (nxt.length > prev.length && (nxt.endsWith(prev) || nxt.includes(` ${prev}`))) return true
-  return false
-}
 
 /** Revisión progresiva ASR (com→Comes po→Comes pollo): mismo turno, no concatenar. */
 export function utterancesAsrProgress(previous = '', next = '') {
@@ -58,13 +43,55 @@ export function utterancesAsrProgress(previous = '', next = '') {
   return false
 }
 
+/**
+ * §9 (anti-fragmentación): ¿`capture` es la MISMA emisión creciendo respecto de
+ * `lastCommitted`? Si lo es, NO se debe pelar el prefijo ya comprometido (eso
+ * produciría residuos como "tas de cafe" a partir de "busca en la web rece" +
+ * "busca en la web recetas de cafe").
+ *
+ * Fuente ÚNICA del criterio: la usan por igual el camino de FINALES y el de
+ * INTERIMS de transcriptIngress.js, para que no puedan divergir.
+ */
+export function isProgressiveExtension(capture = '', lastCommitted = '') {
+  const next = cleanForSpeech(capture)
+  const prior = cleanForSpeech(lastCommitted)
+  if (!next || !prior || next.length <= prior.length) return false
+  return (
+    next.toLowerCase().startsWith(prior.toLowerCase()) ||
+    utterancesAsrProgress(prior, next)
+  )
+}
+
+/**
+ * §9 ÚNICA FUENTE DE VERDAD del texto de un turno en ingress.
+ *
+ * Decide, en UN SOLO lugar, qué texto corresponde al turno actual frente a la
+ * última fila commiteada: conserva la emisión que crece, pela el prefijo ya
+ * commiteado cuando corresponde y no inventa residuos. La usan por igual el
+ * camino de FINALES y el de INTERIMS; antes cada uno tenía su propia lógica y
+ * podían divergir (residuo "tas de cafe" del log).
+ *
+ * @param {string} raw Texto entrante (final o interim).
+ * @param {string} lastCommitted Última fila commiteada.
+ * @param {{ atFreshVoice?: boolean }} [options] `atFreshVoice` conserva el texto
+ *   cuando no continúa la fila (voz nueva), en vez de pelar.
+ */
+export function resolveIngressCaptureText(raw = '', lastCommitted = '', { atFreshVoice = false } = {}) {
+  const current = cleanForSpeech(raw)
+  const prior = cleanForSpeech(lastCommitted)
+  if (!current || !prior) return current
+  if (isProgressiveExtension(current, prior)) return current
+  if (atFreshVoice) return current
+  const peeled = cleanForSpeech(peelCommittedPrefixFromInterim(current, prior))
+  return peeled || current
+}
+
 function speechWords(text = '') {
   return cleanForSpeech(text).split(/\s+/).filter(Boolean)
 }
 
-export function countSpeechWords(text = '') {
-  return countWordsFromPauseCfg(text)
-}
+// Dueño canónico: fluTranscriptPause.js. Se re-exporta para no duplicar.
+export { countSpeechWords } from './fluTranscriptPause.js'
 
 /** Cola ASR suelta tras pausa: heurística de relación + umbrales en fluConfig. */
 export function isTailOnlyInterimCapture(capture = '', turnLive = '', lastCommitted = '') {
@@ -83,7 +110,7 @@ export function isTailOnlyInterimCapture(capture = '', turnLive = '', lastCommit
     if (utterancesRelate(prior, cap) && cap.length < prior.length * ratio) return true
   }
   const maxWords = Number(cfg.tailOnlyMaxWords)
-  if (maxWords > 0 && countSpeechWords(cap) <= maxWords) {
+  if (maxWords > 0 && countWordsFromPauseCfg(cap) <= maxWords) {
     const maxChars = Number(cfg.tailOnlyMaxChars)
     if (!(maxChars > 0) || cap.length < maxChars) return true
   }
@@ -228,7 +255,11 @@ export function recoverInterimAfterStrip(rawInterim = '', priorTexts = []) {
   return raw
 }
 
-/** Interino idéntico al último commit (Chrome repite tras isFinal). */
+/**
+ * Interino idéntico al último commit (Chrome repite tras isFinal).
+ * NO duplica `audioMath.spokenUtteranceRevision` (comparador de revisión):
+ * aquí la política es "eco de commit"; allí, el avance de la emisión hablada.
+ */
 export function isCommittedInterimEcho(interim = '', lastCommitted = '') {
   const chunk = cleanForSpeech(interim)
   const prior = cleanForSpeech(lastCommitted)
@@ -289,9 +320,8 @@ export { clearStaleCommittedEchoFromState }
  */
 export function evaluateStaleInterimFlush(
   state,
-  nowMs = Date.now(),
+  _nowMs = Date.now(),
   maxMs = getTranscriptPauseCfg().interimOpenLineFlushMs,
-  { lastCommitAtMs = 0, lastCommitted = '' } = {},
 ) {
   const turnLive = cleanForSpeech(readTurnLive(state))
   const capture = turnLive || cleanForSpeech(readOpenLine(state))
@@ -326,7 +356,7 @@ export function evaluateSrGapSegmentCommit(
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
   const minWords = Number(cfg.srGapCommitMinWords)
-  if (countSpeechWords(capture) < minWords) {
+  if (countWordsFromPauseCfg(capture) < minWords) {
     return { flush: false, capture, reason: 'too-short' }
   }
 
@@ -336,8 +366,8 @@ export function evaluateSrGapSegmentCommit(
   }
   const extensionChars = prior ? Math.max(0, capture.length - prior.length) : capture.length
   const extensionWords = prior
-    ? countSpeechWords(capture.slice(Math.min(prior.length, capture.length)))
-    : countSpeechWords(capture)
+    ? countWordsFromPauseCfg(capture.slice(Math.min(prior.length, capture.length)))
+    : countWordsFromPauseCfg(capture)
   if (
     prior &&
     utterancesSameRevision(prior, capture) &&
@@ -391,31 +421,15 @@ export function readTurnLive(state) {
 
 export const readStreamDisplay = readTurnLive
 
-/** Quita prefijos de filas ya cerradas en interinos acumulativos de Chrome. */
+/**
+ * Quita prefijos de filas ya cerradas en interinos acumulativos de Chrome
+ * (todas las filas). Fuente ÚNICA del recorte: delega en
+ * `stripRecentClosedTurnsFromInterim` con el total de turnos, para no
+ * reimplementar el bucle.
+ */
 export function stripPriorTurnsFromInterim(interim = '', priorTexts = []) {
-  let chunk = cleanForSpeech(interim)
-  if (!chunk || !priorTexts?.length) return chunk
-
-  const priors = priorTexts
-    .map((t) => cleanForSpeech(t))
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
-  if (!priors.length) return chunk
-
-  let prev = ''
-  let passes = 0
-  while (chunk !== prev && passes < 12) {
-    prev = chunk
-    passes += 1
-    for (const prior of priors) {
-      if (!prior) continue
-      if (chunk.toLowerCase().startsWith(prior.toLowerCase())) {
-        chunk = cleanForSpeech(chunk.slice(prior.length))
-        break
-      }
-    }
-  }
-  return chunk
+  const total = Array.isArray(priorTexts) ? priorTexts.length : 0
+  return stripRecentClosedTurnsFromInterim(interim, priorTexts, total)
 }
 
 /** Solo los últimos N turnos cerrados (no toda la sesión); evita vaciar interinos largos. */
@@ -844,7 +858,7 @@ export function validateLogRowsNoAsrRevisionDup(rows = []) {
   return true
 }
 
-export function assessStreamParity(micInterim = '', published = '', session = '') {
+export function assessStreamParity(micInterim = '', published = '', _session = '') {
   const mic = micInterim ? cleanForSpeech(micInterim) : ''
   if (!mic) return { ok: true }
 

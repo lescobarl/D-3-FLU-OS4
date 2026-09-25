@@ -4,9 +4,11 @@
  * - Final → único commit al log + sesión archivada
  */
 import { cleanForSpeech } from './audioMath.js'
+import { phrasesEquivalent } from './activeListen.js'
 import {
   archiveCommittedTurn,
   processListenPacket,
+  readTurnLive,
   resolveLogRowAction,
   shouldRefreshStream,
 } from './conversationStream.js'
@@ -77,6 +79,25 @@ export function resolveMicCommitAction(
     capture,
     logRowContext,
   })
+}
+
+/**
+ * Re-emisión del mismo turno ya cerrado: la MISMA frase vuelve a commitearse
+ * sin que haya llegado un nuevo resultado de reconocimiento desde el último
+ * commit (doble `onend` / doble dispatch de la misma línea cerrada). El
+ * discriminador es determinista, sin ventanas de tiempo: si hubo habla nueva,
+ * `lastResultAt > lastCommitAt`. Preserva "pausa ⇒ fila nueva" (ahí el nuevo
+ * resultado llega DESPUÉS del commit).
+ */
+export function isDuplicateTurnCommit(
+  capture,
+  { lastEmitted = '', lastCommitted = '', lastResultAt = 0, lastCommitAt = 0 } = {},
+) {
+  if (!capture || !lastCommitAt) return false
+  if (lastResultAt > lastCommitAt) return false
+  const prior = lastEmitted || lastCommitted
+  if (!prior) return false
+  return phrasesEquivalent(capture, prior)
 }
 
 /** Cierra preview tras commit exitoso. */

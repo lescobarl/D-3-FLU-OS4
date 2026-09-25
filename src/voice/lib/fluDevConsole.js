@@ -2,6 +2,8 @@
  * Panel dev: log mic ingress (texto publicado completo, reciente arriba).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const PANEL_ID = 'flu-dev-mic-log'
@@ -37,7 +39,8 @@ function loadPanelPosition(panel) {
     }
     if (Number.isFinite(width) && width >= 240) panel.style.width = `${width}px`
     if (Number.isFinite(height) && height >= 120) panel.style.height = `${height}px`
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js', e);
     // ignore
   }
 }
@@ -54,7 +57,8 @@ function savePanelPosition(panel) {
         height: Math.round(rect.height),
       }),
     )
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js', e);
     // ignore
   }
 }
@@ -100,7 +104,8 @@ function enablePanelDrag(panel, handle) {
     dragging = false
     try {
       handle.releasePointerCapture(pointerId)
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluDevConsole.js', e);
       // ignore
     }
     pointerId = null
@@ -189,7 +194,7 @@ export function appendFluMicLogLine({ seq, source, kind, published, raw = '', no
   if (!body) return
 
   const line = document.createElement('div')
-  const clock = new Date().toLocaleTimeString('es-MX', { hour12: false })
+  const clock = new Date().toLocaleTimeString(SPEECH_LOCALES.es, { hour12: false })
   const head = `${clock} #${seq} [${source}] ${kind}`
   const text = published || raw || note
   line.textContent = note && published ? `${head} ${published} (${note})` : `${head} ${text}`

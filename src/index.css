@@ -1,11 +1,11 @@
 /* ============================================================
    FLU OS4 — Estilos Globales con Sistema Unificado
    ============================================================
-   Orden de importación real (desde main.tsx → App.tsx → avatar/App.tsx):
-      1. src/avatar/App.css      — :root CSS variables + BunnyControlCenter
-      2. src/App.css             — Main layout + tabs + panels
-      3. src/styles/unified.css  — Sistema CSS unificado flu-*
-      4. src/index.css           — Global overrides (este archivo, el último)
+   Orden de importación real (desde main.tsx → App.tsx → index.css):
+      1. src/avatar/App.css        — :root CSS variables + BunnyControlCenter
+      2. src/styles/unified.css    — Sistema unificado: layout legacy de la
+                                     app (ex-App.css) + componentes flu-*
+      3. src/index.css             — Global overrides (este archivo, el último)
    ============================================================ */
 
 /* Importar sistema unificado */
@@ -114,7 +114,7 @@ html {
     align-self: flex-end;
 }
 
-/* Note: .flu-shell-tabs styles moved to src/App.css (lines 665+) */
+/* Note: .flu-shell-tabs styles moved to src/styles/unified.css (Fase 4) */
 
 /* ---- VoiceControls Override (inside FluAvatarVoiceBridge) ---- */
 
@@ -181,111 +181,27 @@ html {
 /* ---- Upload Zone (digitalización OCR) ---- */
 
 .frame-content__upload-zone {
-    margin: 12px 0;
+    margin: 4px 0;
     padding: 0;
 }
 
-.upload-zone__drop {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 24px 16px;
-    border: 2px dashed rgba(100, 140, 255, 0.25);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-height: 120px;
-}
-
-.upload-zone__drop:hover {
-    border-color: rgba(100, 140, 255, 0.5);
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.upload-zone__hint {
-    font-size: var(--text-md);
-    color: var(--text-secondary, #a0a0b0);
-    margin: 0;
-}
-
-.upload-zone__or {
+.flu-upload-zone__or {
     font-size: var(--text-sm);
     color: var(--text-tertiary, #6a6a7a);
     margin: 0;
 }
 
-.upload-zone__buttons {
+.flu-upload-zone__buttons {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     justify-content: center;
 }
 
-.upload-zone__btn {
-    padding: 6px 14px;
-    border: 1px solid rgba(100, 140, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(100, 140, 255, 0.08);
-    color: var(--text-primary, #e0e0e0);
-    font-size: var(--text-sm);
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.upload-zone__btn:hover {
-    background: rgba(100, 140, 255, 0.15);
-    border-color: rgba(100, 140, 255, 0.5);
-}
-
-.upload-zone__btn--camera {
-    border-color: rgba(72, 187, 120, 0.3);
-    background: rgba(72, 187, 120, 0.08);
-}
-
-.upload-zone__btn--camera:hover {
-    background: rgba(72, 187, 120, 0.15);
-    border-color: rgba(72, 187, 120, 0.5);
-}
-
-.upload-zone__btn--clear {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.08);
-}
-
-.upload-zone__btn--clear:hover {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.5);
-}
-
-.upload-zone__preview {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.upload-zone__img {
-    max-width: 100%;
-    max-height: 240px;
-    border-radius: 8px;
-    border: 1px solid rgba(100, 140, 255, 0.2);
-    object-fit: contain;
-}
-
-.upload-zone__actions {
+.flu-upload-zone__actions {
     display: flex;
     align-items: center;
     gap: 12px;
-}
-
-.upload-zone__analyzing {
-    font-size: var(--text-sm);
-    color: var(--brand-primary-light, #a29bfe);
-    animation: pulse 1.5s ease-in-out infinite;
 }
 
 /* ---- Homework Analysis Result ---- */
@@ -327,63 +243,11 @@ html {
 }
 
 /* ---- Generated Image Section (Pollinations) ---- */
-.frame-content__generated-image {
-    margin: 16px 0;
-    padding: 0;
-    border: 1px solid rgba(100, 140, 255, 0.15);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.02);
-    overflow: hidden;
-}
-
-.generated-image__header {
+/* Zona de imágenes unificada: IA generada + grilla web en una sola tarjeta */
+.workspace-images__zone {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(100, 140, 255, 0.1);
+    flex-direction: column;
+    gap: 12px;
 }
 
-.generated-image__title {
-    margin: 0;
-    font-size: var(--text-md);
-    font-weight: var(--weight-semibold);
-    color: var(--brand-primary-light, #a29bfe);
-}
 
-.generated-image__preview {
-    padding: 12px;
-    text-align: center;
-}
-
-.generated-image__img {
-    max-width: 100%;
-    max-height: 300px;
-    border-radius: 4px;
-    object-fit: contain;
-    background: rgba(0, 0, 0, 0.1);
-}
-
-.generated-image__loading {
-    padding: 8px;
-    font-size: var(--text-sm);
-    color: var(--text-secondary, #a0a0b0);
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 4px;
-    margin: 8px;
-}
-
-.generated-image__error {
-    padding: 12px;
-    background: rgba(255, 50, 50, 0.1);
-    border-radius: 4px;
-    margin: 8px;
-    text-align: center;
-}
-
-.generated-image__error p {
-    margin: 0 0 8px 0;
-    font-size: var(--text-sm);
-    color: var(--error, #ff6b6b);
-}
