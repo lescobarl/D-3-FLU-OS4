@@ -685,7 +685,7 @@
     {
       "id": "P7.31",
       "titulo": "notas no persisten por la ruta de voz y el ack de compras no coincide con el DSL",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
       "evidencia": "CAUSA RAIZ MEDIDA (sonda real en navegador, no inferencia): `useNotes.add` empieza con `if (!participantId) return { ok: false, reason: \"invalid-input\" }`: las notas son per-usuario, asi que SIN usuario activo la app RECHAZA la escritura a proposito. El manejador devolvia \"No pude crear la nota.\" y la tabla quedaba con 0 filas. NO era bug de producto: era el arnes, que nunca activaba usuario. Probado con sonda: mismo despacho con usuario sembrado -> reply \"Listo, lo agrege a las notas.\" y 1 fila con label \"comprar pan\". Cierre por SEED: `seedActiveUser` (tests/e2e/_helpers.ts) escribe el participante en Dexie y lo activa por el PICKER DEL HEADER (handleSelectActiveUser), que es la ruta de produccion que marca la sesion como lista; se aplica en los specs que validan dominios per-usuario. Los tests de notas pasan. Leccion registrada: sin usuario activo la app no lee ni escribe nada suyo (notas, agenda, documentos, historial, busqueda); un spec de esos dominios sin sembrar usuario mide el rechazo, no el dominio."
     }
@@ -1436,6 +1436,11 @@
       "id": "P7.29",
       "commit": "8319c4e",
       "titulo": "el reply del LLM no gana: era un comentario obsoleto, no la conducta"
+    },
+    {
+      "id": "P7.31",
+      "commit": "04b9046",
+      "titulo": "las notas no se perdian: la app rechaza datos per-usuario sin usuario activo; era el arnes, no el producto"
     }
   ]
 }
