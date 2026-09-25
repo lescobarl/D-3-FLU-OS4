@@ -700,6 +700,41 @@
       "estado": "done",
       "titulo": "los 11 bugs de producto de 2026-09-14 estaban cerrados; faltaba el mapa que lo dijera",
       "evidencia": "El documento plans/bugs-producto-2026-09-14.md citaba rutas y lineas que HOY no existen (HorarioPizarron.tsx eliminado, deterministicArbiter.js:94, App.tsx:4490) y el ledger no lo mencionaba NI UNA VEZ: los 11 casos se cerraron por trabajo posterior y el fichero envejecio en silencio, asi que \"¿siguen pendientes?\" no tenia respuesta. Verificado caso por caso contra el codigo de hoy (no contra la memoria): 21 ficheros de guard, 136 tests en verde. 10 casos tienen guard de comportamiento propio; el 8 quedo MOOT (la vista HorarioPizarron desaparecio, sus responsabilidades pasaron a AgendaPanel); el 1 pide incluir \"notas\" en el listado del dia y se cierra con DESVIACION DOCUMENTADA: las notas no tienen fecha, no son agenda (no existe kind 'nota'), y la agenda unificada ya cubre recordatorio/cita/junta/clase/alarma. Entregado: tabla de estado en el documento + tests/bugsProductoMap.test.ts, que fija la procedencia (caso -> guard, moot con motivo) y trae prueba de su propio detector (mutacion), ademas de registro en lint:guards. PROBADO rompiendo a proposito una entrada: el guard falla (\"guard ausente (N=1): #7\") y vuelve a verde al revertir."
+    },
+    {
+      "id": "P7.38",
+      "titulo": "temperature 0.3 quemada en useWorkspaceSearch (auditoria fresca #1)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/hooks/useWorkspaceSearch.ts:193 tenia `temperature: 0.3` literal en el contrato del resumen \"Puntos clave\". ARREGLADO: el valor vive ahora en FLU_CONFIG.browser.search.aiOverview.temperature, que es la seccion que la propia cabecera del fichero declara como fuente de config (\"endpoints, proveedores, tope y etiquetas viven en FLU_CONFIG.browser.search\"). El valor se conserva EXACTAMENTE en 0.3: NO se cablea a la creatividad del usuario porque el prompt pide vinetas factuales y con creatividad alta el resumen derivaria. CORRECCION A LA AUDITORIA: la ruta que cita (voiceConfigCatalog.ts:391) no es un valor sino una DESCRIPCION (\"Creatividad de la IA (temperature) (0-1)\") dentro del spec de un comando de voz (accion set_config, clave creativity), y ademas le falta el prefijo src/core/config/."
+    },
+    {
+      "id": "P7.39",
+      "titulo": "@deprecated enganoso en streamLogThrottleMs (auditoria fresca #3)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/voice/lib/fluConfig.js:344 marcaba `@deprecated Interinos ya no escriben al log; solo aplica a rutas legacy` y SIN EMBARGO tiene lector VIVO: src/voice/hooks/useFluVoiceAssistant.js:1757 hace Math.max(0, FLU_CONFIG.timing.streamLogThrottleMs) y esa variable gobierna la rama de throttle (lineas 1759-1773). Con 0 la rama no se toma, pero la clave es configurable y esta conectada. ARREGLADO: la marca se sustituye por un comentario veraz (\"VIVO: useFluVoiceAssistant lo lee; 0 = sin throttle\"), conservando la clave para no perder la capacidad. CORRECCION A LA AUDITORIA: la ruta del lector es src/voice/hooks/, no src/hooks/."
+    },
+    {
+      "id": "P7.40",
+      "titulo": "Base 'http://localhost' literal en los proxies (auditoria fresca #4)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/server/searchProxy.ts:142 y src/server/browserProxy.ts:77 pasaban \"http://localhost\" a new URL(rawUrl, ...). ARREGLADO: extraido a la constante PARSE_BASE_URL junto al resto de constantes de modulo. Alcance real: la base solo sirve para parsear el URL relativo del request; el host NUNCA se usa para fetch, asi que no habia riesgo funcional. Nota: hardcodeGuard ya allowlisteaba ^localhost como \"servidores de desarrollo locales\", o sea era una excepcion declarada, no un descuido; el cambio es de claridad. Ambas ediciones se hicieron a nivel de byte respetando el terminador local porque los dos ficheros tienen EOL MIXTA: eolGuard sigue verde (clase mixed conservada)."
+    },
+    {
+      "id": "P7.41",
+      "titulo": "setTimeout(resolve, 100) magico en 4 sitios (auditoria fresca #5)",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "MEDIDO: src/App.tsx:3725,3745,3768 y src/core/autonomy/autoRecovery.ts:321. ARREGLADO: los tres de App.tsx leen FLU_CONFIG.timing.speechCancelSettleMs (clave nueva, \"pausa tras cancelar el TTS antes del comando de control\"); NET-ZERO lineas en App.tsx, que sigue en 4686 lineas EXACTAS = techo del godFileSizeGuard (trinquete shrink-only, fichero CONGELADO: no se puede subir el techo). En autoRecovery.ts el 100 es la duracion SIMULADA de un reintento (el ejecutor es un stub), asi que se nombra con SIMULATED_RETRY_MS en vez de llevarlo a config de producto. fluConfig.js queda en 2772/2772 (su techo exacto)."
+    },
+    {
+      "id": "P7.42",
+      "titulo": "new GeminiService()/DeepSeekService()/FluDatabase()/BackupSystem() en logica (auditoria fresca #2) — NO APLICA",
+      "estado": "done",
+      "origen": "auditoria-fresca",
+      "evidencia": "VEREDICTO: NO APLICA, sin cambio de codigo. MEDIDO los 4 sitios que cita: src/services/gemini.ts:597 `export const geminiService: GeminiService = new GeminiService()`; src/services/deepseek.ts:563 `export const deepseekService = new DeepSeekService()`; src/core/db/fluDatabase.ts:724 `export const fluDb = new FluDatabase()`; src/core/autonomy/backupSystem.ts:1105 `globalBackupSystem = new BackupSystem(...)` dentro de getBackupSystem(). Ninguno es una instanciacion dentro de logica de negocio: los tres primeros son singletons a nivel de MODULO (se construyen al importar, una vez) y el cuarto es un lazy singleton memoizado. Eso ES un composition root explicito, que es literalmente la alternativa que pide el hallazgo: inyectar por interfaz o declarar el composition root. Ademas getBackupSystem ya acepta inyeccion (config e IBackupManager), y geminiService se declara con tipo concreto a proposito para conservar generateFluContract. Convertirlos en inyeccion por constructor no arregla nada y anadiria cableado sin consumidor."
     }
   ],
   "done": [
@@ -1493,6 +1528,26 @@
       "id": "P7.28",
       "commit": "1024497",
       "titulo": "agenda invisible en el panel: el gate de sesion dejaba las lecturas en undefined y el seed de DEMO se re-sembraba en bucle"
+    },
+    {
+      "id": "P7.38",
+      "commit": "b6f3f2d",
+      "titulo": "temperature 0.3 quemada en useWorkspaceSearch (auditoria fresca #1)"
+    },
+    {
+      "id": "P7.39",
+      "commit": "b6f3f2d",
+      "titulo": "@deprecated enganoso en streamLogThrottleMs (auditoria fresca #3)"
+    },
+    {
+      "id": "P7.40",
+      "commit": "b6f3f2d",
+      "titulo": "Base 'http://localhost' literal en los proxies (auditoria fresca #4)"
+    },
+    {
+      "id": "P7.41",
+      "commit": "b6f3f2d",
+      "titulo": "setTimeout(resolve, 100) magico en 4 sitios (auditoria fresca #5)"
     }
   ]
 }
