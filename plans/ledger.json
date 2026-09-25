@@ -643,23 +643,23 @@
     {
       "id": "P7.33",
       "titulo": "pizarron 3.1: la tarjeta 'result-feed-card-web-imagenes' nunca aparece",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "Sonda real en navegador con usuario sembrado: la tarjeta esperada no se publica. Medido: `[data-testid^=\"result-feed-card-\"]` -> [] (cero tarjetas), `.result-feed` visible = true, `.workspace-search__grid` count = 0, `.workspace-search__result` count = 0 y `.workspace-search__input` count = 0 (el input de busqueda no existe en ese estado, asi que el fallo NO es la tarjeta: es que el feed no recibe/publica el resultado). Descartado como causa el usuario activo: la sonda SI sembro y activo usuario (misma ruta que arreglo las notas) y el resultado no cambio. Queda ABIERTO con esta evidencia."
+      "evidencia": "NO era bug de producto: era un spec desalineado. MEDIDO en navegador real con un spec de diagnostico temporal (borrado despues): con la busqueda lanzada, el feed SI publica la tarjeta (cardWeb=1, grid=1, testids=[\"result-feed-card-web-imagenes\"]) pero cardsAll=0 en \"Todo\". Causa: el item es onlyInKind (WorkspaceHub.tsx:645), asi que el feed lo publica SOLO bajo el filtro \"Imagenes\" (por diseno; lo fija tests/resultFeed.test.tsx:198 \"un video onlyInKind NUNCA aparece en Todo\"). El test 3.1 asertaba la tarjeta estando en \"Todo\", donde por diseno no puede estar. CIERRE: el spec conmuta al filtro \"Imagenes\" antes de asertar. Verificado: npx playwright test -g 3.1 verde."
     },
     {
       "id": "P7.34",
       "titulo": "pizarron 7.1: la tarjeta 'result-feed-card-ia-generacion' nunca aparece",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "Misma sonda y misma clase: `result-feed-card-ia-generacion` no aparece en el feed (`[data-testid^=\"result-feed-card-\"]` -> []). El feed si existe y es visible, pero no publica la tarjeta de generacion. Descartado el usuario activo como causa (sonda con usuario sembrado). Queda ABIERTO con esta evidencia."
+      "evidencia": "NO era bug de producto: el spec despachaba un evento que ya no existe. MEDIDO: la tarjeta aparece por la RUTA REAL (iaGen=1) — contrato de navegacion GENERAR_DOCUMENTO -> useNavigationCommands -> requestMedia(\"doc\") -> App.requestMediaRef — no por el evento. \"flu:generate-document\" se ELIMINO del bus a proposito (useDocumentGenerationBridge.ts:46-48: \"GENERATE_DOCUMENT / GENERATE_VIDEO se eliminaron de este bus... el bus era la segunda ruta y permitia re-generar\"), asi que el window.dispatchEvent(new CustomEvent(\"flu:generate-document\")) del spec era un no-op. CIERRE: el spec drivea la ruta real por __fluOnContractResolved y anade mocks deterministas de /api/gemini/text y /api/gemini/contract (antes salia a la red). Verificado: npx playwright test -g 7.1 verde."
     },
     {
       "id": "P7.35",
       "titulo": "onboarding Bug #1: el participante nuevo no queda activo, visible en el picker ni sugerido",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "Causa del rojo identificada: PRESUPUESTO DE ARRANQUE, no el flujo de alta. El spec pasa AISLADO: 1 passed en 38.5 s (el flujo de onboarding es lento: registro + activacion + sugerencias, con varias esperas asincronas). En la corrida paralela a workers=2 agotaba su timeout y quedaba rojo; con workers=1 y el presupuesto de arranque subido a 45 s pasa. El alta por onboarding crea el usuario, lo deja activo (flu-active-user), lo lista en el picker y lo sugiere: el Bug #1 original no se reproduce."
+      "evidencia": "El flujo real de alta es lento por naturaleza. BASELINE: el spec PASA aislado (47.7s) y FALLA dentro del bloque por page.waitForSelector([data-testid=onboarding-options]) con timeout 10000 ms (linea 29) — carga, no producto. Los pasos post-submit (opciones de rol -> cierre del overlay -> picker -> Dexie) son asincronos y con 10000/15000 ms se caian bajo carga sostenida, mientras el propio spec ya usaba 45000 para el arranque. CIERRE: presupuesto post-accion unificado a 30000 ms y timeout propio del spec (180000) en vez del global 60000. No tapa nada: cada espera sigue fallando por si misma. Verificado: 13/13 verde en la corrida de los dos specs tocados."
     },
     {
       "id": "P7.28",
@@ -678,9 +678,9 @@
     {
       "id": "P7.30",
       "titulo": "'recuerdame <cosa>' SIN hora no matchea el arbitro y el turno se descarta en silencio",
-      "estado": "todo",
+      "estado": "done",
       "origen": "propio",
-      "evidencia": "CAUSA RAIZ MEDIDA (enunciado inicial corregido). Hay DOS huecos distintos y solo uno era el del test: (a) el caso del test 8, \"tomar el medicamento a las 12:00\", SI trae hora; lo que falta es el sustantivo o el verbo del tipo (\"recuerdame\", \"recordatorio\"), que es de donde el parser deduce el kind. El LLM ya lo habia clasificado (dominio reminder) y ese dato se descartaba: el turno no se despachaba. CERRADO: el dominio clasificado entra al MISMO parser como pista de tipo (`parseAgendaCommand` options.kindHint, con `resolveDomainScopedIntent` movido a src/core/agenda/domainScopedIntent.ts, motor puro con test propio). El texto sigue siendo la autoridad del instante: sin hora el parser NO matchea, no se inventa nada. Medido: auditoria-acciones-llm 10/10 verde (3.2m). (b) lo que sigue ABIERTO y es lo que el titulo de este item describe: \"recuerdame <cosa>\" SIN hora. Medido con el parser: `parseAgendaCommand(\"recuerdame comprar el pan\")` -> handled:false tanto antes como despues del arreglo (el kindHint no exime del instante), y `...(\"recuerdame comprar leche a las 18:00\")` -> recordatorio correcto. No se cierra aqui porque exige DECISION DE PRODUCTO, no codigo: un recordatorio sin instante no es accionable con el modelo actual (trigger `absolute` con `at`), asi que o se pregunta la hora o se define un instante por defecto. La app tiene `FLU_CONFIG.reminders.defaultReminderOffsetMinutes` (10 min) que es el candidato natural, pero cablearlo cambia QUE HACE el producto y eso lo decide el usuario. Sin cambio de estado. CORRECCION DEL CIERRE: el primer commit de esta ronda dijo \"trinquete de App.tsx apretado a 4633\". Eso NO es el estado final y no debe leerse asi: tests/godFileSizeGuard.test.ts esta CONGELADO (.task/frozen.json lo hashea) y tocar el criterio no es potestad del agente. Se revirtio. La solucion real fue extraer SOLO el camino nuevo (el tramo de agenda) a src/core/agenda/domainScopedIntent.ts y dejar note/diary intactos en App: App.tsx queda en 4686, EXACTAMENTE su techo, sin margen. Medido con `lineas()` del guard. Leccion registrada: si el techo no permite crecer, se extrae lo que UNO anade, no el codigo que ya estaba."
+      "evidencia": "Medido: resolveAgendaDomainIntent(\"reminder\", \"recuerdame comprar el pan\") devolvia null y el turno se caia SIN respuesta (el modelo exige instante: resolveRecurrence null -> parseAgendaCommand devolvia {handled:false, action:null}, y el manejador agenda.create hacia \"if (!cmd.trigger) return ''\"). CIERRE: NO se inventa el instante (defaultReminderOffsetMinutes es decision de producto, no del agente): el parser conserva la pista (kind+label) aunque falte el instante, el carril de dominio la propaga y el manejador PREGUNTA la hora (askMissingInstant: \"¿Para cuándo te lo recuerdo? Dime la hora, por favor.\" / en). Nada se crea: el action no lleva trigger. Verificado: tests/domainScopedIntent.test.ts 8/8 (4 nuevos: pista conservada sin instante, etiqueta del texto propagada, dominio no-agenda sigue sin matchear, frase bilingue) + tests/agendaCommandParser.test.ts 16/16 + 321/321 suite + 52/52 guards + tsc -b limpio + eslint 0 + npm run gate exit 0. Commit 0f505fd."
     },
     {
       "id": "P7.31",
@@ -1461,13 +1461,28 @@
     },
     {
       "id": "P7.30",
-      "commit": "b86309f",
-      "titulo": "el dominio que el LLM ya clasifico cubre el tipo de agenda que el texto no trae (test 8 verde); queda abierto el recordatorio SIN hora, que es decision de producto"
+      "commit": "0f505fd",
+      "titulo": "recuerdame sin hora: se pregunta la hora en vez de descartar el turno (el instante no se inventa)"
     },
     {
       "id": "P7.37",
       "commit": "ab59332",
       "titulo": "los 11 bugs de producto ya estaban cerrados; se les pone mapa de procedencia y prueba de detector para que no vuelvan a envejecer en silencio"
+    },
+    {
+      "id": "P7.33",
+      "commit": "0f505fd",
+      "titulo": "3.1 no era bug de producto: la tarjeta es onlyInKind y el spec asertaba en \"Todo\""
+    },
+    {
+      "id": "P7.34",
+      "commit": "0f505fd",
+      "titulo": "7.1 no era bug de producto: el spec despachaba un evento eliminado del bus; ahora usa la ruta real"
+    },
+    {
+      "id": "P7.35",
+      "commit": "0f505fd",
+      "titulo": "el onboarding pasa aislado: era presupuesto post-accion de 10000 ms bajo carga, no el producto"
     }
   ]
 }
