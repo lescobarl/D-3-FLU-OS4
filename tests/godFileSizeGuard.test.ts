@@ -28,7 +28,9 @@ import { describe, expect, it } from 'vitest'
 export const TECHOS: Record<string, number> = {
   // +2 en P7.8: el ciclo de vida de los puentes se saco a src/app/fluBridges.ts, pero la
   // LLAMADA y su import siguen teniendo que estar en App (los manejadores se asignan ahi).
-  'src/App.tsx': 4686, // 5391 antes de P6.6
+  // 4633 en P7.30: `resolveDomainScopedIntent` salio a
+  // src/core/agenda/domainScopedIntent.ts (es motor puro, con su propio test).
+  'src/App.tsx': 4633, // 5391 antes de P6.6
   'src/voice/hooks/useFluVoiceAssistant.js': 4579,
   'src/voice/lib/fluConfig.js': 2772,
   'src/voice/lib/gemini.js': 1848,

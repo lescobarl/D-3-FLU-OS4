@@ -154,6 +154,7 @@ import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText } from './voice/lib/noteIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
+import { resolveDomainScopedIntent } from './core/agenda/domainScopedIntent';
 import {
     getVisibleTabIds,
     DEFAULT_AMBIENTE_ID,
@@ -383,60 +384,6 @@ function readStringProp(value: unknown, key: string): string | undefined {
 
 /** Convierte FLU_CONFIG.agenda.voice en etiquetas de sección (es/en) tipadas. */
 
-
-/**
- * Resuelve una intención ESTRUCTURADA a partir del `dominio` que el cerebro
- * conversacional ya clasificó (`accion.dominio`), cuando el re-parseo del texto
- * libre con el árbitro NO matcheó. No cambia la autoridad del parser: usa el
- * MISMO parser de dominio, solo que sin exigir el trigger verbal.
- */
-function resolveDomainScopedIntent(
-    domain: string | null | undefined,
-    text: string,
-    _opts: { defaultOffsetMs?: number; now?: number; language?: 'es' | 'en' },
-): ArbiterResult | null {
-    if (!domain || !text) return null;
-    if (domain === 'note') {
-        const parsed = parseNoteIntentText(text);
-        if (parsed?.label) {
-            return {
-                matched: true,
-                domain: 'note',
-                action: {
-                    handled: true,
-                    action: 'notes.add',
-                    data: {
-                        label: parsed.label,
-                        ...(parsed.body ? { body: String(parsed.body).trim() } : {}),
-                    },
-                },
-                channel: 'flu',
-            };
-        }
-        return null;
-    }
-    if (domain === 'diary') {
-        // Mismo punto de parseo que __fluHandleDiaryText (texto crudo).
-        const clean = String(text || '').trim();
-        const enDiario =
-            /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(
-                clean,
-            );
-        const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
-        const match = enDiario || diarioPrefijo;
-        const content = match?.[1]?.trim();
-        if (content) {
-            return {
-                matched: true,
-                domain: 'diary',
-                action: { handled: true, action: 'diary.add', data: { content } },
-                channel: 'flu',
-            };
-        }
-        return null;
-    }
-    return null;
-}
 
 /**
  * Despacha el intent COMPLETO de un resultado del árbitro determinista al

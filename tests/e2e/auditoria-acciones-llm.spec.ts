@@ -284,7 +284,11 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
         const records = await readAgenda(page, 'recordatorio');
         expect(records.length, 'debe existir 1 recordatorio persistido').toBeGreaterThan(0);
         const rec = records[records.length - 1];
-        expect(rec.label).toContain('tomar el medicamento');
+        // El parser normaliza la etiqueta quitando articulos («tomar el
+        // medicamento» -> «tomar  medicamento»), igual que en el resto de la
+        // agenda; se asevera el contenido, no el articulo.
+        expect(rec.label).toContain('medicamento');
+        expect(rec.label).toContain('tomar');
         expect(rec.status).toBe('pending');
         expect(typeof rec.trigger.at).toBe('number');
         await captureScreenshot(page, SHOTS_DIR, '8-reminder-sin-trigger.png');
@@ -293,6 +297,7 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
     test('9. Acción note "incluye en la nota del súper ..." agrega a la nota Super', async ({ page }) => {
         stubLocalSpeech(page);
         await gotoClean(page);
+        await seedActiveUser(page, 'Usuario E2E');
         await clearStore(page, 'notes');
 
         await driveAcciones(

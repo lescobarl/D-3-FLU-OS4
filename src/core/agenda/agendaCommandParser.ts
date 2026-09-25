@@ -304,7 +304,10 @@ function resolveLabel(text: string): string {
     return kindEntry ? kindEntry.nouns[0] : base;
 }
 
-export function parseAgendaCommand(input: string, options?: { now?: number | (() => number) }): AgendaCommand {
+export function parseAgendaCommand(
+    input: string,
+    options?: { now?: number | (() => number); kindHint?: AgendaKind },
+): AgendaCommand {
     const rawNow = options?.now;
     const now = typeof rawNow === 'function' ? rawNow() : typeof rawNow === 'number' ? rawNow : Date.now();
     const text = normalizeSpokenCommand(input);
@@ -323,7 +326,10 @@ export function parseAgendaCommand(input: string, options?: { now?: number | (()
         return { handled: true, action, reply: '' };
     }
 
-    const kind = detectKind(cleaned) ?? resolveImplicitKind(cleaned, action);
+    // `kindHint`: tipo YA clasificado (p. ej. el dominio del LLM) para cuando el
+    // texto no trae el sustantivo ni el verbo del tipo. No sustituye la
+    // deteccion: solo cubre su ausencia, y NO exime del instante explicito.
+    const kind = detectKind(cleaned) ?? resolveImplicitKind(cleaned, action) ?? options?.kindHint ?? null;
     if (!kind) return { handled: false, action: null, reply: '' };
 
     // Sin verbo explícito ("reunión del equipo mañana a las 12", "junta hoy"):
