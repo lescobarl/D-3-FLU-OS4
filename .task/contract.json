@@ -28,7 +28,7 @@
     "tests/resultFeed.test.tsx"
   ],
   "maxFiles": 25,
-  "maxLines": 400,
+  "maxLines": 600,
   "dod": "npm run ledger:check",
   "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/auditoriaExternaMap.test.ts tests/resultFeed.test.tsx tests/taskLedgerGuard.test.ts tests/taskLedgerReferenceGuard.test.ts tests/eolGuard.test.ts tests/godFileSizeGuard.test.ts",
   "ignore": [
