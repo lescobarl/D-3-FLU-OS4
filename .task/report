@@ -2266,3 +2266,33 @@ No se restaura el contenido anterior: revertir esos commits desharia trabajo apr
 Lo que el congelado protegia --que el criterio de un guard no cambie a espaldas de
 nadie-- sigue intacto: el cambio de contenido esta justificado por commit y el hash
 queda al dia para que el siguiente cambio vuelva a saltar.
+## P7.26 + P7.27 + P7.32 - cierre de los tres cierres mecanicos (y el hueco del "16" queda archivado)
+
+VERIFICADO HOY (hash crudo, no normalizado a LF) en la llegada: task-gate exit 1 por 5
+guards congelados. Los hashes que fallaban no eran de EOL: eran contenido, y el diff de
+los 5 llegaba "solo" al arbol de trabajo en 2 de 5 casos. Los otros 3 (frozen=valor,
+arbol=valor) tambien diferian. Los 5 se editaron en dfe954a (P7.9), 6148862 (P7.7/P7.10),
+7724e8d (C65), a5f68c5 (P7.6) y f471594 (P7.8): no era trabajo sin declarar, era el
+hash sin re-congelar. El dueno autorizo el re-congelado (enmienda B.14, 2026-09-24) y NO
+se restauro el contenido anterior: revertir esos commits desharia trabajo aprobado.
+
+P7.27 era un hueco MEDIDO, no sospechado: el defecto del testid repetido ya se arreglo en
+8b7a5d7, pero nada podia detectarlo (la composicion real solo existe en el DOM de la app;
+o lo ve Playwright, o no lo ve nadie). Ahora hay guard de COMPORTAMIENTO en
+tests/resultFeed.test.tsx que monta el ImageGrid real dentro de la tarjeta del feed.
+
+  PRUEBA DEL DETECTOR (mutacion): reintroducido el defecto en ImageGrid.tsx ->
+  ROJO, "expected 2 to be 1". Restaurado -> verde.
+
+P7.32 - el hueco del "16" deja de ser un asunto abierto. Los 15 items externos estaban
+TODOS en done; lo unico vivo era la falta de 3 numeros (5, 6, 15) y de 2 items sin numero
+(P7.7, P7.10). El documento de la auditoria era EXTERNO y no esta en git, asi que asignar
+numero seria inventar procedencia. Se ARCHIVA por decision del dueno, con el contenido
+intacto y el guard declarandolo como hueco estable. Lo que sigue vigilado: que los 13
+numeros verificados no se pierdan, que ninguno lo reclamen dos items y que no entre un
+numero inventado.
+
+Verificacion: npm run gate exit 0 (Alcance OK / tamano OK / DoD OK / guard OK);
+npm run lint 51/51 guards / 314 tests + eslint 0 avisos; npx tsc -b OK;
+npm run ledger:check -> ledger OK: 5 pendientes (P7.25, P7.28, P7.29, P7.30, P7.31).
+
