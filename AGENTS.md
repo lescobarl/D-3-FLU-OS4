@@ -633,15 +633,33 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
    arrastra el conjunto: se queda con el sustantivo canonico y no hace nada si no casa
    (evita destruir por ambiguedad). El plural vive en `KIND_NOUNS` (misma fuente que el
    kind): no se anaden listas de sinonimos.
-13. **Una ORDEN DE ARRANQUE nunca es accion de partida (juegos).** El motor de un
-   juego NO debe consumir la orden de arranque de SU PROPIO juego como respuesta:
-   el nombre del juego puede ser tambien su frame interno (loteria: el grito
-   "!LOTERIA!" == token 'loteria' dentro de "vamos a jugar loteria"), y el eco o
-   la repeticion del arranque declaraba ganador con UNA carta cantada. El criterio
-   "es arranque" tiene DUENO UNICO: `matchGameIntent` (frame de juego + alias), el
-   mismo que la ruta sin partida activa; en `resolveGameCommandFromText` (paso 3b)
-   resuelve `start`, nunca `turn`. Vale para TODO el catalogo (muro: tests/
-   gameStartRequestNotInGameAction.test.ts). Sin listas propias de frames.
+13. **Una ORDEN DE ARRANQUE nunca es accion de partida (juegos).** El motor de
+   un juego NO debe consumir la orden de arranque de SU PROPIO juego como
+   respuesta: el nombre del juego puede ser tambien su frame interno (loteria:
+   el grito "!LOTERIA!" == token 'loteria' dentro de "vamos a jugar loteria"), y
+   consumirla declaraba ganador con UNA carta cantada. El criterio "es arranque"
+   tiene dueno unico: `matchGameIntent` (frame de juego + alias), el mismo que la
+   ruta sin partida activa; en `resolveGameCommandFromText` (paso 3b) resuelve
+   `start`, nunca `turn`.
+   DOS capas, ambas obligatorias: (1) el ROUTER (`resolveGameCommandFromText`)
+   no enruta un arranque como turno; y (2) el MOTOR, que debe distinguirlo por si
+   mismo (un arranque nunca puede declarar victoria ni consumirse como turno). El
+   concepto "orden de arranque" tiene DUENO UNICO en la hoja `core/games/gameUtils`
+   (`PLAY_INTENT_FRAMES` + `hasPlayOrderFrame`), consultable por catalogo y motores
+   sin ciclo de imports. Muros: tests/gameStartRequestNotInGameAction.test.ts y la
+   matriz (invariante 15).
+
+15. **MATRIZ DE SISTEMA derivada de los registros (no listas a mano).**
+   `tests/systemMatrix.test.ts` GENERA sus celdas iterando las fuentes unicas:
+   GAME_CATALOG x conductas (arrancar, orden-de-arranque, ciclo entrar/salir/
+   re-entrar, cambiar, salir, menu, colision, diferencial de puertas),
+   AGENDA_KINDS x acciones (crear, borrar-etiqueta, borrar-CONJUNTO,
+   conservadurismo singular) sobre servicio real + DB en memoria,
+   END_GAME_FRAMES/GAME_MENU_FRAMES y wakeWords de la config. Cierra con una
+   GUARDIA ANTI-DERIVA: si un juego, un objeto, un frame o una wake del registro
+   no quedo ejercitado, el test es ROJO. Anadir un juego, un objeto o un comando
+   de voz sin cubrirlo es imposible por construccion.
+
 14. **Comparadores de revision ASR: NO son duplicados.** `audioMath.spokenUtteranceRevision`
    (pela la wake, single-source por voiceSingleSourceGuard) y
    `conversationStream.isProgressiveExtension` (exige crecimiento) son reglas

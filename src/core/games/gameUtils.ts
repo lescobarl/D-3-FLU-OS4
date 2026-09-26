@@ -156,3 +156,40 @@ export function adoptRandom(
 ): RandomSource {
     return cfg && typeof cfg.random === 'function' ? (cfg.random as RandomSource) : current;
 }
+// ------------------------------------------------------------
+// Concepto "ORDEN DE ARRANQUE de un juego" --- DUENO UNICO.
+// Vive en esta hoja (sin imports) para que puedan consultarlo por igual el
+// catalogo (matchGameIntent) y los MOTORES (que deben distinguir una orden de
+// arranque de una accion de partida). Antes vivia dentro de gameCatalog: los
+// motores no podian verlo sin crear un ciclo de imports.
+// ------------------------------------------------------------
+/** Marcos de intencion de juego. Ninguno aislado dispara un arranque. */
+export const PLAY_INTENT_FRAMES: readonly string[] = Object.freeze([
+    'vamos a jugar',
+    'vamos a jugar a',
+    'juguemos',
+    'juguemos a',
+    'a jugar',
+    'quiero jugar',
+    'quiero jugar a',
+    'juega conmigo',
+    'juego de',
+    'un juego de',
+    'jugar a',
+    'empecemos a jugar',
+    'quien quiere jugar',
+]);
+/** Frases negativas que NUNCA deben iniciar un juego (guardia anti-falso-positivo). */
+export const NEGATIVE_INTENT_FRAMES: readonly string[] = Object.freeze([
+    'no quiero jugar',
+    'ya no quiero jugar',
+    'no juguemos',
+    'ya no juguemos',
+    'deja de jugar',
+    'parar de jugar',
+    'dejemos de jugar',
+]);
+/** El texto es una ORDEN DE ARRANQUE de juego (o su negacion)? */
+export function hasPlayOrderFrame(normalized = ''): boolean {
+    return hasAnyToken(normalized, PLAY_INTENT_FRAMES);
+}

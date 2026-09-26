@@ -12,7 +12,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameId } from './types';
-import { normalizeForMatch, hasToken } from './gameUtils';
+import { normalizeForMatch, hasToken, PLAY_INTENT_FRAMES, NEGATIVE_INTENT_FRAMES } from './gameUtils';
 import { createSimonDiceEngine } from './simonDice';
 import { createRiddlesEngine } from './riddles';
 import { createVeoVeoEngine } from './veoVeo';
@@ -67,33 +67,6 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
 
 // --- Guardias (data-driven) ---
 
-/** Marcos de intención de juego. Ninguno aislado dispara start. */
-const PLAY_INTENT_FRAMES: readonly string[] = Object.freeze([
-    'vamos a jugar',
-    'vamos a jugar a',
-    'juguemos',
-    'juguemos a',
-    'a jugar',
-    'quiero jugar',
-    'quiero jugar a',
-    'juega conmigo',
-    'juego de',
-    'un juego de',
-    'jugar a',
-    'empecemos a jugar',
-    'quien quiere jugar',
-]);
-
-/** Frases negativas que NUNCA deben iniciar un juego (guardia anti-falso-positivo). */
-const NEGATIVE_INTENT_FRAMES: readonly string[] = Object.freeze([
-    'no quiero jugar',
-    'ya no quiero jugar',
-    'no juguemos',
-    'ya no juguemos',
-    'deja de jugar',
-    'parar de jugar',
-    'dejemos de jugar',
-]);
 
 /**
  * Frases de salida de una partida activa (fuente única de verdad).
