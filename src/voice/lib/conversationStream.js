@@ -22,6 +22,7 @@ import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
  * Vive aquí (defaults de voz) porque `fluConfig.js` está en su techo shrink-only.
  */
 const ASSISTANT_ECHO_MIN_WORDS = VOICE_DIARIZATION_DEFAULTS.assistantEchoMinWords
+const ASSISTANT_ECHO_MIN_COVERAGE = VOICE_DIARIZATION_DEFAULTS.assistantEchoMinCoverage
 
 export {
   collapseRepeatedSpeech,
@@ -315,6 +316,11 @@ export function isAssistantVoiceEcho(candidate = '', assistantText = '') {
   const needle = chunk.split(/[^a-z0-9]+/).filter(Boolean)
   if (needle.length < ASSISTANT_ECHO_MIN_WORDS) return false
   const hay = spoken.split(/[^a-z0-9]+/).filter(Boolean)
+  // El fragmento debe CUBRIR buena parte de lo que dijo FLU. Sin esto, una
+  // corrida corta de palabras dentro de una respuesta larga bastaba para
+  // descartar la frase del usuario: este modulo nunca borra contenido, los
+  // detectores son diagnosticos (ver transcriptionDedupLoss).
+  if (needle.length / hay.length < ASSISTANT_ECHO_MIN_COVERAGE) return false
   for (let i = 0; i + needle.length <= hay.length; i += 1) {
     let matched = true
     for (let k = 0; k < needle.length; k += 1) {

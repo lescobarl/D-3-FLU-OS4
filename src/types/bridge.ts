@@ -431,6 +431,16 @@ export interface FluContract {
         accion: 'play_music' | 'pause_music' | 'stop_music';
         cancion?: string;
     };
+    /**
+     * Juego solicitado por el usuario. Lo emite la IA (igual que `musica`) y
+     * tambien el fast-path determinista. `normalizeJuego` lo valida contra el
+     * catalogo (gameId + accion) antes de applyGameAction.
+     */
+    juego?: {
+        gameId: string;
+        action: 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch';
+        playerText?: string;
+    } | null;
     /** Diagnostics metadata (OS2 parity) */
     diagnostics?: FluDiagnostics;
     /**

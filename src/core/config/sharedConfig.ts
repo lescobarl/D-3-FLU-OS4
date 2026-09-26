@@ -317,6 +317,11 @@ export const VOICE_DIARIZATION_DEFAULTS = {
      * TTS de FLU. Evita descartar respuestas cortas legítimas («sí») que aparezcan
      * casualmente en lo que FLU acaba de decir. */
     assistantEchoMinWords: 3,
+    /** Cobertura minima: el fragmento capturado debe cubrir esta fraccion de lo
+     * que dijo FLU para contarse como eco. Una coincidencia corta dentro de una
+     * respuesta larga es habla del usuario (retoma un termino de FLU) y NO se
+     * descarta: borrarla perdia turnos completos de conversacion. */
+    assistantEchoMinCoverage: 0.5,
 } as const;
 
 // -----------------------------------------------------------
