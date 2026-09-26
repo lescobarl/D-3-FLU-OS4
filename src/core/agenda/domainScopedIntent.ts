@@ -47,26 +47,38 @@ export interface AgendaDomainIntentOptions {
 }
 
 /**
- * Tipo de agenda que implica cada dominio del LLM. Solo los dominios cuyo tipo
- * es INEQUIVOCO: `temporal` cubre alarma Y temporizador, asi que se queda fuera
- * hasta que tenga su propia politica (el tipo no se adivina).
+ * Tipo de agenda que implica cada etiqueta de dominio.
  *
- * Reuniones y citas: la IA no tenia dominio para "junta"/"cita" (su vocabulario
- * solo ofrecia recordatorio/horario), asi que clasificaba mal y la confirmacion
- * se emitia SIN que nada se creara. Estos alias existen para que la
- * clasificacion del LLM -que ya era correcta- llegue al parser.
+ * FUENTE UNICA de dos hechos que antes vivian en listas separadas y por eso
+ * podian divergir: QUE etiquetas acepta el resolver y CUALES se ofrecen al
+ * modelo. Cada entrada declara las dos cosas.
+ *
+ * - `kind`: tipo de agenda que implica la etiqueta.
+ * - `offered`: true = se ofrece al modelo en `acciones[].dominio`. Los sinonimos
+ *   internos (recordatorio/reunion/meeting) se ACEPTAN pero NO se ofrecen: el
+ *   modelo debe tener un solo nombre por concepto, no tres.
+ *
+ * Anadir una etiqueta es UNA edicion aqui; el vocabulario del prompt y el guard
+ * se derivan de esta tabla, asi que no hay una segunda lista que actualizar.
+ *
+ * Nota: "temporal" NO esta a proposito. Cubre alarma Y temporizador, y el tipo
+ * no se adivina; el parser ya resuelve ambas formas por su cuenta.
  */
-const AGENDA_DOMAIN_KIND: Readonly<Record<string, AgendaKind>> = Object.freeze({
-    reminder: 'recordatorio',
-    recordatorio: 'recordatorio',
-    horario: 'clase',
-    junta: 'junta',
-    reunion: 'junta',
-    meeting: 'junta',
-    cita: 'cita',
-    // El kind 'alarma' EXISTE en AgendaKind; solo faltaba la pista. Sin ella,
-    // el dominio 'alarma' que ofrecia el prompt no llegaba al parser.
-    alarma: 'alarma',
+export interface AgendaDomainSpec {
+    kind: AgendaKind;
+    offered: boolean;
+}
+
+export const AGENDA_DOMAIN_KIND: Readonly<Record<string, AgendaDomainSpec>> = Object.freeze({
+    reminder: { kind: 'recordatorio', offered: true },
+    alarma: { kind: 'alarma', offered: true },
+    horario: { kind: 'clase', offered: true },
+    junta: { kind: 'junta', offered: true },
+    cita: { kind: 'cita', offered: true },
+    // Sinonimos internos: se aceptan, no se ofrecen.
+    recordatorio: { kind: 'recordatorio', offered: false },
+    reunion: { kind: 'junta', offered: false },
+    meeting: { kind: 'junta', offered: false },
 });
 
 /**
@@ -83,16 +95,27 @@ const AGENDA_DOMAIN_KIND: Readonly<Record<string, AgendaKind>> = Object.freeze({
  * aceptado por el resolver - los de agenda por AGENDA_DOMAIN_KIND y shopping/note/
  * diary por el despacho de App. Si alguien añade un dominio, el guard lo valida.
  */
-export const CONTRACT_ACTION_DOMAINS = Object.freeze([
-  'reminder',
-  'alarma',
-  'horario',
-  'junta',
-  'cita',
-  'shopping',
-  'note',
-  'diary',
-] as const)
+/** Etiquetas de agenda que el resolver ACEPTA (incluye sinonimos internos). */
+export const AGENDA_DOMAINS_ACCEPTED: readonly string[] = Object.freeze(
+  Object.keys(AGENDA_DOMAIN_KIND),
+)
+
+/** Etiquetas de agenda que se OFRECEN al modelo, derivadas de la tabla. */
+export const AGENDA_DOMAINS_OFFERED: readonly string[] = Object.freeze(
+  AGENDA_DOMAINS_ACCEPTED.filter((d) => AGENDA_DOMAIN_KIND[d].offered),
+)
+
+/**
+ * Dominios de acciones que NO son agenda: los resuelve el arbitro determinista
+ * (no pasan por la pista de tipo de agenda). Es una lista corta y explicita a
+ * proposito: no hay tabla de la que derivarlos, porque no comparten resolver.
+ */
+export const NON_AGENDA_ACTION_DOMAINS = Object.freeze(['shopping', 'note', 'diary'] as const)
+
+export const CONTRACT_ACTION_DOMAINS: readonly string[] = Object.freeze([
+  ...AGENDA_DOMAINS_OFFERED,
+  ...NON_AGENDA_ACTION_DOMAINS,
+])
 
 /** Lista lista para el prompt: `reminder | alarma | ...`. */
 export function actionDomainList(): string {
@@ -104,7 +127,7 @@ export function resolveAgendaDomainIntent(
     text: string,
     opts: AgendaDomainIntentOptions = {},
 ): AgendaDomainIntent | null {
-    const kindHint = domain ? AGENDA_DOMAIN_KIND[domain] : undefined;
+    const kindHint = domain ? AGENDA_DOMAIN_KIND[domain]?.kind : undefined;
     if (!kindHint || !text) return null;
     const cmd = parseAgendaCommand(text, { now: opts.now, kindHint });
     if (cmd?.handled) {

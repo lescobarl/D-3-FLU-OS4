@@ -13,7 +13,11 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import {
+    AGENDA_DOMAIN_KIND,
+    AGENDA_DOMAINS_ACCEPTED,
+    AGENDA_DOMAINS_OFFERED,
     CONTRACT_ACTION_DOMAINS,
+    NON_AGENDA_ACTION_DOMAINS,
     actionDomainList,
     resolveAgendaDomainIntent,
 } from '../src/core/agenda/domainScopedIntent';
@@ -39,12 +43,13 @@ describe('acciones[].dominio - todo dominio ofrecido es ejecutable', () => {
             const text = SAMPLE_TEXT[domain];
             expect(text, `falta texto de referencia para ${domain}`).toBeTruthy();
 
-            // Los dominios de agenda se resuelven SIEMPRE por la pista de dominio
-            // (es el camino que el prompt habilita); shopping/note/diary los cubre
-            // el arbitro determinista. Exigirlo por su via real evita que el
+            // La particion se DERIVA de la fuente unica (AGENDA_DOMAIN_KIND): este
+            // guard no mantiene su propia lista, porque una copia a mano es
+            // exactamente lo que dejo divergir al prompt. Los dominios de agenda se
+            // resuelven por la pista de dominio (el camino que el prompt habilita);
+            // el resto lo cubre el arbitro. Exigirlo por su via real evita que el
             // arbitro enmascare un dominio muerto.
-            const AGENDA_DOMAINS = ['reminder', 'alarma', 'horario', 'junta', 'cita'];
-            if (AGENDA_DOMAINS.includes(domain)) {
+            if (AGENDA_DOMAINS_ACCEPTED.includes(domain)) {
                 const viaDomain = resolveAgendaDomainIntent(domain, text);
                 expect(viaDomain?.matched, `el resolver no entiende el dominio "${domain}"`).toBe(true);
                 expect(viaDomain?.domain).toBe('agendaCommand');
@@ -119,6 +124,54 @@ describe('acciones[].dominio - los dos prompts dicen lo mismo', () => {
         for (const prompt of [capabilitiesEs, capabilitiesEn, systemEs, systemEn]) {
             expect(prompt).not.toMatch(/NO existe dominio "shopping"/);
             expect(prompt).not.toMatch(/there is NO "shopping"/);
+        }
+    });
+});
+
+// ============================================================
+// La tabla es la FUENTE UNICA: de ella salen tanto el vocabulario del prompt
+// como la particion de este guard. Si estas derivaciones se rompen, el guard
+// deja de vigilar lo que dice vigilar (o vuelve a haber dos listas que
+// mantener a mano), asi que se comprueban explicitamente.
+// ============================================================
+describe('AGENDA_DOMAIN_KIND - la tabla deriva el vocabulario, no hay segunda copia', () => {
+    it('el vocabulario ofrecido sale de la tabla (nada ofrecido a mano)', () => {
+        expect([...AGENDA_DOMAINS_OFFERED]).toEqual(
+            AGENDA_DOMAINS_ACCEPTED.filter((d) => AGENDA_DOMAIN_KIND[d].offered),
+        );
+        expect([...CONTRACT_ACTION_DOMAINS]).toEqual([
+            ...AGENDA_DOMAINS_OFFERED,
+            ...NON_AGENDA_ACTION_DOMAINS,
+        ]);
+    });
+
+    it('lo aceptado y lo ofrecido son disjuntos de los sinonimos internos', () => {
+        // Los sinonimos (recordatorio/reunion/meeting) se aceptan pero NO se
+        // ofrecen: si se ofrecieran, el modelo tendria tres nombres por concepto.
+        const sinonimos = AGENDA_DOMAINS_ACCEPTED.filter((d) => !AGENDA_DOMAIN_KIND[d].offered);
+        expect(sinonimos.length).toBeGreaterThan(0);
+        for (const s of sinonimos) {
+            expect(AGENDA_DOMAINS_OFFERED).not.toContain(s);
+        }
+        for (const s of sinonimos) {
+            expect(resolveAgendaDomainIntent(s, 'recuerdame algo a las 12')?.matched).toBe(true);
+        }
+    });
+
+    it('agenda y no-agenda no se solapan (un dominio, un resolver)', () => {
+        for (const d of NON_AGENDA_ACTION_DOMAINS) {
+            expect(AGENDA_DOMAINS_ACCEPTED).not.toContain(d);
+        }
+    });
+
+    it('la particion del guard cubre TODO dominio ofrecido (nada se cuela)', () => {
+        for (const domain of CONTRACT_ACTION_DOMAINS) {
+            const esAgenda = AGENDA_DOMAINS_ACCEPTED.includes(domain);
+            const esNoAgenda = (NON_AGENDA_ACTION_DOMAINS as readonly string[]).includes(domain);
+            expect(
+                esAgenda !== esNoAgenda,
+                `"${domain}" no esta en la tabla de agenda ni en la lista no-agenda`,
+            ).toBe(true);
         }
     });
 });
