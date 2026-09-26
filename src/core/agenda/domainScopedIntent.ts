@@ -64,7 +64,40 @@ const AGENDA_DOMAIN_KIND: Readonly<Record<string, AgendaKind>> = Object.freeze({
     reunion: 'junta',
     meeting: 'junta',
     cita: 'cita',
+    // El kind 'alarma' EXISTE en AgendaKind; solo faltaba la pista. Sin ella,
+    // el dominio 'alarma' que ofrecia el prompt no llegaba al parser.
+    alarma: 'alarma',
 });
+
+/**
+ * Vocabulario canonico del campo `acciones[].dominio`.
+ *
+ * FUENTE UNICA: lo consumen los DOS prompts del sistema - services/capabilities.ts
+ * y voice/lib/gemini.js. Antes cada uno ofrecia una lista distinta y
+ * contradictoria ("agenda"/"shopping" en uno, "reminder"/"temporal" en el otro,
+ * y hasta el conteo se contradecia: decia "five" y listaba siete), y etiquetas
+ * como "agenda" o "temporal" NO las entiende este resolver, asi que la accion
+ * se descartaba EN SILENCIO: la IA confirmaba en voz algo que nunca se creo.
+ *
+ * Invariante (tests/actionDomainContract.test.ts): TODO valor de esta lista esta
+ * aceptado por el resolver - los de agenda por AGENDA_DOMAIN_KIND y shopping/note/
+ * diary por el despacho de App. Si alguien añade un dominio, el guard lo valida.
+ */
+export const CONTRACT_ACTION_DOMAINS = Object.freeze([
+  'reminder',
+  'alarma',
+  'horario',
+  'junta',
+  'cita',
+  'shopping',
+  'note',
+  'diary',
+] as const)
+
+/** Lista lista para el prompt: `reminder | alarma | ...`. */
+export function actionDomainList(): string {
+  return CONTRACT_ACTION_DOMAINS.join(' | ')
+}
 
 export function resolveAgendaDomainIntent(
     domain: string | null | undefined,

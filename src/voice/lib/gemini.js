@@ -692,15 +692,6 @@ export function buildSystemPrompt({ role, theme, phase, language, knowledgeMode 
     isEnglish
       ? 'Return an object with respuesta_voz and navegacion. The app generates images or diagrams ONLY from workspace.tipo (image_prompt, diagram, 3d). Never rely on respuesta_voz text to trigger visuals.'
       : 'Devuelve un objeto con respuesta_voz y navegacion. La app genera imagenes o diagramas SOLO desde workspace.tipo (image_prompt, diagram, 3d). Nunca dependas del texto de respuesta_voz para activar visuales.',
-    // OS4 FASE CONVERSACIONAL: acciones ejecutables. El LLM es el cerebro: si el
-    // usuario pide crear/gestionar recordatorios, compras, alarmas, temporizadores,
-    // notas, diario u horario, DEBE emitir `acciones` (no solo confirmar en texto).
-    // App.tsx re-resuelve cada `texto` con los parsers deterministas (fuente de
-    // verdad del parseo temporal) y ejecuta el manejador __fluHandle*. La
-    // respuesta_voz debe confirmar de forma natural lo que se ejecutó.
-    isEnglish
-      ? 'ACTIONS — When the user asks to create/manage calendar items (alarms, reminders, appointments, meetings, classes), the shopping list, notes or diary, emit "acciones" as an array of { dominio, texto } where dominio is one of: agenda, shopping, note, diary and texto is the USER\'s command fragment as spoken (e.g. dominio:"agenda", texto:"crea una cita para mañana a las 10"). Emit the real action so the app can execute it; do NOT just describe it in respuesta_voz. For "shopping list" use dominio:"shopping" with texto like "agrega pan a la lista de compras".'
-      : 'ACCIONES — Cuando el usuario pida crear/gestionar el calendario (alarmas, recordatorios, citas, juntas, clases), la lista de compras, notas o diario, emite "acciones" como un arreglo de { dominio, texto } donde dominio es uno de: agenda, shopping, note, diary y texto es el fragmento del mandato TAL COMO LO DIJO el usuario (ej. dominio:"agenda", texto:"crea una cita para mañana a las 10"). Emite la acción REAL para que la app la ejecute; NO te limites a describirla en respuesta_voz. Para la lista de compras usa dominio:"shopping" con texto como "agrega pan a la lista de compras".',
     isEnglish
       ? 'Use workspace.tipo text (or omit workspace) for pure conversation, explanations, or when the user says without image / text only. Use image_prompt for photos, diagram for flowcharts, 3d for 3D scenes.'
       : 'Usa workspace.tipo text (u omite workspace) para platica, explicaciones o cuando el usuario diga sin imagen / solo texto. Usa image_prompt para fotos, diagram para diagramas de flujo, 3d para escenas 3D.',
