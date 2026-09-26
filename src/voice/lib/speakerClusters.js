@@ -5,7 +5,7 @@
  */
 import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
-import { foldSpeakerKey, getVoiceIdentityConfig } from './speakerLabels.js'
+import { foldSpeakerKey, getVoiceIdentityConfig, isRegisteredSpeakerLabel } from './speakerLabels.js'
 import { getPassiveBufferMs } from './micCapture.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
@@ -140,9 +140,25 @@ export function passesRoomRematchStrict(similarity, thresholds = {}) {
   return Number.isFinite(similarity) && similarity >= floor
 }
 
+/** ¿Este cluster es el ancla de identidad de una persona REGISTRADA (nombre propio)? */
+function isPinnedAnchorCluster(cluster) {
+  const roomCfg = getVoiceIdentityConfig()?.capture?.roomCapture || {}
+  if (roomCfg.pinRegisteredSpeaker === false) return false
+  return isRegisteredSpeakerLabel(cluster?.label)
+}
+
 export function updateClusterSignature(cluster, vector) {
   const next = normalizeEmbeddingVector(vector)
   if (!next.length) return
+
+  // Un cluster con NOMBRE PROPIO es el ancla de identidad de esa persona y su
+  // firma NO se mezcla con la voz entrante. Muchas ramas (sticky/fallback)
+  // etiquetan por defecto —«sigue siendo el de antes»— y llaman aquí con la voz
+  // que acaba de sonar; mezclarla acercaba el ancla a esa voz turno a turno hasta
+  // que cualquier otra (la TV, otro hablante) la casaba y se quedaba con el
+  // nombre, arrastrando después a la sala entera. Los clusters automáticos
+  // («Hablante N») sí adaptan: es lo que evita el H2 fantasma por pausa o eco.
+  if (isPinnedAnchorCluster(cluster)) return
 
   const stableHistory = Array.isArray(cluster?.signatureHistory)
     ? cluster.signatureHistory
@@ -189,10 +205,23 @@ export function findClusterByLabel(speakerClusters, label = '') {
   return map.get(normalized) || null
 }
 
-export function ensureClusterForLabel(speakerClusters, label, vector) {
+/**
+ * Garantiza que exista un clúster para `label`.
+ *
+ * `learn` separa DOS responsabilidades que antes iban juntas y no debían:
+ *   - ETIQUETAR un turno (decidir a quién pertenece esa voz), y
+ *   - APRENDER su voz (actualizar la firma del clúster).
+ * Las ramas de continuidad/sticky etiquetan por conjetura temporal («sigue
+ * siendo el de antes») y aun así llamaban aquí, así que cada turno mezclaba su
+ * voz en el clúster del anterior: en pocos turnos un solo clúster acababa
+ * casando con toda la sala y se quedaba con todas las frases. Con
+ * `learn: false` la etiqueta no contamina la firma; solo aprende quien tiene
+ * evidencia real (coincidencia de vecino más cercano sobre el umbral).
+ */
+export function ensureClusterForLabel(speakerClusters, label, vector, { learn = true } = {}) {
   const existing = findClusterByLabel(speakerClusters, label)
   if (existing) {
-    updateClusterSignature(existing, vector)
+    if (learn) updateClusterSignature(existing, vector)
     return existing
   }
   const cluster = { label, signature: [...vector], signatureHistory: [[...vector]] }

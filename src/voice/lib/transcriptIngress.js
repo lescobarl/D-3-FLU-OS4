@@ -39,6 +39,7 @@ import {
   shouldMergeLivePreviewIntoFinal,
   resolveIngressCaptureText,
   isProgressiveExtension,
+  isAssistantVoiceEcho,
 } from './conversationStream.js'
 import { fluTrace } from './fluTrace.js'
 import { shouldDiarizeInterimAtTurnBoundary } from './speakerPolicy.js'
@@ -116,6 +117,7 @@ function buildIngressVoiceContext(ctx = {}) {
     previewSignature: fromHook.previewSignature || fromHook.lastSignature || null,
     finalSignature: fromHook.finalSignature || fromHook.previewSignature || null,
     lastSignature: fromHook.lastSignature || fromHook.previewSignature || null,
+    lastAssistantText: fromHook.lastAssistantText || '',
     continuityThreshold: thresholds.cosineContinuityThreshold,
     abruptSimilarityFloor: thresholds.cosineNewVoiceThreshold,
     abruptSimilarityDrop: thresholds.abruptSimilarityDrop,
@@ -559,6 +561,24 @@ function ingestInterimChunk({ interim, ctx }) {
       ctx.touchMeaningfulIngress({ meaningful: false, reason: 'committed-echo-settled' })
     }
     return { handled: false }
+  }
+
+  // Eco de la PROPIA voz de FLU: el micrófono re-captura su TTS y, sin esto,
+  // entraba como turno de una persona y se mezclaba con el hablante real
+  // («FLU y yo como Hablante 1»). El detector de arriba solo compara contra
+  // filas de USUARIO, así que no podía ver lo que FLU acababa de decir.
+  // El gate de «más de una palabra» evita leer el store en el camino caliente
+  // (la mayoría de fragmentos ASR son de una palabra) y descarta coincidencias
+  // casuales con respuestas cortas del usuario.
+  if (cleanedInterim.includes(' ')) {
+    const assistantVoiceCtx =
+      typeof ctx.getIngressVoiceContext === 'function' ? ctx.getIngressVoiceContext() : {}
+    if (isAssistantVoiceEcho(cleanedInterim, assistantVoiceCtx.lastAssistantText)) {
+      if (typeof ctx.touchMeaningfulIngress === 'function') {
+        ctx.touchMeaningfulIngress({ meaningful: false, reason: 'assistant-voice-echo' })
+      }
+      return { handled: false }
+    }
   }
 
   // §9: ÚNICA FUENTE DE VERDAD del texto del turno (misma que finales).

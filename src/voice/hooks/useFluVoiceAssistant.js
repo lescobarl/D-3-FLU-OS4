@@ -141,6 +141,7 @@ import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   FLU_DIALOGUE_SPEAKER,
+  deriveAssistantLastText,
   deriveDialogueHistory,
   deriveUserRowSpeakers,
   deriveUserRowTexts,
@@ -284,11 +285,15 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
   if (clusterMatch && clusterSimilarity >= MATCH_THRESHOLD) {
     const label = clusterMatch.label || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     if (isPlausiblePersonName(label) || /^Hablante\s+\d+$/i.test(label)) {
-      clusterMatch.signature = clusterMatch.signature.map((value, index) => {
-        const previous = Number(value || 0)
-        const next = Number(signatureVector[index] || 0)
-        return previous * (1 - blendWeight) + next * blendWeight
-      })
+      // Cluster con NOMBRE PROPIO = ancla de esa persona: no se mezcla con la voz
+      // entrante (la arrastraría hacia sí misma). Los «Hablante N» sí adaptan.
+      if (!isPlausiblePersonName(label)) {
+        clusterMatch.signature = clusterMatch.signature.map((value, index) => {
+          const previous = Number(value || 0)
+          const next = Number(signatureVector[index] || 0)
+          return previous * (1 - blendWeight) + next * blendWeight
+        })
+      }
       return label
     }
   }
@@ -4474,6 +4479,8 @@ export function useFluVoiceAssistant({
       lastSignature: lastTurnSignatureRef.current,
       previewSignature: lastTurnSignatureRef.current,
       finalSignature: lastTurnSignatureRef.current,
+      // Eco de la propia voz de FLU: el ingress lo usa para no tomar su TTS por un turno de persona.
+      lastAssistantText: deriveAssistantLastText(useIntegrationStore.getState().conversationHistory),
     }),
     peekTurnBridgeText: () => turnBridgeTextRef.current,
     stashTurnBridgeText: (text) => {

@@ -14,6 +14,14 @@ import {
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg } from './fluTranscriptPause.js'
+import { normalizeForMatch } from '../../lib/textUtils'
+import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
+
+/**
+ * Palabras mínimas para tratar un fragmento como eco del TTS de FLU.
+ * Vive aquí (defaults de voz) porque `fluConfig.js` está en su techo shrink-only.
+ */
+const ASSISTANT_ECHO_MIN_WORDS = VOICE_DIARIZATION_DEFAULTS.assistantEchoMinWords
 
 export {
   collapseRepeatedSpeech,
@@ -281,6 +289,41 @@ export function isCommittedInterimEcho(interim = '', lastCommitted = '') {
     const pLow = prior.toLowerCase()
     if (cLow.startsWith(pLow) || pLow.startsWith(cLow)) return true
     return false
+  }
+  return false
+}
+
+/**
+ * ¿Este texto es la propia voz de FLU re-capturada por el micrófono?
+ *
+ * El detector de eco clásico compara contra filas de USUARIO, así que no puede
+ * ver lo que FLU acaba de decir: su TTS re-capturado entraba como turno de una
+ * persona y se mezclaba con el hablante real («FLU y yo como Hablante 1»). Aquí
+ * la referencia es el texto hablado por FLU.
+ *
+ * La comparación es por PALABRAS (no por substring) porque el ASR no reproduce
+ * la puntuación del TTS: «…lotería! Prepárense…» y «…lotería prepárense…» deben
+ * coincidir. El mínimo de palabras evita descartar respuestas cortas legítimas.
+ */
+export function isAssistantVoiceEcho(candidate = '', assistantText = '') {
+  const chunk = normalizeForMatch(candidate)
+  const spoken = normalizeForMatch(assistantText)
+  if (!chunk || !spoken) return false
+  if (chunk === spoken) return true
+  if (isCommittedInterimEcho(chunk, spoken)) return true
+
+  const needle = chunk.split(/[^a-z0-9]+/).filter(Boolean)
+  if (needle.length < ASSISTANT_ECHO_MIN_WORDS) return false
+  const hay = spoken.split(/[^a-z0-9]+/).filter(Boolean)
+  for (let i = 0; i + needle.length <= hay.length; i += 1) {
+    let matched = true
+    for (let k = 0; k < needle.length; k += 1) {
+      if (hay[i + k] !== needle[k]) {
+        matched = false
+        break
+      }
+    }
+    if (matched) return true
   }
   return false
 }

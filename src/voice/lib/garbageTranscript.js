@@ -4,10 +4,19 @@
 // El Web Speech API (Chrome) alucina frases cortas e incoherentes
 // cuando NO hay habla real (silencio). Este guard descarta ese
 // tipo de "basura" SIN bajar la sensibilidad del reconocedor:
-//   - repetición exacta adyacente ("se se", "bor bor") → tartamudeo;
+//   - repetición adyacente de palabra corta ("se se", "bor bor") → tartamudeo;
 //   - ratio alto de tokens "no-palabra" (sin vocal) → ruido.
 // Se aplica en el ÚNICO punto de commit (§9) de la locución.
 // ============================================================
+
+/**
+ * Longitud máxima de palabra para la que una repetición adyacente cuenta como
+ * tartamudeo del ASR («se se», «bor bor»). Una palabra LARGA repetida
+ * («hola hola») es una repetición deliberada del usuario: descartarla dejaba la
+ * frase visible en ÚLTIMA FRASE pero sin fila en la conversación, porque el
+ * preview no pasa por este guard y el commit sí.
+ */
+const STUTTER_MAX_WORD_CHARS = 3
 
 /**
  * ¿La frase es "basura" (alucinación ASR) y debe descartarse?
@@ -26,9 +35,9 @@ export function looksLikeGarbageTranscript(text = '') {
 
   if (words.length === 0) return true
 
-  // 1) Repetición exacta adyacente ("se se", "bor bor") → tartamudeo.
+  // 1) Repetición exacta adyacente de palabra corta ("se se", "bor bor") → tartamudeo.
   for (let i = 1; i < words.length; i += 1) {
-    if (words[i] === words[i - 1]) return true
+    if (words[i] === words[i - 1] && words[i].length <= STUTTER_MAX_WORD_CHARS) return true
   }
 
   // 2) Ratio de tokens "no-palabra" (sin vocal) alto → ruido incoherente.

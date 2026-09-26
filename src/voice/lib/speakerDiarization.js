@@ -53,6 +53,27 @@ function resolveLastTurnSimilarity(normalized, lastSpeaker, lastSignature, speak
   return compareCosineSignatures(normalized, normalizeEmbeddingVector(cluster.signature))
 }
 
+/**
+ * ¿Hay respaldo biométrico para afirmar `label` sobre esta voz?
+ *
+ * Un nombre propio (persona registrada) NO se hereda por línea de tiempo: solo
+ * se afirma si la voz coincide con su ancla por encima del umbral de registrado.
+ * Si el ancla aún no existe, tampoco — no hay nada que respalde el nombre. Las
+ * etiquetas automáticas («Hablante N») son agrupaciones de timbre, no
+ * identidades, así que siempre pasan.
+ */
+function registeredIdentityBacked(vector, label, speakerClusters, registeredMatch) {
+  if (!isRegisteredSpeakerLabel(label)) return true
+  const cluster = findClusterByLabel(speakerClusters, label)
+  if (!cluster?.signature?.length) return false
+  return (
+    compareCosineSignatures(
+      normalizeEmbeddingVector(vector),
+      normalizeEmbeddingVector(cluster.signature),
+    ) >= registeredMatch
+  )
+}
+
 /** Nearest Neighbor en commit de sala: reutiliza clúster más cercano o abre uno nuevo. */
 function resolveProductionSpeakerAtBoundary({
   vector,
@@ -75,6 +96,11 @@ function resolveProductionSpeakerAtBoundary({
   const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', VOICE_DIARIZATION_DEFAULTS.cosineContinuity)
   const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineNewVoice)
   const REUSE = cosineThreshold(thresholds, 'productionClusterReuseThreshold', VOICE_DIARIZATION_DEFAULTS.productionClusterReuse)
+  const REGISTERED_ANCHOR = cosineThreshold(
+    thresholds,
+    'cosineRegisteredMatchThreshold',
+    VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,
+  )
   const HISTORICAL = cosineThreshold(thresholds, 'shortUtteranceHistoricalMatch', 0.7)
   const REUSE_EFF = classroom ? REUSE - (Number(roomCfg.classroomReuseRelax) || VOICE_DIARIZATION_DEFAULTS.classroomReuseRelax) : REUSE
   const NEW_VOICE_EFF = classroom ? NEW_VOICE + (Number(roomCfg.classroomNewVoiceRelax) || VOICE_DIARIZATION_DEFAULTS.classroomNewVoiceRelax) : NEW_VOICE
@@ -87,6 +113,16 @@ function resolveProductionSpeakerAtBoundary({
   const softCap = Number(roomCfg.maxAutoSpeakersSoftCap) || 0
   const hardCap = Number(roomCfg.maxAutoSpeakersInRoom) || 0
   const primaryLabel = normalizeSpeakerLabel(sessionPrimary)
+
+  /**
+   * ¿Se puede AFIRMAR que esta voz es la de `label` cuando `label` es una
+   * persona con NOMBRE PROPIO? Un nombre propio no es una pista temporal: solo
+   * se afirma con coincidencia contra su ancla biométrica. Si el ancla aún no
+   * existe, tampoco — no hay nada que respalde el nombre, así que el turno no
+   * puede heredarlo por continuidad.
+   */
+  const registeredIdentityConfirmed = (label) =>
+    registeredIdentityBacked(normalized, label, speakerClusters, REGISTERED_ANCHOR)
 
   const autoCount = speakerClusters.filter(
     (c) => isAutoSpeakerLabel(c?.label) && Array.isArray(c?.signature) && c.signature.length,
@@ -232,7 +268,9 @@ function resolveProductionSpeakerAtBoundary({
   }
 
   const anchorLastSpeaker = (reason) => {
-    ensureClusterForLabel(speakerClusters, lastSpeaker, normalized)
+    // Etiquetar por continuidad NO es aprender su voz: el turno se rotula como
+    // el anterior, pero la firma de ese clúster NO se mezcla con la voz entrante.
+    ensureClusterForLabel(speakerClusters, lastSpeaker, normalized, { learn: false })
     note?.({ reason, speaker: lastSpeaker, clusterSimilarity: lastSim, bestSim, bestLabel, autoCount })
     return lastSpeaker
   }
@@ -243,7 +281,7 @@ function resolveProductionSpeakerAtBoundary({
     lastSpeaker !== primaryLabel &&
     isShortUtteranceContext({ utteranceText, voicedSampleCount, sampleRate, thresholds })
 
-  if (lastSpeaker && lastSim >= CONTINUITY && !shortAfterOtherVoice) {
+  if (lastSpeaker && lastSim >= CONTINUITY && !shortAfterOtherVoice && registeredIdentityConfirmed(lastSpeaker)) {
     if (!bestLabel || bestLabel === lastSpeaker || bestSim < REUSE_EFF || bestSim - lastSim < SWITCH) {
       return anchorLastSpeaker('production-last-continuity')
     }
@@ -270,7 +308,7 @@ function resolveProductionSpeakerAtBoundary({
     if (preferHistorical && bestSim - lastSim >= SWITCH * VOICE_DIARIZATION_DEFAULTS.switchRelax) {
       return adoptCluster(bestLabel, 'production-historical-reidentify', bestSim)
     }
-    if (lastSpeaker && lastSim >= NEW_VOICE_EFF && !shortAfterOtherVoice) {
+    if (lastSpeaker && lastSim >= NEW_VOICE_EFF && !shortAfterOtherVoice && registeredIdentityConfirmed(lastSpeaker)) {
       if (
         classroom &&
         bestLabel &&
@@ -315,7 +353,7 @@ function resolveProductionSpeakerAtBoundary({
     return label
   }
 
-  if (lastSpeaker && lastSim >= CONTINUITY) {
+  if (lastSpeaker && lastSim >= CONTINUITY && registeredIdentityConfirmed(lastSpeaker)) {
     return anchorLastSpeaker('production-last-continuity-late')
   }
 
@@ -388,7 +426,9 @@ function resolveProductionSpeakerAtBoundary({
   }
 
   if (soloSession) {
-    if (lastSpeaker) return anchorLastSpeaker('production-solo-coalesce')
+    if (lastSpeaker && registeredIdentityConfirmed(lastSpeaker)) {
+      return anchorLastSpeaker('production-solo-coalesce')
+    }
     if (bestLabel) return adoptCluster(bestLabel, 'production-solo-coalesce', bestSim)
   }
 
@@ -608,7 +648,13 @@ export function resolveConversationSpeaker({
     if (pinnedCluster?.signature?.length) {
       const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
       if (pinnedSimilarity >= REGISTERED_MATCH) {
-        updateClusterSignature(pinnedCluster, vector)
+        // La firma del cluster del registrado NO se actualiza aquí: es su ancla
+        // de identidad. Actualizarla con la voz entrante (updateClusterSignature
+        // da más peso al vector nuevo que al acumulado) dejaba que otra voz
+        // —TV, otro hablante— la arrastrara hacia sí misma turno a turno hasta
+        // que todo pasaba el umbral y la sala entera quedaba con un solo nombre.
+        // La deriva natural del titular la absorbe la ruta normal (nearest
+        // neighbour), que exige más evidencia que este atajo.
         note({ reason: 'registered-pinned-rematch', speaker: preferSpeaker, clusterSimilarity: pinnedSimilarity })
         return preferSpeaker
       }
@@ -616,11 +662,12 @@ export function resolveConversationSpeaker({
       // se continúa para asignar el hablante real (evita "voz distinta → nombre
       // del participante", p. ej. la hija etiquetada como el titular).
       note({ reason: 'registered-pinned-mismatch', speaker: effectiveSticky, clusterSimilarity: pinnedSimilarity })
-    } else {
-      ensureClusterForLabel(speakerClusters, preferSpeaker, vector)
-      note({ reason: 'registered-pinned-cluster', speaker: preferSpeaker })
-      return preferSpeaker
     }
+    // Sin cluster del registrado todavía: NO se crea a ciegas con la voz que
+    // suene en ese momento (si habla la TV primero, su cluster nacería con la
+    // voz de la TV y ya arrastraría el nombre para siempre). Se cae a la ruta
+    // normal, que antes de crear el cluster del primario comprueba que su voz
+    // no encaje ya en un cluster existente.
   }
 
   if ((strictCosine || !soloSticky) && atTurnBoundary && vector.length) {
@@ -709,17 +756,16 @@ export function resolveConversationSpeaker({
       if (pinnedCluster?.signature?.length) {
         const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
         if (pinnedSimilarity >= REGISTERED_MATCH) {
-          updateClusterSignature(pinnedCluster, vector)
+          // Mismo criterio que el pin de arriba: la firma del cluster del
+          // registrado es su ancla y NO se mezcla con la voz entrante.
           note({ reason: 'room-pinned-rematch', speaker: preferSpeaker, clusterSimilarity: pinnedSimilarity })
           return preferSpeaker
         }
         // Voz que NO coincide con el perfil registrado: no se fuerza el nombre.
         note({ reason: 'room-pinned-mismatch', speaker: effectiveSticky, clusterSimilarity: pinnedSimilarity })
-      } else {
-        ensureClusterForLabel(speakerClusters, preferSpeaker, vector)
-        note({ reason: 'room-pinned-cluster', speaker: preferSpeaker })
-        return preferSpeaker
       }
+      // Sin cluster del registrado todavía: no se crea a ciegas con la voz
+      // entrante (mismo motivo que el pin de arriba).
     }
 
     const strictRematch = resolveRoomRematchThreshold({ thresholds })
@@ -764,7 +810,7 @@ export function resolveConversationSpeaker({
     if (pinnedCluster?.signature?.length) {
       const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
       if (pinnedSimilarity >= REGISTERED_MATCH) {
-        updateClusterSignature(pinnedCluster, vector)
+        // Ancla del registrado: no se mezcla con la voz entrante (ver el pin principal).
         return preferSpeaker
       }
     }
@@ -852,7 +898,8 @@ export function resolveConversationSpeaker({
     const stickyCluster = findClusterByLabel(speakerClusters, effectiveSticky)
     if (stickyCluster && Array.isArray(stickyCluster.signature) && stickyCluster.signature.length) {
       const stickySimilarity = compareCosineSignatures(vector, stickyCluster.signature)
-      if (stickySimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'stickyMatchFactor', factors.stickyMatchFactor ?? VOICE_DIARIZATION_DEFAULTS.stickyMatchFactor)) {
+      if (stickySimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'stickyMatchFactor', factors.stickyMatchFactor ?? VOICE_DIARIZATION_DEFAULTS.stickyMatchFactor)
+        && registeredIdentityBacked(vector, effectiveSticky, speakerClusters, REGISTERED_MATCH)) {
         updateClusterSignature(stickyCluster, vector)
         return effectiveSticky
       }
@@ -863,7 +910,8 @@ export function resolveConversationSpeaker({
     const lastCluster = findClusterByLabel(speakerClusters, lastSpeaker)
     if (lastCluster && Array.isArray(lastCluster.signature) && lastCluster.signature.length) {
       const lastClusterSimilarity = compareCosineSignatures(vector, lastCluster.signature)
-      if (lastClusterSimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'lastClusterMatchFactor', factors.lastClusterMatchFactor ?? VOICE_DIARIZATION_DEFAULTS.lastClusterMatchFactor)) {
+      if (lastClusterSimilarity >= MATCH * diarizationFactor(FLU_CONFIG, 'lastClusterMatchFactor', factors.lastClusterMatchFactor ?? VOICE_DIARIZATION_DEFAULTS.lastClusterMatchFactor)
+        && registeredIdentityBacked(vector, lastSpeaker, speakerClusters, REGISTERED_MATCH)) {
         updateClusterSignature(lastCluster, vector)
         return lastSpeaker
       }
@@ -875,9 +923,14 @@ export function resolveConversationSpeaker({
       ? compareCosineSignatures(vector, lastSignature)
       : 0
 
-  if (lastSpeaker && lastSimilarity >= continuityGate && !atTurnBoundary) {
+  if (
+    lastSpeaker &&
+    lastSimilarity >= continuityGate &&
+    !atTurnBoundary &&
+    registeredIdentityBacked(vector, lastSpeaker, speakerClusters, REGISTERED_MATCH)
+  ) {
     if (allowNew) {
-      ensureClusterForLabel(speakerClusters, lastSpeaker, vector)
+      ensureClusterForLabel(speakerClusters, lastSpeaker, vector, { learn: false })
     }
     return lastSpeaker
   }
@@ -892,7 +945,8 @@ export function resolveConversationSpeaker({
     !voiceDistinct
   ) {
     const stickyCluster = findClusterByLabel(speakerClusters, effectiveSticky)
-    if (stickyCluster?.signature?.length) {
+    if (stickyCluster?.signature?.length
+      && registeredIdentityBacked(vector, effectiveSticky, speakerClusters, REGISTERED_MATCH)) {
       updateClusterSignature(stickyCluster, vector)
       return effectiveSticky
     }
@@ -900,7 +954,9 @@ export function resolveConversationSpeaker({
       updateClusterSignature(clusterMatch, vector)
       return clusterMatch.label || effectiveSticky
     }
-    return effectiveSticky
+    if (registeredIdentityBacked(vector, effectiveSticky, speakerClusters, REGISTERED_MATCH)) {
+      return effectiveSticky
+    }
   }
 
   if (!speakerClusters.some((cluster) => Array.isArray(cluster?.signature) && cluster.signature.length)) {
@@ -933,15 +989,38 @@ export function resolveConversationSpeaker({
     if (pinnedCluster?.signature?.length) {
       const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
       if (pinnedSimilarity >= REGISTERED_MATCH) {
-        updateClusterSignature(pinnedCluster, vector)
+        // Ancla del registrado: no se mezcla con la voz entrante (ver el pin principal).
         return preferSpeaker
       }
     }
   }
 
+  /**
+   * Fallback de etiqueta: NUNCA devuelve un nombre propio sin respaldo
+   * biométrico. Si el «sticky» es una persona registrada y esta voz no coincide
+   * con su ancla, se devuelve la agrupación de timbre (etiqueta automática) o se
+   * abre una nueva; heredar el nombre por línea de tiempo es justo lo que
+   * mezclaba a la sala entera bajo un solo participante.
+   */
+  const stickyFallback = () => {
+    if (registeredIdentityBacked(vector, effectiveSticky, speakerClusters, REGISTERED_MATCH)) {
+      return effectiveSticky
+    }
+    if (clusterMatch && isAutoSpeakerLabel(clusterMatch.label)) return clusterMatch.label
+    const anyAuto = speakerClusters.find((c) => isAutoSpeakerLabel(c?.label))
+    if (anyAuto) return anyAuto.label
+    if (allowNew || allowNewDespiteBoundary) {
+      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers)
+      speakerClusters.push({ label, signature: [...vector], signatureHistory: [[...vector]] })
+      note({ reason: 'unbacked-registered-sticky', speaker: label })
+      return label
+    }
+    return getFallbackSpeaker()
+  }
+
   if (canCreateNewSpeaker) {
     if (!allowNew && !allowNewDespiteBoundary) {
-      return effectiveSticky
+      return stickyFallback()
     }
     const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers)
     speakerClusters.push({ label, signature: [...vector], signatureHistory: [[...vector]] })
@@ -952,18 +1031,17 @@ export function resolveConversationSpeaker({
   if (clusterMatch) {
     updateClusterSignature(clusterMatch, vector)
     const matched = clusterMatch.label || effectiveSticky
-    if (allowNew || allowNewDespiteBoundary || foldSpeakerKey(matched) === foldSpeakerKey(effectiveSticky)) {
+    if (
+      registeredIdentityBacked(vector, matched, speakerClusters, REGISTERED_MATCH) &&
+      (allowNew || allowNewDespiteBoundary || foldSpeakerKey(matched) === foldSpeakerKey(effectiveSticky))
+    ) {
       return matched
     }
-    const stickyCluster = findClusterByLabel(speakerClusters, effectiveSticky)
-    if (stickyCluster) {
-      updateClusterSignature(stickyCluster, vector)
-    }
-    return effectiveSticky
+    return stickyFallback()
   }
 
   if (allowNew || allowNewDespiteBoundary) {
-    ensureClusterForLabel(speakerClusters, effectiveSticky, vector)
+    ensureClusterForLabel(speakerClusters, effectiveSticky, vector, { learn: false })
   }
-  return effectiveSticky
+  return stickyFallback()
 }

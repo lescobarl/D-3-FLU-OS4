@@ -6,6 +6,13 @@ describe('garbageTranscript — guard anti-alucinación ASR', () => {
     expect(looksLikeGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toBe(true);
   });
 
+  // Una persona repite "hola hola" a proposito: el guard solo debe descartar
+  // el tartamudeo de palabra corta del ASR, no la repeticion deliberada.
+  it('conserva la repeticion deliberada de palabra larga ("hola hola")', () => {
+    expect(looksLikeGarbageTranscript('hola hola')).toBe(false);
+    expect(looksLikeGarbageTranscript('hola hola soy luis')).toBe(false);
+  });
+
   it('descarta ruido incoherente sin vocales', () => {
     expect(looksLikeGarbageTranscript('hmm mmm nnn')).toBe(true);
   });

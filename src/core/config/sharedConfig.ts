@@ -313,6 +313,10 @@ export const VOICE_DIARIZATION_DEFAULTS = {
     lastClusterMatchFactor: 0.95,
     strictNewVoiceAtCapFactor: 0.88,
     strictNewVoiceStickySoftCapFactor: 0.82,
+    /** Palabras mínimas para tratar un fragmento del micrófono como eco del propio
+     * TTS de FLU. Evita descartar respuestas cortas legítimas («sí») que aparezcan
+     * casualmente en lo que FLU acaba de decir. */
+    assistantEchoMinWords: 3,
 } as const;
 
 // -----------------------------------------------------------

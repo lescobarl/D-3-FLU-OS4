@@ -8,6 +8,7 @@
 // ============================================================
 import { describe, expect, it } from 'vitest';
 import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 
 const DIM = 64;
 function makeVector(pairs: Array<[number, number]>): number[] {
@@ -70,5 +71,63 @@ describe('resolveConversationSpeaker — no forzar el perfil registrado con voz 
             diagnosis,
         } as any);
         expect(r).toBe('Luis');
+    });
+});
+
+// ============================================================
+// Regresión: el lazo de realimentación del pin.
+// ------------------------------------------------------------
+// Antes, el pin del registrado hacía `updateClusterSignature(pinnedCluster,
+// vector)` al acertar, y esa firma mezcla el vector entrante con más peso que
+// el acumulado. Cada turno acercaba el ancla del titular a la voz que acababa
+// de sonar, así que la TV (o cualquier otra voz) terminaba pasando el umbral y
+// TODA la sala se etiquetaba con su nombre. El umbral del pin era además el
+// más bajo de la tabla: más laxo que «es la misma voz que un cluster».
+// ============================================================
+describe('pin del registrado: el ancla no se contamina (regresión)', () => {
+    const PROD = FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds;
+
+    const LUIS = makeVector([[0, 1]]);
+    /** Voz con coseno exacto `sim` respecto a la del titular. */
+    const haciaLuis = (sim: number) => makeVector([[0, sim], [1, Math.sqrt(1 - sim * sim)]]);
+
+    function llamar(vector: number[], clusters: any[]) {
+        return resolveConversationSpeaker({
+            voicedSampleCount: 96000,
+            sampleRate: 48000,
+            utteranceText: 'esta es una frase de prueba para voz',
+            thresholds: PROD,
+            allowNewCluster: true,
+            atTurnBoundary: false,
+            signatureVector: vector,
+            speakerClusters: clusters,
+            lastSpeaker: 'Luis',
+            lastSignature: LUIS,
+            preferSpeaker: 'Luis',
+            sessionPrimary: 'Luis',
+        } as any);
+    }
+
+    // El bug: la firma del cluster se mezclaba con la voz entrante en cada
+    // turno, así que el ancla derivaba hacia la voz que acababa de sonar.
+    // El umbral de estas similitudes cubre toda la banda de decisión (por
+    // encima del pin, justo por debajo y muy por debajo).
+    it('el ancla no deriva con ninguna similitud de la voz entrante', () => {
+        for (const sim of [0.9, 0.84, 0.8, 0.7]) {
+            const clusters: any[] = [{ label: 'Luis', signature: [...LUIS] }];
+            llamar(haciaLuis(sim), clusters);
+            expect(clusters[0].signature, `sim=${sim}`).toEqual(LUIS);
+        }
+    });
+
+    it('turnos repetidos de otra voz no arrastran el ancla', () => {
+        const clusters: any[] = [{ label: 'Luis', signature: [...LUIS] }];
+        for (let i = 0; i < 8; i++) llamar(haciaLuis(0.8), clusters);
+        expect(clusters[0].signature).toEqual(LUIS);
+    });
+
+    it('una voz claramente distinta no se etiqueta con su nombre', () => {
+        const clusters: any[] = [{ label: 'Luis', signature: [...LUIS] }];
+        expect(llamar(haciaLuis(0.7), clusters)).not.toBe('Luis');
     });
 });

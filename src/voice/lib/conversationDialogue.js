@@ -239,6 +239,23 @@ export function deriveUserLastText(conversationHistory = []) {
 }
 
 /**
+ * Última frase que FLU ha dicho, derivada del store.
+ *
+ * El detector de eco del ingress solo comparaba contra filas de USUARIO, así que
+ * no podía reconocer el TTS de FLU re-capturado por el micrófono: esa voz entraba
+ * como turno de una persona y se mezclaba con el hablante real («FLU y yo como
+ * Hablante 1»). Esta vista le da al ingress lo que FLU acaba de decir.
+ */
+export function deriveAssistantLastText(conversationHistory = []) {
+  const list = Array.isArray(conversationHistory) ? conversationHistory : []
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const entry = list[index]
+    if (entry?.role === 'flu') return String(entry.text || '').trim()
+  }
+  return ''
+}
+
+/**
  * §9.3: ÚNICA derivación de la frase visible (burbuja · bitácora · barra).
  * Todas las vistas la consumen con los MISMOS insumos → misma cadena exacta.
  * No normaliza: solo selecciona la fuente vigente por prioridad.
