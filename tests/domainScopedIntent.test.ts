@@ -67,3 +67,44 @@ describe('askMissingInstant - preguntar la hora en vez de descartar el turno (P7
     })
 })
 
+
+describe('reuniones y citas: el dominio del LLM ya tiene a donde llegar', () => {
+    // Antes la IA no tenia dominio para "junta"/"cita" (su vocabulario solo
+    // ofrecia recordatorio/horario), asi que la clasificacion se perdia y la
+    // confirmacion se emitia sin crear el evento (exito falso).
+    const NOW = Date.UTC(2026, 0, 5, 9, 0, 0);
+
+    it('el dominio "junta" crea una junta con instante', () => {
+        const r = resolveAgendaDomainIntent('junta', 'reunion del equipo mañana a las 12', { now: NOW });
+        expect(r?.matched).toBe(true);
+        const action = r?.action as Record<string, unknown> | undefined;
+        expect(action?.action).toBe('agenda.create');
+        expect(action?.kind).toBe('junta');
+    });
+
+    it('los alias reunion y meeting apuntan al mismo tipo', () => {
+        for (const dominio of ['reunion', 'meeting']) {
+            const action = resolveAgendaDomainIntent(dominio, 'junta mañana a las 10', { now: NOW })
+                ?.action as Record<string, unknown> | undefined;
+            expect(action?.kind).toBe('junta');
+        }
+    });
+
+    it('el dominio "cita" crea una cita', () => {
+        const action = resolveAgendaDomainIntent('cita', 'agrega una cita mañana a las 5', { now: NOW })
+            ?.action as Record<string, unknown> | undefined;
+        expect(action?.kind).toBe('cita');
+    });
+
+    it('sin hora la junta no se inventa: se propaga la pista para preguntar', () => {
+        const r = resolveAgendaDomainIntent('junta', 'organiza la reunion', { now: NOW });
+        expect(r?.needsInstant).toBe(true);
+        const action = r?.action as Record<string, unknown> | undefined;
+        expect(action?.kind).toBe('junta');
+        expect(action?.trigger).toBeUndefined();
+    });
+
+    it('"temporal" sigue sin cablearse (tipo ambiguo, no se adivina)', () => {
+        expect(resolveAgendaDomainIntent('temporal', 'tomar el medicamento a las 12:00', { now: NOW })).toBeNull();
+    });
+});

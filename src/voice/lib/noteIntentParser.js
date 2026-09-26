@@ -19,7 +19,7 @@ const NOTE_PARA_SUPER =
 const NOTE_SUPER_LIST =
   /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
 const NOTE_SUPER_APPEND =
-  /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(.+?)\s+(?:en\s+la\s+lista\s+del\s+|a\s+la\s+lista\s+del\s+|en\s+la\s+lista\s+de\s+la\s+|a\s+la\s+lista\s+de\s+la\s+|al\s+|a\s+la\s+|en\s+el\s+)(super|supermercado|mercado)\s*$/i
+  /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(.+?)\s+(?:en\s+la\s+(?:lista|nota)\s+del\s+|a\s+la\s+(?:lista|nota)\s+del\s+|en\s+la\s+(?:lista|nota)\s+de\s+(?:la\s+)?|a\s+la\s+(?:lista|nota)\s+de\s+(?:la\s+)?|al\s+|a\s+la\s+|en\s+el\s+)(super|supermercado|compras|mercado)\s*$/i
 // "incluye/agrega [en] la NOTA del súper [que también traiga] {ítem}" → "Super: {ítem}".
 // Cubre el destino "nota del súper" (no solo "lista") y el verbo "incluye",
 // con el ítem ANTES ("incluye X en la nota del super") o DESPUÉS

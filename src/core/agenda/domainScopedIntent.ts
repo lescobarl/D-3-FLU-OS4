@@ -50,11 +50,20 @@ export interface AgendaDomainIntentOptions {
  * Tipo de agenda que implica cada dominio del LLM. Solo los dominios cuyo tipo
  * es INEQUIVOCO: `temporal` cubre alarma Y temporizador, asi que se queda fuera
  * hasta que tenga su propia politica (el tipo no se adivina).
+ *
+ * Reuniones y citas: la IA no tenia dominio para "junta"/"cita" (su vocabulario
+ * solo ofrecia recordatorio/horario), asi que clasificaba mal y la confirmacion
+ * se emitia SIN que nada se creara. Estos alias existen para que la
+ * clasificacion del LLM -que ya era correcta- llegue al parser.
  */
 const AGENDA_DOMAIN_KIND: Readonly<Record<string, AgendaKind>> = Object.freeze({
     reminder: 'recordatorio',
     recordatorio: 'recordatorio',
     horario: 'clase',
+    junta: 'junta',
+    reunion: 'junta',
+    meeting: 'junta',
+    cita: 'cita',
 });
 
 export function resolveAgendaDomainIntent(

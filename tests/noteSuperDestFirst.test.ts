@@ -50,3 +50,29 @@ describe('caso 11 — "en la {destino} {verbo} {ítem}" (destino primero)', () =
     expect(destFirst).toBe(verbFirst);
   });
 });
+
+// Mismo defecto que el caso 11, en el orden ITEM PRIMERO + destino "nota":
+// "agrega cloro a la nota del super". El destino solo aceptaba "lista", asi
+// que la frase real no matcheaba, caia a la IA y la IA confirmaba la nota sin
+// crearla (exito falso).
+describe('item ANTES con destino "nota" ("agrega cloro a la nota del super")', () => {
+  it('reconoce el item antes del destino "nota"', () => {
+    expect(parseNoteIntentText('agrega cloro a la nota del super')?.label).toBe('Super: cloro');
+  });
+
+  it('vale para otras variantes de verbo y destino', () => {
+    expect(parseNoteIntentText('anade jabon a la nota del super')?.label).toBe('Super: jabon');
+    expect(parseNoteIntentText('pon leche en la nota de compras')?.label).toBe('Super: leche');
+  });
+
+  it('el arbitro lo resuelve como notes.add determinista (0 IA)', () => {
+    const result = resolveDeterministicCommand('agrega cloro a la nota del super', {
+      language: 'es',
+    });
+    expect(result.matched).toBe(true);
+    expect(result.domain).toBe('note');
+    const action = result.action as { action?: string; data?: { label?: string } };
+    expect(action.action).toBe('notes.add');
+    expect(action.data?.label).toBe('Super: cloro');
+  });
+});
