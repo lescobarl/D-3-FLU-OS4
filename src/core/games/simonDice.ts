@@ -270,3 +270,6 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         },
     };
 }
+// Superficie de comandos PUBLICADA como dato, con nombre CALIFICADO por motor:
+// los simbolos exportados deben ser unicos (un `HINT_FRAMES` por modulo choca).
+export const SIMON_DICE_COMMAND_FRAMES = Object.freeze({ END_FRAMES, CONTINUE_FRAMES })

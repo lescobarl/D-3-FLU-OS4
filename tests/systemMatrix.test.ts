@@ -24,6 +24,7 @@ import {
 import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands';
 import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter.js';
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore';
+import type { GameEngine } from '../src/core/games/gameEngine';
 import { AGENDA_KINDS, type AgendaKind } from '../src/core/agenda/agendaModel';
 import { parseAgendaCommand } from '../src/core/agenda/agendaCommandParser';
 import { createAgendaService, type AgendaDb } from '../src/core/agenda/agendaService';
@@ -175,6 +176,30 @@ describe('G2 agenda: objetos x acciones (derivado de AGENDA_KINDS)', () => {
             expect(await svc.list({ personId: 'p1', status: 'pending' })).toHaveLength(0);
             expect(await svc.list({ personId: 'p2', status: 'pending' })).toHaveLength(1);
         });
+        it(`[${kind}] modificar -> la etiqueta cambia`, async () => {
+            const svc = makeService();
+            await svc.create({ kind, label: 'Antes', trigger: { type: 'absolute', at: AT }, personId: 'p1' });
+            const [item] = await svc.list({ personId: 'p1' });
+            await svc.update(item.id, { label: 'Despues' });
+            expect((await svc.list({ personId: 'p1' })).map((i) => i.label)).toEqual(['Despues']);
+        });
+        it(`[${kind}] completar -> sale de pendientes`, async () => {
+            const svc = makeService();
+            await svc.create({ kind, label: 'X', trigger: { type: 'absolute', at: AT }, personId: 'p1' });
+            const [item] = await svc.list({ personId: 'p1' });
+            await svc.complete(item.id);
+            expect(await svc.list({ personId: 'p1', status: 'pending' })).toHaveLength(0);
+        });
+        it(`[${kind}] vaciar -> solo el usuario indicado`, async () => {
+            const svc = makeService();
+            await svc.create({ kind, label: 'A', trigger: { type: 'absolute', at: AT }, personId: 'p1' });
+            await svc.create({ kind, label: 'B', trigger: { type: 'absolute', at: AT }, personId: 'p1' });
+            await svc.create({ kind, label: 'C', trigger: { type: 'absolute', at: AT }, personId: 'p2' });
+            await svc.clearAll({ personId: 'p1' });
+            // Vaciar es baja logica: el invariante es que no quedan PENDIENTES.
+            expect(await svc.list({ personId: 'p1', status: 'pending' })).toHaveLength(0);
+            expect(await svc.list({ personId: 'p2', status: 'pending' })).toHaveLength(1);
+        });
         it(`[${kind}] conservadurismo: el singular desnudo NO arrastra el conjunto`, () => {
             const cmd = parseAgendaCommand(`borra el ${kind}`, { now: () => AT });
             expect(cmd.action).toBe('agenda.cancel');
@@ -220,5 +245,140 @@ describe('G5 cobertura completa de los registros (anti-deriva)', () => {
             wakes: (FLU_CONFIG.voiceCommands?.wakeWords || []).filter((w) => !covered.wakes.has(w)),
         };
         expect(missing).toEqual({ games: [], kinds: [], endFrames: [], menuFrames: [], wakes: [] });
+    });
+});
+// ------------------------------------------------------------
+// G6 --- SUPERFICIE DE COMANDOS DE CADA MOTOR (auto-descubierta, sin listas).
+// Cada modulo publica sus tablas *_FRAMES como dato. Contrato: un frame declarado
+// NO puede ser INDISTINGUIBLE DE LA BASURA en su fase; si lo es, es dato muerto.
+// Fase de respuesta: los frames de afirmacion/negacion solo aplican cuando el
+// jugador piensa y el asistente adivina, fase que se alcanza consumiendo un
+// frame de CAMBIO (SWAP). Se deriva de los propios datos del modulo.
+// ------------------------------------------------------------
+describe('G6 superficie de comandos de cada motor (auto-descubierta)', () => {
+    const modules = import.meta.glob('../src/core/games/*.ts', { eager: true }) as Record<string, Record<string, unknown>>;
+    const GIBBERISH = 'zzqx wvvv plof';
+    const sign = (r: { error?: string; valid?: boolean; gameOver?: boolean }) =>
+        JSON.stringify({ error: r.error ?? null, valid: r.valid === true, gameOver: r.gameOver === true });
+    const run = (engine: GameEngine, warmup: string[], text: string) => {
+        const session = engine.createSession();
+        engine.start(session, {});
+        for (const w of warmup) engine.turn(session, w);
+        return sign(engine.turn(session, text));
+    };
+    it('cada motor entiende TODOS los frames que declara (o es dato muerto)', () => {
+        const mismatches: string[] = [];
+        const noSurface: string[] = [];
+        const discovered = new Set<string>();
+        let tables = 0;
+        let frames = 0;
+        let engines = 0;
+        for (const [path, mod] of Object.entries(modules)) {
+            const declared: Record<string, string[]> = {};
+            for (const [key, value] of Object.entries(mod)) {
+                if (!key.endsWith('_COMMAND_FRAMES') || !value || typeof value !== 'object') continue;
+                for (const [table, list] of Object.entries(value as Record<string, unknown>)) {
+                    if (Array.isArray(list)) {
+                        tables += 1;
+                        declared[table] = list as string[];
+                    }
+                }
+            }
+            const factory = Object.entries(mod).find(
+                ([k, v]) => /^create[A-Za-z]+Engine$/.test(k) && typeof v === 'function',
+            )?.[1] as (() => GameEngine) | undefined;
+            if (!factory) continue;
+            if (!Object.keys(declared).length) {
+                noSurface.push(path);
+                continue;
+            }
+            engines += 1;
+            discovered.add(factory().id);
+            const engine = factory();
+            const swap = declared.SWAP_FRAMES?.[0];
+            for (const [table, list] of Object.entries(declared)) {
+                for (const frame of list) {
+                    frames += 1;
+                    if (engine.isGameCommand(frame)) continue;
+                    // Fase de respuesta (afirmar/negar) alcanzada por un frame de cambio.
+                    const warmup = table === 'AFFIRMATIVE_FRAMES' || table === 'NEGATIVE_FRAMES'
+                        ? (swap ? [swap] : [])
+                        : [];
+                    const deadHere = run(engine, warmup, frame) === run(engine, warmup, GIBBERISH);
+                    const deadBase = !warmup.length && run(engine, [], frame) === run(engine, [], GIBBERISH);
+                    if (deadHere && deadBase) {
+                        mismatches.push(`${path} :: ${engine.id} declara "${frame}" (${table}) pero es indistinguible de la basura`);
+                    }
+                }
+            }
+        }
+        expect({ engines: engines >= 20, tables: tables >= 60, frames: frames >= 200 }).toEqual({
+            engines: true, tables: true, frames: true,
+        });
+        expect(mismatches).toEqual([]);
+        // Anti-deriva: ningun motor sin superficie publicada, y la superficie
+        // descubierta cubre TODO el catalogo (si se anade un juego sin publicar
+        // sus comandos, esto es rojo).
+        expect(noSurface).toEqual([]);
+        expect(GAME_CATALOG.map((g) => g.id).filter((id) => !discovered.has(id))).toEqual([]);
+    });
+});
+// ------------------------------------------------------------
+// G7 --- VARIANTES DE RUIDO DEL ASR (eco, repeticion, ruido, truncado).
+// Invariante: una variante NUNCA puede producir una decision DISTINTA a la base;
+// solo la misma decision, o ninguna (equivalente a la basura). Cubre la clase de
+// defecto del eco de la orden de arranque.
+// ------------------------------------------------------------
+describe('G7 variantes de ruido ASR: la variante no cambia la decision', () => {
+    const GIBBERISH = 'zzqx wvvv plof';
+    const noiseVariants = (base: string) => [
+        { name: 'eco', text: `${base} ${base}` },
+        { name: 'eco-con-wake', text: `ok flow ${base} ${base}` },
+        { name: 'ruido-prefijo', text: `eh ${base}` },
+        { name: 'truncado', text: base.slice(0, Math.max(1, base.length - 2)) },
+    ];
+    it('orden de arranque + ruido: nunca accion de partida ni victoria', () => {
+        const bad: string[] = [];
+        for (const entry of GAME_CATALOG) {
+            const order = `vamos a jugar ${entry.aliases[0]}`;
+            const engine = getGameEngine(entry.id);
+            const s = () => {
+                const session = engine!.createSession();
+                engine!.start(session, {});
+                return session;
+            };
+            for (const v of noiseVariants(order)) {
+                const dec = resolveGameCommandFromText(v.text);
+                if (dec && dec.action === 'turn') bad.push(`${entry.id} :: ${v.name} -> turn`);
+                const r = engine!.turn(s(), v.text);
+                if (r.won === true || r.gameOver === true) bad.push(`${entry.id} :: ${v.name} termina la partida`);
+            }
+        }
+        expect(bad).toEqual([]);
+    });
+    it('frases de agenda + ruido: accion y objeto intactos; etiqueta intacta sin perdida', () => {
+        const noop = JSON.stringify(parseAgendaCommand(GIBBERISH, { now: () => AT }));
+        // El recorte del ASR pierde informacion de la etiqueta: se exige accion y
+        // objeto, no la etiqueta. El resto de variantes no tienen perdida.
+        const lossy = new Set(['truncado']);
+        const bad: string[] = [];
+        for (const kind of AGENDA_KINDS) {
+            for (const base of [`borra todas las ${kind}s`, `borra la ${kind} de historia`]) {
+                const ref = parseAgendaCommand(base, { now: () => AT });
+                for (const v of noiseVariants(base)) {
+                    const got = parseAgendaCommand(v.text, { now: () => AT });
+                    const raw = JSON.stringify(got);
+                    if (raw === noop) continue;
+                    if (lossy.has(v.name)) {
+                        if (got.action !== ref.action || got.kind !== ref.kind) {
+                            bad.push(`${v.name} "${v.text}" -> ${raw} (base ${JSON.stringify(ref)})`);
+                        }
+                        continue;
+                    }
+                    if (raw !== JSON.stringify(ref)) bad.push(`${v.name} "${v.text}" -> ${raw} (base ${JSON.stringify(ref)})`);
+                }
+            }
+        }
+        expect(bad).toEqual([]);
     });
 });

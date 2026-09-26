@@ -667,13 +667,19 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
    transitivos. Regla: al tocar voz/juegos/agenda, incluir la CAPA DE COMPOSICION
    (todo test que monte el hook), porque ahi vive el defecto de "arreglado en un
    sitio y roto en otro".
-17. **COBERTURA CONOCIDA PENDIENTE (no confundir con cubierto).** La matriz deriva
-   GAME_CATALOG, AGENDA_KINDS, END_GAME_FRAMES, GAME_MENU_FRAMES y wakeWords. NO
-   deriva todavia: los frames INTERNOS de cada motor (HINT/SKIP/REPEAT/NEXT/SWAP/
-   CONTINUE son `const` locales NO exportados -> no iterables), las acciones
-   update/clear de agenda como celdas, los verbos de notas, las 14 acciones de
-   config, los intents de entorno, ni las variantes de RUIDO de ASR (hoy solo se
-   varia la wake). Cerrar ese hueco exige PUBLICAR esas superficies como datos.
+17. **COBERTURA DERIVADA Y COBERTURA PENDIENTE (no confundir).**
+   DERIVADO: GAME_CATALOG x conductas (G1), AGENDA_KINDS x acciones incl.
+   modificar/completar/vaciar (G2), frames de fin/menu y wakeWords (G3),
+   diferencial de puertas (G4), anti-deriva de registros (G5), SUPERFICIE DE
+   COMANDOS DE LOS MOTORES -63 tablas publicadas como *_COMMAND_FRAMES- (G6) y
+   VARIANTES DE RUIDO DEL ASR: eco, eco con wake, muletilla, truncado (G7).
+   G6 exige ademas que ningun motor quede sin superficie publicada y que la
+   superficie descubierta cubra TODO el catalogo: anadir un juego sin publicar sus
+   comandos es ROJO. La higiene de entrada (eco y muletilla) tiene dueno unico en
+   audioMath.normalizeSpokenCommand, que consumen agenda, notas y arbitro.
+   PENDIENTE: superficies de NOTAS, CONFIG y ENTORNO (hoy son regex heterogeneas,
+   no tablas: publicarlas como dato es rediseno, no algo mecanico), la partida
+   completa hasta victoria por juego, y el DOM del panel.
 
 14. **Comparadores de revision ASR: NO son duplicados.** `audioMath.spokenUtteranceRevision`
    (pela la wake, single-source por voiceSingleSourceGuard) y

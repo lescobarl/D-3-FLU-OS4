@@ -1382,13 +1382,41 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
  * árbitro y los parsers de dominio, de modo que un dictado con wake funcione
  * igual se llame por donde se llame (una sola implementación).
  */
+// Higiene de ENTRADA compartida (agenda, notas y arbitro la consumen via
+// normalizeSpokenCommand). Dos clases de ruido del ASR que degradaban la orden:
+//  - ECO/REPETICION: "X X" -> "X". La repeticion duplicaba la etiqueta capturada
+//    ("borra la clase de historia" + eco -> etiqueta "historia historia").
+//  - MULETILLA INICIAL: "eh X" -> "X". El prefijo se colaba como etiqueta y
+//    ANULABA los cuantificadores universales usando una etiqueta basura.
+const LEADING_NOISE_WORDS = Object.freeze([
+  'eh', 'ehh', 'em', 'mmm', 'pues', 'bueno', 'o sea', 'este', 'digamos',
+])
+function stripLeadingNoiseAndEcho(text = '') {
+  let out = String(text || '').trim()
+  for (let pass = 0; pass < 6; pass += 1) {
+    const before = out
+    for (const noise of LEADING_NOISE_WORDS) {
+      const pattern = new RegExp('^' + noise.replace(/ /g, '\\s+') + '\\b[,:]?\\s*', 'i')
+      out = out.replace(pattern, '').trim()
+    }
+    if (out === before) break
+  }
+  const half = Math.floor(out.length / 2)
+  if (half > 0) {
+    const left = out.slice(0, half).trim()
+    const right = out.slice(out.length - half).trim()
+    if (left && left === right) out = left
+  }
+  return out
+}
 export function normalizeSpokenCommand(text = '') {
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const withoutWake = normalizeCommandForDeterministic(String(text || ''), wakeWords)
-  return String(withoutWake || '')
+  const cleaned = String(withoutWake || '')
     .replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
     .replace(/\s+/g, ' ')
     .trim()
+  return stripLeadingNoiseAndEcho(cleaned)
 }
 
 export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5) {

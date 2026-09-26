@@ -235,3 +235,6 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         },
     };
 }
+// Superficie de comandos PUBLICADA como dato, con nombre CALIFICADO por motor:
+// los simbolos exportados deben ser unicos (un `HINT_FRAMES` por modulo choca).
+export const LOTERIA_COMMAND_FRAMES = Object.freeze({ REPEAT_FRAMES, NEXT_FRAMES, END_FRAMES })
