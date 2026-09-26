@@ -660,6 +660,21 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
    no quedo ejercitado, el test es ROJO. Anadir un juego, un objeto o un comando
    de voz sin cubrirlo es imposible por construccion.
 
+16. **ALCANCE AFECTADO = consumidores TRANSITIVOS, no solo imports directos.**
+   El alcance se dedujo grepando imports (`from '../src/<area>`) y dejo FUERA 21
+   tests que MONTAN el pipeline (renderHook de useFluVoiceAssistant) y que SI
+   ejercitan el cambio: el alcance por imports directos no ve consumidores
+   transitivos. Regla: al tocar voz/juegos/agenda, incluir la CAPA DE COMPOSICION
+   (todo test que monte el hook), porque ahi vive el defecto de "arreglado en un
+   sitio y roto en otro".
+17. **COBERTURA CONOCIDA PENDIENTE (no confundir con cubierto).** La matriz deriva
+   GAME_CATALOG, AGENDA_KINDS, END_GAME_FRAMES, GAME_MENU_FRAMES y wakeWords. NO
+   deriva todavia: los frames INTERNOS de cada motor (HINT/SKIP/REPEAT/NEXT/SWAP/
+   CONTINUE son `const` locales NO exportados -> no iterables), las acciones
+   update/clear de agenda como celdas, los verbos de notas, las 14 acciones de
+   config, los intents de entorno, ni las variantes de RUIDO de ASR (hoy solo se
+   varia la wake). Cerrar ese hueco exige PUBLICAR esas superficies como datos.
+
 14. **Comparadores de revision ASR: NO son duplicados.** `audioMath.spokenUtteranceRevision`
    (pela la wake, single-source por voiceSingleSourceGuard) y
    `conversationStream.isProgressiveExtension` (exige crecimiento) son reglas
