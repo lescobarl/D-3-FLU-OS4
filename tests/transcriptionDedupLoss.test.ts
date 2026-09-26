@@ -24,7 +24,8 @@
 // Los validadores del log son DIAGNÓSTICOS, no borran nada.
 // ============================================================
 import { describe, it, expect } from 'vitest';
-import { isRedundantFinal } from '../src/voice/lib/activeListen.js';
+import { isRedundantFinal, wouldShrinkListenLog } from '../src/voice/lib/activeListen.js';
+import { reconcileCommitText } from '../src/voice/lib/turnStream.js';
 import {
     resolveLogRowAction,
     validateLogRowsNoPrefixDup,
@@ -163,5 +164,68 @@ describe('transcriptionDedupLoss — validadores del log (DIAGNÓSTICOS, no borr
         const rows = ['intervención 2'];
         expect(validateLogRowsNoPrefixDup(rows)).toBe(true);
         expect(validateLogRowsNoAsrRevisionDup(rows)).toBe(true);
+    });
+});
+
+// ============================================================
+// Divergencia ultima-frase vs fila (shrink-preview).
+//
+// El preview BLOQUEA el recorte por ruido ASR (wouldShrinkListenLog), pero el
+// commit escribia el texto recortado: la fila quedaba MAS CORTA que lo ultimo
+// mostrado y la cola se perdia ('...del centro' -> '...'). Medido antes del
+// arreglo: mostrado 'hola como estas' -> fila 'hola como'; mostrado 'necesito
+// comprar pan y leche' -> fila 'leche'.
+//
+// El arreglo decide con el MISMO predicado del preview (reconcileCommitText),
+// de modo que la fila y la ultima frase son el mismo texto. NO toca las
+// extensiones ('intervencion' -> 'intervencion 2'), que son crecimiento:
+// la guarda deja pasar el crecimiento, asi que el P0 de transcriptionDedupLoss
+// sigue cubierto por los casos de arriba.
+// ============================================================
+describe('transcriptionDedupLoss - la fila no puede ser mas corta que la ultima frase', () => {
+    const CASOS = [
+        ['hola como estas', 'hola como'],
+        ['vamos a la tienda del centro', 'vamos a la tienda'],
+        ['necesito comprar pan y leche', 'leche'],
+    ] as const;
+
+    it('el preview ya bloqueaba el recorte (sintoma observado)', () => {
+        for (const [shown, capture] of CASOS) {
+            expect(wouldShrinkListenLog(capture, shown)).toBe(true);
+        }
+    });
+
+    it('el commit escribe la ultima frase, no el recorte (no se pierde la cola)', () => {
+        for (const [shown, capture] of CASOS) {
+            const texto = reconcileCommitText(capture, shown);
+            expect(texto).toBe(shown);
+        }
+    });
+
+    it('reconciliado, la fila resultante conserva el contenido (replaceLast, mismo turno)', () => {
+        const shown = 'vamos a la tienda del centro';
+        const capture = reconcileCommitText('vamos a la tienda', shown);
+        const action = resolveLogRowAction({
+            activeLogStream: false,
+            newParagraph: false,
+            turnBoundary: true,
+            turnCommit: true,
+            lastEmitted: shown,
+            lastCommitted: shown,
+            capture,
+            logRowContext: { msSinceLastCommit: 200 },
+        });
+        expect(action.replaceLast).toBe(true);
+        expect(shown.includes('del centro')).toBe(true);
+    });
+
+    it('la extension (crecimiento) NO se toca: el P0 sigue cubierto', () => {
+        expect(reconcileCommitText('intervencion 2', 'intervencion')).toBe('intervencion 2');
+    });
+
+    it('texto sin relacion tampoco se toca', () => {
+        expect(reconcileCommitText('ahora habla otra persona', 'que buen dia para caminar')).toBe(
+            'ahora habla otra persona',
+        );
     });
 });

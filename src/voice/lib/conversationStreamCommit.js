@@ -6,7 +6,11 @@ import { cleanForSpeech, detectWakeIntroducedName, formatClock } from './audioMa
 import { resolveInlineWakeAtCommit } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { resolveMicCommitAction, isDuplicateTurnCommit } from './turnStream.js'
+import {
+  resolveMicCommitAction,
+  isDuplicateTurnCommit,
+  reconcileCommitText,
+} from './turnStream.js'
 import {
   advancePublishedDisplay,
   detectNextSpeakerPhrase,
@@ -182,6 +186,10 @@ export function handleConversationStreamSync(
   }
 
   flushPendingStreamLog()
+
+  // El preview ya protegia el recorte por ruido ASR, pero aqui se commiteaba el
+  // texto recortado: la fila quedaba mas corta que lo mostrado y se perdia la cola.
+  capture = reconcileCommitText(capture, publishedLiveRef.current)
 
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const lastCommittedRow = logRowsTextRef.current.at(-1) || ''

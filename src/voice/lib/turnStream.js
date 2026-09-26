@@ -4,7 +4,7 @@
  * - Final → único commit al log + sesión archivada
  */
 import { cleanForSpeech } from './audioMath.js'
-import { phrasesEquivalent } from './activeListen.js'
+import { phrasesEquivalent, wouldShrinkListenLog } from './activeListen.js'
 import {
   archiveCommittedTurn,
   processListenPacket,
@@ -59,6 +59,22 @@ export function applyMicPreview(
 }
 
 /** Resuelve acción de fila al cerrar turno (solo final / onend). */
+/**
+ * Fila == ultima frase mostrada.
+ *
+ * El preview bloquea el recorte por ruido ASR (wouldShrinkListenLog), pero el
+ * commit escribia el texto RECORTADO: la fila quedaba mas corta que lo ultimo
+ * mostrado y se perdia la cola ("...del centro" -> "..."), de modo que la ultima
+ * frase y la fila divergian. Se decide con el MISMO predicado del preview: fila y
+ * ultima frase son el mismo texto.
+ *
+ * No afecta a las extensiones ("intervencion" -> "intervencion 2"): eso es
+ * crecimiento y la guarda deja pasar.
+ */
+export function reconcileCommitText(capture = '', shown = '') {
+  return wouldShrinkListenLog(capture, shown) ? shown : capture
+}
+
 export function resolveMicCommitAction(
   turn,
   {
