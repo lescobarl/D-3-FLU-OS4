@@ -193,6 +193,7 @@ import { useFluBridgesLifecycle } from './app/fluBridges';
 import { isAIProvider } from './app/appTypeGuards';
 import { applyConfigAction } from './app/configActions';
 import { applyGameAction } from './app/gameActions';
+import { isVisualWorkspaceTipo, type GenerationWorkspaceTipo, type VisualTipo } from './core/config/sharedConfig';
 
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
@@ -641,7 +642,7 @@ function App() {
         createMediaRequestGate(Number(FLU_CONFIG?.media?.dedupWindowMs) || 120000),
     );
     const requestMediaRef = useRef<
-        (tipo: 'video' | 'doc', commandText: string, prepare?: () => void) => boolean
+        (tipo: GenerationWorkspaceTipo, commandText: string, prepare?: () => void) => boolean
     >(() => false);
 
     // Idempotencia por turno de la RESPUESTA: si el mismo turno (texto+respuesta)
@@ -1806,7 +1807,7 @@ function App() {
                         ? 'video'
                         : wsTipoFocus === 'doc' || navFocus === 'GENERAR_DOCUMENTO'
                             ? 'doc'
-                            : ['image_prompt', 'diagram', '3d'].includes(wsTipoFocus)
+                            : isVisualWorkspaceTipo(wsTipoFocus)
                                 ? 'image'
                                 : 'text';
                 turnFocusSeqRef.current += 1;
@@ -1826,8 +1827,7 @@ function App() {
                     ? workspace.puntos_clave.map((item: string) => String(item || '').trim()).filter(Boolean)
                     : [];
 
-                const VISUAL_TIPOS = ['image_prompt', 'diagram', '3d'];
-                const isVisualTipo = VISUAL_TIPOS.includes(tipo);
+                const isVisualTipo = isVisualWorkspaceTipo(tipo);
                 if (isVisualTipo) {
                     const visualCore = promptVisual || contenido || titulo;
                     if (visualCore && visualCore.length >= 5) {
@@ -1837,7 +1837,7 @@ function App() {
                             id: wsId,
                             respuesta: contenido || titulo || respuestaVoz,
                             titulo: titulo || visualCore,
-                            tipo: tipo as 'text' | 'image_prompt' | 'diagram' | '3d' | null,
+                            tipo: tipo as 'text' | VisualTipo | null,
                             contenido: contenido || visualCore,
                             prompt_visual: visualCore,
                             puntos_clave,

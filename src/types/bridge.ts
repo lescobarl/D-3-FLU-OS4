@@ -6,6 +6,7 @@
 // ============================================================
 
 import type { AvatarState, AvatarExpression } from '../avatar';
+import type { VisualTipo, WorkspaceTipo } from '../core/config/sharedConfig';
 
 /**
  * Estados del ciclo de conversación integrado.
@@ -335,7 +336,7 @@ export interface WorkspaceEntry {
     /** Título del contenido workspace (desde Gemini contract) */
     titulo?: string;
     /** Tipo de contenido workspace (desde Gemini contract) */
-    tipo?: 'text' | 'image_prompt' | 'diagram' | '3d' | 'horario' | 'doc' | 'video' | null;
+    tipo?: WorkspaceTipo | null;
     /** Modo de visualización del horario de clases (solo cuando tipo === 'horario') */
     modo?: 'semana' | 'dia' | 'proxima' | 'recordatorios';
     /** Contenido textual del workspace (desde Gemini contract) */
@@ -403,7 +404,7 @@ export interface FluContract {
     };
     workspace: {
         titulo: string;
-        tipo: 'text' | 'image_prompt' | 'diagram' | '3d' | null;
+        tipo: 'text' | VisualTipo | null;
         contenido: string;
         prompt_visual: string;
         puntos_clave: string[];

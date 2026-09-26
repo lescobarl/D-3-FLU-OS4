@@ -2,7 +2,10 @@
  * Pipeline visual: brief de workspace IA → prompt de generación. Sin números mágicos aquí.
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
  */
-import { buildPollinationsImageUrl } from '../../core/config/sharedConfig'
+import {
+  buildPollinationsImageUrl,
+  VALID_VISUAL_TIPOS,
+} from '../../core/config/sharedConfig'
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { normalizeSpaces, shortText } from '../../lib/textUtils'
 
@@ -40,7 +43,7 @@ export function getVisualPipelineConfig() {
     primary: String(pipeline.primary || 'pollinations').trim(),
     visualTypes: Array.isArray(pipeline.visualTypes)
       ? pipeline.visualTypes.map((t) => String(t || '').trim().toLowerCase()).filter(Boolean)
-      : ['image_prompt', 'diagram', '3d'],
+      : [...VALID_VISUAL_TIPOS],
     errorFallback: String(pipeline.errorFallback || 'localSvg').trim(),
     stockSearchEnabled: pipeline.stockSearch?.enabled === true,
     stockQueryMode: String(pipeline.stockSearch?.queryMode || 'fullBrief').trim(),

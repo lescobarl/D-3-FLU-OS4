@@ -17,7 +17,7 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { GENERATION_TIMEOUT_MS, TEXT_TOKEN_BUDGETS, VALID_VISUAL_TIPOS } from '../config/appConfig';
+import { GENERATION_TIMEOUT_MS, TEXT_TOKEN_BUDGETS, isVisualWorkspaceTipo } from '../config/appConfig';
 import { buildMinuteSystemPrompt } from './prompts';
 import {
     buildMapPrompt,
@@ -294,7 +294,7 @@ export abstract class BaseAIService implements IAIService {
 
         const tipoStr = String(tipo || '').trim().toLowerCase();
         // VALID_VISUAL_TIPOS centralizado en appConfig — Rule #1: NO HARDCODE
-        if (!VALID_VISUAL_TIPOS.includes(tipoStr)) {
+        if (!isVisualWorkspaceTipo(tipoStr)) {
             return {
                 image_url: '',
                 trace: { provider: 'none', hasImage: false, source: 'not_visual_tipo', tipo: tipoStr },

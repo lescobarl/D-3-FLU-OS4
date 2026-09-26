@@ -1,11 +1,10 @@
 import { cleanForSpeech, isVisualRequestText, stripDiacritics, splitTranscriptAtWakeWord } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { VISUAL_CONFIG } from './visualConfig.js'
-
-const VISUAL_WORKSPACE_TIPOS = ['image_prompt', 'diagram', '3d']
-
-// Tipos de generación de documento/video (disparan documentGeneration).
-const GENERATION_WORKSPACE_TIPOS = ['doc', 'video']
+import {
+  isGenerationWorkspaceTipo,
+  isVisualWorkspaceTipo,
+} from '../../core/config/sharedConfig'
 
 const HORARIO_WORKSPACE_MODOS = ['semana', 'dia', 'proxima', 'recordatorios']
 
@@ -113,13 +112,11 @@ export function hasExplicitVisualQualifier(transcript = '') {
   })
 }
 
-export function isVisualWorkspaceTipo(tipo = '') {
-  return VISUAL_WORKSPACE_TIPOS.includes(String(tipo || '').trim().toLowerCase())
-}
-
-export function isGenerationWorkspaceTipo(tipo = '') {
-  return GENERATION_WORKSPACE_TIPOS.includes(String(tipo || '').trim().toLowerCase())
-}
+// La pertenencia la decide el nucleo (core/config/sharedConfig). Se importa para
+// uso interno y se re-exporta para no partir el API que ya consumen voz y
+// pruebas. Un re-export puro (export { x } from '...') NO crea binding local:
+// el cuerpo de este modulo llama a los dos predicados mas abajo.
+export { isGenerationWorkspaceTipo, isVisualWorkspaceTipo }
 
 /**
  * Detecta una petición EXPLÍCITA de generar video o documento en el transcript
@@ -135,7 +132,7 @@ export function isGenerationWorkspaceTipo(tipo = '') {
  *
  * @param {string} transcript
  * @param {object|null|undefined} [voiceCommands]
- * @returns {'video'|'doc'|null} tipo explícito o null si no hay petición clara.
+ * @returns {string|null} tipo explícito o null si no hay petición clara.
  */
 export function detectExplicitGenerationTipo(transcript = '', voiceCommands = null) {
   const text = cleanForSpeech(transcript)

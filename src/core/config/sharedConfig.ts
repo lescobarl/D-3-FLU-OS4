@@ -62,10 +62,59 @@ export function readServerEnv(name: string): string | undefined {
 // -----------------------------------------------------------
 
 /** Valores válidos para workspace.tipo (contrato FLU). */
-export const WORKSPACE_TIPOS: readonly string[] = ['text', 'image_prompt', 'diagram', '3d', 'horario', 'doc', 'video'];
+export const WORKSPACE_TIPOS = [
+    'text',
+    'image_prompt',
+    'diagram',
+    '3d',
+    'horario',
+    'doc',
+    'video',
+] as const;
+
+/** Union derivada del contrato: no se escribe a mano en ningun otro sitio. */
+export type WorkspaceTipo = (typeof WORKSPACE_TIPOS)[number];
 
 /** Tipos visuales que activan generación de imagen (Pollinations). */
-export const VALID_VISUAL_TIPOS: readonly string[] = ['image_prompt', 'diagram', '3d'];
+export const VALID_VISUAL_TIPOS = ['image_prompt', 'diagram', '3d'] as const;
+
+/** Union de tipos visuales, derivada de la lista (no declarada aparte). */
+export type VisualTipo = (typeof VALID_VISUAL_TIPOS)[number];
+
+/**
+ * Roles del contrato workspace: subconjuntos de WORKSPACE_TIPOS, cada uno con su
+ * efecto. FUENTE UNICA: cualquier subsistema que decida "esto es un tipo visual"
+ * o "esto es un tipo de generacion" referencia estas listas, no una copia local.
+ * Antes el vocabulario visual estaba repetido en seis sitios (visualConfig,
+ * fluVisualPipeline, workspaceContract y App) y podia divergir en silencio:
+ * anadir un tipo en un solo sitio hacia que una via lo aceptase y la otra no.
+ */
+export const GENERATION_WORKSPACE_TIPOS = ['doc', 'video'] as const;
+
+/** Union de tipos de generacion, derivada de la lista. */
+export type GenerationWorkspaceTipo = (typeof GENERATION_WORKSPACE_TIPOS)[number];
+
+/** Normalizacion unica para consultar pertenencia (trim + minusculas). */
+function normalizarTipo(tipo: unknown): string {
+    return String(tipo ?? '').trim().toLowerCase();
+}
+
+/**
+ * Pertenencia al contrato. Las listas son tuplas de literales (fuente de los
+ * tipos), asi que una consulta con un string arbitrario pasa por aqui en lugar
+ * de por `.includes` directo: un solo sitio decide "esto es un tipo valido".
+ */
+export function isWorkspaceTipo(tipo: unknown): boolean {
+    return (WORKSPACE_TIPOS as readonly string[]).includes(normalizarTipo(tipo));
+}
+
+export function isVisualWorkspaceTipo(tipo: unknown): boolean {
+    return (VALID_VISUAL_TIPOS as readonly string[]).includes(normalizarTipo(tipo));
+}
+
+export function isGenerationWorkspaceTipo(tipo: unknown): boolean {
+    return (GENERATION_WORKSPACE_TIPOS as readonly string[]).includes(normalizarTipo(tipo));
+}
 
 // -----------------------------------------------------------
 // Defaults (Rule #1: NO HARDCODE) — sin import.meta.env

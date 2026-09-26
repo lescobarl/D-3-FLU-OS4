@@ -6,7 +6,7 @@ import { buildVisualGenerationPrompt } from './fluVisualPipeline.js'
 import {
   FALAI_DEFAULTS,
   OPENROUTER_DEFAULTS,
-  WORKSPACE_TIPOS,
+  isWorkspaceTipo,
   TIMEOUT_POLICY_MS,
   buildPollinationsImageUrl,
   isLocalTextEndpoint,
@@ -1525,9 +1525,7 @@ export async function generateFluContract({
       ? normalizeWorkspaceContract(
         {
           titulo: String(parsed.workspace.titulo || '').trim(),
-          tipo: WORKSPACE_TIPOS.includes(
-            String(parsed.workspace.tipo || '').trim(),
-          )
+          tipo: isWorkspaceTipo(parsed.workspace.tipo)
             ? String(parsed.workspace.tipo).trim()
             : null,
           contenido: String(parsed.workspace.contenido || '').trim(),

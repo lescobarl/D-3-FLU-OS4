@@ -267,6 +267,20 @@ de **0 nuevos**.
 - Estructura: `src/modules/[bloque]/[modulo]/Componente.tsx`.
 - Interfaces con prefijo `I`; tipos sin prefijo. Tipos en `src/types/[dominio].ts`.
 - EOL: conserva la del fichero. El repo es mixto (`core.autocrlf=false`, sin `.gitattributes`): hay blobs en LF y en CRLF. Cambiar la clase EOL hace que git marque TODO el fichero como modificado y que el diff del gate reviente por tamaño. El `eolGuard` lo pilla respecto al índice, pero tras commitear el flip deja de verlo: no te fíes de un diff de miles de líneas.
+- Vocabulario: **una etiqueta, un sitio**. Un conjunto de valores que debe coincidir entre
+  subsistemas (dominios de acción, tipos del contrato workspace) se declara UNA vez y el resto
+  importa la lista o consulta pertenencia por un predicado (`isVisualWorkspaceTipo`). Prohibido
+  re-enumerarlo: ni lista literal, ni unión de tipos, ni JSDoc. Guard:
+  `tests/workspaceVocabularyContract.test.ts`, que compara por CONJUNTO EXACTO — co-ocurrir no
+  basta ("doc"/"video" viven en varios vocabularios) y marcar eso empuja a aflojar el guard.
+- Trinquete de tamaño: `tests/godFileSizeGuard.test.ts` fija el techo de cada god-file
+  (`App.tsx` 4686, `useFluVoiceAssistant.js` 4579, `fluConfig.js` 2772). Solo baja o empata: si
+  una consolidación necesita +N líneas en un god-file, recorta esas N allí mismo o el commit no
+  pasa. Un import multilínea de 5 líneas donde había 1 rompe el trinquete: déjalo en una línea.
+- Los `.js` NO los comprueba `tsc` (`checkJs` off). Un `export { x } from '...'` sin `import` compila
+  en verde y rompe en runtime al usarse el binding dentro del propio módulo. Si un módulo
+  re-exporta algo que además usa: importa Y re-exporta, y ancla la delegación con identidad de
+  función (`expect(modulo.predicado).toBe(nucleo.predicado)`).
 
 ## 5. VALIDACIÓN, ITERACIÓN Y CI
 

@@ -16,7 +16,8 @@
 //   - §8.6/§10.2: implementación única (guard aiServiceSingleImplGuard)
 // ============================================================
 
-import { GEMINI_CONFIG, STORAGE_KEYS, WORKSPACE_TIPOS, buildPollinationsUrl, readStorage, resolveTextApiKey } from '../core/config/appConfig';
+import { GEMINI_CONFIG, STORAGE_KEYS, isWorkspaceTipo, buildPollinationsUrl, readStorage, resolveTextApiKey } from '../core/config/appConfig';
+import type { VisualTipo } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
 import { useIntegrationStore } from '../store/integrationStore';
 import type {
@@ -573,9 +574,9 @@ Responde como ${botName}:`;
             workspace: workspaceRaw
                 ? {
                     titulo: String(workspaceRaw.titulo || '').trim(),
-                    tipo: (WORKSPACE_TIPOS.includes(String(workspaceRaw.tipo || '').trim())
+                    tipo: (isWorkspaceTipo(workspaceRaw.tipo)
                         ? String(workspaceRaw.tipo).trim()
-                        : null) as 'text' | 'image_prompt' | 'diagram' | '3d' | null,
+                        : null) as 'text' | VisualTipo | null,
                     contenido: String(workspaceRaw.contenido || '').trim(),
                     prompt_visual: String(workspaceRaw.prompt_visual || '').trim(),
                     puntos_clave: Array.isArray(workspaceRaw.puntos_clave)

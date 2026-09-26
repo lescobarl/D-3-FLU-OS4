@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import type { GenerationWorkspaceTipo } from '../core/config/sharedConfig';
 import { speakResponse, isSpeechBusy, waitForSpeechIdle } from '../voice/lib/fluSpeech';
 import { FLU_CONFIG, isSessionResetCommand } from '../voice/lib/fluConfig';
 import { userRequestedNavigationCommand } from '../voice/lib/voiceCommands';
@@ -70,7 +71,7 @@ export interface NavigationCommands {
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
         /** Puerta única e idempotente de generación de medios (video/doc). */
-        requestMedia?: (tipo: 'video' | 'doc', commandText: string) => boolean;
+        requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
     }) => Promise<void>;
 }
 
@@ -233,7 +234,7 @@ export function useNavigationCommands(
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
         /** Puerta única e idempotente de generación de medios (video/doc). */
-        requestMedia?: (tipo: 'video' | 'doc', commandText: string) => boolean;
+        requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
     }) => {
         if (!navegacion.comando) return;
 

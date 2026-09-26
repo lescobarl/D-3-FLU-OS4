@@ -1,4 +1,8 @@
-import { POLLINATIONS_DEFAULTS, REMOTE_RESOURCE_URLS } from '../../core/config/sharedConfig'
+import {
+  POLLINATIONS_DEFAULTS,
+  REMOTE_RESOURCE_URLS,
+  VALID_VISUAL_TIPOS,
+} from '../../core/config/sharedConfig'
 
 export const VISUAL_CONFIG = {
   image: {
@@ -7,7 +11,7 @@ export const VISUAL_CONFIG = {
     /** Pipeline único: brief IA → generación. Stock desactivado por defecto. */
     pipeline: {
       primary: 'pollinations',
-      visualTypes: ['image_prompt', 'diagram', '3d'],
+      visualTypes: [...VALID_VISUAL_TIPOS],
       /** Tras fallo de generación/proxy: localSvg | none */
       errorFallback: 'localSvg',
       stockSearch: {

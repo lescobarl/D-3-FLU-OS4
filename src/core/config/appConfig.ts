@@ -64,6 +64,9 @@ import { hasLocalStorage, localGet, localSet } from '../storage/localStore';
 export {
     WORKSPACE_TIPOS,
     VALID_VISUAL_TIPOS,
+    isWorkspaceTipo,
+    isVisualWorkspaceTipo,
+    isGenerationWorkspaceTipo,
     TIMEOUT_POLICY_MS,
     isLocalTextEndpoint,
     DEFAULT_ADVANCED_CONFIG,
@@ -72,6 +75,12 @@ export {
     FLU_PROFILES,
     getProfileById,
     getDefaultProfile,
+} from './sharedConfig';
+
+export type {
+    WorkspaceTipo,
+    VisualTipo,
+    GenerationWorkspaceTipo,
 } from './sharedConfig';
 
 // -----------------------------------------------------------
