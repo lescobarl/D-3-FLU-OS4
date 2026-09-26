@@ -132,7 +132,7 @@ import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaComm
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
 import { nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
-import { describeTriggerWhen } from './core/agenda/describeTriggerText';
+import { describeTriggerWhen, describeWeekdays } from './core/agenda/describeTriggerText';
 import { resolvedActionIdentity } from './voice/lib/resolvedActionIdentity';
 import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
 import { MS_DAY } from './core/temporal/scheduleEngine';
@@ -191,9 +191,16 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { isAIProvider } from './app/appTypeGuards';
+import { arbiterDomainRoute } from './app/arbiterDomainRoutes';
+import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
 import { applyConfigAction } from './app/configActions';
 import { applyGameAction } from './app/gameActions';
 import { isVisualWorkspaceTipo, type GenerationWorkspaceTipo, type VisualTipo } from './core/config/sharedConfig';
+import {
+    isSuperNoteLabel,
+    superNoteItems,
+} from './core/notes/superNoteTarget';
+import { superNoteIncoming, writeSuperNoteList } from './app/superNoteActions';
 
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
@@ -323,14 +330,6 @@ const scheduleAdapter = createScheduleAdapter({
     minEntries: Number(FLU_CONFIG?.horario?.ocrAdapter?.minEntries) || 2,
 });
 
-/** Resultado del árbitro determinista (contrato de deterministicArbiter.js). */
-interface ArbiterResult {
-    matched: boolean;
-    domain: string | null;
-    action: unknown;
-    channel: string | null;
-}
-
 /** Diagnóstico del contrato resuelto (incluye la ruta de minuta). */
 interface ContractDiagnostics {
     route?: string;
@@ -375,14 +374,6 @@ interface DiaryVoiceIntent {
     handled?: boolean;
     data?: { content?: unknown };
 }
-
-/** Lee una propiedad string de un valor desconocido (para logs). */
-function readStringProp(value: unknown, key: string): string | undefined {
-    if (!value || typeof value !== 'object') return undefined;
-    const prop = Reflect.get(value, key);
-    return typeof prop === 'string' ? prop : undefined;
-}
-
 
 /**
  * Resuelve una intención ESTRUCTURADA a partir del `dominio` que el cerebro
@@ -438,65 +429,6 @@ function resolveDomainScopedIntent(
     // Tramo de AGENDA: entra lo que la clasificacion del LLM ya decidio (el
     // texto sigue mandando para el instante). Ver core/agenda/domainScopedIntent.
     return resolveAgendaDomainIntent(domain, text, _opts);
-}
-/**
- * Despacha el intent COMPLETO de un resultado del árbitro determinista al
- * manejador __fluHandle* correspondiente según su dominio. Devuelve la
- * confirmación hablada del manejador (o '' si no hubo dominio/intent).
- * Los manejadores se invocan vía window en runtime (siempre tienen closures
- * frescas porque se reasignan cada render).
- */
-async function dispatchArbiterIntent(
-    arbiterResult: ArbiterResult,
-    opts: { speakerName?: string },
-): Promise<string> {
-    const w = window;
-    const domain = arbiterResult?.matched ? arbiterResult.domain : null;
-    const intent: unknown = arbiterResult?.action || null;
-    const intentLabel = readStringProp(intent, 'action')
-        ?? readStringProp(intent, 'gameId')
-        ?? readStringProp(intent, 'comando')
-        ?? JSON.stringify(intent ?? null)?.slice(0, 120);
-    relayLog('LOG', 'App', `dispatchArbiterIntent: domain="${domain}" action="${intentLabel}"`);
-    if (!domain || !intent) {
-        relayLog('LOG', 'App', 'dispatchArbiterIntent: SIN domain/intent → no se despacha');
-        return '';
-    }
-    let reply = '';
-    try {
-        if (domain === 'diary' && FLU_CONFIG.diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleDiaryText (diary)');
-            reply =
-                (await w.__fluHandleDiaryText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else if (domain === 'note' && typeof w.__fluHandleNoteText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleNoteText (note)');
-            reply =
-                (await w.__fluHandleNoteText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else if (domain === 'shopping' && typeof w.__fluHandleShoppingText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleShoppingText (shopping)');
-            reply = (await w.__fluHandleShoppingText(intent)) || '';
-        } else if (domain === 'agendaCommand' && typeof w.__fluHandleAgendaCommandText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaCommandText (agendaCommand)');
-            reply =
-                (await w.__fluHandleAgendaCommandText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else {
-            relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
-        }
-    } catch (err) {
-        logCaughtError('[App] dispatchArbiterIntent threw (non-critical):', err);
-        relayLog('WARN', 'App', `dispatchArbiterIntent threw: ${err}`);
-    }
-    relayLog('LOG', 'App', `dispatchArbiterIntent → reply="${String(reply).slice(0, 120)}"`);
-    return reply;
 }
 
 /**
@@ -936,11 +868,17 @@ function App() {
                         personId: realParticipantIdRef.current,
                         kind,
                         target: cmd.label || '',
+                        // Solo los días que nombró el usuario: "del jueves" no puede
+                        // llevarse el martes de la misma serie.
+                        ...(cmd.scopeDays?.length ? { daysOfWeek: cmd.scopeDays } : {}),
                     });
                     if (count === 0) {
                         return lang === 'en' ? 'Nothing to cancel.' : 'No encontré nada que cancelar.';
                     }
-                    return lang === 'en' ? 'Cancelled.' : 'Cancelado.';
+                    const scoped = cmd.scopeDays?.length
+                        ? ` (${describeWeekdays(cmd.scopeDays, lang)})`
+                        : '';
+                    return lang === 'en' ? `Cancelled${scoped}.` : `Cancelado${scoped}.`;
                 }
                 case 'agenda.update': {
                     if (!kind) return '';
@@ -1313,10 +1251,17 @@ function App() {
             return `[${last.date}]${titleTxt}${moodTxt}: ${last.content}`;
         },
         getNotesContext: () => {
-            // Bloque 8 — NOTAS: pendientes (top-N, sin hardcode de N).
+            // Bloque 8 — NOTAS: pendientes (top-N, sin hardcode de N). El contenido
+            // (body) va incluido: es donde viven los ítems de una lista (p.ej. la
+            // del súper), y sin él el modelo solo vería el nombre de la nota.
             const pending = (notes.notes || []).filter((n) => !n.done);
             if (pending.length === 0) return '';
-            return pending.map((n) => `- ${n.label}`).join('\n');
+            return pending
+                .map((n) => {
+                    const items = superNoteItems(n.body);
+                    return items.length > 0 ? `- ${n.label}: ${items.join(', ')}` : `- ${n.label}`;
+                })
+                .join('\n');
         },
         getHorarioContext: () => {
             // Bloque 9 — Horario del día (HOY): clases de hoy ordenadas por hora,
@@ -1452,6 +1397,10 @@ function App() {
             // (siempre tienen closures frescas porque se reasignan cada render).
             // ============================================================
             let localHandledReply = '';
+            // Resultado del Árbitro para un dominio de ESTADO (config/game/environment).
+            // Su ruta única es el fast-path correspondiente (más abajo), no el
+            // dispatcher: aquí se acarrea para no perderlo (antes se descartaba).
+            let arbiterStateAction: { domain: string; action: unknown } | null = null;
             const acciones = Array.isArray(contract?.acciones) ? contract.acciones : null;
             const hasAcciones = Boolean(acciones && acciones.length > 0);
 
@@ -1532,6 +1481,17 @@ function App() {
                                 readStringProp(effectiveResult.action, 'action') ?? effectiveResult.action,
                             )})${viaDomain ? ' [vía dominio LLM]' : ''}`,
                         );
+                        const route = arbiterDomainRoute(effectiveResult.domain);
+                        if (route === 'stateFastPath') {
+                            // Ruta única del dominio de estado: su fast-path propio
+                            // (config/juego/ambiente), NO el dispatcher, que no lo
+                            // ejecuta. Antes la resolución se perdía en el `else`.
+                            arbiterStateAction = {
+                                domain: String(effectiveResult.domain),
+                                action: effectiveResult.action,
+                            };
+                            continue;
+                        }
                         const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
                         if (reply) {
                             localHandledReply = reply;
@@ -1641,6 +1601,19 @@ function App() {
                         // más abajo, por el MISMO camino que el contrato navegacion del LLM.
                         navegacion.comando = typeof arbiterResult.action === 'string' ? arbiterResult.action : null;
                         relayLog('LOG', 'App', `onContractResolved: navigation → comando="${arbiterResult.action}" (handleNavigationCommand)`);
+                    } else if (arbiterDomainRoute(arbiterDomain) === 'stateFastPath') {
+                        // El Árbitro resolvió un dominio de ESTADO en el fallback
+                        // offline (p.ej. "vamos a jugar lotería" -> game): su ruta
+                        // única es el fast-path de estado, no dispatchArbiterIntent.
+                        arbiterStateAction = {
+                            domain: String(arbiterDomain),
+                            action: arbiterResult.action,
+                        };
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: dominio de estado "${arbiterDomain}" -> fast-path (no dispatcher)`,
+                        );
                     } else {
                         reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
                     }
@@ -1669,14 +1642,22 @@ function App() {
             // inmediato, mientras la IA aún genera la confirmación verbal.
             // configAction se declara aquí (hoisted) para que el gate de abajo
             // lo admita y se REUTILIZA al final del callback (no se re-declara).
-            const configAction = contract?.configuracion;
+            const configAction =
+                contract?.configuracion ||
+                (arbiterStateAction?.domain === 'config'
+                    ? (arbiterStateAction.action as FluContract['configuracion'])
+                    : undefined);
 
             // Juego por voz (fast-path determinista): contrato normalizado por
             // normalizeJuego (gameId del catálogo + acción válida). Se declara
             // aquí (hoisted) para que el gate de abajo lo admita y se REUTILIZA
             // al final del callback (no se re-declara). El motor local es la
             // fuente de verdad de la partida.
-            const juegoAction = normalizeJuego(contract?.juego);
+            const juegoAction =
+                normalizeJuego(contract?.juego) ||
+                (arbiterStateAction?.domain === 'game'
+                    ? normalizeJuego(arbiterStateAction.action)
+                    : null);
 
             // Ambiente por voz (fast-path determinista): contrato normalizado por
             // normalizeEnvironment (tipo 'activar' | 'reset' + ambienteId del
@@ -1684,7 +1665,11 @@ function App() {
             // admita y se REUTILIZA al final del callback (no se re-declara).
             // El catálogo de ambientes (src/core/environments/*) es la fuente de
             // verdad del rebranding por oficio.
-            const environmentAction = normalizeEnvironment(contract?.ambiente);
+            const environmentAction =
+                normalizeEnvironment(contract?.ambiente) ||
+                (arbiterStateAction?.domain === 'environment'
+                    ? normalizeEnvironment(arbiterStateAction.action)
+                    : null);
 
             // ============================================================
             // MÚSICA REAL (F3): ejecutar la acción de música del contrato
@@ -2160,6 +2145,16 @@ function App() {
                 // Ir directo a SPEAKING — syncAvatarToState aplicará
                 // setExpression('hablando')/etc. que da ['Idle_2', 'MouthMove'].
                 // Una sola recarga de BunnyViewer, sin doble carga.
+                if (!respuestaVoz) {
+                    // Diagnóstico de latencia: entrar en SPEAKING sin nada que decir
+                    // deja el turno "hablando" en vacío (medido: 3,1 s) hasta que se
+                    // reanuda la escucha. Se marca para que el hueco tenga nombre.
+                    relayLog(
+                        'WARN',
+                        'App',
+                        `turnTiming: SPEAKING sin respuesta_voz (turno mudo) transcript="${String(transcript || '').slice(0, 60)}"`,
+                    );
+                }
                 relayLog('LOG', 'App', `onContractResolved: calling setConversationState('SPEAKING')`);
                 integrationStore.setConversationState('SPEAKING');
                 integrationStore.setFluSpeaking(true);
@@ -3032,30 +3027,23 @@ function App() {
             }
 
             if (!label) return '';
-            // Append semántico a una nota "Super:" existente (bug: "agrega papel
-            // de baño a la lista del super" creaba una FILA nueva por ítem). Si la
-            // nota objetivo ya existe pendiente, se renombra concatenando el ítem;
-            // si no existe, se crea.
-            const target = /^Super:\s*/i.test(label)
-                ? label
-                : null;
-            if (target) {
-                const item = label.replace(/^Super:\s*/i, '').trim();
-                const existing = [...(notes?.notes ?? [])]
-                    .filter((n) => !n.done && /^Super:/i.test(n.label || ''))
-                    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-                const head = existing[0];
-                if (head && item && head.id !== undefined) {
-                    const merged = `${String(head.label).trim().replace(/[,;]\s*$/, '')}, ${item}`;
-                    const renamed = await notes.rename(head.id, merged);
-                    lastActionFailed = !renamed;
-                    if (!renamed) {
-                        return lang === 'en'
-                            ? "I couldn't update the note."
-                            : 'No pude actualizar la nota.';
-                    }
-                    return addedMsg;
+            // Lista del súper: los ítems van al CONTENIDO de la nota, nunca al
+            // nombre (superNoteTarget/superNoteActions: única definición del
+            // destino, que además absorbe etiquetas heredadas y duplicados).
+            if (isSuperNoteLabel(label)) {
+                const written = await writeSuperNoteList(
+                    notes,
+                    notes?.notes ?? [],
+                    superNoteIncoming(label, body),
+                    opts,
+                );
+                lastActionFailed = !written.ok;
+                if (!written.ok) {
+                    return lang === 'en'
+                        ? "I couldn't update the note."
+                        : 'No pude actualizar la nota.';
                 }
+                return addedMsg;
             }
             const result = await notes.add({
                 label,
@@ -3630,19 +3618,22 @@ const {
     // cerrar, se genera su minuta (queda archivada) y se marca el día nuevo para
     // que arranque limpio y no se mezcle con el anterior.
     // ============================================================
-    const dayRolloverDoneRef = useRef(false);
+    const dayRolloverDoneRef = useRef<Set<string>>(new Set());
     useEffect(() => {
-        if (dayRolloverDoneRef.current) return;
         const history = integrationStore.conversationHistory;
         if (!history.length) return; // aún no cargó: se reevalúa al hidratar
         // NO cerrar el día hasta saber QUIÉN entra: la minuta es POR usuario.
         // Sin participante activo no se lee/guarda/limpia nada (se reevalúa al resolverse).
-        if (!activeParticipantId) return;
+        if (!realParticipantId) return;
+        // Cierre POR USUARIO: este guard era un booleano único de la app, así que el
+        // centinela de onboarding lo consumía y el usuario real no cerraba su día.
+        if (dayRolloverDoneRef.current.has(realParticipantId)) return;
+        dayRolloverDoneRef.current.add(realParticipantId);
         // Conversación de ESTE usuario: turnos de rol 'user' cuyo hablante coincide
         // con el nombre del participante activo. Sin coincidencia, se usa el global
         // (evita que el cierre de día deje de disparar si el nombre no matchea).
         const activeName = String(
-            participants.participants.find((p) => p.id === activeParticipantId)?.name || '',
+            participants.participants.find((p) => p.id === realParticipantId)?.name || '',
         ).trim();
         const userHistory = activeName
             ? history.filter((e) => e.role === 'user' && String(e.speakerName || '').trim() === activeName)
@@ -3650,7 +3641,7 @@ const {
         const scopedHistory = userHistory.length ? userHistory : history;
         const lastAt = Number(scopedHistory[scopedHistory.length - 1]?.timestamp) || 0;
         // Clave de día POR USUARIO: cada participante cierra su día por separado.
-        const dayStorageKey = `${STORAGE_KEYS.LAST_SESSION_DAY}:${activeParticipantId}`;
+        const dayStorageKey = `${STORAGE_KEYS.LAST_SESSION_DAY}:${realParticipantId}`;
         let lastSessionDay = '';
         try {
             lastSessionDay = localGet(dayStorageKey) || '';
@@ -3658,13 +3649,12 @@ const {
         logCaughtError('[catch] src/App.tsx', e);
             lastSessionDay = '';
         }
-        dayRolloverDoneRef.current = true;
         void (async () => {
             if (shouldRolloverDay(lastAt, Date.now(), lastSessionDay)) {
                 relayLog(
                     'WARN',
                     'App',
-                    `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)}, user=${activeParticipantId})`,
+                    `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)}, user=${realParticipantId})`,
                 );
                 // Cierre real: se GENERA y se GUARDA la minuta. El día se marca
                 // sólo si se guardó; si no, se reintenta en el próximo arranque.
@@ -3681,11 +3671,19 @@ const {
             try {
                 localSet(dayStorageKey, dayKey(Date.now()));
             } catch (e) {
-        logCaughtError('[catch] src/App.tsx', e);
-                /* ignorar */
+                // La marca del día es la EVIDENCIA del cierre: NO se traga el fallo
+                // (misma política que localStore). Si no se puede escribir (cuota),
+                // el día queda sin marcar, se reintentará al arrancar y puede
+                // duplicar la minuta: hay que poder enterarse.
+                logCaughtError('[catch] src/App.tsx', e);
+                relayLog(
+                    'WARN',
+                    'App',
+                    `rollover de día: no se pudo marcar el día (${dayStorageKey}) -> se reintentará y puede duplicar la minuta`,
+                );
             }
         })();
-    }, [integrationStore.conversationHistory, activeParticipantId, participants.participants, handleGenerateSummary]);
+    }, [integrationStore.conversationHistory, realParticipantId, participants.participants, handleGenerateSummary]);
 
     // ============================================================
     // Paso 6: guardar el resumen de conversación UNA vez al cerrar

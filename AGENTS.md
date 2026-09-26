@@ -288,6 +288,8 @@ de **0 nuevos**.
 - `npm test` ejecuta SOLO los tests del cambio (`--changed`); la suite completa es
   `npm run test:full`, reservada al gate de entrega (CI/push), nunca por commit.
 - `npm run test:file <ruta>` para el archivo en curso.
+- `npm run test:grep -- "<texto>"` filtra por NOMBRE de caso sin correr el archivo entero.
+- `npm run verify:fast` (EOL + tipos + eslint) es la verificacion de una iteracion.
 - E2E acotado al bloque: `npm run e2e:plan` (dry-run) y `npm run e2e:scoped`
   (ejecuta) corren SOLO los specs tocados, usando el reparto declarado en
   `.task/contract.json -> e2eScope`. Si un fichero de `src/` cambia y no declara
@@ -295,10 +297,33 @@ de **0 nuevos**.
   La suite E2E completa queda para el gate de entrega, igual que `test:full`.
 - EOL: el trinquete (`tests/eolGuard.test.ts`) compara el árbol con el índice de
   git. Los editores pueden cambiar la clase EOL de un fichero al guardarlo; si eso
-  pasa, se normaliza al índice; no se "arregla" el guard.
+  pasa, se normaliza al índice; no se "arregla" el guard. Se repara con `npm run fix:eol`, que normaliza el arbol a la clase EOL del indice (nunca toca `.task/**`).
 - Puerta de tipos (`npm run typecheck`) en cada iteración; un error de tipos es error
   de entrega.
 - Guard estructural del protocolo: `tests/protocolGuard.test.ts`.
+
+### La suite completa exige autorizacion EXPRESA (regla dura)
+- `npm run test:full` esta BLOQUEADO por `scripts/require-full-suite-auth.mjs`:
+  sin `FLU_AUTH_FULL_SUITE=1` (o `CI=true`, que ya es autorizacion expresa) NO
+  corre; imprime la via rapida y sale con codigo 1.
+- Correr la suite completa "para validar" un cambio NO es prudencia, es
+  incumplimiento: no es un gate de trabajo (342 archivos, >2 min de reloj).
+  Un cambio se valida con los casos que toca, no con todo el repo.
+- Prohibido tambien invocarla por atajos equivalentes (`vitest run` sin filtro,
+  `npx vitest run`, `npm run test:full` con el env var puesto sin pedirlo).
+- Si de verdad hace falta, se PIDE y se anota la autorizacion en el reporte.
+- **PROHIBIDO QUE EL AGENTE PONGA EL ENV VAR** (`FLU_AUTH_FULL_SUITE=1`): el
+  bloqueo no es un tramite a saltar, es la regla. Ponerlo "para validar" es la
+  violacion, no una via de escape. Tampoco `CI=true`.
+- El agente NO decide correr la suite completa. Solo la corre si el USUARIO lo pide
+  en ESE turno, y entonces se anota. "Verificar que no rompi nada" NO es pedido.
+- La validacion de un cambio es: los tests del archivo tocado + `npm run lint`
+  (guards) + `npm run typecheck`. Nada mas. Si esos tres estan verdes, el cambio
+  esta validado; la suite es del CI, no del agente.
+- **Incumplimiento registrado (no repetir):** en la tarea FLU-OS4 el agente corrió
+  `test:full` con el env var puesto de su propia iniciativa, dos veces, para
+  "confirmar" cambios ya verdes con guards+tipos. Fue perdida de tiempo y
+  violacion de alcance. No volver a hacerlo bajo ninguna formulacion.
 - Commit por hito funcional en verde; cambios independientes en paralelo en un mismo turno.
 
 ### Gates
@@ -310,7 +335,6 @@ de **0 nuevos**.
   commit ni en CI: fallaria en cuanto el arbol avanza respecto a esa base.
 - CI (`.github/workflows/ci.yml`): `npm run lint`, `npm run typecheck`, `npm run test:full`,
   `npm run build`, `npm run e2e`. La cobertura de repo la dan guards, tipos y suite.
-  `npm run test:full`, `npm run build`, `npm run e2e`.
 - Antes de declarar entrega, el CI DEBE estar en verde (o suite completa corrida una vez
   en el cierre).
 
@@ -581,6 +605,49 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
    una parte. Las cadenas de UI se resuelven por una fuente única (diccionario / `t()`), no por
    ternarios dispersos por componente.
 
+9. **Los ajustes de IA tienen UN dueno y viven en el configurador.** La creatividad
+   (temperature) la resuelve `src/services/aiTemperature.ts` y los motores la reciben por
+   `AIRequestOptions.temperature`; ningun adapter la relee por su cuenta. Prohibido crear
+   una clave localStorage paralela a un ajuste del configurador (`integrationStore`):
+   `flu-creativity` se retiro por eso: la escribia solo la restauracion de backup y la
+   leia solo el adapter DeepSeek, mientras el configurador era la fuente real, asi que el
+   ajuste llegaba a un motor y no al otro. Ver `tests/storageKeysAliveGuard.test.ts`.
+10. **Una nota con lista es UN destino (`Super`), y sus items van al CONTENIDO.** Los
+   items nunca se embeben en el nombre: la forma canonica es la nota `Super` con un item
+   por linea en el `body`. Las etiquetas heredadas `Super: {items}` se absorben al body y
+   los duplicados del mismo destino se funden en la fila mas antigua (ninguna lista se
+   parte en dos). Definicion unica en `src/core/notes/superNoteTarget.ts`.
+11. **El mandato empieza en la wake word.** La wake marca el inicio de la orden: lo
+   anterior es habla de contexto (TV/sala) o residuo del ASR, y los parsers
+   deterministas anclan sus regex al inicio, así que se descarta. Un solo dueño:
+   `normalizeCommandForDeterministic` (audioMath.js) para el texto del mandato, y
+   `extractFluVoiceCommand` para la compuerta de aceptación; ambos usan el splitter
+   único `splitTranscriptAtWakeWord` (nunca un match de prefijo). Prohibido que un
+   matcher anclado al inicio reciba la captura cruda con wake inline y ruido
+   delante: el comando se pierde en silencio y responde la IA.
+
+12. **Referencia de CONJUNTO vs item concreto (agenda).** Un cuantificador universal
+   ("borra todas/todos ...") o un sustantivo en PLURAL resuelven el CONJUNTO del tipo:
+   `label` va VACIO y el servicio opera sobre la serie entera del tipo (`findSeries`:
+   `!target`), acotada al usuario. Un singular desnudo ("borra el recordatorio") NO
+   arrastra el conjunto: se queda con el sustantivo canonico y no hace nada si no casa
+   (evita destruir por ambiguedad). El plural vive en `KIND_NOUNS` (misma fuente que el
+   kind): no se anaden listas de sinonimos.
+13. **Una ORDEN DE ARRANQUE nunca es accion de partida (juegos).** El motor de un
+   juego NO debe consumir la orden de arranque de SU PROPIO juego como respuesta:
+   el nombre del juego puede ser tambien su frame interno (loteria: el grito
+   "!LOTERIA!" == token 'loteria' dentro de "vamos a jugar loteria"), y el eco o
+   la repeticion del arranque declaraba ganador con UNA carta cantada. El criterio
+   "es arranque" tiene DUENO UNICO: `matchGameIntent` (frame de juego + alias), el
+   mismo que la ruta sin partida activa; en `resolveGameCommandFromText` (paso 3b)
+   resuelve `start`, nunca `turn`. Vale para TODO el catalogo (muro: tests/
+   gameStartRequestNotInGameAction.test.ts). Sin listas propias de frames.
+14. **Comparadores de revision ASR: NO son duplicados.** `audioMath.spokenUtteranceRevision`
+   (pela la wake, single-source por voiceSingleSourceGuard) y
+   `conversationStream.isProgressiveExtension` (exige crecimiento) son reglas
+   DISTINTAS a proposito. La dedupe de emision identica ya se intento y rompio
+   turnos legitimos (tests/transcriptionDedupLoss.test.ts): NO se toca para
+   "arreglar" repeticiones; el defecto real era la colision del punto 13.
 **Guard verificable:** test que falle si N>1 criterios de deduplicación/commit de la misma
 señal.
 

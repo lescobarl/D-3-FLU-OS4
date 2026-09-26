@@ -11,6 +11,7 @@ import { aiService } from '../services/aiServiceFactory';
 import { hasUsableTextBackend } from '../services/deepseek';
 import { isSpeechBusy } from '../voice/lib/fluSpeech';
 import { logCaughtError } from '../lib/caughtError';
+import { resolveConfiguredTemperature } from '../services/aiTemperature';
 import {
     applyParticipantEvaluation,
     advanceParticipantTurnCounter,
@@ -200,6 +201,7 @@ export function useFluParticipant({
                     language,
                     role: session.role || '',
                     theme: session.theme || '',
+                    temperature: resolveConfiguredTemperature(),
                 },
                 conversationLog,
                 cfg.maxDraftChars,

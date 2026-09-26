@@ -66,6 +66,8 @@ vi.mock('../src/core/db/fluDatabase', async () => {
 
 import { useNotes } from '../src/hooks/useNotes';
 import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter';
+import { extractFluVoiceCommand } from '../src/voice/lib/audioMath';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 
 const NOW = new Date(2026, 8, 18, 10, 0, 0, 0).getTime();
 
@@ -145,5 +147,24 @@ describe('notes — inyección end-to-end del turno de voz', () => {
     });
     expect(outcome?.action).toBeNull();
     expect(result.current.notes).toHaveLength(2);
+  });
+
+  it('captura con habla previa + wake inline: la compuerta la acepta y vacia las notas', async () => {
+    const capture = 'disfrutar cada jugada Okay Flow borra todas las notas';
+    const wakeWords: string[] = FLU_CONFIG.voiceCommands?.wakeWords || [];
+    const gate = extractFluVoiceCommand(capture, { requireWake: true, wakeWords });
+    expect(gate.accepted).toBe(true);
+    notesMock.__seed([note('a1', 'user-a'), note('a2', 'user-a'), note('b1', 'user-b')]);
+    const { result } = renderHook(() => useNotes({ participantId: 'user-a' }));
+    await waitFor(() => expect(result.current.notes).toHaveLength(2));
+    let outcome: { action: string | null; count: number } | undefined;
+    await act(async () => {
+      outcome = await dispatch(capture, result.current);
+    });
+    expect(outcome?.action).toBe('notes.clear');
+    await waitFor(() => expect(result.current.notes).toHaveLength(0));
+    const rows = notesMock.__all();
+    expect(rows.filter((r) => r.personId === 'user-a').every((r) => r.sync.deleted)).toBe(true);
+    expect(rows.filter((r) => r.personId === 'user-b').every((r) => !r.sync.deleted)).toBe(true);
   });
 });

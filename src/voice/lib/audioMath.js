@@ -1189,6 +1189,16 @@ export function pickBestRecognitionTranscript(result = []) {
   }).transcript
 }
 
+/**
+ * Extrae el mandato de una captura: valida la wake word y devuelve el texto
+ * posterior. Acepta la wake INLINE (no solo como prefijo) usando el splitter
+ * único `splitTranscriptAtWakeWord`, igual que el resto del motor.
+ *
+ * @param {string} [text] Captura cruda del ASR.
+ * @param {{ requireWake?: boolean, wakeWords?: string[] }} [options]
+ * @returns {{ accepted: boolean, reason: string, wakeWordMatched: boolean,
+ *   normalizedText: string, commandText: string }}
+ */
 export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWords = [] } = {}) {
   const normalizedText = normalizeVoiceCommandText(text)
   if (!normalizedText) {
@@ -1211,8 +1221,8 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
     }
   }
 
-  const wakeWordPrefix = matchWakeWordPrefix(normalizedText, wakeWords)
-  if (!wakeWordPrefix) {
+  const wakeSplit = splitTranscriptAtWakeWord(normalizedText, wakeWords)
+  if (!wakeSplit.wakeWordMatched) {
     return {
       accepted: false,
       reason: 'missing_wake_word',
@@ -1222,7 +1232,7 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
     }
   }
 
-  const commandText = normalizeSpaces(normalizedText.slice(wakeWordPrefix.length))
+  const commandText = normalizeSpaces(wakeSplit.afterWake || '')
 
   if (!commandText) {
     return {
@@ -1317,19 +1327,28 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
   let commandText = String(text || '').trim()
   if (!commandText || !wakeWords.length) return commandText
 
-  // 1) Quitar TODAS las apariciones de wake word (no solo la primera) para
-  //    tolerar el eco ASR duplicado. Fuente ÚNICA del patrón: wakeWord.js.
+  // 1) El mandato EMPIEZA en la wake word: lo anterior es habla de contexto
+  //    (TV/sala) o residuo del ASR, y los parsers deterministas anclan sus
+  //    regex al inicio, así que hay que descartarlo. Dueño único de dónde está la
+  //    wake y qué viene detrás: `splitTranscriptAtWakeWord` (conserva
+  //    acentos/mayúsculas vía afterWakeText). Sin mandato detrás de la wake no hay
+  //    frontera: se conserva el texto tal cual, para no perder lo dicho.
+  const split = splitTranscriptAtWakeWord(commandText, wakeWords)
+  const afterWake = split.wakeWordMatched ? split.afterWakeText : ''
+  if (afterWake) commandText = afterWake
   const wakePattern = buildWakeWordPattern(
     wakeWords.map((ww) => String(ww || '').toLowerCase()),
     { anywhere: true },
   )
+  // 2) Quitar las apariciones RESTANTES de wake word (no solo la primera) para
+  //    tolerar el eco ASR duplicado. Fuente única del patrón: wakeWord.js.
   let stripped = commandText
   if (wakePattern) {
     stripped = stripped.replace(new RegExp(wakePattern.source, 'gi'), ' ')
   }
   commandText = stripped.replace(/\s+/g, ' ').trim()
 
-  // 2) Colapsar fragmentos duplicados del mandato: cuando el ASR repite el
+  // 3) Colapsar fragmentos duplicados del mandato: cuando el ASR repite el
   //    verbo ("generame ... genérame una nota"), nos quedamos con la última
   //    aparición completa. El patrón real es "VERBO una VERBO una NOTA ...":
   //    buscamos la ÚLTIMA ocurrencia de "VERBO [una|un] NOTA" y recortamos.

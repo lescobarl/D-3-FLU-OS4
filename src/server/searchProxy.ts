@@ -29,13 +29,12 @@ import { acceptLanguageHeader } from '../core/search/searchLanguage';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
 import { logCaughtError } from '../lib/caughtError';
 import { parseAllowlist } from './allowlist';
+import { parseRequestUrl } from './requestUrl';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.SEARCH_PROXY_MS;
 const DEFAULT_MAX_RESULTS = 8;
 const USER_AGENT = 'FLU-OS4-Curaduria/1.0 (modo lectura curada)';
-/** Base ficticia solo para parsear el URL del request; el host nunca se usa. */
-const PARSE_BASE_URL = 'http://localhost';
 
 /** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
 const sendJson = (res: ServerResponse, status: number, data: unknown) =>
@@ -138,15 +137,8 @@ async function handleSearch(
   res: ServerResponse,
   type: SearchResultType = 'web',
 ): Promise<void> {
-  const rawUrl = req.url || '';
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl, PARSE_BASE_URL);
-  } catch (e) {
-        logCaughtError('[catch] src/server/searchProxy.ts', e);
-    sendJson(res, 400, { ok: false, reason: 'invalid' });
-    return;
-  }
+  const parsed = parseRequestUrl(req, res, '[searchProxy]');
+  if (!parsed) return;
 
   const query = (parsed.searchParams.get('q') || '').trim();
   const lang = parsed.searchParams.get('lang') || 'es';

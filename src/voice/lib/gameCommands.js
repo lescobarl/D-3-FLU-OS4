@@ -155,6 +155,17 @@ export function resolveGameCommandFromText(text = '') {
     if (intent && intent.id !== activeSession.id) {
       return { gameId: intent.id, action: 'switch' }
     }
+    // 3b. Arranque del juego QUE YA ESTA ACTIVO ("vamos a jugar loteria" con la
+    //     loteria en curso). Es una ORDEN de arranque, NO una accion de partida:
+    //     si llega al motor, el motor la consume como respuesta y, cuando el
+    //     nombre del juego es tambien su frame de victoria ("!loteria!"), declara
+    //     ganador con UNA sola carta cantada. Se resuelve como `start` (arranque
+    //     explicito del juego pedido). El dueno unico del criterio "es arranque"
+    //     es matchGameIntent (frame de juego + alias): el MISMO que la ruta sin
+    //     partida activa, sin listas propias.
+    if (intent) {
+      return { gameId: activeSession.id, action: 'start' }
+    }
     const engine = getGameEngine(activeSession.id)
     // 4. Comando propio del juego (pista, paso, "la tengo"…): siempre turno,
     //    aunque empiece como pregunta.

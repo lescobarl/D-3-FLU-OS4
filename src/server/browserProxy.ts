@@ -13,11 +13,10 @@ import { acceptLanguageHeader } from '../core/search/searchLanguage';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
 import { logCaughtError } from '../lib/caughtError';
 import { parseAllowlist } from './allowlist';
+import { parseRequestUrl } from './requestUrl';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
-/** Base ficticia solo para parsear el URL del request; el host nunca se usa. */
-const PARSE_BASE_URL = 'http://localhost';
 
 /** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
 const sendJson = (res: ServerResponse, status: number, data: unknown) =>
@@ -73,15 +72,8 @@ async function fetchSite(
 }
 
 async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const rawUrl = req.url || '';
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl, PARSE_BASE_URL);
-  } catch (e) {
-        logCaughtError('[catch] src/server/browserProxy.ts', e);
-    sendJson(res, 400, { ok: false, reason: 'invalid' });
-    return;
-  }
+  const parsed = parseRequestUrl(req, res, '[browserProxy]');
+  if (!parsed) return;
 
   const target = parsed.searchParams.get('url') || '';
   const allowlist = parseAllowlist(parsed.searchParams.get('allowlist'));

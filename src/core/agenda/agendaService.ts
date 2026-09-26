@@ -52,6 +52,13 @@ export interface AgendaTargetSelector {
     personId?: string;
     kind: AgendaKind;
     target?: string;
+    /**
+     * Alcance por día (0=domingo … 6=sábado). Si el usuario nombró días, la serie
+     * semanal se ESTRECHA a los días que quedan en vez de caer entera: "borra la
+     * clase de historia del jueves" deja el martes en pie. Sin este campo, el
+     * comportamiento es el de siempre (serie completa).
+     */
+    daysOfWeek?: number[];
 }
 
 export interface AgendaService {
@@ -118,17 +125,54 @@ export function createAgendaService(options: AgendaServiceOptions): AgendaServic
         });
     }
 
-    /** Borrado lógico de la SERIE (bulkPut: una transacción, como clearAll). */
+    /** Días normalizados (únicos, válidos, ordenados). */
+    function normalizeDays(days: readonly number[] | undefined): number[] {
+        if (!days?.length) return [];
+        return [...new Set(days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort(
+            (a, b) => a - b,
+        );
+    }
+
+    /**
+     * Borrado lógico del objetivo (bulkPut: una transacción, como clearAll).
+     * Con `daysOfWeek`, una serie semanal se ESTRECHA a los días que quedan en vez
+     * de caer entera: borrar "la clase de historia del jueves" no puede llevarse el
+     * martes. Si al quitar los días pedidos no queda ninguno, la serie cae.
+     */
     async function cancelByTarget(selector: AgendaTargetSelector): Promise<number> {
         const matches = await findSeries(selector);
         if (!matches.length) return 0;
-        const marked = matches.map((item) => ({
-            ...item,
+        const scope = normalizeDays(selector.daysOfWeek);
+        const writes: AgendaItem[] = [];
+        let affected = 0;
+        const deletedRow = (row: AgendaItem): AgendaItem => ({
+            ...row,
             status: 'deleted' as const,
-            sync: { ...buildSyncTuple(item.sync, now()), deleted: true },
-        }));
-        await db.bulkPut(marked);
-        return marked.length;
+            sync: { ...buildSyncTuple(row.sync, now()), deleted: true },
+        });
+        for (const item of matches) {
+            const days = item.trigger.type === 'weekly' ? normalizeDays(item.trigger.daysOfWeek) : [];
+            // Sin ámbito de días, o serie no semanal: cae entera (lo de siempre).
+            if (!scope.length || item.trigger.type !== 'weekly' || !days.length) {
+                writes.push(deletedRow(item));
+                affected += 1;
+                continue;
+            }
+            const remaining = days.filter((day) => !scope.includes(day));
+            if (remaining.length === days.length) continue;
+            if (remaining.length === 0) {
+                writes.push(deletedRow(item));
+            } else {
+                writes.push({
+                    ...item,
+                    trigger: { ...item.trigger, daysOfWeek: remaining },
+                    sync: buildSyncTuple(item.sync, now()),
+                });
+            }
+            affected += 1;
+        }
+        if (writes.length) await db.bulkPut(writes);
+        return affected;
     }
 
     /** Actualiza la SERIE (bulkPut): mismo objetivo que cancelar/editar. */

@@ -33,6 +33,7 @@ import {
     type TextCompletionRequest,
 } from '../core/ai/aiServiceBase';
 import { localGet } from '../core/storage/localStore';
+import { resolveConfiguredTemperature } from './aiTemperature';
 
 // -----------------------------------------------------------
 // Helpers específicos del transporte de texto
@@ -61,25 +62,6 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
     }
 
     return { apiKey: '', apiKeySource: 'none' };
-}
-
-/**
- * Resolve creativity temperature for the text engine requests.
- */
-function resolveCreativityTemperature(): number | undefined {
-    try {
-        const stored = localGet(STORAGE_KEYS.CREATIVITY);
-        if (stored) {
-            const value = parseFloat(stored);
-            if (!isNaN(value) && value >= 0 && value <= 1) {
-                return value;
-            }
-        }
-    } catch (e) {
-        logCaughtError('[catch] src/services/deepseek.ts', e);
-        // ignore
-    }
-    return OPENROUTER_CONFIG.DEFAULT_TEMPERATURE;
 }
 
 /**
@@ -173,7 +155,7 @@ class DeepSeekService extends BaseAIService {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
         }
 
-        const temperature = resolveCreativityTemperature();
+        const temperature = request.options.temperature ?? resolveConfiguredTemperature();
         const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
         const url = buildTextApiUrl('/chat/completions');
 
@@ -198,7 +180,7 @@ class DeepSeekService extends BaseAIService {
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: temperature || TEXT_TEMPERATURE_DEFAULT,
+                    temperature: temperature ?? TEXT_TEMPERATURE_DEFAULT,
                     max_tokens: TEXT_TOKEN_LIMITS.json,
                     response_format: { type: 'json_object' }
                 }),
@@ -252,7 +234,7 @@ class DeepSeekService extends BaseAIService {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
         }
 
-        const temperature = resolveCreativityTemperature();
+        const temperature = options.temperature ?? resolveConfiguredTemperature();
         const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
         const url = buildTextApiUrl('/chat/completions');
         const isEnglish = options.language === 'en';
@@ -283,7 +265,7 @@ class DeepSeekService extends BaseAIService {
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: temperature || TEXT_TEMPERATURE_DEFAULT,
+                    temperature: temperature ?? TEXT_TEMPERATURE_DEFAULT,
                     max_tokens: TEXT_TOKEN_LIMITS.chat,
                 }),
             });
@@ -313,7 +295,7 @@ class DeepSeekService extends BaseAIService {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
         }
 
-        const temperature = resolveCreativityTemperature();
+        const temperature = options.temperature ?? resolveConfiguredTemperature();
         const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
         const url = buildTextApiUrl('/chat/completions');
         const isEnglish = options.language === 'en';
@@ -357,7 +339,7 @@ Formato de respuesta (JSON):
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: temperature || TEXT_TEMPERATURE_DEFAULT,
+                    temperature: temperature ?? TEXT_TEMPERATURE_DEFAULT,
                     max_tokens: TEXT_TOKEN_LIMITS.brief,
                     response_format: { type: 'json_object' }
                 }),
@@ -539,7 +521,7 @@ Formato de respuesta (JSON):
             model,
             messages,
             max_tokens: options.maxTokens ?? OPENROUTER_CONFIG.DEFAULT_MAX_TOKENS,
-            temperature: options.temperature ?? resolveCreativityTemperature(),
+            temperature: options.temperature ?? resolveConfiguredTemperature(),
         };
         // Local endpoints (Ollama, LM Studio) may not support OpenAI JSON mode.
         // jsonMode=false (generación de documentos/guiones) pide markdown/texto libre,

@@ -20,6 +20,15 @@ import {
     ARBITER_DOMAINS,
 } from '../src/voice/lib/deterministicArbiter.js';
 import { CAPABILITY_IDS, buildCapabilitiesPrompt } from '../src/services/capabilities';
+import {
+    DISPATCHER_DOMAINS,
+    NAVIGATION_DOMAINS,
+    STATE_FAST_PATH_DOMAINS,
+    arbiterDomainRoute,
+} from '../src/app/arbiterDomainRoutes';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { normalizeJuego } from '../src/voice/lib/configCommands.js';
 
 // Frases de referencia tomadas de deterministicArbiter.test.ts (la especificacion).
 const DOMAIN_PHRASES: Record<string, string> = {
@@ -93,4 +102,67 @@ describe('cobertura - toda capacidad declarada esta en el prompt', () => {
             expect(buildCapabilitiesPrompt('en')).toContain(capability);
         });
     }
+});
+
+// ============================================================
+// DESPACHO (no clasificacion) - el hueco real que dejo pasar el
+// guard anterior: comprobaba que el Arbitro CLASIFICA cada dominio,
+// pero no que el despacho lo EJECUTE. "vamos a jugar loteria"
+// resolvia domain="game" y el despachador no tenia rama: reply=""
+// y el LLM simulaba la partida.
+// ============================================================
+describe('cobertura - todo dominio del arbitro tiene ruta de DESPACHO', () => {
+    it('ningun dominio del arbitro se queda sin ruta declarada', () => {
+        const sinRuta = ARBITER_DOMAINS.filter((d) => arbiterDomainRoute(d) === null);
+        expect(sinRuta, `dominios sin ruta de despacho: ${sinRuta.join(', ')}`).toEqual([]);
+    });
+
+    it('las rutas son exclusivas (un dominio no se ejecuta dos veces)', () => {
+        const todas = [
+            ...DISPATCHER_DOMAINS,
+            ...NAVIGATION_DOMAINS,
+            ...STATE_FAST_PATH_DOMAINS,
+        ];
+        expect(new Set(todas).size).toBe(todas.length);
+    });
+
+    it('el despachador sirve exactamente los dominios que declara', () => {
+        const app = readFileSync(join(process.cwd(), 'src/app/arbiterDispatch.ts'), 'utf8');
+        // Rama del despachador = comparacion de dominio en una linea que invoca un
+        // manejador `__fluHandle*`. Asi no cuenta `arbiterDomain === 'navigation'`
+        // ni `turnResult?.domain === 'game'`, que NO son ramas del despachador.
+        const ramas = app
+            .split(/\r?\n/)
+            .filter((l) => /domain\s*===\s*'/.test(l) && l.includes('__fluHandle'));
+        const servidos = ARBITER_DOMAINS.filter((d) =>
+            ramas.some((l) => l.includes(`domain === '${d}'`)),
+        );
+        expect([...servidos].sort()).toEqual([...DISPATCHER_DOMAINS].sort());
+    });
+
+    it('los dominios de estado y navegacion NO se despachan por el dispatcher', () => {
+        const app = readFileSync(join(process.cwd(), 'src/app/arbiterDispatch.ts'), 'utf8');
+        const ramas = app
+            .split(/\r?\n/)
+            .filter((l) => /domain\s*===\s*'/.test(l) && l.includes('__fluHandle'));
+        const intrusos = [...STATE_FAST_PATH_DOMAINS, ...NAVIGATION_DOMAINS].filter((d) =>
+            ramas.some((l) => l.includes(`domain === '${d}'`)),
+        );
+        expect(intrusos, `dominios con ruta propia despachados a la vez: ${intrusos.join(', ')}`).toEqual([]);
+    });
+
+    it('el resultado de game del arbitro es un contrato ejecutable por el fast-path', () => {
+        // Ata clasificacion -> ejecucion: el fast-path de juegos consume el
+        // contrato via normalizeJuego. Si el Arbitro devuelve una forma que
+        // normalizeJuego rechaza, el reenvio quedaria en nada (reply="" y el LLM
+        // simulando la partida), que es justo el defecto medido.
+        const invalidos = GAME_CATALOG.filter((game) => {
+            const res = resolveDeterministicCommand(`juguemos a ${game.aliases[0]}`) as {
+                domain?: string | null;
+                action?: unknown;
+            };
+            return !(res.domain === 'game' && normalizeJuego(res.action));
+        }).map((g) => g.id);
+        expect(invalidos, `juegos cuyo contrato no ejecuta el fast-path: ${invalidos.join(', ')}`).toEqual([]);
+    });
 });

@@ -91,6 +91,7 @@ import {
   sealPendingInterim,
   syncSpeakerIndexFromLabel,
 } from '../lib/activeListen.js'
+import { buildResolvedContract } from '../lib/resolvedContract.js'
 import {
   acquireSpeechRecognition,
   startSpeechRecognition,
@@ -138,6 +139,8 @@ import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
 import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { logCaughtError } from '../../lib/caughtError';
+import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
+import { resolvePreLaunchDelay } from '../lib/preLaunchDelay'
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   FLU_DIALOGUE_SPEAKER,
@@ -486,6 +489,13 @@ export function useFluVoiceAssistant({
     [],
   )
   const speakerClustersRef = useRef([])
+  // Ciclo de vida del turno (overlay + cronómetro) y persistencia fuera del camino
+  // crítico: viven en `useTurnInfrastructure` para no engordar este hook.
+  const turnLifecycleRef = useTurnLifecycleSync()
+  const { write: persistSessionOffPath } = useOffPathSessionWriter(
+    saveSessionState,
+    fluAsyncErrorHandler('useFluVoiceAssistant'),
+  )
   /**
    * §9 ÚNICO punto de escritura de los clusters de hablante.
    * El COMMIT es autoritativo; el segmento solo propone (no persiste).
@@ -1166,17 +1176,17 @@ export function useFluVoiceAssistant({
       const horarioContext = getHorarioContextRef.current() || ''
       const resultadosContext = getResultadosContextRef.current() || ''
 
-      // FLU "thinking" (Pensando / Idle_1) while the AI processes the request —
-      // deterministic per definition: when the user asks the AI something (or it
-      // learns/generates) FLU must show Pensando. Local minute lookups above
-      // return instantly, so they correctly skip this.
+      // FLU "thinking" (Pensando / Idle_1) mientras la IA procesa la petición:
+      // gobierna la EXPRESIÓN del avatar (no el overlay, que lo lleva el turno).
+      // Las consultas locales de minuta de arriba resuelven al instante, así que
+      // se saltan esto correctamente.
       useIntegrationStore.getState?.().setConversationState?.('THINKING')
-      // Indicador visual de procesamiento: se enciende al iniciar la llamada
-      // a la IA y se apaga SIEMPRE al resolver (éxito o error) en el finally.
-      useIntegrationStore.getState?.().setThinking?.(true)
-
+      // El indicador "Pensando" (overlay) lo gobierna el TURNO (turnWorkIndicator),
+      // no esta llamada: al resolver la IA el turno sigue trabajando (escrituras,
+      // despacho de la acción y locución), así que apagarlo aquí lo quitaba
+      // mientras FLU seguía haciendo cosas.
+      const iaStartMs = Date.now()
       try {
-        const iaStartMs = Date.now()
         const iaResult = await requestFluContract({
           apiKey,
           transcript,
@@ -1209,8 +1219,8 @@ export function useFluVoiceAssistant({
           `latencia IA: ${Date.now() - iaStartMs}ms (phase=${contractPhase}, model=${iaResult?.diagnostics?.model || iaResult?.diagnostics?.provider || 'n/d'})`,
         )
         return iaResult
-      } finally {
-        useIntegrationStore.getState?.().setThinking?.(false)
+      } catch (err) {
+        relayLog('ERROR', 'useFluVoiceAssistant', `latencia IA (fallo) tras ${Date.now() - iaStartMs}ms`); throw err
       }
     },
     [apiKey, getConversationContext, language],
@@ -2301,36 +2311,28 @@ export function useFluVoiceAssistant({
           return
         }
 
-        const timingCfg = FLU_CONFIG.timing
-        const baseDelay = validation.wakeWordMatched
-          ? timingCfg.wakeWordCommandDelayMs
-          : timingCfg.interimCommandDelayMs
         // Estabilización de fragmentos (Bug #3/#4): si el turno acumulado quedó
         // en un comando incompleto ("ok flu busca en la web" sin consulta,
         // "navega", "crea un video"…), NO se ejecuta todavía: se espera a que
-        // llegue el siguiente fragmento final. Mientras tanto se amplía el
-        // margen desde el último fragmento con incompleteCommandWaitMs.
+        // llegue el siguiente fragmento final (margen incompleteCommandWaitMs).
         const turnDecision = decideVoiceTurnDispatch(turnPhrase, FLU_CONFIG.voiceCommands, {
           requireWake,
         })
-        // Dictado: una frase larga en curso indica que el usuario sigue hablando
-        // (p. ej. dictando una lista). Se amplía el margen antes de auto-procesar
-        // para no cortarlo cuando hace una pausa breve pensando entre ítems.
-        const wordCount = turnPhrase.trim().split(/\s+/).filter(Boolean).length
-        let pauseDelay = baseDelay
-        if (wordCount >= (timingCfg.dictationGraceWords || 0)) {
-          const extra = Math.min(
-            (timingCfg.dictationGraceBaseMs || 0) +
-              (wordCount - (timingCfg.dictationGraceWords || 0)) *
-                (timingCfg.dictationGracePerWordMs || 0),
-            timingCfg.dictationGraceMaxMs || 0,
-          )
-          pauseDelay = baseDelay + extra
-        }
-        if (turnDecision.ready === false) {
-          pauseDelay = Math.max(pauseDelay, timingCfg.incompleteCommandWaitMs || 0)
-        }
-        scheduleAutoProcess(pauseDelay)
+        const preLaunch = resolvePreLaunchDelay({
+          turnPhrase,
+          wakeWordMatched: validation.wakeWordMatched,
+          ready: turnDecision.ready,
+          timingCfg: FLU_CONFIG.timing,
+        })
+        // La espera previa al lanzamiento no la ve el cronómetro del turno (aún no
+        // ha empezado): sin esta línea, un retardo fijo se confunde con "la IA o
+        // la acción tardan". Se registra con su origen y desglose.
+        relayLog(
+          'LOG',
+          'useFluVoiceAssistant',
+          `esperaPrelanzamiento=${preLaunch.delayMs}ms origen=${preLaunch.origin} base=${preLaunch.baseMs}ms dictado=+${preLaunch.dictationExtraMs}ms palabras=${preLaunch.wordCount} frase="${turnPhrase.slice(0, 60)}"`,
+        )
+        scheduleAutoProcess(preLaunch.delayMs)
       }
 
       Recognition.onerror = (event) => {
@@ -3229,6 +3231,9 @@ export function useFluVoiceAssistant({
 
       setStatus('processing')
       isProcessingRef.current = true
+      // Turno vivo: overlay "Pensando" hasta terminar (IA + escrituras + acción +
+      // voz) + cronómetro del turno.
+      turnLifecycleRef.current?.startTurn('voz')
       setError('')
       // FIX estabilidad: `resolvedSpeakerName`, `speakerAlias` y `audioSignatureVector`
       // se declaran FUERA del try porque el bloque catch los referencia. En JS
@@ -3272,7 +3277,8 @@ export function useFluVoiceAssistant({
           setLastDiagnostics({ route: 'deterministic-arbiter', provider: AI_PROVIDER_IDS.LOCAL, skipGemini: true })
           setError('')
           setLastErrorEvent(null)
-          await saveSessionState({
+          // La respuesta ya está resuelta: la persistencia va DESPUÉS de la voz.
+          persistSessionOffPath({
             phase: 'SESION_ACTIVA',
             ...session,
             history: getConversationContext(),
@@ -3377,49 +3383,35 @@ export function useFluVoiceAssistant({
         // despachó (para que la resolución determinista gane sobre la del modelo).
         const lateStateful = resolveStatefulDomains(question || fullTranscript, { language: detectedLanguage })
 
-        const resolvedContract = {
-          ...contract.contract,
-          respuesta_voz: contract.contract.respuesta_voz,
-          navegacion: contract?.contract?.navegacion || {
-            comando: null,
-            destino: null,
-            parametros: {},
-          },
-          // Idempotencia fast-path: si el árbitro determinista ya aplicó la
-          // configuración, se anula la del contrato tardío para NO duplicar el efecto.
-          // Si no hubo fast-path, se conserva la resolución determinista sobre la del
-          // modelo. La re-resolución se delega al árbitro puro (§1A).
-          configuracion:
-            fastPathConfig?.accion
-              ? null
-              : lateStateful.config?.accion
-                ? lateStateful.config
-                : contract?.contract?.configuracion,
-          // Idempotencia de juego: si el fast-path de juego ya despachó (start/turn/
-          // end), se anula el `juego` del contrato tardío para NO duplicar el efecto.
-          // La voz del turno ya la habló el motor local (determinista).
-          juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
-          // Idempotencia de ambiente: si el fast-path de ambiente ya despachó
-          // (activar/reset), se anula el `ambiente` del contrato tardío para NO
-          // duplicar el rebranding ni la bienvenida hablada.
-          ambiente: fastEnv?.tipo
-            ? null
-            : lateStateful.env?.tipo
-              ? lateStateful.env
-              : contract?.contract?.ambiente ?? null,
-        }
+        // Reparto real del tiempo del turno: la fase paralela (IA + orador +
+        // firma + fast-path) se mide como UNA marca; antes se atribuía a ojo el
+        // hueco post-IA. El resumen se emite en el finally, con el total.
+        turnLifecycleRef.current?.lap('ia+orador+firma+fastpath')
+        const resolvedContract = buildResolvedContract({
+          contract,
+          lateStateful,
+          fastPathConfig,
+          fastGame,
+          fastEnv,
+        })
 
         setLastContract(resolvedContract)
         setLastDiagnostics(contract.diagnostics || null)
         setError('')
         setLastErrorEvent(null)
-        await saveSessionState({
+        // La respuesta ya está resuelta: la persistencia de sesión NO puede
+        // adelantar a la voz (el usuario esperaba al disco para oír algo listo).
+        // Se encola en orden y el turno sigue hasta la locución.
+        persistSessionOffPath({
           phase: 'SESION_ACTIVA',
           ...session,
           history: getConversationContext(),
         })
 
         relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery calling commitAndResolveTurn with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
+        turnLifecycleRef.current?.lap('contrato+escrituras')
+        const turnSignature = audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector
+        turnLifecycleRef.current?.lap('firma')
         await commitAndResolveTurn({
           capture: canonicalPhrase,
           contract: resolvedContract,
@@ -3430,7 +3422,7 @@ export function useFluVoiceAssistant({
           phase: 'SESION_ACTIVA',
           session,
           timestamp: currentClock,
-          signature: audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
+          signature: turnSignature,
           language: detectedLanguage,
           // En juegos por voz la voz es SIEMPRE del motor local (determinista).
           fastPathGame: Boolean(fastGame?.gameId),
@@ -3462,11 +3454,13 @@ export function useFluVoiceAssistant({
           signature: audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
         })
+        turnLifecycleRef.current?.lap('commit(accion+voz)')
         if (isListeningRef.current && !recognitionActiveRef.current) {
           requestRecognitionRestart(FLU_CONFIG.timing.resumeAfterSpeechMs)
         }
       } finally {
         isProcessingRef.current = false
+        turnLifecycleRef.current?.endTurn('voz')
         if (isListeningRef.current) {
           setStatus('listening')
         } else {
@@ -3483,6 +3477,8 @@ export function useFluVoiceAssistant({
       reportGeminiFailure,
       resolveSpeaker,
       applyConversationSpeaker,
+      turnLifecycleRef,
+      persistSessionOffPath,
       session,
       evaluateDeterministicFastPaths,
       computeTurnSignature,
@@ -3681,6 +3677,8 @@ export function useFluVoiceAssistant({
 
     setStatus('processing')
     isProcessingRef.current = true
+    // Turno vivo: overlay "Pensando" hasta terminar (IA + acción + voz) + cronómetro.
+    turnLifecycleRef.current?.startTurn('captura')
     relayLog('LOG', 'useFluVoiceAssistant', '[REC] stop: processConversationFluQuery/processing', {
       isListening: isListeningRef.current,
       conversationActive: Boolean(conversationActiveRef?.current),
@@ -4255,6 +4253,7 @@ export function useFluVoiceAssistant({
       isCommittingRef.current = false
       commitBaselineRef.current = ''
       recognitionEndResolverRef.current = null
+      turnLifecycleRef.current?.endTurn('captura')
       // Captura pasiva: cleanupAudio() ya cerró el micrófono y anuló la
       // reconocedora. Si estaba abierta y no es un cierre explícito, reabrir la
       // escucha aquí (única política de reapertura) para que no "se cierre sola"
@@ -4270,6 +4269,7 @@ export function useFluVoiceAssistant({
   }, [
     apiKey,
     cleanupAudio,
+    turnLifecycleRef,
     clearAutoProcessTimer,
     commitAndResolveTurn,
     conversationActiveRef,

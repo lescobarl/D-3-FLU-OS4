@@ -21,6 +21,7 @@
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
 import { DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
 import { useIntegrationStore } from '../../store/integrationStore';
+import { resolveConfiguredTemperature } from '../../services/aiTemperature';
 import { v4 as uuidv4 } from 'uuid';
 import type { ConversationEntry, ConversationState, VoiceBridgeEvent, WorkspaceEntry } from '../../types/bridge';
 import type { MinuteUIEntry } from '../../hooks/useMinuteKnowledge';
@@ -235,7 +236,9 @@ class DataExtractor {
                     gemini: readStorage(STORAGE_KEYS.TEXT_MODEL, GEMINI_CONFIG.MODEL),
                     deepseek: readStorage(STORAGE_KEYS.DEEPSEEK_MODEL, DEEPSEEK_CONFIG.MODEL),
                 },
-                creativity: readStorage(STORAGE_KEYS.CREATIVITY, String(DEEPSEEK_CONFIG.CREATIVITY)),
+                // Fuente canonica (configurador). La clave local `flu-creativity`
+                // no la escribia nadie, asi que el backup salia siempre con el default.
+                creativity: String(resolveConfiguredTemperature() ?? DEEPSEEK_CONFIG.CREATIVITY),
                 maxTokens: readStorage(STORAGE_KEYS.AI_MAX_TOKENS, String(DEEPSEEK_CONFIG.DEFAULT_MAX_TOKENS)),
             };
         } catch (error) {
@@ -401,8 +404,12 @@ class DataRestorer {
                 }
             }
             
-            if (data.creativity) {
-                localSet(STORAGE_KEYS.CREATIVITY, data.creativity);
+            const restoredCreativity = parseFloat(data.creativity);
+            if (Number.isFinite(restoredCreativity)) {
+                useIntegrationStore.setState((state) => ({
+                    ...state,
+                    advancedConfig: { ...state.advancedConfig, creativity: restoredCreativity },
+                }));
             }
             
             if (data.maxTokens) {

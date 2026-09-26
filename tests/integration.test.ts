@@ -43,6 +43,7 @@ import type {
 import type { MinuteUIEntry } from '../src/hooks/useMinuteKnowledge';
 
 import { useIntegrationStore } from '../src/store/integrationStore';
+import { resolveConfiguredTemperature } from '../src/services/aiTemperature';
 import { DEFAULT_PERSONALITY, DEFAULT_ADVANCED_CONFIG, UI_DEFAULTS, STORAGE_KEYS, GEMINI_CONFIG, WELCOME_MESSAGE } from '../src/core/config/appConfig';
 import { type SyncTuple } from '../src/core/db/fluDatabase';
 import { buildSyncTuple } from '../src/core/db/syncTuple';
@@ -1487,22 +1488,32 @@ describe('🎨 Creatividad → Temperature (Phase 2)', () => {
         resetStore();
     });
 
-    it('resolveCreativityTemperature debe leer creativity de advancedConfig', () => {
-        useIntegrationStore.getState().setAdvancedConfig({ creativity: 0.7 });
-        const state = useIntegrationStore.getState();
-        expect(state.advancedConfig.creativity).toBe(0.7);
+    // El defecto que estos casos fijan: gemini leia el configurador y deepseek una
+    // clave local (`flu-creativity`) que NADIE escribia, asi que la creatividad
+    // llegaba a un motor y no al otro. Ahora hay UN dueno y los motores la reciben.
+    it('la creatividad tiene un dueno unico que la lee del configurador', () => {
+        useIntegrationStore.getState().setAdvancedConfig({ creativity: 0.3 });
+        expect(resolveConfiguredTemperature()).toBe(0.3);
+
+        useIntegrationStore.getState().setAdvancedConfig({ creativity: 0.9 });
+        expect(resolveConfiguredTemperature()).toBe(0.9);
     });
 
-    it('resolveCreativityTemperature debe retornar undefined cuando creativity es undefined', () => {
-        useIntegrationStore.getState().reset();
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
-        expect(source).toContain('resolveCreativityTemperature');
+    it('el dueno respeta la creatividad 0 (no la confunde con "sin valor")', () => {
+        useIntegrationStore.getState().setAdvancedConfig({ creativity: 0 });
+        expect(resolveConfiguredTemperature()).toBe(0);
     });
 
-    it('resolveCreativityTemperature debe ser llamado en generateMinute', () => {
-        const source = require('fs').readFileSync('./src/services/gemini.ts', 'utf-8');
-        expect(source).toContain('resolveCreativityTemperature()');
-        expect(source).toContain('temperature: resolveCreativityTemperature()');
+    it('ningun motor relee la creatividad por su cuenta: la recibe por options.temperature', () => {
+        const sources = [
+            ['src/services/gemini.ts', require('fs').readFileSync('./src/services/gemini.ts', 'utf-8')],
+            ['src/services/deepseek.ts', require('fs').readFileSync('./src/services/deepseek.ts', 'utf-8')],
+        ] as const;
+        for (const [name, src] of sources) {
+            expect(src, name + ' declara su propio lector de creatividad').not.toContain('function ' + 'resolveCreativityTemperature');
+            expect(src, name + ' sigue leyendo la clave local muerta').not.toContain('STORAGE_KEYS.' + 'CREATIVITY');
+            expect(src, name + ' no consume options.temperature').toContain('options.temperature');
+        }
     });
 
     it('generateFluContract debe aceptar temperature como parámetro opcional', () => {

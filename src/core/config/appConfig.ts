@@ -108,8 +108,6 @@ export const STORAGE_KEYS = {
     OCR_MODEL: 'flu-ocr-model',
     OCR_API_URL: 'flu-ocr-api-url',
     // Configurador FLU: sin claves localStorage — vive en integrationStore (zustand persist).
-    // Creativity configuration
-    CREATIVITY: 'flu-creativity',
     // DeepSeek configuration
     DEEPSEEK_API_KEY: 'flu-deepseek-api-key',
     DEEPSEEK_MODEL: 'flu-deepseek-model',

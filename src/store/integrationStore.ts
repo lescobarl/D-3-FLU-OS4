@@ -416,9 +416,12 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     patch._thinkingStart = now;
                 }
 
-                // Safety net: al salir de THINKING, apagar el indicador de
-                // procesamiento (evita que el overlay quede "pegado").
-                if (state !== 'THINKING' && current.uiState.isThinking) {
+                // Safety net SOLO para aborto (ERROR): IDLE NO es señal de
+                // cierre de turno, porque también es un estado transitorio que
+                // escriben la restauración del habla y los minutos. Apagar aquí
+                // en IDLE quitaba el overlay en mitad del turno. El dueño del
+                // turno lo apaga al terminar (turnWorkIndicator.end()).
+                if (state === 'ERROR' && current.uiState.isThinking) {
                     patch.uiState = { ...current.uiState, isThinking: false };
                 }
 

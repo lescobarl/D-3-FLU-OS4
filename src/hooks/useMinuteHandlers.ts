@@ -19,6 +19,7 @@ import type { IntegrationStore } from '../store/integrationStore';
 import type { MinuteUIEntry } from './useMinuteKnowledge';
 import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
+import { resolveConfiguredTemperature } from '../services/aiTemperature';
 
 /** Draft de minuta producido por `createMinuteDraftFromSummary`. */
 export type MinuteDraft = ReturnType<typeof createMinuteDraftFromSummary>;
@@ -90,7 +91,11 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         }
         setIsGeneratingMinute(true);
         try {
-            const result = await aiService.generateMinute({ apiKey, language }, history, 'neutral');
+            const result = await aiService.generateMinute(
+                { apiKey, language, temperature: resolveConfiguredTemperature() },
+                history,
+                'neutral',
+            );
             if (result) {
                 // Build a MinuteSummarySnapshot from the Gemini result
                 const snapshot = {
@@ -167,7 +172,10 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         setIsSummarizing(true);
         let saved = false;
         try {
-            const result = await aiService.generateConversationSummary({ apiKey, language, role: sessionRole }, history);
+            const result = await aiService.generateConversationSummary(
+                { apiKey, language, role: sessionRole, temperature: resolveConfiguredTemperature() },
+                history,
+            );
 
             if (result) {
                 const draft = createMinuteDraftFromSummary(result, sessionRole);
@@ -197,7 +205,10 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                     summaryParts.push(`Acuerdos: ${result.acuerdos.join(', ')}`);
                 }
                 const speechText = summaryParts.join('. ');
-                if (speechText) {
+                // `announce` gobierna TODA la locución, no sólo el aviso previo: el
+                // cierre de día llama con announce:false (segundo plano) y antes la
+                // minuta del día anterior se leía en voz alta al arrancar.
+                if (speechText && announce) {
                     try {
                         await speakResponse(speechText, language);
                     } catch (speechErr) {
@@ -302,7 +313,10 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         if (history.length === 0) return;
 
         try {
-            const result = await aiService.generateConversationSummary({ apiKey, language, role: sessionRole }, history);
+            const result = await aiService.generateConversationSummary(
+                { apiKey, language, role: sessionRole, temperature: resolveConfiguredTemperature() },
+                history,
+            );
             if (!result) return;
 
             const snapshot = {

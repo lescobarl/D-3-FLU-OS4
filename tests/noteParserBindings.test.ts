@@ -25,7 +25,9 @@ describe('🧪 Bindings JS (notas) — sin import rotos', () => {
         });
         expect((result as any)?.matched).toBe(true);
         expect((result as any)?.domain).toBe('note');
-        expect((result as any)?.action?.data?.label).toBe('Super: conejos');
+        // El destino es UNA nota llamada 'Super'; el ítem va al contenido.
+        expect((result as any)?.action?.data?.label).toBe('Super');
+        expect((result as any)?.action?.data?.body).toBe('conejos');
     });
 });
 

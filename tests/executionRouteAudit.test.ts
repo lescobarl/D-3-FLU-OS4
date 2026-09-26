@@ -14,6 +14,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const app = (): string => readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
+const dispatchModule = (): string =>
+    readFileSync(join(process.cwd(), 'src/app/arbiterDispatch.ts'), 'utf8');
 const count = (src: string, re: RegExp): number => (src.match(re) || []).length;
 
 describe('auditoría de rutas de ejecución (una por intención)', () => {
@@ -34,8 +36,11 @@ describe('auditoría de rutas de ejecución (una por intención)', () => {
 
     it('acciones de dominio: 1 helper y 2 entradas EXCLUYENTES por hasAcciones', () => {
         const src = app();
-        // Definición + 2 llamadas (ruta LLM, ruta offline).
-        expect(count(src, /dispatchArbiterIntent\(/g)).toBe(3);
+        // El helper vive en su propio módulo (1 definición) y App sólo lo invoca 2
+        // veces (ruta LLM, ruta offline). La definición se sacó de App por el
+        // trinquete de tamaño de god-files (P6.6); sigue siendo UN solo camino.
+        expect(count(dispatchModule(), /dispatchArbiterIntent\(/g)).toBe(1);
+        expect(count(src, /dispatchArbiterIntent\(/g)).toBe(2);
         // La exclusión es lo que evita el doble despacho del mismo turno.
         expect(src).toMatch(/hasAcciones && !rawOnly/);
         expect(src).toMatch(/!rawOnly && !hasAcciones/);

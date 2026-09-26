@@ -24,6 +24,12 @@ export interface AIRequestOptions {
     language?: string;
     role?: string;
     theme?: string;
+    /**
+     * Temperatura (creatividad) resuelta en el BORDE a partir de la fuente
+     * canónica, y que el adapter debe usar tal cual. Los motores NO releen la
+     * configuracion por su cuenta: si falta, cada uno aplica su propio default.
+     */
+    temperature?: number;
     /** Personality traits to inject into the system prompt (Phase 1) */
     traits?: string[];
     /** Communication tone to inject into the system prompt (Phase 1) */

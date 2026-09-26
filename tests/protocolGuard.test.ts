@@ -36,11 +36,19 @@ describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', (
             `"test" no debe ser la suite completa (eso es test:full). Actual: "${testScript}"`,
         ).toBe(false);
     });
-    it('debe existir "test:full" con la suite completa para cierre de hitos/pre-commit', () => {
+    it('debe existir "test:full" con la suite completa, tras la barrera de autorizacion', () => {
         const fullScript = pkg.scripts['test:full'] ?? '';
+        // Sigue siendo el UNICO dueño de la suite completa: corre todo, sin filtros.
         expect(
-            fullScript.trim() === 'vitest run',
+            fullScript.includes('vitest run'),
             `"test:full" debe ejecutar la suite completa. Actual: "${fullScript}"`,
+        ).toBe(true);
+        expect(fullScript, 'la suite completa no se filtra por cambio').not.toContain('--changed');
+        // ...y ademas exige autorizacion expresa (AGENTS.md seccion 5): el atajo
+        // "vitest run" a secas dejo de ser un camino valido.
+        expect(
+            fullScript.includes('scripts/require-full-suite-auth.mjs'),
+            `"test:full" debe pasar por la barrera de autorizacion. Actual: "${fullScript}"`,
         ).toBe(true);
     });
     it('el pre-commit LIGERO tiene sus dos mecanismos: lint (guards + eslint) y typecheck', () => {

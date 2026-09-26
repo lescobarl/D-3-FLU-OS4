@@ -51,6 +51,25 @@ describe('normalizeCommandForDeterministic', () => {
     it('sin wake words configuradas devuelve el texto recortado tal cual', () => {
         expect(normalizeCommandForDeterministic('  hola mundo  ', [])).toBe('hola mundo');
     });
+
+    it('el mandato empieza en la wake: descarta el habla previa (TV/residuo ASR)', () => {
+        expect(
+            normalizeCommandForDeterministic(
+                'disfrutar cada jugada Okay flu borra todas las notas',
+                WAKE_WORDS,
+            ),
+        ).toBe('borra todas las notas');
+    });
+    it('acepta la wake inline con eco ASR delante', () => {
+        expect(normalizeCommandForDeterministic('bla bla oye flu crea una cita', WAKE_WORDS)).toBe(
+            'crea una cita',
+        );
+    });
+    it('conserva el mandato si la wake va al final (sin mandato detras)', () => {
+        expect(normalizeCommandForDeterministic('borra todas las notas oye flu', WAKE_WORDS)).toBe(
+            'borra todas las notas',
+        );
+    });
 });
 
 describe('actionBelongsToTranscript — guard anti-arrastre de acciones LLM (Bug #5)', () => {

@@ -126,3 +126,42 @@ describe('agenda.intent — list/cancel', () => {
         expect(r.kind).toBe('clase');
     });
 });
+describe('agenda.intent — referencia de CONJUNTO (cuantificador o plural)', () => {
+    it('"borra todas las clases" -> cancel de todo el tipo, sin etiqueta', () => {
+        const r = parseAgendaCommand('borra todas las clases', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+        // Sin objetivo concreto: el servicio opera sobre la serie ENTERA del tipo.
+        expect(r.label).toBe('');
+    });
+    it('con wake delante ("Okay Flow borra todas las clases") -> mismo despacho', () => {
+        const r = parseAgendaCommand('Okay Flow borra todas las clases', { now: () => NOW });
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+        expect(r.label).toBe('');
+    });
+    it('cuantificador universal sobre otros tipos', () => {
+        expect(parseAgendaCommand('borra todas las alarmas').label).toBe('');
+        expect(parseAgendaCommand('borra todos los recordatorios').label).toBe('');
+        expect(parseAgendaCommand('borra todas las citas').label).toBe('');
+    });
+    it('plural desnudo = conjunto; singular desnudo NO arrastra (conservador)', () => {
+        expect(parseAgendaCommand('borra los recordatorios').label).toBe('');
+        // Singular sin nombre: ambiguo, no se lleva el conjunto.
+        expect(parseAgendaCommand('borra el recordatorio').label).toBe('recordatorio');
+    });
+    it('etiqueta nombrada sigue ACOTADA (no se vuelve conjunto)', () => {
+        const r = parseAgendaCommand('borra la clase de historia', { now: () => NOW });
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.label).toBe('historia');
+    });
+    it('"borra toda la agenda" sigue siendo el vaciado TOTAL', () => {
+        expect(parseAgendaCommand('borra toda la agenda').action).toBe('agenda.clear');
+    });
+    it('el plural no rompe crear: "crea clases de matemáticas el lunes a las 8"', () => {
+        const r = parseAgendaCommand('crea clases de matemáticas el lunes a las 8', { now: () => NOW });
+        expect(r.action).toBe('agenda.create');
+        expect(r.kind).toBe('clase');
+    });
+});

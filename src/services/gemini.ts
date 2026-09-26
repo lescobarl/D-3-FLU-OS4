@@ -19,7 +19,6 @@
 import { GEMINI_CONFIG, STORAGE_KEYS, isWorkspaceTipo, buildPollinationsUrl, readStorage, resolveTextApiKey } from '../core/config/appConfig';
 import type { VisualTipo } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
-import { useIntegrationStore } from '../store/integrationStore';
 import type {
     IAIService,
     AIRequestOptions,
@@ -33,6 +32,7 @@ import { postGeminiContract } from './geminiContractClient';
 import { logCaughtError } from '../lib/caughtError';
 import { resolveApiKey } from '../core/config/sharedConfig';
 import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
+import { resolveConfiguredTemperature } from './aiTemperature';
 import {
     BaseAIService,
     type AIVisionAnalysisResult,
@@ -65,21 +65,6 @@ function resolveGeminiKeyForRequest(apiKey: string = ''): { apiKey: string; apiK
     return resolveApiKey(apiKey, resolveTextApiKey);
 }
 
-/**
- * Helper: read creativity (temperature) from FLU Configurator
- */
-function resolveCreativityTemperature(): number | undefined {
-    try {
-        const state = useIntegrationStore.getState();
-        if (state?.advancedConfig?.creativity !== undefined && state.advancedConfig.creativity !== null) {
-            return state.advancedConfig.creativity;
-        }
-    } catch (err) {
-        logCaughtError('[catch] src/services/gemini.ts', err);
-        // Store not available (e.g. test environment)
-    }
-    return undefined;
-}
 
 // -----------------------------------------------------------
 // GeminiService — Adapter de transporte (proxy Gemini)
@@ -128,7 +113,7 @@ class GeminiService extends BaseAIService implements IAIService {
      * Minuta vía proxy (mode='minute'). Devuelve el JSON OS2 ya parseado.
      */
     protected async fetchMinute(request: MinuteRequest): Promise<Record<string, unknown>> {
-        const temperature = resolveCreativityTemperature();
+        const temperature = request.options.temperature ?? resolveConfiguredTemperature();
         const userMessage = request.isEnglish
             ? `Session emotional state: ${request.emotionalState}
 
@@ -202,7 +187,7 @@ Genera la minuta en formato JSON.`;
             history: history,
             systemPrompt,
             userMessage,
-            temperature: resolveCreativityTemperature(),
+            temperature: options.temperature ?? resolveConfiguredTemperature(),
         });
 
         if (!response.ok) {
@@ -290,7 +275,7 @@ Responde como ${botName}:`;
             personality,
             systemPrompt,
             userMessage,
-            temperature: resolveCreativityTemperature(),
+            temperature: options.temperature ?? resolveConfiguredTemperature(),
         });
 
         if (!response.ok) {

@@ -11,6 +11,7 @@
 
 
 import { normalizeSpokenCommand } from './audioMath.js'
+import { SUPER_TARGET_LABEL } from '../../core/notes/superNoteTarget'
 
 const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hazme|hazmelo|hacer|hagame|hágame|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?(?:nota|lista)\b\s*(.*)$/i
@@ -45,7 +46,7 @@ const NOTE_REMOVE =
 /** Normaliza el destino: los destinos de compras se llaman 'Super' en las notas. */
 function normalizeRemoveTarget(raw = '') {
   const norm = stripAccentsEs(raw).trim()
-  if (/^(?:super|supermercado|compras|mercado)\b/.test(norm)) return 'Super'
+  if (/^(?:super|supermercado|compras|mercado)\b/.test(norm)) return SUPER_TARGET_LABEL
   return String(raw || '').trim()
 }
 
@@ -118,14 +119,14 @@ export function parseNoteIntentText(rawText = '') {
   const paraSuper = NOTE_PARA_SUPER.exec(norm)
   if (paraSuper) {
     const rest = cleanSuperItem(paraSuper[2] ? paraSuper[2].trim() : '')
-    return { label: 'Super', body: rest || undefined }
+    return { label: SUPER_TARGET_LABEL, body: rest || undefined }
   }
 
   // 1b) "apunta/agrega [en la lista [de]] super …" → "Super: {resto}".
   const superList = NOTE_SUPER_LIST.exec(norm)
   if (superList) {
     const rest = superList[2] ? superList[2].trim() : ''
-    return { label: rest ? `Super: ${rest}` : 'Super' }
+    return { label: SUPER_TARGET_LABEL, body: rest || undefined }
   }
 
   // 1c) "agrega {ítem} a la lista del super/mercado" (ítem ANTES de la
@@ -134,7 +135,7 @@ export function parseNoteIntentText(rawText = '') {
   const superAppend = NOTE_SUPER_APPEND.exec(norm)
   if (superAppend) {
     const rest = superAppend[1] ? superAppend[1].trim() : ''
-    return { label: rest ? `Super: ${rest}` : 'Super' }
+    return { label: SUPER_TARGET_LABEL, body: rest || undefined }
   }
 
   // 1d) "incluye/agrega [en] la NOTA del súper [que también traiga] {ítem}"
@@ -142,7 +143,7 @@ export function parseNoteIntentText(rawText = '') {
   const superNota = NOTE_SUPER_NOTA.exec(norm)
   if (superNota) {
     const item = cleanSuperItem(superNota[2] ? superNota[2].trim() : '')
-    return { label: item ? `Super: ${item}` : 'Super' }
+    return { label: SUPER_TARGET_LABEL, body: item || undefined }
   }
 
   // 1e) Orden DESTINO PRIMERO: "en la nota del súper incluye {ítem}". Mismo
@@ -150,7 +151,7 @@ export function parseNoteIntentText(rawText = '') {
   const superNotaDestFirst = NOTE_SUPER_NOTA_DEST_FIRST.exec(norm)
   if (superNotaDestFirst) {
     const item = cleanSuperItem(superNotaDestFirst[2] ? superNotaDestFirst[2].trim() : '')
-    return { label: item ? `Super: ${item}` : 'Super' }
+    return { label: SUPER_TARGET_LABEL, body: item || undefined }
   }
 
   // 2) "nota para recordar/acordarme {X}" → "Recordar: {X}".

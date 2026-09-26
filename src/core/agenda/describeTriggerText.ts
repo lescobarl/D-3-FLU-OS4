@@ -18,6 +18,11 @@ function weekdayName(dayIndex: number, lang: string): string {
     return date.toLocaleDateString(locale, { weekday: 'long' });
 }
 
+/** Nombres completos y localizados de una lista de días ("jueves", "lunes, jueves"). */
+export function describeWeekdays(days: readonly number[] | undefined, lang: string): string {
+    return (days ?? []).map((day) => weekdayName(day, lang)).join(', ');
+}
+
 /** Texto legible del disparo ("jueves a las 10:30 a.m.", "los lunes, jueves a las 08:00"). */
 export function describeTriggerWhen(trigger: AgendaTrigger, lang: string): string {
     const t = trigger;

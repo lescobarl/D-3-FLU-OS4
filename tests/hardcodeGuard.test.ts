@@ -23,6 +23,14 @@ const SRC_DIR = path.resolve(__dirname, '../src');
 // Dominios seguros en CUALQUIER archivo: dev local, namespaces, contenido
 // de datos (pistas demo), placeholders de UI y referencias informativas.
 // Los dominios de APIs reales NO están aquí: deben vivir en appConfig.
+//
+// HUECO CONOCIDO (deliberado): el blanqueo de `localhost` hace que este guard NO
+// vea un literal de URL duplicado del tipo `http://localhost` repartido por varios
+// módulos — que fue exactamente cómo se coló la base ficticia `PARSE_BASE_URL` en
+// searchProxy y browserProxy. Se deja blanqueado a propósito (es el servidor de
+// desarrollo) y esa duplicación la vigila `duplicationGuard`
+// (dueño único: `src/server/requestUrl.ts`). Si se endurece aquí, no romperlo sin
+// mover antes ese contrato.
 const SAFE_URL_PATTERNS: RegExp[] = [
     /^localhost(?::|\/|$)/i,           // servidores de desarrollo locales
     /^127\.0\.0\.1(?::|\/|$)/i,        // STT dev server (ws://127.0.0.1:8787)

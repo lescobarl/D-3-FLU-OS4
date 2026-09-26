@@ -12,6 +12,12 @@ import { logCaughtError } from '../../lib/caughtError';
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const RING_MAX = 200
+/**
+ * Ventana de agrupación del flush de trazas a disco: muchas entradas → un solo POST.
+ * NO es latencia de voz; es un debounce de diagnóstico (dev), por eso vive aquí y no
+ * en la config de timing de la voz. El nombre importa: `RING_MAX` es otro 200.
+ */
+const DEV_FLUSH_WINDOW_MS = 200
 const SIM_STAGES = new Set(['sim-start', 'sim-done', 'sim-abort'])
 const FILE_STAGES = new Set(['chrome-raw', 'final', 'mic-ingress'])
 
@@ -70,7 +76,7 @@ function pushRing(entry) {
   if (isListenTraceEnabled() && FILE_STAGES.has(entry.stage)) {
     devPending.push(serialize(entry))
     if (!devFlushTimer) {
-      devFlushTimer = window.setTimeout(flushDevLogs, 200)
+      devFlushTimer = window.setTimeout(flushDevLogs, DEV_FLUSH_WINDOW_MS)
     }
   }
 }

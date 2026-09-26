@@ -33,6 +33,13 @@ export interface AgendaCommand {
     kind?: AgendaKind;
     label?: string;
     trigger?: AgendaTrigger;
+    /**
+     * Alcance por día de una CANCELACIÓN: el usuario nombró días concretos
+     * ("borra la clase de historia del jueves") y solo esos deben caer, no la
+     * serie entera. Sin esto el matcher solo ve kind+label, casa toda la serie
+     * (martes y jueves) y borra más de lo pedido.
+     */
+    scopeDays?: number[];
     /** Vista de la consulta (agenda.list): hoy/mañana/semana/mes. */
     when?: 'hoy' | 'mañana' | 'semana' | 'mes';
     reply: string;
@@ -46,11 +53,11 @@ const REMINDER_CLAUSE =
     /\b(?:que\s+)?(?:me\s+)?(?:recu[eé]rd[ae]s?|acu[eé]rd[ae]s?|acu[eé]rdate|acu[eé]rdame|recu[eé]rdame|rec[oó]rdame|recordar|recordatorio|recordatorios|aviso)\b/gi;
 
 const KIND_NOUNS: ReadonlyArray<{ kind: AgendaKind; nouns: readonly string[] }> = Object.freeze([
-    { kind: 'alarma', nouns: ['alarma', 'despertador', 'temporizador', 'timer', 'despiertame', 'despertame'] },
-    { kind: 'recordatorio', nouns: ['recordatorio', 'recuerdame', 'recordame', 'aviso'] },
-    { kind: 'cita', nouns: ['cita'] },
-    { kind: 'junta', nouns: ['junta', 'reunion', 'reunión', 'meeting'] },
-    { kind: 'clase', nouns: ['clase'] },
+    { kind: 'alarma', nouns: ['alarma', 'alarmas', 'despertador', 'despertadores', 'temporizador', 'temporizadores', 'timer', 'timers', 'despiertame', 'despertame'] },
+    { kind: 'recordatorio', nouns: ['recordatorio', 'recordatorios', 'recuerdame', 'recordame', 'aviso', 'avisos'] },
+    { kind: 'cita', nouns: ['cita', 'citas'] },
+    { kind: 'junta', nouns: ['junta', 'reunion', 'reunión', 'meeting', 'juntas', 'reuniones', 'meetings'] },
+    { kind: 'clase', nouns: ['clase', 'clases'] },
 ]);
 
 const CREATE_FRAMES: readonly string[] = Object.freeze([
@@ -193,16 +200,51 @@ const WEEKLY_LEAD_RE = /\b(?:los|cada|todos\s+los|todas\s+las)\s+/i;
 /** Cualquier día de semana mencionado (con o sin "los"), para CLASES. */
 function detectAnyWeekdays(text: string): number[] {
     const t = normalize(text);
-    return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(t)).map((w) => w.day);
+    const named = WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(t)).map((w) => w.day);
+    return withDayRange(t, named);
+}
+
+/**
+ * Rango de días inclusivo ("de lunes a viernes", "desde el martes hasta el jueves").
+ * Un rango NO es una lista de dos elementos: es la secuencia completa. Antes
+ * "de lunes a viernes" daba [1, 5] (lunes y viernes) y guardaba un horario falso
+ * sin avisar. La alternancia de días se deriva de WEEKDAY_NAMES (fuente única).
+ */
+const DAY_RANGE_RE = new RegExp(
+    `\\b(?:de|desde|entre)\\s+(?:el\\s+)?(${WEEKDAY_NAMES.map((w) => w.name).join('|')})`
+        + `\\s+(?:a|hasta|y)\\s+(?:el\\s+)?(${WEEKDAY_NAMES.map((w) => w.name).join('|')})\\b`,
+    'i',
+);
+
+function expandDayRange(t: string): number[] {
+    const match = DAY_RANGE_RE.exec(t);
+    if (!match) return [];
+    const from = WEEKDAY_NAMES.find((w) => w.name === match[1]);
+    const to = WEEKDAY_NAMES.find((w) => w.name === match[2]);
+    if (!from || !to) return [];
+    const days: number[] = [];
+    for (let day = from.day; days.length < 7; day = (day + 1) % 7) {
+        days.push(day);
+        if (day === to.day) break;
+    }
+    return days;
+}
+
+/** Días nombrados + rango inclusivo, sin duplicados y en orden ascendente. */
+function withDayRange(t: string, named: number[]): number[] {
+    return [...new Set([...named, ...expandDayRange(t)])].sort((a, b) => a - b);
 }
 
 /** Días de semana SOLO con recurrencia explícita ("los lunes"), no "el jueves". */
 function detectWeekdays(text: string): number[] {
     const t = normalize(text);
     const lead = WEEKLY_LEAD_RE.exec(t);
-    if (!lead) return [];
+    // Un rango ("de lunes a viernes") ya es recurrencia explícita: no exige "los".
+    const range = expandDayRange(t);
+    if (!lead) return range;
     const after = t.slice(lead.index + lead[0].length);
-    return WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(after)).map((w) => w.day);
+    const named = WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(after)).map((w) => w.day);
+    return withDayRange(t, named);
 }
 
 /**
@@ -291,11 +333,19 @@ function resolveLabel(text: string): string {
         // Frases de recurrencia COMPLETAS antes de los stopwords: si se quita
         // "los" primero, "todos los días" queda "todos días" y ya no casa.
         .replace(wordRe('toda\\s+la\\s+semana|toda\\s+semana|todos\\s+los\\s+d[ií]as|cada\\s+semana|cada\\s+d[ií]a|semanalmente|semanal|diario|diariamente|semana'), ' ')
-        .replace(wordRe('una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|será'), ' ')
+        .replace(wordRe('una|un|el|la|los|las|mi|para|de|al|del|a|con|es|son|sera|todo|toda|todos|todas|horario|será'), ' ')
         .replace(wordRe('manana|mañana|hoy|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|tarde|noche|madrugada'), ' ')
+        .replace(wordRe('pr[oó]xim[ao]s?|siguiente|que\\s+viene|venider[ao]|entrante|d[ií]as?'), ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
     if (label) return label;
+    // Cuantificador universal ("todas las clases", "todo el horario"): el usuario
+    // pide el CONJUNTO completo del tipo, no un item. Etiqueta vacia = sin
+    // objetivo concreto: el servicio opera sobre la serie ENTERA del tipo
+    // (findSeries: `!target`), acotada al usuario. Sin cuantificador se mantiene
+    // el sustantivo canonico: "borra la clase" no arrastra todo por ambiguedad.
+    if (/\b(?:todo|toda|todos|todas)\b/i.test(base)) return '';
+    if (KIND_NOUNS.some((e) => e.nouns.some((n) => n.endsWith('s') && wordRe(n).test(base)))) return '';
     // Sin contenido: etiqueta = sustantivo CANÓNICO del tipo ("alarma",
     // "recordatorio", "cita"), no el verbo crudo. La detección se hace sobre el
     // texto normalizado para que el acento no impida encontrar el tipo.
@@ -340,7 +390,14 @@ export function parseAgendaCommand(
     // El disparo es OBLIGATORIO solo para crear; cancelar/editar identifican
     // el item por kind+label (la fecha puede venir o no). Un ÚNICO resolutor de
     // recurrencia atiende clases y resto de kinds (sin dos gramáticas).
-    const trigger = resolveRecurrence(cleaned, now, kind);
+    // Hora como COMODÍN: cancelar y editar identifican el item por kind+label, así
+    // que si el usuario NO dijo hora no se inventa una. `resolveRecurrence` usa
+    // '09:00' de relleno (legítimo al crear), pero ese relleno aquí haría que
+    // "cambia el nombre de la clase de historia" moviera además la hora a las
+    // 09:00, y que el borrado arrastrara una hora que nadie dijo.
+    const spokenTime = pickTimeOfDay(cleaned).timeOfDay;
+    const recurrence = resolveRecurrence(cleaned, now, kind);
+    const trigger = resolvedAction === 'agenda.create' || spokenTime ? recurrence : null;
     if (!trigger && resolvedAction === 'agenda.create') {
         // Sin instante NO se crea (el modelo exige `at`/recurrencia), pero el
         // descarte deja de ser ciego: se devuelve la pista (kind+label) para que
@@ -350,12 +407,21 @@ export function parseAgendaCommand(
     }
 
     const label = resolveLabel(cleaned);
+    // Cancelar SÍ usa los días nombrados: "borra la clase de historia del jueves"
+    // cae solo el jueves. Se leen de la recurrencia ya resuelta (misma fuente de
+    // días que crear), pero NO se devuelven como `trigger`: ese hueco de hora
+    // ('09:00' de relleno) es para crear, y usarlo aquí movería la hora.
+    const scopeDays =
+        resolvedAction === 'agenda.cancel' && recurrence?.type === 'weekly' && recurrence.daysOfWeek?.length
+            ? recurrence.daysOfWeek
+            : undefined;
     return {
         handled: true,
         action: resolvedAction,
         kind,
         label,
         trigger: trigger ?? undefined,
+        scopeDays,
         reply: '',
     };
 }

@@ -45,6 +45,21 @@ export function tokenHelperOffenders(src: string, fileName: string): string[] {
   const defs = src.match(/\bfunction\s+(findTokenIndex|hasToken|hasAnyToken)\s*[(<]/g) || [];
   return defs.map((d) => `${fileName}: ${d.trim()}`);
 }
+/** Dueno unico del parseo del URL del request en los proxies. */
+export const REQUEST_URL_OWNER = 'src/server/requestUrl.ts';
+/**
+ * Reimplementaciones del parseo del URL del request fuera del dueno.
+ *
+ * Detecta las DOS caras del mismo defecto: redeclarar la base ficticia
+ * (`PARSE_BASE_URL`) y volver a copiar el `new URL(rawUrl, ...)` con su try/catch.
+ * Ninguna de las dos debe reaparecer fuera del dueno.
+ */
+export function requestUrlOffenders(src: string, fileName: string): string[] {
+  if (fileName === REQUEST_URL_OWNER) return [];
+  const redeclaraBase = /\b(?:const|let|var)\s+PARSE_BASE_URL\b/.test(src);
+  const copiaParseo = /new URL\(rawUrl,/.test(src);
+  return redeclaraBase || copiaParseo ? [fileName] : [];
+}
 describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () => {
   it('el plegado NFD existe solo en su dueno', () => {
     const offenders = walk(SRC).flatMap((f) => nfdOffenders(readFileSync(f, 'utf8'), rel(f)));
@@ -76,6 +91,14 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
     expect(curatedAllowlistLiterals(cfg), 'allowlist curada repetida').toBe(1);
     expect(cfg).toContain('CURATED_ALLOWLIST');
   });
+  it('el parseo del URL del request se define una sola vez y los proxies lo importan', () => {
+    const offenders = walk(join(SRC, 'server'))
+      .flatMap((f) => requestUrlOffenders(readFileSync(f, 'utf8'), rel(f)));
+    expect(offenders, 'parseo del URL del request copiado fuera de ' + REQUEST_URL_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
+    for (const p of ['src/server/searchProxy.ts', 'src/server/browserProxy.ts']) {
+      expect(readFileSync(join(ROOT, p), 'utf8'), p + ' no importa el parseo compartido').toContain("from './requestUrl'");
+    }
+  });
   it('los sinonimos de proveedor cubren exactamente el catalogo', () => {
     expect(Object.keys(AI_PROVIDER_SYNONYMS).sort()).toEqual([...AI_PROVIDERS].sort());
   });
@@ -97,6 +120,14 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo',
     expect(allowlistDefinitions('import { parseAllowlist } from "./x"')).toBe(0);
     expect(curatedAllowlistLiterals("a: ['wikipedia.org', 'educ.ar']")).toBe(1);
     expect(curatedAllowlistLiterals('CURATED_ALLOWLIST')).toBe(0);
+  });
+  it('marca el parseo del URL del request reimplementado y no marca al dueno', () => {
+    // Las dos caras del defecto: la base ficticia redeclarada y el parseo recopiado.
+    expect(requestUrlOffenders("const PARSE_BASE_URL = 'http://localhost'", 'src/server/otroProxy.ts')).toHaveLength(1);
+    expect(requestUrlOffenders('let parsed: URL; try { parsed = new URL(rawUrl, BASE) } catch {}', 'src/server/otroProxy.ts')).toHaveLength(1);
+    // El dueno puede declararlos; importar el helper no cuenta como reimplementar.
+    expect(requestUrlOffenders("const PARSE_BASE_URL = 'http://localhost'", REQUEST_URL_OWNER)).toEqual([]);
+    expect(requestUrlOffenders("import { parseRequestUrl } from './requestUrl'", 'src/server/otroProxy.ts')).toEqual([]);
   });
 });
 describe('P7.20 duplicacion - isAIProvider con un solo dueno', () => {

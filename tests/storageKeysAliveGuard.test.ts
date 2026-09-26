@@ -10,7 +10,10 @@
  * integrationStore (zustand persist); GEMINI_MODEL/GEMINI_API_URL y POLLINATIONS_URL/MODEL,
  * sustituidas por la config de proveedor; y NOTIFICATION_MUTED, sustituida por
  * NOTIFICATION_CHANNEL/NOTIFICATION_PERMISSION. Misma clase que P1.5: almacen declarado
- * que la aplicacion ya no usa.
+ * que la aplicacion ya no usa. CREATIVITY ('flu-creativity') se retiro despues: solo la
+ * escribia la restauracion de backup y la leia el adapter DeepSeek, mientras el
+ * configurador (integrationStore) era la fuente real; ahora hay un dueno unico
+ * (src/services/aiTemperature.ts) y la clave local no la usa nadie.
  *
  * AMBITO: src/ + tests/. Toda clave nueva debe nacer referenciada.
  */
@@ -77,7 +80,7 @@ describe('STORAGE_KEYS sin claves muertas', () => {
   });
 
   it('el mapa no vuelve a declarar las claves ya retiradas', () => {
-    for (const k of ['FLU_PROFILE', 'FLU_VOICE_CONFIG', 'FLU_ADVANCED_CONFIG', 'GEMINI_MODEL', 'POLLINATIONS_URL', 'NOTIFICATION_MUTED']) {
+    for (const k of ['FLU_PROFILE', 'FLU_VOICE_CONFIG', 'FLU_ADVANCED_CONFIG', 'GEMINI_MODEL', 'POLLINATIONS_URL', 'NOTIFICATION_MUTED', 'CREATIVITY']) {
       expect(declared[k], k + ' no debe volver').toBeUndefined();
     }
   });
