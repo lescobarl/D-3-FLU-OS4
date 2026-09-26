@@ -325,13 +325,22 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
     }
     if (!hasFrame) return null;
 
-    // Y UN alias del juego (si hay varios, gana el más largo/primero).
+    // Y UN alias del juego. Si el texto coincide con varios, gana el MÁS
+    // LARGO: es el más específico. "hagamos un cuento" es cuento_colaborativo,
+    // no el alias genérico "un cuento" de cuentacuentos. Empate → orden del
+    // catálogo (estable).
+    let best: GameIntentEntry | null = null;
+    let bestLength = -1;
     for (const entry of GAME_CATALOG) {
         for (const alias of entry.aliases) {
-            if (hasToken(normalized, alias)) return entry;
+            if (!hasToken(normalized, alias)) continue;
+            if (alias.length > bestLength) {
+                best = entry;
+                bestLength = alias.length;
+            }
         }
     }
-    return null;
+    return best;
 }
 
 /**

@@ -7,7 +7,7 @@
 // - getGameEngine resuelve SOLO juegos del catálogo activo.
 // ============================================================
 import { describe, test, expect } from 'vitest';
-import { matchGameIntent, getGameEngine, isGameId, GAME_IDS, END_GAME_FRAMES } from '../src/core/games/gameCatalog';
+import { matchGameIntent, getGameEngine, isGameId, GAME_IDS, GAME_CATALOG, END_GAME_FRAMES } from '../src/core/games/gameCatalog';
 
 describe('gameCatalog — matchGameIntent (guardia triple)', () => {
     test('"ok flu, vamos a jugar a las adivinanzas" → adivinanzas', () => {
@@ -220,5 +220,21 @@ describe('gameCatalog — END_GAME_FRAMES (control data-driven de partida activa
 
     test('sin frases duplicadas', () => {
         expect(new Set(END_GAME_FRAMES).size).toBe(END_GAME_FRAMES.length);
+    });
+    test('cada alias del catalogo resuelve a su propio juego (sin colisiones de especificidad)', () => {
+        // Un alias genérico de un juego no debe secuestrar el alias más
+        // específico de otro: "hagamos un cuento" es cuento_colaborativo, no
+        // el "un cuento" de cuentacuentos. Guard genérico: cubre cualquier
+        // colisión presente o futura, sin listas de excepciones.
+        const perdidos: string[] = [];
+        for (const entry of GAME_CATALOG) {
+            for (const alias of entry.aliases) {
+                const resuelto = matchGameIntent(`juguemos a ${alias}`);
+                if (resuelto?.id !== entry.id) {
+                    perdidos.push(`${alias} => ${resuelto?.id ?? 'null'} (esperado ${entry.id})`);
+                }
+            }
+        }
+        expect(perdidos).toEqual([]);
     });
 });
