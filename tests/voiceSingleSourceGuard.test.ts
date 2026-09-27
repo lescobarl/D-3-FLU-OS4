@@ -18,6 +18,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 import { ARBITER_DOMAINS, resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter'
+import { resolveConfigCommandFromText } from '../src/voice/lib/configCommands'
+import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -61,6 +63,31 @@ export function diaryRouteOffenders(src: string, fileName: string): string[] {
       out.push(`${fileName}:${i + 1}:${l.trim().slice(0, 100)}`)
     }
   })
+  return out
+}
+
+/**
+ * Frases declaradas como comando en config que NO reaccionan. Solo mira las
+ * entradas del catalogo de tipo `action`: son las que declaran su lista de
+ * frases en `FLU_CONFIG.voiceCommands[clave]` y no necesitan valor aparte.
+ * Cualquier frase de esa lista que no resuelva es interface declarada y muerta.
+ */
+export function declaredPhrasesWithoutEffect(
+  config: unknown = FLU_CONFIG,
+  resolve: (text: string) => unknown = resolveConfigCommandFromText,
+): string[] {
+  const out: string[] = []
+  const voiceCommands = (config as { voiceCommands?: Record<string, unknown> })?.voiceCommands || {}
+  for (const entry of VOICE_CONFIG_CATALOG) {
+    if ((entry as { tipo?: string })?.tipo !== 'action') continue
+    const clave = String((entry as { clave?: string })?.clave || '')
+    const phrases = voiceCommands[clave]
+    if (!Array.isArray(phrases)) continue
+    for (const phrase of phrases as string[]) {
+      if (!String(phrase || '').trim()) continue
+      if (!resolve(String(phrase))) out.push(`${clave}: "${phrase}"`)
+    }
+  }
   return out
 }
 
@@ -196,5 +223,19 @@ describe('voiceSingleSourceGuard — una sola fuente de verdad (§9)', () => {
     expect(pos('diary'), 'el diario es más específico que la nota').toBeLessThan(pos('note'))
     expect(resolveDeterministicCommand('iniciar conversacion').domain).toBe('navigation')
     expect(resolveDeterministicCommand('anota en el diario que fui al parque').domain).toBe('diary')
+  })
+
+  it('G10 — todo comando declarado en config reacciona (sin config muerta)', () => {
+    const muertas = declaredPhrasesWithoutEffect()
+    expect(
+      muertas,
+      `Frases declaradas como comando que NO reaccionan (N=${muertas.length}):\n  ${muertas.join('\n  ')}`,
+    ).toEqual([])
+  })
+
+  it('G10 — el detector no es decorativo', () => {
+    const config = { voiceCommands: { resetAvatarColors: ['restablecer colores del avatar'] } }
+    expect(declaredPhrasesWithoutEffect(config, () => null), 'si el resolver no responde, lo marca').toHaveLength(1)
+    expect(declaredPhrasesWithoutEffect(config, () => ({ clave: 'resetAvatarColors' }))).toEqual([])
   })
 })

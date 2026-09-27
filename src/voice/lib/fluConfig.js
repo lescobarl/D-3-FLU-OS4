@@ -2,6 +2,7 @@
 import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
 const IS_DEV = import.meta.env.DEV
@@ -2317,14 +2318,7 @@ export const FLU_CONFIG = {
  /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
   *  Fuente única: FLU_WAKE_WORDS (§9.4). Configurable en Ajustes. */
  wakeWords: [...FLU_WAKE_WORDS],
- resetAvatarColors: [
-   'restablecer colores del avatar',
-   'reset avatar colors',
-   'restablecer colores de flu',
-   'reset flu colors',
-   'colores por defecto',
-   'default colors'
- ],
+ resetAvatarColors: RESET_AVATAR_COLOR_PHRASES,
     openListening: [
       'abrir escucha',
       'abre escucha',

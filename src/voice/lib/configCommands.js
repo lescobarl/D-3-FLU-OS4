@@ -19,6 +19,7 @@ import { isGameId } from '../../core/games/gameCatalog'
 import { normalizeForMatch } from '../../lib/textUtils'
 import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_SYNONYMS } from '../../core/config/sharedConfig'
+import { FLU_CONFIG } from './fluConfig.js'
 
 // ------------------------------------------------------------
 // Normalización de texto
@@ -161,19 +162,6 @@ const CONFIG_NOUNS = Object.freeze({
   pantsColor: ['color del pantalon', 'pants color'],
   bodyColor: ['color del cuerpo', 'body color'],
   faceColor: ['color de la cara', 'face color'],
-  resetAvatarColors: [
-    'restablecer colores del avatar',
-    'restablece los colores del avatar',
-    'restablecer los colores del avatar',
-    'resetear colores del avatar',
-    'resetea los colores del avatar',
-    'restablecer colores',
-    'restablece los colores',
-    'restablecer colores de flu',
-    'resetear colores',
-    'colores por defecto',
-    'default colors',
-  ],
   aiProvider: ['proveedor de ia', 'motor de ia', 'motor de inteligencia artificial', 'ai provider', 'provider', 'proveedor'],
   profile: ['perfil', 'profile'],
   textModel: ['modelo de texto', 'text model', 'modelo'],
@@ -668,6 +656,31 @@ function resolveValueForEntry(text = '', entry = {}) {
 }
 
 /**
+ * Comandos de ACCION declarados en config (`FLU_CONFIG.voiceCommands[clave]`).
+ * La lista declarada ES la frase del comando, asi que no exige verbo de directiva
+ * ni valor aparte («colores por defecto» no lleva verbo). Es el unico dueño de las
+ * frases de estos comandos; el catalogo aporta la clave, el handler y el valor.
+ */
+export function resolveDeclaredActionCommand(normalized = '') {
+  if (!normalized) return null
+  for (const entry of VOICE_CONFIG_CATALOG) {
+    if (entry?.tipo !== 'action' || !entry?.clave) continue
+    const phrases = FLU_CONFIG.voiceCommands?.[entry.clave]
+    if (!Array.isArray(phrases) || !phrases.length) continue
+    // La frase declarada mas larga primero: «…colores del avatar» gana a «…colores».
+    const ordered = [...phrases].sort((a, b) => String(b).length - String(a).length)
+    if (!ordered.some((phrase) => hasVoiceToken(normalized, phrase))) continue
+    return {
+      accion: entry.accion,
+      componente: 'config',
+      clave: entry.clave,
+      valor: resolveValueForEntry(normalized, entry),
+    }
+  }
+  return null
+}
+
+/**
  * Deriva un contrato `configuracion` determinista a partir del texto transcrito.
  * Retorna `null` si no hay un comando de configuración explícito y resoluble
  * (guardia triple: verbo de directiva + sustantivo de configuración + valor).
@@ -675,6 +688,11 @@ function resolveValueForEntry(text = '', entry = {}) {
 export function resolveConfigCommandFromText(text = '', _options = {}) {
   const normalized = normalizeForMatch(text)
   if (!normalized) return null
+
+  // Comandos de accion declarados en config: la lista declarada es la frase del
+  // comando, asi que se resuelve aunque no haya verbo de directiva.
+  const declaredAction = resolveDeclaredActionCommand(normalized)
+  if (declaredAction) return declaredAction
 
   const hasDirective = DIRECTIVE_VERBS.some((verb) => hasVoiceToken(normalized, verb))
   if (!hasDirective) return null
