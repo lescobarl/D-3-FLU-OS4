@@ -77,7 +77,7 @@ describe('gameCommands — la salida del ciclo es GENÉRICA (todos los juegos)',
             '¿cómo estás?',
             'estás ahí',
         ],
-        salida: ['salir del juego', 'ya no quiero jugar'],
+        salida: ['salir del juego', 'ya no quiero jugar', 'alto al juego', 'ya no para para de jugar'],
     };
 
     for (const id of GAME_IDS) {
@@ -108,5 +108,46 @@ describe('gameCommands — la salida del ciclo es GENÉRICA (todos los juegos)',
         engine.start(session, {});
         setActiveGameSession(session);
         expect(resolveGameCommandFromText('baila')?.action).toBe('turn');
+    });
+});
+
+// ------------------------------------------------------------
+// DEFECTO MEDIDO (log del dueño): con la lotería activa, "alto al juego" y
+// "ya no para para de jugar" NO terminaban la partida: el enrutador los
+// resolvía como `turn` y el motor cantaba otra carta. La lista de salidas sólo
+// tenía frases largas y sólo la lotería conocía las cortas.
+// ------------------------------------------------------------
+describe('gameCommands — frases reales de salida del dueño', () => {
+    afterEach(() => clearActiveGameSession());
+
+    const SALIDAS = [
+        'alto al juego',
+        'alto el juego',
+        'ya no para para de jugar', // ASR literal del reporte
+        'para de jugar',
+        'para el juego',
+        'parar el juego',
+        'deten el juego',
+        'detener el juego',
+        'acaba el juego',
+        'alto',
+    ];
+
+    it.each(SALIDAS)('con partida activa, "%s" → end', (phrase) => {
+        withActiveLoteria();
+        expect(resolveGameCommandFromText(phrase)?.action, phrase).toBe('end');
+    });
+
+    it('los comandos de OTRO dominio siguen sin secuestrarse', () => {
+        withActiveLoteria();
+        expect(resolveGameCommandFromText('crea una alarma hoy a las 5:59')).toBeNull();
+        expect(resolveGameCommandFromText('apunta comprar pan')).toBeNull();
+        expect(resolveGameCommandFromText('que hora es')).toBeNull();
+    });
+
+    it('no se dispara por subcadena: "salto" y "determina" NO terminan la partida', () => {
+        withActiveLoteria();
+        expect(resolveGameCommandFromText('salto')).not.toMatchObject({ action: 'end' });
+        expect(resolveGameCommandFromText('determina la respuesta')).not.toMatchObject({ action: 'end' });
     });
 });

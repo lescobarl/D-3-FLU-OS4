@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import {
     NOTE_COMMAND_SURFACE,
     parseNoteIntentText,
+    parseNoteItemRemoveIntentText,
     parseNoteRemoveIntentText,
 } from '../src/voice/lib/noteIntentParser.js';
 import {
@@ -81,14 +82,16 @@ describe('S1 notas - toda capacidad declarada se entiende', () => {
                 const got =
                     capacidad.parser === 'remove'
                         ? (parseNoteRemoveIntentText(frase) as ParseRemove | null)
-                        : (parseNoteIntentText(frase) as ParseNota | null);
+                        : capacidad.parser === 'removeItem'
+                          ? (parseNoteItemRemoveIntentText(frase) as ParseNota | null)
+                          : (parseNoteIntentText(frase) as ParseNota | null);
                 const problema = cumple(capacidad.espera as Espera, got as Record<string, unknown> | null);
                 if (problema) fallos.push(`[${capacidad.id}] "${frase}" -> ${problema}`);
             }
         }
         expect({ frases: frases > 0, parsers: [...cubiertos].sort() }).toEqual({
             frases: true,
-            parsers: ['nota', 'remove'],
+            parsers: ['nota', 'remove', 'removeItem'],
         });
         expect(fallos).toEqual([]);
     });

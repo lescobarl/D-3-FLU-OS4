@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasPlayOrderFrame, shuffleOrder, adoptRandom } from './gameUtils';
+import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasPlayOrderFrame, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -55,11 +55,7 @@ const NEXT_FRAMES: readonly string[] = Object.freeze([
     'yes', 'next', 'listo', 'vamos',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego', 'terminar el juego', 'dejar de jugar', 'ya no quiero jugar', 'cerrar el juego',
-    'salir', 'terminar', 'termina', 'basta', 'parar', 'stop', 'ya no quiero', 'no quiero jugar',
-    'fin del juego', 'se acabo', 'se acabó',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 interface LoteriaState {
     /** Orden del MAZO (cantadas): permutación completa del banco. */
@@ -229,7 +225,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || REPEAT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || NEXT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || (hasToken(normalized, 'loteria') && !hasPlayOrderFrame(normalized));

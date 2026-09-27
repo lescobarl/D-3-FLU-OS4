@@ -24,6 +24,8 @@ import {
     hasAnyToken,
     resolveNumericAnswer,
     adoptRandom,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 const DEFAULT_MIN = 1;
@@ -39,13 +41,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'me rindo', 'rendirse', 'no se', 'no sé', 'no se la respuesta',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 /** Números en letras (0-100) y su resolución: fuente única en gameUtils. */
 
@@ -269,7 +265,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

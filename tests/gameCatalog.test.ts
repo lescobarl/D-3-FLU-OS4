@@ -7,6 +7,8 @@
 // - getGameEngine resuelve SOLO juegos del catálogo activo.
 // ============================================================
 import { describe, test, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { matchGameIntent, getGameEngine, isGameId, GAME_IDS, GAME_CATALOG, END_GAME_FRAMES } from '../src/core/games/gameCatalog';
 
 describe('gameCatalog — matchGameIntent (guardia triple)', () => {
@@ -220,6 +222,20 @@ describe('gameCatalog — END_GAME_FRAMES (control data-driven de partida activa
 
     test('sin frases duplicadas', () => {
         expect(new Set(END_GAME_FRAMES).size).toBe(END_GAME_FRAMES.length);
+    });
+
+    test('fuente UNICA: ningun motor redefine su propia lista de salida', () => {
+        // El defecto medido nacio de 21 copias divergentes de esta lista (solo la
+        // loteria conocia las salidas cortas). Los motores deben consumir
+        // END_GAME_FRAMES de gameUtils, no volver a escribir las frases.
+        const dir = join(process.cwd(), 'src', 'core', 'games');
+        const offenders: string[] = [];
+        for (const file of readdirSync(dir)) {
+            if (!file.endsWith('.ts') || file === 'gameUtils.ts' || file === 'gameCatalog.ts') continue;
+            const src = readFileSync(join(dir, file), 'utf8');
+            if (/'salir del juego'/.test(src)) offenders.push(file);
+        }
+        expect(offenders).toEqual([]);
     });
     test('cada alias del catalogo resuelve a su propio juego (sin colisiones de especificidad)', () => {
         // Un alias genérico de un juego no debe secuestrar el alias más

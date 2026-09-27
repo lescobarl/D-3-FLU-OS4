@@ -411,10 +411,17 @@ export function parseAgendaCommand(
     // cae solo el jueves. Se leen de la recurrencia ya resuelta (misma fuente de
     // días que crear), pero NO se devuelven como `trigger`: ese hueco de hora
     // ('09:00' de relleno) es para crear, y usarlo aquí movería la hora.
-    const scopeDays =
-        resolvedAction === 'agenda.cancel' && recurrence?.type === 'weekly' && recurrence.daysOfWeek?.length
+    // El dia NOMBRADO acota la serie sea CUAL sea el kind. La recurrencia solo
+    // trae dias para 'clase' (el resto exige recurrencia explicita: "los jueves"),
+    // asi que en 'junta'/'cita'/... "del jueves" se perdia y el match caia a la
+    // SERIE COMPLETA (borraba la semana). Fuente unica del dia nombrado:
+    // detectAnyWeekdays, el mismo que usa 'clase' al crear.
+    const namedDays =
+        recurrence?.type === 'weekly' && recurrence.daysOfWeek?.length
             ? recurrence.daysOfWeek
-            : undefined;
+            : detectAnyWeekdays(text);
+    const scopeDays =
+        resolvedAction === 'agenda.cancel' && namedDays.length > 0 ? namedDays : undefined;
     return {
         handled: true,
         action: resolvedAction,

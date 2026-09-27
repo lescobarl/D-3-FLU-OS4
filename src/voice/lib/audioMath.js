@@ -544,6 +544,29 @@ function stripLeadingWakeRepeats(text = '', wakeWords = []) {
   return rest
 }
 
+/**
+ * Locución canónica: consume el ECO de la wake al inicio ("ok flu ok flu <orden>"
+ * → "ok flu <orden>") conservando UNA wake, tal como se dijo. Mismo criterio de
+ * coincidencia que el resto del motor (`matchWakeWordPrefix`). Sin este recorte el
+ * eco se lee como tartamudeo del ASR (guard anti-alucinación) y la frase canónica
+ * perdía su wake. Sin wake al inicio (o con la wake inline) el texto no cambia.
+ */
+export function stripLeadingWakeEcho(text = '', wakeWords = []) {
+  const source = cleanForSpeech(text)
+  if (!source || !wakeWords.length) return source
+  const words = source.split(' ')
+  const wakeWordCount = (value) => speechWords(matchWakeWordPrefix(value, wakeWords) || '').length
+  let consumed = 0
+  while (consumed < words.length) {
+    const prefixWords = wakeWordCount(words.slice(consumed).join(' '))
+    if (!prefixWords) break
+    consumed += prefixWords
+  }
+  const leading = wakeWordCount(source)
+  if (!leading || consumed === leading) return source
+  return cleanForSpeech([words.slice(0, leading).join(' '), ...words.slice(consumed)].join(' '))
+}
+
 export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
   const normalizedText = normalizeVoiceCommandText(text)
   const sliced = sliceWakeWordFromSource(text, wakeWords)

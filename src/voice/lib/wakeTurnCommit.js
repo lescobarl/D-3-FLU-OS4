@@ -3,6 +3,7 @@
  * Ingress, hook y comandos delegan aquí — una sola ruta, sin duplicar split/commit.
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { resolveWakeWords } from './wakeWords.js'
 import {
   cleanForSpeech,
   splitTranscriptAtWakeWord,
@@ -16,7 +17,10 @@ import {
  * @returns {string[]}
  */
 export function getWakeWords(config = FLU_CONFIG) {
-  return config.voiceCommands?.wakeWords || []
+  // La regla de respaldo (lista de Ajustes -> default de FLU_CONFIG) vive en UN
+  // solo sitio, `resolveWakeWords`: antes estaba reimplementada aqui y en el hook,
+  // asi que una copia podia divergir de la otra sin que nadie lo notara.
+  return resolveWakeWords(config.voiceCommands?.wakeWords)
 }
 
 /**

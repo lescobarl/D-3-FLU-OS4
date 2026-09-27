@@ -49,3 +49,107 @@ describe('una locución → una fila de usuario por turno', () => {
         expect(userRows()).toHaveLength(2);
     });
 });
+
+// ============================================================
+// Defecto reportado (partida activa): "Okay Flow siguiente carta" aparecía DOS
+// veces en la conversación — una completa (con wake, la correcta) y otra sin la
+// wake ("siguiente carta"), ambas al mismo hablante. La ejecución del comando
+// era correcta; lo duplicado era la FILA.
+//
+// Causa raíz: el fast-path de estado (que es un EFECTO del turno, no la
+// locución) reenviaba una re-derivación del texto —el texto POST-WAKE— como si
+// fuera la frase del usuario. El escritor deduplica por TEXTO, así que esa
+// re-derivación entraba como otra frase.
+//
+// Invariante: la locución del turno tiene UN solo texto (la frase canónica) y
+// TODOS los puntos de commit usan ESE. Aquí se fija el contrato del escritor
+// que obliga a ello.
+// ============================================================
+describe('una locución → una fila (el fast-path de estado no reescribe la fila)', () => {
+    beforeEach(() => {
+        useIntegrationStore.getState().resetConversationHistory();
+    });
+
+    const LOCUCION = 'Okay Flow siguiente carta'; // frase canónica (con wake): lo que se muestra
+    const RE_DERIVADA = 'siguiente carta'; // texto post-wake: NO es la locución
+
+    it('temprano + efecto de fast-path + final = 1 fila, con la wake y con hablante', () => {
+        // 1) commit temprano del turno (transcripción visible de inmediato).
+        commitUserTurnRow({ text: LOCUCION });
+        // 2) efecto del fast-path de estado: reenvía la MISMA locución canónica.
+        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1' });
+        // 3) commit final del turno.
+        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1' });
+
+        expect(userRows()).toHaveLength(1);
+        expect(userRows()[0].text).toBe(LOCUCION);
+        expect(userRows()[0].speakerName).toBe('Hablante 1');
+    });
+
+    it('el escritor deduplica por TEXTO: dos textos distintos en un turno = dos filas', () => {
+        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1' });
+        // Reenviar la re-derivación (sin wake) duplica: por eso el turno tiene un
+        // texto único y el fast-path debe reenviar ESE, no uno derivado.
+        commitUserTurnRow({ text: RE_DERIVADA, speakerName: 'Hablante 1' });
+
+        expect(userRows()).toHaveLength(2);
+        expect(userRows().map((row) => row.text)).toEqual([LOCUCION, RE_DERIVADA]);
+    });
+});
+
+// ============================================================
+// Eco de la wake ("ok flu ok flu siguiente carta"): la locucion canonica
+// conserva UNA wake, no es basura para el guard anti-alucinacion (la repeticion
+// de la wake es eco, no tartamudeo) y por tanto TODOS los commits del turno
+// llevan el MISMO texto -> una sola fila. Antes: el eco hacia que la frase del
+// turno cayera al texto post-wake y la conversacion mostraba dos filas, una sin
+// el "ok flu".
+// ============================================================
+import { resolveTurnCommitPhrase } from '../src/voice/lib/turnCommitPhrase.js';
+
+describe('eco de la wake: una sola locucion (con wake) y una sola fila', () => {
+    const ECO = 'ok flu ok flu siguiente carta'; // captura cruda del ASR (eco)
+    const POST_WAKE = 'siguiente carta'; // texto validado post-wake (query)
+
+    beforeEach(() => {
+        useIntegrationStore.getState().resetConversationHistory();
+    });
+
+    it('la captura con eco se canoniza a UNA wake y NO se marca como basura', () => {
+        const phrase = resolveTurnCommitPhrase({ capture: ECO, fallback: POST_WAKE });
+        expect(phrase).toBe('ok flu siguiente carta');
+    });
+
+    it('commit crudo + commit del turno = 1 fila con la wake', () => {
+        // 1) commit de la emision cruda (eco incluido).
+        commitUserTurnRow({ text: resolveTurnCommitPhrase({ capture: ECO }) });
+        // 2) commit temprano/final del turno: misma frase canonica + respaldo.
+        commitUserTurnRow({
+            text: resolveTurnCommitPhrase({ capture: ECO, fallback: POST_WAKE }),
+            speakerName: 'Hablante 1',
+        });
+
+        const rows = userRows();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].text).toBe('ok flu siguiente carta');
+        expect(rows[0].speakerName).toBe('Hablante 1');
+    });
+
+    it('una locucion sin eco no cambia (no se rompe lo validado)', () => {
+        expect(resolveTurnCommitPhrase({ capture: 'okay flow crea una cita' })).toBe(
+            'okay flow crea una cita',
+        );
+        expect(resolveTurnCommitPhrase({ capture: 'siguiente carta' })).toBe('siguiente carta');
+        // Wake INLINE (prefijo pasivo delante): el recorte no aplica, no se toca.
+        expect(resolveTurnCommitPhrase({ capture: 'hay una noticia ok flu siguiente carta' })).toBe(
+            'hay una noticia ok flu siguiente carta',
+        );
+    });
+
+    it('el eco se consume aunque la wake se repita mas de dos veces', () => {
+        expect(resolveTurnCommitPhrase({ capture: 'ok flu ok flu ok flu pon una alarma' })).toBe(
+            'ok flu pon una alarma',
+        );
+        expect(resolveTurnCommitPhrase({ capture: 'oye flu oye flu' })).toBe('oye flu');
+    });
+});

@@ -151,7 +151,7 @@ import {
 } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
-import { parseNoteIntentText } from './voice/lib/noteIntentParser';
+import { parseNoteIntentText, resolveNoteVoiceIntent } from './voice/lib/noteIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import { resolveAgendaDomainIntent, askMissingInstant } from './core/agenda/domainScopedIntent';
@@ -201,6 +201,7 @@ import {
     superNoteItems,
 } from './core/notes/superNoteTarget';
 import { superNoteIncoming, writeSuperNoteList } from './app/superNoteActions';
+import { runNoteRemovalIntent } from './app/noteRemovalActions';
 
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
@@ -365,7 +366,7 @@ interface ContractResolution {
 interface NoteVoiceIntent {
     action?: string;
     handled?: boolean;
-    data?: { label?: unknown; target?: unknown; body?: unknown };
+    data?: { label?: unknown; target?: unknown; body?: unknown; item?: unknown };
 }
 
 /** Intención estructurada de diario aceptada por el manejador de voz. */
@@ -1655,7 +1656,7 @@ function App() {
             // fuente de verdad de la partida.
             const juegoAction =
                 normalizeJuego(contract?.juego) ||
-                (arbiterStateAction?.domain === 'game'
+                (arbiterStateAction?.domain === 'game' && !resolved?.fastPathGame
                     ? normalizeJuego(arbiterStateAction.action)
                     : null);
 
@@ -1667,7 +1668,7 @@ function App() {
             // verdad del rebranding por oficio.
             const environmentAction =
                 normalizeEnvironment(contract?.ambiente) ||
-                (arbiterStateAction?.domain === 'environment'
+                (arbiterStateAction?.domain === 'environment' && !resolved?.fastPathEnvironment
                     ? normalizeEnvironment(arbiterStateAction.action)
                     : null);
 
@@ -2981,49 +2982,34 @@ function App() {
                 typeof input.action === 'string' &&
                 input.handled !== false;
 
-            // Borrado lógico de TODAS las notas ("borra todas las notas"): el
-            // árbitro ya entregó action='notes.clear' (0 llamadas a IA).
-            if (isIntent && input.action === 'notes.clear') {
-                const clearedCount = await notes.clearAll();
-                lastActionFailed = clearedCount === 0;
-                if (clearedCount === 0) {
-                    return lang === 'en' ? "There's nothing to clear." : 'No había nada que borrar.';
-                }
-                return lang === 'en'
-                    ? 'Done, I cleared all your notes.'
-                    : 'Listo, borré todas tus notas.';
-            }
+            // Ruta cruda (E2E/integración/uso autónomo): el MISMO parser ÚNICO de
+            // notas deriva el intent (alta / borrado / quitar ítem), sin regex
+            // paralelas en App. Antes la ruta cruda solo entendía el alta, así que
+            // "borra el cloro de la nota del súper" no tenía rama y se perdía.
+            const intent: NoteVoiceIntent | null = isIntent
+                ? (input as NoteVoiceIntent)
+                : (resolveNoteVoiceIntent(String(input || '')) as NoteVoiceIntent | null);
 
-            // Borrado lógico por voz ("borra/elimina/quita la nota X"): el árbitro
-            // ya entregó data.target; se localiza y marca la nota pendiente viva
-            // (0 llamadas a IA). Fuente única del match: notesService.removeByTarget.
-            if (isIntent && input.action === 'notes.remove') {
-                const data = input.data || {};
-                const target = data.target ? String(data.target).trim() : '';
-                if (!target) return '';
-                const removedCount = await notes.removeByTarget(target);
-                lastActionFailed = removedCount === 0;
-                if (removedCount === 0) {
-                    return lang === 'en'
-                        ? "I couldn't find that note."
-                        : 'No encontré esa nota.';
-                }
-                return removedMsg;
+            // Borrado por voz (vaciar todo / borrar por destino / quitar un ítem):
+            // despacho ÚNICO en src/app/noteRemovalActions (0 llamadas a IA). La
+            // confirmación del manejador es la autoridad del turno.
+            const removal = await runNoteRemovalIntent(intent, notes, notes?.notes ?? [], lang, {
+                cleared: lang === 'en' ? 'Done, I cleared all your notes.' : 'Listo, borré todas tus notas.',
+                clearedEmpty: lang === 'en' ? "There's nothing to clear." : 'No había nada que borrar.',
+                removed: removedMsg,
+                notFound: lang === 'en' ? "I couldn't find that note." : 'No encontré esa nota.',
+            });
+            if (removal) {
+                lastActionFailed = removal.failed;
+                return removal.text;
             }
 
             let label: string | null = null;
             let body: string | null = null;
-            if (isIntent) {
-                const data = (input).data || {};
+            if (intent) {
+                const data = intent.data || {};
                 label = data.label ? String(data.label).trim() : null;
                 body = data.body ? String(data.body).trim() : null;
-            } else {
-                // Ruta cruda (E2E/integración/uso autónomo): parser ÚNICO de notas
-                // (src/voice/lib/noteIntentParser.js) — misma lógica que el árbitro
-                // (sin duplicación de regex en App).
-                const parsed = parseNoteIntentText(String(input || '').trim());
-                label = parsed && parsed.label ? parsed.label : null;
-                body = parsed && parsed.body ? String(parsed.body).trim() : null;
             }
 
             if (!label) return '';

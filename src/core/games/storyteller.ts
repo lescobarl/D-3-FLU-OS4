@@ -25,6 +25,8 @@ import {
     hasAnyToken,
     pickRandom,
     adoptRandom,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
@@ -101,14 +103,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'sigue', 'siguiente', 'y luego', 'y despues', 'continua', 'continúa', 'otro cuento', 'otra historia',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-    'fin del cuento',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 const KNOWN_ANIMATIONS: readonly string[] = Object.freeze([
     'Dance', 'Run', 'Walk', 'Jump_in_place', 'Idle',
@@ -365,7 +360,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

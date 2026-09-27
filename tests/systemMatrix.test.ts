@@ -249,24 +249,43 @@ describe('G5 cobertura completa de los registros (anti-deriva)', () => {
 });
 // ------------------------------------------------------------
 // G6 --- SUPERFICIE DE COMANDOS DE CADA MOTOR (auto-descubierta, sin listas).
-// Cada modulo publica sus tablas *_FRAMES como dato. Contrato: un frame declarado
-// NO puede ser INDISTINGUIBLE DE LA BASURA en su fase; si lo es, es dato muerto.
+// Cada modulo publica sus tablas *_FRAMES como dato. Contrato, en dos partes:
+//   a) la tabla de FIN la entiende el ENRUTADOR (dueno unico de la salida): cada
+//      frame declarado ahi DEBE resolver `end` por la ruta real. Un motor que
+//      declare una salida que el enrutador no conoce deja la frase sin efecto:
+//      llega al motor como jugada (en el cuento colaborativo, hasta se agregaba
+//      a la historia) y el nino no puede salir con sus propias palabras.
+//   b) el resto de frames los entiende el MOTOR: ninguno puede ser INDISTINGUIBLE
+//      DE LA BASURA en su fase. No basta con que `isGameCommand` lo reclame: eso
+//      solo anuncia el frame, no lo atiende.
 // Fase de respuesta: los frames de afirmacion/negacion solo aplican cuando el
 // jugador piensa y el asistente adivina, fase que se alcanza consumiendo un
 // frame de CAMBIO (SWAP). Se deriva de los propios datos del modulo.
+// La semilla del RNG es fija: con azar real el prompt cambia entre corridas y el
+// contrato "atiende el frame" no se puede medir.
 // ------------------------------------------------------------
 describe('G6 superficie de comandos de cada motor (auto-descubierta)', () => {
     const modules = import.meta.glob('../src/core/games/*.ts', { eager: true }) as Record<string, Record<string, unknown>>;
     const GIBBERISH = 'zzqx wvvv plof';
-    const sign = (r: { error?: string; valid?: boolean; gameOver?: boolean }) =>
-        JSON.stringify({ error: r.error ?? null, valid: r.valid === true, gameOver: r.gameOver === true });
+    const sign = (r: { error?: string; valid?: boolean; gameOver?: boolean; prompt?: string; animation?: string; emotion?: string }) =>
+        JSON.stringify({
+            error: r.error ?? null,
+            valid: r.valid === true,
+            gameOver: r.gameOver === true,
+            // El PROMPT entra en la firma: un control que solo repite lo mismo que
+            // el camino de la basura es dato muerto aunque cambie la emocion.
+            prompt: r.prompt ?? null,
+            animation: r.animation ?? null,
+            emotion: r.emotion ?? null,
+        });
     const run = (engine: GameEngine, warmup: string[], text: string) => {
-        const session = engine.createSession();
-        engine.start(session, {});
+        const cfg = { random: () => 0.5 };
+        const session = engine.createSession(cfg);
+        engine.start(session, cfg);
         for (const w of warmup) engine.turn(session, w);
         return sign(engine.turn(session, text));
     };
-    it('cada motor entiende TODOS los frames que declara (o es dato muerto)', () => {
+    it('cada frame declarado se ATIENDE (fin: enrutador; resto: motor)', () => {
         const mismatches: string[] = [];
         const noSurface: string[] = [];
         const discovered = new Set<string>();
@@ -299,15 +318,28 @@ describe('G6 superficie de comandos de cada motor (auto-descubierta)', () => {
             for (const [table, list] of Object.entries(declared)) {
                 for (const frame of list) {
                     frames += 1;
-                    if (engine.isGameCommand(frame)) continue;
-                    // Fase de respuesta (afirmar/negar) alcanzada por un frame de cambio.
+                    // (a) Tabla de FIN: la atiende el ENRUTADOR (dueno unico de la
+                    // salida). Se verifica contra la ruta REAL, no contra lo que el
+                    // motor declara: declarar una salida que el enrutador no conoce
+                    // deja la frase sin efecto.
+                    if (table === 'END_FRAMES') {
+                        setActiveGameSession(sessionOf(engine.id));
+                        const salida = resolveGameCommandFromText(frame);
+                        clearActiveGameSession();
+                        if (salida?.action !== 'end') {
+                            mismatches.push(`${path} :: ${engine.id} declara "${frame}" (${table}) pero el enrutador no lo resuelve como fin: ${JSON.stringify(salida)}`);
+                        }
+                        continue;
+                    }
+                    // (b) El RESTO de frames los atiende el MOTOR. Fase de respuesta
+                    // (afirmar/negar) alcanzada por un frame de cambio.
                     const warmup = table === 'AFFIRMATIVE_FRAMES' || table === 'NEGATIVE_FRAMES'
                         ? (swap ? [swap] : [])
                         : [];
                     const deadHere = run(engine, warmup, frame) === run(engine, warmup, GIBBERISH);
                     const deadBase = !warmup.length && run(engine, [], frame) === run(engine, [], GIBBERISH);
                     if (deadHere && deadBase) {
-                        mismatches.push(`${path} :: ${engine.id} declara "${frame}" (${table}) pero es indistinguible de la basura`);
+                        mismatches.push(`${path} :: ${engine.id} declara "${frame}" (${table}) pero es indistinguible de la basura (control no atendido por el motor)`);
                     }
                 }
             }

@@ -20,7 +20,7 @@
 
 import { resolveConfigCommandFromText } from './configCommands.js'
 import { resolveGameCommandFromText } from './gameCommands.js'
-import { parseNoteIntentText, parseNoteRemoveIntentText } from './noteIntentParser.js'
+import { parseNoteIntentText, parseNoteItemRemoveIntentText, parseNoteRemoveIntentText } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
@@ -93,6 +93,12 @@ function resolveChannelForNavigation(commandId = '') {
 // específico que el apunta genérico de nota ("anota {texto}"), así que el diario
 // se evalúa ANTES que la nota para que "anota X en el diario" se enrute bien.
 function recognizeNoteIntent(text = '') {
+  // Quitar un ITEM concreto ("borra el cloro de la nota del súper") va ANTES del
+  // borrado de nota completa: es más específico y el otro patrón no lo captura.
+  const itemRemoval = parseNoteItemRemoveIntentText(text)
+  if (itemRemoval) {
+    return { handled: true, action: 'notes.removeItem', data: { label: itemRemoval.label, item: itemRemoval.item } }
+  }
   const removal = parseNoteRemoveIntentText(text)
   if (removal) {
     if (removal.all) {

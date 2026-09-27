@@ -19,6 +19,8 @@ import {
     normalizeForMatch, hasToken, hasAnyToken, resolveNumericAnswer,
     adoptRandom,
     readRounds,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 export interface TriviaQuestion {
@@ -53,13 +55,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'siguiente', 'otra', 'sigo', 'no se', 'no sé', 'me rindo',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 const ORDINAL_ES: Record<string, number> = Object.freeze({
     primera: 1, primer: 1,
@@ -309,7 +305,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

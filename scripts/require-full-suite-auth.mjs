@@ -10,30 +10,18 @@
  * Autorización explícita:
  *   - `FLU_AUTH_FULL_SUITE=1`  (sesión humana que la pide)
  *   - `CI=true`                (CI es autorización expresa por definición)
+ *
+ * OJO: esta salida NO es la única barrera. Bloquear solo este script fue el
+ * defecto medido (el atajo `npx vitest run` no pasa por aquí); la barrera real
+ * está en `vitest.config.ts`, por donde SÍ pasa cualquier corrida.
  */
-const authorized = process.env.FLU_AUTH_FULL_SUITE === '1' || Boolean(process.env.CI) || Boolean(process.env.GITHUB_ACTIONS)
+import { AUTH_ENV_VAR, AUTH_ENV_VALUE, isSuiteAuthorized, blockedMessage } from './full-suite-policy.mjs'
 
-if (authorized) {
-  const via = process.env.GITHUB_ACTIONS || process.env.CI
-    ? 'CI'
-    : 'FLU_AUTH_FULL_SUITE=1'
+if (isSuiteAuthorized()) {
+  const via = process.env.GITHUB_ACTIONS || process.env.CI ? 'CI' : `${AUTH_ENV_VAR}=${AUTH_ENV_VALUE}`
   console.log(`test:full autorizado (${via})`)
   process.exit(0)
 }
 
-console.error(
-  [
-    '',
-    'test:full BLOQUEADO: la suite completa necesita autorizacion expresa.',
-    '',
-    'Usa la via rapida (los casos que tocas):',
-    '  npm run test:file <ruta>            p.ej. npm run test:file tests/eolGuard.test.ts',
-    '  npm run test:grep -- "<texto>"      filtra por nombre de caso',
-    '  npm test                            solo lo cambiado vs HEAD (vitest --changed)',
-    '',
-    'Si de verdad quieres la suite completa:',
-    '  FLU_AUTH_FULL_SUITE=1 npm run test:full',
-    '',
-  ].join('\n'),
-)
+console.error(blockedMessage())
 process.exit(1)

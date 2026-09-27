@@ -39,7 +39,7 @@ const NOTE_SUPER_APPEND = new RegExp(
 // con el ítem ANTES ("incluye X en la nota del super") o DESPUÉS
 // ("incluye en la nota del super que también traiga X").
 const NOTE_SUPER_NOTA = new RegExp(
-  `^(?:${NOTE_ADD_VERBS})\\s+(?:también\\s+|tambien\\s+|adem[áa]s\\s+)?(?:en\\s+la\\s+|a\\s+la\\s+|en\\s+el\\s+|al\\s+)?nota\\s+(?:de\\s+|del\\s+|para\\s+el\\s+|para\\s+la\\s+|para\\s+)?(super|supermercado|compras|mercado)\\b\\s*(.*)$`,
+  `^(?:${NOTE_ADD_VERBS})\\s+(?:también\\s+|tambien\\s+|adem[áa]s\\s+)?(?:en\\s+la\\s+|a\\s+la\\s+|en\\s+el\\s+|al\\s+|la\\s+|el\\s+)?nota\\s+(?:de\\s+|del\\s+|para\\s+el\\s+|para\\s+la\\s+|para\\s+)?(super|supermercado|compras|mercado)\\b\\s*(.*)$`,
   'i',
 )
 // Orden DESTINO PRIMERO: "en la nota del súper incluye X" (la frase real pone el
@@ -57,6 +57,23 @@ const NOTE_GENERAL =
 // "quita la nota de compras". El destino se normaliza (súper → 'Super').
 const NOTE_REMOVE =
   /^(?:borra|borrar|elimina|eliminar|quita|quitar|remueve|remover|saca|sacar|limpia|limpiar|vac[ií]a|vac[ií]ar|delete|remove|clear)\s+(?:todas?\s+las?\s+|la\s+|el\s+|las\s+|los\s+|esa\s+|esta\s+|mi\s+)?(?:notas?|listas?)\s*(?:de\s+|del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|para\s+el\s+|para\s+la\s+|con\s+)?(.*)$/i
+
+// Quitar UN ITEM de una nota: "borra el cloro de la nota del súper" y
+// "borra de la nota del súper el cloro" (destino primero, ítem al final).
+// Capacidad que FALTABA: solo existían alta y borrado de la nota COMPLETA, así
+// que esta orden o borraba la lista entera o la secuestraba el juego como
+// jugada. El verbo y el destino salen de la MISMA tabla que el resto de notas.
+const NOTE_REMOVE_VERBS = 'borra|borrar|elimina|eliminar|quita|quitar|saca|sacar|remueve|remover'
+// Ítem ANTES del destino: "quita {ítem} de la nota/lista del {destino}".
+const NOTE_ITEM_FIRST = new RegExp(
+  `^(?:${NOTE_REMOVE_VERBS})\\s+(?:el\\s+|la\\s+|los\\s+|las\\s+|un\\s+|una\\s+)?(.+?)\\s+de\\s+(?:la\\s+|las\\s+|el\\s+|los\\s+)?(?:notas?|listas?)\\s+(?:de\\s+|del\\s+|de\\s+la\\s+)?([a-z]+)\\s*$`,
+  'i',
+)
+// Destino ANTES del ítem: "borra de la(s) nota(s) del {destino} {ítem}".
+const NOTE_ITEM_DEST_FIRST = new RegExp(
+  `^(?:${NOTE_REMOVE_VERBS})\\s+de\\s+(?:la\\s+|las\\s+|el\\s+|los\\s+)?(?:notas?|listas?)\\s+(?:de\\s+|del\\s+|de\\s+la\\s+)?([a-z]+)\\s+(?:el\\s+|la\\s+|los\\s+|las\\s+|un\\s+|una\\s+)?(.+?)\\s*$`,
+  'i',
+)
 
 /** Normaliza el destino: los destinos de compras se llaman 'Super' en las notas. */
 function normalizeRemoveTarget(raw = '') {
@@ -242,6 +259,70 @@ export function parseNoteRemoveIntentText(rawText = '') {
   return null
 }
 
+/**
+ * Predicado UNICO: ¿el texto es un comando de notas (crear, borrar o quitar
+ * ítem)? Fuente unica para el passthrough de OTROS dominios: con una partida
+ * activa el juego no debe secuestrar un comando de notas como si fuera una
+ * jugada. Antes el passthrough solo reconocia el alta, asi que "borra la nota
+ * del super" (y menos aun "borra el cloro de la nota del super") con la loteria
+ * activa caia al motor y FLU cantaba una carta.
+ */
+export function isNoteCommand(rawText = '') {
+  return (
+    Boolean(parseNoteIntentText(rawText)?.label) ||
+    Boolean(parseNoteRemoveIntentText(rawText)) ||
+    Boolean(parseNoteItemRemoveIntentText(rawText))
+  )
+}
+
+/**
+ * Parsea una frase que QUITA un ITEM concreto de una nota ("borra el cloro de la
+ * nota del súper", "borra de la nota del súper el cloro") y devuelve
+ * { label, item } o null. `label` se normaliza (súper -> 'Super'); `item` va sin
+ * el articulo inicial, igual que los items de la lista.
+ */
+export function parseNoteItemRemoveIntentText(rawText = '') {
+  let clean = normalizeSpokenCommand(rawText)
+  clean = clean.replace(/^(?:una|un|la|el|mi)\s+(?=notas?\b)/i, '').trim()
+  if (!clean) return null
+  const norm = stripAccentsEs(clean)
+  const destFirst = NOTE_ITEM_DEST_FIRST.exec(norm)
+  const match = destFirst || NOTE_ITEM_FIRST.exec(norm)
+  if (!match) return null
+  const destWord = (destFirst ? match[1] : match[2]) || ''
+  const rawItem = (destFirst ? match[2] : match[1]) || ''
+  const item = String(rawItem)
+    .trim()
+    .replace(/^(?:el|la|los|las|un|una)\s+/i, '')
+    .trim()
+  if (!item) return null
+  const label = normalizeRemoveTarget(destWord)
+  if (!label) return null
+  return { label, item }
+}
+
+/**
+ * Deriva la intencion de voz de notas (alta / borrado / quitar item) de un texto
+ * crudo, con la MISMA fuente unica de parseo. Devuelve { action, data } o null.
+ * Lo usa el handler de voz para su ruta cruda (E2E/integracion/autonomo), para
+ * que no haya regex paralelas en App.
+ */
+export function resolveNoteVoiceIntent(rawText = '') {
+  const raw = String(rawText || '').trim()
+  const itemRemoval = parseNoteItemRemoveIntentText(raw)
+  if (itemRemoval) {
+    return { action: 'notes.removeItem', data: { label: itemRemoval.label, item: itemRemoval.item } }
+  }
+  const removal = parseNoteRemoveIntentText(raw)
+  if (removal) {
+    if (removal.all) return { action: 'notes.clear', data: {} }
+    return removal.target ? { action: 'notes.remove', data: { target: removal.target } } : null
+  }
+  const parsed = parseNoteIntentText(raw)
+  if (!parsed || !parsed.label) return null
+  return { action: 'notes.add', data: { label: parsed.label, body: parsed.body } }
+}
+
 // ------------------------------------------------------------
 // Superficie de comandos de notas PUBLICADA como dato.
 // Fuente unica de lo que el parser declara entender, con una frase testigo por
@@ -308,6 +389,16 @@ export const NOTE_COMMAND_SURFACE = Object.freeze([
     parser: 'nota',
     frases: ['nota que traiga leche'],
     espera: { label: 'Nota', body: 'no-vacio' },
+  },
+  {
+    id: 'item-removal',
+    parser: 'removeItem',
+    frases: [
+      'borra el cloro de la nota del super',
+      'borra de la nota del super el cloro',
+      'quita el pan de la lista del supermercado',
+    ],
+    espera: { label: SUPER_TARGET_LABEL, item: 'no-vacio' },
   },
   {
     id: 'borrado-uno',

@@ -17,6 +17,8 @@ import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasAnyToken, resolveNumericAnswer,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 const DEFAULT_RONDAS = 4;
@@ -30,14 +32,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'sigue', 'listo', 'ok', 'hecho', 'continuemos', 'adelante', 'ya',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-    'terminemos',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 type RandomSource = () => number;
 
@@ -170,7 +165,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasAnyToken(normalized, [frame]))
                 || SKIP_FRAMES.some((frame) => hasAnyToken(normalized, [frame]));
         },

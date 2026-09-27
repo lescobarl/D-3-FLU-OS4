@@ -15,7 +15,7 @@
 
 import { normalizeForMatch, hasVoiceToken } from './configCommands.js'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
-import { parseNoteIntentText } from './noteIntentParser'
+import { isNoteCommand } from './noteIntentParser'
 import {
   matchGameIntent,
   END_GAME_FRAMES,
@@ -101,8 +101,10 @@ function isNonGameActionableCommand(text) {
     /* parser sin match no debe romper el juego */
   }
   try {
-    const note = parseNoteIntentText(text)
-    if (note?.label) return true
+    // Alta Y borrado de notas: el predicado unico del parser (sin lista propia
+    // que se desvie). Antes solo se miraba el alta, asi que "borra la nota del
+    // super" con partida activa caia al motor como respuesta del juego.
+    if (isNoteCommand(text)) return true
   } catch (e) {
         logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
     /* idem */

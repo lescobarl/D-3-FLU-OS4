@@ -21,6 +21,8 @@ import {
     shuffleOrder,
     adoptRandom,
     readRounds,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 export interface SongOption {
@@ -99,13 +101,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'otra', 'siguiente', 'sigo', 'paso', 'no se', 'no sé',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 interface AdivinaCancionState {
     order: number[];
@@ -329,7 +325,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

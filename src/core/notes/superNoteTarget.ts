@@ -71,6 +71,20 @@ export function appendSuperNoteItems(existing: unknown, incoming: readonly unkno
     return items.join('\n');
 }
 
+/**
+ * Quita ítems del contenido: devuelve el body sin las líneas cuyo ítem coincide
+ * (comparación por `superItemKey`: sin acentos, sin mayúsculas, sin artículo).
+ * Capacidad que faltaba: "borra el cloro de la nota del súper" quitaba la nota
+ * ENTERA o no hacía nada, porque solo existían alta y borrado de nota completa.
+ */
+export function removeSuperNoteItems(existing: unknown, removals: readonly unknown[]): string {
+    const keys = new Set(removals.map(superItemKey).filter(Boolean));
+    if (keys.size === 0) return superNoteItems(existing).join('\n');
+    return superNoteItems(existing)
+        .filter((item) => !keys.has(superItemKey(item)))
+        .join('\n');
+}
+
 /** Fila del destino que el plan necesita para decidir. */
 export interface SuperNoteRow {
     id?: string;

@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds } from './gameUtils';
+import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -259,13 +259,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'me rindo', 'rindo', 'otro', 'siguiente',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 interface QuienSoyState {
     order: number[];
@@ -540,7 +534,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

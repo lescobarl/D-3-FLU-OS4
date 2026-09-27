@@ -21,6 +21,8 @@ import type { GameSession, GameTurnResult } from './types';
 import {
     normalizeForMatch, hasAnyToken,
     adoptRandom,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 export interface KaraokeSong {
@@ -135,14 +137,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'sigue', 'paso', 'siguiente', 'adelante', 'sigo',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-    'terminemos',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 type RandomSource = () => number;
 
@@ -277,7 +272,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasAnyToken(normalized, [frame]))
                 || SKIP_FRAMES.some((frame) => hasAnyToken(normalized, [frame]));
         },

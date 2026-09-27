@@ -8,6 +8,7 @@
  */
 import {
     planSuperNoteWrite,
+    removeSuperNoteItems,
     superNoteLabelItems,
     SUPER_TARGET_LABEL,
     type SuperNoteRow,
@@ -69,4 +70,53 @@ export async function writeSuperNoteList(
 /** Extrae los ítems dictados de un intent de nota (`{label, body}`). */
 export function superNoteIncoming(label: unknown, body: unknown): string[] {
     return [superNoteLabelItems(label), body].map((part) => String(part ?? '').trim());
+}
+
+export interface SuperNoteRemoveResult {
+    ok: boolean;
+    /** true solo si el ítem estaba en la lista y se quitó de verdad. */
+    removed: boolean;
+    body: string;
+}
+
+/**
+ * Quita UN ítem de la lista del súper ("borra el cloro de la nota del súper").
+ * Reutiliza el MISMO plan de escritura (misma fila viva, mismos ítems heredados
+ * absorbidos) y solo cambia el contenido por el que ya no trae ese ítem. Si el
+ * ítem no está, NO toca la nota: el handler puede decir que no lo encontró.
+ */
+export async function removeSuperNoteItem(
+    store: SuperNoteStore,
+    rows: readonly SuperNoteRow[],
+    item: unknown,
+): Promise<SuperNoteRemoveResult> {
+    const plan = planSuperNoteWrite(rows, []);
+    const target = plan.target;
+    if (!target || target.id === undefined) return { ok: false, removed: false, body: '' };
+    const body = removeSuperNoteItems(plan.body, [item]);
+    if (body === plan.body) return { ok: true, removed: false, body: plan.body };
+    if (target.label !== SUPER_TARGET_LABEL) {
+        await store.rename(target.id, SUPER_TARGET_LABEL);
+    }
+    const saved = await store.setBody(target.id, body);
+    if (!saved) return { ok: false, removed: false, body };
+    for (const duplicate of plan.absorbed) {
+        if (duplicate.id !== undefined) await store.softRemove(duplicate.id);
+    }
+    return { ok: true, removed: true, body };
+}
+
+/** Respuesta hablada del quitado de ítem (fuente unica ES/EN). */
+export function superNoteItemRemovedReply(
+    item: string,
+    result: SuperNoteRemoveResult,
+    lang: 'es' | 'en',
+): string {
+    if (!result.ok) return lang === 'en' ? "I couldn't update the note." : 'No pude actualizar la nota.';
+    if (!result.removed) {
+        return lang === 'en'
+            ? `I couldn't find "${item}" in the list.`
+            : `No encontré "${item}" en la lista.`;
+    }
+    return lang === 'en' ? `Done, I removed ${item} from the list.` : `Listo, quité ${item} de la lista.`;
 }

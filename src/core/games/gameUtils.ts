@@ -193,3 +193,74 @@ export const NEGATIVE_INTENT_FRAMES: readonly string[] = Object.freeze([
 export function hasPlayOrderFrame(normalized = ''): boolean {
     return hasAnyToken(normalized, PLAY_INTENT_FRAMES);
 }
+// ------------------------------------------------------------
+// Concepto "SALIR DE LA PARTIDA" --- DUENO UNICO.
+// Vive en esta hoja (sin imports) por el mismo motivo que el orden de arranque:
+// lo consultan por igual el fast-path de voz (gameCommands.js) y los 21 motores.
+// Antes cada motor tenia su PROPIA copia de la lista y habia divergido (solo la
+// loteria conocia las salidas cortas), asi que "alto al juego" no terminaba la
+// partida en el resto. Una sola lista: una sola verdad.
+// ------------------------------------------------------------
+/**
+ * Frases de salida de una partida activa. Se comparan con limites de palabra
+ * (`hasAnyToken`), no por subcadena: "alto" no debe dispararse dentro de
+ * "salto" ni "termina" dentro de "determina".
+ */
+export const END_GAME_FRAMES: readonly string[] = Object.freeze([
+    // Frases explicitas
+    'salir del juego',
+    'terminar el juego',
+    'termina el juego',
+    'terminemos',
+    'dejar de jugar',
+    'deja de jugar',
+    'ya no quiero jugar',
+    'ya no quiero jugar mas',
+    'no quiero jugar',
+    'no quiero jugar mas',
+    'cerrar el juego',
+    'cierra el juego',
+    'cancelar el juego',
+    'cancela el juego',
+    'fin del juego',
+    'se acabo',
+    'ya basta',
+    'basta ya',
+    // Peticiones directas de parar (las del reporte: "alto al juego")
+    'alto al juego',
+    'alto el juego',
+    'parar el juego',
+    'parar de jugar',
+    'para el juego',
+    'para de jugar',
+    'deten el juego',
+    'detener el juego',
+    'finalizar el juego',
+    'finaliza el juego',
+    'acabar el juego',
+    'acaba el juego',
+    'abortar el juego',
+    'aborta el juego',
+    // Salidas que vivian SOLO en la copia local de un motor (loteria, cuentacuentos,
+    // cuento colaborativo). El motor las declaraba en su superficie y el enrutador
+    // -dueno real de la salida- no las conocia: las enviaba al motor como jugada y
+    // la frase no cerraba nada (en el cuento, hasta se agregaba a la historia).
+    'ya no quiero',
+    'fin del cuento',
+    // Salidas cortas (antes habia que decir la frase completa y quedaba atrapado).
+    'salir',
+    'terminar',
+    'termina',
+    'basta',
+    'parar',
+    'alto',
+    'stop',
+]);
+
+/**
+ * ¿El texto normalizado pide TERMINAR la partida? Criterio UNICO de salida:
+ * `frames` permite a un motor anadir sus salidas propias sin duplicar la base.
+ */
+export function matchesEndGameFrames(normalized = '', frames: readonly string[] = END_GAME_FRAMES): boolean {
+    return hasAnyToken(normalized, frames);
+}

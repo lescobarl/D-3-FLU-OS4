@@ -18,6 +18,8 @@ import {
     normalizeForMatch, hasToken, hasAnyToken, findTokenIndex,
     adoptRandom,
     readRounds,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 export interface OrdenaPaso {
@@ -98,13 +100,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'siguiente', 'otro', 'sigo', 'no se', 'no sé', 'me rindo',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 type RandomSource = () => number;
 
@@ -394,7 +390,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

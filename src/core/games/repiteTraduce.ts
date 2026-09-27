@@ -3,9 +3,9 @@
 // Repite y traduce (plan-juegos §Fase 3, Riesgo 3).
 // Motor puro sin I/O, ideal para el modo bilingüe.
 //
-// FLU dice una palabra en español y pide su traducción al
-// inglés (o al revés). Acepta la palabra en cualquiera de los
-// dos idiomas (repetición o traducción), validación por keyword.
+// FLU dice una palabra en español y pide su traducción al inglés.
+// Acredita SOLO la traducción (`item.en`): repetir la palabra en
+// español NO puntúa, porque el prompt ya la enunció. Keyword sin acentos.
 //
 // Controles:
 //   "pista" / "ayuda"      → da la traducción
@@ -18,6 +18,8 @@ import {
     normalizeForMatch, hasToken, hasAnyToken,
     adoptRandom,
     readRounds,
+    END_GAME_FRAMES,
+    matchesEndGameFrames,
 } from './gameUtils';
 
 export interface RepiteTraduceItem {
@@ -50,13 +52,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'siguiente', 'otra', 'sigo', 'no se', 'no sé',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 type RandomSource = () => number;
 
@@ -246,7 +242,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },

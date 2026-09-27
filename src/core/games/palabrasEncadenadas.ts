@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -43,13 +43,7 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'me rindo', 'rendirse', 'no se', 'no sé',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 interface PalabrasEncadenadasState {
     word: string;
@@ -236,7 +230,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
         },
     };

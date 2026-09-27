@@ -23,9 +23,9 @@ const STUTTER_MAX_WORD_CHARS = 3
  * Conservador a propósito: solo descarta basura CLARA para no perder
  * habla real bajita (salón de clases / sala de juntas).
  */
-export function looksLikeGarbageTranscript(text = '') {
+export function classifyGarbageTranscript(text = '') {
   const t = String(text || '').trim()
-  if (!t) return true
+  if (!t) return { garbage: true, reason: 'empty' }
 
   const words = t
     .toLowerCase()
@@ -33,11 +33,12 @@ export function looksLikeGarbageTranscript(text = '') {
     .split(/\s+/)
     .filter(Boolean)
 
-  if (words.length === 0) return true
+  if (words.length === 0) return { garbage: true, reason: 'empty' }
 
   // 1) Repetición exacta adyacente de palabra corta ("se se", "bor bor") → tartamudeo.
   for (let i = 1; i < words.length; i += 1) {
-    if (words[i] === words[i - 1] && words[i].length <= STUTTER_MAX_WORD_CHARS) return true
+    if (words[i] === words[i - 1] && words[i].length <= STUTTER_MAX_WORD_CHARS)
+      return { garbage: true, reason: 'stutter' }
   }
 
   // 2) Ratio de tokens "no-palabra" (sin vocal) alto → ruido incoherente.
@@ -48,6 +49,35 @@ export function looksLikeGarbageTranscript(text = '') {
   }
 
   // Exigimos al menos 2 palabras para no rechazar una palabra suelta legítima.
-  if (words.length < 2) return false
+  if (words.length < 2) return { garbage: false, reason: null }
   return nonWord / words.length >= 0.6
+    ? { garbage: true, reason: 'nonword' }
+    : { garbage: false, reason: null }
+}
+
+/**
+ * ¿La frase es "basura" (alucinación ASR)? Se conserva como predicado booleano
+ * por compatibilidad; el criterio vive una sola vez en `classifyGarbageTranscript`.
+ */
+export function looksLikeGarbageTranscript(text = '') {
+  return classifyGarbageTranscript(text).garbage
+}
+
+/**
+ * Resuelve QUÉ frase se commitea cuando la captura cruda del ASR puede venir
+ * corrupta: si la captura es basura, el turno NO se descarta — se usa el texto
+ * VALIDADO del turno (`fallback`, ya derivado por el motor de voz) para que la
+ * locución no se pierda ni quede muda. Solo devuelve frase vacía cuando tampoco
+ * hay texto validado, y SIEMPRE informa el motivo (nunca falla en silencio).
+ */
+export function resolveCommittablePhrase(capture = '', fallback = '') {
+  const primary = String(capture || '').trim()
+  const verdict = classifyGarbageTranscript(primary)
+  if (!verdict.garbage) return { phrase: primary, usedFallback: false, reason: null }
+
+  const alternative = String(fallback || '').trim()
+  if (classifyGarbageTranscript(alternative).garbage) {
+    return { phrase: '', usedFallback: false, reason: verdict.reason }
+  }
+  return { phrase: alternative, usedFallback: true, reason: verdict.reason }
 }

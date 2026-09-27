@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, adoptRandom } from './gameUtils';
+import { normalizeForMatch, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -39,13 +39,7 @@ const DEFAULT_LONG_MAX = 5;
 const MAX_ROUNDS = 12;
 const MAX_LONG = 10;
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 const CONTINUE_FRAMES: readonly string[] = Object.freeze([
     'sigo jugando',
@@ -199,7 +193,20 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
                 return this.start(session, {});
             }
 
-            const got = extractOrderedVerbs(normalizeForMatch(text), state.verbos);
+            const normalized = normalizeForMatch(text);
+
+            // Control de REPETICION declarado por el motor ("repite", "no entendi",
+            // "continua"...). Sin rama propia caia al error "no reconoci ningun
+            // movimiento": un control publicado se consumia como respuesta erronea.
+            if (CONTINUE_FRAMES.some((frame) => normalized.includes(frame))) {
+                return {
+                    ...announcePrompt(state.sequence),
+                    prompt: `Te la repito: ${describeSequence(state.sequence)}! En el mismo orden.`,
+                    score: session.score,
+                };
+            }
+
+            const got = extractOrderedVerbs(normalized, state.verbos);
             if (got.length === 0) {
                 return {
                     prompt: `No logré reconocer un movimiento. Repite: ${describeSequence(state.sequence)}.`,
@@ -267,7 +274,7 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || CONTINUE_FRAMES.some((frame) => normalized.includes(frame));
         },
     };

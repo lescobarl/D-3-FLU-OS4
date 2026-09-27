@@ -69,31 +69,12 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
 
 
 /**
- * Frases de salida de una partida activa (fuente única de verdad).
- * Las consume el fast-path de voz (gameCommands.js) para emitir `end`
- * SOLO cuando hay partida activa; en solitario nunca inician un juego.
+ * Frases de salida de una partida activa.
+ * DUENO UNICO: viven en gameUtils (hoja sin imports) porque las consumen por
+ * igual el fast-path de voz y los 21 motores. Aqui solo se re-exportan para no
+ * romper la superficie publica del catalogo.
  */
-export const END_GAME_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-    'terminemos',
-    'ya basta',
-    'se acabo',
-    // Salidas cortas (antes había que decir la frase completa y quedaba atrapado).
-    'salir',
-    'terminar',
-    'termina',
-    'basta',
-    'parar',
-    'stop',
-    'no quiero jugar',
-    'fin del juego',
-    'cancelar el juego',
-    'cancela el juego',
-]);
+export { END_GAME_FRAMES } from './gameUtils';
 
 /**
  * Con una partida ACTIVA, frases que piden el MENÚ de juegos (no son un turno

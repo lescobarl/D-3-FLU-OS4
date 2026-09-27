@@ -214,6 +214,15 @@ export async function applyGameAction(juegoAction: NormalizedGameAction, ctx: Ap
     }
 
     if (juegoAction.action === 'start' || juegoAction.action === 'switch') {
+        // Arranque IDEMPOTENTE: un `start` del juego que YA esta activo NO reinicia
+        // la partida. El eco/doble turno reemitia "vamos a jugar loteria" y volvia
+        // a cantar la primera carta (el mazo se reseteaba). Cambiar de juego si
+        // arranca de cero; repetir el mismo, no.
+        const active = getActiveGameSession();
+        if (juegoAction.action === 'start' && active && active.id === juegoAction.gameId) {
+            await speakGameText('Ya estamos jugando. Sigue cuando quieras.', ctx);
+            return;
+        }
         const config = buildGameConfig(juegoAction.gameId);
         const session = engine.createSession(config);
         const result = engine.start(session, config);

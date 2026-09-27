@@ -118,7 +118,8 @@ import { createConversationIngressRuntime } from '../lib/conversationIngressBrid
 import { formatGeminiUserMessage, buildGeminiDiagnosticsFromError } from '../lib/geminiDiagnostics.js'
 import { convertSimEventsToMicBursts } from '../lib/micEventProducer.js'
 import { collectRecognitionResultChunks } from '../lib/transcriptIngress.js'
-import { looksLikeGarbageTranscript } from '../lib/garbageTranscript.js'
+import { resolveTurnCommitPhrase } from '../lib/turnCommitPhrase.js'
+import { resolveWakeWords } from '../lib/wakeWords.js'
 import {
   flushTranscriptStateOnFinal,
   flushPcmStateAfterCommit,
@@ -364,14 +365,14 @@ export function useFluVoiceAssistant({
    * el mismo texto (display === fila). Ninguna rama llama ya
    * `commitVisibleTranscript` directo (salvo el reset).
    */
-  const commitTurnPhrase = useCallback((text) => {
-    const canonical = cleanForSpeech(typeof text === 'string' ? text : '')
-    // Guard anti-alucinación: descartar basura incoherente del Web Speech API
-    // (silencio interpretado como palabras) sin bajar sensibilidad.
-    if (canonical && looksLikeGarbageTranscript(canonical)) return ''
-    if (canonical) commitVisibleTranscript(canonical)
-    return canonical
-  }, [commitVisibleTranscript])
+  // Wake words efectivas (Ajustes o default): UN solo criterio. Van declaradas
+  // ANTES del commit porque el commit las consume para recortar el eco.
+  const resolvedWakeWords = resolveWakeWords(wakeWords)
+  const commitTurnPhrase = useCallback((text, fallback = '') => {
+    const phrase = resolveTurnCommitPhrase({ capture: text, fallback, log: relayLog, wakeWords: resolvedWakeWords })
+    if (phrase) commitVisibleTranscript(phrase)
+    return phrase
+  }, [commitVisibleTranscript, resolvedWakeWords])
   // Limpieza del estado del turno tras resolver (se asigna cuando
   // `clearTurnBuffers` existe). Evita que la locución ya ejecutada quede en el
   // buffer/spill y se vuelva a procesar (ciclo de comandos repetidos).
@@ -383,8 +384,8 @@ export function useFluVoiceAssistant({
    * Las ramas solo aportan su `contract` y los campos del payload.
    */
   const commitAndResolveTurn = useCallback(
-    async ({ capture, contract, commitOnly = false, ...payload } = {}) => {
-      const canonicalPhrase = commitTurnPhrase(capture)
+    async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
+      const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
       if (!canonicalPhrase) return ''
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
@@ -417,19 +418,6 @@ export function useFluVoiceAssistant({
   })
   const [isSupported, setIsSupported] = useState(true)
   const [listeningAck, setListeningAck] = useState('')
-
-  // Wake words configurables (Ajustes) — fuente única para toda la resolución
-  // de comandos. Nunca hardcodeadas aquí: si Ajustes no provee ninguna, se cae
-  // al default de FLU_CONFIG.voiceCommands.wakeWords.
-  const configuredWakeWords = Array.isArray(wakeWords)
-    ? wakeWords.filter(Boolean)
-    : String(wakeWords || '')
-        .split('\n')
-        .map((word) => word.trim())
-        .filter(Boolean)
-  const resolvedWakeWords = configuredWakeWords.length
-    ? configuredWakeWords
-    : FLU_CONFIG.voiceCommands.wakeWords
 
   const getParticipantLogSnapshotRef = useRef(() => ({ texts: [], speakers: [] }))
 
@@ -3151,8 +3139,13 @@ export function useFluVoiceAssistant({
       session = null,
       language = null,
       timestamp = '',
+      // Texto de la LOCUCIÓN del turno (frase canónica). Los fast-paths de estado
+      // son EFECTOS del turno: reenviar una re-derivación (texto post-wake) haría
+      // que el escritor de filas la tomara por otra frase y duplicara la fila.
+      utterance = null,
     }) => {
       const transcript = cleanForSpeech(text)
+      const utteranceTranscript = cleanForSpeech(utterance) || transcript
       // §1A: la resolución de los dominios con efecto de estado (config/juego/
       // ambiente) se delega al árbitro puro (src/voice/lib/deterministicArbiter.js).
       // El hook conserva SOLO la orquestación del despacho (onContractResolved).
@@ -3166,7 +3159,7 @@ export function useFluVoiceAssistant({
               session,
               language,
               timestamp,
-              transcript,
+              transcript: utteranceTranscript,
             })
           : Promise.resolve(null),
         game?.gameId
@@ -3177,7 +3170,7 @@ export function useFluVoiceAssistant({
               session,
               language,
               timestamp,
-              transcript,
+              transcript: utteranceTranscript,
             })
           : Promise.resolve(null),
         env?.tipo
@@ -3188,7 +3181,7 @@ export function useFluVoiceAssistant({
               session,
               language,
               timestamp,
-              transcript,
+              transcript: utteranceTranscript,
             })
           : Promise.resolve(null),
       ])
@@ -3215,8 +3208,11 @@ export function useFluVoiceAssistant({
       // resolución posterior re-commitea el mismo valor.
       const canonicalPhrase = await commitAndResolveTurn({
         capture: fullTranscript || question,
+        fallbackCapture: question, // texto validado del turno (si la captura cruda es basura)
         commitOnly: true,
       })
+      // Sin frase válida no se llama a la IA (el motivo ya quedó registrado).
+      if (!canonicalPhrase) return
       // §9: la query ya viene derivada por el derivador único
       // (`planConversationDispatch` → action.question); NO se re-deriva aquí.
       publishedLiveRef.current = ''
@@ -3345,6 +3341,9 @@ export function useFluVoiceAssistant({
           (async () => {
             const result = await evaluateDeterministicFastPaths({
               text: question || fullTranscript,
+              // La fila del usuario es la MISMA frase canónica del turno: el
+              // fast-path no debe registrar otra (defecto: fila duplicada sin wake).
+              utterance: canonicalPhrase,
               speakerName: resolvedSpeakerName,
               speakerAlias,
               phase: 'SESION_ACTIVA',
