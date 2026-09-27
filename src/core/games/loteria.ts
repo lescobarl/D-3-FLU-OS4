@@ -156,6 +156,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                         : 'Ya terminamos la lotería. ¿Jugamos otra vez?',
                     valid: false,
                     gameOver: true,
+                    won: false,
                     score: session.score,
                     animation: 'Idle',
                     emotion: 'happy',

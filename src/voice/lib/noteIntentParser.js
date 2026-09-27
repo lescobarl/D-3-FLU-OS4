@@ -17,16 +17,31 @@ const NOTE_CREATION_PREFIX =
   /^(?:crea|crear|genera|generar|gen[ée]rame|generame|haz|hazme|hazmelo|hacer|hagame|hágame|pon|poner|guarda|guardar|anota|apunta|quiero\s+(?:crear|hacer|poner|guardar|anotar|apuntar|generar))\s+(?:una\s+|un\s+)?(?:nota|lista)\b\s*(.*)$/i
 const NOTE_PARA_SUPER =
   /^nota\s+(?:(?:de|del|para|al|a|el|la|los|las|en|de\s+la|de\s+los|de\s+las|para\s+el|para\s+la|a\s+el|a\s+la)\s+)*(?:lista\s+(?:de\s+|del\s+)?)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
-const NOTE_SUPER_LIST =
-  /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(?:en\s+la\s+|a\s+la\s+|una\s+)?(?:lista\s+(?:de\s+)?)?(super|supermercado|compras|mercado)\b\s*(?:comprar\s*)?(.*)$/i
-const NOTE_SUPER_APPEND =
-  /^(?:apunta|anota|anade|añade|agrega|agregar|pon|poner)\s+(.+?)\s+(?:en\s+la\s+(?:lista|nota)\s+del\s+|a\s+la\s+(?:lista|nota)\s+del\s+|en\s+la\s+(?:lista|nota)\s+de\s+(?:la\s+)?|a\s+la\s+(?:lista|nota)\s+de\s+(?:la\s+)?|al\s+|a\s+la\s+|en\s+el\s+)(super|supermercado|compras|mercado)\s*$/i
-// "incluye/agrega [en] la NOTA del súper [que también traiga] {ítem}" → "Super: {ítem}".
-// Cubre el destino "nota del súper" (no solo "lista") y el verbo "incluye",
+// Sinónimos de AÑADIR a una nota: fuente ÚNICA. Estaban repetidos y
+// desalineados en tres regexes, así que añadir un sinónimo en uno dejaba mudos
+// los otros: "adiciona en la nota del súper focos" no lo entendía NINGUNO y la
+// orden se perdía en silencio (solo entraba el ítem cuyo verbo sí estaba en la
+// tabla). Un verbo nuevo se añade AQUÍ y lo ven los tres.
+// Los regexes corren sobre texto ya sin acentos (stripAccentsEs), así que la
+// forma viva es "anade"; "añade" se conserva por claridad de la tabla.
+const NOTE_ADD_VERBS =
+  'apunta|anota|anade|añade|agrega|agregar|adiciona|adicionar|incluye|incluir|inclu[ií]|suma|sumar|pon|poner'
+const NOTE_SUPER_LIST = new RegExp(
+  `^(?:${NOTE_ADD_VERBS})\\s+(?:en\\s+la\\s+|a\\s+la\\s+|una\\s+)?(?:lista\\s+(?:de\\s+|del\\s+|de\\s+la\\s+)?)?(super|supermercado|compras|mercado)\\b\\s*(?:comprar\\s*)?(.*)$`,
+  'i',
+)
+const NOTE_SUPER_APPEND = new RegExp(
+  `^(?:${NOTE_ADD_VERBS})\\s+(.+?)\\s+(?:en\\s+la\\s+(?:lista|nota)\\s+del\\s+|a\\s+la\\s+(?:lista|nota)\\s+del\\s+|en\\s+la\\s+(?:lista|nota)\\s+de\\s+(?:la\\s+)?|a\\s+la\\s+(?:lista|nota)\\s+de\\s+(?:la\\s+)?|al\\s+|a\\s+la\\s+|en\\s+el\\s+)(super|supermercado|compras|mercado)\\s*$`,
+  'i',
+)
+// "incluye/agrega/adiciona [en] la NOTA del súper [que también traiga] {ítem}"
+// → "Super: {ítem}". Cubre el destino "nota del súper" (no solo "lista"),
 // con el ítem ANTES ("incluye X en la nota del super") o DESPUÉS
 // ("incluye en la nota del super que también traiga X").
-const NOTE_SUPER_NOTA =
-  /^(?:incluye|incluir|inclu[ií]|agrega|agregar|a[ñn]ade|anade|suma|sumar|pon|poner)\s+(?:también\s+|tambien\s+|adem[áa]s\s+)?(?:en\s+la\s+|a\s+la\s+|en\s+el\s+|al\s+)?nota\s+(?:de\s+|del\s+|para\s+el\s+|para\s+la\s+|para\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
+const NOTE_SUPER_NOTA = new RegExp(
+  `^(?:${NOTE_ADD_VERBS})\\s+(?:también\\s+|tambien\\s+|adem[áa]s\\s+)?(?:en\\s+la\\s+|a\\s+la\\s+|en\\s+el\\s+|al\\s+)?nota\\s+(?:de\\s+|del\\s+|para\\s+el\\s+|para\\s+la\\s+|para\\s+)?(super|supermercado|compras|mercado)\\b\\s*(.*)$`,
+  'i',
+)
 // Orden DESTINO PRIMERO: "en la nota del súper incluye X" (la frase real pone el
 // destino antes que el verbo). El verbo/ítem se limpia con cleanSuperItem.
 const NOTE_SUPER_NOTA_DEST_FIRST =
@@ -161,7 +176,16 @@ export function parseNoteIntentText(rawText = '') {
     return { label: rest ? `Recordar: ${rest}` : 'Recordar' }
   }
 
-  // 3) "apunta/anota/añade/nota {texto}" → el texto (sin conectores de relleno).
+  // 3) Nota GENERAL con contenido: se evalua ANTES de NOTE_APUNTA. Si no,
+  //    "nota que traiga X" lo capturaba NOTE_APUNTA y el nombre quedaba en
+  //    "traiga X" (nombre equivocado).
+  const general = NOTE_GENERAL.exec(norm)
+  if (general) {
+    const content = cleanSuperItem(general[1] ? general[1].trim() : '')
+    if (!content) return null
+    return { label: 'Nota', body: content }
+  }
+  // 4) "apunta/anota/anade/nota {texto}" -> el texto (sin conectores de relleno).
   const apunta = NOTE_APUNTA.exec(clean)
   if (apunta) {
     const label = apunta[1]
@@ -174,18 +198,17 @@ export function parseNoteIntentText(rawText = '') {
     if (!label) return null
     return { label }
   }
-
-  // 4) "nota [que traiga/que contenga/con/sobre/para/de] X" → nota general:
-  //     nombre por defecto "Nota" y contenido (body) = X.
-  const general = NOTE_GENERAL.exec(norm)
-  if (general) {
-    const content = cleanSuperItem(general[1] ? general[1].trim() : '')
-    if (!content) return null
-    return { label: 'Nota', body: content }
+  // 5) Prefijo de CREACION explicito sin rama especifica: "crea/guarda una nota
+  //    X" -> nota general "Nota" con contenido X. El prefijo YA declara la
+  //    intencion (verbo + nota/lista): no hay sobrecaptura, solo cubre lo que el
+  //    propio prefijo prometia y antes se perdia (devolvia null).
+  if (creationMatch) {
+    const content = cleanSuperItem(creationMatch[1] ? creationMatch[1].trim() : '')
+    if (content) return { label: 'Nota', body: content }
   }
-
   return null
 }
+
 
 /**
  * Parsea una frase de BORRADO de nota y devuelve { target, all } o null.
@@ -218,3 +241,84 @@ export function parseNoteRemoveIntentText(rawText = '') {
   }
   return null
 }
+
+// ------------------------------------------------------------
+// Superficie de comandos de notas PUBLICADA como dato.
+// Fuente unica de lo que el parser declara entender, con una frase testigo por
+// capacidad. El invariante derivado comprueba que TODA capacidad declarada se
+// entiende de verdad (mismo contrato que los motores de juego): "declarado pero
+// no entendido" es deriva. No altera el comportamiento del parser.
+// `espera` describe la forma del resultado esperado y la evalua el test.
+// ------------------------------------------------------------
+export const NOTE_COMMAND_SURFACE = Object.freeze([
+  {
+    id: 'creacion',
+    parser: 'nota',
+    frases: [
+      'crea una nota comprar leche',
+      'guarda una lista de la compra',
+      'quiero crear una nota para la fiesta',
+    ],
+    espera: { label: 'no-vacio' },
+  },
+  {
+    id: 'super-prefijo',
+    parser: 'nota',
+    frases: ['nota del super leche y pan'],
+    espera: { label: SUPER_TARGET_LABEL, body: 'no-vacio' },
+  },
+  {
+    id: 'super-lista',
+    parser: 'nota',
+    frases: ['apunta en la lista del super, leche y pan'],
+    espera: { label: SUPER_TARGET_LABEL, body: 'no-vacio' },
+  },
+  {
+    id: 'super-append',
+    parser: 'nota',
+    frases: ['apunta leche en la lista del super'],
+    espera: { label: SUPER_TARGET_LABEL, body: 'no-vacio' },
+  },
+  {
+    id: 'super-nota',
+    parser: 'nota',
+    frases: ['incluye en la nota del super que tambien traiga leche'],
+    espera: { label: SUPER_TARGET_LABEL, body: 'no-vacio' },
+  },
+  {
+    id: 'super-nota-destino-primero',
+    parser: 'nota',
+    frases: ['en la nota del super incluye leche'],
+    espera: { label: SUPER_TARGET_LABEL, body: 'no-vacio' },
+  },
+  {
+    id: 'recordar',
+    parser: 'nota',
+    frases: ['nota para recordar llamar a mama'],
+    espera: { label: 'prefijo:Recordar' },
+  },
+  {
+    id: 'apunta',
+    parser: 'nota',
+    frases: ['apunta comprar pan'],
+    espera: { label: 'no-vacio' },
+  },
+  {
+    id: 'general',
+    parser: 'nota',
+    frases: ['nota que traiga leche'],
+    espera: { label: 'Nota', body: 'no-vacio' },
+  },
+  {
+    id: 'borrado-uno',
+    parser: 'remove',
+    frases: ['borra la nota del super'],
+    espera: { all: false, target: SUPER_TARGET_LABEL },
+  },
+  {
+    id: 'borrado-todo',
+    parser: 'remove',
+    frases: ['borra todas las notas', 'borra las notas'],
+    espera: { all: true, target: null },
+  },
+])

@@ -691,6 +691,19 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
 señal.
 
 ---
+## Contrato de desenlace de partida (juegos)
+Todo final de motor (`gameOver: true`) DEBE declarar `won` booleano: `true` SOLO si el
+jugador logro el objetivo de ese turno (completar las rondas, acertar, cerrar el cuento);
+`false` en agotamiento, rendicion, salto o salida. Motivo: `resolveGameSpeechOptions`
+(`src/core/games/gameSpeech.ts`) grita victoria siempre que `gameOver` no traiga
+`won === false`; con los motores terminando sin `won`, FLU celebraba cada derrota.
+El desenlace se declara en el propio final, nunca se deriva del `animation` (`Dance`
+acompaña tambien a "muy bien jugado" en derrota).
+**Guard verificable:** `tests/gamePlaythrough.test.ts` (partida completa hasta victoria en
+TODO el catalogo, victoria alcanzable en cada juego, cierre por la ruta REAL
+`applyGameAction`, y guardia de fuente que falla si algun `gameOver: true` omite `won`).
+
+---
 
 **Fin.** Ninguna regla de este archivo se silencia: lo que no se pueda cumplir se detiene y
 se pregunta.

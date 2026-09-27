@@ -527,6 +527,23 @@ function sliceWakeWordFromSource(source = '', wakeWords = []) {
   return { matched: true, beforeWakeText, afterWakeText }
 }
 
+/**
+ * Consume repeticiones de la wake al INICIO del mandato. El eco (FLU oyéndose,
+ * o el hablante repitiendo la wake: "okay flow okay flow <orden>") dejaba la
+ * segunda wake DENTRO del mandato, porque solo se recortaba la primera. La
+ * invariante 11 exige que el mandato empiece en la wake: la wake repetida es
+ * ruido por delante, no contenido.
+ */
+function stripLeadingWakeRepeats(text = '', wakeWords = []) {
+  let rest = normalizeSpaces(text)
+  for (let i = 0; i < 4; i += 1) {
+    const prefix = matchWakeWordPrefix(rest, wakeWords)
+    if (!prefix) break
+    rest = normalizeSpaces(rest.slice(prefix.length))
+  }
+  return rest
+}
+
 export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
   const normalizedText = normalizeVoiceCommandText(text)
   const sliced = sliceWakeWordFromSource(text, wakeWords)
@@ -544,7 +561,7 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
 
   const prefix = matchWakeWordPrefix(normalizedText, wakeWords)
   if (prefix) {
-    const afterWake = normalizeSpaces(normalizedText.slice(prefix.length))
+    const afterWake = stripLeadingWakeRepeats(normalizedText.slice(prefix.length), wakeWords)
     return {
       wakeWordMatched: true,
       beforeWake: '',
@@ -552,7 +569,7 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
       commandText: afterWake,
       normalizedText,
       beforeWakeText: '',
-      afterWakeText: sliced.afterWakeText,
+      afterWakeText: stripLeadingWakeRepeats(sliced.afterWakeText, wakeWords),
     }
   }
 
@@ -570,7 +587,10 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
   }
 
   const beforeWake = normalizeSpaces(normalizedText.slice(0, inline.index).trim())
-  const afterWake = normalizeSpaces(normalizedText.slice(inline.index + inline.length).trim())
+  const afterWake = stripLeadingWakeRepeats(
+    normalizedText.slice(inline.index + inline.length).trim(),
+    wakeWords,
+  )
   return {
     wakeWordMatched: true,
     beforeWake,
@@ -578,7 +598,7 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
     commandText: afterWake,
     normalizedText,
     beforeWakeText: sliced.beforeWakeText,
-    afterWakeText: sliced.afterWakeText,
+    afterWakeText: stripLeadingWakeRepeats(sliced.afterWakeText, wakeWords),
   }
 }
 

@@ -182,6 +182,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                     prompt: 'Ya terminamos el ahorcado. ¿Jugamos otra vez?',
                     valid: false,
                     gameOver: true,
+                    won: false,
                     score: session.score,
                     animation: 'Idle',
                     emotion: 'happy',

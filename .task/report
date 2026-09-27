@@ -2266,6 +2266,116 @@ No se restaura el contenido anterior: revertir esos commits desharia trabajo apr
 Lo que el congelado protegia --que el criterio de un guard no cambie a espaldas de
 nadie-- sigue intacto: el cambio de contenido esta justificado por commit y el hash
 queda al dia para que el siguiente cambio vuelva a saltar.
+## Enmienda B.15 - re-congelado de 3 guards y repunte del contrato a la ronda vigente
+
+Dos cosas distintas, ambas MEDIDAS antes de tocar nada. La primera era la deuda de la clase
+P7.26; la segunda la destapo la propia puerta al quedar en rojo por un motivo que no era hash.
+
+1) CONGELADOS (hash crudo: sha256 de los bytes, NO normalizado a LF). frozen -> actual:
+
+  tests/hardcodeGuard.test.ts         c0193fb23bff338b...  ->  d23b01304a219c4e...
+  tests/duplicationGuard.test.ts      5c25cf004717d3d9...  ->  9fd43f56220a9359...
+  tests/storageKeysAliveGuard.test.ts a269d15fd6ee2351...  ->  e758ada58edecff1...
+
+No es trabajo sin declarar: los tres se editaron en a53c733, que ES ancestro de HEAD, y su
+contenido en el arbol es identico al de ese commit (git status vacio para los tres). El cambio
+es sustantivo y correcto: duplicationGuard estrena requestUrlOffenders (dueno unico
+src/server/requestUrl.ts, cierra el hueco que el propio hardcodeGuard declara: el blanqueo de
+`localhost` no veia una base ficticia repartida por modulos). Los tres guards estan VERDES
+(2 + 15 + 6 = 23 tests). Se re-congela con la herramienta canonica, no con un editor:
+
+  node scripts/task-gate-freeze.mjs tests/hardcodeGuard.test.ts tests/duplicationGuard.test.ts tests/storageKeysAliveGuard.test.ts
+
+Diff de .task/frozen.json: 3 lineas (las 93 entradas restantes intactas; se comprobo que la
+reescritura de formato del script es no-op sobre el fichero, LF y sin BOM).
+
+2) ALCANCE: el "FUERA de alcance" NO era de esos ficheros. El contrato seguia describiendo la
+ronda del vocabulario de contrato con base b74d8f7, asi que la puerta veia la deriva ACUMULADA
+desde entonces (10 ficheros de rondas ya cerradas: hooks de voz/participante, protocolGuard,
+fullSuiteAuthGuard y los propios guards re-congelados). El protocolo (.task/README.md) manda
+fijar la base al checkpoint de la ronda y declarar su zona, de modo que la puerta solo vea los
+cambios de ESTA tarea. Se repunta el contrato a esta ronda:
+
+  base=a2e5702 (HEAD al empezar la ronda) | allow=8 patrones (src/core/games/**, notas, AGENTS.md,
+  los dos tests nuevos y los 3 guards re-congelados) | dod: partida completa + superficie de notas |
+  guard: tests/gamePlaythrough.test.ts (verde) | ignore .task/** (para que frozen.json no sea "alcance")
+
+Medido ANTES de fijar los limites, no despues: 25 ficheros / 739 lineas -> maxFiles 30 / maxLines 800.
+`e2eScope` se conserva tal cual (la puerta no lo usa; scripts/e2e-scope.mjs lo filtra por allow).
+
+CONTRATO ANTERIOR, verbatim, para poder restaurarlo tal cual sin depender de este commit:
+
+```json
+{
+  "base": "b74d8f7",
+  "task": "Vocabulario de contrato con fuente unica: los dominios de acciones[] y los tipos de workspace dejan de estar enumerados en varios sitios (guard derivado, no recopiado).",
+  "objective": "Que ningun vocabulario que deba coincidir entre subsistemas viva en mas de un sitio: el resto importa la lista o consulta pertenencia por predicado. Que un guard falle si alguien lo vuelve a enumerar, y que la union de tipos salga derivada de la lista.",
+  "allow": [
+    "AGENTS.md",
+    "package.json",
+    "plans/bugs-producto-2026-09-14.md",
+    "plans/ledger.json",
+    "playwright.config.ts",
+    "scripts/e2e-scope.mjs",
+    "src/App.tsx",
+    "src/core/agenda/agendaCommandParser.ts",
+    "src/core/agenda/domainScopedIntent.ts",
+    "src/core/autonomy/autoRecovery.ts",
+    "src/hooks/useWorkspaceSearch.ts",
+    "src/server/browserProxy.ts",
+    "src/server/searchProxy.ts",
+    "src/voice/lib/fluConfig.js",
+    "tests/auditoriaExternaMap.test.ts",
+    "tests/bugsProductoMap.test.ts",
+    "tests/domainScopedIntent.test.ts",
+    "tests/e2e/_globalSetup.ts",
+    "tests/e2e/_helpers.ts",
+    "tests/e2e/auditoria-acciones-llm.spec.ts",
+    "tests/e2e/auditoria-despacho-real.spec.ts",
+    "tests/e2e/matriz-comandos-productivos.spec.ts",
+    "tests/e2e/onboarding-registro-usuario.spec.ts",
+    "tests/e2e/pizarron-funcionalidades.spec.ts",
+    "tests/e2e/video-config.spec.ts",
+    "tests/e2eScope.test.ts",
+    "tests/godFileSizeGuard.test.ts",
+    "tests/resultFeed.test.tsx",
+    "src/core/ai/aiServiceBase.ts",
+    "src/core/config/appConfig.ts",
+    "src/core/config/sharedConfig.ts",
+    "src/hooks/useNavigationCommands.ts",
+    "src/services/gemini.ts",
+    "src/types/bridge.ts",
+    "src/voice/lib/fluVisualPipeline.js",
+    "src/voice/lib/gemini.js",
+    "src/voice/lib/visualConfig.js",
+    "src/voice/lib/workspaceContract.js",
+    "tests/actionDomainContract.test.ts",
+    "tests/workspaceVocabularyContract.test.ts"
+  ],
+  "maxFiles": 25,
+  "maxLines": 600,
+  "dod": "npm run ledger:check",
+  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/auditoriaExternaMap.test.ts tests/resultFeed.test.tsx tests/taskLedgerGuard.test.ts tests/taskLedgerReferenceGuard.test.ts tests/eolGuard.test.ts tests/godFileSizeGuard.test.ts",
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "kilo.json"
+  ],
+  "e2eScope": {
+    "src/App.tsx": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/core/agenda/agendaCommandParser.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/core/agenda/domainScopedIntent.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ]
+  }
+}
+```
+
+
 ## P7.26 + P7.27 + P7.32 - cierre de los tres cierres mecanicos (y el hueco del "16" queda archivado)
 
 VERIFICADO HOY (hash crudo, no normalizado a LF) en la llegada: task-gate exit 1 por 5
