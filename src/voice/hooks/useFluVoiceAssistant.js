@@ -53,6 +53,7 @@ import {
   flattenChunksTail,
   flattenChunksWindow,
   isAutoSpeakerLabel,
+  isProperSpeakerName,
   nextAvailableSpeakerLabel,
   normalizeSpeakerLabel,
   pruneGhostSpeakerClusters,
@@ -1419,13 +1420,9 @@ export function useFluVoiceAssistant({
       // §3 Regla dura: sin EVIDENCIA de audio NO se estampa un nombre propio
       // (respeta requireWakeWordForSpeakerName). Se usa etiqueta genérica.
       const GENERIC_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-      const isProperName = (value) => {
-        const s = String(value || '').trim()
-        return Boolean(s) && s !== 'FLU' && !/^Hablante\s+\d+$/i.test(s)
-      }
       if (!audioSnapshot?.length) {
         const sticky = lastSpeakerRef.current || fallbackSpeaker
-        return isProperName(sticky) ? GENERIC_SPEAKER : sticky || GENERIC_SPEAKER
+        return isProperSpeakerName(sticky) ? GENERIC_SPEAKER : sticky || GENERIC_SPEAKER
       }
       // Embeddings async (worker): el preflight ya resolvió identidad por audio
       // (assignSpeaker, signatureVector 512-D). Se consulta el slot del
@@ -1438,13 +1435,13 @@ export function useFluVoiceAssistant({
         }
         if (lastLoggedSpeakerRef.current) {
           // Sin preflight listo NO se estampa el nombre propio (evita "FLU/otro = tu nombre").
-          return isProperName(lastLoggedSpeakerRef.current)
+          return isProperSpeakerName(lastLoggedSpeakerRef.current)
             ? GENERIC_SPEAKER
             : lastLoggedSpeakerRef.current
         }
       }
       const fallback = fallbackSpeaker || lastLoggedSpeakerRef.current || lastSpeakerRef.current || GENERIC_SPEAKER
-      return isProperName(fallback) ? GENERIC_SPEAKER : fallback
+      return isProperSpeakerName(fallback) ? GENERIC_SPEAKER : fallback
     },
     [conversationActiveRef],
   )

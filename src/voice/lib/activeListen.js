@@ -3,7 +3,8 @@
  */
 import { cleanForSpeech, detectWakeIntroducedName, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG, getActiveListenConfig } from './fluConfig.js'
-import { nextAvailableSpeakerLabel } from './voiceIdentity.js'
+import { isProperSpeakerName, nextAvailableSpeakerLabel } from './voiceIdentity.js'
+import { requiresWakeWordForSpeakerName } from './speakerPolicy.js'
 import { integrateMicPacket, mergeMicChunks, readStreamDisplay, resolveCommitCapture, utterancesRelate, utterancesSameRevision } from './conversationStream.js'
 
 export {
@@ -307,7 +308,13 @@ export function resolveSpeakerByText(transcript = '', lastSpeaker = '') {
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const introduced = detectWakeIntroducedName(transcript, wakeWords)
   if (introduced) return introduced
-  return cleanForSpeech(lastSpeaker) || speakers.defaultLabel
+  const last = cleanForSpeech(lastSpeaker)
+  // Sin wake no se estampa un nombre propio por continuidad: el habla pasiva
+  // (sala/TV) es generica (Hablante N). Config: requireWakeWordForSpeakerName.
+  if (last && requiresWakeWordForSpeakerName() && isProperSpeakerName(last)) {
+    return speakers.defaultLabel
+  }
+  return last || speakers.defaultLabel
 }
 
 export function advanceSpeaker(state) {

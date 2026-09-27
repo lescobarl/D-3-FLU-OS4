@@ -29,6 +29,18 @@ export function isRegisteredSpeakerLabel(label = '') {
   return Boolean(text) && !isAutoSpeakerLabel(text)
 }
 
+/**
+ * Nombre propio de PERSONA: ni la etiqueta automatica "Hablante N" ni el motor
+ * de dialogo (FLU). Criterio unico para decidir si una etiqueta puede estamparse
+ * como identidad sin evidencia (regla requireWakeWordForSpeakerName).
+ */
+export function isProperSpeakerName(label = '') {
+  const text = normalizeSpeakerLabel(label)
+  if (!text) return false
+  if (text.toLowerCase() === 'flu') return false
+  return !isAutoSpeakerLabel(text)
+}
+
 /** Corrige etiquetas corruptas «Hablante N / Hablante M / …» → un solo hablante. */
 export function normalizeSpeakerLabel(label = '') {
   const text = normalizeSpaces(label)
