@@ -19,6 +19,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { parseAgendaCommand } from '../src/core/agenda/agendaCommandParser'
+import { scanTimesOfDay, stripTimesOfDay } from '../src/core/temporal/timeOfDay'
 import { pickTimeOfDay } from '../src/core/temporal/timeOfDay'
 import {
     SPOKEN_NUMBERS_EN,
@@ -221,5 +223,48 @@ describe('P5.8 configSingleSource - el léxico de números hablados tiene un sol
     it('el detector no es decorativo: una palabra fuera del léxico no resuelve', () => {
         expect(pickTimeOfDay('a las folegre').timeOfDay).toBeNull()
         expect(resolveSpokenNumber('folegre')).toBeNull()
+    })
+})
+
+// ------------------------------------------------------------
+// P5.9 - La hora se lee UNA vez y un cambio de hora apunta al DESTINO.
+// El escáner devuelve todas las horas ("de las siete a las ocho" = dos) y el
+// consumidor elige; sin esto ganaba la hora de ORIGEN y el cambio quedaba en
+// nada (mover 07:00 a 07:00). Mismo resultado en cifras que en palabras.
+// ------------------------------------------------------------
+describe('P5.9 configSingleSource - la hora se lee una vez y el cambio apunta al destino', () => {
+    const NOW = new Date(2026, 8, 22, 15, 30, 0, 0).getTime()
+    const horas = (cmd: { trigger?: unknown }) => {
+        const trigger = cmd.trigger as { at?: number } | undefined
+        return trigger?.at ? new Date(trigger.at).getHours() : null
+    }
+
+    it('el escáner devuelve TODAS las horas en orden y el recorte las quita todas', () => {
+        expect(scanTimesOfDay('de las siete a las ocho').map((m) => m.timeOfDay)).toEqual(['07:00', '08:00'])
+        expect(stripTimesOfDay('cambia la alarma de las siete a las ocho')).not.toMatch(/siete|ocho/)
+    })
+
+    it('un cambio de hora apunta al DESTINO, igual en cifras que en palabras', () => {
+        const cifras = parseAgendaCommand('cambia la alarma de las 7 a las 8', { now: NOW })
+        const palabras = parseAgendaCommand('cambia la alarma de las siete a las ocho', { now: NOW })
+        expect(palabras.label).toBe(cifras.label)
+        expect(palabras.trigger).toEqual(cifras.trigger)
+        expect(horas(palabras)).toBe(8)
+    })
+
+    it('sin hora no se inventa ninguna (editar el nombre no mueve la hora)', () => {
+        const cmd = parseAgendaCommand('cambia el nombre de la clase de historia', { now: NOW })
+        expect(cmd.trigger).toBeUndefined()
+    })
+
+    it('el countdown es bilingüe', () => {
+        expect(parseAgendaCommand('pon una alarma en 5 minutos', { now: NOW }).trigger).toEqual({
+            type: 'countdown',
+            durationMs: 5 * 60_000,
+        })
+        expect(parseAgendaCommand('pon una alarma in 2 hours', { now: NOW }).trigger).toEqual({
+            type: 'countdown',
+            durationMs: 2 * 3_600_000,
+        })
     })
 })

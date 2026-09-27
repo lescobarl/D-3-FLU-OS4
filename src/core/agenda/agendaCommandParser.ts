@@ -14,7 +14,7 @@ import {
     parseNlDateTime,
     describeNlDateTime,
 } from '../reminders/nlDateParser';
-import { pickTimeOfDay } from '../temporal/timeOfDay';
+import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
 import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
@@ -89,7 +89,7 @@ const WEEKDAY_NAMES: ReadonlyArray<{ name: string; day: number }> = Object.freez
 const DAILY_RE = /\b(?:todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
 /** Recurrencia de CLASE "toda la semana / todos los días" = horario de 7 días. */
 const CLASE_ALL_DAYS_RE = /\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
-const COUNTDOWN_RE = /\b(?:en|de)\s+(\d+)\s+(segundos?|minutos?|horas?)\b/i;
+const COUNTDOWN_RE = /\b(?:en|de|in)\s+(\d+)\s+(segundos?|minutos?|horas?|seconds?|minutes?|hours?)\b/i;
 
 function normalize(text: string): string {
     return stripDiacriticsLower(text).trim();
@@ -256,41 +256,56 @@ function detectWeekdays(text: string): number[] {
  *   - Resto: exigen recurrencia explícita ("los lunes"), no "el jueves".
  * "todos los días" en una clase = horario semanal de 7 días; en el resto, daily.
  */
-function resolveRecurrence(text: string, now: number, kind: AgendaKind): AgendaTrigger | null {
+function resolveRecurrence(
+    text: string,
+    now: number,
+    kind: AgendaKind,
+    timeHint?: string | null,
+): AgendaTrigger | null {
     const t = normalize(text);
 
     const countdown = COUNTDOWN_RE.exec(t);
     if (countdown) {
         const amount = Number(countdown[1]);
         const unit = normalize(countdown[2]);
-        const ms = unit.startsWith('seg') ? 1000 : unit.startsWith('min') ? 60_000 : 3_600_000;
+        const ms =
+            unit.startsWith('seg') || unit.startsWith('sec')
+                ? 1000
+                : unit.startsWith('min')
+                  ? 60_000
+                  : 3_600_000;
         return { type: 'countdown', durationMs: amount * ms };
     }
 
+    // Hora ELEGIDA: el consumidor puede fijarla. Un cambio de hora ("de las siete
+    // a las ocho") mueve al DESTINO; sin esto ganaría la hora más temprana del
+    // texto (la de origen) y el cambio quedaría en nada.
+    const chosen = timeHint ?? pickTimeOfDay(text).timeOfDay;
+
     const days = kind === 'clase' ? detectAnyWeekdays(text) : detectWeekdays(text);
     if (days.length > 0) {
-        const time = pickTimeOfDay(text).timeOfDay ?? '09:00';
+        const time = chosen ?? '09:00';
         return { type: 'weekly', daysOfWeek: days, timeOfDay: time };
     }
 
     const allDays = kind === 'clase' ? CLASE_ALL_DAYS_RE.test(t) : DAILY_RE.test(t);
     if (allDays) {
-        const timeOfDay = pickTimeOfDay(text).timeOfDay ?? '09:00';
+        const timeOfDay = chosen ?? '09:00';
         return kind === 'clase'
             ? { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay }
             : { type: 'daily', timeOfDay };
     }
 
-    const picked = pickTimeOfDay(text);
-    const dateText = picked.rest || text;
-    const nl = parseNlDateTime(dateText, { now: () => now });
-    if (picked.timeOfDay) {
+    // Fecha SIN ninguna hora: si quedara la segunda hora ("… a las ocho"),
+    // `parseNlDateTime` la leería y fijaría el disparo a esa hora del día actual.
+    const nl = parseNlDateTime(stripTimesOfDay(text), { now: () => now });
+    if (chosen) {
         // Base: fecha explícita ("hoy/mañana/jueves") o HOY si no la hay ("a las 7").
         const explicitDay = Boolean(nl?.at);
         const baseAt = nl?.at ?? now;
         const day = new Date(baseAt);
         const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
-            + (parseTimeOfDayToMs(picked.timeOfDay) ?? 0);
+            + (parseTimeOfDayToMs(chosen) ?? 0);
         // Solo la hora PELADA ("a las 7") cae a la próxima ocurrencia si ya
         // pasó. Con día explícito ("hoy", "mañana", "el jueves") NO se rueda:
         // "hoy a las 9" es hoy, no mañana.
@@ -315,10 +330,12 @@ function wordRe(alternation: string): RegExp {
 function resolveLabel(text: string): string {
     // §9.2: el consumidor no re-normaliza; la frase llega canónica del motor.
     const base = text;
-    // 2) Quitar la HORA con el MISMO selector único (pickTimeOfDay): maneja
-    //    "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3", etc.
+    // 2) Quitar TODAS las horas con el escáner único (stripTimesOfDay): maneja
+    //    "a las 3 de la tarde", "a las 4 p.m.", "mañana a las 3" y, en un cambio
+    //    de hora, también la segunda ("de las siete a las ocho") para que no
+    //    quede pegada a la etiqueta.
     // 3) Quitar la cláusula del recordatorio ("que me recuerde", "recuérdame"…).
-    let label = pickTimeOfDay(base).rest || base;
+    let label = stripTimesOfDay(base) || base;
     label = label.replace(REMINDER_CLAUSE, ' ');
     for (const noun of KIND_NOUNS.flatMap((e) => e.nouns)) {
         label = label.replace(wordRe(noun), ' ');
@@ -395,8 +412,13 @@ export function parseAgendaCommand(
     // '09:00' de relleno (legítimo al crear), pero ese relleno aquí haría que
     // "cambia el nombre de la clase de historia" moviera además la hora a las
     // 09:00, y que el borrado arrastrara una hora que nadie dijo.
-    const spokenTime = pickTimeOfDay(cleaned).timeOfDay;
-    const recurrence = resolveRecurrence(cleaned, now, kind);
+    // Cambio de HORA ("de las siete a las ocho"): la ÚLTIMA hora es el DESTINO y
+    // la primera identifica el item. Con una sola hora, esa es la hora.
+    const hours = scanTimesOfDay(cleaned);
+    const target = hours.length > 1 ? hours[hours.length - 1] : undefined;
+    const destination = resolvedAction === 'agenda.update' && target ? target.timeOfDay : null;
+    const spokenTime = destination ?? pickTimeOfDay(cleaned).timeOfDay;
+    const recurrence = resolveRecurrence(cleaned, now, kind, destination);
     const trigger = resolvedAction === 'agenda.create' || spokenTime ? recurrence : null;
     if (!trigger && resolvedAction === 'agenda.create') {
         // Sin instante NO se crea (el modelo exige `at`/recurrencia), pero el

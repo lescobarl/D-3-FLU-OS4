@@ -170,3 +170,83 @@ export function pickTimeOfDay(text: string): PickedTimeOfDay {
     }
     return { timeOfDay: best.timeOfDay, rest };
 }
+
+// ------------------------------------------------------------
+// Lectura COMPLETA: todas las horas del texto, en orden.
+// `pickTimeOfDay` devuelve UNA hora (el contrato hist�rico: la de meridiem
+// expl�cito o la m�s temprana). Un cambio de hora ("de las siete a las ocho")
+// necesita las DOS: la primera identifica el item y la �ltima es el destino.
+// Mismo resolutor y mismas regex que `pickTimeOfDay` (una sola sem�ntica de
+// hora); s�lo cambia la recolecci�n, que aqu� no se corta en el primer match.
+// ------------------------------------------------------------
+
+export interface TimeOfDayMatch {
+    /** Hora en 'HH:MM' (24h). */
+    timeOfDay: string;
+    start: number;
+    end: number;
+    /** 1 = meridiem expl�cito � 2 = 'a las N' concreta � 4 = parte del d�a sola. */
+    rank: number;
+}
+
+const ALL_ES = new RegExp(ES_TIME.source, 'gi');
+const ALL_EN = new RegExp(EN_TIME.source, 'gi');
+const ALL_BARE = new RegExp(BARE_MERIDIEM_TIME.source, 'gi');
+const ALL_NOON_ES = new RegExp(NOON_ES.source, 'gi');
+const ALL_NOON_EN = new RegExp(NOON_EN.source, 'gi');
+const ALL_MID_ES = new RegExp(MIDNIGHT_ES.source, 'gi');
+const ALL_MID_EN = new RegExp(MIDNIGHT_EN.source, 'gi');
+
+function overlapsAny(kept: readonly TimeOfDayMatch[], c: TimeOfDayMatch): boolean {
+    return kept.some((k) => c.start < k.end && c.end > k.start);
+}
+
+/** Todas las horas del texto, sin solapes y en orden de aparici�n. */
+export function scanTimesOfDay(text: string): TimeOfDayMatch[] {
+    const source = String(text || '');
+    const matches: TimeOfDayMatch[] = [];
+    const collect = (
+        re: RegExp,
+        resolve: (m: RegExpExecArray) => string | null,
+        rank: (m: RegExpExecArray) => number,
+    ): void => {
+        re.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(source)) !== null) {
+            if (!m[0].length) {
+                re.lastIndex += 1;
+                continue;
+            }
+            const timeOfDay = resolve(m);
+            if (timeOfDay) {
+                matches.push({ timeOfDay, start: m.index, end: m.index + m[0].length, rank: rank(m) });
+            }
+        }
+    };
+    // Prioridad de recolecci�n la de `pickTimeOfDay`: primero las formas con
+    // 'a las/at', luego la hora suelta con meridiem, luego parte del d�a.
+    collect(ALL_ES, resolveEsTime, (m) => (m[7] ? 1 : 2));
+    collect(ALL_EN, resolveEnTime, (m) => (m[5] ? 1 : 2));
+    collect(ALL_BARE, resolveBareMeridiemTime, () => 1);
+    collect(ALL_NOON_ES, () => '12:00', () => 4);
+    collect(ALL_NOON_EN, () => '12:00', () => 4);
+    collect(ALL_MID_ES, () => '00:00', () => 4);
+    collect(ALL_MID_EN, () => '00:00', () => 4);
+
+    const kept: TimeOfDayMatch[] = [];
+    for (const c of matches) {
+        if (overlapsAny(kept, c)) continue;
+        kept.push(c);
+    }
+    return kept.sort((a, b) => a.start - b.start);
+}
+
+/** El texto SIN ninguna hora (todas, no s�lo la primera). */
+export function stripTimesOfDay(text: string): string {
+    const source = String(text || '');
+    let rest = source;
+    for (const c of scanTimesOfDay(source).sort((a, b) => b.start - a.start)) {
+        rest = removeRange(rest, c.start, c.end);
+    }
+    return rest;
+}

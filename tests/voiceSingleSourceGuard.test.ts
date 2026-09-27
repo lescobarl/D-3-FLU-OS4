@@ -19,6 +19,7 @@ import { join, relative } from 'node:path'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 import { ARBITER_DOMAINS, resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter'
 import { resolveConfigCommandFromText } from '../src/voice/lib/configCommands'
+import { detectNextSpeakerPhrase } from '../src/voice/lib/activeListen'
 import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog'
 
 const ROOT = process.cwd()
@@ -238,4 +239,24 @@ describe('voiceSingleSourceGuard — una sola fuente de verdad (§9)', () => {
     expect(declaredPhrasesWithoutEffect(config, () => null), 'si el resolver no responde, lo marca').toHaveLength(1)
     expect(declaredPhrasesWithoutEffect(config, () => ({ clave: 'resetAvatarColors' }))).toEqual([])
   })
+})
+
+// ------------------------------------------------------------
+// G11 - Las frases de mando de turno declaradas en la config tienen lector.
+// 'nextSpeaker' no lo resuelve el arbitro (es control de TURNO, no un dominio):
+// lo consume 'detectNextSpeakerPhrase' en la capa de turno, ANTES de que la
+// navegacion o el juego vean el texto. Una frase declarada que su consumidor no
+// reconoce es config muerta y aqui se cae.
+// ------------------------------------------------------------
+describe('G11 voiceSingleSource - las frases de nextSpeaker declaradas tienen consumidor', () => {
+    it('detectNextSpeakerPhrase reconoce TODAS las frases declaradas', () => {
+        const phrases: readonly string[] = FLU_CONFIG.voiceCommands.nextSpeaker || []
+        expect(phrases.length).toBeGreaterThan(0)
+        const sinLector = phrases.filter((p) => !detectNextSpeakerPhrase(`oye flu ${p}`))
+        expect(sinLector, `frases sin lector: ${sinLector.join(', ')}`).toEqual([])
+    })
+
+    it('el detector no es decorativo', () => {
+        expect(detectNextSpeakerPhrase('oye flu pon una alarma a las siete')).toBeFalsy()
+    })
 })
