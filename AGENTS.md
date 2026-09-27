@@ -303,9 +303,20 @@ de **0 nuevos**.
 - Guard estructural del protocolo: `tests/protocolGuard.test.ts`.
 
 ### La suite completa exige autorizacion EXPRESA (regla dura)
-- `npm run test:full` esta BLOQUEADO por `scripts/require-full-suite-auth.mjs`:
-  sin `FLU_AUTH_FULL_SUITE=1` (o `CI=true`, que ya es autorizacion expresa) NO
-  corre; imprime la via rapida y sale con codigo 1.
+- La barrera tiene DOS puertas y UN solo criterio: `scripts/full-suite-policy.mjs`
+  decide que es una corrida sin filtro y que cuenta como autorizacion expresa; lo
+  aplican `scripts/require-full-suite-auth.mjs` (script npm) y `vitest.config.ts`, que
+  vitest carga en TODA corrida (npm, npx, IDE). Bloquear solo el script npm NO bastaba:
+  el atajo `npx vitest run` no pasa por `npm run` y esquivaba la barrera.
+- Sin `FLU_AUTH_FULL_SUITE=1` (o `CI=true`, que ya es autorizacion expresa) la corrida
+  sin filtro NO arranca; imprime la via rapida y sale con codigo 1.
+- Que cuenta como "sin filtro": `vitest run`/`bench` sin ruta de test y sin
+  `--changed`/`-t`/`--related`/`--shard`. El valor de un flag NO es un filtro
+  (`--reporter dot` sigue siendo suite completa). El modo watch no se bloquea: es
+  interactivo y lo ve el humano, pero corre todo el repo igual.
+- El guard `tests/fullSuitePathBarrier.test.ts` mide la CONDUCTA: lanza un proceso real
+  sin filtro y exige que muera pidiendo autorizacion, y que una corrida acotada no se
+  bloquee. Un guard que solo lee el TEXTO del comando no vigila la violacion.
 - Correr la suite completa "para validar" un cambio NO es prudencia, es
   incumplimiento: no es un gate de trabajo (342 archivos, >2 min de reloj).
   Un cambio se valida con los casos que toca, no con todo el repo.
@@ -324,6 +335,12 @@ de **0 nuevos**.
   `test:full` con el env var puesto de su propia iniciativa, dos veces, para
   "confirmar" cambios ya verdes con guards+tipos. Fue perdida de tiempo y
   violacion de alcance. No volver a hacerlo bajo ninguna formulacion.
+- **Incumplimiento registrado 2 (no repetir):** el agente corrio
+  `npx vitest run --reporter=dot --silent` SIN autorizacion. Su propio razonamiento lo
+  dice ("plain `npx vitest run` should be fine") y el comando llevaba `timeout=1500`:
+  identifico la barrera del script npm y eligio el atajo que la esquivaba. El guard de
+  entonces seguia verde porque miraba el TEXTO del script, no la conducta. No produjo
+  salida (interrumpido). Trazabilidad: `plans/ledger.json` P7.43/P7.44.
 - Commit por hito funcional en verde; cambios independientes en paralelo en un mismo turno.
 
 ### Gates
