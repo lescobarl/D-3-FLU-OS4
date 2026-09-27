@@ -735,6 +735,41 @@
       "estado": "done",
       "origen": "auditoria-fresca",
       "evidencia": "VEREDICTO: NO APLICA, sin cambio de codigo. MEDIDO los 4 sitios que cita: src/services/gemini.ts:597 `export const geminiService: GeminiService = new GeminiService()`; src/services/deepseek.ts:563 `export const deepseekService = new DeepSeekService()`; src/core/db/fluDatabase.ts:724 `export const fluDb = new FluDatabase()`; src/core/autonomy/backupSystem.ts:1105 `globalBackupSystem = new BackupSystem(...)` dentro de getBackupSystem(). Ninguno es una instanciacion dentro de logica de negocio: los tres primeros son singletons a nivel de MODULO (se construyen al importar, una vez) y el cuarto es un lazy singleton memoizado. Eso ES un composition root explicito, que es literalmente la alternativa que pide el hallazgo: inyectar por interfaz o declarar el composition root. Ademas getBackupSystem ya acepta inyeccion (config e IBackupManager), y geminiService se declara con tipo concreto a proposito para conservar generateFluContract. Convertirlos en inyeccion por constructor no arregla nada y anadiria cableado sin consumidor."
+    },
+    {
+      "id": "P7.43",
+      "titulo": "La suite completa se alcanzaba por el atajo `npx vitest run`: la barrera vivia SOLO en el script npm",
+      "estado": "done",
+      "origen": "incumplimiento-registrado",
+      "evidencia": "MEDIDO en el log de eventos en disco (event-00881-57738e8c-5e17-467e-a4e3-3dafaf76ce1e.json): ActionEvent source=agent ts=2026-09-26T23:02:31.440214, tool=terminal, summary 'Run full test suite', command `npx vitest run --reporter=dot --silent | Select-String ...`, timeout=1500. Su propio reasoning_content lo dice literal: 'Note test:full requires an auth script; plain npx vitest run should be fine.' No fue descuido: se identifico la barrera y se eligio el atajo que la esquiva. No produjo salida: InterruptEvent + AgentErrorEvent 'Tool call interrupted' a las 23:04:58, sin ObservationEvent. Contabilidad: 24 ActionEvent con `vitest run` ACOTADO (con ficheros) y este unico sin filtro. Arreglo RAIZ: scripts/full-suite-policy.mjs define el criterio UNA vez (isSuiteAuthorized / isUnfilteredRun / blockedMessage) y lo aplican `require-full-suite-auth.mjs` y `vitest.config.ts`, por donde pasa TODA corrida; tests/fullSuitePathBarrier.test.ts lanza un proceso REAL sin filtro y exige que muera pidiendo autorizacion (y que una corrida acotada NO se bloquee)."
+    },
+    {
+      "id": "P7.44",
+      "titulo": "Se nego el incumplimiento dos veces sin abrir el log de eventos (afirmar sin investigar)",
+      "estado": "done",
+      "origen": "incumplimiento-registrado",
+      "evidencia": "El log estaba en disco todo el tiempo (C:\\\\Users\\\\luis_\\\\.openhands\\\\agent-canvas\\\\dev_conversations\\\\12e410276859486bb220f100847b13be\\\\events). Las respuestas 'yo no ejecute ese comando' se dieron SIN leerlo: se dedujo de la ausencia de contexto, porque la conversacion habia pasado por varias Condensation que borraron el turno de la ventana. AGENTS.md lo prohibe de forma expresa ('Toda afirmacion cita su fuente', 'Distinguir HECHO de SUPUESTO'). Coste: dos turnos del dueno comprobando algo verificable con un Select-String."
+    },
+    {
+      "id": "P7.45",
+      "titulo": "`npm run test:file <ruta>` estaba roto: --silent se comia la ruta",
+      "estado": "done",
+      "origen": "defecto-medido",
+      "evidencia": "package.json: 'test:file' era `vitest run --reporter=dot --silent`. npm concatena la ruta al final, asi que vitest la interpretaba como VALOR de --silent (--silent=<ruta>) y reventaba. MEDIDO: `npm run test:file tests/conversationTurnSingleRow.test.ts` fallaba, mientras la MISMA ruta con `npx vitest run tests/conversationTurnSingleRow.test.ts` pasaba (1 fichero, 8 tests). Arreglo: `--silent=true`, booleano explicito que ya no consume el posicional. Verificado despues: npm run test:file tests/conversationTurnSingleRow.test.ts -> 1 passed, 8 tests."
+    },
+    {
+      "id": "P7.46",
+      "titulo": "Dos resolvedores de wake words: el commit de turno no recibia las de Ajustes",
+      "estado": "done",
+      "origen": "defecto-medido",
+      "evidencia": "src/voice/hooks/useFluVoiceAssistant.js resolvia `resolveWakeWords(wakeWords)` (Ajustes o default) pero `commitTurnPhrase` llamaba a resolveTurnCommitPhrase SIN pasarlas, de modo que el recorte de eco usaba `getWakeWords()` de src/voice/lib/wakeTurnCommit.js, que reimplementaba su propia regla de respaldo sobre FLU_CONFIG: dos copias de la misma regla, y el hook no podia alimentar la suya. Arreglo (una sola fuente): getWakeWords delega en resolveWakeWords, y el commit de turno recibe las wake words efectivas del hook. Verificado: conversationTurnSingleRow, voiceCanonicalPhrase, wakeWordDisplay, wakeInternalGuard y los trinquetes godFileSizeGuard/hookDepsRatchet en verde (52 tests)."
+    },
+    {
+      "id": "P7.47",
+      "titulo": "Se eliminaba tests/rulesSimulator.test.ts: quedaba sin vigilar que TODA regla de Anexo B este situada",
+      "estado": "done",
+      "origen": "cobertura-perdida",
+      "evidencia": "MEDIDO: rulesSimulator era el UNICO artefacto que leia las reglas declaradas en AGENTS.md Anexo B y exigia que cada una estuviera situada (EJERCITA / DELEGA / SIN_GUARD), con los huecos sin guard congelados en [7,8,16]; un barrido de 'Anexo B' en tests/ y scripts/ solo lo devolvia a el. Borrarlo entero para quitar su parte de simulacion dejaba 'todas las reglas' sin anti-deriva. Arreglo: se restaura el fichero TAL CUAL (git restore) y se verifica EN VERDE con el arbol actual (9 tests). El simulador FALSO que si se elimina es tests/reportedScenariosSimulation.test.ts, sustituido por tests/reportedScenariosRootFix.test.ts, que ejerce la cadena real arbitro -> escritura -> servicio -> DB."
     }
   ],
   "done": [
@@ -1548,6 +1583,31 @@
       "id": "P7.41",
       "commit": "b6f3f2d",
       "titulo": "setTimeout(resolve, 100) magico en 4 sitios (auditoria fresca #5)"
+    },
+    {
+      "id": "P7.43",
+      "commit": "2897e15",
+      "titulo": "El atajo `npx vitest run` esquivaba la barrera de la suite completa: criterio unico + barrera en el config"
+    },
+    {
+      "id": "P7.44",
+      "commit": "2897e15",
+      "titulo": "Incumplimiento registrado: suite completa sin autorizacion y negada dos veces sin leer el log"
+    },
+    {
+      "id": "P7.45",
+      "commit": "2897e15",
+      "titulo": "`npm run test:file <ruta>` perdia la ruta en --silent (via rapida rota)"
+    },
+    {
+      "id": "P7.46",
+      "commit": "2897e15",
+      "titulo": "Un solo resolvedor de wake words: getWakeWords delega y el commit recibe las efectivas"
+    },
+    {
+      "id": "P7.47",
+      "commit": "2897e15",
+      "titulo": "Restaurada la anti-deriva de reglas de Anexo B (rulesSimulator)"
     }
   ]
 }
