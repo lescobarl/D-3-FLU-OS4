@@ -35,26 +35,30 @@ import { cleanForSpeech, splitTranscriptAtWakeWord, normalizeSpokenCommand } fro
  */
 
 /**
- * Dominios deterministas soportados por el árbitro.
- * Orden de prioridad de resolución (config > juego > ambiente > función-adición
- * > horario > navegación): los dominios con efecto de estado (config/juego/
- * ambiente) y las funciones-adición (reminder/temporal/diario/nota) se evalúan
- * antes que la navegación pura para que un comando de configuración no se trague
- * una navegación, y viceversa.
+ * Dominios deterministas soportados por el árbitro, en su ORDEN DE RESOLUCIÓN.
+ *
+ * El orden real (el que ejecuta `resolveDeterministicCommand`) es:
+ *   config → navigation → game → environment → agendaCommand → shopping →
+ *   diary → note → (respuesta abierta del juego, última red).
+ *
+ * La NAVEGACIÓN va ANTES que el juego a propósito: el enunciado del usuario
+ * manda sobre la partida, así que "parar escucha" o "abre youtube" son órdenes y
+ * no respuestas del juego. La respuesta ABIERTA de la partida (`action: 'turn'`)
+ * es la ÚLTIMA red, para que un juego vivo no secuestre un comando ejecutable.
  *
  * §Concepto plataforma: las funciones-adición (recordatorios, temporales,
  * diario, notas) son "términos" que se suman al núcleo fijo; el árbitro las
- * reconoce en el MISMO punto único que config/juego/ambiente/horario/navegación.
+ * reconoce en el MISMO punto único que config/juego/ambiente/navegación.
  */
 export const ARBITER_DOMAINS = Object.freeze([
   'config',
+  'navigation',
   'game',
   'environment',
   'agendaCommand',
   'shopping',
   'diary',
   'note',
-  'navigation',
 ])
 
 // ------------------------------------------------------------
@@ -194,13 +198,13 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
 
-  // 3. Ambiente (environmentIntents): activar/reset de ambiente.
+  // 4. Ambiente (environmentIntents): activar/reset de ambiente.
   const env = resolveEnvironmentIntent(transcript, language)
   if (env?.tipo) {
     return { matched: true, domain: 'environment', action: env, channel: 'flu' }
   }
 
-  // 3.a Calendario unificado (agendaCommand): crear/editar/cancelar de
+  // 5. Calendario unificado (agendaCommand): crear/editar/cancelar de
   //     alarma/recordatorio/cita/junta/clase por el parser y servicio ÚNICOS.
   //     Se evalúa ANTES que los dominios viejos (reminder/temporal/horario)
   //     para que el sustantivo mande y exista UNA sola ruta de escritura.
@@ -210,17 +214,17 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'agendaCommand', action: agendaCmd, channel: 'flu' }
   }
 
-  // 3.b Reuniones (junta/reunión/meeting): ya cubiertas por agendaCommand
+  // 6. Reuniones (junta/reunión/meeting): ya cubiertas por agendaCommand
   //     (kind 'junta'). No hay ruta doble: el calendario unificado las resuelve.
 
-  // 4. Lista de compras (shoppingIntentParser): función-adición separada del
+  // 7. Lista de compras (shoppingIntentParser): función-adición separada del
   //    calendario. Se evalúa ANTES que recordatorios.
   const shopping = parseShoppingIntent(transcript)
   if (shopping?.handled && shopping?.action) {
     return { matched: true, domain: 'shopping', action: shopping, channel: 'flu' }
   }
 
-  // 5. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
+  // 8. Diario (función-adición). Se evalúa ANTES que la nota porque su patrón
   //    ("... en el diario ...") es MÁS específico que el "apunta {texto}" de
   //    nota: así "anota X en el diario" gana diario.
   const diary = parseDiaryIntent(transcript, { language })
@@ -228,22 +232,22 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'diary', action: diary, channel: 'flu' }
   }
 
-  // 7. Nota (función-adición): "nota ...", "apunta/anota {texto}", etc.
+  // 9. Nota (función-adición): "nota ...", "apunta/anota {texto}", etc.
   const note = recognizeNoteIntent(transcript)
   if (note) {
     return { matched: true, domain: 'note', action: note, channel: 'flu' }
   }
 
-  // 8. Agenda del día ("¿qué hay para hoy?"): cubierta por agendaCommand.list.
+  // 10. Agenda del día ("¿qué hay para hoy?"): cubierta por agendaCommand.list.
   //    No hay ruta doble.
 
-  // 8. Horario por dictado: ya cubierto por agendaCommand (crear/consultar/
+  // 11. Horario por dictado: ya cubierto por agendaCommand (crear/consultar/
   //    quitar clase). No hay ruta doble.
 
-  // 9. Navegacion: se resuelve ANTES del juego (paso 2) para que la partida no
-  //    cambie el significado de lo que dices. Sin ruta doble.
+  // 12. Navegación: ya resuelta en el paso 2, antes del juego, para que la
+  //     partida no cambie el significado de lo que dices. Sin ruta doble.
 
-  // 10. Respuesta abierta de la partida activa: SOLO si ningun otro dominio la
+  // 13. Respuesta abierta de la partida activa: SOLO si ningun otro dominio la
   //     reclama. Es la ultima red, de modo que la partida nunca secuestra un
   //     comando ejecutable (regla: "permite ejecutar cualquier comando").
   if (game?.gameId) {

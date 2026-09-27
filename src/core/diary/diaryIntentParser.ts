@@ -58,3 +58,22 @@ export function parseDiaryIntent(
     data: { content },
   };
 }
+
+/**
+ * Deriva la intencion de voz del diario (alta) a partir de un texto crudo, con
+ * la MISMA fuente unica de parseo (`parseDiaryIntent`). Devuelve
+ * `{ action, data }` o null si no hay contenido.
+ *
+ * Lo usan la ruta cruda del handler de voz y el rescate por dominio, para que no
+ * haya regex paralelas en App. Mismo contrato que `resolveNoteVoiceIntent` en
+ * notas: UNA sola fuente para reconocer el diario.
+ */
+export function resolveDiaryVoiceIntent(
+  rawText: string,
+  options: DiaryIntentParserOptions = {},
+): { action: string; data: { content: string } } | null {
+  const parsed = parseDiaryIntent(rawText, options);
+  const content = parsed.data?.content?.trim();
+  if (!parsed.handled || !content) return null;
+  return { action: 'diary.addEntry', data: { content } };
+}

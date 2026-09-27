@@ -152,6 +152,7 @@ import {
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
 import { parseNoteIntentText, resolveNoteVoiceIntent } from './voice/lib/noteIntentParser';
+import { resolveDiaryVoiceIntent } from './core/diary/diaryIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
 import { resolveAgendaDomainIntent, askMissingInstant } from './core/agenda/domainScopedIntent';
@@ -408,24 +409,16 @@ function resolveDomainScopedIntent(
         return null;
     }
     if (domain === 'diary') {
-        // Mismo punto de parseo que __fluHandleDiaryText (texto crudo).
-        const clean = String(text || '').trim();
-        const enDiario =
-            /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(
-                clean,
-            );
-        const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
-        const match = enDiario || diarioPrefijo;
-        const content = match?.[1]?.trim();
-        if (content) {
-            return {
-                matched: true,
-                domain: 'diary',
-                action: { handled: true, action: 'diary.add', data: { content } },
-                channel: 'flu',
-            };
-        }
-        return null;
+        // Fuente unica de parseo del diario (el MISMO resolver que el handler):
+        // sin regex paralelas que puedan divergir del parser de core.
+        const intent = resolveDiaryVoiceIntent(text, { language: _opts.language });
+        if (!intent) return null;
+        return {
+            matched: true,
+            domain: 'diary',
+            action: { handled: true, action: intent.action, data: intent.data },
+            channel: 'flu',
+        };
     }
     // Tramo de AGENDA: entra lo que la clasificacion del LLM ya decidio (el
     // texto sigue mandando para el instante). Ver core/agenda/domainScopedIntent.
@@ -3054,7 +3047,7 @@ function App() {
     // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
     window.__fluHandleDiaryText = useCallback(
         async (input: DiaryVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
-            // DIARIO PAUSADO: no se crean entradas hasta su reimplementación.
+            // El diario se activa por config (diary.enabled), no por codigo.
             if (!FLU_CONFIG.diary?.enabled) return '';
             const lang = (languageRef.current as 'es' | 'en') || 'es';
             const diaryVoice = FLU_CONFIG.diary?.voice || {};
@@ -3079,15 +3072,8 @@ function App() {
                 const data = input.data || {};
                 content = data.content ? String(data.content).trim() : null;
             } else {
-                const clean = String(input || '').trim();
-                if (!clean) return '';
-                // "escribe/guarda/anota en el diario {contenido}"
-                const enDiario = /^(?:escribe|guarda|anota|apunta|registra)\s+(?:en\s+)?(?:el\s+|mi\s+)?diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
-                // "diario: {contenido}" / "diario {contenido}"
-                const diarioPrefijo = /^diario\s*[:,\-]?\s+(.+)$/i.exec(clean);
-                const match = enDiario || diarioPrefijo;
-                if (!match) return '';
-                content = match[1].trim();
+                // Fuente unica: el MISMO resolver que el rescate por dominio.
+                content = resolveDiaryVoiceIntent(String(input || ''), { language: lang })?.data.content ?? null;
             }
 
             if (!content) return '';

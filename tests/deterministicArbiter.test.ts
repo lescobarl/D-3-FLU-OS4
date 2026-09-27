@@ -429,19 +429,33 @@ describe('deterministicArbiter — resolveStatefulDomains', () => {
 
 describe('deterministicArbiter — dominios declarados', () => {
   it('expone los dominios soportados en orden de prioridad', () => {
-    // §Concepto plataforma (Phase B): las funciones-adición (reminder/temporal/
-    // diary/note) se suman como términos al núcleo fijo, ANTES de horario y
-    // navegación, en el MISMO punto único de resolución.
+    // El orden declarado es el ORDEN REAL de resolución (ver el comentario del
+    // módulo): la navegación va ANTES que el juego para que el enunciado del
+    // usuario mande sobre la partida, y la respuesta abierta del juego
+    // (`action: 'turn'`) queda como última red.
     expect(ARBITER_DOMAINS).toEqual([
       'config',
+      'navigation',
       'game',
       'environment',
       'agendaCommand',
       'shopping',
       'diary',
       'note',
-      'navigation',
     ]);
+  });
+
+  it('el orden declarado coincide con la conducta observada', () => {
+    // Anti-deriva: si se reordena la resolución sin mover ARBITER_DOMAINS (o al
+    // revés), estos solapes reales fallan y dicen cuál. Antes, el orden declarado
+    // describía el comportamiento ANTERIOR (navegación al final).
+    const pos = (d: string) => (ARBITER_DOMAINS as readonly string[]).indexOf(d);
+    expect(pos('config')).toBe(0);
+    expect(pos('navigation')).toBeLessThan(pos('game'));
+    expect(pos('diary')).toBeLessThan(pos('note'));
+    expect(pos('note')).toBe(ARBITER_DOMAINS.length - 1);
+    expect(resolveDeterministicCommand('iniciar conversacion').domain).toBe('navigation');
+    expect(resolveDeterministicCommand('anota en el diario que fui al parque').domain).toBe('diary');
   });
 });
 
