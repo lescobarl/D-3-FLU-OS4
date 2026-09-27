@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
+import { ARBITER_DOMAINS, resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -38,6 +39,29 @@ const stripLineComment = (line: string) => {
   const trimmed = line.trim()
   if (trimmed.startsWith('*') || trimmed.startsWith('/*') || trimmed.startsWith('//')) return ''
   return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
+}
+
+/** Dueño único del reconocimiento del diario (alta por voz). */
+export const DIARY_OWNER = 'src/core/diary/diaryIntentParser.ts'
+/** Copias del patrón de comando de diario: regex que arranca en `^(?:verbos…)`. */
+const DIARY_VERBOS = /\/\^\(\?:[^/\r\n]*\)[^/\r\n]*diario/i
+/** Copias del prefijo directo: regex que arranca en `^diario`. */
+const DIARY_PREFIJO = /\/\^diario\b/i
+/**
+ * Copias del patrón de comando de diario fuera del dueño, por COMPORTAMIENTO (la
+ * forma de la regex, no el nombre con que se declare). Cualquier copia es una
+ * ruta paralela: puede divergir del dueño en lo que acepta.
+ */
+export function diaryRouteOffenders(src: string, fileName: string): string[] {
+  if (fileName === DIARY_OWNER) return []
+  const out: string[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    const l = stripLineComment(line)
+    if (DIARY_VERBOS.test(l) || DIARY_PREFIJO.test(l)) {
+      out.push(`${fileName}:${i + 1}:${l.trim().slice(0, 100)}`)
+    }
+  })
+  return out
 }
 
 /** Busca `re` en cada línea de `files` y devuelve `archivo:linea:contenido`. */
@@ -142,5 +166,35 @@ describe('voiceSingleSourceGuard — una sola fuente de verdad (§9)', () => {
       findings,
       `La barra cachea estado en el store (N=${findings.length}); recibe la frase canónica por props:\n  ${findings.join('\n  ')}`,
     ).toEqual([])
+  })
+
+  it('G8 — el diario se reconoce en una sola fuente (sin copias de su patrón)', () => {
+    const offenders = FILES
+      .filter((f) => rel(f) !== DIARY_OWNER)
+      .flatMap((f) => diaryRouteOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `Patrón de comando de diario copiado fuera de ${DIARY_OWNER} (N=${offenders.length}):\n  ${offenders.join('\n  ')}`).toEqual([])
+    const owner = readFileSync(join(ROOT, DIARY_OWNER), 'utf8')
+    expect(owner, 'el dueño debe publicar el resolver compartido').toContain('export function resolveDiaryVoiceIntent')
+    expect(readFileSync(join(SRC, 'App.tsx'), 'utf8'), 'App debe reconocer el diario con la fuente única').toContain('resolveDiaryVoiceIntent')
+  })
+
+  it('G8 — el detector no es decorativo', () => {
+    const copia = "const r = /^(?:escribe|anota)\\s+diario\\s*[:,-]?\\s+(.+)$/i.exec(x);"
+    expect(diaryRouteOffenders(copia, 'src/App.tsx')).toHaveLength(1)
+    expect(diaryRouteOffenders(copia, DIARY_OWNER)).toEqual([])
+    expect(diaryRouteOffenders('const x = 1; // diario', 'src/App.tsx')).toEqual([])
+  })
+
+  it('G9 — el orden declarado del árbitro es el que se ejecuta', () => {
+    // El array declara el ORDEN DE RESOLUCIÓN. Si se reordena la resolución sin
+    // mover el array (o al revés), estos solapes reales lo dicen. Nació de un
+    // defecto medido: el array describía el comportamiento ANTERIOR (navegación
+    // al final) y quien lo creyera reintroducía el secuestro de comandos.
+    const pos = (d: string) => (ARBITER_DOMAINS as readonly string[]).indexOf(d)
+    expect(pos('config'), 'config es el primero').toBe(0)
+    expect(pos('navigation'), 'el enunciado manda sobre la partida').toBeLessThan(pos('game'))
+    expect(pos('diary'), 'el diario es más específico que la nota').toBeLessThan(pos('note'))
+    expect(resolveDeterministicCommand('iniciar conversacion').domain).toBe('navigation')
+    expect(resolveDeterministicCommand('anota en el diario que fui al parque').domain).toBe('diary')
   })
 })

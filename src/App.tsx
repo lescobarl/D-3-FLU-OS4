@@ -151,7 +151,7 @@ import {
 } from './voice/lib/audioMath';
 import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
 import { normalizeJuego } from './voice/lib/configCommands';
-import { parseNoteIntentText, resolveNoteVoiceIntent } from './voice/lib/noteIntentParser';
+import { resolveNoteVoiceIntent } from './voice/lib/noteIntentParser';
 import { resolveDiaryVoiceIntent } from './core/diary/diaryIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
@@ -390,23 +390,17 @@ function resolveDomainScopedIntent(
 ): ArbiterResult | null {
     if (!domain || !text) return null;
     if (domain === 'note') {
-        const parsed = parseNoteIntentText(text);
-        if (parsed?.label) {
-            return {
-                matched: true,
-                domain: 'note',
-                action: {
-                    handled: true,
-                    action: 'notes.add',
-                    data: {
-                        label: parsed.label,
-                        ...(parsed.body ? { body: String(parsed.body).trim() } : {}),
-                    },
-                },
-                channel: 'flu',
-            };
-        }
-        return null;
+        // Fuente unica de parseo de notas (el MISMO resolver que el handler):
+        // alta, borrado por destino, vaciado y quitar item. Antes solo entendia
+        // el alta, asi que el borrado por esta ruta se perdia.
+        const intent = resolveNoteVoiceIntent(text) as NoteVoiceIntent | null;
+        if (!intent) return null;
+        return {
+            matched: true,
+            domain: 'note',
+            action: { handled: true, action: intent.action, data: intent.data },
+            channel: 'flu',
+        };
     }
     if (domain === 'diary') {
         // Fuente unica de parseo del diario (el MISMO resolver que el handler):

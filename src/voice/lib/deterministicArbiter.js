@@ -20,7 +20,7 @@
 
 import { resolveConfigCommandFromText } from './configCommands.js'
 import { resolveGameCommandFromText } from './gameCommands.js'
-import { parseNoteIntentText, parseNoteItemRemoveIntentText, parseNoteRemoveIntentText } from './noteIntentParser.js'
+import { resolveNoteVoiceIntent } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
@@ -86,36 +86,14 @@ function resolveChannelForNavigation(commandId = '') {
 }
 
 // ------------------------------------------------------------
-// Reconocimiento de nota / diario (función-adición)
-// ------------------------------------------------------------
-// No existe un parser dedicado para nota/diario (viven como regex inline en
-// App.tsx). Para que el árbitro sea la fuente única de reconocimiento, se
-// replican AQUÍ los mismos patrones (fuente única por intención) como funciones
-// puras. El despacho real (crear la nota/entrada) sigue en App.tsx.
+// Orden nota-vs-diario (se aplica en los pasos 8/9 de resolveDeterministicCommand):
+// el patrón de diario ("... en el diario ...") es MÁS específico que el apunta
+// genérico de nota ("anota {texto}"), así que el diario se evalúa ANTES que la
+// nota para que "anota X en el diario" se enrute bien.
 //
-// Orden nota-vs-diario: el patrón de diario ("... en el diario ...") es MÁS
-// específico que el apunta genérico de nota ("anota {texto}"), así que el diario
-// se evalúa ANTES que la nota para que "anota X en el diario" se enrute bien.
-function recognizeNoteIntent(text = '') {
-  // Quitar un ITEM concreto ("borra el cloro de la nota del súper") va ANTES del
-  // borrado de nota completa: es más específico y el otro patrón no lo captura.
-  const itemRemoval = parseNoteItemRemoveIntentText(text)
-  if (itemRemoval) {
-    return { handled: true, action: 'notes.removeItem', data: { label: itemRemoval.label, item: itemRemoval.item } }
-  }
-  const removal = parseNoteRemoveIntentText(text)
-  if (removal) {
-    if (removal.all) {
-      return { handled: true, action: 'notes.clear', data: {} }
-    }
-    if (removal.target) {
-      return { handled: true, action: 'notes.remove', data: { target: removal.target } }
-    }
-  }
-  const parsed = parseNoteIntentText(text)
-  if (!parsed || !parsed.label) return null
-  return { handled: true, action: 'notes.add', data: { label: parsed.label, body: parsed.body } }
-}
+// El reconocimiento de nota (alta / borrado por destino / vaciado / quitar ítem)
+// es el MISMO resolver que usa el despacho: `resolveNoteVoiceIntent`. Antes se
+// replicaba AQUÍ su algoritmo, así que arreglar una copia no arreglaba la otra.
 
 /**
  * Resuelve de forma determinista y local un comando de voz a partir del texto
@@ -232,10 +210,11 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'diary', action: diary, channel: 'flu' }
   }
 
-  // 9. Nota (función-adición): "nota ...", "apunta/anota {texto}", etc.
-  const note = recognizeNoteIntent(transcript)
+  // 9. Nota (función-adición): "nota ...", "apunta/anota {texto}", borrado por
+  //    destino, vaciado y quitar ítem. Fuente única: `resolveNoteVoiceIntent`.
+  const note = resolveNoteVoiceIntent(transcript)
   if (note) {
-    return { matched: true, domain: 'note', action: note, channel: 'flu' }
+    return { matched: true, domain: 'note', action: { handled: true, ...note }, channel: 'flu' }
   }
 
   // 10. Agenda del día ("¿qué hay para hoy?"): cubierta por agendaCommand.list.
