@@ -9,16 +9,38 @@
 // Devuelve `timeOfDay` en 'HH:MM' (24h) y el texto SIN las horas (`rest`).
 // ============================================================
 
+import { resolveSpokenNumber, spokenNumberAlternation } from '../../lib/spokenNumbers';
+
 export interface PickedTimeOfDay {
     timeOfDay: string | null;
     rest: string;
 }
 
-export const ES_TIME =
-    /\b(?:a|para|hacia|de)\s+las?\s+(\d{1,2})(?:(?:\s*[:.]\s*(\d{2}))|(?:\s+(\d{2}))|(?:\s+con\s+(\d{1,2})\s+minutos?))?\s*(?:de\s+la\s+(mañana|manana|tarde|noche|madrugada))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)?/i;
+// Hora y minuto también en PALABRAS ("a las siete", "y media"): la alternancia
+// se construye desde el léxico ÚNICO (lib/spokenNumbers), nunca desde una lista
+// de frases paralela que pueda divergir de la que usan los demás flujos.
+const ES_WORDS = spokenNumberAlternation('es');
+const EN_WORDS = spokenNumberAlternation('en');
 
-export const EN_TIME =
-    /\b(?:at|for)\s+(\d{1,2})(?::(\d{2})|\s+(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i;
+export const ES_TIME = new RegExp(
+    '\\b(?:a|para|hacia|de)\\s+las?\\s+(\\d{1,2}|' +
+        ES_WORDS +
+        ')(?:(?:\\s*[:.]\\s*(\\d{2}))|(?:\\s+(\\d{2}))|(?:\\s+con\\s+(\\d{1,2})\\s+minutos?)|(?:\\s+y\\s+(media|cuarto|' +
+        ES_WORDS +
+        ')))?' +
+        '\\s*(?:de\\s+la\\s+(mañana|manana|tarde|noche|madrugada))?' +
+        '\\s*(p\\.?\\s*m\\.?|a\\.?\\s*m\\.?)?',
+    'i',
+);
+
+export const EN_TIME = new RegExp(
+    '\\b(?:at|for)\\s+(\\d{1,2}|' +
+        EN_WORDS +
+        ')(?::(\\d{2})|\\s+(\\d{2}))?(?:\\s+(' +
+        EN_WORDS +
+        '))?\\s*(am|pm|a\\.m\\.|p\\.m\\.)?\\b',
+    'i',
+);
 
 // Hora suelta con meridiem explícito ("10 p.m", "10 pm", "10 p. m.") SIN "a las".
 export const BARE_MERIDIEM_TIME = /\b(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(p\.?\s*m\.?|a\.?\s*m\.?)\b/i;
@@ -32,11 +54,26 @@ function removeRange(text: string, start: number, end: number): string {
     return `${text.slice(0, start)} ${text.slice(end)}`;
 }
 
-function resolveEsTime(m: RegExpExecArray): string {
-    let h = Number(m[1]);
-    const min = m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : m[4] ? Number(m[4]) : 0;
-    const part = m[5] ? m[5].toLowerCase() : null;
-    const meridiem = m[6] ? m[6].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
+/** Minutos desde una palabra hablada: "y media", "y cuarto", "y veinte". */
+function resolveMinuteWord(word: string | undefined): number | null {
+    if (!word) return null;
+    const w = word.toLowerCase();
+    if (w === 'media') return 30;
+    if (w === 'cuarto') return 15;
+    return resolveSpokenNumber(w);
+}
+
+function resolveEsTime(m: RegExpExecArray): string | null {
+    // La hora llega en cifra o en palabra ("a las 7" / "a las siete").
+    const base = resolveSpokenNumber(m[1]);
+    if (base == null) return null;
+    let h = base;
+    const min =
+        (m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : m[4] ? Number(m[4]) : null) ??
+        resolveMinuteWord(m[5]) ??
+        0;
+    const part = m[6] ? m[6].toLowerCase() : null;
+    const meridiem = m[7] ? m[7].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
     if (meridiem === 'pm') {
         if (h < 12) h += 12;
     } else if (meridiem === 'am') {
@@ -50,10 +87,12 @@ function resolveEsTime(m: RegExpExecArray): string {
     return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 }
 
-function resolveEnTime(m: RegExpExecArray): string {
-    let h = Number(m[1]);
-    const min = m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : 0;
-    const meridiem = m[4] ? m[4].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
+function resolveEnTime(m: RegExpExecArray): string | null {
+    const base = resolveSpokenNumber(m[1]);
+    if (base == null) return null;
+    let h = base;
+    const min = (m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : null) ?? resolveSpokenNumber(m[4]) ?? 0;
+    const meridiem = m[5] ? m[5].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
     if (meridiem === 'pm') {
         if (h < 12) h += 12;
     } else if (meridiem === 'am') {
@@ -81,21 +120,27 @@ export function pickTimeOfDay(text: string): PickedTimeOfDay {
 
     const es = ES_TIME.exec(source);
     if (es) {
-        candidates.push({
-            start: es.index,
-            end: es.index + es[0].length,
-            timeOfDay: resolveEsTime(es),
-            rank: es[6] ? 1 : 2,
-        });
+        const timeOfDay = resolveEsTime(es);
+        if (timeOfDay) {
+            candidates.push({
+                start: es.index,
+                end: es.index + es[0].length,
+                timeOfDay,
+                rank: es[7] ? 1 : 2,
+            });
+        }
     }
     const en = EN_TIME.exec(source);
     if (en) {
-        candidates.push({
-            start: en.index,
-            end: en.index + en[0].length,
-            timeOfDay: resolveEnTime(en),
-            rank: en[4] ? 1 : 2,
-        });
+        const timeOfDay = resolveEnTime(en);
+        if (timeOfDay) {
+            candidates.push({
+                start: en.index,
+                end: en.index + en[0].length,
+                timeOfDay,
+                rank: en[5] ? 1 : 2,
+            });
+        }
     }
     const bare = BARE_MERIDIEM_TIME.exec(source);
     if (bare) {

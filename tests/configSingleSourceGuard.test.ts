@@ -19,6 +19,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { pickTimeOfDay } from '../src/core/temporal/timeOfDay'
+import {
+    SPOKEN_NUMBERS_EN,
+    SPOKEN_NUMBERS_ES,
+    resolveSpokenNumber,
+} from '../src/lib/spokenNumbers'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 /** Origen unico declarado del sample rate. */
@@ -150,4 +156,70 @@ describe('P5.5/P5.6/P5.7 configSingleSource - el detector no es decorativo', () 
     expect(tokenBudgetOffenders('maxTokens = 2048,', 'src/voice/lib/gemini.js')).toHaveLength(1)
     expect(tokenBudgetOffenders('maxOutputTokens: 2048,', 'src/voice/lib/fluConfig.js')).toEqual([])
   })
+})
+
+
+// ------------------------------------------------------------
+// P5.8 - El léxico de números hablados tiene UN solo origen y la hora lo usa.
+// Antes la hora sólo aceptaba cifras y el léxico vivía copiado dentro de
+// configCommands: "a las siete" no existía para ningún flujo (la agenda creaba
+// el item SIN la hora). El detector no es decorativo: una palabra fuera del
+// léxico NO resuelve.
+// ------------------------------------------------------------
+describe('P5.8 configSingleSource - el léxico de números hablados tiene un solo origen', () => {
+    it('resuelve cifras y palabras (es/en) y acota las cifras a 2 dígitos', () => {
+        expect(resolveSpokenNumber('7')).toBe(7)
+        expect(resolveSpokenNumber('siete')).toBe(7)
+        expect(resolveSpokenNumber('Siete')).toBe(7)
+        expect(resolveSpokenNumber('veinticinco')).toBe(25)
+        expect(resolveSpokenNumber('seven')).toBe(7)
+        expect(resolveSpokenNumber('1995')).toBeNull()
+        expect(resolveSpokenNumber('folegre')).toBeNull()
+    })
+
+    it('la hora en palabras resuelve igual que en cifras (es)', () => {
+        for (const [word, value] of Object.entries(SPOKEN_NUMBERS_ES)) {
+            if (value < 1 || value > 23) continue
+            const hh = String(value).padStart(2, '0')
+            expect(pickTimeOfDay(`pon una alarma a las ${word}`).timeOfDay, `a las ${word}`).toBe(`${hh}:00`)
+        }
+    })
+
+    it('la hora en palabras resuelve igual que en cifras (en)', () => {
+        for (const [word, value] of Object.entries(SPOKEN_NUMBERS_EN)) {
+            if (value < 1 || value > 23) continue
+            const hh = String(value).padStart(2, '0')
+            expect(pickTimeOfDay(`set an alarm at ${word}`).timeOfDay, `at ${word}`).toBe(`${hh}:00`)
+        }
+    })
+
+    it('parte del día y minutos hablados', () => {
+        expect(pickTimeOfDay('a las siete de la tarde').timeOfDay).toBe('19:00')
+        expect(pickTimeOfDay('a las siete de la noche').timeOfDay).toBe('19:00')
+        expect(pickTimeOfDay('a las doce de la noche').timeOfDay).toBe('00:00')
+        expect(pickTimeOfDay('a las siete y media').timeOfDay).toBe('07:30')
+        expect(pickTimeOfDay('a las siete y cuarto').timeOfDay).toBe('07:15')
+        expect(pickTimeOfDay('a las siete y veinte').timeOfDay).toBe('07:20')
+        expect(pickTimeOfDay('at seven thirty').timeOfDay).toBe('07:30')
+        expect(pickTimeOfDay('at seven pm').timeOfDay).toBe('19:00')
+    })
+
+    it('las cifras siguen resolviendo igual (sin regresión)', () => {
+        expect(pickTimeOfDay('a las 7').timeOfDay).toBe('07:00')
+        expect(pickTimeOfDay('a las 7:30').timeOfDay).toBe('07:30')
+        expect(pickTimeOfDay('a las 7 de la tarde').timeOfDay).toBe('19:00')
+        expect(pickTimeOfDay('a las 10 pm').timeOfDay).toBe('22:00')
+        expect(pickTimeOfDay('a mediodia').timeOfDay).toBe('12:00')
+        expect(pickTimeOfDay('a medianoche').timeOfDay).toBe('00:00')
+    })
+
+    it('la hora consumida no deja el número en el texto restante', () => {
+        expect(pickTimeOfDay('pon una alarma a las siete').rest).not.toMatch(/siete/)
+        expect(pickTimeOfDay('pon un recordatorio para las ocho').rest).not.toMatch(/ocho/)
+    })
+
+    it('el detector no es decorativo: una palabra fuera del léxico no resuelve', () => {
+        expect(pickTimeOfDay('a las folegre').timeOfDay).toBeNull()
+        expect(resolveSpokenNumber('folegre')).toBeNull()
+    })
 })
