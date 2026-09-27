@@ -264,3 +264,15 @@ export const END_GAME_FRAMES: readonly string[] = Object.freeze([
 export function matchesEndGameFrames(normalized = '', frames: readonly string[] = END_GAME_FRAMES): boolean {
     return hasAnyToken(normalized, frames);
 }
+
+/**
+ * Palabras de funcion que NO cuentan como "dije una palabra": sin esto, en
+ * juegos de vocabulario ("una palabra que empiece con...") un "el" o un "la"
+ * daban acierto gratis. Fuente unica: la usan abecedario y palabras encadenadas.
+ */
+export const STOPWORDS_ES: ReadonlySet<string> = new Set([
+    'el', 'la', 'lo', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'del',
+    'es', 'en', 'se', 'si', 'te', 'tu', 'tus', 'me', 'mi', 'mis', 'su', 'sus',
+    'no', 'ni', 'por', 'para', 'que', 'con', 'de', 'y', 'o', 'le', 'les',
+    'muy', 'ya', 'hay', 'son', 'mas', 'tan', 'sin',
+]);

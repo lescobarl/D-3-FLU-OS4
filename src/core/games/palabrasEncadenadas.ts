@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, STOPWORDS_ES, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -48,6 +48,7 @@ const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 interface PalabrasEncadenadasState {
     word: string;
     nextLetter: string;
+    usadas: string[];
     maxRounds: number;
     phase: 'announce' | 'done';
 }
@@ -87,11 +88,27 @@ function findBankWord(normalized: string, requiredLetter?: string): string | nul
 }
 
 /** Palabra del banco que continúa la cadena desde la última letra dada. */
-function continuationFor(playerWord: string, rng: RandomSource): string {
+function continuationFor(playerWord: string, usadas: readonly string[], rng: RandomSource): string | null {
     const letter = lastLetter(playerWord);
-    const candidates = WORD_BANK.filter((word) => firstLetter(word) === letter && word !== playerWord);
-    const pool = candidates.length > 0 ? candidates : WORD_BANK.filter((word) => firstLetter(word) === letter);
-    return pickRandom(pool, rng);
+    const conLetra = WORD_BANK.filter((word) => firstLetter(word) === letter && word !== playerWord);
+    const nuevas = conLetra.filter((word) => !usadas.includes(word));
+    const pool = nuevas.length > 0 ? nuevas : conLetra;
+    // El banco esta cerrado para SUS palabras, no para el vocabulario del nino:
+    // si dice una palabra que acaba en una letra que el banco no puede seguir,
+    // no hay continuacion (antes se devolvia undefined).
+    return pool.length > 0 ? pickRandom(pool, rng) : null;
+}
+
+/**
+ * Palabra REAL dicha por el nino que empieza por la letra pedida. La regla real
+ * acepta su vocabulario; exigir el banco local volvia el juego injugable
+ * (con la letra N, "naranja" se rechazaba).
+ */
+function realWordWithLetter(normalized: string, letra: string): string | null {
+    for (const token of normalized.split(/\s+/)) {
+        if (token.length >= 2 && token.startsWith(letra) && !STOPWORDS_ES.has(token)) return token;
+    }
+    return null;
 }
 
 export function createPalabrasEncadenadasEngine(options?: { random?: RandomSource }): GameEngine<PalabrasEncadenadasState> {
@@ -102,6 +119,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         const state: PalabrasEncadenadasState = {
             word: startWord,
             nextLetter: lastLetter(startWord),
+            usadas: [startWord],
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
@@ -122,6 +140,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 state: {
                     word: startWord,
                     nextLetter: lastLetter(startWord),
+                    usadas: [startWord],
                     maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
                     phase: 'announce',
                 },
@@ -174,8 +193,35 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 };
             }
 
-            // Palabra del niño (del banco local), prefiriendo la que enlaza.
-            const playerWord = findBankWord(normalized, state.nextLetter);
+            // Palabra del nino: primero el banco (prefiere la que enlaza) y, si no
+            // esta, CUALQUIER palabra real que empiece por la letra pedida. La regla
+            // real acepta el vocabulario del nino; exigir el banco lo volvia injugable.
+            const bankWord = findBankWord(normalized, state.nextLetter);
+            const playerWord = bankWord && firstLetter(bankWord) === state.nextLetter
+                ? bankWord
+                : realWordWithLetter(normalized, state.nextLetter);
+            if (playerWord && state.usadas.includes(playerWord)) {
+                return {
+                    prompt: `Ya dijiste "${playerWord}". Di una palabra nueva que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
+                    valid: false,
+                    gameOver: false,
+                    score: session.score,
+                    animation: 'Idle',
+                    emotion: 'neutral',
+                    error: 'palabra repetida',
+                };
+            }
+            if (!playerWord && bankWord) {
+                return {
+                    prompt: `¡Casi! Tu palabra debe empezar con la letra ${state.nextLetter.toUpperCase()}. Inténtalo otra vez.`,
+                    valid: false,
+                    gameOver: false,
+                    score: session.score,
+                    animation: 'Idle',
+                    emotion: 'encouraging',
+                    error: 'la palabra no empieza con la letra pedida',
+                };
+            }
             if (!playerWord) {
                 return {
                     prompt: `No reconozco esa palabra. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
@@ -188,18 +234,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 };
             }
 
-            if (firstLetter(playerWord) !== state.nextLetter) {
-                return {
-                    prompt: `¡Casi! Tu palabra debe empezar con la letra ${state.nextLetter.toUpperCase()}. Inténtalo otra vez.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'la palabra no empieza con la letra pedida',
-                };
-            }
-
+            state.usadas.push(playerWord);
             session.score += 1;
             session.round += 1;
             if (session.round > state.maxRounds) {
@@ -215,7 +250,20 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 };
             }
 
-            const fluWord = continuationFor(playerWord, rng);
+            const fluWord = continuationFor(playerWord, state.usadas, rng);
+            if (!fluWord) {
+                state.phase = 'done';
+                return {
+                    prompt: `¡Me ganaste! No se me ocurre ninguna palabra con la letra ${lastLetter(playerWord).toUpperCase()}. ¡Muy bien!`,
+                    valid: true,
+                    gameOver: true,
+                    won: true,
+                    score: session.score,
+                    animation: 'Dance',
+                    emotion: 'happy',
+                };
+            }
+            state.usadas.push(fluWord);
             state.word = fluWord;
             state.nextLetter = lastLetter(fluWord);
             return {

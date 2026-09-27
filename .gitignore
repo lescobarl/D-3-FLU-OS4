@@ -33,3 +33,4 @@ reports/
 
 # TypeScript incremental (cache en node_modules/.cache/ts)
 tsconfig.tsbuildinfo
+.agent_tmp/

@@ -16,9 +16,11 @@
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
 import {
+    stripDiacritics,
     normalizeForMatch, hasAnyToken,
     adoptRandom,
     readRounds,
+    STOPWORDS_ES,
     END_GAME_FRAMES,
     matchesEndGameFrames,
 } from './gameUtils';
@@ -37,11 +39,26 @@ export const ABECEDARIO_BANK: readonly AbecedarioItem[] = Object.freeze([
     { letra: 'e', palabra: 'elefante', pista: 'Un animal enorme con trompa.' },
     { letra: 'f', palabra: 'fresa', pista: 'Una fruta roja y dulce.' },
     { letra: 'g', palabra: 'gato', pista: 'Un felino que dice miau.' },
+    { letra: 'h', palabra: 'hipopótamo', pista: 'Un animal enorme que vive en el río.' },
+    { letra: 'i', palabra: 'isla', pista: 'Un pedazo de tierra rodeado de agua.' },
+    { letra: 'j', palabra: 'jirafa', pista: 'Un animal muy alto con el cuello largo.' },
+    { letra: 'k', palabra: 'koala', pista: 'Vive en los árboles y come hojas.' },
     { letra: 'l', palabra: 'luna', pista: 'Brilla en el cielo de noche.' },
     { letra: 'm', palabra: 'mariposa', pista: 'Vuela y tiene alas de colores.' },
+    { letra: 'n', palabra: 'nube', pista: 'Está en el cielo y trae la lluvia.' },
+    { letra: 'ñ', palabra: 'ñandú', pista: 'Un ave grande que no vuela y corre rapidísimo.' },
+    { letra: 'o', palabra: 'oso', pista: 'Un animal peludo que come miel.' },
     { letra: 'p', palabra: 'pelota', pista: 'La usas para jugar y rebota.' },
+    { letra: 'q', palabra: 'queso', pista: 'Es de leche y se pone en el sándwich.' },
+    { letra: 'r', palabra: 'ratón', pista: 'Un animal pequeñito con la cola larga.' },
     { letra: 's', palabra: 'sol', pista: 'Brilla y da calor de día.' },
     { letra: 't', palabra: 'tortuga', pista: 'Es lenta y lleva caparazón.' },
+    { letra: 'u', palabra: 'uva', pista: 'Una fruta pequeña y redonda que viene en racimo.' },
+    { letra: 'v', palabra: 'vaca', pista: 'Un animal que nos da la leche.' },
+    { letra: 'w', palabra: 'waffle', pista: 'Un pan dulce con cuadritos.' },
+    { letra: 'x', palabra: 'xilófono', pista: 'Un instrumento que se toca con baquetas.' },
+    { letra: 'y', palabra: 'yogur', pista: 'Un postre de leche, frío y cremoso.' },
+    { letra: 'z', palabra: 'zapato', pista: 'Te lo pones en el pie.' },
 ]);
 
 const DEFAULT_ROUNDS = 3;
@@ -72,25 +89,25 @@ function itemAt(state: AbecedarioState): AbecedarioItem | null {
 }
 
 /**
- * Palabras función que NO cuentan como "una palabra que empieza con…":
- * sin esto, "el", "lo", "se", "te", "mi"… daban acierto gratis y se ganaba
- * el juego sin decir una palabra real.
+ * STOPWORDS_ES vive en `gameUtils` (fuente unica): es el mismo criterio de
+ * "palabra real" que aplican abecedario y palabras encadenadas.
  */
-const STOPWORDS_ES: ReadonlySet<string> = new Set([
-    'el', 'la', 'lo', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'del',
-    'es', 'en', 'se', 'si', 'te', 'tu', 'tus', 'me', 'mi', 'mis', 'su', 'sus',
-    'no', 'ni', 'por', 'para', 'que', 'con', 'de', 'y', 'o', 'le', 'les',
-    'muy', 'ya', 'hay', 'son', 'mas', 'tan', 'sin',
-]);
 
 /** Palabra REAL dicha por el niño que empieza con la letra objetivo, o null. */
-function matchedWord(normalized: string, letra: string): string | null {
-    const target = letra.toLowerCase();
-    for (const token of normalized.split(/\s+/)) {
-        if (token.length >= 2 && token.startsWith(target) && !STOPWORDS_ES.has(token)) {
-            return token;
+function matchedWord(texto: string, normalized: string, item: AbecedarioItem): string | null {
+    const target = item.letra.toLowerCase();
+    // La "ñ" NO sobrevive al plegado de diacriticos (se vuelve "n"), asi que esa
+    // ronda se compara contra el texto CRUDO: si no, era imposible de acertar.
+    const fuente = target === 'ñ' ? texto.toLowerCase() : normalized;
+    for (const token of fuente.split(/\s+/)) {
+        const limpio = token.replace(/[^a-z\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f1]/g, '');
+        if (limpio.length >= 2 && limpio.startsWith(target) && !STOPWORDS_ES.has(limpio)) {
+            return limpio;
         }
     }
+    // La palabra del banco siempre cuenta (contrato del motor), lo que ademas
+    // cubre que el ASR entregue la "ñ" ya plegada ("nandu").
+    if (hasAnyToken(normalized, [stripDiacritics(item.palabra).toLowerCase()])) return item.palabra;
     return null;
 }
 
@@ -196,7 +213,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
             }
 
             // ¿Acierta? Una palabra REAL del niño con la letra inicial.
-            const word = matchedWord(normalized, item.letra);
+            const word = matchedWord(text, normalized, item);
             if (word) {
                 session.score += 1;
                 session.round += 1;

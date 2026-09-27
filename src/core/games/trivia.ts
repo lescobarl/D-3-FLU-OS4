@@ -39,7 +39,7 @@ export const TRIVIA_BANK: readonly TriviaQuestion[] = Object.freeze([
     { pregunta: '¿Qué hay en el cielo de noche?', opciones: ['el sol', 'la luna', 'la playa', 'la montaña'], correcta: 1, pista: 'Brilla cuando está oscuro.' },
     { pregunta: '¿Cómo se llama el bebé del gato?', opciones: ['cachorro', 'gatito', 'pollito', 'patito'], correcta: 1, pista: 'Es un gato muy pequeñito.' },
     { pregunta: '¿Qué prenda te pones en los pies?', opciones: ['gorra', 'guante', 'zapato', 'bufanda'], correcta: 2, pista: 'La usas para caminar.' },
-    { pregunta: '¿Qué animal nada en el mar?', opciones: ['águila', 'conejo', 'delfín', 'tortuga', 'león'], correcta: 2, pista: 'Es muy inteligente y salta del agua.' },
+{ pregunta: '¿Qué animal vive en el mar y es muy inteligente?', opciones: ['águila', 'conejo', 'delfín', 'león'], correcta: 2, pista: 'Salta del agua y es muy listo.' },
     { pregunta: '¿Qué usas para dibujar?', opciones: ['tijeras', 'lápiz', 'martillo', 'regla'], correcta: 1, pista: 'Tiene punta y grafito.' },
 ]);
 
