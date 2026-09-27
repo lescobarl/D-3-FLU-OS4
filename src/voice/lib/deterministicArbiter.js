@@ -167,9 +167,30 @@ export function resolveDeterministicCommand(text = '', options = {}) {
     return { matched: true, domain: 'config', action: config, channel: 'flu' }
   }
 
-  // 2. Juego (gameCommands): arranque/turno/fin de partida.
+  // 2. Navegacion y control de escucha (voiceCommands): el enunciado del usuario
+  //    manda sobre la partida. Con una partida viva, "parar escucha" o "abre
+  //    youtube" son ORDENES, no respuestas del juego; si se evaluara despues, los
+  //    marcos sueltos de salida ("parar", "stop") cerrarian la partida en vez de
+  //    hacer lo que se pide. Mismo orden con partida y sin ella: el significado
+  //    de lo que dices no cambia porque haya un juego abierto.
+  const navTexts = normalizedTexts && normalizedTexts.length ? normalizedTexts : [transcript]
+  const nav = resolveNavigationCommandFromTexts(navTexts)
+  if (nav) {
+    return {
+      matched: true,
+      domain: 'navigation',
+      action: nav,
+      channel: resolveChannelForNavigation(nav),
+    }
+  }
+
+  // 3. Juego (gameCommands): arranque/cambio/fin/menu de partida y los comandos
+  //    propios del motor. La respuesta ABIERTA del jugador (`action: 'turn'`) NO
+  //    se resuelve aqui: es la ultima red (paso 10). Si se resolviera aqui, con
+  //    una partida viva CUALQUIER frase caeria en `turn` y se tragaria comandos
+  //    que otro dominio si sabe ejecutar (ambiente, agenda...).
   const game = resolveGameCommandFromText(transcript)
-  if (game?.gameId) {
+  if (game?.gameId && game.action !== 'turn') {
     return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
 
@@ -219,17 +240,14 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   // 8. Horario por dictado: ya cubierto por agendaCommand (crear/consultar/
   //    quitar clase). No hay ruta doble.
 
-  // 9. Navegación (voiceCommands): comandos de UI/navegación directos. El canal
-  //    se deriva del comando (web/video/documento/app/flu).
-  const navTexts = normalizedTexts && normalizedTexts.length ? normalizedTexts : [transcript]
-  const nav = resolveNavigationCommandFromTexts(navTexts)
-  if (nav) {
-    return {
-      matched: true,
-      domain: 'navigation',
-      action: nav,
-      channel: resolveChannelForNavigation(nav),
-    }
+  // 9. Navegacion: se resuelve ANTES del juego (paso 2) para que la partida no
+  //    cambie el significado de lo que dices. Sin ruta doble.
+
+  // 10. Respuesta abierta de la partida activa: SOLO si ningun otro dominio la
+  //     reclama. Es la ultima red, de modo que la partida nunca secuestra un
+  //     comando ejecutable (regla: "permite ejecutar cualquier comando").
+  if (game?.gameId) {
+    return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
 
   return { matched: false, domain: null, action: null, channel: null }
