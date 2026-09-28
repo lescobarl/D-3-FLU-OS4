@@ -2533,3 +2533,29 @@ SALIDA CRUDA DE LA PUERTA (npm run gate) - exit 0:
     [task-gate] Guard (green): npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/fullSuitePathBarrier.test.ts
     [task-gate] Guards base: npx vitest run --no-file-parallelism --testTimeout=30000 --retry=1 --reporter=dot tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts
     OK [task-gate] Alcance OK - tamaño OK - DoD OK - guard OK.
+================================================================
+CIERRE DE LA RONDA (2026-09-28)
+================================================================
+Commits: cc6e182 (fix P7.48+P7.51 + 2a enmienda del contrato) y ef63ed3 (docs
+ledger: cierres, veredicto de P7.50 y alta de P7.52).
+Puerta VERDE medida sobre ef63ed3: alcance OK - tamano OK - DoD OK - guard OK.
+ledger:check OK: 2 pendientes (P7.49, flaky preexistente de systemMatrix G7;
+P7.52, e2eScope en rojo), 112 done, 0 blocked, 0 decision, 166 cierres.
+Portal: vite dev en http://localhost:5173 -> HTTP 200 (npm run dev, PID 16108).
+
+Lo que la barrera IMPIDIO de verdad en esta ronda (no promesa de chat):
+  1) hygieneIndicatorsGuard paro el commit 1: tests/workspaceLastObjectPerType.tsx
+     (nuevo) tenia 30 marcas de mojibake cp1252 invisibles mientras el fichero no
+     estaba versionado (el guard mira git ls-files). Reparado cp1252 -> UTF-8 sin
+     tocar el EOL; sus 14 casos en verde.
+  2) hygieneIndicatorsGuard paro el commit 2: 1 marca en el texto que yo mismo
+     anadi al ledger (PowerShell me devolvio la palabra en cp437). Reparada, mas
+     18 marcas en este mismo .task/report.
+  3) taskLedgerGuard exige que cada done apunte a un commit que EXISTE y que lo
+     justifique: por eso los cierres van en el commit siguiente (ef63ed3) y su
+     asunto nombra los ids (fix(P7.48+P7.51)).
+
+PENDIENTE PARA EL DUENO:
+  - Verificacion de producto (no automatizable): imagen recien generada visible,
+    instruccion 16:20 sin duplicar, y juego suspendido con el turno de otro dominio.
+  - P7.52: declarar e2eScope o descartarlo con razon (otra vuelta de enmienda).
