@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-27",
+  "updated": "2026-09-28",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -774,9 +774,9 @@
     {
       "id": "P7.48",
       "titulo": "Con partida ACTIVA, un turno AJENO no se consume como jugada: la orden que la IA pide en contract.juego tampoco se ejecuta y la partida queda EN PAUSA (todos los juegos)",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido-por-el-dueno",
-      "evidencia": "MEDIDO (log del dueno, 2026-09-28): 16:24:36 'Okay flu Crea una cita para manana a las 3 de la tarde con el doctor' creaba la cita (su dueno) y 16:24:42 FLU respondia 'La carta es: La muerte...' con la loteria activa; y 16:20:29/16:20:33 'Okay Flow genera una imagen' quedaba como instruccion DUPLICADA (el fast-path del juego despachaba turno del mismo texto y el escritor de filas lo tomaba por otra frase). CAUSA de la ruta que quedaba abierta: la orden de juego del LLM (contract.juego -> App.onContractResolved -> applyGameAction) entraba al motor SIN preguntar de quien era el TURNO; el passthrough de la ronda previa solo cerraba la ruta determinista. Arreglo con UN criterio (dueno unico isClaimedByOtherDomain, gameCommands.js) aplicado por el EJECUTOR: applyGameAction ignora la orden si otro dominio reclama el texto y deja la partida SUSPENDIDA (gameSessionStore.suspendActiveGameSession); App le pasa el texto del turno (ctx.turnText). PAUSA generica (regla 19 de Anexo B): gameSessionStore.noteGameTurn la aplica el fast-path del hook UNA vez por turno; en pausa la partida no consume respuestas abiertas (gameCommands paso 7) ni vuelve a hablar, sigue VIVA (estado/ronda/puntaje) y se retoma con CUALQUIER orden de juego (salir/menu/cambio, arranque del mismo juego, comandos del motor), sin ramas por juego. VERIFICADO: DoD del contrato 8/8 ficheros y 115/115 tests; guard VERDE (gamePlaythrough + gameDoesNotHijackCommands + fullSuitePathBarrier); 30 casos nuevos en tests/gameDoesNotHijackCommands.test.ts (la orden ajena no habla y deja en pausa; falsacion: la MISMA orden sin texto de turno si llega al motor; control pausa/sin pausa; retoma sin reiniciar; bucle sobre los 21 juegos del catalogo; tabla medida de que ninguna orden de juego la reclama otro dominio); npx tsc -b 0; npm run lint:eslint 0; npm run lint:guards 57/57. PENDIENTE: commit (bloqueado por P7.50)."
+      "evidencia": "MEDIDO (log del dueno, 2026-09-28): 16:24:36 'Okay flu Crea una cita para manana a las 3 de la tarde con el doctor' creaba la cita (su dueno) y 16:24:42 FLU respondia 'La carta es: La muerte...' con la loteria activa; y 16:20:29/16:20:33 'Okay Flow genera una imagen' quedaba como instruccion DUPLICADA (el fast-path del juego despachaba turno del mismo texto y el escritor de filas lo tomaba por otra frase). CAUSA de la ruta que quedaba abierta: la orden de juego del LLM (contract.juego -> App.onContractResolved -> applyGameAction) entraba al motor SIN preguntar de quien era el TURNO; el passthrough de la ronda previa solo cerraba la ruta determinista. Arreglo con UN criterio (dueno unico isClaimedByOtherDomain, gameCommands.js) aplicado por el EJECUTOR: applyGameAction ignora la orden si otro dominio reclama el texto y deja la partida SUSPENDIDA (gameSessionStore.suspendActiveGameSession); App le pasa el texto del turno (ctx.turnText). PAUSA generica (regla 19 de Anexo B): gameSessionStore.noteGameTurn la aplica el fast-path del hook UNA vez por turno; en pausa la partida no consume respuestas abiertas (gameCommands paso 7) ni vuelve a hablar, sigue VIVA (estado/ronda/puntaje) y se retoma con CUALQUIER orden de juego (salir/menu/cambio, arranque del mismo juego, comandos del motor), sin ramas por juego. VERIFICADO: DoD del contrato 8/8 ficheros y 115/115 tests; guard VERDE (gamePlaythrough + gameDoesNotHijackCommands + fullSuitePathBarrier); 30 casos nuevos en tests/gameDoesNotHijackCommands.test.ts (la orden ajena no habla y deja en pausa; falsacion: la MISMA orden sin texto de turno si llega al motor; control pausa/sin pausa; retoma sin reiniciar; bucle sobre los 21 juegos del catalogo; tabla medida de que ninguna orden de juego la reclama otro dominio); npx tsc -b 0; npm run lint:eslint 0; npm run lint:guards 57/57. CERRADO commit cc6e182 (18 ficheros, 990 insertadas / 139 borradas): npm run gate exit 0 (alcance/tamano/DoD/guard); guard VERDE; DoD 8/8 ficheros y 115/115 tests; npx tsc -b 0; npm run lint:eslint 0; npm run lint:guards 57/57 (396 tests). El primer intento de commit lo paro la propia barrera: tests/workspaceLastObjectPerType.test.tsx (nuevo, de la ronda previa) traia 30 marcas de mojibake cp1252 invisibles mientras el fichero no estaba versionado (hygieneIndicatorsGuard mira git ls-files); reparado con la ida y vuelta cp1252 -> UTF-8 sin tocar el EOL ni una linea de codigo, y sus 14 casos pasan."
     },
     {
       "id": "P7.49",
@@ -788,19 +788,36 @@
     {
       "id": "P7.50",
       "titulo": "npm run gate en ROJO por ALCANCE: ficheros del Pizarron/imagen de la ronda previa fuera del 'allow' del contrato",
-      "estado": "blocked",
+      "estado": "done",
       "origen": "alcance-agotado",
-      "evidencia": "MEDIDO: node scripts/task-gate.mjs rechaza src/components/WorkspaceHub.tsx (modificado) y los sin trackear src/lib/turnArtifactKind.ts, tests/turnArtifactKindPerTurn.test.ts, tests/workspaceLastObjectPerType.test.tsx, tests/workspaceMediaResetOnRequest.test.tsx, tests/workspaceHubRestoreMedia.test.tsx (trabajo de imagen/ultimo-objeto-por-tipo de la ronda anterior, declarado en la regla 18 de AGENTS.md). .task/contract.json NO los admite en 'allow' y AGENTS.md B16 declara .task/** inmutable por el agente, asi que la enmienda es del dueno: (a) ampliar 'allow' con nuevo hash del contrato, o (b) revertir esos ficheros a HEAD (perderia el arreglo de la imagen que el dueno pidio). Sin gate verde no hay commit: el hook pre-commit ejecuta el gate."
+      "evidencia": "VEREDICTO: RESUELTO por la 2a enmienda del contrato, autorizada por el dueno (respuesta dale commit) tras pedirla el agente: base f00c0ed -> ff9f3dc (con la base vieja la puerta medía 18 commits ya cerrados) y allow += las 4 rutas del arreglo de imagen/ultimo-objeto-por-tipo del Pizarron. npm run gate exit 0 despues. Cambios SOLO en base+allow: dod, guard, guardExpect, maxFiles y maxLines intactos. .task/contract.json sha256=65b6cc2a8c741b464489b22cd9d1fb6b898a77078d0c3b3effa7c34c31e3d357 (no esta en frozen.json). MEDIDO: node scripts/task-gate.mjs rechaza src/components/WorkspaceHub.tsx (modificado) y los sin trackear src/lib/turnArtifactKind.ts, tests/turnArtifactKindPerTurn.test.ts, tests/workspaceLastObjectPerType.test.tsx, tests/workspaceMediaResetOnRequest.test.tsx, tests/workspaceHubRestoreMedia.test.tsx (trabajo de imagen/ultimo-objeto-por-tipo de la ronda anterior, declarado en la regla 18 de AGENTS.md). .task/contract.json NO los admite en 'allow' y AGENTS.md B16 declara .task/** inmutable por el agente, asi que la enmienda es del dueno: (a) ampliar 'allow' con nuevo hash del contrato, o (b) revertir esos ficheros a HEAD (perderia el arreglo de la imagen que el dueno pidio). Sin gate verde no hay commit: el hook pre-commit ejecuta el gate."
     },
     {
       "id": "P7.51",
       "titulo": "La regla 18 de Anexo B quedo declarada SIN situar en el simulador (DoD en rojo): registradas 18 y 19",
-      "estado": "todo",
+      "estado": "done",
       "origen": "hallazgo",
       "evidencia": "MEDIDO: tests/rulesSimulator.test.ts 'sinSituar: [18]' -- la regla 18 (ultimo objeto de cada tipo del Pizarron, anadida por la ronda previa) no estaba en REGLAS, y el fichero esta en el DoD del contrato, asi que el DoD nacia rojo. Arreglo: 18 -> DELEGA a tests/turnArtifactKindPerTurn.test.ts (sus 4 muros existen: turnArtifactKindPerTurn, workspaceLastObjectPerType, workspaceMediaResetOnRequest, workspaceHubRestoreMedia) y 19 (regla nueva de este turno) -> DELEGA a tests/gameDoesNotHijackCommands.test.ts. Verificado: rulesSimulator 3/3 en verde dentro del DoD (115/115)."
+    },
+    {
+      "id": "P7.52",
+      "titulo": "El planificador E2E (e2e-scope, P7.36) sigue en rojo: 6 ficheros de src/ de este commit cambian sin spec declarado en el contrato",
+      "estado": "todo",
+      "origen": "hallazgo",
+      "evidencia": "MEDIDO: npm run e2e:plan falla con [src/ cambiado SIN spec declarado (no se corre a ciegas)] y lista src/app/gameActions.ts, src/components/WorkspaceHub.tsx, src/lib/turnArtifactKind.ts, src/voice/hooks/useFluVoiceAssistant.js, src/voice/lib/deterministicArbiter.js y src/voice/lib/gameCommands.js. La 2a enmienda amplio base y allow, NO e2eScope (que sigue declarando solo App.tsx, agendaCommandParser.ts y domainScopedIntent.ts). No bloquea el commit (el pre-commit corre lint + tipos, no e2e:plan), pero bloquea npm run e2e:scoped y el job E2E. Mapeo medido a declarar o descartar con razon: gameCommands / gameActions / deterministicArbiter / useFluVoiceAssistant -> tests/e2e/matriz-comandos-productivos.spec.ts (y cita-agenda.spec.ts para el turno de agenda con partida activa); WorkspaceHub / turnArtifactKind -> tests/e2e/pizarron-funcionalidades.spec.ts. Requiere otra vuelta de enmienda del dueno."
     }
   ],
   "done": [
+    {
+      "id": "P7.48",
+      "commit": "cc6e182",
+      "titulo": "La partida no consume el turno de otro dominio (tampoco la orden de juego que pide la IA) y queda EN PAUSA; se retoma con cualquier orden de juego"
+    },
+    {
+      "id": "P7.51",
+      "commit": "cc6e182",
+      "titulo": "Regla 18 del Anexo B situada en el simulador (y la 19 nueva): el DoD del contrato deja de nacer rojo"
+    },
     {
       "id": "C41",
       "commit": "168abdf",

@@ -1247,7 +1247,7 @@ REDACTAON de AGENTS.md. Era una traba real: el documento es objetivo de trabajo
 pendiente (P6.5 y P6.8 tocan su seccion 4).
 ANTES: tests/protocolGuard.test.ts (guard BASE: corre en CADA gate) ataba 4 de sus
   5 tests a prosa del documento:
-    toContain('Iteraci├│n r├ípida') | '--changed' | 'test:full'
+    toContain('Iteración rípida') | '--changed' | 'test:full'
     toContain('protocolGuard.test.ts')
     toMatch(/Pre-commit LIGERO/) | 'npm run lint' | 'npm run typecheck'
     '.github/workflows/ci.yml' | 'npm run test:full'
@@ -1321,15 +1321,15 @@ NO VALIDADO (usuario): que su editor no reescriba EOL al guardar. El guard ahora
   detecta en el pre-commit en lugar de dejarlo pasar, pero no puede impedir la escritura.================================================================
 [CIERRE TECNICO] 2026-09-22 - P5.1 (fallback del wake word fuera de la config)
 ================================================================
-OBJETIVO: el wake word canonico (┬º9.4) no puede aparecer como literal en runtime.
+OBJETIVO: el wake word canonico (º9.4) no puede aparecer como literal en runtime.
 HALLAZGO (2 sitios, ambos con el MISMO literal):
   - src/core/config/voiceConfigCatalog.ts:776
       const wakeWord = FLU_CONFIG.voiceCommands?.wakeWords?.[0] || 'FLU'
       (y el comentario afirmaba "nunca un literal en runtime")
   - src/components/VoiceAssistantBarWrapper.tsx:111
-      `...equivalente a ┬½${FLU_CONFIG.voiceCommands?.wakeWords?.[0] ?? 'FLU'} adelante┬╗`
+      `...equivalente a «${FLU_CONFIG.voiceCommands?.wakeWords?.[0] ?? 'FLU'} adelante┬╗`
   No era solo cosm├⌐tico: el fallback 'FLU' NO es una wake valida del catalogo (las 16
-  son "oye|ok|okay|hey + flu|flow|blue|flo"), asi que con la lista vac├¡a el prompt y el
+  son "oye|ok|okay|hey + flu|flow|blue|flo"), asi que con la lista vacía el prompt y el
   copy anunciaban una wake que el reconocedor nunca acepta. El primario real es 'oye flu'.
 POR QUE NINGUN GUARD LO VEIA: C56 (wakeInternalGuard) usa
   /\b(?:oye|ok|okay|hey)\s+(?:flu|flow|blue|flo)\b/, que exige una wake COMPLETA.
@@ -1407,7 +1407,7 @@ HALLAZGO PARA P6.2 (evidencia empirica del escaneo, aun pendiente): el guard enc
     src/voice/lib/fluTrace.js:66        window.__FLU_LISTEN_DEBUG
     src/voice/lib/fluTrace.js:248       window.__fluDev
   No se tocan aqui: P6.2 es un item aparte y el flag de debug con relay remoto es una
-  decision de dise├▒o, no un descuido de gate.
+  decision de diseño, no un descuido de gate.
 REGRESION:
   antes:   288 archivos / 2984 tests / 0 fallos ; lint:guards 73/73
   despues: 289 archivos / 2994 tests / 0 fallos ; lint:guards 73/73 (14 archivos)
@@ -1924,7 +1924,7 @@ Que era: la lista de las 23 tablas estaba escrita TRES veces en src/core/db/fluD
   (2) las llamadas "this.table('...')" una por tabla (23 lineas a mano),
   (3) el esquema de versiones (DEXIE_VERSIONS de facto, v3..v23).
 Hoy las tres coincidian (verificado: 23/23/21 versiones), o sea que NO habia bug activo: el
-defecto es la DERIVA. Y la peor de las tres es la (2): olvidar un "this.table()" al a├▒adir una
+defecto es la DERIVA. Y la peor de las tres es la (2): olvidar un "this.table()" al añadir una
 tabla deja "fluDb.<tabla>" a undefined en runtime, y TypeScript no avisa porque los campos van
 declarados con "!" (definite assignment). Un fallo silencioso a un paso de distancia.
 Que se hizo:
@@ -2005,7 +2005,7 @@ LIMITE: los e2e NO se pudieron ejecutar en esta maquina: el dev server de vite f
 al cargar vite.config.ts ("Cannot read properties of undefined (reading DEV)"), fallo
 PREEXISTENTE (vite.config.ts no se toco en esta tarea). El ajuste de los helpers e2e
 queda pendiente de corrida en un entorno con vite operativo.================================================================
-[CIERRE] 2026-09-22 - P4.10: clasificar los simbolos repetidos (┬º7.7)
+[CIERRE] 2026-09-22 - P4.10: clasificar los simbolos repetidos (º7.7)
 ================================================================
 NO se cambio codigo, y es deliberado. El item pedia "clasificar los 16 simbolos
 repetidos con seccion 7.7" y esa clasificacion YA estaba hecha: vive en
@@ -2038,7 +2038,7 @@ VERIFICACION INDEPENDIENTE (no acepte el comentario como prueba):
   logica distinta en los tres (fallbacks y dominios distintos).
 POR QUE NO HAY HITO DE CODIGO: no queda ruta doble que unificar y la metrica
 (no clasificados) ya esta en 0. Empujarla por el gate daria "hito cosmetico",
-que ┬º7.2/┬º7.5 prohiben. Se intento antes el camino de "guard con los veredictos
+que º7.2/º7.5 prohiben. Se intento antes el camino de "guard con los veredictos
 dentro" y el propio gate lo rechazo, con razon: copia los guardFiles al worktree
 base, asi que un veredicto que vive en el guard no distingue base de actual
 (metric base=0 actual=0, y el guard pasaba en base). Aprendido y anotado.
@@ -2451,9 +2451,9 @@ arnes y la que era un comentario mintiendo.
 Verificacion: npm run gate exit 0; npm run lint 51/51 guards + eslint 0 avisos;
 npx tsc -b OK; npm run ledger:check OK.
 ================================================================
-CIERRE DE RONDA (2026-09-28, sesion del due├▒o: imagen 16:24 + duplicado 16:20)
+CIERRE DE RONDA (2026-09-28, sesion del dueño: imagen 16:24 + duplicado 16:20)
 ================================================================
-OBJETIVO DEL DUE├æO: (1) que un comando accionable de otro dominio NO se
+OBJETIVO DEL DUEÑO: (1) que un comando accionable de otro dominio NO se
 consuma como jugada con partida activa; (2) que se pueda interactuar con la IA
 y SUSPENDER el juego (loteria y TODOS); (3) la instruccion duplicada
 16:20:29/16:20:33; (4) la imagen recien generada que no aparecia.
@@ -2461,7 +2461,7 @@ CAUSA MEDIDA DE (1)+(3) -- ruta que quedaba abierta:
 La orden de juego de la IA (contract.juego -> App.onContractResolved ->
 applyGameAction) entraba al motor SIN preguntar de quien era el TURNO. El
 passthrough de la ronda previa cerraba solo la ruta determinista (resolutor),
-y por eso el log del due├▒o muestra lo que muestra: 16:24:36 se crea la cita
+y por eso el log del dueño muestra lo que muestra: 16:24:36 se crea la cita
 (dueno correcto) y 16:24:42 el motor canta su carta igual ("La carta es: La
 muerte. La muerte siriqui siaca.").
 ARREGLO (un solo criterio, sin ramas por juego):
@@ -2493,7 +2493,7 @@ fallaba por "archivos congelados modificados" antes de mirar el alcance:
   tests/godFileSizeGuard.test.ts -> re-congelados con node scripts/task-gate-freeze.mjs.
 Los tres siguen VERDES en lint:guards (no se afloja nada: el criterio es el actual).
 PUERTA EN ROJO -- BLOQUEO DE ALCANCE (no de codigo). Salida cruda de npm run gate:
-    Γ¥î [task-gate] Archivos FUERA de alcance (prohibido):
+    ❌ [task-gate] Archivos FUERA de alcance (prohibido):
       src/components/WorkspaceHub.tsx
       src/lib/turnArtifactKind.ts                (sin trackear)
       tests/turnArtifactKindPerTurn.test.ts      (sin trackear)
@@ -2505,18 +2505,18 @@ El "...y 97 ficheros mas" es la causa de fondo: el contrato fija
 "base": "f00c0ed" y HEAD esta 18 commits por delante (93 ficheros distintos) --
 todo el trabajo ya COMMITEADO desde f00c0ed cuenta como "fuera de alcance".
 Eso no lo puede arreglar el agente: .task/** es inmutable por el agente
-(AGENTS.md B16). ENMIENDA NECESARIA DEL DUE├æO:
+(AGENTS.md B16). ENMIENDA NECESARIA DEL DUEÑO:
   (a) "base": "ff9f3dc" (HEAD) y anadir al "allow" los 5 ficheros del arreglo de
       imagen/Pizarron de la ronda previa (WorkspaceHub.tsx + turnArtifactKind.ts +
       sus 4 tests) -- con nuevo hash, o
   (b) revertir esos 5 ficheros a HEAD (perderia el arreglo de la imagen).
 Sin ella no hay commit: el hook pre-commit ejecuta la puerta.
 PORTAL: npm run dev levantado y respondiendo 200 en http://localhost:5173
-(la verificacion de producto -- "mi pantalla" -- es del due├▒o, AGENTS.md A.1).
+(la verificacion de producto -- "mi pantalla" -- es del dueño, AGENTS.md A.1).
 ﻿================================================================
 ENMIENDA DEL CONTRATO (2a) - AUTORIZADA POR EL DUENO ("dale commit")
 ================================================================
-La pidio el agente al cerrar la ronda (la puerta med├¡a un contrato obsoleto)
+La pidio el agente al cerrar la ronda (la puerta medía un contrato obsoleto)
 y el dueno la autorizo en el chat. Cambios, SOLO dos campos:
   base   f00c0ed -> ff9f3dc   checkpoint actual. Con f00c0ed la puerta veia 18
                               commits ya cerrados y marcaba "fuera de alcance"
@@ -2532,4 +2532,4 @@ SALIDA CRUDA DE LA PUERTA (npm run gate) - exit 0:
     [task-gate] DoD: npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/surfaceMatrix.test.ts tests/noteItemRemovalLiteral.test.ts tests/gameDoesNotHijackCommands.test.ts tests/turnCommitGarbageGate.test.ts tests/garbageTranscript.test.ts tests/fullSuitePathBarrier.test.ts tests/rulesSimulator.test.ts
     [task-gate] Guard (green): npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/fullSuitePathBarrier.test.ts
     [task-gate] Guards base: npx vitest run --no-file-parallelism --testTimeout=30000 --retry=1 --reporter=dot tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts
-    OK [task-gate] Alcance OK - tama├▒o OK - DoD OK - guard OK.
+    OK [task-gate] Alcance OK - tamaño OK - DoD OK - guard OK.
