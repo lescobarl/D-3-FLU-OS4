@@ -77,6 +77,7 @@ import {
 } from './core/search/searchConfigOverrides';
 import { isSupportedDocument } from './lib/documentParser';
 import { useAutonomyIntegration } from './core/autonomy';
+import { DEFAULT_MONITORED_COMPONENTS } from './core/autonomy/healthMonitor';
 import {
     detectActionInTranscript,
     detectEmotionInTranscript,
@@ -505,15 +506,7 @@ function App() {
         // Configure HealthMonitor to EXCLUDE speech components from monitoring
         // Speech components are managed by the voice system and don't need autonomous health checks
         autonomyActions.updateSystemConfig('healthMonitor', {
-            monitoredComponents: [
-                'ai-service',
-                'indexed-db',
-                'network',
-                'memory',
-                'react-components'
-                // NOTE: 'speech-recognition' and 'speech-synthesis' are EXCLUDED intentionally
-                // These components are managed by the voice system (useFluVoiceAssistant)
-            ],
+            monitoredComponents: [...DEFAULT_MONITORED_COMPONENTS],
             autoRecoveryEnabled: false // Health monitor should not trigger auto-recovery
         });
         

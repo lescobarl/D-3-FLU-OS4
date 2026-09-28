@@ -12,6 +12,7 @@
 // ============================================================
 
 import { pickTimeOfDay } from '../temporal/timeOfDay';
+import { MONTH_NAMES_ES, WEEKDAYS_ES } from '../temporal/calendarNames';
 import { SPEECH_LOCALES } from '../config/localeConfig';
 import { stripDiacriticsLower } from '../../lib/textUtils';
 
@@ -44,20 +45,10 @@ export interface NlDateParserOptions {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const MONTHS_ES: ReadonlyArray<{ name: string; number: number }> = Object.freeze([
-  { name: 'enero', number: 1 },
-  { name: 'febrero', number: 2 },
-  { name: 'marzo', number: 3 },
-  { name: 'abril', number: 4 },
-  { name: 'mayo', number: 5 },
-  { name: 'junio', number: 6 },
-  { name: 'julio', number: 7 },
-  { name: 'agosto', number: 8 },
-  { name: 'septiembre', number: 9 },
-  { name: 'octubre', number: 10 },
-  { name: 'noviembre', number: 11 },
-  { name: 'diciembre', number: 12 },
-]);
+/** Meses en español: `number` = 1..12, derivado de la fuente única de nombres. */
+const MONTHS_ES: ReadonlyArray<{ name: string; number: number }> = Object.freeze(
+  MONTH_NAMES_ES.map((name, i) => ({ name, number: i + 1 })),
+);
 
 const MONTHS_EN: ReadonlyArray<{ name: string; number: number }> = Object.freeze([
   { name: 'january', number: 1 },
@@ -74,16 +65,8 @@ const MONTHS_EN: ReadonlyArray<{ name: string; number: number }> = Object.freeze
   { name: 'december', number: 12 },
 ]);
 
-/** Días de la semana: domingo=0 ... sábado=6 (getDay). */
-const WEEKDAYS: ReadonlyArray<{ name: string; day: number }> = Object.freeze([
-  { name: 'domingo', day: 0 },
-  { name: 'lunes', day: 1 },
-  { name: 'martes', day: 2 },
-  { name: 'miercoles', day: 3 },
-  { name: 'jueves', day: 4 },
-  { name: 'viernes', day: 5 },
-  { name: 'sabado', day: 6 },
-]);
+/** Días de la semana: domingo=0 ... sábado=6 (getDay). Fuente única. */
+const WEEKDAYS = WEEKDAYS_ES;
 
 const WEEKDAYS_EN: ReadonlyArray<{ name: string; day: number }> = Object.freeze([
   { name: 'sunday', day: 0 },

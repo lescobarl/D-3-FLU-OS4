@@ -1,4 +1,5 @@
 import { logCaughtError } from '../../lib/caughtError';
+import { MONTH_NAMES_ES } from '../temporal/calendarNames';
 
 // ============================================================
 // FLU OS4 — Calendario General de Temporalidades (Branding Inteligente)
@@ -395,9 +396,5 @@ export function isSameDay(month1: number, day1: number, month2: number, day2: nu
  * Obtiene el nombre del mes en español.
  */
 export function getMonthName(month: number): string {
-    const names = [
-        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-    ];
-    return names[month - 1] || 'desconocido';
+    return MONTH_NAMES_ES[month - 1] || 'desconocido';
 }

@@ -23,6 +23,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { 
     HealthMonitor, 
     startGlobalHealthMonitoring,
+    DEFAULT_MONITORED_COMPONENTS,
     SystemHealth,
     type HealthMonitorConfig
 } from './healthMonitor';
@@ -185,19 +186,11 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     useEffect(() => {
         const initializeAutonomySystems = async () => {
             try {
-                // Inicializar Health Monitor - EXCLUIR componentes de speech desde el inicio
-                // Speech components son manejados por el sistema de voz y no necesitan monitoreo autónomo
+                // Inicializar Health Monitor — la lista de componentes (y su
+                // exclusión de speech) viene de la fuente única del monitor.
                 const healthMonitor = startGlobalHealthMonitoring({
                     verboseLogging: false,
-                    monitoredComponents: [
-                        'ai-service',
-                        'indexed-db',
-                        'network',
-                        'memory',
-                        'react-components'
-                        // NOTA: 'speech-recognition' y 'speech-synthesis' están EXCLUIDOS intencionalmente
-                        // Estos componentes son manejados por useFluVoiceAssistant
-                    ],
+                    monitoredComponents: [...DEFAULT_MONITORED_COMPONENTS],
                     autoRecoveryEnabled: false, // Deshabilitar recuperación automática desde el inicio
                 });
                 healthMonitorRef.current = healthMonitor;

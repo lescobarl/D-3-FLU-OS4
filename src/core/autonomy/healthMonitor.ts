@@ -100,21 +100,26 @@ export interface HealthMonitorConfig {
 // Configuración por defecto
 // -----------------------------------------------------------
 
+/**
+ * Componentes monitoreados por defecto — FUENTE ÚNICA. El arranque (App) y el
+ * hook de autonomía importan esta lista en vez de recopiarla.
+ * `speech-recognition` y `speech-synthesis` quedan EXCLUIDOS: los maneja el
+ * sistema de voz (`useFluVoiceAssistant`) y no necesitan chequeo autónomo.
+ */
+export const DEFAULT_MONITORED_COMPONENTS: readonly string[] = Object.freeze([
+    'ai-service',
+    'indexed-db',
+    'network',
+    'memory',
+    'react-components',
+]);
+
 export const DEFAULT_HEALTH_CONFIG: HealthMonitorConfig = {
     monitoringInterval: 30000, // 30 segundos
     degradedThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.degraded,   // 85% de salud
     criticalThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.critical,   // 60% de salud
     autoRecoveryEnabled: false, // Deshabilitado por defecto - se habilita solo para componentes específicos
-    monitoredComponents: [
-        'ai-service',
-        'indexed-db',
-        'network',
-        'memory',
-        'react-components',
-        // NOTA: 'speech-recognition' y 'speech-synthesis' están EXCLUIDOS por defecto
-        // Estos componentes son manejados por el sistema de voz (useFluVoiceAssistant)
-        // y no necesitan monitoreo autónomo
-    ],
+    monitoredComponents: [...DEFAULT_MONITORED_COMPONENTS],
     verboseLogging: false,
 };
 
@@ -493,28 +498,31 @@ async function checkNetwork(): Promise<ComponentHealth> {
         // Verificar conectividad
         const testUrls = NETWORK_PROBE_URLS;
         
-        let successfulPings = 0;
-        const pingResults: number[] = [];
-        
-        for (const url of testUrls) {
-            const pingStart = Date.now();
-            try {
-                await fetchTextEngine(
-                    url,
-                    {
-                        method: 'HEAD',
-                        mode: 'no-cors',
-                    },
-                    TIMEOUT_POLICY_MS.networkPingAbort,
-                );
-                
-                successfulPings++;
-                pingResults.push(Date.now() - pingStart);
-            } catch (e) {
-        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
-                // Ignorar errores individuales
-            }
-        }
+        // Los sondeos son INDEPENDIENTES: en paralelo el peor caso es UN timeout,
+        // no la suma de todos. En serie, N URLs tardaban hasta N × el abort.
+        const pings = await Promise.all(
+            testUrls.map(async (url) => {
+                const pingStart = Date.now();
+                try {
+                    await fetchTextEngine(
+                        url,
+                        {
+                            method: 'HEAD',
+                            mode: 'no-cors',
+                        },
+                        TIMEOUT_POLICY_MS.networkPingAbort,
+                    );
+                    return Date.now() - pingStart;
+                } catch (e) {
+                    logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
+                    // Error individual: no cuenta como ping exitoso.
+                    return null;
+                }
+            }),
+        );
+
+        const pingResults = pings.filter((ms): ms is number => ms !== null);
+        const successfulPings = pingResults.length;
         
         metrics.successfulPings = successfulPings;
         metrics.totalPings = testUrls.length;

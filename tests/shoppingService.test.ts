@@ -33,6 +33,10 @@ function createMapDb(initial: ShoppingItemRecord[] = []): ShoppingDb {
       map.set(record.id, { ...record, sync: { ...record.sync } });
       return undefined;
     },
+    async bulkPut(records: ShoppingItemRecord[]): Promise<unknown> {
+      for (const record of records) map.set(record.id, { ...record, sync: { ...record.sync } });
+      return undefined;
+    },
     async delete(id: string): Promise<void> {
       map.delete(id);
     },

@@ -17,6 +17,7 @@ import { summarizeAgenda } from '../core/agenda/agendaSummary';
 import type { AgendaView } from '../core/agenda/agendaQuery';
 import type { AgendaColorMap, AgendaItem, AgendaKind, AgendaTrigger } from '../core/agenda/agendaModel';
 import { AGENDA_KINDS, nextAgendaDue } from '../core/agenda/agendaModel';
+import { MONTH_DISPLAY_ES, WEEKDAY_DISPLAY_ES } from '../core/temporal/calendarNames';
 
 const VIEWS: ReadonlyArray<{ key: AgendaView; label: string }> = [
     { key: 'day', label: 'Hoy' },
@@ -79,9 +80,7 @@ function fromDateTimeLocal(value: string): number {
 
 function formatDayLabel(ms: number): string {
     const d = new Date(ms);
-    const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    return `${days[d.getDay()]} ${d.getDate()} de ${months[d.getMonth()]}`;
+    return `${WEEKDAY_DISPLAY_ES[d.getDay()]} ${d.getDate()} de ${MONTH_DISPLAY_ES[d.getMonth()]}`;
 }
 
 function formatTimeLabel(ms: number): string {

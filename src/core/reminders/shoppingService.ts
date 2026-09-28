@@ -34,6 +34,7 @@ export interface NewShoppingItemInput {
 export interface ShoppingDb {
   add(record: ShoppingItemRecord): Promise<unknown>;
   put(record: ShoppingItemRecord): Promise<unknown>;
+  bulkPut(records: ShoppingItemRecord[]): Promise<unknown>;
   delete(id: string): Promise<void>;
   get(id: string): Promise<ShoppingItemRecord | undefined>;
   toArray(): Promise<ShoppingItemRecord[]>;
@@ -168,13 +169,13 @@ export function createShoppingService({
     const all = await db.toArray();
     const checked = all.filter((item) => item.checked && !item.sync?.deleted);
     const t = timestamp();
-    for (const item of checked) {
-      await db.put({
-        ...item,
-        updatedAt: t,
-        sync: { ...buildSyncTuple(item.sync, t), deleted: true },
-      });
-    }
+    // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
+    const marked = checked.map((item) => ({
+      ...item,
+      updatedAt: t,
+      sync: { ...buildSyncTuple(item.sync, t), deleted: true },
+    }));
+    if (marked.length > 0) await db.bulkPut(marked);
     if (checked.length > 0) {
       await addAuditLog('shopping.clearChecked', 'shoppingItem', '', checked.length, 0, 'shoppingService');
     }

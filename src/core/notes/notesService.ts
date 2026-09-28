@@ -205,15 +205,14 @@ export function createNotesService({
     const all = await db.toArray();
     const done = all.filter((note) => note.done);
     const t = timestamp();
-    for (const note of done) {
-      const updated: NoteRecord = {
-        ...note,
-        done: false,
-        updatedAt: t,
-        sync: buildSyncTuple(note.sync, timestamp()),
-      };
-      await db.put(updated);
-    }
+    // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
+    const cleared = done.map((note) => ({
+      ...note,
+      done: false,
+      updatedAt: t,
+      sync: buildSyncTuple(note.sync, timestamp()),
+    }));
+    if (cleared.length > 0) await db.bulkPut(cleared);
     if (done.length > 0) {
       await addAuditLog('notes.uncheckAll', 'note', '', done.length, 0, 'notesService');
     }
@@ -225,13 +224,13 @@ export function createNotesService({
     const all = await db.toArray();
     const done = all.filter((note) => note.done && !note.sync?.deleted);
     const t = timestamp();
-    for (const note of done) {
-      await db.put({
-        ...note,
-        updatedAt: t,
-        sync: { ...buildSyncTuple(note.sync, t), deleted: true },
-      });
-    }
+    // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
+    const marked = done.map((note) => ({
+      ...note,
+      updatedAt: t,
+      sync: { ...buildSyncTuple(note.sync, t), deleted: true },
+    }));
+    if (marked.length > 0) await db.bulkPut(marked);
     if (done.length > 0) {
       await addAuditLog('notes.clearDone', 'note', '', done.length, 0, 'notesService');
     }

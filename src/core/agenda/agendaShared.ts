@@ -8,6 +8,7 @@
 // ============================================================
 
 import { stripDiacritics } from '../../lib/textUtils';
+import { ISO_WEEKDAY_BY_NAME } from '../temporal/calendarNames';
 
 // ------------------------------------------------------------
 // Tipos de entrada (estructuración OCR de horarios)
@@ -68,15 +69,9 @@ export function minutosDeFecha(at: number): number {
 // Capa de estructuración OCR — analyzeImage.texto_extraido
 // ------------------------------------------------------------
 
-const DIA_MAP: Record<string, number> = {
-    lunes: 1,
-    martes: 2,
-    miercoles: 3,
-    jueves: 4,
-    viernes: 5,
-    sabado: 6,
-    domingo: 7,
-};
+// ISO local (1 = lunes … 7 = domingo) para OCR. Derivado de la fuente única de
+// nombres: antes era una cuarta copia de los días con su propio convenio.
+const DIA_MAP: Readonly<Record<string, number>> = ISO_WEEKDAY_BY_NAME;
 
 /** Detecta el día (1-7) a partir de un texto con nombre de día en español. */
 export function clasificarDia(value: string): number | null {

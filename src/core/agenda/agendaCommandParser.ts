@@ -16,6 +16,7 @@ import {
 } from '../reminders/nlDateParser';
 import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
+import { WEEKDAYS_ES } from '../temporal/calendarNames';
 import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 import { stripDiacriticsLower } from '../../lib/textUtils';
@@ -76,15 +77,7 @@ const UPDATE_FRAMES: readonly string[] = Object.freeze([
     'cambia', 'cambiar', 'mueve', 'mover', 'edita', 'editar', 'pospon', 'posponer',
 ]);
 
-const WEEKDAY_NAMES: ReadonlyArray<{ name: string; day: number }> = Object.freeze([
-    { name: 'domingo', day: 0 },
-    { name: 'lunes', day: 1 },
-    { name: 'martes', day: 2 },
-    { name: 'miercoles', day: 3 },
-    { name: 'jueves', day: 4 },
-    { name: 'viernes', day: 5 },
-    { name: 'sabado', day: 6 },
-]);
+const WEEKDAY_NAMES = WEEKDAYS_ES;
 
 const DAILY_RE = /\b(?:todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
 /** Recurrencia de CLASE "toda la semana / todos los días" = horario de 7 días. */
