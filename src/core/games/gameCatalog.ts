@@ -5,14 +5,16 @@
 // configCommands.js. Módulo autónomo (helpers locales de
 // normalización; sin imports .js para evitar riesgo de resolución).
 //
-// GUARDIA TRIPLE: para iniciar un juego se requiere UN marco de
-// intención de juego (PLAY_INTENT_FRAMES) Y UN alias del juego.
+// GUARDIA TRIPLE: para pedir un juego se requiere UNA orden de
+// juego (arranque PLAY_INTENT_FRAMES o cambio CHANGE_GAME_FRAMES)
+// Y UN alias del juego.
 // "simón dice que te calles" NO dispara (falta el marco).
 // "ok flu, vamos a jugar a las adivinanzas" → adivinanzas.
+// "cambia a trivia" → trivia (cambio con la partida en curso).
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameId } from './types';
-import { normalizeForMatch, hasToken, PLAY_INTENT_FRAMES, NEGATIVE_INTENT_FRAMES } from './gameUtils';
+import { normalizeForMatch, hasToken, hasGameOrderFrame, NEGATIVE_INTENT_FRAMES } from './gameUtils';
 import { createSimonDiceEngine } from './simonDice';
 import { createRiddlesEngine } from './riddles';
 import { createVeoVeoEngine } from './veoVeo';
@@ -269,20 +271,11 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
         if (hasToken(normalized, negative)) return null;
     }
 
-    // Requiere UN marco de intención de juego.
-    let hasFrame = false;
-    for (const frame of PLAY_INTENT_FRAMES) {
-        if (hasToken(normalized, frame)) {
-            hasFrame = true;
-            break;
-        }
-    }
-    if (!hasFrame) return null;
-
-    // Y UN alias del juego. Si el texto coincide con varios, gana el MÁS
-    // LARGO: es el más específico. "hagamos un cuento" es cuento_colaborativo,
-    // no el alias genérico "un cuento" de cuentacuentos. Empate → orden del
-    // catálogo (estable).
+    // Requiere UNA ORDEN DE JUEGO (arranque o cambio) Y UN alias del juego. Si el
+    // texto coincide con varios, gana el MÁS LARGO: es el más específico. "hagamos
+    // un cuento" es cuento_colaborativo, no el alias genérico "un cuento" de
+    // cuentacuentos. Empate → orden del catálogo (estable).
+    if (!hasGameOrderFrame(normalized)) return null;
     let best: GameIntentEntry | null = null;
     let bestLength = -1;
     for (const entry of GAME_CATALOG) {

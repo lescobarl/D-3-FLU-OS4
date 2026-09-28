@@ -23,6 +23,7 @@ import { detectNextSpeakerPhrase } from '../src/voice/lib/activeListen'
 import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
+import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -303,6 +304,37 @@ describe('G12 voiceSingleSource - el juego no secuestra comandos de otros domini
             const resuelto = resolveDeterministicCommand('siguiente carta')
             expect(resuelto.domain).toBe('game')
             expect((resuelto.action as { action?: string })?.action).toBe('turn')
+        })
+    })
+
+    it('cambiar de juego y terminarlo con la partida activa', () => {
+        conLoteriaActiva(() => {
+            const cambio = resolveGameCommandFromText('cambia a trivia')
+            expect(cambio?.action, '"cambia a trivia" es un CAMBIO, no una jugada').toBe('switch')
+            expect(cambio?.gameId).toBe('trivia')
+            expect(resolveGameCommandFromText('trivia')?.action).toBe('switch')
+            expect(resolveGameCommandFromText('terminar el juego')?.action).toBe('end')
+            expect(resolveGameCommandFromText('para el juego')?.action).toBe('end')
+            // El motor conserva su prioridad: el nombre del juego activo es SU
+            // comando (en la loteria, "loteria" canta la carta).
+            expect(resolveGameCommandFromText('loteria')?.action).toBe('turn')
+            expect(resolveGameCommandFromText('siguiente carta')?.action).toBe('turn')
+        })
+    })
+
+    it('la orden de cambio no secuestra conversacion sin alias de juego', () => {
+        conLoteriaActiva(() => {
+            // Comandos de config DECLARADOS: los resuelve su dueno, no el juego.
+            expect(resolveGameCommandFromText('restablece los colores del avatar')).toBeNull()
+            expect(resolveGameCommandFromText('resetear colores')).toBeNull()
+            expect(resolveGameCommandFromText('colores por defecto')).toBeNull()
+            // Navegacion DECLARADA (web): tambien se ejecuta durante la partida.
+            expect(resolveGameCommandFromText('abre youtube')).toBeNull()
+            expect(resolveGameCommandFromText('navega a wikipedia')).toBeNull()
+            // Sin alias de juego, "cambia…" sigue siendo conversacion del jugador.
+            expect(resolveGameCommandFromText('cambia el color')).toEqual(
+                expect.objectContaining({ gameId: 'loteria', action: 'turn' }),
+            )
         })
     })
 

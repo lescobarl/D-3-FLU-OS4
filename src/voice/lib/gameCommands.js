@@ -13,7 +13,8 @@
 //   Sin partida activa, "simón dice que te calles" NO inicia nada.
 // ============================================================
 
-import { normalizeForMatch, hasVoiceToken } from './configCommands.js'
+import { resolveNavigationCommand } from './voiceCommands.js'
+import { normalizeForMatch, hasVoiceToken, resolveConfigCommandFromText } from './configCommands.js'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { isNoteCommand } from './noteIntentParser'
 import {
@@ -85,10 +86,11 @@ function isQuestionLike(clean) {
 }
 
 /**
- * ¿El texto es un comando ACCIONABLE de otro dominio (agenda o notas)?
+ * ¿El texto es un comando ACCIONABLE de otro dominio (agenda, notas o config)?
  * Con una partida activa, esos comandos NO deben consumirse como respuesta del
  * juego: se dejan pasar (return null) para que el enrutador normal los ejecute
- * (crear alarma/cita/recordatorio, poner/quitar notas…). El juego queda activo.
+ * (crear alarma/cita/recordatorio, poner/quitar notas, cambiar volumen/color…).
+ * El juego queda activo.
  *
  * Sin acoplamiento al árbitro (import directo de los parsers) para no crear
  * un ciclo de imports (el árbitro ya importa este módulo).
@@ -106,6 +108,26 @@ function isNonGameActionableCommand(text) {
     // que se desvie). Antes solo se miraba el alta, asi que "borra la nota del
     // super" con partida activa caia al motor como respuesta del juego.
     if (isNoteCommand(text)) return true
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
+    /* idem */
+  }
+  try {
+    // Config (volumen, color del avatar, branding…): el DUENO del criterio es su
+    // resolutor, no una lista propia. Defecto real (portal): con una partida
+    // activa, "cambia el color del avatar" y "sube el volumen" caian al ultimo
+    // paso como respuesta del jugador y el juego los consumia: no se podia
+    // ejecutar ningun comando de configuracion durante la partida.
+    if (resolveConfigCommandFromText(text)) return true
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
+    /* idem */
+  }
+  try {
+    // Navegacion DECLARADA (wikipedia/educar/youtube): su dueno es el resolutor de
+    // comandos de voz. Sin esto, "abre youtube" con la loteria activa se consumia
+    // como respuesta del jugador y la navegacion nunca se ejecutaba.
+    if (resolveNavigationCommand(text)) return true
   } catch (e) {
         logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
     /* idem */

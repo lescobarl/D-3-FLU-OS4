@@ -189,9 +189,28 @@ export const NEGATIVE_INTENT_FRAMES: readonly string[] = Object.freeze([
     'parar de jugar',
     'dejemos de jugar',
 ]);
-/** El texto es una ORDEN DE ARRANQUE de juego (o su negacion)? */
-export function hasPlayOrderFrame(normalized = ''): boolean {
-    return hasAnyToken(normalized, PLAY_INTENT_FRAMES);
+/**
+ * Marcos de CAMBIO de juego ("cambia a <juego>"). Mismo dueno que el arranque:
+ * son la misma clase de orden (el usuario pide un juego, no juega un turno).
+ * Defecto real (portal): con la loteria abierta, "cambia a trivia" no lo reconocia
+ * ningun marco, caia al ultimo paso de `resolveGameCommandFromText` (respuesta
+ * abierta del jugador) y se consumia como turno: no habia forma de cambiar de
+ * juego con una orden explicita.
+ */
+export const CHANGE_GAME_FRAMES: readonly string[] = Object.freeze([
+    'cambia a',
+    'cambia al',
+    'cambia el juego',
+    'cambia el juego a',
+    'cambia de juego',
+    'cambia de juego a',
+    'cambiar a',
+    'cambiar el juego',
+    'cambiar de juego',
+]);
+/** El texto es una ORDEN DE JUEGO: arranque ("vamos a jugar X") o cambio ("cambia a X")? */
+export function hasGameOrderFrame(normalized = ''): boolean {
+    return hasAnyToken(normalized, PLAY_INTENT_FRAMES) || hasAnyToken(normalized, CHANGE_GAME_FRAMES);
 }
 // ------------------------------------------------------------
 // Concepto "SALIR DE LA PARTIDA" --- DUENO UNICO.

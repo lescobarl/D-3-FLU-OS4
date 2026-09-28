@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasPlayOrderFrame, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasGameOrderFrame, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -209,7 +209,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             // El GRITO de victoria es "loterA-a" SUELTO. Una ORDEN DE ARRANQUE
             // ("vamos a jugar loterA-a") contiene la misma palabra y NO es un grito:
             // consumirla declaraba ganador con UNA carta cantada (defecto medido).
-            if (hasToken(normalized, 'loteria') && !hasPlayOrderFrame(normalized)) {
+            if (hasToken(normalized, 'loteria') && !hasGameOrderFrame(normalized)) {
                 state.phase = 'done';
                 // Nombre legible si viene; si no, el id SOLO si no es un UUID crudo.
                 const rawName = String(context?.playerName || '').trim();
@@ -266,7 +266,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             return matchesEndGameFrames(normalized, END_FRAMES)
                 || REPEAT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || NEXT_FRAMES.some((frame) => hasToken(normalized, frame))
-                || (hasToken(normalized, 'loteria') && !hasPlayOrderFrame(normalized));
+                || (hasToken(normalized, 'loteria') && !hasGameOrderFrame(normalized));
         },
     };
 }
