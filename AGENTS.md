@@ -324,6 +324,13 @@ de **0 nuevos**.
   lunes" se guardaba como NOTA; y con partida activa esa misma frase (y
   "recuérdame comprar el pan", "cita con el dentista") caía en `game/turn` y el
   juego se la tragaba. La barrera cierra ambos huecos en pre-commit.
+- **Invariante de agenda: crear exige hora EXPLÍCITA.** `parseAgendaCommand` NO
+  inventa la hora: sin hora dicha devuelve la pista (`handled:false` + `kind`) para
+  que se pregunte. Antes rellenaba 09:00 en lo recurrente ("reunión los lunes") y
+  00:00 en la fecha pelada ("recuérdame … mañana"), fijando una hora que nadie
+  dijo. Aplica a TODOS los kinds y también a la vía del LLM
+  (`resolveAgendaDomainIntent` → `needsInstant`). Cancelar/editar no cambian: no
+  usan la hora para identificar el item. Cubierto en `arbiterDomainBarrier`.
 - Un guard de comportamiento que use módulos de producción NO es "teatro": toda
   barrera nueva en `lint:guards` debe traer su caso de **prueba de detector**
   (alimenta una entrada y comprueba que la marca discrimina) o `guardMutationGuard`

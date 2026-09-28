@@ -20,14 +20,6 @@ import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 import { stripDiacriticsLower } from '../../lib/textUtils';
 
-/**
- * Hora de RELLENO al CREAR una clase/evento recurrente sin hora dicha.
- * Es el único valor por defecto de hora del parser; el borrado y el cambio de
- * hora NO lo usan (ver `resolveLabel`/cancel: mover con un relleno cambiaria
- * una hora que nadie dijo). Antes estaba escrito dos veces como literal.
- */
-const DEFAULT_CREATE_TIME_OF_DAY = '09:00';
-
 export type AgendaCommandAction =
     | 'agenda.create'
     | 'agenda.list'
@@ -298,40 +290,38 @@ function resolveRecurrence(
     // texto (la de origen) y el cambio quedaría en nada.
     const chosen = timeHint ?? pickTimeOfDay(text).timeOfDay;
 
+    // Sin hora EXPLÍCITA no se inventa ninguna: `null` ⇒ el alta pide la hora.
+    // Invariante del módulo: "sin hora no hay acción accionable; se pide
+    // aclaración". Rellenar aquí ("reunión los lunes" → 09:00, "… mañana" → 00:00)
+    // fijaba una hora que nadie dijo.
+    if (!chosen) return null;
+
     const days = kind === 'clase' ? detectAnyWeekdays(text) : detectWeekdays(text);
     if (days.length > 0) {
-        const time = chosen ?? DEFAULT_CREATE_TIME_OF_DAY;
-        return { type: 'weekly', daysOfWeek: days, timeOfDay: time };
+        return { type: 'weekly', daysOfWeek: days, timeOfDay: chosen };
     }
 
     const allDays = kind === 'clase' ? CLASE_ALL_DAYS_RE.test(t) : DAILY_RE.test(t);
     if (allDays) {
-        const timeOfDay = chosen ?? DEFAULT_CREATE_TIME_OF_DAY;
         return kind === 'clase'
-            ? { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay }
-            : { type: 'daily', timeOfDay };
+            ? { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay: chosen }
+            : { type: 'daily', timeOfDay: chosen };
     }
 
-    // Fecha SIN ninguna hora: si quedara la segunda hora ("… a las ocho"),
-    // `parseNlDateTime` la leería y fijaría el disparo a esa hora del día actual.
+    // Fecha explícita ("hoy/mañana/jueves") + hora: se fija a esa hora.
     const nl = parseNlDateTime(stripTimesOfDay(text), { now: () => now });
-    if (chosen) {
-        // Base: fecha explícita ("hoy/mañana/jueves") o HOY si no la hay ("a las 7").
-        const explicitDay = Boolean(nl?.at);
-        const baseAt = nl?.at ?? now;
-        const day = new Date(baseAt);
-        const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
-            + (parseTimeOfDayToMs(chosen) ?? 0);
-        // Solo la hora PELADA ("a las 7") cae a la próxima ocurrencia si ya
-        // pasó. Con día explícito ("hoy", "mañana", "el jueves") NO se rueda:
-        // "hoy a las 9" es hoy, no mañana.
-        if (!explicitDay && at <= now) {
-            return { type: 'absolute', at: at + MS_DAY };
-        }
-        return { type: 'absolute', at };
+    const explicitDay = Boolean(nl?.at);
+    const baseAt = nl?.at ?? now;
+    const day = new Date(baseAt);
+    const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0).getTime()
+        + (parseTimeOfDayToMs(chosen) ?? 0);
+    // Solo la hora PELADA ("a las 7") cae a la próxima ocurrencia si ya pasó.
+    // Con día explícito ("hoy", "mañana", "el jueves") NO se rueda: "hoy a las
+    // 9" es hoy, no mañana.
+    if (!explicitDay && at <= now) {
+        return { type: 'absolute', at: at + MS_DAY };
     }
-    if (!nl || !nl.at) return null;
-    return { type: 'absolute', at: nl.at };
+    return { type: 'absolute', at };
 }
 
 /**
@@ -444,10 +434,8 @@ export function parseAgendaCommand(
     // el item por kind+label (la fecha puede venir o no). Un ÚNICO resolutor de
     // recurrencia atiende clases y resto de kinds (sin dos gramáticas).
     // Hora como COMODÍN: cancelar y editar identifican el item por kind+label, así
-    // que si el usuario NO dijo hora no se inventa una. `resolveRecurrence` usa
-    // '09:00' de relleno (legítimo al crear), pero ese relleno aquí haría que
-    // "cambia el nombre de la clase de historia" moviera además la hora a las
-    // 09:00, y que el borrado arrastrara una hora que nadie dijo.
+    // que si el usuario NO dijo hora no se inventa una: `resolveRecurrence` pide
+    // hora explícita y devuelve null sin ella (crear entonces pide la hora).
     // Cambio de HORA ("de las siete a las ocho"): la ÚLTIMA hora es el DESTINO y
     // la primera identifica el item. Con una sola hora, esa es la hora.
     const hours = scanTimesOfDay(cleaned);

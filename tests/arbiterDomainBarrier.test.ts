@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { resolveDeterministicCommand, resolveStatefulDomains } from '../src/voice/lib/deterministicArbiter'
+import { resolveAgendaDomainIntent } from '../src/core/agenda/domainScopedIntent'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
 
@@ -144,5 +145,49 @@ describe('arbiterDomainBarrier — cada dominio conserva sus comandos', () => {
       expect(resolveDeterministicCommand('siguiente carta').domain).toBe('game')
       expect(resolveDeterministicCommand('agrega matemáticas el lunes').domain).not.toBe('game')
     })
+  })
+})
+
+describe('arbiterDomainBarrier — crear exige hora explícita (no se inventa)', () => {
+  it('ni 09:00 (recurrente) ni 00:00 (fecha pelada): sin hora se pregunta', () => {
+    // Dos invenciones silenciosas distintas, la misma regla: rellenar la hora
+    // fijaba "reunión los lunes" a las 09:00 y "recuérdame … mañana" a las 00:00.
+    for (const frase of [
+      'crea una clase los lunes',
+      'reunión los lunes',
+      'recuérdame comprar el pan los lunes',
+      'cita los martes',
+      'clase de historia todos los días',
+      'recuérdame comprar el pan mañana',
+      'crea una cita para mañana',
+      'junta mañana',
+    ]) {
+      const r = resolveDeterministicCommand(frase)
+      expect(r.matched, `"${frase}" pide la hora en vez de inventarla`).toBe(false)
+    }
+  })
+
+  it('con la hora dicha se crea igual que siempre', () => {
+    for (const frase of [
+      'crea una clase los lunes a las 9',
+      'agrega matemáticas el lunes a las 8',
+      'recuérdame comprar el pan mañana a las 4 de la tarde',
+      'crea una junta para mañana a las 11',
+      'recuérdame todos los días a las 8',
+    ]) {
+      const r = resolveDeterministicCommand(frase)
+      expect(r.matched, `"${frase}" crea`).toBe(true)
+      expect(r.domain).toBe('agendaCommand')
+    }
+  })
+
+  it('la vía del LLM (dominio horario/recordatorio) también pide la hora', () => {
+    // Hueco real: el árbitro no matcheaba y la clasificación del LLM creaba la
+    // clase a las 09:00 por defecto. Ahora propaga la pista para preguntar.
+    const sinHora = resolveAgendaDomainIntent('horario', 'agrega matemáticas el lunes')
+    expect(sinHora?.needsInstant).toBe(true)
+    const conHora = resolveAgendaDomainIntent('horario', 'agrega matemáticas el lunes a las 8')
+    expect(conHora?.matched).toBe(true)
+    expect((conHora?.action as { trigger?: unknown })?.trigger).toBeTruthy()
   })
 })
