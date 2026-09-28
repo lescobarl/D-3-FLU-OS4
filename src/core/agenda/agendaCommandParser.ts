@@ -121,6 +121,19 @@ function detectKind(text: string): AgendaKind | null {
     return null;
 }
 
+/** Día nombrado u "horario": acota la serie por día (cancelar/editar). */
+function hasNamedDay(text: string): boolean {
+    const t = normalize(text);
+    return /\bhorario\b/.test(t) || WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
+}
+
+/** Recurrencia explícita ("toda la semana", "todos los días"): también es CLASE. */
+function hasExplicitRecurrence(text: string): boolean {
+    return /(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)/i.test(
+        normalize(text),
+    );
+}
+
 /**
  * Kind implícito cuando no hay sustantivo explícito: el dictado escolar
  * "agrega matemáticas el lunes a las 8" (materia + día + hora) es una CLASE.
@@ -128,18 +141,13 @@ function detectKind(text: string): AgendaKind | null {
  */
 function resolveImplicitKind(text: string, action: AgendaCommandAction | null): AgendaKind | null {
     if (!action) return null;
-    const t = normalize(text);
-    const isHorario = /\bhorario\b/.test(t);
-    const hasWeekday = WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
-    // Recurrencia explícita ("toda la semana", "todos los días") también es clase.
-    const isRecurring = /(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)/i.test(t);
     // Cancelar/editar una clase: "quita X del viernes" (día) o "quita X del horario".
     if (action === 'agenda.cancel' || action === 'agenda.update') {
-        return hasWeekday || isHorario ? 'clase' : null;
+        return hasNamedDay(text) ? 'clase' : null;
     }
     // Crear una clase exige la HORA ("el lunes a las 8"); sin hora no hay
     // acción accionable (se pide aclaración, no se inventa una hora).
-    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay && (hasWeekday || isHorario || isRecurring)) {
+    if (action === 'agenda.create' && pickTimeOfDay(text).timeOfDay && (hasNamedDay(text) || hasExplicitRecurrence(text))) {
         return 'clase';
     }
     return null;
@@ -414,7 +422,18 @@ export function parseAgendaCommand(
     // texto no trae el sustantivo ni el verbo del tipo. No sustituye la
     // deteccion: solo cubre su ausencia, y NO exime del instante explicito.
     const kind = detectKind(cleaned) ?? resolveImplicitKind(cleaned, action) ?? options?.kindHint ?? null;
-    if (!kind) return { handled: false, action: null, reply: '' };
+    if (!kind) {
+        // Dictado escolar SIN hora ("agrega matemáticas el lunes"): el tipo es
+        // CLASE, pero crear exige el instante y NO se inventa uno. No se descarta
+        // en silencio: se devuelve la PISTA (kind+label) para que el carril de
+        // dominio pida la hora, igual que cuando el tipo vino por sustantivo
+        // explícito ("recuérdame …" → {kind:'recordatorio'}). `handled:false` ⇒
+        // quien no mire `action` sigue sin crear nada.
+        const claseSinHora = action === 'agenda.create' && (hasNamedDay(cleaned) || hasExplicitRecurrence(cleaned));
+        return claseSinHora
+            ? { handled: false, action: 'agenda.create', kind: 'clase', label: resolveLabel(cleaned), reply: '' }
+            : { handled: false, action: null, reply: '' };
+    }
 
     // Sin verbo explícito ("reunión del equipo mañana a las 12", "junta hoy"):
     // se interpreta como CREAR si trae cláusula de tiempo. Sin tiempo no hay

@@ -311,13 +311,19 @@ de **0 nuevos**.
 - **Barrera de COMPORTAMIENTO por dominio** (`tests/arbiterDomainBarrier.test.ts`,
   dentro de `lint:guards`): fija que cada dominio conserve sus comandos y ninguno
   invada al vecino (agenda con/sin hora, nota, compra, diario, configuración, y la
-  precedencia con partida activa). **Motivo medido (riesgo estructural real):**
+  precedencia con partida activa). **Invariante de la partida:** una intención
+  PENDIENTE de otro dominio (crear en agenda sin instante) **no es una jugada**; el
+  juego no puede consumirla como `turn`. Se guardan las DOS vías que ofrecen el
+  turno: el paso 13 de `resolveDeterministicCommand` y el fast-path
+  `resolveStatefulDomains` del hook. **Motivo medido (riesgo estructural real):**
   `lint:guards` eran 56 archivos de HIGIENE (rutas, fuentes, hardcode) y
   `deterministicArbiter.test.ts` quedaba FUERA, así que una regresión de
   precedencia pasaba con "typecheck + guardias en verde" y solo se veía en la
-  suite completa (que exige autorización). Ocurrió: en `3b66634` el alta genérica
-  de notas se llevó los verbos de la agenda y "agrega matemáticas el lunes" se
-  guardaba como NOTA. La barrera de comportamiento cierra ese hueco en pre-commit.
+  suite completa (que exige autorización). Ocurrieron dos: en `3b66634` el alta
+  genérica de notas se llevó los verbos de la agenda y "agrega matemáticas el
+  lunes" se guardaba como NOTA; y con partida activa esa misma frase (y
+  "recuérdame comprar el pan", "cita con el dentista") caía en `game/turn` y el
+  juego se la tragaba. La barrera cierra ambos huecos en pre-commit.
 - Un guard de comportamiento que use módulos de producción NO es "teatro": toda
   barrera nueva en `lint:guards` debe traer su caso de **prueba de detector**
   (alimenta una entrada y comprueba que la marca discrimina) o `guardMutationGuard`

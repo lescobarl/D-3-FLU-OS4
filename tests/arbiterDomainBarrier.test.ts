@@ -11,9 +11,16 @@
  *
  * Esta barrera fija la PRECEDENCIA por dueño: cada dominio conserva sus comandos
  * y ninguno invade al vecino. Usa los resolutores de PRODUCCIÓN (sin mocks).
+ *
+ * Cubre dos regresiones reales:
+ *   1. El alta genérica de notas se llevaba los verbos de la agenda (3b66634).
+ *   2. Con partida activa, una intención pendiente de OTRO dominio (crear en
+ *      agenda sin instante) caía en `game/turn` y el juego se la tragaba. Se
+ *      comprueban las DOS vías que ofrecen el turno: el paso 13 del árbitro y el
+ *      fast-path `resolveStatefulDomains` del hook.
  */
 import { describe, expect, it } from 'vitest'
-import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter'
+import { resolveDeterministicCommand, resolveStatefulDomains } from '../src/voice/lib/deterministicArbiter'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
 
@@ -29,6 +36,12 @@ function conLoteriaActiva(fn: () => void) {
   } finally {
     clearActiveGameSession()
   }
+}
+
+/** Acción que el fast-path de estado ofrece para la frase (undefined si ninguna). */
+function statefulGameAction(frase: string): string | undefined {
+  const game = resolveStatefulDomains(frase).game as { action?: string } | null
+  return game?.action
 }
 
 describe('arbiterDomainBarrier — cada dominio conserva sus comandos', () => {
@@ -77,22 +90,59 @@ describe('arbiterDomainBarrier — cada dominio conserva sus comandos', () => {
       const propio = resolveDeterministicCommand('siguiente carta')
       expect(propio.domain).toBe('game')
       expect((propio.action as { action?: string })?.action).toBe('turn')
+      // Cambiar de juego y terminarlo siguen siendo del motor.
+      expect((resolveDeterministicCommand('cambia a trivia').action as { action?: string })?.action).toBe(
+        'switch',
+      )
+      expect((resolveDeterministicCommand('terminar el juego').action as { action?: string })?.action).toBe(
+        'end',
+      )
+    })
+  })
+
+  it('una intención pendiente de agenda NO se convierte en jugada con partida activa', () => {
+    // Regresión real (2026-09-28): con la lotería abierta estas tres frases caían
+    // en `game/turn` — el juego se las tragaba y la agenda nunca pedía la hora.
+    // Sin partida iban al carril que pregunta; con partida deben ir IGUAL
+    // (el significado no cambia porque haya un juego abierto).
+    conLoteriaActiva(() => {
+      for (const frase of [
+        'agrega matemáticas el lunes',
+        'recuérdame comprar el pan',
+        'cita con el dentista',
+      ]) {
+        const r = resolveDeterministicCommand(frase)
+        expect(r.domain, `"${frase}" no es una jugada`).not.toBe('game')
+        expect(r.matched, `"${frase}" va al carril que pide la hora`).toBe(false)
+      }
+    })
+  })
+
+  it('el fast-path de estado tampoco le ofrece el turno del juego a ese texto', () => {
+    // Segunda vía real: el hook despacha el turno por `resolveStatefulDomains`
+    // (fastPathGame). Guardar solo el paso 13 del árbitro dejaba este hueco.
+    conLoteriaActiva(() => {
+      expect(resolveStatefulDomains('agrega matemáticas el lunes').game).toBeNull()
+      expect(resolveStatefulDomains('recuérdame comprar el pan').game).toBeNull()
+      // Los comandos EXPLÍCITOS del motor no se tocan.
+      expect(statefulGameAction('terminar el juego')).toBe('end')
+      expect(statefulGameAction('cambia a trivia')).toBe('switch')
+      // Y una jugada real sigue llegando como turno.
+      expect(statefulGameAction('siguiente carta')).toBe('turn')
     })
   })
 
   it('el detector no es decorativo: los dos casos se distinguen de verdad', () => {
-    // Sin esta discriminación, la barrera podría estar en verde con cualquier
-    // implementación. Con hora hay match de agenda; sin hora no hay match: si el
-    // resolutor devolviera lo mismo para ambos, este caso cae.
+    // Con hora hay acción de agenda; sin hora no la hay. Si el resolutor
+    // devolviera lo mismo para ambos, este caso cae.
     const conHora = resolveDeterministicCommand('agrega matemáticas el lunes a las 8')
     const sinHora = resolveDeterministicCommand('agrega matemáticas el lunes')
     expect(conHora.matched).not.toBe(sinHora.matched)
-    // Y la marca inversa: con partida activa el texto sin dueño SÍ cae en el
-    // juego, de modo que la aserción "no es nota" no es trivialmente cierta.
+    // Marca inversa: la barrera no puede "arreglar" lo anterior rompiendo el
+    // juego, así que la jugada real se comprueba en el mismo caso.
     conLoteriaActiva(() => {
-      const ambiguo = resolveDeterministicCommand('agrega matemáticas el lunes')
-      expect(ambiguo.domain).toBe('game')
-      expect(ambiguo.domain).not.toBe('note')
+      expect(resolveDeterministicCommand('siguiente carta').domain).toBe('game')
+      expect(resolveDeterministicCommand('agrega matemáticas el lunes').domain).not.toBe('game')
     })
   })
 })
