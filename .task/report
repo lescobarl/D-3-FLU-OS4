@@ -2450,3 +2450,86 @@ arnes y la que era un comentario mintiendo.
 
 Verificacion: npm run gate exit 0; npm run lint 51/51 guards + eslint 0 avisos;
 npx tsc -b OK; npm run ledger:check OK.
+================================================================
+CIERRE DE RONDA (2026-09-28, sesion del due├▒o: imagen 16:24 + duplicado 16:20)
+================================================================
+OBJETIVO DEL DUE├æO: (1) que un comando accionable de otro dominio NO se
+consuma como jugada con partida activa; (2) que se pueda interactuar con la IA
+y SUSPENDER el juego (loteria y TODOS); (3) la instruccion duplicada
+16:20:29/16:20:33; (4) la imagen recien generada que no aparecia.
+CAUSA MEDIDA DE (1)+(3) -- ruta que quedaba abierta:
+La orden de juego de la IA (contract.juego -> App.onContractResolved ->
+applyGameAction) entraba al motor SIN preguntar de quien era el TURNO. El
+passthrough de la ronda previa cerraba solo la ruta determinista (resolutor),
+y por eso el log del due├▒o muestra lo que muestra: 16:24:36 se crea la cita
+(dueno correcto) y 16:24:42 el motor canta su carta igual ("La carta es: La
+muerte. La muerte siriqui siaca.").
+ARREGLO (un solo criterio, sin ramas por juego):
+- Dueno unico del tipo de turno: isClaimedByOtherDomain (src/voice/lib/gameCommands.js).
+- Ejecutor: applyGameAction (src/app/gameActions.ts) ignora cualquier orden de
+  juego (venga del fast-path o de la IA) si otro dominio reclama el texto, y
+  deja la partida SUSPENDIDA. App le pasa el texto del turno (ctx.turnText).
+- Pausa generica: gameSessionStore.noteGameTurn la aplica el fast-path del hook
+  UNA vez por turno (src/voice/hooks/useFluVoiceAssistant.js). En pausa el motor
+  no consume respuestas abiertas (paso 7 de resolveGameCommandFromText) ni
+  vuelve a hablar: sigue VIVA y se retoma con CUALQUIER orden de juego.
+- Regla 19 nueva en AGENTS.md Anexo B + registrada en el simulador (la 18 del
+  Pizarron estaba declarada SIN situar: eso ponia el DoD en rojo, sinSituar:[18]).
+MEDICION (comandos crudos):
+  npx vitest run <8 ficheros del DoD> -> 8 passed (8) / 115 passed (115)
+  guard (gamePlaythrough + gameDoesNotHijackCommands + fullSuitePathBarrier) -> VERDE
+  tests/gameDoesNotHijackCommands.test.ts -> 55/55 (30 casos nuevos)
+  npx tsc -b -> 0; npm run lint:eslint -> 0; npm run lint:guards -> 57/57 (396 tests)
+  npm run ledger:check -> OK (4 pendientes nuevos: P7.48..P7.51)
+DEUDA MEDIDA NUEVA (registrada, no arreglada: fuera del DoD):
+  tests/systemMatrix.test.ts G7 "orden de arranque + ruido" es FLAKY por RNG.
+  6 corridas en el arbol: FALLA FALLA FALLA PASA PASA PASA.
+  6 corridas en worktree de HEAD: FALLA PASA FALLA PASA PASA FALLA -> preexistente.
+  Causa: createSession() sin cfg + adoptRandom solo adopta si cfg.random es funcion.
+RE-CONGELADO (autorizado por la enmienda del contrato, P7.26): el commit
+ff9f3dc modifico tres guards y no actualizo .task/frozen.json, asi que la puerta
+fallaba por "archivos congelados modificados" antes de mirar el alcance:
+  tests/configSingleSourceGuard.test.ts, tests/duplicationGuard.test.ts,
+  tests/godFileSizeGuard.test.ts -> re-congelados con node scripts/task-gate-freeze.mjs.
+Los tres siguen VERDES en lint:guards (no se afloja nada: el criterio es el actual).
+PUERTA EN ROJO -- BLOQUEO DE ALCANCE (no de codigo). Salida cruda de npm run gate:
+    Γ¥î [task-gate] Archivos FUERA de alcance (prohibido):
+      src/components/WorkspaceHub.tsx
+      src/lib/turnArtifactKind.ts                (sin trackear)
+      tests/turnArtifactKindPerTurn.test.ts      (sin trackear)
+      tests/workspaceLastObjectPerType.test.tsx  (sin trackear)
+      tests/workspaceMediaResetOnRequest.test.tsx (sin trackear)
+      tests/workspaceHubRestoreMedia.test.tsx    (sin trackear)
+      ... y 97 ficheros mas
+El "...y 97 ficheros mas" es la causa de fondo: el contrato fija
+"base": "f00c0ed" y HEAD esta 18 commits por delante (93 ficheros distintos) --
+todo el trabajo ya COMMITEADO desde f00c0ed cuenta como "fuera de alcance".
+Eso no lo puede arreglar el agente: .task/** es inmutable por el agente
+(AGENTS.md B16). ENMIENDA NECESARIA DEL DUE├æO:
+  (a) "base": "ff9f3dc" (HEAD) y anadir al "allow" los 5 ficheros del arreglo de
+      imagen/Pizarron de la ronda previa (WorkspaceHub.tsx + turnArtifactKind.ts +
+      sus 4 tests) -- con nuevo hash, o
+  (b) revertir esos 5 ficheros a HEAD (perderia el arreglo de la imagen).
+Sin ella no hay commit: el hook pre-commit ejecuta la puerta.
+PORTAL: npm run dev levantado y respondiendo 200 en http://localhost:5173
+(la verificacion de producto -- "mi pantalla" -- es del due├▒o, AGENTS.md A.1).
+﻿================================================================
+ENMIENDA DEL CONTRATO (2a) - AUTORIZADA POR EL DUENO ("dale commit")
+================================================================
+La pidio el agente al cerrar la ronda (la puerta med├¡a un contrato obsoleto)
+y el dueno la autorizo en el chat. Cambios, SOLO dos campos:
+  base   f00c0ed -> ff9f3dc   checkpoint actual. Con f00c0ed la puerta veia 18
+                              commits ya cerrados y marcaba "fuera de alcance"
+                              97 ficheros que NO eran de esta ronda.
+  allow  += 4 rutas del arreglo de imagen/ultimo-objeto-por-tipo del Pizarron
+         (src/components/WorkspaceHub.tsx, src/lib/turnArtifactKind.ts,
+          tests/turnArtifactKindPerTurn.test.ts,
+          tests/workspaceLastObjectPerType.test.tsx)
+NO se tocaron dod, guard, guardExpect, maxFiles ni maxLines.
+.task/contract.json sha256 = 65b6cc2a8c741b464489b22cd9d1fb6b898a77078d0c3b3effa7c34c31e3d357
+(no esta en frozen.json, asi que no exige re-congelar)
+SALIDA CRUDA DE LA PUERTA (npm run gate) - exit 0:
+    [task-gate] DoD: npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/surfaceMatrix.test.ts tests/noteItemRemovalLiteral.test.ts tests/gameDoesNotHijackCommands.test.ts tests/turnCommitGarbageGate.test.ts tests/garbageTranscript.test.ts tests/fullSuitePathBarrier.test.ts tests/rulesSimulator.test.ts
+    [task-gate] Guard (green): npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/fullSuitePathBarrier.test.ts
+    [task-gate] Guards base: npx vitest run --no-file-parallelism --testTimeout=30000 --retry=1 --reporter=dot tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts
+    OK [task-gate] Alcance OK - tama├▒o OK - DoD OK - guard OK.

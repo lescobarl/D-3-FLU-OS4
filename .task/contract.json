@@ -1,7 +1,7 @@
 {
-  "base": "f00c0ed",
+  "base": "ff9f3dc",
   "task": "Cierre de los dos defectos medidos en el log del dueno. (1) Con una partida ACTIVA, un comando accionable de otro dominio se lo comia el motor de juego como jugada y nunca se ejecutaba; ademas el juego se despachaba dos veces por turno. (2) El turno moria MUDO: si el guard anti-alucinacion marcaba la captura cruda del ASR como basura, commitTurnPhrase devolvia '' en silencio, commitAndResolveTurn salia sin llamar al callback y la respuesta de Gemini ya pagada se descartaba (log: 'latencia IA: 1102ms' seguido de LISTENING, sin onContractResolved ni SPEAKING). Se anade la capacidad que faltaba (quitar UN item de una nota), se deriva el passthrough del juego del parser unico y el cierre de turno pasa a resolver la frase con motivo explicito y texto validado de respaldo. Se eliminan los simuladores falsos.",
-  "objective": "Que ningun comando accionable de otro dominio pueda consumirse como jugada con partida activa; que 'borra el cloro de la nota del super' quite el item del contenido; y que ningun turno pueda morir en silencio: si la captura cruda del ASR es basura se commitea el texto validado del turno (motivo registrado) y sin texto valido no se llama a la IA. ENMIENDA AUTORIZADA POR EL DUENO en esta sesion (amplia el alcance): cerrar el hueco de la barrera de la suite completa (el atajo 'npx vitest run' esquivaba la autorizacion porque la barrera vivia solo en el script npm), registrar ese incumplimiento en el ledger, unificar el resolvedor de wake words (hook vs getWakeWords), reparar 'npm run test:file' y restaurar la anti-deriva de reglas de Anexo B.",
+  "objective": "Que ningun comando accionable de otro dominio pueda consumirse como jugada con partida activa; que 'borra el cloro de la nota del super' quite el item del contenido; y que ningun turno pueda morir en silencio: si la captura cruda del ASR es basura se commitea el texto validado del turno (motivo registrado) y sin texto valido no se llama a la IA. ENMIENDA AUTORIZADA POR EL DUENO en esta sesion (amplia el alcance): cerrar el hueco de la barrera de la suite completa (el atajo 'npx vitest run' esquivaba la autorizacion porque la barrera vivia solo en el script npm), registrar ese incumplimiento en el ledger, unificar el resolvedor de wake words (hook vs getWakeWords), reparar 'npm run test:file' y restaurar la anti-deriva de reglas de Anexo B. SEGUNDA ENMIENDA AUTORIZADA POR EL DUENO (2026-09-28, respuesta 'dale commit' tras pedirla el agente): (a) base al checkpoint actual ff9f3dc, porque con base f00c0ed la puerta medía 18 commits ya cerrados y marcaba como fuera de alcance todo lo commiteado desde entonces; (b) allow ampliado con las 4 rutas del arreglo de imagen/ultimo-objeto-por-tipo del Pizarron que el dueno pidio en la ronda previa y nunca se declararon. No se tocaron dod, guard, guardExpect, maxFiles ni maxLines.",
   "allow": [
     "src/core/games/**",
     "src/core/notes/**",
@@ -19,6 +19,10 @@
     "src/voice/lib/wakeTurnCommit.js",
     "src/voice/lib/wakeWords.js",
     "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/components/WorkspaceHub.tsx",
+    "src/lib/turnArtifactKind.ts",
+    "tests/turnArtifactKindPerTurn.test.ts",
+    "tests/workspaceLastObjectPerType.test.tsx",
     "scripts/full-suite-policy.mjs",
     "scripts/require-full-suite-auth.mjs",
     "vitest.config.ts",

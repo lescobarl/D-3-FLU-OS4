@@ -43,6 +43,14 @@ export interface GameSession<TState = unknown> {
      * aquí la tabla/puntaje de cada participante. Fuente única de aislamiento.
      */
     players?: Record<string, Record<string, unknown>>;
+    /**
+     * Partida SUSPENDIDA (en pausa): un turno que NO era suyo (imagen, cita,
+     * nota, pregunta a la IA…) la dejo en pausa. Sigue VIVA —conserva estado,
+     * ronda y puntaje— pero no consume respuestas abiertas ni vuelve a hablar
+     * hasta que el usuario la retome con una orden de juego. Regla unica para
+     * TODOS los juegos: ver gameSessionStore.noteGameTurn.
+     */
+    suspended?: boolean;
 }
 
 /** Contexto opcional de un turno: quién habla. */

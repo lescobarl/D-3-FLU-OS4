@@ -177,6 +177,8 @@ const REGLAS: Sitio[] = [
     { id: 15, modo: 'DELEGA', detalle: 'matriz de sistema derivada de los registros', guard: 'tests/systemMatrix.test.ts' },
     { id: 16, modo: 'SIN_GUARD', detalle: 'alcance afectado = consumidores transitivos' },
     { id: 17, modo: 'DELEGA', detalle: 'cobertura derivada y pendiente (G1..G7)', guard: 'tests/surfaceMatrix.test.ts' },
+    { id: 18, modo: 'DELEGA', detalle: 'el ultimo objeto de CADA tipo del Pizarron no se borra (video/imagen/todo)', guard: 'tests/turnArtifactKindPerTurn.test.ts' },
+    { id: 19, modo: 'DELEGA', detalle: 'con partida activa, un turno AJENO no lo consume el motor: la partida queda EN PAUSA (todos los juegos)', guard: 'tests/gameDoesNotHijackCommands.test.ts' },
 ];
 
 /** Huecos congelados: crecer en silencio es lo prohibido. */

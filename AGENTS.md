@@ -743,6 +743,38 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
 **Guard verificable:** test que falle si N>1 criterios de deduplicación/commit de la misma
 señal.
 
+18. **El último objeto de CADA TIPO del Pizarrón no se borra.** El Pizarrón convive con tres
+   objetos de vida propia (video, imagen, respuesta/todo) y cada uno se reemplaza SOLO cuando
+   el MISMO tipo produce uno nuevo. Un turno de otro tipo no los borra. Dueño único del tipo
+   que produce un turno: `resolveTurnArtifactKind` (`src/lib/turnArtifactKind.ts`), que
+   consumen la limpieza por turno de App (la imagen solo se limpia en un turno de imagen) y
+   el foco del feed (un solo criterio, no dos copias). La restauración del Historial descarta
+   POR TIPO: una generación de video (o una imagen en curso) no borra el último objeto
+   restaurado de los otros tipos. Dentro de su tipo el descarte sigue siendo definitivo: una
+   petición que termina sin resultado NO repinta el artefacto anterior (casos 2 y 4).
+   EXCEPCIÓN declarada: una BÚSQUEDA nueva sí limpia la imagen viva generada, porque comparten
+   la misma zona "Imágenes" del grid del feed.
+   Muros: `tests/turnArtifactKindPerTurn.test.ts`, `tests/workspaceLastObjectPerType.test.tsx`,
+   `tests/workspaceMediaResetOnRequest.test.tsx`, `tests/workspaceHubRestoreMedia.test.tsx`.
+
+19. **Con partida ACTIVA, un turno AJENO no lo consume el motor: la partida queda EN PAUSA.**
+   El tipo del turno lo decide su DUEÑO, no quien pide la jugada. Dueño único de esa pregunta:
+   `isClaimedByOtherDomain` (`src/voice/lib/gameCommands.js`), que consulta al resolutor de cada
+   dominio (agenda, notas, compras, diario, ambiente, configuración, navegación/generación,
+   petición visual). Si otro dominio reclama el texto, NINGUNA orden de juego se ejecuta
+   —tampoco la que pide la IA en `contract.juego`— y `applyGameAction` deja la partida
+   SUSPENDIDA (`gameSessionStore.noteGameTurn`): sigue VIVA (estado, ronda y puntaje intactos)
+   pero no consume respuestas abiertas ni vuelve a hablar mientras el usuario está en otro
+   asunto. Se RETOMA con cualquier orden de juego (salir/menú/cambio, arranque del mismo juego o
+   un comando del motor) sin reiniciar nada. Regla única para los 21 motores: sin ramas por
+   juego. Defectos medidos en el log del dueño (2026-09-28): 16:24:36 "Okay flu Crea una cita
+   para mañana a las 3 de la tarde con el doctor" → 16:24:42 FLU "La carta es: La muerte…" (la
+   cita se creaba y el motor cantaba su carta igual); y 16:20:29/16:20:33 "Okay Flow genera una
+   imagen" dos veces (el fast-path del juego escribía la SEGUNDA fila del mismo turno).
+   **Guard verificable:** `tests/gameDoesNotHijackCommands.test.ts` (la orden ajena no habla, la
+   partida queda en pausa y se retoma; tabla medida de que ninguna orden de juego la reclama
+   otro dominio).
+
 ---
 ## Contrato de desenlace de partida (juegos)
 Todo final de motor (`gameOver: true`) DEBE declarar `won` booleano: `true` SOLO si el

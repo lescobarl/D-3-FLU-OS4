@@ -64,6 +64,7 @@ import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
 import { isDataUrl } from './lib/formatAdapters';
+import { resolveTurnArtifactKind } from './lib/turnArtifactKind';
 import { commitUserTurnRow } from './voice/lib/conversationTurnRow';
 import { createConversationModeController } from './voice/lib/conversationMode';
 import { logFluReply } from './voice/lib/fluConversationLog';
@@ -1725,14 +1726,22 @@ function App() {
 
             // ============================================================
             // LIMPIEZA POR TURNO del estado VIVO (imagen/artifact)
-            // Al iniciar un turno real se limpia la imagen generada y el artifact
-            // vivos para que NO queden "pegados" los resultados del turno anterior
-            // (p. ej. imágenes de una consulta previa). Lo persistido (Historial
-            // por usuario en `documents`) y la restauración por prioridad NO viven
-            // aquí: siguen intactos.
+            // ACOTADA AL TIPO: el turno solo reemplaza el objeto del tipo que
+            // él mismo produce (invariante: el último objeto de cada tipo
+            // —video, imagen, todo— NO se borra por un turno de otro tipo).
+            // Antes se limpiaba la imagen en TODO turno, así que la imagen
+            // recién generada desaparecía en el turno siguiente (una carta de
+            // la partida, una respuesta de texto…) aunque siguiera siendo el
+            // último objeto de su tipo. La imagen la reemplaza su propia ruta
+            // cuando el turno SÍ pide una imagen (beginImageRequest del hook).
+            // El artifact (objeto "todo") sí se limpia: es el texto del turno
+            // y la respuesta conversacional ya lo pinta desde latestResponse.
+            // Lo persistido (Historial por usuario en `documents`) sigue
+            // intacto: es la fuente de restauración por tipo.
             // ============================================================
+            const turnKind = resolveTurnArtifactKind(workspace?.tipo, navegacion?.comando);
             try {
-                workspaceImage.clear();
+                if (turnKind === 'image') workspaceImage.clear();
             } catch (err) {
     logCaughtError('[catch] src/App.tsx', err);
                 relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
@@ -1764,20 +1773,11 @@ function App() {
             const isSearchFillTurn = comandoNavegacion === 'BUSCAR' || comandoNavegacion === 'NAVEGAR';
             if (!isSearchFillTurn) dispatchFluResetSearch();
             // Foco del turno: el feed del Pizarrón salta al tipo del resultado.
-            // `text` (respuesta conversacional) → vuelve a "Todo".
+            // `text` (respuesta conversacional) → vuelve a "Todo". El tipo sale
+            // del MISMO criterio que la limpieza por turno (turnKind de arriba).
             {
-                const wsTipoFocus = String((workspace)?.tipo || '').trim().toLowerCase();
-                const navFocus = String((navegacion)?.comando || '').toUpperCase();
-                const focusKindNow: 'video' | 'doc' | 'image' | 'text' =
-                    wsTipoFocus === 'video' || navFocus === 'GENERAR_VIDEO'
-                        ? 'video'
-                        : wsTipoFocus === 'doc' || navFocus === 'GENERAR_DOCUMENTO'
-                            ? 'doc'
-                            : isVisualWorkspaceTipo(wsTipoFocus)
-                                ? 'image'
-                                : 'text';
                 turnFocusSeqRef.current += 1;
-                setTurnFocus({ kind: focusKindNow, seq: turnFocusSeqRef.current });
+                setTurnFocus({ kind: turnKind, seq: turnFocusSeqRef.current });
             }
             if (workspace) {
                 const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
@@ -2261,7 +2261,7 @@ function App() {
                         conversationActiveRef,
                         speakFluRef,
                         scheduleResumeListening,
-                        participantIdRef: realParticipantIdRef,
+                        participantIdRef: realParticipantIdRef, turnText: transcript,
                     });
                 } catch (err) {
                     logCaughtError('[App] applyGameAction failed (non-critical)', err);

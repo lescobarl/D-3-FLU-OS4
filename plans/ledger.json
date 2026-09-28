@@ -770,6 +770,34 @@
       "estado": "done",
       "origen": "cobertura-perdida",
       "evidencia": "MEDIDO: rulesSimulator era el UNICO artefacto que leia las reglas declaradas en AGENTS.md Anexo B y exigia que cada una estuviera situada (EJERCITA / DELEGA / SIN_GUARD), con los huecos sin guard congelados en [7,8,16]; un barrido de 'Anexo B' en tests/ y scripts/ solo lo devolvia a el. Borrarlo entero para quitar su parte de simulacion dejaba 'todas las reglas' sin anti-deriva. Arreglo: se restaura el fichero TAL CUAL (git restore) y se verifica EN VERDE con el arbol actual (9 tests). El simulador FALSO que si se elimina es tests/reportedScenariosSimulation.test.ts, sustituido por tests/reportedScenariosRootFix.test.ts, que ejerce la cadena real arbitro -> escritura -> servicio -> DB."
+    },
+    {
+      "id": "P7.48",
+      "titulo": "Con partida ACTIVA, un turno AJENO no se consume como jugada: la orden que la IA pide en contract.juego tampoco se ejecuta y la partida queda EN PAUSA (todos los juegos)",
+      "estado": "todo",
+      "origen": "defecto-medido-por-el-dueno",
+      "evidencia": "MEDIDO (log del dueno, 2026-09-28): 16:24:36 'Okay flu Crea una cita para manana a las 3 de la tarde con el doctor' creaba la cita (su dueno) y 16:24:42 FLU respondia 'La carta es: La muerte...' con la loteria activa; y 16:20:29/16:20:33 'Okay Flow genera una imagen' quedaba como instruccion DUPLICADA (el fast-path del juego despachaba turno del mismo texto y el escritor de filas lo tomaba por otra frase). CAUSA de la ruta que quedaba abierta: la orden de juego del LLM (contract.juego -> App.onContractResolved -> applyGameAction) entraba al motor SIN preguntar de quien era el TURNO; el passthrough de la ronda previa solo cerraba la ruta determinista. Arreglo con UN criterio (dueno unico isClaimedByOtherDomain, gameCommands.js) aplicado por el EJECUTOR: applyGameAction ignora la orden si otro dominio reclama el texto y deja la partida SUSPENDIDA (gameSessionStore.suspendActiveGameSession); App le pasa el texto del turno (ctx.turnText). PAUSA generica (regla 19 de Anexo B): gameSessionStore.noteGameTurn la aplica el fast-path del hook UNA vez por turno; en pausa la partida no consume respuestas abiertas (gameCommands paso 7) ni vuelve a hablar, sigue VIVA (estado/ronda/puntaje) y se retoma con CUALQUIER orden de juego (salir/menu/cambio, arranque del mismo juego, comandos del motor), sin ramas por juego. VERIFICADO: DoD del contrato 8/8 ficheros y 115/115 tests; guard VERDE (gamePlaythrough + gameDoesNotHijackCommands + fullSuitePathBarrier); 30 casos nuevos en tests/gameDoesNotHijackCommands.test.ts (la orden ajena no habla y deja en pausa; falsacion: la MISMA orden sin texto de turno si llega al motor; control pausa/sin pausa; retoma sin reiniciar; bucle sobre los 21 juegos del catalogo; tabla medida de que ninguna orden de juego la reclama otro dominio); npx tsc -b 0; npm run lint:eslint 0; npm run lint:guards 57/57. PENDIENTE: commit (bloqueado por P7.50)."
+    },
+    {
+      "id": "P7.49",
+      "titulo": "Deuda medida: tests/systemMatrix.test.ts G7 'orden de arranque + ruido' es FLAKY (depende de Math.random)",
+      "estado": "todo",
+      "origen": "deuda-detectada",
+      "evidencia": "MEDIDO 6 corridas del mismo comando en el arbol actual: FALLA FALLA FALLA PASA PASA PASA; y 6 corridas en un git worktree de HEAD (node_modules enlazado): FALLA PASA FALLA PASA PASA FALLA -> el rojo es PREEXISTENTE, no regresion de esta sesion. Causa: el escenario llama engine.createSession() sin cfg y adoptRandom (src/core/games/gameUtils.ts:153) solo adopta el RNG si cfg.random es funcion, asi que la palabra inicial del banco es aleatoria (en palabrasEncadenadas, 'eco-con-wake termina la partida' depende de la letra inicial). Arreglo propuesto (no hecho: fuera del DoD y del guard del contrato): RNG sembrado en el escenario. Fuera de lint:guards, por eso nadie lo veia."
+    },
+    {
+      "id": "P7.50",
+      "titulo": "npm run gate en ROJO por ALCANCE: ficheros del Pizarron/imagen de la ronda previa fuera del 'allow' del contrato",
+      "estado": "blocked",
+      "origen": "alcance-agotado",
+      "evidencia": "MEDIDO: node scripts/task-gate.mjs rechaza src/components/WorkspaceHub.tsx (modificado) y los sin trackear src/lib/turnArtifactKind.ts, tests/turnArtifactKindPerTurn.test.ts, tests/workspaceLastObjectPerType.test.tsx, tests/workspaceMediaResetOnRequest.test.tsx, tests/workspaceHubRestoreMedia.test.tsx (trabajo de imagen/ultimo-objeto-por-tipo de la ronda anterior, declarado en la regla 18 de AGENTS.md). .task/contract.json NO los admite en 'allow' y AGENTS.md B16 declara .task/** inmutable por el agente, asi que la enmienda es del dueno: (a) ampliar 'allow' con nuevo hash del contrato, o (b) revertir esos ficheros a HEAD (perderia el arreglo de la imagen que el dueno pidio). Sin gate verde no hay commit: el hook pre-commit ejecuta el gate."
+    },
+    {
+      "id": "P7.51",
+      "titulo": "La regla 18 de Anexo B quedo declarada SIN situar en el simulador (DoD en rojo): registradas 18 y 19",
+      "estado": "todo",
+      "origen": "hallazgo",
+      "evidencia": "MEDIDO: tests/rulesSimulator.test.ts 'sinSituar: [18]' -- la regla 18 (ultimo objeto de cada tipo del Pizarron, anadida por la ronda previa) no estaba en REGLAS, y el fichero esta en el DoD del contrato, asi que el DoD nacia rojo. Arreglo: 18 -> DELEGA a tests/turnArtifactKindPerTurn.test.ts (sus 4 muros existen: turnArtifactKindPerTurn, workspaceLastObjectPerType, workspaceMediaResetOnRequest, workspaceHubRestoreMedia) y 19 (regla nueva de este turno) -> DELEGA a tests/gameDoesNotHijackCommands.test.ts. Verificado: rulesSimulator 3/3 en verde dentro del DoD (115/115)."
     }
   ],
   "done": [

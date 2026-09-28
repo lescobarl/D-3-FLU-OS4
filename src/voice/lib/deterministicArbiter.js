@@ -19,7 +19,7 @@
 // ============================================================
 
 import { resolveConfigCommandFromText } from './configCommands.js'
-import { resolveGameCommandFromText } from './gameCommands.js'
+import { resolveGameCommandFromText, isClaimedByOtherDomain } from './gameCommands.js'
 import { resolveNoteVoiceIntent } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
@@ -94,24 +94,6 @@ function resolveChannelForNavigation(commandId = '') {
 // El reconocimiento de nota (alta / borrado por destino / vaciado / quitar ítem)
 // es el MISMO resolver que usa el despacho: `resolveNoteVoiceIntent`. Antes se
 // replicaba AQUÍ su algoritmo, así que arreglar una copia no arreglaba la otra.
-
-/**
- * Intención PENDIENTE de agenda: el parser reconoció el tipo (kind) pero el texto
- * NO trae instante, así que no es accionable (no se inventa la hora) y el árbitro
- * no la matchea — el turno va al carril conversacional, que pregunta.
- *
- * Lo que NO puede pasar es que la PARTIDA lo consuma como jugada: la respuesta
- * abierta del juego (`action: 'turn'`) es la última red, y un texto de otro
- * dominio no es una respuesta del jugador. Mismo criterio con partida y sin ella
- * (el significado de lo que dices no cambia porque haya un juego abierto).
- *
- * Fuente única de la señal: la pista del parser de agenda, la MISMA que usa la
- * vía LLM (`resolveAgendaDomainIntent` en core/agenda/domainScopedIntent).
- */
-function hasAgendaPendingCreate(text, now) {
-  const cmd = parseAgendaCommand(String(text || ''), { now })
-  return cmd?.action === 'agenda.create' && Boolean(cmd?.kind)
-}
 
 /**
  * Resuelve de forma determinista y local un comando de voz a partir del texto
@@ -189,7 +171,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   //    se resuelve aqui: es la ultima red (paso 10). Si se resolviera aqui, con
   //    una partida viva CUALQUIER frase caeria en `turn` y se tragaria comandos
   //    que otro dominio si sabe ejecutar (ambiente, agenda...).
-  const game = resolveGameCommandFromText(transcript)
+  const game = resolveGameCommandFromText(transcript, { language, now })
   if (game?.gameId && game.action !== 'turn') {
     return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
@@ -247,10 +229,13 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   // 13. Respuesta abierta de la partida activa: SOLO si ningun otro dominio la
   //     reclama. Es la ultima red, de modo que la partida nunca secuestra un
   //     comando ejecutable (regla: "permite ejecutar cualquier comando").
-  //     13.a: una intencion PENDIENTE de otro dominio (crear en agenda sin
-  //     instante) tampoco es una jugada. Se deja sin match para que la atienda el
-  //     carril conversacional (que pide la hora), igual que cuando NO hay partida.
-  if (game?.gameId && !hasAgendaPendingCreate(transcript, now)) {
+  //     13.a: el criterio "¿otro dominio lo reclama?" es UNICO
+  //     (`isClaimedByOtherDomain`, gameCommands.js) y consulta al dueño de cada
+  //     dominio; el juego ya lo aplicó en su propio paso 5b, así que con partida
+  //     y sin ella el significado de la frase es el MISMO. Antes aquí vivía un
+  //     segundo criterio más estrecho (solo el alta de agenda sin instante), así
+  //     que "genera una imagen" o una cita CON hora caían al motor.
+  if (game?.gameId && !isClaimedByOtherDomain(transcript, { language, now })) {
     return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
 
@@ -270,14 +255,17 @@ export function resolveDeterministicCommand(text = '', options = {}) {
 export function resolveStatefulDomains(text = '', options = {}) {
   const { language = 'es', now } = options || {}
   const transcript = String(text || '').trim()
-  const game = transcript ? resolveGameCommandFromText(transcript) : null
+  const game = transcript ? resolveGameCommandFromText(transcript, { language, now }) : null
   return {
     config: transcript ? resolveConfigCommandFromText(transcript) : null,
-    // La respuesta ABIERTA de la partida no se ofrece si el texto es una
-    // intencion pendiente de otro dominio: el fast-path del hook despacharia el
-    // turno del juego y se tragaria el comando (misma regla que el paso 13).
-    // Los comandos EXPLICITOS del motor (arranque/cambio/fin/menu) no se tocan.
-    game: game?.action === 'turn' && hasAgendaPendingCreate(transcript, now) ? null : game,
+    // La respuesta ABIERTA de la partida no se ofrece si el texto lo reclama otro
+    // dominio (imagen, agenda, notas, compras, diario, ambiente…): el fast-path del
+    // hook despacharia el turno del juego y se tragaria el comando (misma regla
+    // unica que el paso 13). Los comandos EXPLICITOS del motor
+    // (arranque/cambio/fin/menu) no se tocan.
+    game: game?.action === 'turn' && isClaimedByOtherDomain(transcript, { language, now })
+      ? null
+      : game,
     env: transcript ? resolveEnvironmentIntent(transcript, language) : null,
   }
 }

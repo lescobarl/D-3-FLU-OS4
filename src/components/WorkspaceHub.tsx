@@ -47,6 +47,10 @@ import { dispatchFluSearchReady, onFluResetSearch, onFluSearch } from '../core/e
 // ------------------------------------------------------------
 // Props — todo el estado llega desde App.tsx
 // ------------------------------------------------------------
+
+/** Tipos con artefacto persistido en el Historial (uno por tipo en el feed). */
+type RestorableKind = 'video' | 'image' | 'doc';
+
 export interface WorkspaceHubProps {
     // Búsqueda (WorkspaceSearch)
     searchAllowlist?: string[];
@@ -310,18 +314,37 @@ export function WorkspaceHub({
         [image, runSearch],
     );
 
-    // Restauración ONE-SHOT del Historial: el último artefacto persistido se
-    // pinta SOLO al inicio de la sesión. En cuanto el usuario arranca cualquier
-    // petición o llega un artefacto vivo (generación, imagen o búsqueda en
-    // curso), la restauración se descarta para no repintar el artefacto ANTERIOR
-    // cuando la petición nueva no produce resultado (casos 2 y 4). Es estado de
-    // sesión (una sola transición), no un flag por render.
-    const [restoreDismissed, setRestoreDismissed] = useState(false);
+    // Restauración del Historial POR TIPO: se pinta el último artefacto
+    // PERSISTIDO de cada tipo (video / imagen / documento) mientras ese tipo no
+    // esté vivo ni en curso. El descarte es POR TIPO: una petición de un tipo NO
+    // borra el último objeto restaurado de los otros (antes el descarte era
+    // global y una generación de video borraba también la imagen del Pizarrón).
+    // Dentro de su tipo el descarte sigue siendo definitivo: si la petición nueva
+    // termina sin resultado, no se repinta el artefacto ANTERIOR (casos 2 y 4).
+    const [dismissedKinds, setDismissedKinds] = useState<ReadonlySet<RestorableKind>>(
+        () => new Set<RestorableKind>(),
+    );
     useEffect(() => {
-        if (generation.isGenerating || image.isLoading || searchState.loading) {
-            setRestoreDismissed(true);
+        const busy = new Set<RestorableKind>();
+        if (image.isLoading) busy.add('image');
+        // La generación descarta el medio que está produciendo: el job dice cuál
+        // ('pdf' | 'video'); mientras no haya job, los dos (conservador).
+        if (generation.isGenerating) {
+            const formato = String(generation.job?.formato || '').toLowerCase();
+            if (formato !== 'pdf') busy.add('video');
+            if (formato !== 'video') busy.add('doc');
         }
-    }, [generation.isGenerating, image.isLoading, searchState.loading]);
+        // Una búsqueda escribe en las zonas de imágenes y vídeo del feed.
+        if (searchState.loading) {
+            busy.add('image');
+            busy.add('video');
+        }
+        if (busy.size === 0) return;
+        setDismissedKinds((prev) => {
+            if ([...busy].every((kind) => prev.has(kind))) return prev;
+            return new Set([...prev, ...busy]);
+        });
+    }, [generation.isGenerating, generation.job, image.isLoading, searchState.loading]);
 
     // Comando de voz NAVEGAR/BUSCAR (evento RUN_SEARCH): ejecuta la búsqueda
     // externa inyectando consulta e idioma, y vuelca los resultados al feed
@@ -502,13 +525,13 @@ export function WorkspaceHub({
             });
         }
 
-        // Restauración al iniciar sesión: último artefacto PERSISTIDO por tipo
-        // (prioridad video > imagen > documento). ÚNICA fuente: `documents`
-        // (Dexie, por usuario). UN solo builder. Si el tipo ya está vivo en
-        // pantalla se omite, para no duplicar el render. El foco inicial lo
-        // decide `pickInitialFilter` (una sola vez) al remontar el feed cuando
-        // termina de cargar el historial.
-        if (documents && !documents.loading && !restoreDismissed) {
+        // Restauración por TIPO: último artefacto PERSISTIDO de cada tipo
+        // (video > imagen > documento para el foco inicial). ÚNICA fuente:
+        // `documents` (Dexie, por usuario). UN solo builder. Si el tipo ya está
+        // vivo en pantalla se omite, para no duplicar el render. El foco inicial
+        // lo decide `pickInitialFilter` (una sola vez) al remontar el feed
+        // cuando termina de cargar el historial.
+        if (documents && !documents.loading) {
             const latestByFormato = (formato: string): DocumentRecord | undefined =>
                 documents.documents.find(
                     (d) => String(d.formato || '').toLowerCase() === formato,
@@ -516,18 +539,23 @@ export function WorkspaceHub({
             // Un artefacto está "vivo" si ya llegó o si se está generando/cargando:
             // mientras hay una petición en curso NO se restaura el anterior, para
             // que sólo se pinte el nuevo al llegar (no el de la vez pasada).
+            // El medio en curso sale del job (formato 'pdf' | 'video'): una
+            // generación de video no oculta el último documento ni al revés.
+            // Sin job todavía no se sabe qué medio es: se dan por vivos los dos
+            // (conservador, como antes).
+            const medioEnCurso = String(generation.job?.formato || '').toLowerCase();
             const liveMedia = {
-                video: Boolean(generation.videoResult) || generation.isGenerating,
+                video: Boolean(generation.videoResult) || (generation.isGenerating && medioEnCurso !== 'pdf'),
                 image: Boolean(image.imageUrl) || image.isLoading,
-                doc: Boolean(generation.result) || generation.isGenerating,
+                doc: Boolean(generation.result) || (generation.isGenerating && medioEnCurso !== 'video'),
             };
-            const restored: Array<{ rec?: DocumentRecord; kind: 'video' | 'image' | 'doc'; live: boolean }> = [
+            const restored: Array<{ rec?: DocumentRecord; kind: RestorableKind; live: boolean }> = [
                 { rec: latestByFormato('video'), kind: 'video', live: liveMedia.video },
                 { rec: latestByFormato('image'), kind: 'image', live: liveMedia.image },
                 { rec: latestByFormato('pdf'), kind: 'doc', live: liveMedia.doc },
             ];
             restored.forEach(({ rec, kind, live }) => {
-                if (!rec || live) return;
+                if (!rec || live || dismissedKinds.has(kind)) return;
                 const label = String(rec.titulo || rec.nombre || '');
                 const pointer = String(rec.ref || '');
                 const docSource = String(rec.ref || rec.contenido || '');
@@ -695,7 +723,7 @@ export function WorkspaceHub({
         language,
         ws,
         searchState,
-        restoreDismissed,
+        dismissedKinds,
       image,
     ]);
 

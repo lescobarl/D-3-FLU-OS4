@@ -8,7 +8,7 @@
 
 import { EXPRESSION_MAP } from '../avatar';
 import { getGameEngine, gameMenuNames, isAudioGame } from '../core/games/gameCatalog';
-import { clearActiveGameSession, getActiveGameSession, setActiveGameSession } from '../core/games/gameSessionStore';
+import { clearActiveGameSession, getActiveGameSession, resumeActiveGameSession, setActiveGameSession, suspendActiveGameSession } from '../core/games/gameSessionStore';
 import type { GameSpeechOptions } from '../core/games/gameSpeech';
 import { resolveGameSpeechOptions } from '../core/games/gameSpeech';
 import type { GameId, GameSession } from '../core/games/types';
@@ -18,7 +18,7 @@ import { resolveEmotionAnims } from '../lib/transcriptProcessor';
 import { isMusicPlaying, playSong, stopMusic } from '../services/musicPlayer';
 import { useIntegrationStore } from '../store/integrationStore';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { setAudioPlayingProbe } from '../voice/lib/gameCommands';
+import { setAudioPlayingProbe, isClaimedByOtherDomain } from '../voice/lib/gameCommands';
 import type React from 'react';
 // ============================================================
 // Juegos por voz (fast-path determinista) — plan-juegos §7
@@ -38,6 +38,14 @@ interface ApplyGameContext {
     scheduleResumeListening: (textLength?: number) => void;
     /** Participante activo (dueño del turno, mismo scope que horario/notas). */
     participantIdRef: React.MutableRefObject<string | undefined>;
+    /**
+     * Texto del TURNO que originó la orden (frase canónica). Es la entrada del
+     * dueño único del tipo de turno (`isClaimedByOtherDomain`): con él, una orden
+     * de juego que la IA pidió para un turno AJENO no se ejecuta. Sin texto (rutas
+     * sin turno: E2E/integración que ejecutan el motor a propósito) no hay nada que
+     * clasificar y la orden se aplica tal cual.
+     */
+    turnText?: string;
 }
 
 /** Aplica la emoción/animación de un resultado de motor al avatar. */
@@ -166,6 +174,25 @@ interface NormalizedGameAction {
  * registra y se responde de forma amigable.
  */
 export async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGameContext): Promise<void> {
+    // ============================================================
+    // EL TURNO LO DECIDE SU DUEÑO (una sola pregunta, todos los juegos)
+    // ============================================================
+    // La IA también emite `juego` (contract.juego) y con un turno de OTRO dominio
+    // el motor cantaba su carta por encima del dueño real: log del dueño 16:24:42 —
+    // "Okay flu Crea una cita para mañana a las 3 de la tarde con el doctor" creaba
+    // la cita Y FLU respondía "La carta es: La muerte…". Aquí no se pregunta quién
+    // pidió la jugada, sino de quién es el TURNO (`isClaimedByOtherDomain`, dueño
+    // único): si otro dominio lo reclama, no se ejecuta ninguna orden de juego y la
+    // partida queda SUSPENDIDA (sigue viva, pero deja de responder turnos) hasta que
+    // el usuario la retome con una orden de juego.
+    if (ctx.turnText && isClaimedByOtherDomain(ctx.turnText, { language: ctx.languageRef.current })) {
+        suspendActiveGameSession();
+        relayLog('LOG', 'App', `[Juego] orden "${juegoAction.action}" IGNORADA: el turno es de otro dominio ("${String(ctx.turnText).slice(0, 60)}") → partida en PAUSA`);
+        return;
+    }
+    // Cualquier orden de juego que SÍ llega al motor RETOMA la partida en pausa: la
+    // pausa no borra nada (misma carta, misma ronda, mismo puntaje).
+    resumeActiveGameSession();
     if (juegoAction.action === 'narrate') {
         const engine = getGameEngine(juegoAction.gameId as GameId);
         const scenes = juegoAction.narrative?.scenes;

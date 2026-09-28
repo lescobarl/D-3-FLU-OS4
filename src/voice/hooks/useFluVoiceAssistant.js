@@ -33,6 +33,7 @@ import {
   resolveStatefulDomains,
   resolveVoiceCommand,
 } from '../lib/deterministicArbiter'
+import { noteGameTurn } from '../../core/games/gameSessionStore'
 import { relayLog } from '../../lib/clientLogRelay'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
@@ -3148,6 +3149,7 @@ export function useFluVoiceAssistant({
       // ambiente) se delega al árbitro puro (src/voice/lib/deterministicArbiter.js).
       // El hook conserva SOLO la orquestación del despacho (onContractResolved).
       const { config, game, env } = resolveStatefulDomains(text, { language })
+      if (transcript) noteGameTurn(Boolean(game?.gameId)) // turno AJENO = partida EN PAUSA (se retoma con una orden de juego)
       const dispatch = Promise.allSettled([
         config?.accion
           ? dispatchFastConfigCommand(config, {

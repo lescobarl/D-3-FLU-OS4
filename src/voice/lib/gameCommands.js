@@ -15,8 +15,13 @@
 
 import { resolveNavigationCommand } from './voiceCommands.js'
 import { normalizeForMatch, hasVoiceToken, resolveConfigCommandFromText } from './configCommands.js'
+import { isVisualRequestText } from './audioMath.js'
+import { detectExplicitGenerationTipo } from './workspaceContract.js'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { isNoteCommand } from './noteIntentParser'
+import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
+import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
+import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import {
   matchGameIntent,
   matchGameAliasOnly,
@@ -26,7 +31,7 @@ import {
   getGameEngine,
   suppressesAmbient,
 } from '../../core/games/gameCatalog'
-import { getActiveGameSession } from '../../core/games/gameSessionStore'
+import { getActiveGameSession, isGameSuspended } from '../../core/games/gameSessionStore'
 import { logCaughtError } from '../../lib/caughtError';
 
 // ------------------------------------------------------------
@@ -86,53 +91,64 @@ function isQuestionLike(clean) {
 }
 
 /**
- * ¿El texto es un comando ACCIONABLE de otro dominio (agenda, notas o config)?
- * Con una partida activa, esos comandos NO deben consumirse como respuesta del
- * juego: se dejan pasar (return null) para que el enrutador normal los ejecute
- * (crear alarma/cita/recordatorio, poner/quitar notas, cambiar volumen/color…).
- * El juego queda activo.
+ * ¿El texto lo RECLAMA otro dominio (no es una jugada del juego)?
  *
- * Sin acoplamiento al árbitro (import directo de los parsers) para no crear
- * un ciclo de imports (el árbitro ya importa este módulo).
+ * DUENO UNICO de la pregunta "¿de quién es este turno?". Con una partida activa,
+ * un texto reclamado por otro dominio NO puede consumirse como respuesta del
+ * jugador: si el motor lo consume, el juego responde POR ENCIMA del dueño real
+ * (defecto medido: "okay flow genera una imagen" con la lotería activa generaba
+ * la imagen y además el motor cantaba "La carta es…"; una cita CON hora se
+ * creaba y el motor respondía su carta igual) y el turno se produce dos veces
+ * (el motor y la IA), duplicando la fila de la locución.
+ *
+ * La respuesta la da el DUENO de cada dominio (su resolutor), nunca una lista
+ * paralela que se desvía: configuración, navegación/generación de
+ * video-documento, petición visual (imagen/foto), ambiente, agenda, compras,
+ * diario y notas. Se importan los resolutores (no el árbitro) para no crear un
+ * ciclo: el árbitro importa este módulo.
+ *
+ * @param {string} text Texto del turno (crudo o ya limpio).
+ * @param {{ language?: string, now?: number }} [options] Idioma y marca de tiempo
+ *   que esperan los resolutores de ambiente, agenda y diario.
+ * @returns {boolean} true si otro dominio reclama el turno.
  */
-function isNonGameActionableCommand(text) {
-  try {
-    const agenda = parseAgendaCommand(text)
-    if (agenda?.handled && agenda.action) return true
-  } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
-    /* parser sin match no debe romper el juego */
+export function isClaimedByOtherDomain(text = '', options = {}) {
+  const { language = 'es', now } = options || {}
+  const owned = (intent) => Boolean(intent?.handled && intent.action)
+  const run = (owner) => {
+    try {
+      return Boolean(owner())
+    } catch (e) {
+      logCaughtError('[catch] src/voice/lib/gameCommands.js', e)
+      /* un resolutor sin match no debe romper el juego */
+      return false
+    }
   }
-  try {
-    // Alta Y borrado de notas: el predicado unico del parser (sin lista propia
-    // que se desvie). Antes solo se miraba el alta, asi que "borra la nota del
-    // super" con partida activa caia al motor como respuesta del juego.
-    if (isNoteCommand(text)) return true
-  } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
-    /* idem */
-  }
-  try {
-    // Config (volumen, color del avatar, branding…): el DUENO del criterio es su
-    // resolutor, no una lista propia. Defecto real (portal): con una partida
-    // activa, "cambia el color del avatar" y "sube el volumen" caian al ultimo
-    // paso como respuesta del jugador y el juego los consumia: no se podia
-    // ejecutar ningun comando de configuracion durante la partida.
-    if (resolveConfigCommandFromText(text)) return true
-  } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
-    /* idem */
-  }
-  try {
-    // Navegacion DECLARADA (wikipedia/educar/youtube): su dueno es el resolutor de
-    // comandos de voz. Sin esto, "abre youtube" con la loteria activa se consumia
-    // como respuesta del jugador y la navegacion nunca se ejecutaba.
-    if (resolveNavigationCommand(text)) return true
-  } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gameCommands.js', e);
-    /* idem */
-  }
-  return false
+  return (
+    // Agenda: crear, editar, cancelar. Dueño: su parser. Reclama también la
+    // creación PENDIENTE (reconocida por su `kind` pero sin instante): no es una
+    // jugada — la atiende el carril conversacional, que pide la hora.
+    run(() => {
+      const cmd = parseAgendaCommand(text, { now })
+      return owned(cmd) || Boolean(cmd?.action && cmd?.kind)
+    })
+    // Notas: alta Y borrado (predicado único del parser).
+    || run(() => isNoteCommand(text))
+    // Configuración: volumen, color del avatar, branding…
+    || run(() => resolveConfigCommandFromText(text))
+    // Navegación declarada + generación de video/documento pedida tal cual.
+    || run(() => resolveNavigationCommand(text))
+    || run(() => detectExplicitGenerationTipo(text))
+    // Petición visual (imagen/foto/ilustración/diagrama). Dueño: el predicado
+    // visual del audio; su generación corre por el carril de workspace.
+    || run(() => isVisualRequestText(text))
+    // Ambiente (activar/reset).
+    || run(() => resolveEnvironmentIntent(text, language)?.tipo)
+    // Lista de compras.
+    || run(() => owned(parseShoppingIntent(text)))
+    // Diario.
+    || run(() => owned(parseDiaryIntent(text, { language })))
+  )
 }
 
 /**
@@ -143,14 +159,20 @@ function isNonGameActionableCommand(text) {
  *   1. Frase de salida            → `end`
  *   2. Pide el menú de juegos     → `menu`
  *   3. Pide OTRO juego concreto   → `switch` (cerrar el actual y abrir el nuevo)
- *   4. Comando propio del juego   → `turn` (señal positiva del motor)
- *   5. Pregunta general           → null (la responde la IA, no el motor)
- *   6. Cualquier otra cosa        → `turn` (respuesta abierta del jugador)
+ *   4. OTRO dominio lo reclama    → null (lo ejecuta su dueño; el juego no responde)
+ *   5. Comando propio del juego   → `turn` (señal positiva del motor)
+ *   6. Nombre pelado de otro juego→ `switch`
+ *   7. Pregunta general           → null (la responde la IA, no el motor)
+ *   7b. Partida EN PAUSA          → null salvo ORDEN de juego (que la retoma)
+ *   8. Cualquier otra cosa        → `turn` (respuesta abierta del jugador)
+ * El paso 4 VA ANTES del 5 porque los marcos del motor son tokens sueltos de
+ * afirmación ("ok", "si", "vale"): sin él, "Okay Flow genera una imagen" era
+ * leído como "canta la siguiente" y el juego respondía su carta.
  * Sin partida activa:
  *   1. Intención explícita de iniciar → `start`
  *   2. Nada                           → null
  */
-export function resolveGameCommandFromText(text = '') {
+export function resolveGameCommandFromText(text = '', options = {}) {
   const normalized = normalizeForMatch(text)
   if (!normalized) return null
 
@@ -191,32 +213,47 @@ export function resolveGameCommandFromText(text = '') {
     if (intent) {
       return { gameId: activeSession.id, action: 'start' }
     }
+    // 4. Reclamado por OTRO dominio (imagen, generación, agenda, notas, compras,
+    //    diario, ambiente, navegación, configuración) → NO es jugada: se deja
+    //    pasar para que lo ejecute su dueño (la IA o el dominio) y el motor no
+    //    responde por encima.
+    //    VA ANTES de `engine.isGameCommand` (paso 5) porque esos marcos son
+    //    TOKENS SUELTOS de afirmación ("ok", "si", "vale", "dale"): el prefijo de
+    //    wake word "Okay Flow genera una imagen" llevaba el 'ok' y el motor lo leía
+    //    como "canta la siguiente" (defecto medido en el log: el juego respondía su
+    //    carta mientras la imagen se generaba por otro carril, y el turno salía
+    //    duplicado). Orden nuevo, uno solo para TODOS los juegos.
+    if (isClaimedByOtherDomain(text, options)) {
+      return null
+    }
     const engine = getGameEngine(activeSession.id)
-    // 4. Comando propio del juego (pista, paso, "la tengo"…): siempre turno,
+    // 5. Comando propio del juego (pista, paso, "la tengo"…): siempre turno,
     //    aunque empiece como pregunta. VA ANTES del nombre pelado: en la lotería,
     //    "loteria" es SU comando (canto/ganador) y no un cambio de juego.
     if (engine && engine.isGameCommand(text)) {
       return { gameId: activeSession.id, action: 'turn', playerText: text }
     }
-    // 4b. Nombre PELADO de OTRO juego ("trivia" mientras juegas lotería): es una
+    // 5b. Nombre PELADO de OTRO juego ("trivia" mientras juegas lotería): es una
     //     orden de cambio, no una jugada. Si fuera del juego activo, el motor la
     //     consumiría como respuesta y no cambiaría nunca.
     const bareIntent = matchGameAliasOnly(text)
     if (bareIntent && bareIntent.id !== activeSession.id) {
       return { gameId: bareIntent.id, action: 'switch' }
     }
-    // 5. Petición general (pregunta o "platícame de…") → la responde la IA.
+    // 6. Petición general (pregunta o "platícame de…") → la responde la IA.
     //    Genérico: mismo criterio para cualquier juego activo (rompe el ciclo).
     const clean = normalized.replace(/^[^a-z0-9]+/, '')
     if (isQuestionLike(clean) || startsWithFrame(clean, NON_GAME_REQUEST_FRAMES)) {
       return null
     }
-    // 5b. Comando accionable de OTRO dominio (agenda/notas): NO es respuesta del
-    //     juego → se deja pasar para que se ejecute (el juego sigue activo).
-    if (isNonGameActionableCommand(text)) {
-      return null
-    }
-    // 6. Respuesta abierta del jugador (el motor decide si es correcta).
+    // 7. Respuesta abierta del jugador (el motor decide si es correcta), SIEMPRE
+    //    que la partida no esté en PAUSA. En pausa la partida no consume el turno:
+    //    el turno es de su dueño real (otra orden, o la IA si es una frase suelta),
+    //    y la partida se retoma con CUALQUIERA de sus órdenes (pasos 1-5b: salir,
+    //    menú, cambio de juego, arranque del mismo juego, comandos del motor), no
+    //    con una respuesta suelta: así el juego no "bate la conversación" cuando el
+    //    usuario está en otro asunto. La pausa la aplica noteGameTurn (hook).
+    if (isGameSuspended()) return null
     return { gameId: activeSession.id, action: 'turn', playerText: text }
   }
 
