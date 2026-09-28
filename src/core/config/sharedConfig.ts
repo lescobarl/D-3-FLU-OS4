@@ -371,6 +371,13 @@ export const VOICE_DIARIZATION_DEFAULTS = {
      * respuesta larga es habla del usuario (retoma un termino de FLU) y NO se
      * descarta: borrarla perdia turnos completos de conversacion. */
     assistantEchoMinCoverage: 0.5,
+    /** Ventana de tiempo para hablar de ECO. El eco es un fenomeno FISICO: el
+     * microfono re-captura el TTS de FLU mientras habla o en su cola inmediata.
+     * Comparar solo palabras no basta: el jugador que repite una frase que FLU
+     * usa como comando ("siguiente carta" en la loteria) devuelve EXACTAMENTE las
+     * mismas palabras, y sin ventana su turno se descartaba minutos despues de
+     * que FLU hablara (la partida dejaba de responder cartas). */
+    assistantEchoWindowMs: 2500,
 } as const;
 
 // -----------------------------------------------------------

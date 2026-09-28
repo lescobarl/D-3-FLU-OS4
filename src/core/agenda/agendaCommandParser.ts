@@ -355,6 +355,15 @@ function resolveLabel(text: string): string {
         .replace(wordRe('pr[oó]xim[ao]s?|siguiente|que\\s+viene|venider[ao]|entrante|d[ií]as?'), ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
+    // Conectores que quedan COLGANDO al quitar los días: "los miércoles y jueves"
+    // → los días se van y sobrevive la "y", así que la clase se guardaba como
+    // "matemáticas y". Solo se limpian en los EXTREMOS: un "y" interior puede ser
+    // parte real de la etiqueta ("pan y leche").
+    label = label
+        .replace(/^(?:y|e|o|u|con|de)\s+/i, '')
+        .replace(/\s+(?:y|e|o|u|con|de)$/i, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
     if (label) return label;
     // Cuantificador universal ("todas las clases", "todo el horario"): el usuario
     // pide el CONJUNTO completo del tipo, no un item. Etiqueta vacia = sin

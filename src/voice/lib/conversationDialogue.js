@@ -247,12 +247,25 @@ export function deriveUserLastText(conversationHistory = []) {
  * Hablante 1»). Esta vista le da al ingress lo que FLU acaba de decir.
  */
 export function deriveAssistantLastText(conversationHistory = []) {
+  const entry = lastFluEntry(conversationHistory)
+  return entry ? String(entry.text || '').trim() : ''
+}
+
+/** Cuando se dijo esa ultima frase (ms epoch), para el detector de ECO del ingress. */
+export function deriveAssistantLastAtMs(conversationHistory = []) {
+  const entry = lastFluEntry(conversationHistory)
+  const at = Number(entry?.timestamp)
+  return Number.isFinite(at) && at > 0 ? at : 0
+}
+
+/** Seleccion UNICA de "la ultima frase de FLU": las dos vistas vienen de aqui. */
+function lastFluEntry(conversationHistory = []) {
   const list = Array.isArray(conversationHistory) ? conversationHistory : []
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const entry = list[index]
-    if (entry?.role === 'flu') return String(entry.text || '').trim()
+    if (entry?.role === 'flu') return entry
   }
-  return ''
+  return null
 }
 
 /**

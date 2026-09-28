@@ -147,6 +147,7 @@ import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   FLU_DIALOGUE_SPEAKER,
   deriveAssistantLastText,
+  deriveAssistantLastAtMs,
   deriveDialogueHistory,
   deriveUserRowSpeakers,
   deriveUserRowTexts,
@@ -4477,6 +4478,7 @@ export function useFluVoiceAssistant({
       finalSignature: lastTurnSignatureRef.current,
       // Eco de la propia voz de FLU: el ingress lo usa para no tomar su TTS por un turno de persona.
       lastAssistantText: deriveAssistantLastText(useIntegrationStore.getState().conversationHistory),
+      lastAssistantAtMs: deriveAssistantLastAtMs(useIntegrationStore.getState().conversationHistory),
     }),
     peekTurnBridgeText: () => turnBridgeTextRef.current,
     stashTurnBridgeText: (text) => {

@@ -298,6 +298,42 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
 }
 
 /**
+ * Match EXACTO por NOMBRE de juego, sin marco de intención.
+ *
+ * Caso real (portal 11:27): FLU ofrece el menú ("¿A cuál te gustaría jugar?") y el
+ * niño responde solo con el nombre ("cuenta conmigo"). Sin marco, NINGÚN dominio lo
+ * resolvía y la IA SIMULABA el arranque ("¡Claro! Iniciamos el juego 'Cuenta
+ * conmigo'.") sin partida real: después el juego no respondía nada.
+ *
+ * Solo acepta el nombre PELADO (artículo opcional) para no arrancar partidas con
+ * frases de conversación. Con partida activa NO debe usarse como "el juego manda":
+ * el motor conserva la prioridad sobre sus propios comandos.
+ */
+const LEADING_ARTICLE_RE = /^(?:el|la|los|las|un|una)\s+/;
+
+export function matchGameAliasOnly(text = ''): GameIntentEntry | null {
+    let normalized = normalizeForMatch(text);
+    if (!normalized) return null;
+    for (const negative of NEGATIVE_INTENT_FRAMES) {
+        if (hasToken(normalized, negative)) return null;
+    }
+    normalized = normalized.replace(LEADING_ARTICLE_RE, '').trim();
+    if (!normalized) return null;
+    let best: GameIntentEntry | null = null;
+    let bestLength = -1;
+    for (const entry of GAME_CATALOG) {
+        for (const alias of entry.aliases) {
+            if (normalized !== alias) continue;
+            if (alias.length > bestLength) {
+                best = entry;
+                bestLength = alias.length;
+            }
+        }
+    }
+    return best;
+}
+
+/**
  * Nombre visible de un juego (para menús): su primer alias, capitalizado.
  * Fuente única: el alias canónico del catálogo; sin lista de títulos aparte.
  */

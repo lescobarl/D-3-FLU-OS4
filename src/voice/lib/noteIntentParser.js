@@ -48,10 +48,40 @@ const NOTE_SUPER_NOTA_DEST_FIRST =
   /^(?:en\s+la\s+|en\s+el\s+|a\s+la\s+|al\s+|de\s+la\s+|del\s+)?nota\s+(?:de\s+|del\s+|para\s+el\s+|para\s+la\s+|para\s+)?(super|supermercado|compras|mercado)\b\s*(.*)$/i
 const NOTE_PARA_RECORDAR =
   /^nota\s+(?:para\s+)?(?:recordar|acordarme|acordar)\s+(?:de\s+)?(?:un\s+|una\s+|el\s+|la\s+)?(.*)$/i
-const NOTE_APUNTA = /^(?:apunta|anota|anade|añade|nota)\s*[:,\-]?\s+(.+)$/i
 // Nota GENERAL con contenido: "nota [que traiga/que contenga/con/sobre/para/de] X".
 const NOTE_GENERAL =
   /^nota\s+(?:que\s+)?(?:traiga|trae|contenga|contiene|tenga|tiene|con|sobre|acerca\s+de|para|de)\s+(.+)$/i
+
+// ------------------------------------------------------------
+// ALTA GENERAL con destino "nota" (no la lista del súper).
+// Faltaba por completo: con la lotería abierta, "agrega guitarra en la nota" NO
+// lo reconocía ningún dominio y el JUEGO lo tomaba como jugada (respondía "La
+// carta es…"). El verbo sale de NOTE_ADD_VERBS (fuente única) y, para una nota
+// general, se excluye "pon/poner" (demasiado amplio: "pon la mesa" no es nota).
+// ------------------------------------------------------------
+const NOTE_ADD_VERBS_NARROW = NOTE_ADD_VERBS
+  .split('|')
+  .filter((verbo) => !/^pon/.test(verbo))
+  .join('|')
+// Relleno entre "nota" y el ítem: "en la nota ADICIONAL guitarra", "en la nota nota X".
+const NOTE_FILLER =
+  '(?:adicional(?:e)?|extras?|nuev[ao]s?|mism[ao]s?|esa|este?|la|el|nota|notas)'
+// Ítem ANTES del destino: "agrega guitarra en la nota [nota]".
+const NOTE_GENERAL_APPEND = new RegExp(
+  `^(?:${NOTE_ADD_VERBS_NARROW})\\s+(?:el\\s+|la\\s+|los\\s+|las\\s+|un\\s+|una\\s+)?(.+?)\\s+(?:en\\s+la\\s+|a\\s+la\\s+|en\\s+el\\s+|al\\s+)(?:nota|notas)\\b(?:\\s+${NOTE_FILLER})*\\s*$`,
+  'i',
+)
+// Destino PRIMERO: "en la nota [adicional] {ítem}".
+const NOTE_GENERAL_DEST_FIRST = new RegExp(
+  `^(?:en\\s+la\\s+|en\\s+el\\s+|a\\s+la\\s+|al\\s+)(?:nota|notas)\\b(?:\\s+${NOTE_FILLER})*\\s+(.+)$`,
+  'i',
+)
+// "apunta {texto}" con los MISMOS verbos de alta (antes solo 4 literales, así que
+// "agrega guitarra" se perdía). Sin "pon": esa forma va por la creación explícita.
+const NOTE_APUNTA_ADD = new RegExp(
+  `^(?:${NOTE_ADD_VERBS_NARROW}|nota)\\s*[:,\\-]?\\s+(.+)$`,
+  'i',
+)
 
 // Borrado de nota por voz: "borra la nota del súper", "elimina la nota X",
 // "quita la nota de compras". El destino se normaliza (súper → 'Super').
@@ -202,8 +232,22 @@ export function parseNoteIntentText(rawText = '') {
     if (!content) return null
     return { label: 'Nota', body: content }
   }
-  // 4) "apunta/anota/anade/nota {texto}" -> el texto (sin conectores de relleno).
-  const apunta = NOTE_APUNTA.exec(clean)
+  // 3b) ALTA GENERAL con destino "nota": ítem antes ("agrega guitarra en la nota
+  //     [nota]") o destino primero ("en la nota [adicional] guitarra"). Va ANTES
+  //     del apunta genérico para que "agrega X en la nota" no deje el destino
+  //     dentro del nombre ("guitarra en la nota").
+  const generalAppend = NOTE_GENERAL_APPEND.exec(norm)
+  if (generalAppend) {
+    const item = cleanSuperItem(generalAppend[1] ? generalAppend[1].trim() : '')
+    if (item) return { label: 'Nota', body: item }
+  }
+  const generalDestFirst = NOTE_GENERAL_DEST_FIRST.exec(norm)
+  if (generalDestFirst) {
+    const item = cleanSuperItem(generalDestFirst[1] ? generalDestFirst[1].trim() : '')
+    if (item) return { label: 'Nota', body: item }
+  }
+  // 4) "apunta/anota/anade/agrega/adiciona {texto}" -> el texto (sin relleno).
+  const apunta = NOTE_APUNTA_ADD.exec(clean)
   if (apunta) {
     const label = apunta[1]
       ? apunta[1]

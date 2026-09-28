@@ -21,6 +21,8 @@ import { ARBITER_DOMAINS, resolveDeterministicCommand } from '../src/voice/lib/d
 import { resolveConfigCommandFromText } from '../src/voice/lib/configCommands'
 import { detectNextSpeakerPhrase } from '../src/voice/lib/activeListen'
 import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog'
+import { getGameEngine } from '../src/core/games/gameCatalog'
+import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -258,5 +260,55 @@ describe('G11 voiceSingleSource - las frases de nextSpeaker declaradas tienen co
 
     it('el detector no es decorativo', () => {
         expect(detectNextSpeakerPhrase('oye flu pon una alarma a las siete')).toBeFalsy()
+    })
+})
+
+// ------------------------------------------------------------
+// G12 - Con una partida ACTIVA, un comando que OTRO dominio sabe ejecutar no
+// puede ser consumido por el juego (regla: "permite ejecutar cualquier comando").
+// Defecto real (portal 11:19): con la loteria abierta, "agrega guitarra en la
+// nota" no lo reconocia ningun dominio y el juego lo tomaba como jugada
+// (respondia "La carta es..."), asi que la nota se perdia. Las notas y la IA
+// deben seguir accesibles con la partida en curso.
+// ------------------------------------------------------------
+describe('G12 voiceSingleSource - el juego no secuestra comandos de otros dominios', () => {
+    function conLoteriaActiva(fn: () => void) {
+        const engine = getGameEngine('loteria' as Parameters<typeof getGameEngine>[0])
+        expect(engine, 'el motor de loteria existe').toBeTruthy()
+        if (!engine) return
+        const session = engine.createSession({})
+        engine.start(session, {})
+        setActiveGameSession(session)
+        try {
+            fn()
+        } finally {
+            clearActiveGameSession()
+        }
+    }
+
+    it('las notas generales llegan al dominio note con la partida activa', () => {
+        conLoteriaActiva(() => {
+            for (const frase of [
+                'agrega guitarra en la nota',
+                'en la nota adicionale guitarra',
+                'anota guitarra',
+            ]) {
+                expect(resolveDeterministicCommand(frase).domain, `"${frase}" debe ser nota`).toBe('note')
+            }
+        })
+    })
+
+    it('el motor sigue mandando en lo suyo: su comando es turno del juego', () => {
+        conLoteriaActiva(() => {
+            const resuelto = resolveDeterministicCommand('siguiente carta')
+            expect(resuelto.domain).toBe('game')
+            expect((resuelto.action as { action?: string })?.action).toBe('turn')
+        })
+    })
+
+    it('el guard no es decorativo: sin partida activa la loteria no arranca sola', () => {
+        clearActiveGameSession()
+        expect(resolveDeterministicCommand('agrega guitarra en la nota').domain).toBe('note')
+        expect(resolveDeterministicCommand('siguiente carta').domain).not.toBe('game')
     })
 })

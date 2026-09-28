@@ -18,6 +18,7 @@ import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { isNoteCommand } from './noteIntentParser'
 import {
   matchGameIntent,
+  matchGameAliasOnly,
   END_GAME_FRAMES,
   GAME_MENU_FRAMES,
   NON_GAME_REQUEST_FRAMES,
@@ -170,9 +171,17 @@ export function resolveGameCommandFromText(text = '') {
     }
     const engine = getGameEngine(activeSession.id)
     // 4. Comando propio del juego (pista, paso, "la tengo"…): siempre turno,
-    //    aunque empiece como pregunta.
+    //    aunque empiece como pregunta. VA ANTES del nombre pelado: en la lotería,
+    //    "loteria" es SU comando (canto/ganador) y no un cambio de juego.
     if (engine && engine.isGameCommand(text)) {
       return { gameId: activeSession.id, action: 'turn', playerText: text }
+    }
+    // 4b. Nombre PELADO de OTRO juego ("trivia" mientras juegas lotería): es una
+    //     orden de cambio, no una jugada. Si fuera del juego activo, el motor la
+    //     consumiría como respuesta y no cambiaría nunca.
+    const bareIntent = matchGameAliasOnly(text)
+    if (bareIntent && bareIntent.id !== activeSession.id) {
+      return { gameId: bareIntent.id, action: 'switch' }
     }
     // 5. Petición general (pregunta o "platícame de…") → la responde la IA.
     //    Genérico: mismo criterio para cualquier juego activo (rompe el ciclo).
@@ -198,6 +207,11 @@ export function resolveGameCommandFromText(text = '') {
   // Solo inicia si hay intención explícita y resoluble.
   const intent = matchGameIntent(text)
   if (intent) return { gameId: intent.id, action: 'start' }
+  // Nombre PELADO: respuesta al menú de juegos ("¿a cuál te gustaría jugar?" →
+  // "cuenta conmigo"). Sin esto, ningún dominio lo resolvía y la IA simulaba el
+  // arranque sin partida real (bug del portal 11:27).
+  const bareIntent = matchGameAliasOnly(text)
+  if (bareIntent) return { gameId: bareIntent.id, action: 'start' }
 
   // Nada → no es un juego.
   return null

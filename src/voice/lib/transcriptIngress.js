@@ -46,6 +46,10 @@ import { shouldDiarizeInterimAtTurnBoundary } from './speakerPolicy.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { nowPerf, getSegmentSilenceGapMs } from './audioSegmentClock.js'
 import { countSpeechWords as countWordsFromPauseCfg } from './fluTranscriptPause.js'
+import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
+
+/** Ventana en la que un fragmento que coincide con la voz de FLU se cuenta como eco. */
+const ASSISTANT_ECHO_WINDOW_MS = VOICE_DIARIZATION_DEFAULTS.assistantEchoWindowMs
 
 function buildFinalCommitList(finalChunks = []) {
   const normalized = finalChunks
@@ -118,6 +122,7 @@ function buildIngressVoiceContext(ctx = {}) {
     finalSignature: fromHook.finalSignature || fromHook.previewSignature || null,
     lastSignature: fromHook.lastSignature || fromHook.previewSignature || null,
     lastAssistantText: fromHook.lastAssistantText || '',
+    lastAssistantAtMs: Number(fromHook.lastAssistantAtMs) || 0,
     continuityThreshold: thresholds.cosineContinuityThreshold,
     abruptSimilarityFloor: thresholds.cosineNewVoiceThreshold,
     abruptSimilarityDrop: thresholds.abruptSimilarityDrop,
@@ -570,10 +575,22 @@ function ingestInterimChunk({ interim, ctx }) {
   // El gate de «más de una palabra» evita leer el store en el camino caliente
   // (la mayoría de fragmentos ASR son de una palabra) y descarta coincidencias
   // casuales con respuestas cortas del usuario.
+  //
+  // VENTANA: el eco es físico (el micrófono oye a FLU mientras habla o en su
+  // cola). Sin ventana, el texto solo no distingue "el usuario repite una frase
+  // que FLU usa como comando" ("siguiente carta" en la lotería) de "mi voz
+  // rebotó": son las MISMAS palabras, y el turno se perdía minutos después de
+  // que FLU hablara (la partida dejaba de responder). Fuera de la ventana, es
+  // voz nueva y NO se descarta.
   if (cleanedInterim.includes(' ')) {
     const assistantVoiceCtx =
       typeof ctx.getIngressVoiceContext === 'function' ? ctx.getIngressVoiceContext() : {}
-    if (isAssistantVoiceEcho(cleanedInterim, assistantVoiceCtx.lastAssistantText)) {
+    const spokenAt = Number(assistantVoiceCtx.lastAssistantAtMs) || 0
+    const msSinceAssistant = spokenAt > 0 ? Date.now() - spokenAt : Number.POSITIVE_INFINITY
+    if (
+      msSinceAssistant <= ASSISTANT_ECHO_WINDOW_MS &&
+      isAssistantVoiceEcho(cleanedInterim, assistantVoiceCtx.lastAssistantText)
+    ) {
       if (typeof ctx.touchMeaningfulIngress === 'function') {
         ctx.touchMeaningfulIngress({ meaningful: false, reason: 'assistant-voice-echo' })
       }
