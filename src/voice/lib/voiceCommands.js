@@ -71,9 +71,6 @@ export function userRequestedNavigationCommand(
   if (!text) return false
   if (cmd === 'GENERAR_RESUMEN') return isMinuteGenerationRequest(text)
   if (cmd === 'GUARDAR_MINUTA') return isMinuteSaveRequest(text)
-  if (cmd === 'FLU_WAKE' || cmd === 'FLU_ADELANTE' || cmd === 'FLU_ESPERA') {
-    return detectSessionVoiceCommand(text, voiceCommands) === cmd
-  }
   return detectSessionVoiceCommand(text, voiceCommands) === cmd
 }
 

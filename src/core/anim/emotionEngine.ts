@@ -16,6 +16,7 @@
 import type { AvatarState, AvatarExpression, BunnyAnimation } from '../../avatar';
 import type { ConversationState, EmotionalState } from '../../types/bridge';
 import {
+    ACTION_ANIMS,
     EXPRESSION_REGISTRY,
     getStateExpressions,
     getEmotionExpressions,
@@ -327,9 +328,8 @@ export function resolveIdleMicroExpression(
     // are more common. (pickBestExpressionForPersonality is NOT used here:
     // micro entries have no affinity, so it always returns the first one —
     // 'atencion' → Idle_2 — i.e. NO visible change every time.)
-    const ACTION_ANIMS = ['Dance', 'Run', 'Walk', 'Walk_sneaky', 'Jump_in_place', 'Jump_while_run'];
     const weights = candidates.map((def) =>
-        def.anims.some((a) => ACTION_ANIMS.includes(a)) ? 0.4 : 1.0
+        def.anims.some((a) => ACTION_ANIMS.has(a)) ? 0.4 : 1.0
     );
     const total = weights.reduce((a, b) => a + b, 0);
     let roll = Math.random() * total;

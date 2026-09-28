@@ -20,6 +20,14 @@ import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
 import { stripDiacriticsLower } from '../../lib/textUtils';
 
+/**
+ * Hora de RELLENO al CREAR una clase/evento recurrente sin hora dicha.
+ * Es el único valor por defecto de hora del parser; el borrado y el cambio de
+ * hora NO lo usan (ver `resolveLabel`/cancel: mover con un relleno cambiaria
+ * una hora que nadie dijo). Antes estaba escrito dos veces como literal.
+ */
+const DEFAULT_CREATE_TIME_OF_DAY = '09:00';
+
 export type AgendaCommandAction =
     | 'agenda.create'
     | 'agenda.list'
@@ -284,13 +292,13 @@ function resolveRecurrence(
 
     const days = kind === 'clase' ? detectAnyWeekdays(text) : detectWeekdays(text);
     if (days.length > 0) {
-        const time = chosen ?? '09:00';
+        const time = chosen ?? DEFAULT_CREATE_TIME_OF_DAY;
         return { type: 'weekly', daysOfWeek: days, timeOfDay: time };
     }
 
     const allDays = kind === 'clase' ? CLASE_ALL_DAYS_RE.test(t) : DAILY_RE.test(t);
     if (allDays) {
-        const timeOfDay = chosen ?? '09:00';
+        const timeOfDay = chosen ?? DEFAULT_CREATE_TIME_OF_DAY;
         return kind === 'clase'
             ? { type: 'weekly', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay }
             : { type: 'daily', timeOfDay };

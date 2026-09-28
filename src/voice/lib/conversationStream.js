@@ -288,8 +288,7 @@ export function isCommittedInterimEcho(interim = '', lastCommitted = '') {
   ) {
     const cLow = chunk.toLowerCase()
     const pLow = prior.toLowerCase()
-    if (cLow.startsWith(pLow) || pLow.startsWith(cLow)) return true
-    return false
+    return cLow.startsWith(pLow) || pLow.startsWith(cLow)
   }
   return false
 }
@@ -362,25 +361,6 @@ function clearStaleCommittedEchoFromState(state, lastCommitted = '') {
 }
 
 export { clearStaleCommittedEchoFromState }
-
-/**
- * Heartbeat por tiempo en interino sin cambios — DESHABILITADO.
- * Ver evaluateSrGapSegmentCommit (silencio SR, no timer sobre mismo texto).
- */
-export function evaluateStaleInterimFlush(
-  state,
-  _nowMs = Date.now(),
-  maxMs = getTranscriptPauseCfg().interimOpenLineFlushMs,
-) {
-  const turnLive = cleanForSpeech(readTurnLive(state))
-  const capture = turnLive || cleanForSpeech(readOpenLine(state))
-  if (!capture) return { flush: false, capture: '' }
-  const limit = Number.isFinite(maxMs) && maxMs > 0 ? maxMs : 0
-  if (!limit) {
-    return { flush: false, capture, reason: 'flush-disabled-production' }
-  }
-  return { flush: false, capture, reason: 'flush-disabled-production' }
-}
 
 /** Commit de segmento cuando Chrome deja de emitir onresult pero openLine tiene texto nuevo. */
 export function evaluateSrGapSegmentCommit(

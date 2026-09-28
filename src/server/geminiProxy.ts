@@ -246,10 +246,8 @@ function resolveServerApiKey(body: ProxyBody | null): ProxyBody | null {
     if (serverEnvApiKey) {
         return { ...(body || {}), apiKey: serverEnvApiKey };
     }
-    const bodyKey = String(body?.apiKey ?? '').trim();
-    if (bodyKey) {
-        return body;
-    }
+    // Sin clave de servidor se respeta el cuerpo tal cual (la clave del cliente,
+    // si viene, ya está dentro): no hay nada que reescribir.
     return body;
 }
 

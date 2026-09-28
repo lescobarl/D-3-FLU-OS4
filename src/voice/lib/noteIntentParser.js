@@ -76,10 +76,15 @@ const NOTE_GENERAL_DEST_FIRST = new RegExp(
   `^(?:en\\s+la\\s+|en\\s+el\\s+|a\\s+la\\s+|al\\s+)(?:nota|notas)\\b(?:\\s+${NOTE_FILLER})*\\s+(.+)$`,
   'i',
 )
-// "apunta {texto}" con los MISMOS verbos de alta (antes solo 4 literales, así que
-// "agrega guitarra" se perdía). Sin "pon": esa forma va por la creación explícita.
+// "apunta {texto}" con los verbos PROPIOS de nota (apuntar/anotar/añadir/nota).
+// NOTE_ADD_VERBS es la tabla compartida con la lista del súper e incluye verbos
+// genéricos de alta ("agrega", "suma", "pon") que TAMBIÉN usa la agenda: con
+// ellos, "agrega matemáticas el lunes" (clase sin hora) se guardaba como NOTA y
+// la agenda nunca llegaba a pedir la hora. Para esos verbos genéricos la nota
+// exige destino explícito ("… en la nota"), que ya cubren los patrones de arriba.
+const NOTE_OWN_VERBS = 'apunta|anota|anade|añade|nota'
 const NOTE_APUNTA_ADD = new RegExp(
-  `^(?:${NOTE_ADD_VERBS_NARROW}|nota)\\s*[:,\\-]?\\s+(.+)$`,
+  `^(?:${NOTE_OWN_VERBS})\\s*[:,\\-]?\\s+(.+)$`,
   'i',
 )
 

@@ -394,9 +394,6 @@ function minuteCatalogSpeech(records: MinuteRecordLike[] = [], { language = 'es'
             const { sequence } = parseMinuteHistoryCode(code);
             const seqLabel = sequence > 0 ? sequence : index + 1;
             const title = String(record?.description || snapshot?.titulo || '').trim();
-            if (isEnglish) {
-                return title ? `${kindLabel} ${seqLabel} (${title})` : `${kindLabel} ${seqLabel}`;
-            }
             return title ? `${kindLabel} ${seqLabel} (${title})` : `${kindLabel} ${seqLabel}`;
         })
         .filter(Boolean);

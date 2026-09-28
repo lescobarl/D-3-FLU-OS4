@@ -91,10 +91,8 @@ export const FLU_CAPABILITIES: CapabilityDef[] = [
 /** Nombre (id) de las capacidades, útil para validación y tests. */
 export const CAPABILITY_IDS: readonly string[] = FLU_CAPABILITIES.map((c) => c.id)
 
-function trackListFor(language: 'es' | 'en'): string {
-  if (language === 'es') {
-    return FLU_PLAYLIST.map((t) => `- ${t.id}: ${t.title}`).join('\n')
-  }
+/** Lista de ids/títulos del playlist: igual en los dos idiomas (ids y títulos son datos). */
+function trackListFor(): string {
   return FLU_PLAYLIST.map((t) => `- ${t.id}: ${t.title}`).join('\n')
 }
 
@@ -113,9 +111,9 @@ export function buildCapabilitiesPrompt(language: 'es' | 'en' = 'es'): string {
   )
   const music = isEnglish
     ? 'MUSIC PLAYLIST (use "musica.cancion" with one of these ids or titles; any other song will be searched online):\n' +
-      trackListFor('en')
+      trackListFor()
     : 'PLAYLIST DE MÚSICA (usa "musica.cancion" con uno de estos ids o títulos; cualquier otra canción se buscará en línea):\n' +
-      trackListFor('es')
+      trackListFor()
   const musicRule = isEnglish
     ? 'MANDATORY MUSIC RULE: whenever the user asks you to play, sing, put on or start a song (e.g. "sing La Bamba", "play Las Mañanitas", "put on Cumpleaños Feliz"), you MUST emit the "musica" contract field with accion="play_music" and cancion="<song name>". Emitting "musica" is mandatory; answering with text only is NOT enough. To pause or stop, emit accion="pause_music" or accion="stop_music".'
     : 'REGLA DE MÚSICA OBLIGATORIA: cuando el usuario te pida poner, cantar, tocar o reproducir una canción (ej. "canta La Bamba", "pon Las Mañanitas", "toca Cumpleaños Feliz"), DEBES emitir el campo "musica" del contrato con accion="play_music" y cancion="<nombre de la canción>". Emitir "musica" es obligatorio; responder solo con texto NO es suficiente. Para pausar o detener emite accion="pause_music" o accion="stop_music".'

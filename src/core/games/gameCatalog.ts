@@ -265,29 +265,12 @@ export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
 export function matchGameIntent(text = ''): GameIntentEntry | null {
     const normalized = normalizeForMatch(text);
     if (!normalized) return null;
+    if (hasNegativeIntent(normalized)) return null;
 
-    // Guardia anti-negación: "no quiero jugar a..." nunca inicia.
-    for (const negative of NEGATIVE_INTENT_FRAMES) {
-        if (hasToken(normalized, negative)) return null;
-    }
-
-    // Requiere UNA ORDEN DE JUEGO (arranque o cambio) Y UN alias del juego. Si el
-    // texto coincide con varios, gana el MÁS LARGO: es el más específico. "hagamos
-    // un cuento" es cuento_colaborativo, no el alias genérico "un cuento" de
-    // cuentacuentos. Empate → orden del catálogo (estable).
+    // Requiere UNA ORDEN DE JUEGO (arranque "vamos a jugar X" o cambio "cambia a
+    // X") Y UN alias del juego. "simón dice que te calles" NO dispara (sin marco).
     if (!hasGameOrderFrame(normalized)) return null;
-    let best: GameIntentEntry | null = null;
-    let bestLength = -1;
-    for (const entry of GAME_CATALOG) {
-        for (const alias of entry.aliases) {
-            if (!hasToken(normalized, alias)) continue;
-            if (alias.length > bestLength) {
-                best = entry;
-                bestLength = alias.length;
-            }
-        }
-    }
-    return best;
+    return bestAliasMatch((alias) => hasToken(normalized, alias));
 }
 
 /**
@@ -305,18 +288,31 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
 const LEADING_ARTICLE_RE = /^(?:el|la|los|las|un|una)\s+/;
 
 export function matchGameAliasOnly(text = ''): GameIntentEntry | null {
-    let normalized = normalizeForMatch(text);
+    const normalized = normalizeForMatch(text).replace(LEADING_ARTICLE_RE, '').trim();
     if (!normalized) return null;
-    for (const negative of NEGATIVE_INTENT_FRAMES) {
-        if (hasToken(normalized, negative)) return null;
-    }
-    normalized = normalized.replace(LEADING_ARTICLE_RE, '').trim();
-    if (!normalized) return null;
+    if (hasNegativeIntent(normalized)) return null;
+    return bestAliasMatch((alias) => normalized === alias);
+}
+
+/** Guardia anti-negación: "no quiero jugar a..." nunca inicia/cambia. */
+function hasNegativeIntent(normalized: string): boolean {
+    return NEGATIVE_INTENT_FRAMES.some((negative) => hasToken(normalized, negative));
+}
+
+/**
+ * Elige el juego cuyo alias casa (dueño ÚNICO de la selección). Si casa más de
+ * uno gana el MÁS LARGO, que es el MÁS específico: "hagamos un cuento" es
+ * cuento_colaborativo, no el alias genérico "un cuento" de cuentacuentos.
+ * Empate → orden del catálogo (estable).
+ */
+function bestAliasMatch(
+    matches: (alias: string) => boolean,
+): GameIntentEntry | null {
     let best: GameIntentEntry | null = null;
     let bestLength = -1;
     for (const entry of GAME_CATALOG) {
         for (const alias of entry.aliases) {
-            if (normalized !== alias) continue;
+            if (!matches(alias)) continue;
             if (alias.length > bestLength) {
                 best = entry;
                 bestLength = alias.length;
