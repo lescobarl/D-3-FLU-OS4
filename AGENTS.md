@@ -243,6 +243,13 @@ de **0 nuevos**.
     deterministas (fake timers, `act()`), sin depender de la carga de la máquina.
 16. **No dejar procesos largos colgados**: identificar el PID exacto y terminar ese PID.
     Nunca `pkill`/`taskkill` por palabra genérica.
+17. **No generar RESPALDOS por iniciativa propia**: prohibido crear `git bundle`,
+    copias manuales, archivos fechados (`*-FULL-AAAA-MM-DD-*`) o tags de respaldo
+    sin que el USUARIO lo pida EXPRESAMENTE en ESE turno. Git ya es el respaldo
+    (§2.10). Un respaldo no solicitado no protege nada nuevo y quema el turno.
+    **Incumplimiento registrado (no repetir):** el agente generó
+    `FLU-OS4-FULL-2026-09-28-S1.bundle` + tag `respaldo-full-2026-09-28-s1` por su
+    cuenta. Si el usuario quiere un respaldo, lo pide y se hace UNA vez, al final.
 
 ## 3. OBLIGACIONES ESTRICTAS
 
@@ -301,6 +308,20 @@ de **0 nuevos**.
 - Puerta de tipos (`npm run typecheck`) en cada iteración; un error de tipos es error
   de entrega.
 - Guard estructural del protocolo: `tests/protocolGuard.test.ts`.
+- **Barrera de COMPORTAMIENTO por dominio** (`tests/arbiterDomainBarrier.test.ts`,
+  dentro de `lint:guards`): fija que cada dominio conserve sus comandos y ninguno
+  invada al vecino (agenda con/sin hora, nota, compra, diario, configuración, y la
+  precedencia con partida activa). **Motivo medido (riesgo estructural real):**
+  `lint:guards` eran 56 archivos de HIGIENE (rutas, fuentes, hardcode) y
+  `deterministicArbiter.test.ts` quedaba FUERA, así que una regresión de
+  precedencia pasaba con "typecheck + guardias en verde" y solo se veía en la
+  suite completa (que exige autorización). Ocurrió: en `3b66634` el alta genérica
+  de notas se llevó los verbos de la agenda y "agrega matemáticas el lunes" se
+  guardaba como NOTA. La barrera de comportamiento cierra ese hueco en pre-commit.
+- Un guard de comportamiento que use módulos de producción NO es "teatro": toda
+  barrera nueva en `lint:guards` debe traer su caso de **prueba de detector**
+  (alimenta una entrada y comprueba que la marca discrimina) o `guardMutationGuard`
+  la rechaza.
 
 ### La suite completa exige autorizacion EXPRESA (regla dura)
 - La barrera tiene DOS puertas y UN solo criterio: `scripts/full-suite-policy.mjs`
@@ -330,7 +351,9 @@ de **0 nuevos**.
   en ESE turno, y entonces se anota. "Verificar que no rompi nada" NO es pedido.
 - La validacion de un cambio es: los tests del archivo tocado + `npm run lint`
   (guards) + `npm run typecheck`. Nada mas. Si esos tres estan verdes, el cambio
-  esta validado; la suite es del CI, no del agente.
+  esta validado; la suite es del CI, no del agente. Los guards YA incluyen la
+  barrera de comportamiento por dominio (`arbiterDomainBarrier`), asi que una
+  regresion de precedencia cae aqui y no hace falta la suite completa para verla.
 - **Incumplimiento registrado (no repetir):** en la tarea FLU-OS4 el agente corrió
   `test:full` con el env var puesto de su propia iniciativa, dos veces, para
   "confirmar" cambios ya verdes con guards+tipos. Fue perdida de tiempo y
