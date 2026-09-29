@@ -938,6 +938,13 @@
       "estado": "done",
       "evidencia": "AUDITORIA DEL FLUJO. La MISMA verdad escrita CUATRO veces: la tabla, el hook que las escribe, los consumidores de App.tsx y el TIPO del contrato (fastPathGame y fastPathEnvironment a mano, y faltaba fastPathConfig). ARREGLO en 6b9c89b: FAST_PATH_EXECUTED_MARKS con `as const` es la unica declaracion; FastPathExecutedMarks DERIVA de ella la forma del contrato; ContractResolution la intersecta; el ultimo lector por nombre (gate de respuesta_voz) pasa por el predicado unico. MEDIDO: tsc 0; eslint 0; App.tsx 4639 dentro del techo 4643; gate del repo (pre-commit: lint:guards + typecheck) 57 ficheros / 397 tests en verde.",
       "origen": "auditoria-flujo"
+    },
+    {
+      "id": "P7.78",
+      "titulo": "Dos guards del flujo quedaron EN ROJO con el refactor (no estaban en lint:guards): vuelven a medir el invariante y entran en el gate",
+      "estado": "done",
+      "evidencia": "DEFECTO PROPIO, MEDIDO: el refactor del flujo dejo en ROJO tests/gameTurnSingleDispatch.test.ts y tests/commandAndGameCoverage.test.ts y el pre-commit NO lo dijo, porque `lint:guards` cubre HIGIENE y no los incluia (el propio repo ya lo documentaba en arbiterDomainBarrier: una regresion pasaba con \"typecheck + guardias en verde\" y solo se veia en la suite completa, que exige autorizacion). El primero exigia el TEXTO a mano `domain === game && !resolved?.fastPathGame`, que el refactor sustituyo por el predicado unico isTurnAlreadyExecuted; el segundo reconstruia los dominios servidos parseando la cadena if/else del despachador, que ahora es la tabla DISPATCHER_HANDLERS. ARREGLO en e529bda: los dos guards miden el INVARIANTE contra su fuente unica y no contra texto (la tabla sirve exactamente los dominios declarados, cada entrada apunta a un manejador __fluHandle* real, el despachador consulta la tabla; todo dominio del arbitro tiene ruta contra ARBITER_DOMAINS; la tabla declara game -> fastPathGame y el predicado lo honra), y el primero ADEMAS prohibe la cadena a mano que se retiro (0 ramas). Cada uno lleva PRUEBA DE DETECTOR con entrada sintetica infractora (sin ella son teatro y guardMutationGuard lo exige). Ambos se REGISTRAN en lint:guards (57 -> 59) para cerrar la causa raiz. MEDIDO: `npm run lint:guards` 59 ficheros / 450 tests VERDE; los 14 guards que leen como texto los 4 ficheros tocados, 338 tests VERDE; tsc -b 0; eolGuard cazo un CRLF introducido en un fichero LF (normalizado: clase EOL del indice conservada).",
+      "origen": "auditoria-flujo"
     }
   ],
   "done": [
@@ -1891,6 +1898,11 @@
       "id": "P7.77",
       "commit": "6b9c89b",
       "titulo": "Auditoria del FLUJO: las marcas del contrato se derivan de la tabla (FastPathExecutedMarks); cuatro copias de la misma verdad pasan a una"
+    },
+    {
+      "id": "P7.78",
+      "commit": "e529bda",
+      "titulo": "Dos guards del flujo quedaron EN ROJO con el refactor (no estaban en lint:guards): vuelven a medir el invariante y entran en el gate"
     }
   ]
 }
