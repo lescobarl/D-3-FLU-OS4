@@ -70,6 +70,7 @@ export function dispatcherHandlerFor(domain: unknown): DispatcherDomainEntry | n
  * environment) en cada rama. Un dominio de estado nuevo se declara AQUÍ.
  */
 export const FAST_PATH_EXECUTED_MARKS: Readonly<Record<string, string>> = Object.freeze({
+    config: 'fastPathConfig',
     game: 'fastPathGame',
     environment: 'fastPathEnvironment',
 });

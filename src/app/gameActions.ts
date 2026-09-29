@@ -90,51 +90,49 @@ async function speakGameText(text: string, ctx: ApplyGameContext, opts?: GameSpe
     ctx.scheduleResumeListening(text.length);
 }
 
-/** Configuración de motor data-driven desde FLU_CONFIG.games. */
+/**
+ * FORMA de la configuracion de cada motor (FUENTE UNICA). El id del juego y la
+ * clave en FLU_CONFIG.games estaban cableados en una cadena de 10 if (gameId ===
+ * ...), asi que un juego nuevo obligaba a tocar la cadena y una errata en la clave
+ * dejaba al motor sin su config en silencio. Aqui es DATO: clave en FLU_CONFIG.games
+ * y campos que se copian al motor. Los campos de tipo lista se COPIAN (no se comparte
+ * la referencia) para que el motor no mute la config global.
+ */
+/** Clave real de la config en FLU_CONFIG.games (una errata = error de compilacion). */
+type GameConfigKey = keyof typeof FLU_CONFIG.games;
+
+interface GameConfigField {
+    readonly name: string;
+    readonly list?: boolean;
+}
+
+const GAME_CONFIG_SHAPE: Readonly<Record<string, { key: GameConfigKey; fields: readonly GameConfigField[] }>> =
+    Object.freeze({
+        simon_dice: { key: 'simonDice', fields: [{ name: 'verbos', list: true }, { name: 'longMax' }] },
+        adivina_numero: { key: 'adivinaNumero', fields: [{ name: 'min' }, { name: 'max' }, { name: 'pistasMax' }] },
+        calculo_mental: { key: 'calculoMental', fields: [{ name: 'maxSuma' }, { name: 'operaciones', list: true }] },
+        ahorcado: { key: 'ahorcado', fields: [{ name: 'intentos' }] },
+        memoria_secuencias: { key: 'memoriaSecuencias', fields: [{ name: 'longMax' }] },
+        cuento_colaborativo: { key: 'cuentoColaborativo', fields: [{ name: 'turnos' }] },
+        cuenta_conmigo: { key: 'cuentaConmigo', fields: [{ name: 'hasta' }] },
+        respiracion: { key: 'respiracion', fields: [{ name: 'rondas' }] },
+        loteria: { key: 'loteria', fields: [{ name: 'tablaSize' }] },
+        cuentacuentos: { key: 'cuentacuentos', fields: [{ name: 'escenasMax' }] },
+    });
+
+/** Configuracion de motor data-driven desde FLU_CONFIG.games. */
 function buildGameConfig(gameId: string): Record<string, unknown> {
     const games = FLU_CONFIG.games || {};
     const base: Record<string, unknown> = { rounds: games.defaultRounds };
-    if (gameId === 'simon_dice') {
-        const simon = games.simonDice || {};
-        return { ...base, verbos: [...(simon.verbos || [])], longMax: simon.longMax };
+    const shape = GAME_CONFIG_SHAPE[gameId];
+    if (!shape) return base;
+    const source = (games[shape.key] || {}) as Record<string, unknown>;
+    const out: Record<string, unknown> = { ...base };
+    for (const field of shape.fields) {
+        const value = source[field.name];
+        out[field.name] = field.list && Array.isArray(value) ? [...value] : value;
     }
-    if (gameId === 'adivina_numero') {
-        const cfg = games.adivinaNumero || {};
-        return { ...base, min: cfg.min, max: cfg.max, pistasMax: cfg.pistasMax };
-    }
-    if (gameId === 'calculo_mental') {
-        const cfg = games.calculoMental || {};
-        return { ...base, maxSuma: cfg.maxSuma, operaciones: [...(cfg.operaciones || [])] };
-    }
-    if (gameId === 'ahorcado') {
-        const cfg = games.ahorcado || {};
-        return { ...base, intentos: cfg.intentos };
-    }
-    if (gameId === 'memoria_secuencias') {
-        const cfg = games.memoriaSecuencias || {};
-        return { ...base, longMax: cfg.longMax };
-    }
-    if (gameId === 'cuento_colaborativo') {
-        const cfg = games.cuentoColaborativo || {};
-        return { ...base, turnos: cfg.turnos };
-    }
-    if (gameId === 'cuenta_conmigo') {
-        const cfg = games.cuentaConmigo || {};
-        return { ...base, hasta: cfg.hasta };
-    }
-    if (gameId === 'respiracion') {
-        const cfg = games.respiracion || {};
-        return { ...base, rondas: cfg.rondas };
-    }
-    if (gameId === 'loteria') {
-        const cfg = games.loteria || {};
-        return { ...base, tablaSize: cfg.tablaSize };
-    }
-    if (gameId === 'cuentacuentos') {
-        const cfg = games.cuentacuentos || {};
-        return { ...base, escenasMax: cfg.escenasMax };
-    }
-    return base;
+    return out;
 }
 
 // Mientras un juego de audio reproduce su pista, la voz ambiente no interviene

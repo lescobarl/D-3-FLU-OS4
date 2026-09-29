@@ -1366,10 +1366,8 @@ function App() {
             // __fluHandle* que usa el flujo offline. Así la ejecución queda
             // UNIFICADA en un solo conjunto de manejadores.
             //
-            // Cuando el LLM emite `acciones`, se OMITE el re-parseo del transcript
-            // crudo (evita doble creación). El re-parseo del transcript crudo queda
-            // como FALLBACK OFFLINE puro: solo corre cuando el LLM NO produjo
-            // ninguna acción (p. ej. sin API key o respuesta genérica).
+            // El re-parseo del transcript crudo es FALLBACK OFFLINE: solo corre cuando
+            // el LLM no produjo ninguna acción (sin API key o respuesta genérica).
             //
             // Gana el MANEJADOR, no el LLM: su confirmacion reemplaza a
             // `respuesta_voz` (ver mas abajo, regla unica). Sabe lo que se
@@ -1436,7 +1434,8 @@ function App() {
                             continue;
                         }
                         const commandText = texto;
-                        const arbiterResult: ArbiterResult = resolveDeterministicCommand(commandText, arbiterOptions);
+                        // Mismo texto que el turno: se REUTILIZA su resolucion (el Arbitro es determinista) en vez de re-parsearlo.
+                        const arbiterResult: ArbiterResult = String(transcript).trim() === commandText ? turnResult : resolveDeterministicCommand(commandText, arbiterOptions);
                         const effectiveResult: ArbiterResult | null = arbiterResult?.matched
                             ? arbiterResult
                             : resolveDomainScopedIntent(accion?.dominio, commandText, {
@@ -1627,7 +1626,7 @@ function App() {
             // lo admita y se REUTILIZA al final del callback (no se re-declara).
             const configAction =
                 contract?.configuracion ||
-                (arbiterStateAction?.domain === 'config'
+                (arbiterStateAction?.domain === 'config' && !isTurnAlreadyExecuted(resolved, arbiterStateAction?.domain)
                     ? (arbiterStateAction.action as FluContract['configuracion'])
                     : undefined);
 
