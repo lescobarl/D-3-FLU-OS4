@@ -19,7 +19,7 @@
 // ============================================================
 
 import { resolveConfigCommandFromText } from './configCommands.js'
-import { resolveGameCommandFromText, isClaimedByOtherDomain } from './gameCommands.js'
+import { resolveGameCommandFromText, isClaimedByOtherDomain, isCatalogLevelGameAction } from './gameCommands.js'
 import { resolveNoteVoiceIntent } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
@@ -172,7 +172,11 @@ export function resolveDeterministicCommand(text = '', options = {}) {
   //    una partida viva CUALQUIER frase caeria en `turn` y se tragaria comandos
   //    que otro dominio si sabe ejecutar (ambiente, agenda...).
   const game = resolveGameCommandFromText(transcript, { language, now })
-  if (game?.gameId && game.action !== 'turn') {
+  // `unavailable` es del dominio de juegos aunque NO haya partida: es la respuesta
+  // del catalogo a "ese juego no lo tengo". Sin abrir esta puerta, la orden de un
+  // juego inexistente no la resolvia nadie y la contestaba el LLM (que anunciaba
+  // la partida). El resto de acciones siguen exigiendo gameId del catalogo.
+  if (game && game.action !== 'turn' && (game.gameId || isCatalogLevelGameAction(game))) {
     return { matched: true, domain: 'game', action: game, channel: 'flu' }
   }
 

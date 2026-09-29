@@ -9,7 +9,7 @@
 // Sin dummies: cada prompt es el string exacto que FLU verbaliza.
 // ============================================================
 import { describe, test, expect } from 'vitest';
-import { createQuienSoyEngine, QUIEN_SOY_BANK } from '../src/core/games/quienSoy';
+import { createQuienSoyEngine, QUIEN_SOY_BANK, quienSoyHints } from '../src/core/games/quienSoy';
 
 // random:()=>0.9999 → Fisher-Yates elige siempre el propio índice →
 // order = [0,1,...,11] (identidad). Primer animal: QUIEN_SOY_BANK[0] = leon.
@@ -114,15 +114,61 @@ describe('quienSoy — pistas progresivas', () => {
     });
 });
 
+describe('quienSoy — calidad de pistas (invariante)', () => {
+    test('ninguna primera pista es una negación (información cero)', () => {
+        for (const item of QUIEN_SOY_BANK) {
+            const primera = quienSoyHints(item)[0];
+            expect(primera).toBeTruthy();
+            expect(primera).not.toMatch(/^\s*no\b/i);
+        }
+    });
+
+    test('el reordenado no pierde ni duplica pistas', () => {
+        for (const item of QUIEN_SOY_BANK) {
+            const pistas = quienSoyHints(item);
+            expect(pistas).toHaveLength(item.pistas.length);
+            expect([...pistas].sort()).toEqual([...item.pistas].sort());
+        }
+    });
+
+    test('caso medido: el pingüino abre con "Vivo en el frío.", no con "No puedo volar."', () => {
+        const pinguino = QUIEN_SOY_BANK.find((item) => item.nombre === 'pinguino');
+        expect(pinguino).toBeTruthy();
+        const pistas = quienSoyHints(pinguino!);
+        expect(pistas[0]).toBe('Vivo en el frío.');
+        expect(pistas).toContain('No puedo volar.');
+    });
+
+    test('caso medido (partida real): el pingüino es adivinable con lo que FLU dice', () => {
+        const { engine, session } = freshQuien(12); // order identidad: el cursor avanza 1 a 1
+        for (let i = 0; i < 7; i += 1) engine.turn(session, 'paso'); // cursor 7 → pinguino
+        const incorrecto = engine.turn(session, 'un perro');
+        // Ni "¡Casi!" falso ni la negación universal que volvía inganable la partida.
+        expect(incorrecto.prompt).toBe('No, ese no es. Inténtalo otra vez. Pista 2: Voy vestido de negro y blanco. ¿Quién soy?');
+        expect(incorrecto.prompt).not.toContain('No puedo volar');
+        // Y contra un ave de verdad sí hay "casi": el jugador puede cerrar el juego.
+        const casi = engine.turn(session, 'buho');
+        expect(casi.prompt).toContain('¡Casi!');
+    });
+});
+
 describe('quienSoy — turnos incorrectos y saltos', () => {
-    test('respuesta incorrecta → reintenta el mismo animal', () => {
+    test('respuesta incorrecta → reintenta el mismo animal con PISTA NUEVA', () => {
         const { engine, session } = freshQuien();
         const result = engine.turn(session, 'perro');
         expect(result.valid).toBe(false);
         expect(result.gameOver).toBe(false);
         expect(result.error).toBe('respuesta incorrecta');
-        expect(result.prompt).toBe('¡Casi! Inténtalo otra vez. Pista 1: Vivo en la selva. ¿Quién soy?');
-        expect(session.round).toBe(1); // no avanza
+        // "perro" no está en el banco: no hay "casi" que dar, y la pista avanza.
+        expect(result.prompt).toBe('No, ese no es. Inténtalo otra vez. Pista 2: Soy muy fuerte y valiente. ¿Quién soy?');
+        expect(session.round).toBe(1); // no avanza de animal
+    });
+
+    test('"¡Casi!" solo si el animal nombrado es del banco y de la misma categoría', () => {
+        const { engine, session } = freshQuien();
+        const result = engine.turn(session, 'gato'); // ambos mamíferos
+        expect(result.valid).toBe(false);
+        expect(result.prompt).toBe('¡Casi! Inténtalo otra vez. Pista 2: Soy muy fuerte y valiente. ¿Quién soy?');
     });
 
     test('"paso" salta al siguiente animal sin puntuar', () => {

@@ -1740,12 +1740,10 @@ function App() {
             // intacto: es la fuente de restauración por tipo.
             // ============================================================
             const turnKind = resolveTurnArtifactKind(workspace?.tipo, navegacion?.comando);
-            try {
-                if (turnKind === 'image') workspaceImage.clear();
-            } catch (err) {
-    logCaughtError('[catch] src/App.tsx', err);
-                relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
-            }
+            // La imagen NO se limpia aqui: su ruta unica (generateFromContract ->
+            // beginImageRequest) ya invalida la anterior; limpiarla en todo turno de
+            // tipo imagen borraba el ultimo objeto de su tipo cuando no habia
+            // prompt_visual con el que reemplazarla.
             integrationStore.setWorkspaceArtifact(null);
 
             // ============================================================

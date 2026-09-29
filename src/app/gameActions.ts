@@ -173,6 +173,17 @@ interface NormalizedGameAction {
  * local del catálogo. No relanza excepciones: cualquier error se
  * registra y se responde de forma amigable.
  */
+/**
+ * Respuesta HONESTA a "ese juego no lo tengo": ofrece el catalogo real.
+ *
+ * Fuente unica del texto: `gameMenuNames()` (los alias canonicos del catalogo).
+ * No promete nada ni arranca nada: es el muro contra la IA anunciando una partida
+ * que no existe (defecto medido 2026-09-28 18:11:56).
+ */
+export function unavailableGameMessage(): string {
+    return `Ese juego no lo tengo todavia. Podemos jugar a: ${gameMenuNames().join(', ')}. Cual eliges?`;
+}
+
 export async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGameContext): Promise<void> {
     // ============================================================
     // EL TURNO LO DECIDE SU DUEÑO (una sola pregunta, todos los juegos)
@@ -192,6 +203,16 @@ export async function applyGameAction(juegoAction: NormalizedGameAction, ctx: Ap
     }
     // Cualquier orden de juego que SÍ llega al motor RETOMA la partida en pausa: la
     // pausa no borra nada (misma carta, misma ronda, mismo puntaje).
+    // `unavailable`: el juego pedido NO esta en el catalogo. Lo responde el
+    // DOMINIO DE JUEGOS con la lista real del catalogo (el LLM no puede anunciar una
+    // partida inexistente) y la partida activa queda EN PAUSA: no se borra (sigue
+    // viva, se retoma con una orden de juego) pero deja de consumir turnos. Va ANTES
+    // del resume: si la partida estaba en pausa, el catalogo NO la levanta.
+    if (juegoAction.action === 'unavailable') {
+        suspendActiveGameSession();
+        await speakGameText(unavailableGameMessage(), ctx);
+        return;
+    }
     resumeActiveGameSession();
     if (juegoAction.action === 'narrate') {
         const engine = getGameEngine(juegoAction.gameId as GameId);

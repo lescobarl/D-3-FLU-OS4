@@ -439,7 +439,10 @@ export interface FluContract {
      */
     juego?: {
         gameId: string;
-        action: 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch';
+        // `unavailable`: el juego pedido NO esta en el catalogo. Lo responde el
+        // dominio de juegos con la lista real (gameMenuNames) y no arranca nada:
+        // el LLM nunca puede anunciar una partida que no existe.
+        action: 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch' | 'unavailable';
         playerText?: string;
     } | null;
     /** Diagnostics metadata (OS2 parity) */

@@ -279,6 +279,36 @@ interface QuienSoyState {
     fluGuess: string | null;
 }
 
+/**
+ * Una pista es una NEGACION cuando se define por lo que el animal NO es o NO
+ * puede hacer ("No puedo volar.", "No soy un pez..."). Es vocabulario de apoyo:
+ * solo informa DESPUES de una pista positiva que acote el espacio.
+ */
+const NEGATION_CLAUSE = /^\s*no\b/i;
+
+/**
+ * Secuencia REAL de pistas de un animal: primero las positivas y despues las
+ * negaciones (orden relativo preservado). Duena unica del orden de las pistas;
+ * la leen `clueAt` y el tope de "pista".
+ *
+ * INVARIANTE (guardado por test): la primera pista nunca es una negacion. Si lo
+ * fuera, la partida es inganable: "No puedo volar" describe a 9 de los 12
+ * animales del banco y no descarta nada (defecto medido 22:11:37).
+ */
+export function quienSoyHints(item: QuienSoyItem): string[] {
+    const positivas = item.pistas.filter((pista) => !NEGATION_CLAUSE.test(pista));
+    const negaciones = item.pistas.filter((pista) => NEGATION_CLAUSE.test(pista));
+    return [...positivas, ...negaciones];
+}
+
+/** Categoria del animal segun el vocabulario de atributos (plumas/mamifero/insecto). */
+export function quienSoyCategory(item: QuienSoyItem): string {
+    if (item.atributos?.insecto === true) return 'insecto';
+    if (item.atributos?.plumas === true) return 'ave';
+    if (item.atributos?.mamifero === true) return 'mamifero';
+    return 'otro';
+}
+
 type RandomSource = () => number;
 
 /** Baraja determinista (Fisher-Yates) de los índices del banco. */
@@ -297,7 +327,8 @@ function itemAt(state: QuienSoyState): QuienSoyItem | null {
 }
 
 function clueAt(state: QuienSoyState, item: QuienSoyItem): string {
-    return item.pistas[Math.min(state.clueIndex, item.pistas.length - 1)];
+    const pistas = quienSoyHints(item);
+    return pistas[Math.min(state.clueIndex, pistas.length - 1)] ?? '';
 }
 
 function cluePrompt(state: QuienSoyState, item: QuienSoyItem): string {
@@ -429,7 +460,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
 
             // ¿Pide otra pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                if (state.clueIndex + 1 >= item.pistas.length) {
+                if (state.clueIndex + 1 >= quienSoyHints(item).length) {
                     return {
                         prompt: `Ya te di todas las pistas. ${cluePrompt(state, item)}`,
                         valid: false,
@@ -520,9 +551,19 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 };
             }
 
-            // Respuesta incorrecta → reintenta el mismo animal.
+            // Respuesta incorrecta → reintenta el mismo animal CON PISTA NUEVA.
+            // Antes repetia la misma pista indefinidamente ("Pista 1"), asi que el
+            // jugador no acumulaba informacion y la partida era inganable. El fallo
+            // avanza el cursor de pistas (hasta la ultima). El "¡Casi!" solo se dice
+            // si el animal nombrado es del banco y de la MISMA categoria: "un perro"
+            // contra un pinguino no es un "casi" (defecto medido 22:11:37).
+            const pistasSequencia = quienSoyHints(item);
+            const namedSameCategory = QUIEN_SOY_BANK.some((bankItem) =>
+                hasAnyToken(normalized, [bankItem.nombre, ...(bankItem.keywords ?? [])])
+                && quienSoyCategory(bankItem) === quienSoyCategory(item));
+            if (state.clueIndex + 1 < pistasSequencia.length) state.clueIndex += 1;
             return {
-                prompt: `¡Casi! Inténtalo otra vez. ${cluePrompt(state, item)}`,
+                prompt: `${namedSameCategory ? '¡Casi! Inténtalo otra vez.' : 'No, ese no es. Inténtalo otra vez.'} ${cluePrompt(state, item)}`,
                 valid: false,
                 gameOver: false,
                 score: session.score,

@@ -294,9 +294,21 @@ export function matchGameAliasOnly(text = ''): GameIntentEntry | null {
     return bestAliasMatch((alias) => normalized === alias);
 }
 
-/** Guardia anti-negación: "no quiero jugar a..." nunca inicia/cambia. */
+/** Guardia anti-negacion: "no quiero jugar a..." nunca inicia/cambia. */
 function hasNegativeIntent(normalized: string): boolean {
     return NEGATIVE_INTENT_FRAMES.some((negative) => hasToken(normalized, negative));
+}
+/**
+ * Es el texto una NEGACION de juego? ("no quiero jugar a X").
+ *
+ * Se exporta porque el dueno de la frase "el catalogo no tiene ese juego" necesita
+ * distinguir una ORDEN de una NEGACION: "no quiero jugar a adivina quien" no puede
+ * responder con el catalogo. Dueno UNICO de la lista: NEGATIVE_INTENT_FRAMES.
+ */
+export function hasNegativeGameIntent(text = ''): boolean {
+    const normalized = normalizeForMatch(text);
+    if (!normalized) return false;
+    return hasNegativeIntent(normalized);
 }
 
 /**

@@ -60,6 +60,10 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
     // ---- Refs ----
     const urlRef = useRef<string>('');
     const requestRef = useRef(0);
+    // Token monotono de peticion: Date.now() no sirve como identidad (dos
+    // peticiones en el mismo ms compartian token y la vieja pisaba a la nueva;
+    // y una peticion en vuelo quedaba invalidada por un clear del turno).
+    const requestSeqRef = useRef(0);
     const promptRef = useRef<string>('');
     const tipoRef = useRef<string | null>(null);
     const loadTimeoutRef = useRef<number>(0);
@@ -92,7 +96,8 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
     /** Invalida la petición previa y limpia el resultado vivo: al pedir una
      *  imagen nueva, la anterior deja de pintarse hasta que llegue la nueva. */
     const beginImageRequest = useCallback((): number => {
-        const requestId = Date.now();
+        requestSeqRef.current += 1;
+        const requestId = requestSeqRef.current;
         requestRef.current = requestId;
         loadAttemptRef.current = 0;
         setLoadAttempt(0);
@@ -247,7 +252,8 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
 
     // ---- Clear ----
     const clear = useCallback(() => {
-        requestRef.current = Date.now();
+        requestSeqRef.current += 1;
+        requestRef.current = requestSeqRef.current;
         setImageUrl(null);
         setIsLoading(false);
         setIsFailed(false);

@@ -14,6 +14,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
+import { phrasesRelate } from './activeListen';
 
 export interface UserTurnRowInput {
     /** Frase canónica de la locución (con wake word, tal como se muestra). */
@@ -80,14 +81,30 @@ export function commitUserTurnRow({
         }
     }
 
-    // 2) Misma frase ya commiteada en el turno: reutiliza la fila y completa hablante.
+    // 2) Misma LOCUCION ya commiteada en el turno: reutiliza la fila y completa
+    //    hablante. La comparacion es por RELACION (prefijo/sufijo normalizado,
+    //    `phrasesRelate`), no por igualdad estricta: una reemision del ASR que CRECE
+    //    ("Okay Flow empiezas" -> "Okay Flow empiezas Okay Flow empieza tu") o que se
+    //    recorta es la MISMA locucion, y con igualdad abria una SEGUNDA fila (defecto
+    //    medido 18:12:06 y 18:12:34; la respuesta de FLU quedaba alineada a una sola).
+    //    De la reemision se conserva el texto MAS COMPLETO: nunca se pierde lo dicho.
     for (let i = history.length - 1; i >= turnStart; i -= 1) {
         const entry = history[i];
         if (!entry || entry.role !== 'user') continue;
-        if (cleanForSpeech(entry.text || '').toLowerCase() !== norm) continue;
-        if (resolved && !String(entry.speakerName || '').trim()) {
-            store.setConversationEntrySpeaker(entry.id, resolved);
-        }
+        const previo = cleanForSpeech(entry.text || '');
+        if (!phrasesRelate(previo, raw)) continue;
+        const masCompleto = norm.length > previo.toLowerCase().length;
+        const updated = history.map((e) =>
+            e.id === entry.id
+                ? {
+                    ...e,
+                    text: masCompleto ? raw : e.text,
+                    speakerName: resolved || e.speakerName,
+                    timestamp: masCompleto ? stamp : e.timestamp,
+                }
+                : e,
+        );
+        store.batchLoadHistory(updated);
         return { id: entry.id, action: 'reused' };
     }
 

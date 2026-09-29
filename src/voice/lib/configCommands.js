@@ -802,9 +802,12 @@ export function normalizeJuego(raw = null) {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
 
   const gameId = String(parsed.gameId || parsed.juego || '').trim()
-  if (!gameId || !isGameId(gameId)) return null
-
   const action = String(parsed.action || parsed.accion || '').trim()
+  // `unavailable` la resuelve el CATALOGO (el juego pedido no existe): no arranca
+  // partida, asi que no necesita un gameId valido. El resto de acciones SI lo
+  // exigen: son acciones de una partida del catalogo.
+  if (action === 'unavailable') return { gameId, action }
+  if (!gameId || !isGameId(gameId)) return null
   if (
     action !== 'start'
     && action !== 'turn'

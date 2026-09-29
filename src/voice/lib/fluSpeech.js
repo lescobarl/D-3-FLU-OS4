@@ -204,6 +204,18 @@ export function isFluSpeaking() {
   return Boolean(activeSpeechPromise)
 }
 
+/**
+ * Cuando TERMINO de hablar FLU (marca de tiempo de la ultima locucion hablada).
+ *
+ * Dueno unico de "hasta cuando dura mi voz": la usa el detector de eco para no
+ * tomar su propia cola por un turno de persona. La FILA de FLU se escribe al
+ * producir la respuesta (antes de hablar), asi que anclar la ventana de eco a esa
+ * fila la deja expirada mientras FLU sigue hablando (defecto medido: la cola del
+ * TTS entraba como turno del usuario).
+ */
+export function getLastCompletedSpeechAt() {
+  return lastCompletedSpeechAt;
+}
 export function isSpeechBusy() {
   if (activeSpeechPromise) return true
   if (typeof window === 'undefined' || !window.speechSynthesis) return false

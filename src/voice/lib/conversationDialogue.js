@@ -252,6 +252,21 @@ export function deriveAssistantLastText(conversationHistory = []) {
 }
 
 /** Cuando se dijo esa ultima frase (ms epoch), para el detector de ECO del ingress. */
+/**
+ * Contexto de eco de la propia voz de FLU para el ingress: el texto que FLU dijo
+ * y el instante en que TERMINO de hablar (el ingress lo usa para no tomar su TTS
+ * por un turno de persona). La fila de FLU se escribe ANTES de hablar, asi que
+ * anclar la ventana de eco solo a la fila la dejaba expirada mientras FLU seguia
+ * hablando y su cola entraba como turno de persona; con el fin del habla, la
+ * ventana cubre el TTS completo. Fuente unica del instante de habla: fluSpeech.
+ */
+export function resolveEchoContext(conversationHistory = [], completedSpeechAt = 0) {
+    return {
+        lastAssistantText: deriveAssistantLastText(conversationHistory),
+        lastAssistantAtMs: Math.max(deriveAssistantLastAtMs(conversationHistory), Number(completedSpeechAt) || 0),
+    }
+}
+
 export function deriveAssistantLastAtMs(conversationHistory = []) {
   const entry = lastFluEntry(conversationHistory)
   const at = Number(entry?.timestamp)

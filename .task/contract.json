@@ -1,7 +1,7 @@
 {
-  "base": "ff9f3dc",
-  "task": "Cierre de los dos defectos medidos en el log del dueno. (1) Con una partida ACTIVA, un comando accionable de otro dominio se lo comia el motor de juego como jugada y nunca se ejecutaba; ademas el juego se despachaba dos veces por turno. (2) El turno moria MUDO: si el guard anti-alucinacion marcaba la captura cruda del ASR como basura, commitTurnPhrase devolvia '' en silencio, commitAndResolveTurn salia sin llamar al callback y la respuesta de Gemini ya pagada se descartaba (log: 'latencia IA: 1102ms' seguido de LISTENING, sin onContractResolved ni SPEAKING). Se anade la capacidad que faltaba (quitar UN item de una nota), se deriva el passthrough del juego del parser unico y el cierre de turno pasa a resolver la frase con motivo explicito y texto validado de respaldo. Se eliminan los simuladores falsos.",
-  "objective": "Que ningun comando accionable de otro dominio pueda consumirse como jugada con partida activa; que 'borra el cloro de la nota del super' quite el item del contenido; y que ningun turno pueda morir en silencio: si la captura cruda del ASR es basura se commitea el texto validado del turno (motivo registrado) y sin texto valido no se llama a la IA. ENMIENDA AUTORIZADA POR EL DUENO en esta sesion (amplia el alcance): cerrar el hueco de la barrera de la suite completa (el atajo 'npx vitest run' esquivaba la autorizacion porque la barrera vivia solo en el script npm), registrar ese incumplimiento en el ledger, unificar el resolvedor de wake words (hook vs getWakeWords), reparar 'npm run test:file' y restaurar la anti-deriva de reglas de Anexo B. SEGUNDA ENMIENDA AUTORIZADA POR EL DUENO (2026-09-28, respuesta 'dale commit' tras pedirla el agente): (a) base al checkpoint actual ff9f3dc, porque con base f00c0ed la puerta medía 18 commits ya cerrados y marcaba como fuera de alcance todo lo commiteado desde entonces; (b) allow ampliado con las 4 rutas del arreglo de imagen/ultimo-objeto-por-tipo del Pizarron que el dueno pidio en la ronda previa y nunca se declararon. No se tocaron dod, guard, guardExpect, maxFiles ni maxLines.",
+  "base": "c467177",
+  "task": "Cierre del DOMINIO de juegos (no de un caso suelto). Tercera enmienda autorizada por el dueno (2026-09-28, respuesta 'vas' a la pregunta 'autorizas la enmienda para cerrar todo el dominio de juegos': 'no me gustan los parches, debemos tener un catalogo de juegos y si piden uno que no exista limitarlo a esos'). Medido en el log del dueno 18:11:56-18:12:47 y con sonda sobre las funciones reales: (1) una orden de juego con nombre FUERA del catalogo ('vamos a jugar Adivina quien') no la posee NADIE, cae al LLM y el LLM ANUNCIA la partida que no existe; (2) con partida viva esa misma orden se la come el motor como jugada (los marcos del motor son tokens sueltos: 'vamos' esta en NEXT_FRAMES); (3) la PAUSA no protege de esos marcos ('si'/'dale'/'adelante' retoman la partida y se comen el turno); (4) el eco de la COLA del TTS entra como turno de persona (ventana anclada a la FILA de FLU, escrita antes de hablar, y umbral de cobertura 0.5 que un fragmento de cola no pasa); (5) una locucion reemitida abre FILA DUPLICADA (el escritor compara por igualdad estricta y el predicado de relacion prefijo/sufijo `phrasesRelate` existe y esta MUERTO). CUARTA ENMIENDA (extension, 2026-09-28): el dueno reporto en esta misma sesion dos defectos ya corregidos en el arbol pero sin declarar en el allow: (6) la imagen recien generada que no aparecia (el token de peticion era Date.now(), compartido entre dos peticiones del mismo ms, y un clear del turno invalidaba la generacion en vuelo) y (7) el juego quien_soy con pista de arranque inutil (la primera pista de un animal podia ser una NEGACION: 'No puedo volar' describe a 9 de los 12 animales) y fallo que no aportaba informacion nueva (repetia la misma pista). Se amplia allow con src/hooks/useWorkspaceImage.ts, src/voice/lib/conversationDialogue.js (requerido por el objetivo E: es el dueno del contexto de eco) y tests/quienSoy.test.ts; dod incorpora tests/quienSoy.test.ts. No se tocan guard, guardExpect, maxFiles ni maxLines.",
+  "objective": "UN invariante, para todos los juegos y todas las puertas: 'toda orden de juego tiene dueno, ningun turno se pierde y ningun juego se inventa'. (A) El catalogo es la UNICA puerta de entrada: si la frase es una ORDEN DE JUEGO y no casa ningun juego del catalogo, la responde el DOMINIO DE JUEGOS (accion nueva `unavailable`: lista el catalogo real, no arranca nada, no borra la partida y la deja EN PAUSA), nunca el LLM, que no puede anunciar una partida que no existe. (B) Con partida viva, el motor no consume como jugada un texto con MARCO DE ORDEN DE JUEGO que no sea una orden del juego activo. (C) La PAUSA solo la levanta una ORDEN DE JUEGO: con la partida en pausa el motor no consume turnos (ni marcos sueltos de afirmacion ni respuesta abierta). (D) La SALIDA es de los 21 juegos por igual (barrido del catalogo con la lista unica END_GAME_FRAMES). (E) El eco de la COLA del TTS no puede abrir turno de persona: la ventana de eco se ancla al FIN DEL HABLA y un fragmento que coincide con la cola de lo que FLU acaba de decir es eco sin exigir cobertura completa. (F) Una locucion = una fila: el escritor de fila usa la relacion prefijo/sufijo (predicado `phrasesRelate`, hoy sin consumidor) dentro del turno.",
   "allow": [
     "src/core/games/**",
     "src/core/notes/**",
@@ -10,9 +10,16 @@
     "src/app/superNoteActions.ts",
     "src/app/noteRemovalActions.ts",
     "src/App.tsx",
+    "src/types/bridge.ts",
+    "src/hooks/useWorkspaceImage.ts",
     "src/voice/lib/noteIntentParser.js",
     "src/voice/lib/gameCommands.js",
     "src/voice/lib/deterministicArbiter.js",
+    "src/voice/lib/configCommands.js",
+    "src/voice/lib/conversationStream.js",
+    "src/voice/lib/conversationTurnRow.ts",
+    "src/voice/lib/fluSpeech.js",
+    "src/voice/lib/conversationDialogue.js",
     "src/voice/lib/audioMath.js",
     "src/voice/lib/garbageTranscript.js",
     "src/voice/lib/turnCommitPhrase.js",
@@ -29,8 +36,13 @@
     "package.json",
     "plans/ledger.json",
     "AGENTS.md",
+    "tests/gameDomainOwnership.test.ts",
     "tests/gamePlaythrough.test.ts",
     "tests/gameDoesNotHijackCommands.test.ts",
+    "tests/gameCommandEscape.test.ts",
+    "tests/gameCatalog.test.ts",
+    "tests/gameStartRequestNotInGameAction.test.ts",
+    "tests/quienSoy.test.ts",
     "tests/noteItemRemovalLiteral.test.ts",
     "tests/conversationTurnSingleRow.test.ts",
     "tests/turnCommitGarbageGate.test.ts",
@@ -38,8 +50,6 @@
     "tests/rulesSimulator.test.ts",
     "tests/reportedScenariosSimulation.test.ts",
     "tests/reportedScenariosRootFix.test.ts",
-    "tests/gameCatalog.test.ts",
-    "tests/gameCommandEscape.test.ts",
     "tests/systemMatrix.test.ts",
     "tests/fullSuitePathBarrier.test.ts",
     "tests/hardcodeGuard.test.ts",
@@ -48,8 +58,8 @@
   ],
   "maxFiles": 60,
   "maxLines": 2800,
-  "dod": "npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/surfaceMatrix.test.ts tests/noteItemRemovalLiteral.test.ts tests/gameDoesNotHijackCommands.test.ts tests/turnCommitGarbageGate.test.ts tests/garbageTranscript.test.ts tests/fullSuitePathBarrier.test.ts tests/rulesSimulator.test.ts",
-  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/fullSuitePathBarrier.test.ts",
+  "dod": "npx vitest run --no-file-parallelism --reporter=dot tests/gameDomainOwnership.test.ts tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/gameCommandEscape.test.ts tests/gameCatalog.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/quienSoy.test.ts tests/surfaceMatrix.test.ts tests/conversationTurnSingleRow.test.ts tests/turnCommitGarbageGate.test.ts tests/garbageTranscript.test.ts tests/rulesSimulator.test.ts tests/fullSuitePathBarrier.test.ts",
+  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/gameDomainOwnership.test.ts tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/fullSuitePathBarrier.test.ts",
   "guardExpect": "green",
   "ignore": [
     ".task/**",
@@ -64,6 +74,40 @@
       "tests/e2e/auditoria-acciones-llm.spec.ts"
     ],
     "src/core/agenda/domainScopedIntent.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/core/games/gameCatalog.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts",
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/voice/lib/gameCommands.js": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts",
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/voice/lib/deterministicArbiter.js": [
+      "tests/e2e/auditoria-despacho-real.spec.ts",
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/voice/lib/configCommands.js": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/types/bridge.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/app/gameActions.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/voice/hooks/useFluVoiceAssistant.js": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts",
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/voice/lib/conversationStream.js": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/voice/lib/conversationTurnRow.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/voice/lib/fluSpeech.js": [
       "tests/e2e/auditoria-acciones-llm.spec.ts"
     ]
   }

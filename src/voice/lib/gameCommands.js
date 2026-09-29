@@ -30,8 +30,10 @@ import {
   NON_GAME_REQUEST_FRAMES,
   getGameEngine,
   suppressesAmbient,
+  hasNegativeGameIntent,
 } from '../../core/games/gameCatalog'
 import { getActiveGameSession, isGameSuspended } from '../../core/games/gameSessionStore'
+import { hasGameOrderFrame } from '../../core/games/gameUtils'
 import { logCaughtError } from '../../lib/caughtError';
 
 // ------------------------------------------------------------
@@ -88,6 +90,45 @@ function startsWithFrame(clean, frames) {
 
 function isQuestionLike(clean) {
   return startsWithFrame(clean, QUESTION_STARTERS)
+}
+
+/**
+ * Es una ORDEN de juego ("vamos a jugar X" / "cambia a X") de un juego que el
+ * catalogo NO tiene? ("vamos a jugar Adivina quien", "vamos a jugar al futbol").
+ *
+ * El catalogo es la UNICA puerta de entrada: si la orden no casa ningun juego,
+ * la respuesta es del DOMINIO DE JUEGOS (accion `unavailable`), nunca del motor
+ * (que la consumia como jugada: sus marcos son tokens sueltos, 'vamos' esta en
+ * NEXT_FRAMES) ni del LLM (que ANUNCIABA la partida sin que existiera: medido
+ * 2026-09-28 18:11:56 -> "Claro! Vamos a jugar a Adivina quien").
+ *
+ * Una NEGACION ("no quiero jugar a X") no es una orden y no entra aqui.
+ */
+function isUnknownGameOrder(normalized) {
+  if (!normalized) return false
+  if (!hasGameOrderFrame(normalized)) return false
+  if (hasNegativeGameIntent(normalized)) return false
+  return !matchGameIntent(normalized) && !matchGameAliasOnly(normalized)
+}
+
+/**
+ * Accion del dominio de juegos que responde el CATALOGO, sin motor y sin partida:
+ * "ese juego no lo tengo" o "estos son los que hay". La partida activa queda EN
+ * PAUSA (no se borra: sigue viva y se retoma con una orden de juego).
+ */
+export function isCatalogLevelGameAction(action) {
+  return action?.action === 'unavailable'
+}
+
+/**
+ * Esta orden de juego SE LLEVA el turno? Fuente unica del ciclo por turno (la usa
+ * el fast-path del hook con `noteGameTurn`). `unavailable` es del dominio de
+ * juegos pero NO arranca nada, asi que no puede dejar viva una partida que siga
+ * consumiendo turnos mientras se responde con el catalogo.
+ */
+export function consumesGameTurn(action) {
+  if (!action?.action) return false
+  return !isCatalogLevelGameAction(action)
 }
 
 /**
@@ -213,6 +254,21 @@ export function resolveGameCommandFromText(text = '', options = {}) {
     if (intent) {
       return { gameId: activeSession.id, action: 'start' }
     }
+    // 3c. ORDEN de juego de un juego que el catalogo NO tiene ("vamos a jugar
+    //     Adivina quien"): la posee el DOMINIO DE JUEGOS, no el motor. Sin esta
+    //     rama el texto caia al paso 5 (`engine.isGameCommand`) y el motor lo
+    //     consumia como jugada, porque sus marcos son tokens sueltos de
+    //     afirmacion ('vamos', 'dale', 'adelante').
+    if (isUnknownGameOrder(normalized)) {
+      return { gameId: activeSession.id, action: 'unavailable' }
+    }
+    // 3d. PARTIDA EN PAUSA: el motor NO consume turnos. Solo una ORDEN de juego la
+    //     retoma (pasos 1-3c: salir, menu, cambio, arranque, catalogo). Los marcos
+    //     sueltos de afirmacion ('si', 'dale', 'adelante', 'ok') y la respuesta
+    //     abierta son de la CONVERSACION: si el motor los consume, la pausa no
+    //     protege nada y el turno de su dueno real se pierde (defecto medido con
+    //     la loteria en pausa). UN criterio, para todos los juegos.
+    if (isGameSuspended()) return null
     // 4. Reclamado por OTRO dominio (imagen, generación, agenda, notas, compras,
     //    diario, ambiente, navegación, configuración) → NO es jugada: se deja
     //    pasar para que lo ejecute su dueño (la IA o el dominio) y el motor no
@@ -253,12 +309,19 @@ export function resolveGameCommandFromText(text = '', options = {}) {
     //    menú, cambio de juego, arranque del mismo juego, comandos del motor), no
     //    con una respuesta suelta: así el juego no "bate la conversación" cuando el
     //    usuario está en otro asunto. La pausa la aplica noteGameTurn (hook).
-    if (isGameSuspended()) return null
     return { gameId: activeSession.id, action: 'turn', playerText: text }
   }
 
   // Sin partida activa: una PREGUNTA sobre el juego la responde la IA, NO inicia
   // la partida (antes "dime cuántas cartas tiene la lotería" arrancaba el juego).
+  // Nombre PELADO del catalogo ("cuenta conmigo", "quien soy"): es una ORDEN
+  // (la respuesta al menu de FLU), no una pregunta. VA ANTES del gate de pregunta
+  // porque 'quien soy' es el nombre canonico de quien_soy y empieza por palabra
+  // interrogativa: con el gate delante, el MISMO texto arrancaba o no segun
+  // hubiera partida (la ruta con partida consulta el alias pelado antes del
+  // gate). Un solo criterio para el mismo texto.
+  const bareWithoutSession = matchGameAliasOnly(text)
+  if (bareWithoutSession) return { gameId: bareWithoutSession.id, action: 'start' }
   const cleanNoSession = normalized.replace(/^[^a-z0-9]+/, '')
   if (isQuestionLike(cleanNoSession) || startsWithFrame(cleanNoSession, NON_GAME_REQUEST_FRAMES)) {
     return null
@@ -266,11 +329,11 @@ export function resolveGameCommandFromText(text = '', options = {}) {
   // Solo inicia si hay intención explícita y resoluble.
   const intent = matchGameIntent(text)
   if (intent) return { gameId: intent.id, action: 'start' }
-  // Nombre PELADO: respuesta al menú de juegos ("¿a cuál te gustaría jugar?" →
-  // "cuenta conmigo"). Sin esto, ningún dominio lo resolvía y la IA simulaba el
-  // arranque sin partida real (bug del portal 11:27).
-  const bareIntent = matchGameAliasOnly(text)
-  if (bareIntent) return { gameId: bareIntent.id, action: 'start' }
+  // ORDEN de juego de un juego que el catalogo NO tiene: la responde el catalogo
+  // (nunca la IA: no puede anunciar una partida que no existe).
+  if (isUnknownGameOrder(normalized)) return { action: 'unavailable' }
+  // El nombre PELADO ya se resolvio ANTES del gate de pregunta (un solo
+  // criterio: el mismo texto arranca igual con partida y sin ella).
 
   // Nada → no es un juego.
   return null

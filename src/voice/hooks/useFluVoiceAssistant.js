@@ -34,6 +34,7 @@ import {
   resolveVoiceCommand,
 } from '../lib/deterministicArbiter'
 import { noteGameTurn } from '../../core/games/gameSessionStore'
+import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
@@ -139,7 +140,7 @@ import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPau
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
 // App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
-import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
+import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { logCaughtError } from '../../lib/caughtError';
 import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
@@ -147,8 +148,7 @@ import { resolvePreLaunchDelay } from '../lib/preLaunchDelay'
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   FLU_DIALOGUE_SPEAKER,
-  deriveAssistantLastText,
-  deriveAssistantLastAtMs,
+  resolveEchoContext,
   deriveDialogueHistory,
   deriveUserRowSpeakers,
   deriveUserRowTexts,
@@ -3055,7 +3055,8 @@ export function useFluVoiceAssistant({
       juego,
       { speakerName = null, speakerAlias = null, phase = 'SESION_ACTIVA', session = null, language = null, transcript = '', timestamp = '' } = {},
     ) => {
-      if (!juego?.gameId) return null
+      // `unavailable` es del dominio de juegos aunque no traiga gameId (la respuesta la da el catalogo).
+      if (!juego?.gameId && !isCatalogLevelGameAction(juego)) return null
       await onContractResolved?.({
         contract: {
           respuesta_voz: '',
@@ -3149,7 +3150,7 @@ export function useFluVoiceAssistant({
       // ambiente) se delega al árbitro puro (src/voice/lib/deterministicArbiter.js).
       // El hook conserva SOLO la orquestación del despacho (onContractResolved).
       const { config, game, env } = resolveStatefulDomains(text, { language })
-      if (transcript) noteGameTurn(Boolean(game?.gameId)) // turno AJENO = partida EN PAUSA (se retoma con una orden de juego)
+      if (transcript) noteGameTurn(consumesGameTurn(game))
       const dispatch = Promise.allSettled([
         config?.accion
           ? dispatchFastConfigCommand(config, {
@@ -4478,9 +4479,7 @@ export function useFluVoiceAssistant({
       lastSignature: lastTurnSignatureRef.current,
       previewSignature: lastTurnSignatureRef.current,
       finalSignature: lastTurnSignatureRef.current,
-      // Eco de la propia voz de FLU: el ingress lo usa para no tomar su TTS por un turno de persona.
-      lastAssistantText: deriveAssistantLastText(useIntegrationStore.getState().conversationHistory),
-      lastAssistantAtMs: deriveAssistantLastAtMs(useIntegrationStore.getState().conversationHistory),
+      ...resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()),
     }),
     peekTurnBridgeText: () => turnBridgeTextRef.current,
     stashTurnBridgeText: (text) => {

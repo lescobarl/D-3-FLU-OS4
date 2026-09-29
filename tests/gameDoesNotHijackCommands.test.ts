@@ -179,29 +179,37 @@ describe('la partida EN PAUSA deja de consumir turnos, sigue viva y se retoma', 
         expect(resolveDeterministicCommand('el sol', { language: 'es' }).domain).not.toBe('game');
     });
 
-    it('una orden del juego la consume y la RETOMA, sin reiniciar el estado', async () => {
+    it('una ORDEN del juego la RETOMA sin reiniciar el estado (y ya sin pausa, el motor avanza)', async () => {
         startActiveGame();
         const antes = getActiveGameSession();
         const cursorAntes = (antes!.state as { cursor: number }).cursor;
         noteGameTurn(false);
-        expect(resolveGameCommandFromText('siguiente')).toMatchObject({ action: 'turn' });
+        // EN PAUSA el motor no consume: 'siguiente' pertenece al turno de su dueno real.
+        expect(resolveGameCommandFromText('siguiente')).toBeNull();
         const spoken: string[] = [];
         await applyGameAction(
-            { gameId: 'loteria', action: 'turn', playerText: 'siguiente' } as never,
-            execCtx(spoken, 'siguiente') as never,
+            { gameId: 'loteria', action: 'start' } as never,
+            execCtx(spoken, 'vamos a jugar loteria') as never,
         );
         expect(isGameSuspended()).toBe(false);
         expect(spoken.length).toBe(1);
         expect(getActiveGameSession()).toBe(antes);
+        // RETOMADA: el comando del motor vuelve a ser jugada (sin reiniciar el mazo).
+        expect(resolveGameCommandFromText('siguiente')).toMatchObject({ action: 'turn' });
+        await applyGameAction(
+            { gameId: 'loteria', action: 'turn', playerText: 'siguiente' } as never,
+            execCtx(spoken, 'siguiente') as never,
+        );
         expect((antes!.state as { cursor: number }).cursor).toBe(cursorAntes + 1);
     });
 
-    it('en pausa siguen funcionando salir, menu, cambio de juego y los comandos del motor', () => {
+    it('en pausa siguen funcionando salir, menu y cambio; el MOTOR no consume', () => {
         noteGameTurn(false);
         expect(resolveGameCommandFromText('salir del juego')).toMatchObject({ action: 'end' });
         expect(resolveGameCommandFromText('que otro juego podemos jugar')).toMatchObject({ action: 'menu' });
         expect(resolveGameCommandFromText('vamos a jugar trivia')).toMatchObject({ action: 'switch' });
-        expect(resolveGameCommandFromText('loteria')).toMatchObject({ action: 'turn' });
+        // El comando propio del motor NO es una orden de juego: en pausa no se consume.
+        expect(resolveGameCommandFromText('loteria')).toBeNull();
     });
 
     it('repetir el arranque del juego activo la retoma (idempotente: no reinicia el mazo)', async () => {

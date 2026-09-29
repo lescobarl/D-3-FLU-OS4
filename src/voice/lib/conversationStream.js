@@ -305,6 +305,27 @@ export function isCommittedInterimEcho(interim = '', lastCommitted = '') {
  * la puntuación del TTS: «…lotería! Prepárense…» y «…lotería prepárense…» deben
  * coincidir. El mínimo de palabras evita descartar respuestas cortas legítimas.
  */
+/**
+ * El fragmento EMPIEZA por la COLA de lo que FLU acaba de decir?
+ *
+ * El ASR captura el final del TTS (el micro se abre mientras FLU termina) y
+ * despues, muchas veces, el turno real: "o prefieres que te cuente algo mas
+ * esta | Okay flu estabamos jugando..." (medido 18:12:34). Por eso la cola que
+ * cuenta es la que ABRE el fragmento. Exige mas palabras que el minimo suelto:
+ * repetir las 3 ultimas palabras de FLU no es eco, es conversacion.
+ */
+function empiezaPorLaCola(needle, hay) {
+  const minimo = ASSISTANT_ECHO_MIN_WORDS + 1
+  const max = Math.min(needle.length, hay.length)
+  for (let k = max; k >= minimo; k -= 1) {
+    let igual = true
+    for (let j = 0; j < k; j += 1) {
+      if (needle[j] !== hay[hay.length - k + j]) { igual = false; break }
+    }
+    if (igual) return true
+  }
+  return false
+}
 export function isAssistantVoiceEcho(candidate = '', assistantText = '') {
   const chunk = normalizeForMatch(candidate)
   const spoken = normalizeForMatch(assistantText)
@@ -315,6 +336,12 @@ export function isAssistantVoiceEcho(candidate = '', assistantText = '') {
   const needle = chunk.split(/[^a-z0-9]+/).filter(Boolean)
   if (needle.length < ASSISTANT_ECHO_MIN_WORDS) return false
   const hay = spoken.split(/[^a-z0-9]+/).filter(Boolean)
+  // COLA: el ASR suele captar el FINAL de lo que FLU acaba de decir (el micro se
+  // abre mientras el TTS termina). Un sufijo suficiente de las ultimas palabras
+  // habladas ES eco, aunque no cubra la frase entera: sin esto, la cola de una
+  // respuesta larga (8 de 20 palabras = 0.4 < 0.5 de cobertura) se colaba como
+  // turno de persona y el LLM respondia a las palabras de FLU (medido 18:12:34).
+  if (empiezaPorLaCola(needle, hay)) return true
   // El fragmento debe CUBRIR buena parte de lo que dijo FLU. Sin esto, una
   // corrida corta de palabras dentro de una respuesta larga bastaba para
   // descartar la frase del usuario: este modulo nunca borra contenido, los
