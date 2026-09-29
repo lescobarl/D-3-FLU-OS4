@@ -2957,4 +2957,22 @@ MEDIDO DESPUES (misma sonda): cortes de 1 y 2 letras que rompen la decision 97 -
 GUARD NUEVO: tests/gameAliasTruncatedName.test.ts (6 tests, recorre GAME_CATALOG sin
   listas por juego). FALSACION: sin la tolerancia, 3 de 6 caen con el sintoma exacto.
 BATERIA: 13 ficheros / 310 tests verdes; tsc -b 0; lint:eslint 0; eolGuard y utf8Guard
-  verdes. Suite completa NO ejecutada (orden expresa del dueno).
+  verdes. Suite completa NO ejecutada (orden expresa del dueno).================================================================
+AUDITORIA DEL FLUJO (una pasada, sin tests por orden): el patron de la
+MISMA VERDAD ESCRITA VARIAS VECES, en 4 formas, cerrado de raiz.
+  c73bbcb  el despacho deja de ser una cadena if/else: tabla DISPATCHER_HANDLERS
+           (DISPATCHER_DOMAINS se DERIVA). Su else se tragaba la resolucion.
+  f9cd481  (1) el turno NO se re-parsea cuando la accion es el mismo texto: se
+           reutiliza (el comentario del diseno decia que se omitia y MENTIA);
+           (2) fastPathConfig se declara (el hook lo escribe; App.tsx no lo leia);
+           (3) buildGameConfig: 10 if(gameId===...) -> tabla con clave TIPADA.
+  6b9c89b  las marcas del contrato se DERIVAN de la tabla (FastPathExecutedMarks);
+           el tipo del contrato tambien las enumeraba a mano (faltaba una).
+MEDIDO: tsc -b 0; eslint 0; App.tsx 4639 (techo 4643, no se afloja el trinquete);
+  bateria del camino tocado 14 ficheros / 297 tests; gate del repo (pre-commit
+  lint:guards + typecheck) 57 ficheros / 397 tests. Suite completa NO ejecutada.
+GUARDS QUE CAZARON DEFECTOS PROPIOS (medido, no supuesto): tsStrictGuard (doble
+  cast as unknown as -> tipado real de la clave) y godFileSizeGuard (4652 > 4643
+  -> comprimido a linea neta). Tambien un CRLF introducido en un fichero LF.
+LEDGER: P7.75 / P7.76 / P7.77 (done, con commit). Tracker: sin pendientes de
+  codigo en este camino; P7.49 sigue done (0ebee8c, ruido ASR del arranque).

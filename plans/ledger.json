@@ -917,6 +917,27 @@
       "estado": "done",
       "evidencia": "CAUSA RAIZ MEDIDA y arreglada en a3999d6. La metrica js-reference (scripts/js-ref-metric.mjs) lanzaba tsc con spawnSync, que BLOQUEA el event loop del worker de vitest durante toda la medicion (~9 s); bajo contencion (12 CPUs logicas -> 10 workers) el worker deja de latir, el RPC de vitest expira a los 60 s y la corrida COMPLETA sale ROJA por \"Timeout calling onTaskUpdate\" con los 3868 tests en verde. ARREGLO, sin tocar lo que se mide: execFile + await en la misma fuente unica, con el argv en un dueno unico (comandoCheckJs) y el criterio de linea en otro (lineasDeNombreLibre) para que la metrica y el guard no puedan divergir. MEDIDO con UN SOLO fichero (tests/jsReferenceGuard.test.ts); NO se corrio la suite completa, por orden expresa del dueno: ANTES (spawnSync, por mutacion) 6 verdes / 1 ROJO en 17.32 s con \"AssertionError: expected 0 to be greater than 0\" (exit 1); DESPUES (execFile + await) 7/7 VERDES en 21.98 s (exit 0). La restauracion se verifico por hash: sha256 455D4146B98B9A853AA6C927380EFEF98619EF06E15F0FC40603A028B5F411EF, identico al fichero que dio verde. En el mismo commit, `npm run gate` VERDE (alcance/tamano/DoD/guard), `npm run e2e:plan` exit 0 y el pre-commit con lint:guards 57 ficheros / 397 tests VERDE + eslint limpio + tsc -b limpio.",
       "origen": "deuda-detectada"
+    },
+    {
+      "id": "P7.75",
+      "titulo": "Auditoria del FLUJO: el despacho por dominio deja de estar cableado a mano (tabla unica DISPATCHER_HANDLERS)",
+      "estado": "done",
+      "evidencia": "AUDITORIA DEL FLUJO (leido, no grepado). Hallazgo: la MISMA verdad en dos sitios. arbiterDispatch.dispatchArbiterIntent despachaba con una cadena `if (domain === diary) ... else if`, repitiendo en codigo lo que la tabla declarada arbiterDomainRoutes ya decia (que ruta ejecuta cada dominio): dos fuentes de la misma verdad y un `else` que se tragaba la resolucion en silencio (el defecto que abrio esa tabla). ARREGLO en c73bbcb: tabla DISPATCHER_HANDLERS (dominio, manejador, withSpeaker, configFlag) en arbiterDomainRoutes.ts; DISPATCHER_DOMAINS se DERIVA de ella (sin lista paralela); el dispatcher la recorre. Comportamiento identico: mismas condiciones, argumentos, this y logs. MEDIDO: tsc -b 0; eslint 0; 6 ficheros / 111 tests del camino tocado; App.tsx 4642 dentro del techo 4643.",
+      "origen": "auditoria-flujo"
+    },
+    {
+      "id": "P7.76",
+      "titulo": "Auditoria del FLUJO: el turno ya no se re-parsea (se reutiliza), la marca fastPathConfig se declara y buildGameConfig pasa a tabla con la clave tipada",
+      "estado": "done",
+      "evidencia": "AUDITORIA DEL FLUJO. Tres copias mas de la misma verdad, cerradas en f9cd481. (1) DOBLE RESOLUCION DEL TURNO: el diseno documentado dice que con acciones del LLM se OMITE el re-parseo del transcript crudo (evita doble creacion), pero el codigo resolvia el turno completo Y cada accion y escondia el efecto con dedup a posteriori (coveredKeys): ahora se reutiliza el resultado del turno cuando la accion es el MISMO texto (el Arbitro es determinista) y el comentario que mentia se corrige. (2) LA MARCA fastPathConfig FALTABA: el hook la escribe (useFluVoiceAssistant.js:3297) y App.tsx solo comprobaba game y environment. (3) HARDCODE buildGameConfig: cadena de 10 `if (gameId === ...)` con el id y la clave de FLU_CONFIG.games a mano; ahora GAME_CONFIG_SHAPE con la clave TIPADA (keyof typeof FLU_CONFIG.games: una errata es error de compilacion). MEDIDO: tsc 0; eslint 0; 14 ficheros / 297 tests; App.tsx 4641. Los guards cazaron dos defectos propios: tsStrictGuard (doble cast as unknown as, sustituido por tipado real) y godFileSizeGuard (4652 sobre 4643, comprimido a linea neta).",
+      "origen": "auditoria-flujo"
+    },
+    {
+      "id": "P7.77",
+      "titulo": "Auditoria del FLUJO: las marcas del contrato se derivan de la tabla (FastPathExecutedMarks); cuatro copias de la misma verdad pasan a una",
+      "estado": "done",
+      "evidencia": "AUDITORIA DEL FLUJO. La MISMA verdad escrita CUATRO veces: la tabla, el hook que las escribe, los consumidores de App.tsx y el TIPO del contrato (fastPathGame y fastPathEnvironment a mano, y faltaba fastPathConfig). ARREGLO en 6b9c89b: FAST_PATH_EXECUTED_MARKS con `as const` es la unica declaracion; FastPathExecutedMarks DERIVA de ella la forma del contrato; ContractResolution la intersecta; el ultimo lector por nombre (gate de respuesta_voz) pasa por el predicado unico. MEDIDO: tsc 0; eslint 0; App.tsx 4639 dentro del techo 4643; gate del repo (pre-commit: lint:guards + typecheck) 57 ficheros / 397 tests en verde.",
+      "origen": "auditoria-flujo"
     }
   ],
   "done": [
@@ -1855,6 +1876,21 @@
       "id": "P7.68",
       "commit": "a3999d6",
       "titulo": "El error no controlado intermitente de la suite no era de la suite: la metrica checkJs bloqueaba el event loop del worker con spawnSync"
+    },
+    {
+      "id": "P7.75",
+      "commit": "c73bbcb",
+      "titulo": "Auditoria del FLUJO: el despacho por dominio deja de estar cableado a mano (tabla unica DISPATCHER_HANDLERS)"
+    },
+    {
+      "id": "P7.76",
+      "commit": "f9cd481",
+      "titulo": "Auditoria del FLUJO: el turno ya no se re-parsea (se reutiliza), la marca fastPathConfig se declara y buildGameConfig pasa a tabla con la clave tipada"
+    },
+    {
+      "id": "P7.77",
+      "commit": "6b9c89b",
+      "titulo": "Auditoria del FLUJO: las marcas del contrato se derivan de la tabla (FastPathExecutedMarks); cuatro copias de la misma verdad pasan a una"
     }
   ]
 }
