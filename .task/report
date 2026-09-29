@@ -2933,3 +2933,28 @@ PENDIENTE QUE SIGUE SIENDO SOLO DEL DUENO
     turnos), jugar un quien soy fallando a proposito 5 veces (4 pistas distintas y
     luego revela y avanza) y comprobar que tras una generacion fallida el ultimo
     video/imagen por tipo sigue en el Pizarron.
+========================================================================
+DEFECTO DEL DUENO: "┬┐Qui├⌐n soy? se corta/truncado"  (cerrado, commit 894871b)
+========================================================================
+MEDIDO ANTES, con el resolutor real sobre el CATALOGO entero:
+  resolveGameCommandFromText("quien soy")               -> {quien_soy, start}
+  resolveGameCommandFromText("quien so")                -> null   (cae al LLM: simula el arranque)
+  resolveGameCommandFromText("vamos a jugar quien soy") -> {quien_soy, start}
+  resolveGameCommandFromText("vamos a jugar quien so")  -> {action:"unavailable"}
+        (el dueno dice "ese juego no lo tengo" de un juego que SI tiene)
+  "loteri" -> null, "trivi" -> null, "adivinan"/"ahorca"/"karaok" -> null.
+  ALCANCE: 97 cortes (1 y 2 letras) rompian la decision en los 21 juegos.
+CAUSA (unica): el match de alias (gameCatalog.matchGameIntent / matchGameAliasOnly)
+  exigia el alias COMPLETO; una letra menos y el nombre no existia.
+ARREGLO: se tolera el corte del ASR al final del nombre, con limites: solo la ULTIMA
+  palabra, sin perder palabras enteras (asi "quien" no arranca el juego: P7.58), hasta
+  2 letras (magnitud medida del ASR), palabras anteriores exactas, y con una sola
+  palabra se conservan 4 letras (asi "cuenta" no arranca cuentacuentos ni "adivina"
+  adivinanzas).
+MEDIDO DESPUES (misma sonda): cortes de 1 y 2 letras que rompen la decision 97 -> 0
+  (nombre pelado y con marco, los 21 juegos). Cortes de 3+ letras fuera por diseno
+  (7 casos, todos con perdida de media palabra o de una palabra entera).
+GUARD NUEVO: tests/gameAliasTruncatedName.test.ts (6 tests, recorre GAME_CATALOG sin
+  listas por juego). FALSACION: sin la tolerancia, 3 de 6 caen con el sintoma exacto.
+BATERIA: 13 ficheros / 310 tests verdes; tsc -b 0; lint:eslint 0; eolGuard y utf8Guard
+  verdes. Suite completa NO ejecutada (orden expresa del dueno).
