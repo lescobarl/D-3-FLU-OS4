@@ -348,9 +348,43 @@ export function gameMenuNames(): string[] {
     return GAME_CATALOG.map(gameDisplayName);
 }
 
+/**
+ * Una ORDEN DE ARRANQUE/CAMBIO ("vamos a jugar X", "cambia a X") NUNCA es una
+ * jugada del jugador. El fast-path ya no la despacha como turno, pero el ECO del
+ * ASR puede llegar al motor por la via directa (misma clase de defecto que el
+ * doble dueno de la voz), y ahi el motor la consumia como jugada: medido con
+ * semillas fijas en G7, `palabras_encadenadas` terminaba la partida declarando
+ * ganador al jugador con UNA sola jugada, y `memoria_secuencias`/`abecedario`/
+ * `respiracion` sumaban un punto y una ronda que nadie habia dado. El muro vive
+ * AQUI, en el unico sitio por el que pasan los 21 motores, para no repetir la
+ * regla en 21 ficheros: el marco de arranque tiene UN dueno (`hasGameOrderFrame`).
+ * Devuelve "sin decision": no habla (prompt vacio, misma convencion que
+ * resolveDeterministicCourtesySpeech) y no toca la partida.
+ */
+function withStartOrderWall(engine: GameEngine): GameEngine {
+    const turn = engine.turn.bind(engine);
+    return {
+        ...engine,
+        turn(session, text = '', context) {
+            if (hasGameOrderFrame(normalizeForMatch(text))) {
+                return {
+                    prompt: '',
+                    valid: false,
+                    gameOver: false,
+                    score: session.score,
+                    animation: 'Idle',
+                    emotion: 'neutral',
+                    error: 'orden de arranque, no una jugada',
+                };
+            }
+            return turn(session, text, context);
+        },
+    };
+}
+
 export function getGameEngine(id: GameId): GameEngine | null {
     const entry = GAME_CATALOG.find((candidate) => candidate.id === id);
-    return entry ? entry.engine() : null;
+    return entry ? withStartOrderWall(entry.engine()) : null;
 }
 
 /** ¿El juego reproduce audio (música)? Fuente única: el flag del catálogo. */

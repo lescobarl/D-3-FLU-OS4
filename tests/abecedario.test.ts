@@ -35,22 +35,31 @@ describe('abecedario — inicio de partida', () => {
         expect(session.round).toBe(1);
     });
 
-    test('el banco tiene 12 letras con estructura {letra, palabra, pista}', () => {
-        expect(ABECEDARIO_BANK).toHaveLength(12);
+    test('el banco tiene estructura {letra, palabra, pista}, letras unicas y A-Z', () => {
+        // No se congela el tamano (crecio de 12 a 27 sin que el juego cambiara): se
+        // mide la ESTRUCTURA, la unicidad de la letra y que cubra el abecedario.
+        expect(ABECEDARIO_BANK.length).toBeGreaterThanOrEqual(12);
+        const letras = new Set<string>();
         for (const item of ABECEDARIO_BANK) {
             expect(item.letra.length).toBe(1);
             expect(typeof item.palabra).toBe('string');
             expect(item.palabra.length).toBeGreaterThan(0);
             expect(typeof item.pista).toBe('string');
             expect(item.pista.length).toBeGreaterThan(0);
+            letras.add(item.letra.toLowerCase());
         }
+        expect(letras.size).toBe(ABECEDARIO_BANK.length);
+        for (const letra of 'abcdefghijklmnopqrstuvwxy') expect(letras.has(letra)).toBe(true);
     });
 
     test('createSession devuelve una sesión serializable y plana', () => {
         const { session } = freshAbecedario();
         expect(session.id).toBe('abecedario');
         expect(Array.isArray(session.state.order)).toBe(true);
-        expect(session.state.order).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        // El mazo recorre TODO el banco (antes 0..11 congelado; el banco ya tiene 27).
+        expect(session.state.order).toHaveLength(ABECEDARIO_BANK.length);
+        expect(new Set(session.state.order).size).toBe(ABECEDARIO_BANK.length);
+        expect(session.state.order.every((i: number) => i >= 0 && i < ABECEDARIO_BANK.length)).toBe(true);
         expect(session.state.cursor).toBe(0);
         expect(session.state.maxRounds).toBe(3);
         expect(session.state.phase).toBe('announce');
@@ -173,7 +182,7 @@ describe('abecedario — fin de partida', () => {
 });
 
 describe('abecedario — configuración (data-driven, sin hardcode)', () => {
-    test('aplica rounds y clamps al rango [1,12]', () => {
+    test('aplica rounds y clamps al rango [1, banco]', () => {
         const { session } = freshAbecedario(2);
         expect(session.state.maxRounds).toBe(2);
 
@@ -183,7 +192,8 @@ describe('abecedario — configuración (data-driven, sin hardcode)', () => {
 
         const high = createAbecedarioEngine({ random: () => 0.9999 });
         const highSession = high.createSession({ rounds: 99 });
-        expect(highSession.state.maxRounds).toBe(12);
+        // El tope no es un numero magico: es el tamano del banco (crecio 12 -> 27).
+        expect(highSession.state.maxRounds).toBe(ABECEDARIO_BANK.length);
 
         const alias = createAbecedarioEngine({ random: () => 0.9999 });
         const aliasSession = alias.createSession({ defaultRounds: 4 });

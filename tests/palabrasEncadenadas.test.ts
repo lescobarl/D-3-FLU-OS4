@@ -67,7 +67,7 @@ describe('palabrasEncadenadas — enlaces válidos', () => {
         const { engine, session } = freshPalabras(3);
         engine.turn(session, 'nube');     // 1 → FLU: elefante (E)
         engine.turn(session, 'escoba');   // 2 → FLU: avion (N)
-        const result = engine.turn(session, 'nube'); // 3 → fin
+        const result = engine.turn(session, 'oso'); // 3 → fin
         expect(result.valid).toBe(true);
         expect(result.gameOver).toBe(true);
         expect(result.score).toBe(3);

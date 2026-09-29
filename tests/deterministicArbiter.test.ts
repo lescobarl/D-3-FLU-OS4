@@ -150,12 +150,19 @@ describe('deterministicArbiter — resolveDeterministicCommand', () => {
 });
 
 describe('deterministicArbiter — funciones-adición (Phase B)', () => {
-  it('resuelve el dominio de recordatorio (reminder.add)', () => {
-    const result = resolveDeterministicCommand('recuérdame comprar leche mañana');
+  it('resuelve el dominio de recordatorio (reminder.add con hora)', () => {
+    const result = resolveDeterministicCommand('recuérdame comprar leche mañana a las 9');
     expect(result.matched).toBe(true);
     expect(result.domain).toBe('agendaCommand');
     expect(result.action).toMatchObject({ handled: true, action: 'agenda.create', kind: 'recordatorio' });
     expect(result.channel).toBe('flu');
+  });
+
+  it('el alta SIN instante NO la reclama el determinista: la hora se PREGUNTA', () => {
+    // P7.30b: no se inventa el instante. El parser conserva la pista (kind+label)
+    // y el carril de agenda pide la hora; por eso el arbitro no la da por hecha.
+    const result = resolveDeterministicCommand('recuérdame comprar leche mañana');
+    expect(result.matched).toBe(false);
   });
 
   it('resuelve el dominio de recordatorio (shopping.add)', () => {
@@ -264,7 +271,7 @@ describe('deterministicArbiter — CONTRATO DE DESPACHO ÚNICO (Point F)', () =>
   };
 
   it('reminder.add: el intent del árbitro trae kind/trigger para el handler único', () => {
-    const r = resolveDeterministicCommand('recuérdame comprar leche mañana', {
+    const r = resolveDeterministicCommand('recuérdame comprar leche mañana a las 9', {
       defaultOffsetMs: 10 * 60 * 1000,
     });
     expect(r.domain).toBe('agendaCommand');

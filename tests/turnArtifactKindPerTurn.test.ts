@@ -42,19 +42,24 @@ describe('resolveTurnArtifactKind — tipo de objeto que produce el turno', () =
 });
 
 describe('App — la limpieza por turno está acotada al tipo del turno', () => {
-    it('solo limpia la imagen el turno que SÍ pide una imagen', () => {
-        // Llamadas reales al hook (se descartan los mensajes de log, que citan
-        // el mismo texto dentro de un template).
-        const clearLines = APP_SRC.split(/\r?\n/).filter(
-            (line) => line.includes('workspaceImage.clear();') && !line.includes('`'),
+    it('NINGUN turno limpia la imagen a mano: la invalida su ruta unica', () => {
+        // P7.62 (medido): limpiar la imagen en cada turno borraba el ULTIMO objeto
+        // de su tipo (una carta de la partida, una respuesta, se llevaban por
+        // delante la imagen recien generada). El arreglo no fue acotar la limpieza
+        // con un guard, fue QUITARLA: su ruta unica (generateFromContract ->
+        // beginImageRequest) ya invalida la anterior. Este test falsa la vuelta
+        // atras: si reaparece una limpieza por turno, cae.
+        const clearCalls = APP_SRC.split(/\r?\n/).filter(
+            (line) => /workspaceImage\.clear\(/.test(line) && !line.includes('`'),
         );
-        expect(clearLines.length).toBeGreaterThan(0);
-        // Cada limpieza vive dentro del guard de tipo; sin guard, un turno de
-        // texto (una carta de la partida, una respuesta) borraba la imagen
-        // recién generada, que es el último objeto de su tipo.
-        for (const line of clearLines) {
-            expect(line).toContain("turnKind === 'image'");
-        }
+        expect(clearCalls).toHaveLength(0);
+    });
+
+    it('el objeto de tipo artifact se reemplaza por su ruta unica, no por un guard de tipo', () => {
+        // El artifact (objeto 'todo') si se limpia por turno: es el texto del turno.
+        expect(APP_SRC).toContain('integrationStore.setWorkspaceArtifact(null);');
+        // Y la limpieza NO puede depender de haber pedido imagen: eso era el bug.
+        expect(APP_SRC).not.toContain('turnKind === \'image\'');
     });
 
     it('el tipo del turno sale del motor único (no recopiado en App)', () => {

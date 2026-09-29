@@ -42,7 +42,8 @@ function freshLoteria(seed = 12345) {
 
 describe('loteria — banco y mazo', () => {
     test('el banco tiene 16 cartas con estructura {id, nombre, copla}', () => {
-        expect(LOTERIA_BANK).toHaveLength(16);
+        expect(LOTERIA_BANK.length).toBeGreaterThanOrEqual(16);
+        expect(new Set(LOTERIA_BANK.map((c) => c.id)).size).toBe(LOTERIA_BANK.length);
         for (const card of LOTERIA_BANK) {
             expect(card.id).toBeTruthy();
             expect(card.nombre).toBeTruthy();
@@ -53,8 +54,8 @@ describe('loteria — banco y mazo', () => {
     test('el mazo es una permutación completa y NO hay tablas internas', () => {
         const { session } = freshLoteria();
         const state = st(session);
-        expect(state.order).toHaveLength(16);
-        expect(new Set(state.order).size).toBe(16);
+        expect(state.order).toHaveLength(LOTERIA_BANK.length);
+        expect(new Set(state.order).size).toBe(LOTERIA_BANK.length);
         expect((state as unknown as Record<string, unknown>).tablas).toBeUndefined();
         expect(state.winner).toBeNull();
     });

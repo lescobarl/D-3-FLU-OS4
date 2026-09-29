@@ -369,21 +369,62 @@ describe('G7 variantes de ruido ASR: la variante no cambia la decision', () => {
         { name: 'ruido-prefijo', text: `eh ${base}` },
         { name: 'truncado', text: base.slice(0, Math.max(1, base.length - 2)) },
     ];
-    it('orden de arranque + ruido: nunca accion de partida ni victoria', () => {
+    // G7: el escenario necesita ser REPRODUCIBLE (defecto P7.49). Antes usaba
+    // `createSession()` sin cfg, asi que el motor tomaba su palabra/letra inicial
+    // de Math.random: en `palabras_encadenadas` la letra inicial aleatoria puede no
+    // tener continuacion en el banco y el motor gana la partida de inmediato
+    // ("¡Me ganaste! No se me ocurre ninguna palabra con la letra K"), lo que hacia
+    // FALLA/PASA sin cambiar una sola linea. Ademas `s()` creaba una sesion NUEVA
+    // para la base y para cada variante, asi que la variante no se comparaba con
+    // NADA: la invariante del propio comentario ("nunca una decision DISTINTA a la
+    // base") no se estaba midiendo. Ahora: RNG sembrado (reproducible) y el MISMO
+    // estado inicial para la base y su variante, comparando la variante CONTRA la
+    // base. Es estrictamente mas fuerte que antes y no depende de la suerte.
+    const seededRng = (seed: number) => {
+        let s = seed >>> 0;
+        return () => {
+            s = (s + 0x6d2b79f5) >>> 0;
+            let t = s;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    };
+    /** Decisión observable de un turno: lo que la invariante compara. */
+    const decision = (r: { won?: boolean; gameOver?: boolean; valid?: boolean }) =>
+        JSON.stringify({ won: Boolean(r.won), gameOver: Boolean(r.gameOver), valid: Boolean(r.valid) });
+
+    it('orden de arranque + ruido: la variante no decide DISTINTO a la base', () => {
         const bad: string[] = [];
+        // Semillas fijas: cubren muchas palabras iniciales y son reproducibles.
+        const SEMILLAS = Array.from({ length: 24 }, (_, i) => i + 1);
         for (const entry of GAME_CATALOG) {
             const order = `vamos a jugar ${entry.aliases[0]}`;
             const engine = getGameEngine(entry.id);
-            const s = () => {
-                const session = engine!.createSession();
-                engine!.start(session, {});
-                return session;
-            };
-            for (const v of noiseVariants(order)) {
-                const dec = resolveGameCommandFromText(v.text);
-                if (dec && dec.action === 'turn') bad.push(`${entry.id} :: ${v.name} -> turn`);
-                const r = engine!.turn(s(), v.text);
-                if (r.won === true || r.gameOver === true) bad.push(`${entry.id} :: ${v.name} termina la partida`);
+            for (const seed of SEMILLAS) {
+                // Base y variante parten del MISMO estado (misma semilla): asi la
+                // comparacion mide el efecto del ruido, no la suerte del sorteo.
+                const s = () => {
+                    const rng = seededRng(seed);
+                    const cfg = { random: rng };
+                    const session = engine!.createSession(cfg);
+                    engine!.start(session, cfg);
+                    return session;
+                };
+                const rBase = engine!.turn(s(), order);
+                const decididoBase = decision(rBase);
+                for (const v of noiseVariants(order)) {
+                    const dec = resolveGameCommandFromText(v.text);
+                    // El resolutor: la orden NO es una accion de partida; si el ruido
+                    // la convierte en `turn`, es una decision DISTINTA de la base.
+                    if (dec && dec.action === 'turn') bad.push(`${entry.id} :: ${v.name} -> turn`);
+                    const rVar = engine!.turn(s(), v.text);
+                    if (decision(rVar) !== decididoBase) {
+                        bad.push(
+                            `${entry.id} :: semilla ${seed} :: ${v.name} decide ${decision(rVar)} y la base ${decididoBase}`,
+                        );
+                    }
+                }
             }
         }
         expect(bad).toEqual([]);
