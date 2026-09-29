@@ -44,10 +44,13 @@ function filterForKind(kind: ResultFeedFocusKind): ResultFeedFilter {
   return 'all';
 }
 
-/** Filtro inicial derivado del contenido: video o documento → "Video/Docs",
- *  imagen → "Imágenes", historial → "Historial", si no → Todo. Prioridad
- *  video > imagen > doc > historial. */
-function pickInitialFilter(list: ResultFeedItem[]): ResultFeedFilter {
+/** Filtro inicial derivado del contenido. DUENO UNICO de la PRIORIDAD de la
+ *  seleccion, explicita y determinista (no "el mas reciente por tipo" implicito):
+ *      VIDEO -> IMAGEN -> DOC -> HISTORIAL -> TODO
+ *  `onlyInKind` = el objeto pertenece a su tipo (no se intercala en "Todo"), que
+ *  es justo lo que lo hace candidato a decidir el foco. Exportada para vigilar el
+ *  orden desde un test: era lo unico que lo sostenia. */
+export function pickPriorityFilter(list: ResultFeedItem[]): ResultFeedFilter {
   if (list.some((item) => item.onlyInKind && item.kind === 'video')) return 'media';
   if (list.some((item) => item.onlyInKind && item.kind === 'image')) return 'image';
   if (list.some((item) => item.onlyInKind && item.kind === 'doc')) return 'media';
@@ -102,7 +105,7 @@ export function ResultFeed({
   focusKind = null,
   focusSeq,
 }: ResultFeedProps) {
-  const [filter, setFilter] = useState<ResultFeedFilter>(() => pickInitialFilter(items));
+  const [filter, setFilter] = useState<ResultFeedFilter>(() => pickPriorityFilter(items));
 
   // Foco por turno. Con `focusSeq` se aplica en CADA turno (aunque el tipo se
   // repita) y `text` vuelve a "Todo"; sin él, se conserva el comportamiento por

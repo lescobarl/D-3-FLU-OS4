@@ -51,6 +51,10 @@ import { dispatchFluSearchReady, onFluResetSearch, onFluSearch } from '../core/e
 /** Tipos con artefacto persistido en el Historial (uno por tipo en el feed). */
 type RestorableKind = 'video' | 'image' | 'doc';
 
+/** Conjunto vacio ESTABLE: `dismissedKinds` entra en deps de un useMemo, asi que
+ *  devolver un `new Set()` en cada render lo invalidaba en balde. */
+const EMPTY_RESTORABLE_KINDS: ReadonlySet<RestorableKind> = new Set<RestorableKind>();
+
 export interface WorkspaceHubProps {
     // Búsqueda (WorkspaceSearch)
     searchAllowlist?: string[];
@@ -321,9 +325,21 @@ export function WorkspaceHub({
     // global y una generación de video borraba también la imagen del Pizarrón).
     // Dentro de su tipo el descarte sigue siendo definitivo: si la petición nueva
     // termina sin resultado, no se repinta el artefacto ANTERIOR (casos 2 y 4).
-    const [dismissedKinds, setDismissedKinds] = useState<ReadonlySet<RestorableKind>>(
-        () => new Set<RestorableKind>(),
-    );
+    // El descarte del artefacto anterior vale para el TURNO que lo provoco, no
+    // para siempre. `dismissedKinds` solo CRECIA, asi que una busqueda o una
+    // generacion fallida dejaba fuera del Pizarron, para el resto de la sesion, el
+    // ultimo objeto de su tipo (defecto del dueno: "esta borrando el ultimo
+    // objeto"). El descarte se guarda CON el turno que lo provoco: al avanzar el
+    // turno (`turnFocus.seq`, la senal monotona que ya manda App) expira solo, y el
+    // ultimo objeto PERSISTIDO de cada tipo vuelve a estar disponible. Dentro del
+    // mismo turno el descarte sigue siendo definitivo (casos 2 y 4, vigilados en
+    // workspaceMediaResetOnRequest.test.tsx). Se guarda el turno en vez de borrar
+    // el estado en un efecto aparte para no depender del orden de los efectos.
+    const turnSeq = turnFocus?.seq ?? 0;
+    const [dismissals, setDismissals] = useState<{
+        seq: number;
+        kinds: ReadonlySet<RestorableKind>;
+    }>(() => ({ seq: 0, kinds: new Set<RestorableKind>() }));
     useEffect(() => {
         const busy = new Set<RestorableKind>();
         if (image.isLoading) busy.add('image');
@@ -340,11 +356,15 @@ export function WorkspaceHub({
             busy.add('video');
         }
         if (busy.size === 0) return;
-        setDismissedKinds((prev) => {
-            if ([...busy].every((kind) => prev.has(kind))) return prev;
-            return new Set([...prev, ...busy]);
+        setDismissals((prev) => {
+            const base = prev.seq === turnSeq ? prev.kinds : new Set<RestorableKind>();
+            if ([...busy].every((kind) => base.has(kind))) return prev;
+            return { seq: turnSeq, kinds: new Set([...base, ...busy]) };
         });
-    }, [generation.isGenerating, generation.job, image.isLoading, searchState.loading]);
+    }, [generation.isGenerating, generation.job, image.isLoading, searchState.loading, turnSeq]);
+    // Descarte VIGENTE: el registrado por el turno actual. El de un turno previo expira.
+    const dismissedKinds: ReadonlySet<RestorableKind> =
+        dismissals.seq === turnSeq ? dismissals.kinds : EMPTY_RESTORABLE_KINDS;
 
     // Comando de voz NAVEGAR/BUSCAR (evento RUN_SEARCH): ejecuta la búsqueda
     // externa inyectando consulta e idioma, y vuelca los resultados al feed

@@ -3163,7 +3163,7 @@ export function useFluVoiceAssistant({
               transcript: utteranceTranscript,
             })
           : Promise.resolve(null),
-        game?.gameId
+        game?.gameId || isCatalogLevelGameAction(game)
           ? dispatchFastGameCommand(game, {
               speakerName,
               speakerAlias,
