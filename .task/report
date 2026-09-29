@@ -2880,3 +2880,56 @@ PENDIENTE QUE NO PUEDO CERRAR SIN EL DUENO
     sin repetir y sin perder turnos), jugar un quien soy fallando a proposito 5
     veces (4 pistas distintas y luego revela y avanza) y comprobar que tras una
     generacion fallida el ultimo video/imagen por tipo sigue en el Pizarron.
+
+P7.52 + P7.68 CERRADOS (commit a3999d6). SIN suite completa: solo los casos estrictos.
+  Regla que se respeto, por orden expresa del dueno ("solo debe ejecutar los casos
+  especificos, no tengo tu tiempo"): ninguna corrida de "npm run test:full". Lo que si
+  se corrio y por que: "npm run e2e:plan" (es el planificador, no la suite),
+  "tests/jsReferenceGuard.test.ts" (UN fichero, el del cambio) y "npm run gate"
+  (DoD+guard DEL CONTRATO, que es el acto de cierre de AGENTS.md seccion 10).
+
+  P7.52 - planificador E2E (e2eScope).
+    ANTES: "npm run e2e:plan" ROJO -> "[src/ cambiado SIN spec declarado (no se corre
+      a ciegas)]", con los src/ de la ronda sin spec declarado.
+    DESPUES: exit 0 -> "ficheros cambiados en alcance: 33" y 6 specs del bloque.
+    Se declara el mapeo MEDIDO sobre lo que cada spec YA recorre, no inventado:
+      ResultFeed.tsx + WorkspaceHub.tsx + useWorkspaceImage.ts ->
+        tests/e2e/pizarron-funcionalidades.spec.ts
+      conversationDialogue.js (dueno del contexto de eco) ->
+        tests/e2e/auditoria-acciones-llm.spec.ts
+      resolvedContract.js (dueno de la voz del turno de juego) ->
+        tests/e2e/matriz-comandos-productivos.spec.ts
+    No se toco base, maxFiles, maxLines, dod, guard ni guardExpect.
+
+  P7.68 - error NO controlado intermitente de la suite con todos los tests verdes.
+    CAUSA RAIZ MEDIDA: scripts/js-ref-metric.mjs lanzaba tsc con spawnSync y eso
+      BLOQUEA el event loop del worker de vitest durante toda la medicion (~9 s).
+      Bajo contencion (12 CPUs logicas -> 10 workers) el worker deja de latir y el
+      RPC de vitest expira a los 60 s: la corrida sale ROJA por
+      "Timeout calling onTaskUpdate" con los 3868 tests en verde.
+    ARREGLO: execFile + await en la misma fuente unica. El argv pasa a un dueno
+      unico (comandoCheckJs) y el criterio de linea a otro (lineasDeNombreLibre),
+      para que la metrica y el guard no puedan divergir.
+    MEDIDO con UN SOLO FICHERO (tests/jsReferenceGuard.test.ts):
+      - ANTES (spawnSync, por mutacion, que es como se prueba el detector):
+        6 verdes / 1 ROJO en 17.32 s -> "AssertionError: expected 0 to be greater
+        than 0" (el contador del event loop se queda en 0). Exit 1.
+      - DESPUES (execFile + await): 7/7 VERDES en 21.98 s. Exit 0.
+      - Restauracion del fichero verificada por hash: sha256
+        455D4146B98B9A853AA6C927380EFEF98619EF06E15F0FC40603A028B5F411EF,
+        identico al fichero que dio verde.
+      - La falsabilidad es real, no decorativa: el caso nuevo distingue las dos
+        versiones de la MISMA metrica.
+
+  CIERRE MEDIDO: "npm run gate" VERDE (alcance OK, tamano OK, DoD OK, guard OK);
+    "npm run e2e:plan" exit 0; pre-commit de a3999d6 con lint:guards 57 ficheros /
+    397 tests VERDE, eslint limpio y tsc -b limpio.
+    "git diff --stat c467177" (evidencia 10 de AGENTS.md): 33 ficheros, 1785
+    insertions(+), 214 deletions(-) -> dentro de maxFiles 60 / maxLines 2800.
+
+PENDIENTE QUE SIGUE SIENDO SOLO DEL DUENO
+  - Verificacion de PRODUCTO en pantalla (AGENTS.md A.1, no automatizable): jugar una
+    loteria pidiendo cartas seguidas (6 cartas distintas, sin repetir y sin perder
+    turnos), jugar un quien soy fallando a proposito 5 veces (4 pistas distintas y
+    luego revela y avanza) y comprobar que tras una generacion fallida el ultimo
+    video/imagen por tipo sigue en el Pizarron.

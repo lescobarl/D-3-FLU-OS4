@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-28",
+  "updated": "2026-09-29",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -802,9 +802,9 @@
     {
       "id": "P7.52",
       "titulo": "El planificador E2E (e2e-scope, P7.36) sigue en rojo: 6 ficheros de src/ de este commit cambian sin spec declarado en el contrato",
-      "estado": "todo",
+      "estado": "done",
       "origen": "hallazgo",
-      "evidencia": "MEDIDO: npm run e2e:plan falla con [src/ cambiado SIN spec declarado (no se corre a ciegas)] y lista src/app/gameActions.ts, src/components/WorkspaceHub.tsx, src/lib/turnArtifactKind.ts, src/voice/hooks/useFluVoiceAssistant.js, src/voice/lib/deterministicArbiter.js y src/voice/lib/gameCommands.js. La 2a enmienda amplio base y allow, NO e2eScope (que sigue declarando solo App.tsx, agendaCommandParser.ts y domainScopedIntent.ts). No bloquea el commit (el pre-commit corre lint + tipos, no e2e:plan), pero bloquea npm run e2e:scoped y el job E2E. Mapeo medido a declarar o descartar con razon: gameCommands / gameActions / deterministicArbiter / useFluVoiceAssistant -> tests/e2e/matriz-comandos-productivos.spec.ts (y cita-agenda.spec.ts para el turno de agenda con partida activa); WorkspaceHub / turnArtifactKind -> tests/e2e/pizarron-funcionalidades.spec.ts. Requiere otra vuelta de enmienda del dueno."
+      "evidencia": "CERRADO en a3999d6. MEDIDO (antes -> despues) con `npm run e2e:plan`: ANTES ROJO, \"[src/ cambiado SIN spec declarado (no se corre a ciegas)]\" listando los src/ del bloque sin spec; DESPUES exit 0 con 33 ficheros en alcance y 6 specs del bloque. Se declara el mapeo MEDIDO sobre lo que cada spec YA recorre, no inventado: ResultFeed.tsx + WorkspaceHub.tsx + useWorkspaceImage.ts -> tests/e2e/pizarron-funcionalidades.spec.ts (feed del Pizarron y la imagen del contrato visual); conversationDialogue.js (dueno del contexto de eco) -> tests/e2e/auditoria-acciones-llm.spec.ts (pipeline real de voz); resolvedContract.js (dueno de la voz del turno de juego) -> tests/e2e/matriz-comandos-productivos.spec.ts. No se toco base, maxFiles, maxLines, dod, guard ni guardExpect."
     },
     {
       "id": "P7.53",
@@ -914,8 +914,8 @@
     {
       "id": "P7.68",
       "titulo": "La suite completa deja a veces un error NO controlado (rejection) sin ningun test en rojo: 1 de 3 corridas medidas, con 3867/3868 tests verdes",
-      "estado": "todo",
-      "evidencia": "MEDIDO en las corridas de cierre de esta sesion con FLU_AUTH_FULL_SUITE=1: corrida 1 -> 361 ficheros / 3867 tests y \"Errors 1 error\" (exit 1) sin ningun test fallido; corridas 2 y 3 -> 361 ficheros / 3868 tests, 0 errores, exit 0. No se ha aislado el origen (el resumen de vitest no lo atribuye a ningun fichero) y no se reproduce a voluntad, asi que NO se toca nada a ciegas. Siguiente paso propuesto: correr con --reporter=verbose redirigiendo stderr y buscar el unhandled rejection por fichero, o anadir un handler de proceso que lo atribuya.",
+      "estado": "done",
+      "evidencia": "CAUSA RAIZ MEDIDA y arreglada en a3999d6. La metrica js-reference (scripts/js-ref-metric.mjs) lanzaba tsc con spawnSync, que BLOQUEA el event loop del worker de vitest durante toda la medicion (~9 s); bajo contencion (12 CPUs logicas -> 10 workers) el worker deja de latir, el RPC de vitest expira a los 60 s y la corrida COMPLETA sale ROJA por \"Timeout calling onTaskUpdate\" con los 3868 tests en verde. ARREGLO, sin tocar lo que se mide: execFile + await en la misma fuente unica, con el argv en un dueno unico (comandoCheckJs) y el criterio de linea en otro (lineasDeNombreLibre) para que la metrica y el guard no puedan divergir. MEDIDO con UN SOLO fichero (tests/jsReferenceGuard.test.ts); NO se corrio la suite completa, por orden expresa del dueno: ANTES (spawnSync, por mutacion) 6 verdes / 1 ROJO en 17.32 s con \"AssertionError: expected 0 to be greater than 0\" (exit 1); DESPUES (execFile + await) 7/7 VERDES en 21.98 s (exit 0). La restauracion se verifico por hash: sha256 455D4146B98B9A853AA6C927380EFEF98619EF06E15F0FC40603A028B5F411EF, identico al fichero que dio verde. En el mismo commit, `npm run gate` VERDE (alcance/tamano/DoD/guard), `npm run e2e:plan` exit 0 y el pre-commit con lint:guards 57 ficheros / 397 tests VERDE + eslint limpio + tsc -b limpio.",
       "origen": "deuda-detectada"
     }
   ],
@@ -1845,6 +1845,16 @@
       "id": "P7.67",
       "commit": "80aa99d",
       "titulo": "quien_soy: agotadas las pistas, el fallo revela y avanza (antes repetia la ultima pista para siempre)"
+    },
+    {
+      "id": "P7.52",
+      "commit": "a3999d6",
+      "titulo": "El planificador E2E (e2eScope) pasa a verde: se declara el mapeo medido de los 5 src/ que faltaban"
+    },
+    {
+      "id": "P7.68",
+      "commit": "a3999d6",
+      "titulo": "El error no controlado intermitente de la suite no era de la suite: la metrica checkJs bloqueaba el event loop del worker con spawnSync"
     }
   ]
 }
