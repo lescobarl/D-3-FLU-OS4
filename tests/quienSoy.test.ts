@@ -171,6 +171,33 @@ describe('quienSoy — turnos incorrectos y saltos', () => {
         expect(result.prompt).toBe('¡Casi! Inténtalo otra vez. Pista 2: Soy muy fuerte y valiente. ¿Quién soy?');
     });
 
+    test('agotadas las pistas, el fallo REVELA y AVANZA (no repite la ultima para siempre)', () => {
+        // Defecto del dueno: "con esas pistas quien va a poder completar el juego".
+        // Antes: la pista 1 podia ser una NEGACION y cada fallo repetia la MISMA
+        // pista. Ahora hay 4 pistas positivas y distintas, y cuando el jugador
+        // vuelve a fallar DESPUES de la ultima, la partida no se queda en bucle:
+        // revela el animal y pasa al siguiente (mismo avance que "paso").
+        const { engine, session } = freshQuien();
+        const pistas = quienSoyHints(QUIEN_SOY_BANK[0]);
+        let ultimo = engine.turn(session, 'perro'); // pista 2
+        const dichas = [ultimo.prompt];
+        for (let i = 2; i < pistas.length; i += 1) {
+            ultimo = engine.turn(session, 'perro');
+            dichas.push(ultimo.prompt);
+        }
+        // Todas las pistas dichas son DISTINTAS: cada fallo aporta informacion nueva.
+        expect(new Set(dichas).size).toBe(dichas.length);
+        expect(ultimo.prompt).toContain(`Pista ${pistas.length}`);
+        // Fallo extra con el cupo agotado: revela y avanza (antes repetia "Pista 4").
+        const agotado = engine.turn(session, 'perro');
+        expect(agotado.valid).toBe(false);
+        expect(agotado.score).toBe(0); // no hubo acierto: no puntua
+        expect(session.round).toBe(2); // avanza de animal
+        expect(agotado.prompt).toContain('Se acabaron las pistas');
+        expect(agotado.prompt).toContain(QUIEN_SOY_BANK[0].nombre);
+        expect(agotado.prompt).not.toBe(ultimo.prompt);
+    });
+
     test('"paso" salta al siguiente animal sin puntuar', () => {
         const { engine, session } = freshQuien();
         const result = engine.turn(session, 'paso');

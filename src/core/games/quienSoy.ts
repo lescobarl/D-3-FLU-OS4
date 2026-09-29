@@ -524,8 +524,14 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 };
             }
 
-            // ¿Salta al siguiente animal?
-            if (hasAnyToken(normalized, SKIP_FRAMES)) {
+            /**
+             * Cierra el animal en curso y pasa al siguiente. DUENO UNICO del
+             * avance: lo usan el salto explicito ("paso") y el fallo cuando YA se
+             * dieron todas las pistas (antes repetia la ultima pista para siempre,
+             * asi que la partida no avanzaba ni aportaba informacion nueva).
+             * `apertura` es como se dice que el animal se acabo.
+             */
+            const cerrarAnimal = (apertura: string): GameTurnResult => {
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
@@ -542,13 +548,18 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 advanceSkippingMentioned(state);
                 const next = itemAt(state);
                 return {
-                    prompt: `¡Claro! Era ${item.nombre}. Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`,
+                    prompt: `${apertura} Era ${item.nombre}. Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`,
                     valid: false,
                     gameOver: false,
                     score: session.score,
                     animation: 'Idle',
                     emotion: 'neutral',
                 };
+            };
+
+            // ¿Salta al siguiente animal?
+            if (hasAnyToken(normalized, SKIP_FRAMES)) {
+                return cerrarAnimal('¡Claro!');
             }
 
             // Respuesta incorrecta → reintenta el mismo animal CON PISTA NUEVA.
@@ -561,7 +572,14 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             const namedSameCategory = QUIEN_SOY_BANK.some((bankItem) =>
                 hasAnyToken(normalized, [bankItem.nombre, ...(bankItem.keywords ?? [])])
                 && quienSoyCategory(bankItem) === quienSoyCategory(item));
-            if (state.clueIndex + 1 < pistasSequencia.length) state.clueIndex += 1;
+            if (state.clueIndex + 1 >= pistasSequencia.length) {
+                // Ya se dieron TODAS las pistas y vuelve a fallar: repetir la ultima
+                // no aporta nada y dejaba la partida en bucle. Se revela y se pasa al
+                // siguiente con el MISMO avance del salto (sin puntuar el acierto:
+                // no lo hubo).
+                return cerrarAnimal('¡Se acabaron las pistas!');
+            }
+            state.clueIndex += 1;
             return {
                 prompt: `${namedSameCategory ? '¡Casi! Inténtalo otra vez.' : 'No, ese no es. Inténtalo otra vez.'} ${cluePrompt(state, item)}`,
                 valid: false,
