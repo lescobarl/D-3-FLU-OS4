@@ -20,7 +20,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/lib/conversationTurnRow';
 
 const userRows = () =>
     useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user');
@@ -94,5 +94,75 @@ describe('la resolucion del mismo turno no duplica la fila', () => {
         const path = await import('node:path');
         const app = fs.readFileSync(path.join(process.cwd(), 'src', 'App.tsx'), 'utf8');
         expect(app).toMatch(/sameTurn: resolved\?\.sameTurn === true/);
+    });
+
+    // ------------------------------------------------------------
+    // SEPARACION DE RESPONSABILIDADES: un SERVICIO (juego/ambiente/config)
+    // aplica su efecto y NO escribe la conversacion. El unico dueno de la fila
+    // es la transcripcion (commitAndResolveTurn). Antes los tres fast-path
+    // pasaban `transcript` a secas y escribian fila: una ruta de mas.
+    // ------------------------------------------------------------
+    it('GUARD: los tres fast-path de SERVICIO se declaran `effectOnly`', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const hook = fs.readFileSync(
+            path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
+            'utf8',
+        );
+        const marcas = hook.match(/\beffectOnly: true,/g) || [];
+        expect(marcas).toHaveLength(3);
+    });
+
+    it('GUARD: App decide la escritura de fila con la puerta pura compartida', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const app = fs.readFileSync(path.join(process.cwd(), 'src', 'App.tsx'), 'utf8');
+        expect(app).toMatch(/escribeFilaDeUsuario\(resolved,/);
+    });
+
+    // ------------------------------------------------------------
+    // PRUEBA DE ESCRITORIO: secuencia EXACTA de la sesion del dueno
+    // (13:58-13:59). Cuatro pasos reales, contando filas en cada uno.
+    // ------------------------------------------------------------
+    it('la secuencia real del dueno produce UNA fila de usuario', () => {
+        // 1) commit temprano del turno (visible al instante, sin hablante).
+        const temprano = { userCommitOnly: true, sameTurn: true };
+        expect(escribeFilaDeUsuario(temprano, { hayTexto: true, hablable: true })).toBe(true);
+        commitUserTurnRow({ text: ORDEN });
+        expect(userRows()).toHaveLength(1);
+
+        // 2) el SERVICIO de juego aplica su efecto (`effectOnly`): NO escribe fila.
+        //    Este es el paso que antes escribia la fila de mas.
+        const efectoDeServicio = { effectOnly: true, sameTurn: true, transcript: ORDEN };
+        expect(escribeFilaDeUsuario(efectoDeServicio, { hayTexto: true, hablable: true })).toBe(false);
+        expect(userRows()).toHaveLength(1);
+
+        // 3) FLU responde: el motor canta la carta.
+        fliHabla('Siguiente carta: Subeme paso a pasito.');
+        expect(userRows()).toHaveLength(1);
+
+        // 4) resolucion del turno, ya con el hablante resuelto.
+        commitUserTurnRow({ text: ORDEN, speakerName: 'Hablante 1', sameTurn: true });
+
+        const rows = userRows();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].text).toBe(ORDEN);
+        expect(rows[0].speakerName).toBe('Hablante 1');
+    });
+
+    // La puerta pura, caso por caso (es la regla que App aplica).
+    const PUERTA: Array<
+        [string, { effectOnly?: boolean; userCommitOnly?: boolean; rawOnly?: boolean }, boolean, boolean, boolean]
+    > = [
+        ['efecto de servicio', { effectOnly: true }, true, true, false],
+        ['efecto gana al commit temprano', { effectOnly: true, userCommitOnly: true }, true, true, false],
+        ['commit temprano sin texto aun', { userCommitOnly: true }, false, false, true],
+        ['resolucion con texto', {}, true, true, true],
+        ['emision cruda vacia tras limpiar', { rawOnly: true }, false, false, false],
+        ['emision cruda hablable', { rawOnly: true }, true, true, true],
+        ['sin texto y sin commit', {}, false, false, false],
+    ];
+    it.each(PUERTA)('puerta de fila: %s', (_caso, payload, hayTexto, hablable, esperado) => {
+        expect(escribeFilaDeUsuario(payload, { hayTexto, hablable })).toBe(esperado);
     });
 });

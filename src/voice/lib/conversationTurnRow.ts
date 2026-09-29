@@ -41,6 +41,26 @@ export interface UserTurnRowInput {
 
 export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
 
+/**
+ * DECISIÓN de escritura de la fila del usuario: ¿este payload de resolución
+ * ESCRIBE en la conversación?
+ *
+ * Un SERVICIO (juego/ambiente/configuración) manda `effectOnly`: aplica su
+ * efecto en su motor y NO escribe la conversación. La transcripción tiene su
+ * único dueño (`commitAndResolveTurn`). Antes los tres fast-path pasaban
+ * `transcript` a secas y escribían fila: una ruta de escritura de más.
+ *
+ * Función pura (no toca el store) para poder probarla directamente.
+ */
+export function escribeFilaDeUsuario(
+    payload: { effectOnly?: boolean; userCommitOnly?: boolean; rawOnly?: boolean } | null | undefined,
+    { hayTexto = false, hablable = false } = {},
+): boolean {
+    if (payload?.effectOnly) return false;
+    if (payload?.userCommitOnly) return true;
+    return hayTexto && (!payload?.rawOnly || hablable);
+}
+
 export interface UserTurnRowResult {
     id: string | null;
     action: UserTurnRowAction;

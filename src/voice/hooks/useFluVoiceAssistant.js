@@ -3030,6 +3030,7 @@ export function useFluVoiceAssistant({
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
         diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
+        effectOnly: true,
         transcript,
         speakerName,
         speakerAlias,
@@ -3068,6 +3069,7 @@ export function useFluVoiceAssistant({
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
         diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
+        effectOnly: true,
         transcript,
         speakerName,
         speakerAlias,
@@ -3083,12 +3085,10 @@ export function useFluVoiceAssistant({
     [onContractResolved],
   )
 
-  // Fast-path determinista de AMBIENTE (espejo de dispatchFastGameCommand): despacha
-  // un contrato `ambiente` ya resuelto por resolveEnvironmentIntent a la ÚNICA ruta
-  // (onContractResolved → applyEnvironment/resetEnvironment). El catálogo de ambientes
-  // (src/core/environments/*) es la fuente de verdad: el rebranding se aplica de
-  // inmediato mientras la IA solo genera la confirmación verbal. Si no hay intent,
-  // no hace nada (guardia estricta: requiere tipo resuelto).
+  // Fast-path determinista de AMBIENTE (espejo de dispatchFastGameCommand): despacha un
+  // contrato `ambiente` ya resuelto a la ÚNICA ruta (onContractResolved →
+  // applyEnvironment/resetEnvironment). El catálogo (src/core/environments/*) es la
+  // fuente de verdad. Como los otros servicios, NO escribe la conversacion (`effectOnly`).
   const dispatchFastEnvironmentCommand = useCallback(
     async (
       intent,
@@ -3107,6 +3107,7 @@ export function useFluVoiceAssistant({
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
         diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
+        effectOnly: true,
         transcript,
         speakerName,
         speakerAlias,

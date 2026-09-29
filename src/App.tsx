@@ -65,7 +65,7 @@ import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
 import { isDataUrl } from './lib/formatAdapters';
 import { resolveTurnArtifactKind } from './lib/turnArtifactKind';
-import { commitUserTurnRow } from './voice/lib/conversationTurnRow';
+import { commitUserTurnRow, escribeFilaDeUsuario } from './voice/lib/conversationTurnRow';
 import { createConversationModeController } from './voice/lib/conversationMode';
 import { logFluReply } from './voice/lib/fluConversationLog';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
@@ -353,7 +353,7 @@ type ResolvedContract = Omit<FluContract, 'workspace'> & {
 
 /** Payload entregado por el motor de voz al resolver un contrato. */
 interface ContractResolution {
-    userCommitOnly?: boolean;
+    userCommitOnly?: boolean; effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
     sameTurn?: boolean;
     transcript?: string;
     speakerName?: string;
@@ -1302,10 +1302,10 @@ function App() {
             const phase: string = resolved?.phase || '';
             const userCommitOnly: boolean = resolved?.userCommitOnly === true;
 
-            // §9 — ÚNICO escritor de la fila del usuario (`commitUserTurnRow`): el
-            // commit temprano, la emisión cruda y la resolución del turno (`sameTurn`).
+            // §9 — UNICO escritor de la fila del usuario (`commitUserTurnRow`). Un
+            // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
-            if (userCommitOnly || (transcript && (!rawOnly || cleanForSpeech(transcript)))) {
+            if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
                 commitUserTurnRow({
                     text: transcript,
                     speakerName,
