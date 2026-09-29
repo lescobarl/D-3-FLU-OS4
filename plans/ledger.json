@@ -945,6 +945,20 @@
       "estado": "done",
       "evidencia": "DEFECTO PROPIO, MEDIDO: el refactor del flujo dejo en ROJO tests/gameTurnSingleDispatch.test.ts y tests/commandAndGameCoverage.test.ts y el pre-commit NO lo dijo, porque `lint:guards` cubre HIGIENE y no los incluia (el propio repo ya lo documentaba en arbiterDomainBarrier: una regresion pasaba con \"typecheck + guardias en verde\" y solo se veia en la suite completa, que exige autorizacion). El primero exigia el TEXTO a mano `domain === game && !resolved?.fastPathGame`, que el refactor sustituyo por el predicado unico isTurnAlreadyExecuted; el segundo reconstruia los dominios servidos parseando la cadena if/else del despachador, que ahora es la tabla DISPATCHER_HANDLERS. ARREGLO en e529bda: los dos guards miden el INVARIANTE contra su fuente unica y no contra texto (la tabla sirve exactamente los dominios declarados, cada entrada apunta a un manejador __fluHandle* real, el despachador consulta la tabla; todo dominio del arbitro tiene ruta contra ARBITER_DOMAINS; la tabla declara game -> fastPathGame y el predicado lo honra), y el primero ADEMAS prohibe la cadena a mano que se retiro (0 ramas). Cada uno lleva PRUEBA DE DETECTOR con entrada sintetica infractora (sin ella son teatro y guardMutationGuard lo exige). Ambos se REGISTRAN en lint:guards (57 -> 59) para cerrar la causa raiz. MEDIDO: `npm run lint:guards` 59 ficheros / 450 tests VERDE; los 14 guards que leen como texto los 4 ficheros tocados, 338 tests VERDE; tsc -b 0; eolGuard cazo un CRLF introducido en un fichero LF (normalizado: clase EOL del indice conservada).",
       "origen": "auditoria-flujo"
+    },
+    {
+      "id": "P7.79",
+      "titulo": "Arnes PENDIENTE de la constraint 0.22 (integridad del instrumento): falta el guard que impide tocar src y sus guards de texto en el mismo commit",
+      "estado": "todo",
+      "evidencia": "PENDIENTE declarado al escribir la constraint (AGENTS.md 0.22). Falta el arnes que hace IMPOSIBLE el incumplimiento en vez de confiar en la disciplina: un guard que compare los ficheros de un commit con la lista de tests que hacen readFileSync de ese mismo src como texto (guard de estructura) y falle si ambos aparecen en el MISMO commit. Hoy la regla esta escrita y su incumplimiento esta registrado, pero NO es mecanica. Bloqueo: el guard es un fichero de test nuevo, y para que el gate lo acepte debe entrar en allow (maxFiles 60, hoy justo). Requiere ENMIENDA del dueno en .task/contract.json (allow/maxFiles), inmutable por el agente (AGENTS.md 0.B.16).",
+      "origen": "auditoria-flujo"
+    },
+    {
+      "id": "P7.80",
+      "titulo": "Arnes PENDIENTE de las constraints 0.23/0.24: falta exigir el campo CUBIERTO/NO CUBIERTO y calcular la cobertura de guards por fichero tocado",
+      "estado": "todo",
+      "evidencia": "PENDIENTE declarado al escribir las constraints (AGENTS.md 0.23 y 0.24). Falta el arnes de (a) ALANCE: que todo cierre lleve el campo CUBIERTO / NO CUBIERTO con valor real, y (b) COBERTURA: que todo guard que lee un fichero tocado este en lint:guards (o el cierre declare por que no). El caso que lo motiva esta medido: en P7.75-P7.77 dos guards del flujo (gameTurnSingleDispatch, commandAndGameCoverage) quedaron ROJOS fuera de lint:guards, que es solo higiene, y el pre-commit paso en verde. Remediado en e529bda (los dos guards entran en lint:guards, 57 -> 59), pero el CALCULO automatico (ficheros tocados -> guards que los leen -> en el gate?) no existe. Requiere enmienda de allow si se implementa como guard de test.",
+      "origen": "auditoria-flujo"
     }
   ],
   "done": [
@@ -1887,22 +1901,26 @@
     {
       "id": "P7.75",
       "commit": "c73bbcb",
-      "titulo": "Auditoria del FLUJO: el despacho por dominio deja de estar cableado a mano (tabla unica DISPATCHER_HANDLERS)"
+      "titulo": "Auditoria del FLUJO: el despacho por dominio deja de estar cableado a mano (tabla unica DISPATCHER_HANDLERS)",
+      "evidencia": "src/app/arbiterDomainRoutes.ts:1"
     },
     {
       "id": "P7.76",
       "commit": "f9cd481",
-      "titulo": "Auditoria del FLUJO: el turno ya no se re-parsea (se reutiliza), la marca fastPathConfig se declara y buildGameConfig pasa a tabla con la clave tipada"
+      "titulo": "Auditoria del FLUJO: el turno ya no se re-parsea (se reutiliza), la marca fastPathConfig se declara y buildGameConfig pasa a tabla con la clave tipada",
+      "evidencia": "src/app/gameActions.ts:1"
     },
     {
       "id": "P7.77",
       "commit": "6b9c89b",
-      "titulo": "Auditoria del FLUJO: las marcas del contrato se derivan de la tabla (FastPathExecutedMarks); cuatro copias de la misma verdad pasan a una"
+      "titulo": "Auditoria del FLUJO: las marcas del contrato se derivan de la tabla (FastPathExecutedMarks); cuatro copias de la misma verdad pasan a una",
+      "evidencia": "src/app/arbiterDomainRoutes.ts:1"
     },
     {
       "id": "P7.78",
       "commit": "e529bda",
-      "titulo": "Dos guards del flujo quedaron EN ROJO con el refactor (no estaban en lint:guards): vuelven a medir el invariante y entran en el gate"
+      "titulo": "Dos guards del flujo quedaron EN ROJO con el refactor (no estaban en lint:guards): vuelven a medir el invariante y entran en el gate",
+      "evidencia": "tests/commandAndGameCoverage.test.ts:1"
     }
   ]
 }

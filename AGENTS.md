@@ -137,6 +137,27 @@ no depende de la buena voluntad; vive en el repo y en comandos verificables.
     afirmar "esto ya se hizo / esto no se hizo" sin citar el ledger o el commit.
     `npm run ledger:check` + `tests/taskLedgerGuard.test.ts` lo impiden.
 
+22. **Integridad del instrumento.** Un commit que toca `src/**` **no** puede tocar a la
+    vez un guard que lea ese mismo `src` **como texto**. Si un guard cae por el cambio:
+    se reporta el ROJO y se **para**; el arreglo del guard va en commit **aparte**.
+    **Incumplimiento registrado (no repetir):** en P7.75-P7.77 dos guards quedaron en
+    ROJO y el agente los edito en el **mismo turno** que el codigo que median, dejando
+    indistinguible "guard mal escrito" de "codigo mal escrito".
+    **Arnes:** los ficheros del commit vs los tests que hacen `readFileSync` de ese
+    `src`. **Estado: PENDIENTE DE ENMIENDA** (el guard necesita entrar en `allow`).
+23. **Alcance declarado en TODO cierre.** Sin el campo `CUBIERTO` / `NO CUBIERTO`
+    (formato en 0.E) un cierre **no** es valido. Una evidencia estrecha **no** se narra
+    como suficiente: "gate verde" no es "nada roto" si hay guards **fuera** de ese gate.
+    **Incumplimiento registrado:** se declaro "verificacion final, nada roto" con 2
+    guards en ROJO, fuera del gate que se habia ejecutado.
+    **Estado: PENDIENTE DE ARNES** (campo obligatorio en el gate del ledger).
+24. **Cobertura de los guards de COMPORTAMIENTO.** Si un cambio toca un fichero que un
+    guard lee, ese guard **debe** estar en `lint:guards`, o el cierre declara por que no.
+    `lint:guards` es **higiene** (rutas, fuentes, hardcode), **no** comportamiento: es el
+    agujero por el que dos guards del flujo quedaron fuera sin que el pre-commit lo
+    dijera. **Arnes:** ficheros tocados -> guards que los leen -> estan en el gate?.
+    **Estado: PARCIAL** (declarado por escrito; falta el calculo automatico).
+
 ### C. Contrato (formato mínimo)
 
 ```jsonc
@@ -177,6 +198,7 @@ Formato fijo, corto en el chat y en el lugar inmutable (commit/PR + `.task/repor
 Cambios aplicados: <lista>
 Validado contra: <comando + salida cruda ANTES/DESPUÉS; guard; baseline y 0 nuevos>
 No validado: <lo que falta — típicamente el DoD-producto, "pendiente del usuario">
+Alcance real (obligatorio, 0.23): CUBIERTO=<lo medido>; NO CUBIERTO=<lo NO verificado>
 ```
 
 Evidencia cruda: `git diff --stat` · salida del **DoD** ANTES y DESPUÉS · salida
