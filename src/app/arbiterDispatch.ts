@@ -8,7 +8,7 @@
  * environment) o de navegación tiene su propio camino y se denuncia si llega aquí,
  * en vez de caer al `else` genérico y devolver "" en silencio.
  */
-import { arbiterDomainRoute } from './arbiterDomainRoutes';
+import { arbiterDomainRoute, dispatcherHandlerFor } from './arbiterDomainRoutes';
 import { logCaughtError } from '../lib/caughtError';
 import { relayLog } from '../lib/clientLogRelay';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
@@ -63,35 +63,25 @@ export async function dispatchArbiterIntent(
         );
         return '';
     }
+    // El manejador se busca en la tabla declarada (fuente unica): una rama por
+    // dominio escrita a mano era la segunda copia de la misma verdad y su `else`
+    // se tragaba el dominio en silencio.
+    const entry = dispatcherHandlerFor(domain);
+    const handler = entry ? Reflect.get(w, entry.handler) : undefined;
+    const enabled = entry?.configFlag
+        ? Boolean(Reflect.get(FLU_CONFIG, entry.configFlag)?.enabled)
+        : true;
+    if (!entry || !enabled || typeof handler !== 'function') {
+        relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
+        return '';
+    }
+    relayLog('LOG', 'App', `dispatchArbiterIntent → ${entry.handler} (${domain})`);
     let reply = '';
     try {
-        if (domain === 'diary' && FLU_CONFIG.diary?.enabled && typeof w.__fluHandleDiaryText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleDiaryText (diary)');
-            reply =
-                (await w.__fluHandleDiaryText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else if (domain === 'note' && typeof w.__fluHandleNoteText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleNoteText (note)');
-            reply =
-                (await w.__fluHandleNoteText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else if (domain === 'shopping' && typeof w.__fluHandleShoppingText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleShoppingText (shopping)');
-            reply = (await w.__fluHandleShoppingText(intent)) || '';
-        } else if (domain === 'agendaCommand' && typeof w.__fluHandleAgendaCommandText === 'function') {
-            relayLog('LOG', 'App', 'dispatchArbiterIntent → __fluHandleAgendaCommandText (agendaCommand)');
-            reply =
-                (await w.__fluHandleAgendaCommandText(intent, {
-                    personId: undefined,
-                    personName: opts.speakerName || undefined,
-                })) || '';
-        } else {
-            relayLog('LOG', 'App', `dispatchArbiterIntent: dominio "${domain}" sin manejador window registrado (o deshabilitado)`);
-        }
+        const args: unknown[] = entry.withSpeaker
+            ? [intent, { personId: undefined, personName: opts.speakerName || undefined }]
+            : [intent];
+        reply = (await handler.call(w, ...args)) || '';
     } catch (err) {
         logCaughtError('[App] dispatchArbiterIntent threw (non-critical):', err);
         relayLog('WARN', 'App', `dispatchArbiterIntent threw: ${err}`);

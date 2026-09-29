@@ -21,13 +21,73 @@
  *                        camino, no se despacha por el dispatcher.
  */
 
+/**
+ * Tabla de MANEJADORES de los dominios `dispatcher` (FUENTE ÚNICA, junto a la
+ * clasificación de rutas). Antes el despacho era una cadena de `if (domain ===
+ * 'diary') … else if (… 'note') …` escrita a mano en `arbiterDispatch.ts`: la
+ * misma verdad (qué ejecuta cada dominio) vivía en dos sitios, así que añadir un
+ * dominio obligaba a tocar la cadena y era fácil que el `else` genérico se
+ * tragara la resolución en silencio (justo el defecto que abrió esta tabla).
+ *
+ * `withSpeaker`: el manejador recibe `{ personId, personName }` (diario/nota/
+ * calendario registran de quién es la entrada; compras no).
+ * `configFlag`: interruptor de producto en `FLU_CONFIG` (p. ej. `diary`).
+ */
+export interface DispatcherDomainEntry {
+    readonly domain: string;
+    readonly handler: string;
+    readonly withSpeaker?: boolean;
+    readonly configFlag?: string;
+}
+
+/** Manejador `window.__fluHandle*` que ejecuta cada dominio `dispatcher`. */
+export const DISPATCHER_HANDLERS = Object.freeze([
+    { domain: 'diary', handler: '__fluHandleDiaryText', withSpeaker: true, configFlag: 'diary' },
+    { domain: 'note', handler: '__fluHandleNoteText', withSpeaker: true },
+    { domain: 'shopping', handler: '__fluHandleShoppingText' },
+    { domain: 'agendaCommand', handler: '__fluHandleAgendaCommandText', withSpeaker: true },
+] as const satisfies readonly DispatcherDomainEntry[]);
+
 /** Dominios con manejador `__fluHandle*` (ejecuta `dispatchArbiterIntent`). */
-export const DISPATCHER_DOMAINS = Object.freeze([
-    'agendaCommand',
-    'diary',
-    'note',
-    'shopping',
-] as const);
+export const DISPATCHER_DOMAINS = Object.freeze(
+    DISPATCHER_HANDLERS.map((entry) => entry.domain),
+);
+
+/**
+ * Manejador declarado para un dominio `dispatcher`, o `null` si el dominio no lo
+ * tiene. `null` es señal de hueco: ningún dominio debe caer al `else` genérico.
+ */
+export function dispatcherHandlerFor(domain: unknown): DispatcherDomainEntry | null {
+    const value = String(domain ?? '');
+    return DISPATCHER_HANDLERS.find((entry) => entry.domain === value) ?? null;
+}
+
+/**
+ * Marcas del contrato que declaran "esta parte del turno YA la ejecutó su dueño"
+ * (el fast-path de estado del hook), por dominio. El hook las escribe; aquí vive
+ * la ÚNICA fuente de su nombre para que el consumidor no repita una condición
+ * por dominio (`domain === 'game' && !resolved?.fastPathGame`, y lo mismo para
+ * environment) en cada rama. Un dominio de estado nuevo se declara AQUÍ.
+ */
+export const FAST_PATH_EXECUTED_MARKS: Readonly<Record<string, string>> = Object.freeze({
+    game: 'fastPathGame',
+    environment: 'fastPathEnvironment',
+});
+
+/**
+ * true si el fast-path de estado del hook YA ejecutó el turno para ese dominio,
+ * así que el contrato NO debe volver a aplicarlo (re-aplicar = dos cartas, dos
+ * veces el mismo ambiente). Dominio sin marca declarada => false (sin cambio de
+ * comportamiento: el calendario/estado se sigue aplicando como hasta ahora).
+ */
+export function isTurnAlreadyExecuted(resolved: unknown, domain: unknown): boolean {
+    const mark = FAST_PATH_EXECUTED_MARKS[String(domain ?? '')];
+    if (!mark) return false;
+    return (resolved as Record<string, unknown> | null | undefined)?.[mark] === true;
+}
+
+/** Quién ejecuta el resultado del Árbitro para un dominio. */
+export type ArbiterDomainRoute = 'dispatcher' | 'navigation' | 'stateFastPath';
 
 /** Dominios de navegación (los ejecuta `handleNavigationCommand`). */
 export const NAVIGATION_DOMAINS = Object.freeze(['navigation'] as const);
@@ -38,9 +98,6 @@ export const STATE_FAST_PATH_DOMAINS = Object.freeze([
     'environment',
     'game',
 ] as const);
-
-/** Quién ejecuta el resultado del Árbitro para un dominio. */
-export type ArbiterDomainRoute = 'dispatcher' | 'navigation' | 'stateFastPath';
 
 /** true si el dominio se ejecuta por su fast-path de estado (no por el dispatcher). */
 export function isStateFastPathDomain(domain: unknown): boolean {

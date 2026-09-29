@@ -194,7 +194,7 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { isAIProvider } from './app/appTypeGuards';
-import { arbiterDomainRoute } from './app/arbiterDomainRoutes';
+import { arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
 import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
 import { applyConfigAction } from './app/configActions';
 import { applyGameAction } from './app/gameActions';
@@ -1409,7 +1409,7 @@ function App() {
                     // contrato como `juego` o marcado `fastPathGame`): no re-despachar
                     // el turno o se reinicia la partida (nueva semilla → otra canción).
                     const gameAlreadyHandled =
-                        turnResult?.domain === 'game' && resolved?.fastPathGame === true;
+                        turnResult?.domain === 'game' && isTurnAlreadyExecuted(resolved, turnResult?.domain);
                     if (turnResult?.matched && !gameAlreadyHandled) {
                         resolvedActions.push({ result: turnResult, viaDomain: false });
                     }
@@ -1639,7 +1639,7 @@ function App() {
             const juegoAction =
                 normalizeJuego(contract?.juego) ||
                 // El fast-path ya despacho el motor: re-despachar aqui = DOS cartas.
-                (arbiterStateAction?.domain === 'game' && !resolved?.fastPathGame
+                (arbiterStateAction?.domain === 'game' && !isTurnAlreadyExecuted(resolved, arbiterStateAction?.domain)
                     ? normalizeJuego(arbiterStateAction.action)
                     : null);
 
@@ -1651,7 +1651,7 @@ function App() {
             // verdad del rebranding por oficio.
             const environmentAction =
                 normalizeEnvironment(contract?.ambiente) ||
-                (arbiterStateAction?.domain === 'environment' && !resolved?.fastPathEnvironment
+                (arbiterStateAction?.domain === 'environment' && !isTurnAlreadyExecuted(resolved, arbiterStateAction?.domain)
                     ? normalizeEnvironment(arbiterStateAction.action)
                     : null);
 
