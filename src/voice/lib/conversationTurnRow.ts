@@ -28,6 +28,15 @@ export interface UserTurnRowInput {
      * turno (misma locución, texto más completo) en lugar de agregar otra.
      */
     replaceLast?: boolean;
+    /**
+     * `true` = resolución del MISMO turno ya iniciado: reutiliza su fila de
+     * usuario aunque FLU haya hablado en medio. Sin esta marca, la frontera del
+     * turno (posterior a la última fila de FLU) hacía que el cierre volviera a
+     * escribir la MISMA locución como fila nueva (defecto medido: la misma orden
+     * aparecía dos veces en la conversación). Un turno NUEVO no la usa: por eso
+     * repetir a propósito tras una respuesta de FLU sigue abriendo fila propia.
+     */
+    sameTurn?: boolean;
 }
 
 export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
@@ -47,6 +56,7 @@ export function commitUserTurnRow({
     speakerName,
     timestamp,
     replaceLast = false,
+    sameTurn = false,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -88,7 +98,10 @@ export function commitUserTurnRow({
     //    recorta es la MISMA locucion, y con igualdad abria una SEGUNDA fila (defecto
     //    medido 18:12:06 y 18:12:34; la respuesta de FLU quedaba alineada a una sola).
     //    De la reemision se conserva el texto MAS COMPLETO: nunca se pierde lo dicho.
-    for (let i = history.length - 1; i >= turnStart; i -= 1) {
+    //    `sameTurn` (resolucion del MISMO turno) ignora la frontera de FLU: la fila
+    //    del turno ya existe y el cierre debe completarla, no abrir una segunda.
+    const reuseFrom = sameTurn ? 0 : turnStart;
+    for (let i = history.length - 1; i >= reuseFrom; i -= 1) {
         const entry = history[i];
         if (!entry || entry.role !== 'user') continue;
         const previo = cleanForSpeech(entry.text || '');

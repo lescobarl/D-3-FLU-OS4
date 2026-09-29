@@ -354,6 +354,7 @@ type ResolvedContract = Omit<FluContract, 'workspace'> & {
 /** Payload entregado por el motor de voz al resolver un contrato. */
 interface ContractResolution {
     userCommitOnly?: boolean;
+    sameTurn?: boolean;
     transcript?: string;
     speakerName?: string;
     rawOnly?: boolean;
@@ -1301,15 +1302,15 @@ function App() {
             const phase: string = resolved?.phase || '';
             const userCommitOnly: boolean = resolved?.userCommitOnly === true;
 
-            // §9 — UN ÚNICO escritor de la fila del usuario: `commitUserTurnRow`
-            // (una frase ⇒ una fila). El commit temprano, el commit final de
-            // comando y la emisión cruda que crece pasan por ESTE punto único.
+            // §9 — ÚNICO escritor de la fila del usuario (`commitUserTurnRow`): el
+            // commit temprano, la emisión cruda y la resolución del turno (`sameTurn`).
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
             if (userCommitOnly || (transcript && (!rawOnly || cleanForSpeech(transcript)))) {
                 commitUserTurnRow({
                     text: transcript,
                     speakerName,
                     replaceLast: resolved?.replaceLastRawLog === true,
+                    sameTurn: resolved?.sameTurn === true,
                 });
             }
             if (userCommitOnly) return;
@@ -1637,8 +1638,7 @@ function App() {
             // fuente de verdad de la partida.
             const juegoAction =
                 normalizeJuego(contract?.juego) ||
-                // El fast-path (`fastPathGame`) YA despacho el motor: re-despachar
-                // aqui avanzaria DOS cartas por la misma orden (defecto medido).
+                // El fast-path ya despacho el motor: re-despachar aqui = DOS cartas.
                 (arbiterStateAction?.domain === 'game' && !resolved?.fastPathGame
                     ? normalizeJuego(arbiterStateAction.action)
                     : null);

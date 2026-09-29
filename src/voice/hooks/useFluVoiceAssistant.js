@@ -404,7 +404,7 @@ export function useFluVoiceAssistant({
         })
         return canonicalPhrase
       }
-      const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase })
+      const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase, sameTurn: true })
       // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no
       // se reprocese (ciclo de comandos/ambient que repetían la misma orden).
       clearTurnAfterResolveRef.current?.()
