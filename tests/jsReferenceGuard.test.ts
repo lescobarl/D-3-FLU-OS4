@@ -86,10 +86,28 @@ describe('P6.7 jsReferenceGuard - referencias a nombres que no existen', () => {
   // `tsc --checkJs` tarda ~11 s: el timeout se declara aqui para que el
   // guard no dependa de que quien lo invoque pase --testTimeout (lint:guards
   // no lo pasa y el defecto de 5 s lo cortaria).
-  it('no queda ningun nombre inexistente en src/ (checkJs)', { timeout: 120000 }, () => {
+  it('no queda ningun nombre inexistente en src/ (checkJs)', { timeout: 120000 }, async () => {
     // El detector se prueba en los casos de arriba; aqui se mide la ausencia
     // completa. Si aparece un nombre nuevo sin definir, este caso lo caza.
-    const errores = erroresDeNombreLibre()
+    const errores = await erroresDeNombreLibre()
     expect(errores, `nombres inexistentes:\n  ${errores.join('\n  ')}`).toEqual([])
+  })
+
+  // Defecto medido (P7.68): lanzar `tsc` con `spawnSync` BLOQUEA el event loop del
+  // worker durante toda la medicion. Bajo contencion (12 CPUs logicas -> 10 workers)
+  // esos ~9 s pasan de los 60 s del timeout del RPC de vitest, el worker deja de
+  // latir y la corrida COMPLETA sale roja por "Unhandled Error: [vitest-worker]:
+  // Timeout calling onTaskUpdate" con los 3868 tests verdes. MEDIDO con sonda:
+  // spawnSync 9445ms/ticks=0, execFile 8913ms/ticks=281. Este caso falsifica de
+  // verdad: si alguien vuelve a la version sincrona, ticks es 0 y cae.
+  it('la medicion no bloquea el event loop (el RPC del worker sigue latiendo)', { timeout: 120000 }, async () => {
+    let ticks = 0
+    const id = setInterval(() => {
+      ticks += 1
+    }, 20)
+    const errores = await erroresDeNombreLibre()
+    clearInterval(id)
+    expect(errores).toEqual([])
+    expect(ticks).toBeGreaterThan(0)
   })
 })
