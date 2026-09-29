@@ -35,10 +35,21 @@ export function classifyGarbageTranscript(text = '') {
 
   if (words.length === 0) return { garbage: true, reason: 'empty' }
 
-  // 1) Repetición exacta adyacente de palabra corta ("se se", "bor bor") → tartamudeo.
+  // 1) Repeticion exacta adyacente de palabra corta ("se se", "bor bor") -> tartamudeo.
+  //    `repiteDominante` separa la alucinacion (la frase ES la repeticion: "se se")
+  //    del habla natural ("...ya esta lista no no", "ahora si si"), donde la
+  //    repeticion es un detalle dentro de una frase real. Lo consume
+  //    `resolveCommittablePhrase` para NO callar el turno en el segundo caso.
+  let repeticionesCortas = 0
   for (let i = 1; i < words.length; i += 1) {
-    if (words[i] === words[i - 1] && words[i].length <= STUTTER_MAX_WORD_CHARS)
-      return { garbage: true, reason: 'stutter' }
+    if (words[i] === words[i - 1] && words[i].length <= STUTTER_MAX_WORD_CHARS) repeticionesCortas += 1
+  }
+  if (repeticionesCortas > 0) {
+    return {
+      garbage: true,
+      reason: 'stutter',
+      repiteDominante: repeticionesCortas * 2 >= words.length,
+    }
   }
 
   // 2) Ratio de tokens "no-palabra" (sin vocal) alto → ruido incoherente.
@@ -76,8 +87,19 @@ export function resolveCommittablePhrase(capture = '', fallback = '') {
   if (!verdict.garbage) return { phrase: primary, usedFallback: false, reason: null }
 
   const alternative = String(fallback || '').trim()
-  if (classifyGarbageTranscript(alternative).garbage) {
-    return { phrase: '', usedFallback: false, reason: verdict.reason }
+  if (!classifyGarbageTranscript(alternative).garbage) {
+    return { phrase: alternative, usedFallback: true, reason: verdict.reason }
   }
-  return { phrase: alternative, usedFallback: true, reason: verdict.reason }
+
+  // Sin texto validado al que caer. El veredicto 'stutter' NO basta por si solo para
+  // callar el turno: solo es senal fuerte cuando la repeticion DOMINA la frase
+  // ("se se", "bor bor" = alucinacion del ASR). Si la repeticion es un detalle
+  // dentro de una frase real ("no no", "ahi ahi", "si si") se commitea lo que dijo
+  // el usuario. Medido en el log real del dueno: 3 capturas humanas de 3 acabaron
+  // MUDAS por esta via (fallback vacio -> phrase vacia -> turno sin habla).
+  // 'nonword' (sin vocales) y 'empty' SI son ruido claro: siguen descartandose.
+  if (verdict.reason === 'stutter' && !verdict.repiteDominante) {
+    return { phrase: primary, usedFallback: false, reason: verdict.reason }
+  }
+  return { phrase: '', usedFallback: false, reason: verdict.reason }
 }

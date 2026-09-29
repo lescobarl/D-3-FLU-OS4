@@ -90,3 +90,57 @@ describe('el escenario del log: la captura cruda corrupta NO mata el turno', () 
         expect(resolved.phrase).toBe('borra de la nota del súper el cloro');
     });
 });
+
+// ============================================================
+// Defecto MEDIDO en el log del dueno (2026-09-29 19:10-19:11). Tres capturas
+// HUMANAS reales, tal cual salen en vite-dev.log, acabaron las tres igual:
+//
+//   WARN turnCommitPhrase turno SIN texto valido (motivo=stutter)
+//        capture="..." fallback="" -> se cierra sin habla
+//
+// Su frase se tiraba entera porque repetia una palabra de <=3 letras ("no no",
+// "ahi ahi"): el guard lo leia como tartamudeo del ASR y, al no haber texto
+// validado de respaldo, el turno se cerraba MUDO. El dueno lo vivia como
+// "le hablo y FLU no hace nada".
+//
+// El contrato anterior solo cubria el caso CON fallback (ver arriba). El hueco
+// era el caso SIN fallback, que es justo el habla conversacional normal: si no
+// hay comando, no hay texto validado, y la frase se perdia.
+// ============================================================
+describe('el log del dueno: habla real con repeticion no puede quedar muda', () => {
+    // Capturas HUMANAS reales del log, sin retocar.
+    const CAPTURAS_REALES = [
+        'No la que está tirada ahí ahí conectada al desagüe',
+        'SA- sA- o se ha filtrado normal',
+        'se empieza a agarrar como un poquito más de fuerza y le digo ya está lista no no',
+    ];
+
+    it('commitea la frase real en vez de callar el turno (antes: mudo)', () => {
+        for (const captura of CAPTURAS_REALES) {
+            const resolved = resolveCommittablePhrase(captura, '');
+
+            expect(resolved.phrase).toBe(captura);
+            expect(resolved.phrase).not.toBe('');
+            expect(resolved.reason).toBe('stutter');
+        }
+    });
+
+    it('la alucinacion pura sigue descartandose (la repeticion DOMINA la frase)', () => {
+        for (const ruido of ['se se', 'bor bor', 'el el el', 'la la la la']) {
+            expect(classifyGarbageTranscript(ruido).repiteDominante).toBe(true);
+            expect(resolveCommittablePhrase(ruido, '').phrase).toBe('');
+        }
+    });
+
+    it('el ruido sin vocales sigue descartandose aunque no haya fallback', () => {
+        expect(resolveCommittablePhrase('hmm mmm nnn', '').phrase).toBe('');
+    });
+
+    it('el texto validado sigue teniendo prioridad sobre la captura cruda', () => {
+        const resolved = resolveCommittablePhrase(CAPTURA_CORRUPTA, AVIONES);
+
+        expect(resolved.phrase).toBe(AVIONES);
+        expect(resolved.usedFallback).toBe(true);
+    });
+});
+
