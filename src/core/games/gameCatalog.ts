@@ -270,7 +270,9 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
     // Requiere UNA ORDEN DE JUEGO (arranque "vamos a jugar X" o cambio "cambia a
     // X") Y UN alias del juego. "simón dice que te calles" NO dispara (sin marco).
     if (!hasGameOrderFrame(normalized)) return null;
-    return bestAliasMatch((alias) => hasToken(normalized, alias));
+    return bestAliasMatch(
+        (alias) => hasToken(normalized, alias) || matchesTruncatedAliasTail(normalized, alias, false),
+    );
 }
 
 /**
@@ -287,11 +289,71 @@ export function matchGameIntent(text = ''): GameIntentEntry | null {
  */
 const LEADING_ARTICLE_RE = /^(?:el|la|los|las|un|una)\s+/;
 
+/**
+ * Palabras de un texto ya NORMALIZADO. `normalizeForMatch` colapsa los espacios
+ * pero NO quita la puntuacion, asi que aqui se recorta la de los bordes (es la
+ * misma clase de limite que `findTokenIndex` ya trata: `.,;!?` y los signos de
+ * apertura). Los alias del catalogo son palabras limpias; esto solo limpia lo
+ * que llega del ASR ("¿quien soy?" -> "quien", "soy").
+ */
+function wordsOf(value: string): string[] {
+    return value
+        .split(' ')
+        .map((word) => word.replace(/[.,;!?¡¿"'()[\]]/g, ''))
+        .filter(Boolean);
+}
+
+/**
+ * CORTE DEL ASR AL FINAL DEL NOMBRE. Defecto de clase medido (2026-09-22): el
+ * dictado pierde el final de la ULTIMA palabra del nombre ("quien so" por
+ * "quien soy", "loteri" por "loteria", "trivi" por "trivia") y el nombre deja de
+ * existir: en la ruta pelada el turno cae al LLM (que simula el arranque) y con
+ * marco el dueno responde "ese juego no lo tengo" a un juego que SI tiene. Antes
+ * de este arreglo, 97 cortes (de 1 y 2 letras) rompian la decision en los 21
+ * juegos del catalogo.
+ *
+ * Reglas (medidas, no esteticas):
+ *  - El corte cae SIEMPRE al final de la locucion, asi que solo se tolera en la
+ *    ULTIMA palabra y solo si el alias queda al final del texto.
+ *  - NO se pueden perder palabras enteras: el numero de palabras debe ser el del
+ *    alias. Sin esto, "quien" (arranque interrogativo) arrancaria el juego y
+ *    volveria el defecto P7.58.
+ *  - El corte tolerado es de hasta CORTE_MAX_PALABRA letras: es la magnitud
+ *    medida del ASR (el guard de ruido G7 corta exactamente 2).
+ *  - Con DOS o mas palabras, las anteriores van EXACTAS y completas: ese contexto
+ *    identifica el nombre aunque la ultima quede en una sola letra ("quien s").
+ *  - Con UNA sola palabra no hay contexto, asi que ademas hay que conservar
+ *    MIN_LETRAS_UNA_PALABRA: es lo que evita que "cuenta" arranque cuentacuentos
+ *    o "adivina" arranque adivinanzas.
+ */
+const CORTE_MAX_PALABRA = 2;
+const MIN_LETRAS_UNA_PALABRA = 4;
+
+function matchesTruncatedAliasTail(normalized: string, alias: string, wholeText: boolean): boolean {
+    const said = wordsOf(normalized);
+    const words = wordsOf(alias);
+    if (!words.length || said.length < words.length) return false;
+    if (wholeText && said.length !== words.length) return false;
+    const tail = said.slice(said.length - words.length);
+    const last = words.length - 1;
+    for (let i = 0; i < last; i += 1) {
+        if (tail[i] !== words[i]) return false;
+    }
+    const dicho = tail[last];
+    const entera = words[last];
+    if (dicho === entera || !entera.startsWith(dicho)) return false;
+    if (entera.length - dicho.length > CORTE_MAX_PALABRA) return false;
+    if (words.length === 1 && dicho.length < MIN_LETRAS_UNA_PALABRA) return false;
+    return true;
+}
+
 export function matchGameAliasOnly(text = ''): GameIntentEntry | null {
     const normalized = normalizeForMatch(text).replace(LEADING_ARTICLE_RE, '').trim();
     if (!normalized) return null;
     if (hasNegativeIntent(normalized)) return null;
-    return bestAliasMatch((alias) => normalized === alias);
+    return bestAliasMatch(
+        (alias) => normalized === alias || matchesTruncatedAliasTail(normalized, alias, true),
+    );
 }
 
 /** Guardia anti-negacion: "no quiero jugar a..." nunca inicia/cambia. */

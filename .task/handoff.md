@@ -33,6 +33,10 @@ ESTADO DE HOY: 0 pendientes en el ledger. Los ultimos cierres son:
 - ¿Quién soy? (pistas vagas / fallo que repetia la ultima pista): cerrado, commit 80aa99d.
 - Pizarron (no se borra el ultimo objeto por tipo): cerrado, P7.60/P7.62/P7.64.
 - Planificador E2E (e2eScope) + rojo intermitente de la suite: cerrados, a3999d6.
+- Juego (un turno con dueno de la voz, una orden = una carta, eco de la orden de arranque): cerrados, P7.69/P7.71.
+- Voz (el habla real con repeticion corta no cierra el turno mudo, eco de la cola del TTS): cerrado, P7.70.
+- Fila de conversacion (una locucion = una fila; un servicio no escribe la conversacion): cerrados, P7.72/P7.73.
+- quien_soy (la pista que no acota no es posible): cerrado, P7.59/P7.67.
 
 LO UNICO ABIERTO: verificacion de PRODUCTO en mi pantalla (AGENTS.md A.1, no
 automatizable): jugar una loteria pidiendo cartas seguidas (6 cartas distintas sin

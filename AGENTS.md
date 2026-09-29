@@ -24,7 +24,7 @@
 | Idioma | `es` / `en` / `both`, UN selector en la cabecera (`App.tsx`, `aria-label="Idioma"`); sin librería i18n |
 | IA/Medios locales | `@huggingface/transformers`, Whisper WASM (workers), `tesseract.js`, `pdfjs-dist` |
 | Testing | Vitest 3 + React Testing Library · Playwright (E2E) |
-| Node | 20 (el de CI) |
+| Node | 22 (el de CI) |
 
 **Comandos del proyecto (única fuente de verdad de los gates):**
 
@@ -42,7 +42,7 @@
 | E2E | `npm run e2e` |
 | Build | `npm run build` |
 
-**Barrera real (no depende de buena voluntad):** `.git/hooks/pre-commit` -> `lint` + `typecheck`
+**Barrera real (no depende de buena voluntad):** `.githooks/pre-commit` -> `lint` + `typecheck`
 (ligero, por commit, AGENTS.md seccion 5); `.github/workflows/ci.yml` -> `lint`, `typecheck`,
 `test:full`, `build`, `e2e`. `npm run gate` es de **cierre de tarea** (valida UN contrato contra
 su base), NO un gate de repo: no se ejecuta en CI ni en cada commit.
@@ -281,7 +281,7 @@ de **0 nuevos**.
   `tests/workspaceVocabularyContract.test.ts`, que compara por CONJUNTO EXACTO — co-ocurrir no
   basta ("doc"/"video" viven en varios vocabularios) y marcar eso empuja a aflojar el guard.
 - Trinquete de tamaño: `tests/godFileSizeGuard.test.ts` fija el techo de cada god-file
-  (`App.tsx` 4686, `useFluVoiceAssistant.js` 4579, `fluConfig.js` 2772). Solo baja o empata: si
+  (`App.tsx` 4643, `useFluVoiceAssistant.js` 4579, `fluConfig.js` 2772, `gemini.js` 1848). Solo baja o empata: si
   una consolidación necesita +N líneas en un god-file, recorta esas N allí mismo o el commit no
   pasa. Un import multilínea de 5 líneas donde había 1 rompe el trinquete: déjalo en una línea.
 - Los `.js` NO los comprueba `tsc` (`checkJs` off). Un `export { x } from '...'` sin `import` compila
