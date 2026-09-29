@@ -1637,9 +1637,9 @@ function App() {
             // fuente de verdad de la partida.
             const juegoAction =
                 normalizeJuego(contract?.juego) ||
-                // `fastPathGame` solo significa "el arbitro clasifico el turno
-                // como juego", NO "ya se despacho": App es el unico despachador.
-                (arbiterStateAction?.domain === 'game'
+                // El fast-path (`fastPathGame`) YA despacho el motor: re-despachar
+                // aqui avanzaria DOS cartas por la misma orden (defecto medido).
+                (arbiterStateAction?.domain === 'game' && !resolved?.fastPathGame
                     ? normalizeJuego(arbiterStateAction.action)
                     : null);
 
