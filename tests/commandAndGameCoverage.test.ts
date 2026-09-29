@@ -22,6 +22,7 @@ import {
 import { CAPABILITY_IDS, buildCapabilitiesPrompt } from '../src/services/capabilities';
 import {
     DISPATCHER_DOMAINS,
+    DISPATCHER_HANDLERS,
     NAVIGATION_DOMAINS,
     STATE_FAST_PATH_DOMAINS,
     arbiterDomainRoute,
@@ -128,27 +129,67 @@ describe('cobertura - todo dominio del arbitro tiene ruta de DESPACHO', () => {
 
     it('el despachador sirve exactamente los dominios que declara', () => {
         const app = readFileSync(join(process.cwd(), 'src/app/arbiterDispatch.ts'), 'utf8');
-        // Rama del despachador = comparacion de dominio en una linea que invoca un
-        // manejador `__fluHandle*`. Asi no cuenta `arbiterDomain === 'navigation'`
-        // ni `turnResult?.domain === 'game'`, que NO son ramas del despachador.
-        const ramas = app
-            .split(/\r?\n/)
-            .filter((l) => /domain\s*===\s*'/.test(l) && l.includes('__fluHandle'));
-        const servidos = ARBITER_DOMAINS.filter((d) =>
-            ramas.some((l) => l.includes(`domain === '${d}'`)),
-        );
+        // El despachador ya NO cablea las ramas a mano: obtiene el manejador de la
+        // tabla unica (`dispatcherHandlerFor` -> DISPATCHER_HANDLERS). Se verifica el
+        // invariante contra el dueno unico, no contra texto: (a) la tabla sirve
+        // exactamente los dominios declarados, (b) cada entrada apunta a un manejador
+        // `__fluHandle*` real y (c) el despachador CONSULTA la tabla.
+        const servidos = DISPATCHER_HANDLERS.map((entry) => entry.domain);
         expect([...servidos].sort()).toEqual([...DISPATCHER_DOMAINS].sort());
+        expect(DISPATCHER_HANDLERS.length).toBeGreaterThan(0);
+        const malFormados = DISPATCHER_HANDLERS.filter(
+            (entry) => !/^__fluHandle[A-Za-z]+$/.test(entry.handler),
+        );
+        expect(malFormados, `entradas sin manejador __fluHandle*: ${malFormados.length}`).toEqual([]);
+        expect(app).toMatch(/dispatcherHandlerFor\(domain\)/);
+    });
+
+    it('todo dominio del arbitro tiene ruta: despacho o ruta propia', () => {
+        // El invariante que de verdad protege la cobertura: si el arbitro gana un
+        // dominio y nadie lo declara (ni aqui ni en su ruta propia), el turno se
+        // perderia en silencio. Se comprueba contra ARBITER_DOMAINS, la fuente real.
+        const conRutaPropia = new Set<string>([...NAVIGATION_DOMAINS, ...STATE_FAST_PATH_DOMAINS]);
+        const declarados = new Set<string>(DISPATCHER_DOMAINS);
+        const sinRuta = ARBITER_DOMAINS.filter(
+            (d) => !conRutaPropia.has(d) && !declarados.has(d),
+        );
+        expect(sinRuta, `dominios del arbitro sin ruta declarada: ${sinRuta.join(', ')}`).toEqual([]);
     });
 
     it('los dominios de estado y navegacion NO se despachan por el dispatcher', () => {
         const app = readFileSync(join(process.cwd(), 'src/app/arbiterDispatch.ts'), 'utf8');
+        const propias = new Set<string>([...STATE_FAST_PATH_DOMAINS, ...NAVIGATION_DOMAINS]);
+        const intrusos = DISPATCHER_HANDLERS.map((entry) => entry.domain).filter((d) =>
+            propias.has(d),
+        );
+        expect(intrusos, `dominios con ruta propia despachados a la vez: ${intrusos.join(', ')}`).toEqual([]);
+        // Y NO se reintroduce la cadena a mano que este guard retiro: las ramas por
+        // dominio con su `__fluHandle*` deben seguir viviendo solo en la tabla.
         const ramas = app
             .split(/\r?\n/)
             .filter((l) => /domain\s*===\s*'/.test(l) && l.includes('__fluHandle'));
-        const intrusos = [...STATE_FAST_PATH_DOMAINS, ...NAVIGATION_DOMAINS].filter((d) =>
-            ramas.some((l) => l.includes(`domain === '${d}'`)),
-        );
-        expect(intrusos, `dominios con ruta propia despachados a la vez: ${intrusos.join(', ')}`).toEqual([]);
+        expect(ramas, `ramas cableadas a mano en el despachador: ${ramas.length}`).toEqual([]);
+    });
+
+    // PRUEBA DEL DETECTOR (mutacion sintetica): se alimenta la entrada INFRACTORA
+    // (una rama a mano de las que el refactor retiro) y debe marcarla; y la correcta
+    // (la consulta a la tabla), que no. Un guard sin esto es decorativo.
+    it('PRUEBA DEL DETECTOR: las ramas cableadas a mano se marcan', () => {
+        const ramasDe = (src: string) =>
+            src
+                .split(/\r?\n/)
+                .filter((l) => /domain\s*===\s*'/.test(l) && l.includes('__fluHandle'));
+        expect(ramasDe("if (domain === 'note' && __fluHandleNoteText) {")).toHaveLength(1);
+        expect(ramasDe('const entry = dispatcherHandlerFor(domain);')).toHaveLength(0);
+    });
+
+    it('PRUEBA DEL DETECTOR: un dominio sin ruta declarada se marca', () => {
+        const conRutaPropia = new Set<string>([...NAVIGATION_DOMAINS, ...STATE_FAST_PATH_DOMAINS]);
+        const sinRutaDe = (dominios: readonly string[], declarados: ReadonlySet<string>) =>
+            dominios.filter((d) => !conRutaPropia.has(d) && !declarados.has(d));
+        expect(sinRutaDe([...ARBITER_DOMAINS, 'dominioInventado'], new Set(DISPATCHER_DOMAINS))).toEqual([
+            'dominioInventado',
+        ]);
     });
 
     it('el resultado de game del arbitro es un contrato ejecutable por el fast-path', () => {

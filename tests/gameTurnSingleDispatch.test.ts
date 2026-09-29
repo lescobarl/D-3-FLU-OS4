@@ -19,6 +19,7 @@ import { describe, test, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLoteriaEngine } from '../src/core/games/loteria';
+import { FAST_PATH_EXECUTED_MARKS, isTurnAlreadyExecuted } from '../src/app/arbiterDomainRoutes';
 import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter';
 import { normalizeJuego } from '../src/voice/lib/configCommands';
 import {
@@ -101,6 +102,24 @@ describe('una orden de juego = una carta', () => {
 
     test('GUARD: App.tsx conserva el dueno unico del despacho (no reabrir el doble)', () => {
         const app = fs.readFileSync(path.join(process.cwd(), 'src', 'App.tsx'), 'utf8');
-        expect(app).toMatch(/domain === 'game'\s*&&\s*!resolved\?\.fastPathGame/);
+        // El guard ya no es un texto a mano en App.tsx: la condicion vive en el
+        // predicado unico (tabla FAST_PATH_EXECUTED_MARKS). Se verifica el invariante
+        // completo: la tabla declara la marca, el predicado la honra y App.tsx
+        // consulta al dueno unico con el dominio del turno.
+        expect(app).toMatch(/isTurnAlreadyExecuted\(resolved,\s*turnResult\?\.domain\)/);
+        expect(FAST_PATH_EXECUTED_MARKS.game).toBe('fastPathGame');
+        expect(isTurnAlreadyExecuted({ fastPathGame: true }, 'game')).toBe(true);
+        expect(isTurnAlreadyExecuted({}, 'game')).toBe(false);
+    });
+
+    // PRUEBA DEL DETECTOR (mutacion sintetica): un guard verde no prueba nada si su
+    // detector no discrimina. Se le da la entrada INFRACTORA (la condicion a mano que
+    // existia antes, sin el predicado unico) y debe NO marcarla; y la correcta, SI.
+    test('PRUEBA DEL DETECTOR: el regex del guard discrimina', () => {
+        const detector = /isTurnAlreadyExecuted\(resolved,\s*turnResult\?\.domain\)/;
+        const infractor = "if (domain === 'game' && !resolved?.fastPathGame) {";
+        const correcto = 'if (!isTurnAlreadyExecuted(resolved, turnResult?.domain)) {';
+        expect(detector.test(infractor)).toBe(false);
+        expect(detector.test(correcto)).toBe(true);
     });
 });
