@@ -602,6 +602,15 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
 
 ## 10. VELOCIDAD DE INTERACCIÓN
 
+0. **Arranque en UN comando y relevo de sesion.** Antes de leer nada (ledger, git log,
+   contrato, reporte), correr `npm run brief`: rama, HEAD, estado del arbol, base y
+   limites, tamano de allow/e2eScope, pendientes del ledger y los comandos de validacion
+   en orden. Sustituye ~8 lecturas de arranque por una. `--files` lista los ficheros
+   cambiados y `--json` da el mismo dato legible por maquina. El briefing NO comprueba
+   alcance: el dueno unico de eso sigue siendo `npm run gate`.
+   **Relevo:** el texto listo para pegar en una sesion nueva vive en `.task/handoff.md`
+   y se actualiza cuando cambia el estado (nuevo pendiente, nueva base, nuevo defecto).
+
 1. **Evidencia en el primer mensaje.** Toda petición trae: entrada cruda + salida real
    observada + resultado esperado. Si falta, el agente hace UNA pregunta con propuesta por
    defecto y para.

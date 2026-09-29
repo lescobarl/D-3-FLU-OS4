@@ -64,7 +64,8 @@
     "tests/loteria.test.ts",
     "tests/deterministicArbiter.test.ts",
     "scripts/js-ref-metric.mjs",
-    "tests/jsReferenceGuard.test.ts"
+    "tests/jsReferenceGuard.test.ts",
+    "scripts/session-brief.mjs"
   ],
   "maxFiles": 60,
   "maxLines": 2800,
