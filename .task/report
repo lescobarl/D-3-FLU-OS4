@@ -2559,3 +2559,69 @@ PENDIENTE PARA EL DUENO:
   - Verificacion de producto (no automatizable): imagen recien generada visible,
     instruccion 16:20 sin duplicar, y juego suspendido con el turno de otro dominio.
   - P7.52: declarar e2eScope o descartarlo con razon (otra vuelta de enmienda).
+
+================================================================
+AUDITORIA DEL LOG DEL DUENO 18:11:56-18:12:47 (2026-09-28) - "Adivina quien no juega"
+================================================================
+Alcance: auditar TODO el tramo (no solo el juego reportado) con las funciones REALES
+(sonda temporal; borrada tras medir) y registrar los hallazgos en el ledger.
+
+Lo que se ve en el tramo:
+  18:11:56 yo   "Okay Flow vamos a jugar Adivina quien"
+  18:12:03 yo   "Okay Flow empiezas"  18:12:06 "Okay Flow empiezas Okay Flow empieza tu"
+  18:12:14 FLU  "(Claro!) Vamos a jugar a Adivina quien."   <- la IA anuncia la partida
+  18:12:34 yo   "o prefieres que te cuente algo mas esta" (eco del TTS de FLU)
+  18:12:34 yo   "o prefieres ... esta Okay flu estabamos jugando Adivina quien"
+  18:12:47 FLU  "(Perfecto) Continuemos con 'Adivina quien'." <- y no juega nadie
+
+MEDIDO (salida cruda de la sonda, resumida; el fichero temporal se borro):
+  - Las frases del tramo resuelven a NADA (ni juego ni otro dominio):
+      'vamos a jugar Adivina quien'      -> intent=null bare=null gameCmd=null domain=null
+      'continuamos con el juego'         -> idem
+      'empecemos a jugar' / 'empieza tu' -> idem
+      'si' / 'adelante' / 'dale'         -> idem (sin partida)
+      'estabamos jugando Adivina quien'  -> idem
+    => la orden de juego no tiene dueno y la contesta el LLM, que puede AFIRMAR una
+       partida que no existe (es lo que el dueno ve).
+  - Eco del TTS: isAssistantVoiceEcho(cola de FLU, frase de FLU) = false y tambien
+    false con la cola pegada al turno real; solo la recaptura COMPLETA da true.
+  - Con loteria ACTIVA: 'vamos a jugar Adivina quien' -> {loteria, turn} (canta carta).
+  - Con loteria EN PAUSA: 'adelante'/'si'/'dale'/'vamos a jugar X' -> turn (la retoman).
+  - INVARIANTE DE LA RONDA PREVIA (no regresion, verificado hoy): con loteria activa,
+    'genera una imagen de un gato' -> gameCmd=null y 'crea una cita para manana a las 3'
+    -> agendaCommand, 'borra el cloro de la nota del super' -> note. El turno ajeno NO se
+    consume como jugada: la correccion de P7.48 sigue en pie.
+
+HALLAZGOS (pendientes P7.53..P7.58, cada uno con su evidencia medida en el ledger):
+  P7.53  orden de juego con nombre FUERA del catalogo: sin dueno; el LLM simula el arranque.
+  P7.54  con partida viva, una orden de juego ajena la consume el motor (marcos anchos).
+  P7.55  la PAUSA no protege de los marcos del motor (afirmaciones sueltas retoman).
+  P7.56  el eco de la COLA del TTS entra como turno (anclaje de la ventana + cobertura).
+  P7.57  instruccion DUPLICADA: reemision tardia abre fila nueva (phrasesRelate sin uso).
+  P7.58  nombre pelado interrogativo ('quien soy') no arranca fuera de partida.
+
+LECTURA UNICA: los tres sintomas que reporta el dueno ("no juega", "instruccion duplicada",
+"FLU repite y habla de lo que no toca") tienen causa raiz medida y NINGUNA esta en el LLM:
+(a) no hay dueno para la orden de juego desconocida, (b) los marcos del motor son tokens
+sueltos ('vamos', 'adelante', 'dale') y consumen la orden, (c) el eco de FLU entra como turno
+del usuario y una reemision tardia abre fila. El LLM solo es el altavoz de (a): al no tener
+dueno, el turno cae a la IA y la IA inventa la partida.
+
+PROPUESTA DE 3a ENMIENDA (requiere autorizacion del dueno; NO se toco codigo):
+  objetivo: toda orden de juego tiene dueno y ninguna orden ajena se consume como jugada;
+            el turno del usuario no puede llevar dentro la voz de FLU; una locucion = una fila.
+  Ficheros fuera del 'allow' vigente que harian falta: src/voice/lib/transcriptIngress.js,
+  src/voice/lib/conversationStream.js, src/voice/lib/turnStream.js, src/voice/lib/activeListen.js,
+  src/voice/lib/conversationTurnRow.ts + 2 tests nuevos.
+  Guard (nace ROJO): test que fija (1) orden de juego desconocida con/sin partida -> mismo
+  dueno, (2) marco de motor no puede ser jugada cuando el texto pide OTRO juego, (3) la cola
+  del TTS de FLU no puede abrir fila de usuario, (4) una locucion reemitida = una fila.
+
+Cambios aplicados: auditoria medida (sonda temporal borrada) + alta de P7.53..P7.58 en
+plans/ledger.json con la evidencia de cada uno. Cero cambios de codigo: el arreglo necesita
+contrato (AGENTS.md B9/B16: sin contrato no se empieza; alcance agotado -> parar y pedir
+enmienda).
+Validado contra: salida cruda de la sonda + npm run ledger:check OK (8 pendientes: P7.49,
+P7.52, P7.53..P7.58; 112 done; 166 cierres en 126 commits).
+No validado (producto, reservado al dueno): que la partida arranque y avance en su pantalla;
+queda pendiente hasta que se autorice la 3a enmienda y se implemente el arreglo.
