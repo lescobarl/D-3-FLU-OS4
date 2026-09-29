@@ -861,6 +861,34 @@
       "estado": "done",
       "evidencia": "src/hooks/useWorkspaceImage.ts: token de peticion MONOTONO (contador, no reloj) + src/App.tsx deja de limpiar la imagen en cada turno de tipo imagen (el borrado es por tipo de artefacto, no por turno). Defecto reportado por el dueno 2026-09-28 16:24",
       "origen": "defecto-medido-por-el-dueno"
+    },
+    {
+      "id": "P7.61",
+      "titulo": "El turno de juego tenia DOS duenos de la voz: el motor local cantaba la carta nueva y el LLM, en paralelo, decia la suya (inventada o repetida), asi que \"cada 2 turnos de nueva carta no hacia nada\"",
+      "estado": "done",
+      "origen": "defecto-medido-en-log-del-dueno",
+      "evidencia": "MEDIDO en el log real del dueno (.agent_tmp/dev-server.log, loteria activa): 22:19:35 TRACE determinista question=\"siguiente carta\" -> matched=true domain=\"game\" action=\"turn\"; 22:19:39 commitAndResolveTurn respuesta_voz=\"Siguiente carta: El sol sale para todos.\"; 22:19:52 otra vez domain=\"game\"/\"turn\"; 22:19:56 commitAndResolveTurn respuesta_voz=\"Siguiente carta: El sol sale para todos.\" -> EL MISMO TEXTO dos veces, la carta visible no cambio. Y a las 22:19:26 el LLM habia dicho \"Claro, aqui va la siguiente carta: El gorrito...\", una carta inventada. CAUSA (src/voice/lib/resolvedContract.js): buildResolvedContract anulaba el `juego` tardio cuando el fast-path ya habia despachado (no habia doble efecto en el motor) pero CONSERVABA `respuesta_voz: contract.contract.respuesta_voz` del LLM, asi que la voz del turno la tenia el modelo, que no ve el mazo. ARREGLO: la voz del turno pertenece al motor local cuando el fast-path de juego/ambiente lo reclama (`fastPathOwnsSpeech`); mismo criterio que resolveDeterministicCourtesySpeech, que ya devuelve \"\" para juego/ambiente. Configuracion NO entra (su accion no habla sola). GUARD: tests/gameTurnSingleOwnerSpeech.test.ts, que recorre TODOS los gameId de GAME_IDS + la ruta real (arbitro + contrato) con la loteria activa: 23 rojo -> 25 verde. Ademas App ya no recibe un contrato `juego` con la voz del LLM, luego tampoco hay doble locucion."
+    },
+    {
+      "id": "P7.62",
+      "titulo": "El descarte del artefacto anterior en el Pizarron era PERMANENTE (dismissedKinds solo crecia), asi que una busqueda o una generacion fallida borraba para toda la sesion el ultimo objeto de su tipo",
+      "estado": "done",
+      "origen": "defecto-medido-por-el-dueno",
+      "evidencia": "CAUSA (src/components/WorkspaceHub.tsx): el descarte nace para no repintar el artefacto viejo MIENTRAS se produce el nuevo (y en el mismo turno si la peticion termina sin resultado: casos 2 y 4, vigilados en tests/workspaceMediaResetOnRequest.test.tsx), pero el Set nunca se soltaba: pasada la peticion, el ultimo objeto persistido de ese tipo ya no volvia a pintarse. ARREGLO: el descarte se guarda CON el turno que lo provoco (`{seq, kinds}` atado a turnFocus.seq, la senal monotona que ya manda App) y solo vale mientras ese sea el turno vigente; al avanzar el turno expira solo. Dentro del mismo turno sigue siendo definitivo. Se guarda el turno en el propio estado (no se borra en un efecto aparte) para no depender del orden de los efectos: un efecto de liberacion posterior habria borrado el descarte recien puesto en curso. GUARD: tests/workspaceLastObjectPerTurn.test.tsx, 2 rojo -> verde, con los casos 2 y 4 re-verificados en verde."
+    },
+    {
+      "id": "P7.63",
+      "titulo": "La orden de un juego INEXISTENTE sin partida no llegaba a App (el fast-path exigia gameId) y la contestaba el LLM, que anunciaba la partida",
+      "estado": "done",
+      "origen": "defecto-medido",
+      "evidencia": "CAUSA (src/voice/hooks/useFluVoiceAssistant.js): `game?.gameId ? dispatchFastGameCommand(game, ...) : Promise.resolve(null)`. `unavailable` es accion de catalogo y NO trae gameId (lo dice el propio contrato de dispatchFastGameCommand, que ya aceptaba `isCatalogLevelGameAction(juego)`), asi que sin partida el contrato nunca se despachaba: la respuesta del catalogo no se oia y el turno caia al LLM. ARREGLO: el llamador usa el MISMO criterio que el despachador (`game?.gameId || isCatalogLevelGameAction(game)`), y buildResolvedContract anula tambien la voz del LLM en ese caso. Criterio unico, sin copia."
+    },
+    {
+      "id": "P7.64",
+      "titulo": "DEUDA MEDIDA: `npm run gate` (gate de contrato) esta en ROJO por tamano y ya lo estaba antes de esta sesion: 9290 lineas en alcance vs maxLines 2800, sobre un allow de 56 ficheros con base c467177",
+      "estado": "todo",
+      "origen": "deuda-detectada",
+      "evidencia": "MEDIDO con scripts: sumando `git diff --numstat c467177` de los ficheros del allow EN HEAD SIN ningun cambio de esta sesion -> 9290 lineas > 2800. Con el arreglo de esta sesion: 10331. Por eso el gate de tamano NO lo rompio esta sesion: venia roto de los commits 71f5f78 + a4e2d7d y de una base c467177 que quedo muy atras. No bloquea el commit (el pre-commit de AGENTS.md seccion 5 es lint + tipos) pero SI bloquea `npm run gate` como acto de cierre. Salida propuesta (fuera del alcance de esta sesion, necesita decision del dueno): subir `base` al ultimo commit de cierre, o trocear el alcance en contratos por dominio. No se toca base por decision propia: cambia que se mide."
     }
   ],
   "done": [
@@ -1749,6 +1777,21 @@
       "id": "P7.60",
       "commit": "71f5f78",
       "titulo": "La imagen recien generada no se borra: token de peticion monotono y sin clear por turno"
+    },
+    {
+      "id": "P7.61",
+      "commit": "033cc69",
+      "titulo": "El turno de juego tenia DOS duenos de la voz: el motor local cantaba la carta nueva y el LLM, en paralelo, decia la suya (inventada o repetida), asi que \"cada 2 turnos de nueva carta no hacia nada\""
+    },
+    {
+      "id": "P7.62",
+      "commit": "033cc69",
+      "titulo": "El descarte del artefacto anterior en el Pizarron era PERMANENTE (dismissedKinds solo crecia), asi que una busqueda o una generacion fallida borraba para toda la sesion el ultimo objeto de su tipo"
+    },
+    {
+      "id": "P7.63",
+      "commit": "033cc69",
+      "titulo": "La orden de un juego INEXISTENTE sin partida no llegaba a App (el fast-path exigia gameId) y la contestaba el LLM, que anunciaba la partida"
     }
   ]
 }
