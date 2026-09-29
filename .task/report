@@ -2775,3 +2775,108 @@ PENDIENTE DE VERIFICACION DE PRODUCTO (no automatizable, AGENTS.md A.1):
   en la pantalla del dueno: jugar una loteria y pedir cartas seguidas SIN que se
   repita la carta, y comprobar que tras una generacion fallida el ultimo video/
   imagen por tipo sigue en el Pizarron.
+
+
+---
+
+## Cierre de sesion 5 ("continua lo que quedo pendiente" -> "tienes la autorizacion! termina!")
+
+LOS 3 DEFECTOS QUE PIDIO EL DUENO, MEDIDOS ANTES / DESPUES
+
+1) LOTERIA "cada 2 turnos de nueva carta no hace nada / pierde una ejecucion"
+   - Antes (medido en el log real del dueno, 22:19:35): TRACE determinista
+     question="siguiente carta" -> matched=true domain="game" action="turn";
+     22:19:39 commitAndResolve... -> el motor local cantaba la carta nueva MIENTRAS
+     el LLM, en paralelo, decia la suya (inventada o la misma): el turno tenia DOS
+     duenos de la voz y de ahi el "no hace nada" cada 2 turnos. Cerrado en la ronda
+     previa (P7.61/033cc69, src/voice/lib/resolvedContract.js).
+   - Despues (medido hoy, motor real, RNG sembrado, 6 turnos seguidos): 6 cartas
+     DISTINTAS de 6, y la ronda avanza 2,3,4,5,6,7 -> ninguna ejecucion se pierde
+     ni se repite la carta. La loteria tambien queda cubierta por el muro nuevo
+     (la orden de arranque no es una jugada) sin afectar a la jugada legitima:
+     `engine.turn(sesion, "siguiente carta")` sigue dando la carta siguiente.
+
+2) QUIEN SOY "las pistas son demasiado vagas / no sirven"
+   - Antes (cerrado en la ronda previa, P7.59/71f5f78): la primera pista podia ser
+     una NEGACION ("No puedo volar" describe a 9 de los 12 animales) y cada fallo
+     repetia la MISMA pista.
+   - MEDIDO hoy con sonda sobre el motor real: quedaba la otra mitad -> el cursor
+     avanzaba "hasta la ultima", asi que del 4o fallo en adelante devolvia SIEMPRE
+     "Pista 4" (fallo 4, 5, 6 ... identicos): la partida se quedaba en bucle sin
+     informacion nueva. Arreglado en 80aa99d: el fallo con el cupo agotado REVELA
+     el animal y AVANZA al siguiente, reutilizando el avance que ya usaba "paso"
+     (un solo dueno, `cerrarAnimal`), sin puntuar.
+   - Despues (medido, semilla fija, leon): fallo 1 -> Pista 2, fallo 2 -> Pista 3,
+     fallo 3 -> Pista 4, fallo 4 -> "¡Se acabaron las pistas! Era leon. Siguiente:
+     Soy un animal. Pista 1: Vivo en el mar." (round 1 -> 2). Las pistas dichas
+     mientras quedan son todas DISTINTAS.
+
+3) PIZARRON "esta borrando el ultimo objeto" + prioridad de seleccion
+   - Cerrado en la ronda previa (P7.60/71f5f78 imagen que no aparecia por token de
+     peticion Date.now() y clear por turno; P7.62/033cc69 el descarte era
+     PERMANENTE y se llevaba por delante el ultimo objeto de su tipo; P7.63/033cc69
+     y la prioridad video->imagen->todo en ResultFeed/regla 18).
+   - Hoy se BLINDA con un invariante invertido: NINGUN turno limpia la imagen a
+     mano (la invalida su ruta unica), y el objeto artifact se reemplaza por su
+     ruta unica, no por un guard de tipo. Antes el test asertaba el
+     `workspaceImage.clear()` por turno que causaba el borrado: ahora su ausencia
+     es lo que el guard vigila (si alguien lo reintroduce, cae).
+
+DEFECTOS DE PRUEBA/LEDGER QUE APARECIERON AL MEDIR (y como quedaron)
+
+- P7.49 (cerrado): no era solo un test flaky, era un DEFECTO REAL. El ECO de la
+  orden de arranque ("vamos a jugar X") entraba al motor como jugada: medido con
+  semillas fijas y comparando la variante CONTRA la base, palabras_encadenadas
+  TERMINABA la partida declarando ganador al jugador con UNA sola jugada
+  (won:true/gameOver:true) y memoria_secuencias / abecedario / respiracion sumaban
+  punto y ronda que nadie dio. El test ademas creaba una sesion NUEVA por variante
+  (no comparaba nada) y tomaba la palabra inicial de Math.random (de ahi el
+  FALLA/PASA FALLA/PASA). Muro en el dueno UNICO del motor
+  (gameCatalog.getGameEngine -> withStartOrderWall + hasGameOrderFrame); la jugada
+  legitima no se toca. Guard G7: 21 juegos x 24 semillas x 3 variantes.
+- P7.64 (cerrado): el gate estaba en ROJO POR TAMANO y la causa NO era el trabajo.
+  `plans/ledger.json` habia cambiado de clase EOL (LF en la base -> CRLF), asi que
+  el diff reescribia el fichero ENTERO: 3497 de las 4728 lineas eran churn fantasma
+  de bookkeeping. Devuelto a LF: el diff del ledger baja a 111 lineas y el gate
+  pasa a VERDE. Misma clase que el eolGuard de esta sesion.
+- P7.66 (cerrado): la suite completa tenia 9 rojos PREEXISTENTES en 5 ficheros
+  (identicos en HEAD con y sin cambios: medido con stash). 4 eran tests OBSOLETOS
+  contra la realidad ya medida (loteria 16->54 cartas, abecedario 12->27 letras y
+  su tope de rondas = tamano del banco, palabrasEncadenadas con la palabra "avion"
+  ya usada por el motor, y turnArtifactKindPerTurn asertando el clear que P7.62
+  quito) y 2 congelaban el alta de agenda SIN instante (que desde P7.30b/dc2ff98 no
+  la reclama el determinista a proposito: la hora se PREGUNTA).
+- P7.68 (pendiente, registrado): en 1 de 3 corridas de la suite completa aparecio un
+  error NO controlado (rejection) sin ningun test en rojo (3867 verdes, exit 1). No
+  se reproduce a voluntad y no se toca nada a ciegas.
+
+MEDICIONES DE CIERRE (todas del arbol final)
+  - `npm run gate` -> VERDE (Alcance OK · tamano OK · DoD OK · guard OK).
+    Antes: "Diff demasiado grande: 4728 lineas > 2800".
+  - Pre-commit (AGENTS.md 5: guards + tipos): lint:guards 57 ficheros / 396 tests OK,
+    eslint . --max-warnings=0 OK, tsc -b OK (dos commits).
+  - Suite completa AUTORIZADA (FLU_AUTH_FULL_SUITE=1): 361 ficheros / 3868 tests,
+    0 errores, exit 0.
+  - DoD de juegos + pizarron: 12 ficheros / 419 tests OK.
+  - ledger:check OK: 3 pendientes (P7.52, P7.68 y nada mas), 5 cierres nuevos.
+  - `git diff --stat c467177` (evidencia 10): 31 ficheros, 1590 insertions(+),
+    200 deletions(-) -> dentro de maxFiles 60 / maxLines 2800.
+
+ENMIENDA 5a DEL CONTRATO (autorizada por el dueno: "tienes la autorizacion! termina!")
+  `.task/contract.json`: allow 56 -> 60 (<= maxFiles 60). Ficheros anadidos:
+  tests/palabrasEncadenadas.test.ts, tests/abecedario.test.ts, tests/loteria.test.ts,
+  tests/deterministicArbiter.test.ts. Motivo: son exactamente los 4 ficheros de test
+  que habia que alinear con la realidad MEDIDA (bancos que crecieron y el alta de
+  agenda sin instante). No se toca guard, guardExpect, dod, maxFiles ni maxLines.
+
+PENDIENTE QUE NO PUEDO CERRAR SIN EL DUENO
+  - P7.52: `npm run e2e:plan` sigue en rojo porque e2eScope solo declara App.tsx,
+    agendaCommandParser.ts y domainScopedIntent.ts, y este alcance toca 6 src/ mas
+    (gameActions, WorkspaceHub, turnArtifactKind, useFluVoiceAssistant,
+    deterministicArbiter, gameCommands). Mapeo medido y propuesto en el propio
+    item; declararlo o descartarlo es una decision del dueno (y valida correr E2E).
+  - Verificacion de PRODUCTO en la pantalla del dueno (AGENTS.md A.1, no
+    automatizable): jugar una loteria pidiendo cartas seguidas (6 cartas distintas,
+    sin repetir y sin perder turnos), jugar un quien soy fallando a proposito 5
+    veces (4 pistas distintas y luego revela y avanza) y comprobar que tras una
+    generacion fallida el ultimo video/imagen por tipo sigue en el Pizarron.

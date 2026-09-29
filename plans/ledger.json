@@ -781,9 +781,9 @@
     {
       "id": "P7.49",
       "titulo": "Deuda medida: tests/systemMatrix.test.ts G7 'orden de arranque + ruido' es FLAKY (depende de Math.random)",
-      "estado": "todo",
+      "estado": "done",
       "origen": "deuda-detectada",
-      "evidencia": "MEDIDO 6 corridas del mismo comando en el arbol actual: FALLA FALLA FALLA PASA PASA PASA; y 6 corridas en un git worktree de HEAD (node_modules enlazado): FALLA PASA FALLA PASA PASA FALLA -> el rojo es PREEXISTENTE, no regresion de esta sesion. Causa: el escenario llama engine.createSession() sin cfg y adoptRandom (src/core/games/gameUtils.ts:153) solo adopta el RNG si cfg.random es funcion, asi que la palabra inicial del banco es aleatoria (en palabrasEncadenadas, 'eco-con-wake termina la partida' depende de la letra inicial). Arreglo propuesto (no hecho: fuera del DoD y del guard del contrato): RNG sembrado en el escenario. Fuera de lint:guards, por eso nadie lo veia."
+      "evidencia": "VEREDICTO: NO era (solo) un test flaky. La causa raiz del FALLA/PASA es un DEFECTO DE PRODUCTO: el ECO de la orden de arranque (\"vamos a jugar X\") llegaba al motor como jugada y el motor la consumia. MEDIDO con semillas fijas y comparando la variante CONTRA la base (misma sesion inicial, antes el escenario creaba una sesion NUEVA por variante, asi que no comparaba nada): 4 motores decidieron DISTINTO al base -> palabras_encadenadas TERMINABA la partida declarando ganador al jugador con UNA sola jugada (won:true/gameOver:true) y memoria_secuencias / abecedario / respiracion sumaban punto y ronda que nadie dio (valid:true). ARREGLO en el dueno unico del motor (gameCatalog.getGameEngine -> withStartOrderWall, predicado hasGameOrderFrame de gameUtils): la orden de arranque NO decide nada y no toca la partida. Medido despues: G7 verde con 21 juegos x 24 semillas x 3 variantes de ruido; el eco ya no consume turno. Commit 0ebee8c."
     },
     {
       "id": "P7.50",
@@ -886,9 +886,37 @@
     {
       "id": "P7.64",
       "titulo": "DEUDA MEDIDA: `npm run gate` (gate de contrato) esta en ROJO por tamano y ya lo estaba antes de esta sesion: 9290 lineas en alcance vs maxLines 2800, sobre un allow de 56 ficheros con base c467177",
-      "estado": "todo",
+      "estado": "done",
       "origen": "deuda-detectada",
-      "evidencia": "MEDIDO con scripts: sumando `git diff --numstat c467177` de los ficheros del allow EN HEAD SIN ningun cambio de esta sesion -> 9290 lineas > 2800. Con el arreglo de esta sesion: 10331. Por eso el gate de tamano NO lo rompio esta sesion: venia roto de los commits 71f5f78 + a4e2d7d y de una base c467177 que quedo muy atras. No bloquea el commit (el pre-commit de AGENTS.md seccion 5 es lint + tipos) pero SI bloquea `npm run gate` como acto de cierre. Salida propuesta (fuera del alcance de esta sesion, necesita decision del dueno): subir `base` al ultimo commit de cierre, o trocear el alcance en contratos por dominio. No se toca base por decision propia: cambia que se mide."
+      "evidencia": "VEREDICTO: RESUELTO y la causa NO era el tamano del trabajo. MEDIDO: `plans/ledger.json` habia cambiado de clase EOL en el indice (LF en la base c467177 -> CRLF), asi que el diff reescribia el fichero ENTERO: 3497 de las 4728 lineas que el gate medía eran churn fantasma de bookkeeping (el codigo real eran ~1.2k). Devuelto a su EOL historico (LF): el diff del ledger baja de 3497 a 111 lineas y `npm run gate` pasa de ROJO (\"Diff demasiado grande: 4728 > 2800\") a VERDE (alcance/tamano/DoD/guards). Misma clase de defecto que el eolGuard de esta sesion. No se toco el instrumento (ni base, ni maxLines, ni el guard). Commit 0ebee8c."
+    },
+    {
+      "id": "P7.65",
+      "titulo": "El eco de la ORDEN DE ARRANQUE entraba al motor como jugada: con palabras_encadenadas el jugador ganaba la partida con una sola \"jugada\" (misma clase que el doble dueno de la voz)",
+      "estado": "done",
+      "evidencia": "MEDIDO con semillas fijas: engine.turn(sesion, \"vamos a jugar <juego>\") -> palabras_encadenadas won:true/gameOver:true; memoria_secuencias, abecedario y respiracion valid:true (punto y ronda que nadie dio). ARREGLO: muro en el dueno unico del motor (gameCatalog.getGameEngine -> withStartOrderWall con hasGameOrderFrame): sin decision, sin tocar la partida, sin copiar la regla en 21 ficheros. Guard: G7 de tests/systemMatrix.test.ts (21 juegos x 24 semillas x 3 variantes, variante CONTRA base) + tests/gameStartRequestNotInGameAction.test.ts. Commit 0ebee8c.",
+      "origen": "defecto-medido"
+    },
+    {
+      "id": "P7.66",
+      "titulo": "La suite completa (autorizada) tenia 9 ROJOS preexistentes en 5 ficheros que nadie habia medido: 4 tests OBSOLETOS contra bancos que crecieron y 2 que congelaban el alta de agenda sin instante",
+      "estado": "done",
+      "evidencia": "MEDIDO (FLU_AUTH_FULL_SUITE=1, en HEAD con y sin estos cambios: identicos -> preexistentes): loteria (banco 16 -> 54 cartas), abecedario (banco 12 -> 27 letras y su tope de rondas ES el tamano del banco), palabrasEncadenadas (el test creia que tras \"escoba\" FLU seguia con \"avion\", pero ya estaba en `usadas` y continua con \"auto\"), turnArtifactKindPerTurn (asertaba un workspaceImage.clear() por turno que P7.62 quito a proposito) y deterministicArbiter (reminder.add SIN instante, que desde P7.30b/dc2ff98 no la reclama el determinista: la hora se PREGUNTA). Se alinean con la realidad medida sin tocar ningun criterio de producto y se anaden los invariantes que faltaban (banco<->mazo, A-Z, ninguna limpieza de imagen por turno, alta sin instante no la da por hecha el determinista). MEDIDO despues: suite completa 361 ficheros / 3868 tests a VERDE (exit 0). Commit 0ebee8c.",
+      "origen": "deuda-detectada"
+    },
+    {
+      "id": "P7.67",
+      "titulo": "quien_soy: agotadas las pistas, el fallo repetia la ULTIMA pista para siempre (misma clase que el defecto del dueno: pistas que no aportan informacion nueva) y la partida podia quedarse en bucle",
+      "estado": "done",
+      "evidencia": "tests/quienSoy.test.ts: MEDIDO con sonda sobre el motor real (semilla fija, leon): antes, los fallos 4, 5 y 6 devolvian los TRES la misma Pista 4; despues, el fallo con el cupo de pistas agotado revela el animal y AVANZA al siguiente (Se acabaron las pistas! Era leon. Siguiente: ... Pista 1: ...), sin puntuar. El avance de animal pasa a tener un dueno unico local (cerrarAnimal) que ya usaba el salto paso: no se duplica el fin de partida ni el anuncio de la pista nueva. Fuente del motor: src/core/games/quienSoy.ts. Medido: quienSoy 20/20, DoD de juegos 419/419, gate VERDE, suite completa 361 ficheros / 3868 tests VERDE. La mitad previa del defecto (pista 1 negacion, fallo que repetia la misma pista) esta cerrada en P7.59/71f5f78. Commit 80aa99d.",
+      "origen": "defecto-medido-por-el-dueno"
+    },
+    {
+      "id": "P7.68",
+      "titulo": "La suite completa deja a veces un error NO controlado (rejection) sin ningun test en rojo: 1 de 3 corridas medidas, con 3867/3868 tests verdes",
+      "estado": "todo",
+      "evidencia": "MEDIDO en las corridas de cierre de esta sesion con FLU_AUTH_FULL_SUITE=1: corrida 1 -> 361 ficheros / 3867 tests y \"Errors 1 error\" (exit 1) sin ningun test fallido; corridas 2 y 3 -> 361 ficheros / 3868 tests, 0 errores, exit 0. No se ha aislado el origen (el resumen de vitest no lo atribuye a ningun fichero) y no se reproduce a voluntad, asi que NO se toca nada a ciegas. Siguiente paso propuesto: correr con --reporter=verbose redirigiendo stderr y buscar el unhandled rejection por fichero, o anadir un handler de proceso que lo atribuya.",
+      "origen": "deuda-detectada"
     }
   ],
   "done": [
@@ -1792,6 +1820,31 @@
       "id": "P7.63",
       "commit": "033cc69",
       "titulo": "La orden de un juego INEXISTENTE sin partida no llegaba a App (el fast-path exigia gameId) y la contestaba el LLM, que anunciaba la partida"
+    },
+    {
+      "id": "P7.49",
+      "commit": "0ebee8c",
+      "titulo": "La orden de arranque no es una jugada: el eco entraba al motor y 4 motores decidieron distinto al base (palabras_encadenadas terminaba la partida con una sola jugada)"
+    },
+    {
+      "id": "P7.64",
+      "commit": "0ebee8c",
+      "titulo": "Gate de tamano en verde: el \"tamano\" era un cambio de clase EOL del ledger (3497 de 4728 lineas de churn fantasma), no el trabajo"
+    },
+    {
+      "id": "P7.65",
+      "commit": "0ebee8c",
+      "titulo": "El eco de la orden de arranque como jugada (misma clase que el doble dueno de la voz)"
+    },
+    {
+      "id": "P7.66",
+      "commit": "0ebee8c",
+      "titulo": "9 rojos preexistentes de la suite completa: 4 tests obsoletos contra bancos que crecieron y 2 del alta de agenda sin instante"
+    },
+    {
+      "id": "P7.67",
+      "commit": "80aa99d",
+      "titulo": "quien_soy: agotadas las pistas, el fallo revela y avanza (antes repetia la ultima pista para siempre)"
     }
   ]
 }
