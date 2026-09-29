@@ -2625,3 +2625,63 @@ Validado contra: salida cruda de la sonda + npm run ledger:check OK (8 pendiente
 P7.52, P7.53..P7.58; 112 done; 166 cierres en 126 commits).
 No validado (producto, reservado al dueno): que la partida arranque y avance en su pantalla;
 queda pendiente hasta que se autorice la 3a enmienda y se implemente el arreglo.
+
+
+================================================================
+CIERRE DE RONDA (2026-09-28) - DOMINIO DE JUEGOS + 2 DEFECTOS REPORTADOS
+================================================================
+Commit de codigo: 71f5f78 (18 ficheros, +634/-72). Puerta VERDE (exit 0):
+  [task-gate] Alcance OK - tamano OK - DoD OK - guard OK.
+  DoD: 13 ficheros (gameDomainOwnership, gamePlaythrough, gameDoesNotHijackCommands,
+       gameCommandEscape, gameCatalog, gameStartRequestNotInGameAction, quienSoy,
+       surfaceMatrix, conversationTurnSingleRow, turnCommitGarbageGate,
+       garbageTranscript, rulesSimulator, fullSuitePathBarrier).
+  guard (green): gameDomainOwnership + gamePlaythrough + gameDoesNotHijackCommands +
+       gameStartRequestNotInGameAction + fullSuitePathBarrier.
+Pre-commit: lint 57/57 guards (396 tests) + eslint --max-warnings=0 -> 0 + tsc -b -> 0.
+
+SINTOMA DEL DUENO (log 22:16:28-22:17:08) -> CAUSA -> ARREGLO:
+- "cada 2 turnos pierde una ejecucion" (loteria: "siguiente carta" a las 22:16:45 y
+  22:16:58 sin respuesta de FLU) y la locucion DUPLICADA en pantalla
+  ("Okay Flow siguiente carta" / "Okay flu siguiente carta"):
+  P7.57 -> el escritor de fila comparaba por IGUALDAD ESTRICTA, asi que la reemision
+  del ASR abria fila nueva (y el predicado de relacion prefijo/sufijo `phrasesRelate`
+  existia SIN consumidor). Ahora el escritor usa `phrasesRelate` DENTRO del turno:
+  una locucion = una fila, y se conserva el texto MAS COMPLETO.
+  P7.56 -> el eco de la COLA del TTS entraba como turno de persona (la ventana se
+  anclaba a la FILA de FLU, escrita ANTES de hablar, y el umbral de cobertura 0.5 no
+  lo pasa una cola). Ahora la ventana se ancla al FIN DEL HABLA (`getLastCompletedSpeechAt`)
+  y un fragmento que coincide con la cola es ECO sin exigir cobertura completa.
+  P7.55 -> con la partida EN PAUSA, marcos sueltos de afirmacion ('si', 'dale',
+  'adelante', 'vamos') retomaban la partida y se comian el turno. Ahora la pausa solo
+  la levanta una ORDEN de juego.
+
+DOBLE EJECUCION EN EL CHAT DE OPENHANDS (reporte del dueno): medido con el log real
+de la conversacion previa (2229 eventos): 0 eventos consecutivos identicos y 721
+ActionEvent con 721 `llm_response_id` distintos -> NO hubo doble ejecucion del agente
+ni lote paralelo. Lo que se ve duplicado en la UI es el MISMO evento renderizado por
+los dos canales de razonamiento, no dos corridas.
+
+ENMIENDA DEL CONTRATO (4a, extension): allow += src/hooks/useWorkspaceImage.ts,
+src/voice/lib/conversationDialogue.js (requerido por el objetivo E: es el dueno del
+contexto de eco) y tests/quienSoy.test.ts; dod += tests/quienSoy.test.ts. No se tocan
+guard, guardExpect, maxFiles ni maxLines.
+
+AUDITORIA DE JUEGOS HERMANOS (mismo defecto de pistas que quien_soy): NINGUNO lo tiene.
+  adivinaNumero: pistas progresivas ya implementadas (paridad -> mayor/menor que el
+    medio -> rango cercano) y el fallo numerico da mayor/menor con frio/caliente.
+  trivia: pregunta con 4 opciones + pista a peticion -> el reintento es informativo.
+  ahorcado: revela letras; riddles: la pregunta ES la pista y hay pista a peticion;
+  adivinaCancion: repite la cancion (el reintento es la propia mecanica).
+  quien_soy era el UNICO con cursor de pistas y era el unico defectuoso (P7.59).
+
+LEDGER: P7.53..P7.60 cerrados en done[] apuntando a 71f5f78. ledger:check OK:
+  2 pendientes (P7.49 flaky de systemMatrix G7 por RNG; P7.52 e2eScope en rojo),
+  120 done, 0 blocked, 0 decision, 174 cierres en 127 commits.
+
+PENDIENTE:
+  - Verificacion de producto (no automatizable, AGENTS.md A.1): en la pantalla del
+    dueno, el juego arranca y avanza con "siguiente carta", la instruccion no se
+    duplica y la imagen recien generada se ve.
+  - P7.52: declarar e2eScope o descartarlo con razon (otra vuelta de enmienda).
+  - P7.49: flaky PREEXISTENTE de systemMatrix G7 (createSession() sin cfg).

@@ -809,44 +809,58 @@
     {
       "id": "P7.53",
       "titulo": "Orden de juego con nombre FUERA del catalogo: no la posee nadie y la IA simula el arranque (bug de producto reportado por el dueno: 'Adivina quien no juega')",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido-por-el-dueno",
       "evidencia": "MEDIDO con las funciones reales (sonda temporal sobre resolveGameCommandFromText + matchGameIntent + matchGameAliasOnly + resolveDeterministicCommand, borrada tras medir): 'vamos a jugar Adivina quien' -> intent=null bare=null gameCmd=null domain=null; identico para 'quiero jugar a adivina quien', 'juguemos adivina quien', 'continuamos con el juego', 'seguimos jugando', 'vamos a jugar', 'quiero jugar a algo', 'empecemos a jugar', 'empieza tu', 'si', 'adelante', 'dale', 'pista'. LOG DEL DUENO (2026-09-28, tramo 18:11:56-18:12:47): las 8 frases del tramo resuelven a NADA (ni juego ni otro dominio) y las contesta el LLM, que anuncia '¡Claro! Vamos a jugar a Adivina quien' (18:12:14) y 'Continuemos con Adivina quien' (18:12:47) sin que exista partida. CAUSA: 'adivina quien' NO esta en GAME_CATALOG (los alias de quien_soy son 'quien soy','a quien soy','quien soy yo','adivina quien soy', src/core/games/gameCatalog.ts:171) y NO HAY DUENO para 'orden de juego con nombre desconocido': matchGameIntent exige alias conocido (gameCatalog.ts:238) y devuelve null, y el resolvedor no tiene rama para ese caso. El comentario de gameCatalog.ts:279-282 documenta que se cerro 'la IA simulaba el arranque' para el NOMBRE PELADO CONOCIDO (paso 5b, gameCommands.js:272), pero la puerta sigue abierta para el nombre DESCONOCIDO con marco de juego delante. DECISION DE PRODUCTO PENDIENTE DEL DUENO: (a) 'adivina quien' pasa a ser alias de quien_soy (mismo mecanica: FLU piensa un personaje y el jugador pregunta) o (b) el dueno de ordenes de juego responde con el menu ('ese juego no lo tengo; estos son los que hay') y el LLM no puede inventar la partida. Sin (a) o (b), el defecto se reproduce con CUALQUIER nombre de juego que no exista."
     },
     {
       "id": "P7.54",
       "titulo": "Con partida viva, una orden de juego AJENA o de nombre desconocido se la come el motor como jugada: los marcos del motor son tokens sueltos ('vamos', 'adelante', 'dale')",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido-por-el-dueno",
       "evidencia": "MEDIDO con loteria activa (setActiveGameSession({id:'loteria',...})): 'vamos a jugar Adivina quien' -> {gameId:'loteria',action:'turn'}; igual 'quiero jugar a adivina quien', 'juguemos adivina quien', 'vamos a jugar', 'quiero jugar a algo', 'juguemos a lo que dijiste', 'empecemos a jugar', 'continuamos con el juego', 'seguimos jugando'. CAUSA: loteria.isGameCommand (src/core/games/loteria.ts:264-270) devuelve true si el texto contiene CUALQUIER token de NEXT_FRAMES (src/core/games/loteria.ts:88-94), lista que incluye 'vamos','adelante','dale','ok','okey','vale','si','listo','sigue'; 'vamos a jugar adivina quien' contiene 'vamos'. gameCommands.js:229-235 (paso 5) consulta engine.isGameCommand ANTES de los pasos 5b/6, asi que la orden de arranque de OTRO juego se convierte en jugada del juego activo (la loteria canta carta) en vez de atenderse. El muro actual tests/gameStartRequestNotInGameAction.test.ts recorre el catalogo con entry.aliases[0]: solo cubre los nombres CONOCIDOS, el desconocido no lo mira nadie. Arreglo propuesto (un criterio, sin listas nuevas): el paso 5 no puede consumir como turno un texto con MARCO DE JUEGO (hasGameOrderFrame, gameCatalog.ts) que no sea orden del juego activo."
     },
     {
       "id": "P7.55",
       "titulo": "La PAUSA de la partida no protege de los marcos del motor: una afirmacion suelta ('si', 'dale', 'adelante', 'vamos') retoma la partida y la jugada se come el turno",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido-por-el-dueno",
       "evidencia": "MEDIDO con loteria SUSPENDIDA (suspended:true, la pausa que aplica noteGameTurn): 'vamos a jugar Adivina quien' -> turn, 'vamos a jugar' -> turn, 'si' -> turn, 'adelante' -> turn, 'dale' -> turn, 'pista' -> turn. Solo 'continuamos con el juego', 'quiero jugar a algo', 'juguemos adivina quien', 'empecemos a jugar', 'seguimos jugando', 'empieza tu' quedan en null (paso 7, gameCommands.js:256). CAUSA: la pausa bloquea la RESPUESTA ABIERTA (paso 7) pero NO los pasos 1-5b, y los pasos 4/5 son marcos del motor y comandos propios que incluyen AFIRMACIONES SUELTAS (NEXT_FRAMES 'si','ok','vale','dale','adelante','vamos'). El comentario de gameCommands.js:249-255 declara esa regla a proposito ('la partida se retoma con CUALQUIERA de sus ordenes'), pero el efecto medido es que la partida se retoma con un 'si' que en la conversacion significa otra cosa (log del dueno: 18:12:03 'Okay Flow empiezas', 18:12:22 'Okay Flow adelante', 18:12:46 'Okay Flow si'). Nota: en el log del dueno NO habia partida viva (ningun turno se consumio como jugada: medido, los 8 turnos resuelven null y los contesta el LLM), asi que este defecto es independiente del P7.53/P7.54 y se mide con la sesion puesta a mano."
     },
     {
       "id": "P7.56",
       "titulo": "El eco de la COLA del TTS entra como turno del usuario: la ventana de eco se ancla al TEXTO de FLU (antes del TTS) y el umbral de cobertura rechaza un fragmento",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido-por-el-dueno",
       "evidencia": "MEDIDO con la funcion real: isAssistantVoiceEcho('o prefieres que te cuente algo mas esta', 'He notado que repeti la informacion sobre los ratones. ¿Te gustaria que continuemos con la loteria o prefieres que te cuente algo mas?') = false; y con la cola pegada al turno real ('...algo mas esta Okay flu estabamos jugando Adivina quien') = false; solo la recaptura COMPLETA de la frase da true. Umbrales: assistantEchoMinWords 3 / assistantEchoMinCoverage 0.5 / assistantEchoWindowMs 2500 (src/core/config/sharedConfig.ts:368-380) consumidos en src/voice/lib/conversationStream.js:24-25 y src/voice/lib/transcriptIngress.js:52 y :588-592. DOS HUECOS: (1) ANCLAJE: la ventana se mide contra deriveAssistantLastAtMs (src/voice/lib/conversationDialogue.js:255-259) = timestamp de la FILA de FLU, y esa fila se escribe al producir la RESPUESTA (src/App.tsx:1963 logFluReply ANTES de speakFlu en :2121), no al terminar el TTS; una frase de 20 palabras tarda ~10 s en hablarse, asi que a los 2.5 s la ventana ya expiro mientras FLU sigue hablando. (2) COBERTURA: la cola del TTS es un FRAGMENTO de la frase de FLU (8 de 20 palabras = 0.4 < 0.5) y el detector exige cobertura de la frase completa, no sufijo. LOG DEL DUENO: fila de usuario 18:12:34 'o prefieres que te cuente algo mas esta Okay flu estabamos jugando Adivina quien' cuando FLU acababa de decir '...o prefieres que te cuente algo mas?' (fila de FLU 18:12:22): el turno del dueno entra con las palabras de FLU delante y el LLM las lee como suyas (de ahi 'He notado que repeti la informacion sobre los ratones'). HUECO ADICIONAL: la puerta del motor local usa el flag global (src/voice/lib/asr/whisperRecognitionEngine.js:148 y :249, isSpeechSynthesisSpeaking) que el propio repo documenta como pegajoso (src/voice/lib/fluSpeech.js:197-205) en vez de isFluSpeaking, y el habla va por CHUNKS (src/voice/lib/fluSpeech.js:357-372), asi que entre trozos el flag global cae."
     },
     {
       "id": "P7.57",
       "titulo": "Instruccion DUPLICADA: una reemision de la misma locucion que llega despues de la respuesta de FLU abre fila nueva (el dedup del escritor de fila solo mira el turno actual y solo compara por igualdad)",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido-por-el-dueno",
       "evidencia": "MEDIDO en el log del dueno: 18:12:06 'Okay Flow empiezas' + 18:12:06 'Okay Flow empiezas Okay Flow empieza tu' y 18:12:34 'o prefieres que te cuente algo mas esta' + 18:12:34 'o prefieres que te cuente algo mas esta Okay flu estabamos jugando Adivina quien': DOS filas de usuario para UNA locucion (una es prefijo de la otra) y la respuesta de FLU queda alineada a una sola (desalineacion ya reportada el 16:20:29/16:20:33). CAUSA: el escritor unico de la fila de usuario (src/voice/lib/conversationTurnRow.ts:commitUserTurnRow) acota su dedup al TURNO ACTUAL (turnStart = filas posteriores a la ultima respuesta de FLU, lineas 61-74) y compara solo por IGUALDAD estricta (paso 2, lineas 83-92), asi que una reemision TARDIA de la misma locucion que llega DESPUES de la respuesta de FLU es indistinguible de una frase nueva y abre fila (paso 3, lineas 94-104). El predicado que falta YA EXISTE Y ESTA MUERTO: phrasesRelate (relacion prefijo/sufijo normalizada) en src/voice/lib/activeListen.js:237-242 no tiene consumidor (medido: rg phrasesRelate en src/ lo devuelve solo en su definicion). El unico dedup global (isDuplicateTurnCommit, src/voice/lib/turnStream.js:108-117, usado en src/voice/lib/conversationStreamCommit.js:206-218) usa phrasesEquivalent (igualdad exacta, src/voice/lib/activeListen.js:231-235) y su discriminador 'hubo habla nueva' (lastResultAt > lastCommitAt) deja pasar la reemision parcial. OJO: P7.48 declaro cerrada 'la fila duplicada del turno' como efecto del arreglo del juego; esta medicion muestra que el caso sin partida sigue vivo."
     },
     {
       "id": "P7.58",
       "titulo": "El nombre PELADO con palabra interrogativa ('quien soy') no arranca fuera de partida: el gate de pregunta corre antes que el alias pelado",
-      "estado": "todo",
+      "estado": "done",
       "origen": "defecto-medido",
       "evidencia": "MEDIDO: sin partida activa, resolveGameCommandFromText('quien soy') -> null aunque matchGameAliasOnly('quien soy') resuelve quien_soy; con la loteria activa o en pausa -> {gameId:'quien_soy',action:'switch'}. CAUSA: en la ruta SIN partida el gate de pregunta (isQuestionLike, QUESTION_STARTERS en src/voice/lib/gameCommands.js:59-90) corre ANTES del nombre pelado (gameCommands.js:263 vs :272), y 'quien' es arranque interrogativo, asi que el nombre del juego nunca llega al catalogo. En la ruta CON partida el orden es el inverso (alias pelado :239 antes del gate :246), luego el MISMO texto arranca o no segun haya partida: dos criterios para la misma decision. Impacto: es justo el nombre con el que el dueno pide el juego ('adivina quien' / 'quien soy'), y el turno cae al LLM como charla."
+    },
+    {
+      "id": "P7.59",
+      "titulo": "quien_soy con partida INGANABLE: la primera pista podia ser una NEGACION (No puedo volar describe a 9 de los 12 animales) y el fallo repetia la MISMA pista, asi que el jugador no acumulaba informacion (defecto reportado por el dueno: con esas pistas quien va a poder completar el juego)",
+      "estado": "done",
+      "evidencia": "src/core/games/quienSoy.ts: quienSoyHints (positivas antes que negaciones; la primera pista nunca es una negacion) + el fallo AVANZA el cursor de pistas y el Casi solo se dice si el animal nombrado es del banco y de la MISMA categoria. MEDIDO en el log del dueno 22:11:37 (un pinguino respondido contra una negacion no es un casi). Guard: tests/quienSoy.test.ts",
+      "origen": "defecto-medido-por-el-dueno"
+    },
+    {
+      "id": "P7.60",
+      "titulo": "La imagen recien generada no aparecia: el token de peticion era Date.now() (dos peticiones del mismo ms compartian token, asi que una tumbaba el resultado de la otra) y un clear del turno invalidaba la generacion en vuelo; ademas App limpiaba la imagen en TODO turno de tipo imagen (borraba el ultimo objeto de su tipo)",
+      "estado": "done",
+      "evidencia": "src/hooks/useWorkspaceImage.ts: token de peticion MONOTONO (contador, no reloj) + src/App.tsx deja de limpiar la imagen en cada turno de tipo imagen (el borrado es por tipo de artefacto, no por turno). Defecto reportado por el dueno 2026-09-28 16:24",
+      "origen": "defecto-medido-por-el-dueno"
     }
   ],
   "done": [
@@ -1695,6 +1709,46 @@
       "id": "P7.47",
       "commit": "2897e15",
       "titulo": "Restaurada la anti-deriva de reglas de Anexo B (rulesSimulator)"
+    },
+    {
+      "id": "P7.53",
+      "commit": "71f5f78",
+      "titulo": "Orden de juego fuera del catalogo: la posee el dominio de juegos (accion unavailable), no el LLM"
+    },
+    {
+      "id": "P7.54",
+      "commit": "71f5f78",
+      "titulo": "Con partida viva, un marco de orden de juego ajeno no se consume como jugada"
+    },
+    {
+      "id": "P7.55",
+      "commit": "71f5f78",
+      "titulo": "La pausa solo la levanta una ORDEN de juego (ni marcos sueltos ni respuesta abierta)"
+    },
+    {
+      "id": "P7.56",
+      "commit": "71f5f78",
+      "titulo": "El eco de la COLA del TTS no abre turno de persona (ventana anclada al fin del habla)"
+    },
+    {
+      "id": "P7.57",
+      "commit": "71f5f78",
+      "titulo": "Una locucion reemitida = una fila (dedup por phrasesRelate dentro del turno)"
+    },
+    {
+      "id": "P7.58",
+      "commit": "71f5f78",
+      "titulo": "El nombre pelado con palabra interrogativa (quien soy) arranca sin partida"
+    },
+    {
+      "id": "P7.59",
+      "commit": "71f5f78",
+      "titulo": "quien_soy: la primera pista nunca es una negacion y el fallo aporta informacion nueva"
+    },
+    {
+      "id": "P7.60",
+      "commit": "71f5f78",
+      "titulo": "La imagen recien generada no se borra: token de peticion monotono y sin clear por turno"
     }
   ]
 }
