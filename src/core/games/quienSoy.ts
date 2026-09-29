@@ -20,6 +20,16 @@ import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_
 export interface QuienSoyItem {
     nombre: string;
     pistas: string[];
+    /**
+     * Rasgo observable que revela cada pista, en el MISMO orden y con la MISMA
+     * longitud que `pistas`. Es lo que hace medible "la pista aporta": si el
+     * jugador solo sabe los rasgos revelados hasta ahora, los animales que
+     * siguen siendo posibles son los que tienen TODOS esos rasgos. Una pista
+     * cuyo rasgo no descarta a nadie es relleno, y hay guard que lo impide.
+     */
+    revela: QuienSoyRasgo[];
+    /** Rasgos que el animal TIENE de verdad (vocabulario cerrado). */
+    rasgos: QuienSoyRasgo[];
     keywords?: string[];
     /** Atributos sí/no del animal (vocabulario compartido, para 20 preguntas). */
     atributos?: Partial<Record<QuienSoyAttribute, boolean>>;
@@ -29,74 +39,120 @@ export interface QuienSoyItem {
 export type QuienSoyAttribute =
     | 'vuela' | 'agua' | 'grande' | 'mamifero' | 'plumas' | 'insecto';
 
+/**
+ * Vocabulario CERRADO de rasgos observables de una pista. Cada rasgo agrupa a
+ * los animales que lo comparten, y eso es lo que permite medir si una pista
+ * acota o no. Añadir un animal al banco obliga a declarar sus rasgos; el guard
+ * de calibración comprueba que sigue siendo adivinable.
+ */
+export type QuienSoyRasgo =
+    | 'mamifero' | 'ave' | 'insecto' | 'reptil'
+    | 'vuela' | 'acuatico' | 'grande'
+    | 'felino' | 'melena' | 'rugido' | 'bigotes' | 'ronroneo'
+    | 'trompa' | 'colmillos' | 'cuello_largo' | 'manchas'
+    | 'salta_ola' | 'inteligente' | 'salta_alto' | 'bolsa' | 'australia'
+    | 'nocturno' | 'ojos_grandes' | 'ulula' | 'cola_abanico' | 'plumas_coloridas'
+    | 'blanco_y_negro' | 'hielo' | 'colmena' | 'miel'
+    | 'oruga' | 'alas_coloridas' | 'caparazon' | 'lento';
+
 export const QUIEN_SOY_BANK: readonly QuienSoyItem[] = Object.freeze([
     {
         nombre: 'leon',
-        pistas: ['Vivo en la selva.', 'Soy muy fuerte y valiente.', 'Tengo una melena enorme.', 'Rujo fuerte: ¡grrr!'],
+        pistas: ['Soy un mamífero: tengo pelo y de pequeño tomé leche de mi mamá.', 'Soy un felino: ando a cuatro patas y tengo garras.', 'Tengo una melena enorme.', 'Rujo fuerte: ¡grrr!'],
+        revela: ['mamifero', 'felino', 'melena', 'rugido'],
+        rasgos: ['mamifero', 'felino', 'melena', 'rugido'],
         atributos: { vuela: false, agua: false, grande: true, mamifero: true, plumas: false, insecto: false },
     },
     {
         nombre: 'elefante',
-        pistas: ['Soy el animal más grande de la tierra.', 'Tengo una trompa larga.', 'Mis orejas son muy grandes.', 'Tengo colmillos de marfil.'],
+        pistas: ['Soy un mamífero muy grande.', 'Soy el animal más grande de la tierra.', 'Tengo una trompa larga.', 'Tengo colmillos de marfil.'],
+        revela: ['mamifero', 'grande', 'trompa', 'colmillos'],
+        rasgos: ['mamifero', 'grande', 'trompa', 'colmillos'],
         atributos: { vuela: false, agua: false, grande: true, mamifero: true, plumas: false, insecto: false },
     },
     {
         nombre: 'delfin',
-        pistas: ['Vivo en el mar.', 'Soy muy inteligente y juguetón.', 'Salto sobre el agua.', 'No soy un pez, soy un mamífero.'],
+        pistas: ['Soy un mamífero que vive en el agua.', 'Vivo en el mar y nado muy rápido.', 'Salto sobre el agua.', 'Soy muy inteligente y juguetón.'],
+        revela: ['mamifero', 'acuatico', 'salta_ola', 'inteligente'],
+        rasgos: ['mamifero', 'acuatico', 'salta_ola', 'inteligente'],
         atributos: { vuela: false, agua: true, grande: false, mamifero: true, plumas: false, insecto: false },
     },
     {
         nombre: 'tortuga',
-        pistas: ['Me muevo muy despacio.', 'Llevo mi casa a cuestas.', 'Vivo muchísimos años.', 'Me escondo dentro de mi caparazón.'],
+        pistas: ['Nado en el agua, pero salgo a respirar.', 'Soy un reptil: tengo escamas.', 'Llevo mi casa a cuestas.', 'Me muevo muy despacio.'],
+        revela: ['acuatico', 'reptil', 'caparazon', 'lento'],
+        rasgos: ['acuatico', 'reptil', 'caparazon', 'lento'],
         atributos: { vuela: false, agua: false, grande: false, mamifero: false, plumas: false, insecto: false },
     },
     {
         nombre: 'buho',
         keywords: ['buho', 'lechuza'],
-        pistas: ['Salgo de noche.', 'Tengo los ojos muy grandes.', 'Vuelo en silencio.', 'Hago "uuu uuu".'],
+        pistas: ['Soy un ave y tengo plumas.', 'Salgo de noche.', 'Tengo los ojos muy grandes.', 'Hago "uuu uuu".'],
+        revela: ['ave', 'nocturno', 'ojos_grandes', 'ulula'],
+        rasgos: ['ave', 'nocturno', 'ojos_grandes', 'ulula'],
         atributos: { vuela: true, agua: false, grande: false, mamifero: false, plumas: true, insecto: false },
     },
     {
         nombre: 'gato',
-        pistas: ['Me gusta dormir mucho.', 'Digo "miau".', 'Cazo ratones.', 'Ronroneo cuando me acarician.'],
+        pistas: ['Soy un mamífero pequeñito que vive en casa.', 'Soy un felino y tengo las uñas muy afiladas.', 'Tengo bigotes largos y sensibles.', 'Ronroneo cuando me acarician.'],
+        revela: ['mamifero', 'felino', 'bigotes', 'ronroneo'],
+        rasgos: ['mamifero', 'felino', 'bigotes', 'ronroneo'],
         atributos: { vuela: false, agua: false, grande: false, mamifero: true, plumas: false, insecto: false },
     },
     {
         nombre: 'canguro',
-        pistas: ['Tengo una bolsa en la panza.', 'Salto muy alto.', 'Vivo en Australia.', 'Llevo a mi bebé en mi bolsa.'],
+        pistas: ['Soy un mamífero y llevo a mis crías conmigo.', 'Salto muy alto.', 'Tengo una bolsa en la panza.', 'Vivo en Australia.'],
+        revela: ['mamifero', 'salta_alto', 'bolsa', 'australia'],
+        rasgos: ['mamifero', 'salta_alto', 'bolsa', 'australia'],
         atributos: { vuela: false, agua: false, grande: false, mamifero: true, plumas: false, insecto: false },
     },
     {
         nombre: 'pinguino',
-        pistas: ['No puedo volar.', 'Vivo en el frío.', 'Voy vestido de negro y blanco.', 'Me deslizo sobre el hielo.'],
+        pistas: ['Soy un ave, pero no puedo volar.', 'Nado muy bien y vivo donde hace mucho frío.', 'Voy vestido de negro y blanco.', 'Me deslizo sobre el hielo.'],
+        revela: ['ave', 'acuatico', 'blanco_y_negro', 'hielo'],
+        rasgos: ['ave', 'acuatico', 'blanco_y_negro', 'hielo'],
         atributos: { vuela: false, agua: true, grande: false, mamifero: false, plumas: true, insecto: false },
     },
     {
         nombre: 'abeja',
         keywords: ['abeja', 'abejita'],
-        pistas: ['Soy muy pequeñita.', 'Hago algo muy dulce.', 'Vivo en una colmena.', 'Hago la miel.'],
+        pistas: ['Soy muy pequeñita y tengo alas.', 'Soy un insecto, no un ave.', 'Vivo en una colmena.', 'Hago la miel.'],
+        revela: ['vuela', 'insecto', 'colmena', 'miel'],
+        rasgos: ['vuela', 'insecto', 'colmena', 'miel'],
         atributos: { vuela: true, agua: false, grande: false, mamifero: false, plumas: false, insecto: true },
     },
     {
         nombre: 'pavoreal',
         keywords: ['pavoreal', 'pavo real', 'pavo'],
-        pistas: ['Tengo colores muy bonitos.', 'Tengo una cola enorme y colorida.', 'Abro mi cola como un abanico.', 'Soy un ave elegante.'],
+        pistas: ['Soy un ave con muchísimas plumas.', 'Puedo volar, aunque prefiero caminar.', 'Abro mi cola como un abanico.', 'Mis plumas brillan con muchos colores.'],
+        revela: ['ave', 'vuela', 'cola_abanico', 'plumas_coloridas'],
+        rasgos: ['ave', 'vuela', 'cola_abanico', 'plumas_coloridas'],
         atributos: { vuela: true, agua: false, grande: false, mamifero: false, plumas: true, insecto: false },
     },
     {
         nombre: 'jirafa',
-        pistas: ['Tengo el cuello muy largo.', 'Soy muy alta.', 'Como hojas de los árboles.', 'Tengo manchas en el cuerpo.'],
+        pistas: ['Soy un mamífero que come plantas.', 'Soy tan alta que casi toco las nubes.', 'Tengo el cuello muy largo.', 'Tengo manchas en el cuerpo.'],
+        revela: ['mamifero', 'grande', 'cuello_largo', 'manchas'],
+        rasgos: ['mamifero', 'grande', 'cuello_largo', 'manchas'],
         atributos: { vuela: false, agua: false, grande: true, mamifero: true, plumas: false, insecto: false },
     },
     {
         nombre: 'mariposa',
-        pistas: ['Antes era una oruga.', 'Tengo alas de colores.', 'Vuelo de flor en flor.', 'Soy muy ligera.'],
+        pistas: ['Tengo alas y soy muy ligera.', 'Soy un insecto de jardín.', 'Antes era una oruga.', 'Tengo alas de colores.'],
+        revela: ['vuela', 'insecto', 'oruga', 'alas_coloridas'],
+        rasgos: ['vuela', 'insecto', 'oruga', 'alas_coloridas'],
         atributos: { vuela: true, agua: false, grande: false, mamifero: false, plumas: false, insecto: true },
     },
 ]);
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = QUIEN_SOY_BANK.length;
+
+/**
+ * Minimo de candidatos que debe dejar la PRIMERA pista: si resolviera el juego
+ * de golpe no habria juego. Es parte del invariante de calibracion.
+ */
+export const MIN_CANDIDATOS_PRIMERA = 3;
 
 /**
  * Preguntas sí/no del jugador (20 preguntas): cada regla asocia tokens de la
@@ -299,6 +355,29 @@ export function quienSoyHints(item: QuienSoyItem): string[] {
     const positivas = item.pistas.filter((pista) => !NEGATION_CLAUSE.test(pista));
     const negaciones = item.pistas.filter((pista) => NEGATION_CLAUSE.test(pista));
     return [...positivas, ...negaciones];
+}
+
+/**
+ * CALIBRACION de un animal: cuantos animales siguen siendo posibles despues de
+ * cada pista. Es la medida del defecto "pistas vagas/inutiles" y la lee el guard
+ * de tests/quienSoy.test.ts.
+ *
+ * Un animal es candidato si tiene TODOS los rasgos revelados hasta ese momento.
+ * Invariante que hace jugable la partida:
+ *   - la primera pista NUNCA resuelve (deja al menos MIN_CANDIDATOS_PRIMERA);
+ *   - mientras haya mas de un candidato, cada pista siguiente DEBE descartar
+ *     alguno (una pista que no descarta nada es relleno);
+ *   - la ultima pista deja EXACTAMENTE un candidato (se puede adivinar).
+ */
+export function quienSoyNarrowing(
+    item: QuienSoyItem,
+    bank: readonly QuienSoyItem[] = QUIEN_SOY_BANK,
+): number[] {
+    const revelados: QuienSoyRasgo[] = [];
+    return item.revela.map((rasgo) => {
+        revelados.push(rasgo);
+        return bank.filter((candidato) => revelados.every((r) => candidato.rasgos.includes(r))).length;
+    });
 }
 
 /** Categoria del animal segun el vocabulario de atributos (plumas/mamifero/insecto). */
