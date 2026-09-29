@@ -69,11 +69,21 @@ export function dispatcherHandlerFor(domain: unknown): DispatcherDomainEntry | n
  * por dominio (`domain === 'game' && !resolved?.fastPathGame`, y lo mismo para
  * environment) en cada rama. Un dominio de estado nuevo se declara AQUÍ.
  */
-export const FAST_PATH_EXECUTED_MARKS: Readonly<Record<string, string>> = Object.freeze({
+export const FAST_PATH_EXECUTED_MARKS = Object.freeze({
     config: 'fastPathConfig',
     game: 'fastPathGame',
     environment: 'fastPathEnvironment',
-});
+} as const);
+
+/**
+ * Forma que debe tener el contrato para declarar las marcas de "ya ejecutado",
+ * DERIVADA de la tabla (no una lista escrita a mano que se queda corta: el tipo
+ * del contrato declaraba 2 de las 3 marcas). Añadir una marca a la tabla la
+ * declara también aquí, sin tocar el tipo.
+ */
+export type FastPathExecutedMarks = {
+    [K in (typeof FAST_PATH_EXECUTED_MARKS)[keyof typeof FAST_PATH_EXECUTED_MARKS]]?: unknown;
+};
 
 /**
  * true si el fast-path de estado del hook YA ejecutó el turno para ese dominio,
@@ -82,7 +92,8 @@ export const FAST_PATH_EXECUTED_MARKS: Readonly<Record<string, string>> = Object
  * comportamiento: el calendario/estado se sigue aplicando como hasta ahora).
  */
 export function isTurnAlreadyExecuted(resolved: unknown, domain: unknown): boolean {
-    const mark = FAST_PATH_EXECUTED_MARKS[String(domain ?? '')];
+    const marks: Readonly<Record<string, string>> = FAST_PATH_EXECUTED_MARKS;
+    const mark = marks[String(domain ?? '')];
     if (!mark) return false;
     return (resolved as Record<string, unknown> | null | undefined)?.[mark] === true;
 }

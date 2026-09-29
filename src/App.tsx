@@ -194,7 +194,7 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { isAIProvider } from './app/appTypeGuards';
-import { arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
+import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
 import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
 import { applyConfigAction } from './app/configActions';
 import { applyGameAction } from './app/gameActions';
@@ -352,7 +352,7 @@ type ResolvedContract = Omit<FluContract, 'workspace'> & {
 };
 
 /** Payload entregado por el motor de voz al resolver un contrato. */
-interface ContractResolution {
+type ContractResolution = FastPathExecutedMarks & {
     userCommitOnly?: boolean; effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
     sameTurn?: boolean;
     transcript?: string;
@@ -362,9 +362,7 @@ interface ContractResolution {
     replaceLastRawLog?: boolean;
     contract?: ResolvedContract | null;
     diagnostics?: ContractDiagnostics;
-    fastPathGame?: unknown;
-    fastPathEnvironment?: unknown;
-}
+};
 
 /** Intención estructurada de nota aceptada por el manejador de voz. */
 interface NoteVoiceIntent {
@@ -1949,8 +1947,8 @@ function App() {
                 !dupResponse &&
                 !juegoAction?.action &&
                 !environmentWillChange &&
-                !(resolved)?.fastPathGame &&
-                !(resolved)?.fastPathEnvironment
+                !isTurnAlreadyExecuted(resolved, 'game') &&
+                !isTurnAlreadyExecuted(resolved, 'environment')
             ) {
                 recentResponsesRef.current = pushResponseState(
                     recentResponsesRef.current,
