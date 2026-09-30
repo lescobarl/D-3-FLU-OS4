@@ -1077,7 +1077,7 @@
     },
     {
       "id": "P7.100",
-      "estado": "in_progress",
+      "estado": "done",
       "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
       "evidencia": "VEREDICTO MEDIDO de las 5 sospechas de duplicacion/parche/hardcode que el informe dejaba abiertas: (1) UI de catalogos (AmbientesPanel 305 lineas, PaletasPanel 266, SearchCatalogPanel 475): NO son copia; solo comparten 2 nombres de handler genericos. (2) src/services/gemini.ts (585 lineas, exporta la clase geminiService) vs src/voice/lib/gemini.js (1837, 22 exports): CERO exports compartidos; son el cliente del motor de texto y el motor de voz, no dos copias. (3) avatar 3D: BunnyControlCenter.tsx (83) IMPORTA de src/avatar/config/bunnySceneConfig.ts (95) y no repite ni un literal numerico de los suyos; existe UNA sola copia de bunnySceneConfig. (4) hasUsableTextBackend tiene UN solo dueno (src/services/deepseek.ts:73) y un unico importador externo (src/hooks/useFluParticipant.ts:11): no hay implementaciones duplicadas; si queda acoplamiento (un hook tirando de un proveedor concreto para una capacidad que es del contrato) pero NO es un dato con dos duenos. (5) src/lib/fluParticipant.ts:215 textBackendUsable = true NO es un hardcode: es un parametro por defecto documentado en :224-228, el hook pasa el valor real y hay test de las dos ramas (tests/fluParticipant.test.ts:117 y :126)."
     }
@@ -2168,6 +2168,12 @@
       "commit": "eedf525",
       "titulo": "console.* como registro de un catch (la constraint exige logCaughtError) en los ficheros limpios",
       "evidencia": "CUBIERTO= 8 catches cuyo UNICO registro era console.* pasan a logCaughtError(contexto, error): gameActions.ts:72, BrowserProfilesPanel.tsx:96, ParticipantsPanel.tsx:104 y :112, useSeasonalBranding.ts:194, musicPlayer.ts:94 y :150, useFluVoiceAssistant.js:3819. El sink de trazas solo-dev de fluTrace.js:107 se declara omision deliberada con el mecanismo previsto (comentario ignorado: + motivo) en vez de fingir un registro que en produccion no aplica. De paso se limpio un comentario de useFluVoiceAssistant.js que habia quedado CORRUPTO por una sustitucion automatica anterior. NO CUBIERTO= quedan 36 sitios MEDIDOS con console.* como unico registro y NO son arreglables en esta pasada: viven en src/App.tsx y src/main.tsx (34 guards de texto leen App.tsx y 33 de ellos no tienen prueba de detector) y en src/hooks/** (5 guards lectores). Tocar esos ficheros obliga a meter ~39 guards en lint:guards, y guardMutationGuard (baseline de teatro shrink-only) lo prohibe: la puerta nace ROJA. Registrado como P7.99 (blocked) con la via de desbloqueo medida."
+    },
+    {
+      "id": "P7.100",
+      "commit": "9ce07ad",
+      "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
+      "evidencia": "CUBIERTO= las 5 sospechas quedaron medidas con el codigo delante (tamanos, exports compartidos, literales repetidos y duenos reales): 4 son falsas y 1 es acoplamiento sin dato duplicado. Evita que se reabran a ciegas o que alguien las toque rompiendo lo ya validado. NO CUBIERTO= la revision fue de CODIGO sobre esos 5 puntos; no es una auditoria exhaustiva de todo src: los 36 sitios de console.* de P7.98 siguen abiertos y P7.99 sigue blocked."
     }
   ]
 }
