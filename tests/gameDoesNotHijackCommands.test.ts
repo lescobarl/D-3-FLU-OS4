@@ -184,8 +184,11 @@ describe('la partida EN PAUSA deja de consumir turnos, sigue viva y se retoma', 
         const antes = getActiveGameSession();
         const cursorAntes = (antes!.state as { cursor: number }).cursor;
         noteGameTurn(false);
-        // EN PAUSA el motor no consume: 'siguiente' pertenece al turno de su dueno real.
-        expect(resolveGameCommandFromText('siguiente')).toBeNull();
+        // EN PAUSA un comando EXPLICITO del motor la RETOMA (regla 19 de AGENTS.md:
+        // "se retoma con ... un comando del motor"). Defecto medido 2026-09-29
+        // 17:22:33: tras un turno ajeno, "siguiente carta" no cantaba y lo
+        // contestaba la IA con una cortesia.
+        expect(resolveGameCommandFromText('siguiente')).toMatchObject({ gameId: 'loteria', action: 'turn' });
         const spoken: string[] = [];
         await applyGameAction(
             { gameId: 'loteria', action: 'start' } as never,

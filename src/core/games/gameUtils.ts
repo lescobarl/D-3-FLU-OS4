@@ -15,6 +15,8 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 // Normalización de texto: fuente única en src/lib/textUtils.ts.
+// Se importa Y se re-exporta: el binding se usa en este modulo (isExplicitOrderFor).
+import { normalizeForMatch } from '../../lib/textUtils';
 export { stripDiacritics, normalizeForMatch } from '../../lib/textUtils';
 
 /**
@@ -275,6 +277,47 @@ export const END_GAME_FRAMES: readonly string[] = Object.freeze([
     'alto',
     'stop',
 ]);
+
+// ------------------------------------------------------------
+// Conceptos "AFIRMACION SUELTA" y "ORDEN EXPLICITA del motor" --- DUENO UNICO.
+// Un "si"/"dale"/"adelante" NO es una ORDEN del motor: es una afirmacion de la
+// conversacion. Con la partida EN PAUSA, una orden EXPLICITA del propio motor
+// ("siguiente carta", "pista", "paso") la retoma; una afirmacion suelta NO
+// (P7.55: en pausa un "si" significaba otra cosa en la conversacion). Esta es la
+// clasificacion UNICA: el motor declara QUE acepta (`isGameCommand`) y, si su
+// caso lo pide, QUE de eso es una orden (`isExplicitOrder`, p.ej. loteria para
+// excluir su grito de victoria); el enrutador NO re-enumera tokens.
+// ------------------------------------------------------------
+export const BARE_AFFIRMATION_FRAMES: readonly string[] = Object.freeze([
+    'si', 'sí', 'ok', 'okey', 'vale', 'dale', 'adelante', 'vamos',
+    'yes', 'listo', 'sigue', 'continua', 'continúa', 'continuar',
+]);
+
+/** ¿El texto normalizado es (solo) una afirmacion suelta, no una orden del motor? */
+export function isBareAffirmation(normalized = ''): boolean {
+    return hasAnyToken(normalized, BARE_AFFIRMATION_FRAMES);
+}
+
+/** Forma minima del motor que necesita el criterio (sin acoplar a GameEngine). */
+interface ExplicitOrderEngine {
+    isGameCommand?: (text: string) => boolean;
+    isExplicitOrder?: (text: string) => boolean;
+}
+
+/**
+ * ¿El texto es una ORDEN EXPLICITA del motor (retoma una partida EN PAUSA)?
+ * El dueno es el MOTOR: si declara `isExplicitOrder`, manda esa; si no, se
+ * deriva de `isGameCommand` menos las afirmaciones sueltas. Un solo criterio.
+ */
+export function isExplicitOrderFor(
+    engine: ExplicitOrderEngine | null | undefined,
+    text = '',
+): boolean {
+    if (!engine) return false;
+    if (typeof engine.isExplicitOrder === 'function') return Boolean(engine.isExplicitOrder(text));
+    if (typeof engine.isGameCommand !== 'function') return false;
+    return Boolean(engine.isGameCommand(text)) && !isBareAffirmation(normalizeForMatch(text));
+}
 
 /**
  * ¿El texto normalizado pide TERMINAR la partida? Criterio UNICO de salida:

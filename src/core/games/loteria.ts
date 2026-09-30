@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasGameOrderFrame, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasGameOrderFrame, isBareAffirmation, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -267,6 +267,17 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                 || REPEAT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || NEXT_FRAMES.some((frame) => hasToken(normalized, frame))
                 || (hasToken(normalized, 'loteria') && !hasGameOrderFrame(normalized));
+        },
+
+        // La VOZ del juego puede RETOMAR una partida en pausa con una orden
+        // explicita ("siguiente carta", "pista", "repite"). El grito de victoria
+        // NO es una orden: en pausa no retoma (sigue siendo del turno de su dueno).
+        isExplicitOrder(text = ''): boolean {
+            const normalized = normalizeForMatch(text);
+            if (hasToken(normalized, 'loteria') && !hasGameOrderFrame(normalized)) return false;
+            if (matchesEndGameFrames(normalized, END_FRAMES)) return true;
+            if (REPEAT_FRAMES.some((frame) => hasToken(normalized, frame))) return true;
+            return NEXT_FRAMES.some((frame) => hasToken(normalized, frame)) && !isBareAffirmation(normalized);
         },
     };
 }

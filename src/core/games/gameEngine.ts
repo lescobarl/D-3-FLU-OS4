@@ -29,4 +29,14 @@ export interface GameEngine<TState = unknown> {
     narrate?(session: GameSession<TState>, scenes: GameNarrativeScene[], options?: Record<string, unknown>): GameTurnResult;
     /** Detecta "sigo jugando", "salir del juego", etc. */
     isGameCommand(text: string): boolean;
+    /**
+     * (Opcional) ¿El texto es una ORDEN EXPLICITA del motor (avanzar, pedir
+     * pista, saltar) — y no una afirmacion suelta ni el grito de victoria?
+     * La usa el enrutador para RETOMAR una partida EN PAUSA: con la pausa, la
+     * unica via de reentrada es una orden de juego o esta. Por defecto se deriva
+     * de `isGameCommand` menos las afirmaciones (gameUtils.isBareAffirmation);
+     * un motor cuyo `isGameCommand` acepte un token de victoria (loteria:
+     * "¡lotería!") lo SOBRESCRIBE para excluirlo.
+     */
+    isExplicitOrder?(text: string): boolean;
 }

@@ -119,19 +119,34 @@ describe('2. con partida viva, la orden de juego AJENA no se consume como jugada
     });
 });
 
-describe('3. la PAUSA solo la levanta una ORDEN DE JUEGO', () => {
+describe('3. la PAUSA la levanta una ORDEN DE JUEGO o un comando EXPLICITO del motor', () => {
     beforeEach(() => {
         setActiveGameSession(session('loteria'));
         suspendActiveGameSession();
     });
     afterEach(() => clearActiveGameSession());
 
-    test.each(['si', 'dale', 'adelante', 'vamos', 'ok', 'vale', 'pista'])(
-        'en pausa, "%s" NO es jugada (el turno es de su dueno real)',
+    test.each(['si', 'dale', 'adelante', 'vamos', 'ok', 'vale'])(
+        'en pausa, la afirmacion suelta "%s" NO es jugada (el turno es de su dueno real)',
         (frase) => {
             expect(resolveGameCommandFromText(frase)).toBeNull();
         },
     );
+
+    // Regla 19 de AGENTS.md: la partida "se RETOMA con ... un comando del motor".
+    // Antes el gate de pausa corria ANTES del comando del motor y "siguiente
+    // carta"/"pista" caian a la IA sin cantar (defecto medido 17:22:33).
+    test.each(['siguiente', 'pista', 'repite', 'paso'])(
+        'en pausa, el comando del motor "%s" SI retoma (turn)',
+        (frase) => {
+            expect(resolveGameCommandFromText(frase)).toMatchObject({ gameId: 'loteria', action: 'turn' });
+        },
+    );
+
+    // El GRITO de victoria no es una orden: en pausa no retoma la partida.
+    test('en pausa, el grito "loteria" NO retoma (no es una orden)', () => {
+        expect(resolveGameCommandFromText('loteria')).toBeNull();
+    });
 
     test('en pausa, una ORDEN explicita si la retoma', () => {
         expect(resolveGameCommandFromText('vamos a jugar loteria')).toEqual({

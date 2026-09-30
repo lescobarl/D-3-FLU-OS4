@@ -33,7 +33,7 @@ import {
   hasNegativeGameIntent,
 } from '../../core/games/gameCatalog'
 import { getActiveGameSession, isGameSuspended } from '../../core/games/gameSessionStore'
-import { hasGameOrderFrame } from '../../core/games/gameUtils'
+import { hasGameOrderFrame, isExplicitOrderFor } from '../../core/games/gameUtils'
 import { logCaughtError } from '../../lib/caughtError';
 
 // ------------------------------------------------------------
@@ -262,13 +262,17 @@ export function resolveGameCommandFromText(text = '', options = {}) {
     if (isUnknownGameOrder(normalized)) {
       return { gameId: activeSession.id, action: 'unavailable' }
     }
-    // 3d. PARTIDA EN PAUSA: el motor NO consume turnos. Solo una ORDEN de juego la
-    //     retoma (pasos 1-3c: salir, menu, cambio, arranque, catalogo). Los marcos
-    //     sueltos de afirmacion ('si', 'dale', 'adelante', 'ok') y la respuesta
-    //     abierta son de la CONVERSACION: si el motor los consume, la pausa no
-    //     protege nada y el turno de su dueno real se pierde (defecto medido con
-    //     la loteria en pausa). UN criterio, para todos los juegos.
-    if (isGameSuspended()) return null
+    // 3d. PARTIDA EN PAUSA: el motor NO consume turnos. La retoma una ORDEN de
+    //     juego (pasos 1-3c: salir, menu, cambio, arranque, catalogo) O un comando
+    //     EXPLICITO del propio motor ("siguiente carta", "pista", "paso"). Los
+    //     marcos SUELTOS de afirmacion ('si', 'dale', 'adelante', 'ok') y la
+    //     respuesta abierta son de la CONVERSACION: si el motor los consume, la
+    //     pausa no protege nada (P7.55). UN criterio para todos los juegos: el
+    //     dueno de "que es una orden explicita" es el MOTOR (`isExplicitOrder`, con
+    //     el default de gameUtils); el enrutador no re-enumera tokens.
+    if (isGameSuspended() && !isExplicitOrderFor(getGameEngine(activeSession.id), text)) {
+      return null
+    }
     // 4. Reclamado por OTRO dominio (imagen, generación, agenda, notas, compras,
     //    diario, ambiente, navegación, configuración) → NO es jugada: se deja
     //    pasar para que lo ejecute su dueño (la IA o el dominio) y el motor no
