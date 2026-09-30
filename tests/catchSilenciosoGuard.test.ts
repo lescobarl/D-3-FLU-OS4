@@ -19,6 +19,10 @@
  *      no propaga y ni siquiera usa el rechazo. Antes solo miraba el handler VACIO,
  *      asi que `.catch(() => undefined)` o `.catch(() => '')` (que tragan igual)
  *      pasaban sin decir nada. (P7.9)
+ *      P7.99: entregar el rechazo a la CONSOLA no cuenta como usarlo. Un handler
+ *      `.catch((e) => console.warn(e))` deja el hecho en un sitio que nadie lee (y
+ *      que en produccion puede no existir): o va al registro central
+ *      (logCaughtError), o propaga, o se declara con `ignorado: <motivo>`.
  *
  * El analisis es por AST (TypeScript), no por regex: no confunde `catch` dentro de
  * comentarios o cadenas y distingue los catch ANIDADOS.
@@ -121,6 +125,29 @@ export function findViolations(src: string, fileName = 'synthetic.ts'): Violatio
   // `.catch(() => undefined)` o `.catch(() => '')` pasaban sin decir nada.
   const registra = (cuerpo: string): boolean =>
     /logCaughtError\s*\(/.test(cuerpo) || /\bthrow\b/.test(cuerpo)
+  /** Usos REALES del rechazo en un handler: referencias al parametro que NO van
+   *  dentro de una llamada a console.*. Entregar el error a la consola no es
+   *  registrarlo (P7.99): el registro es logCaughtError. */
+  const usosReales = (handler: ts.ArrowFunction | ts.FunctionExpression, name: string): number => {
+    let usos = 0
+    const visita = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && node.text === name) {
+        let p: ts.Node | undefined = node.parent
+        let enConsola = false
+        while (p && p !== handler) {
+          if (ts.isCallExpression(p) && p.expression.getText(sf).startsWith('console.')) {
+            enConsola = true
+            break
+          }
+          p = p.parent
+        }
+        if (!enConsola) usos += 1
+      }
+      ts.forEachChild(node, visita)
+    }
+    if (handler.body) visita(handler.body)
+    return usos
+  }
   const scanCatch = (n: ts.Node): void => {
     if (
       ts.isCallExpression(n) &&
@@ -133,8 +160,8 @@ export function findViolations(src: string, fileName = 'synthetic.ts'): Violatio
         const cuerpo = a.body.getText(sf)
         if (!IGN_DECL.test(cuerpo) && !registra(cuerpo)) {
           const p = a.parameters[0]
-          const usa = !!p && ts.isIdentifier(p.name) && new RegExp('\\b' + p.name.text + '\\b').test(cuerpo)
-          if (!usa) {
+          const usos = p && ts.isIdentifier(p.name) ? usosReales(a, p.name.text) : 0
+          if (usos === 0) {
             out.push({ line: line(n.getStart(sf)), kind: 'catchPromesa', detail: '.catch() no registra el rechazo' })
           }
         }
@@ -193,11 +220,16 @@ describe('C13 catchSilencioso - el detector no es decorativo', () => {
     expect(findViolations('p.catch(function () {})')).toHaveLength(1)
     expect(findViolations('p.catch(() => { setReady(true) })')).toHaveLength(1)
   })
-  it('no marca .catch que usa el rechazo (lenidad deliberada: evita falsos positivos)', () => {
-    // Asimetria a proposito: el bloque `catch` debe ir al registro CENTRAL, pero un
-    // handler de .catch que al menos usa el rechazo no se marca, para no ensuciar
-    // los reporters propios (setError, warn contextual, ...).
-    expect(findViolations('p.catch((e) => { console.warn(e) })')).toHaveLength(0)
+  it('marca .catch que SOLO entrega el rechazo a la consola (P7.99: no es registrarlo)', () => {
+    // P7.99: la lenidad anterior (warn contextual contaba como uso) dejaba 16 sitios
+    // reales con la consola como unico registro. Ahora la consola no registra.
+    expect(findViolations('p.catch((e) => { console.warn(e) })')).toHaveLength(1)
+    expect(findViolations("p.catch((e) => console.error('x', e))")).toHaveLength(1)
+    expect(findViolations('p.catch((e) => { console.info(String(e)) })')).toHaveLength(1)
+  })
+  it('no marca .catch que usa el rechazo en un reportero que NO es la consola', () => {
+    expect(findViolations('p.catch((e) => { console.warn(e); reportar(e) })')).toHaveLength(0)
+    expect(findViolations('p.catch((e) => { setError(e) })')).toHaveLength(0)
   })
   it('no marca .catch que registra, propaga o usa el rechazo', () => {
     expect(findViolations("p.catch((e) => { logCaughtError('x', e) })")).toHaveLength(0)
