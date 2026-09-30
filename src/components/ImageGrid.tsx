@@ -14,6 +14,7 @@
 
 import { useMemo } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { SEARCH_PROVIDER_IDS } from '../core/config/sharedConfig';
 import { configLabel } from './configText';
 import { pickLabel } from '../lib/textUtils';
 import type { SearchResult } from '../core/search/searchSession';
@@ -73,7 +74,7 @@ function useImageGridUi(language: string): ImageGridUi {
 
 /** Etiqueta legible por proveedor (config-driven). */
 function sourceLabel(source: string | undefined, ui: ImageGridUi): string {
-    if (source === 'commons') return ui.sourceCommons;
+    if (source === SEARCH_PROVIDER_IDS.COMMONS) return ui.sourceCommons;
     return source || '';
 }
 

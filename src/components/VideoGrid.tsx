@@ -14,6 +14,7 @@
 
 import { useMemo } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { SEARCH_PROVIDER_IDS } from '../core/config/sharedConfig';
 import type { SearchResult } from '../core/search/searchSession';
 
 export interface VideoGridProps {
@@ -49,9 +50,9 @@ function useVideoGridUi(): VideoGridUi {
 
 /** Etiqueta legible por proveedor (config-driven). */
 function sourceLabel(source: string | undefined, ui: VideoGridUi): string {
-    if (source === 'youtube') return ui.sourceYouTube;
-    if (source === 'commons-video') return ui.sourceCommons;
-    if (source === 'invidious') return ui.sourceInvidious;
+    if (source === SEARCH_PROVIDER_IDS.YOUTUBE) return ui.sourceYouTube;
+    if (source === SEARCH_PROVIDER_IDS.COMMONS_VIDEO) return ui.sourceCommons;
+    if (source === SEARCH_PROVIDER_IDS.INVIDIOUS) return ui.sourceInvidious;
     return source || '';
 }
 

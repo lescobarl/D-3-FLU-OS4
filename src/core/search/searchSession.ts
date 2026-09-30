@@ -14,7 +14,7 @@
 import { isDomainAllowed, normalizeHost } from '../browser/browserSession';
 import type { ResolvedLanguage } from './searchLanguage';
 import { logCaughtError } from '../../lib/caughtError';
-import { AI_PROVIDER_IDS } from '../config/sharedConfig'
+import { AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../config/sharedConfig'
 
 /** Resultado unificado de búsqueda (cualquier proveedor). */
 export interface SearchResult {
@@ -390,7 +390,7 @@ function normalizeYouTube(raw: unknown, provider?: SearchProviderConfig): Search
             snippet: stripHtml(String(record.snippet?.description || '')),
             url: watchUrl || embedUrl,
             host: extractHost(watchUrl) || extractHost(embedUrl),
-            source: 'youtube',
+            source: SEARCH_PROVIDER_IDS.YOUTUBE,
             allowed: true,
             type: 'video',
             thumbnail: String(record.snippet?.thumbnails?.medium?.url || '').trim(),
@@ -440,7 +440,7 @@ function normalizeInvidious(raw: unknown, provider?: SearchProviderConfig): Sear
             snippet: stripHtml(String(record.description || '')),
             url: watchUrl || embedUrl,
             host: extractHost(watchUrl) || extractHost(embedUrl),
-            source: 'invidious',
+            source: SEARCH_PROVIDER_IDS.INVIDIOUS,
             allowed: true,
             type: 'video',
             thumbnail: String(record.videoThumbnails?.[0]?.url || '').trim(),
@@ -470,7 +470,7 @@ function normalizeWikipedia(
             snippet: stripHtml(String(record.snippet || '')),
             url,
             host: extractHost(url) || `${lang}.wikipedia.org`,
-            source: 'wikipedia',
+            source: SEARCH_PROVIDER_IDS.WIKIPEDIA,
             allowed: true,
         });
     }
@@ -492,7 +492,7 @@ function pushTopic(out: SearchResult[], topic: unknown): void {
         snippet,
         url,
         host: extractHost(url),
-        source: 'duckduckgo',
+        source: SEARCH_PROVIDER_IDS.DUCKDUCKGO,
         allowed: true,
     });
 }
@@ -516,7 +516,7 @@ function normalizeDuckDuckGo(raw: unknown): SearchResult[] {
             snippet: abstractText,
             url: abstractUrl,
             host: extractHost(abstractUrl),
-            source: 'duckduckgo',
+            source: SEARCH_PROVIDER_IDS.DUCKDUCKGO,
             allowed: true,
         });
     }
@@ -553,7 +553,7 @@ function normalizeTavily(raw: unknown): SearchResult[] {
             snippet: stripHtml(String(record.content || '')),
             url,
             host: extractHost(url),
-            source: 'tavily',
+            source: SEARCH_PROVIDER_IDS.TAVILY,
             allowed: true,
         });
     }
@@ -594,6 +594,30 @@ function normalizeOpenRouter(raw: unknown): SearchResult[] {
     return results;
 }
 
+/** Adaptador de la respuesta cruda de un proveedor. */
+type SearchNormalizer = (
+    raw: unknown,
+    ctx: { lang: ResolvedLanguage; provider?: SearchProviderConfig },
+) => SearchResult[];
+
+/**
+ * Identidad de proveedor -> parser de su respuesta cruda.
+ *
+ * Es la fuente UNICA de que identidades de busqueda sabe normalizar el sistema:
+ * cada proveedor del catalogo tiene su entrada, sin ramas sueltas que puedan
+ * desincronizarse de el.
+ */
+const SEARCH_NORMALIZERS: Readonly<Record<string, SearchNormalizer>> = {
+    [SEARCH_PROVIDER_IDS.WIKIPEDIA]: (raw, { lang, provider }) => normalizeWikipedia(raw, lang, provider),
+    [SEARCH_PROVIDER_IDS.DUCKDUCKGO]: (raw) => normalizeDuckDuckGo(raw),
+    [SEARCH_PROVIDER_IDS.TAVILY]: (raw) => normalizeTavily(raw),
+    [AI_PROVIDER_IDS.OPENROUTER]: (raw) => normalizeOpenRouter(raw),
+    [SEARCH_PROVIDER_IDS.COMMONS]: (raw, { provider }) => normalizeCommonsMedia(raw, 'images', provider),
+    [SEARCH_PROVIDER_IDS.COMMONS_VIDEO]: (raw, { provider }) => normalizeCommonsMedia(raw, 'video', provider),
+    [SEARCH_PROVIDER_IDS.YOUTUBE]: (raw, { provider }) => normalizeYouTube(raw, provider),
+    [SEARCH_PROVIDER_IDS.INVIDIOUS]: (raw, { provider }) => normalizeInvidious(raw, provider),
+};
+
 /**
  * Normaliza la respuesta cruda de un proveedor a SearchResult[] unificados.
  * Soporta los proveedores sin clave de F3 (wikipedia + duckduckgo), los de
@@ -607,15 +631,8 @@ export function normalizeResults(
     lang: ResolvedLanguage,
     provider?: SearchProviderConfig,
 ): SearchResult[] {
-    if (providerId === 'wikipedia') return normalizeWikipedia(raw, lang, provider);
-    if (providerId === 'duckduckgo') return normalizeDuckDuckGo(raw);
-    if (providerId === 'tavily') return normalizeTavily(raw);
-    if (providerId === AI_PROVIDER_IDS.OPENROUTER) return normalizeOpenRouter(raw);
-    if (providerId === 'commons') return normalizeCommonsMedia(raw, 'images', provider);
-    if (providerId === 'commons-video') return normalizeCommonsMedia(raw, 'video', provider);
-    if (providerId === 'youtube') return normalizeYouTube(raw, provider);
-    if (providerId === 'invidious') return normalizeInvidious(raw, provider);
-    return [];
+    const normalizer = SEARCH_NORMALIZERS[providerId];
+    return normalizer ? normalizer(raw, { lang, provider }) : [];
 }
 
 /**

@@ -1,5 +1,5 @@
 /** Configuración central de FLU. */
-import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
+import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
@@ -1182,7 +1182,7 @@ export const FLU_CONFIG = {
         // OpenRouter se editan en el configurador (NUNCA en .env).
         web: [
           {
-            id: 'tavily',
+            id: SEARCH_PROVIDER_IDS.TAVILY,
             label: 'Tavily',
             enabled: true,
             method: 'POST',
@@ -1211,7 +1211,7 @@ export const FLU_CONFIG = {
             externalConfig: true,
           },
           {
-            id: 'wikipedia',
+            id: SEARCH_PROVIDER_IDS.WIKIPEDIA,
             label: 'Wikipedia',
             enabled: true,
             endpoint: 'https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={q}&format=json',
@@ -1229,7 +1229,7 @@ export const FLU_CONFIG = {
         // instancia, FLU los usa junto a Commons (todo config-driven).
         images: [
           {
-            id: 'commons',
+            id: SEARCH_PROVIDER_IDS.COMMONS,
             label: 'Wikimedia Commons',
             enabled: true,
             endpoint: 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={q}&gsrnamespace=6&prop=imageinfo&iiprop=url|size&iiurlwidth=320&format=json',
@@ -1240,7 +1240,7 @@ export const FLU_CONFIG = {
         ],
         video: [
           {
-            id: 'commons-video',
+            id: SEARCH_PROVIDER_IDS.COMMONS_VIDEO,
             label: 'Commons vídeo',
             enabled: true,
             endpoint: 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={q}%20filetype:video&gsrnamespace=6&prop=videoinfo&viprop=url|size&viurlwidth=320&format=json',
@@ -1249,7 +1249,7 @@ export const FLU_CONFIG = {
             timeoutMs: 8000,
           },
           {
-            id: 'youtube',
+            id: SEARCH_PROVIDER_IDS.YOUTUBE,
             label: 'YouTube',
             enabled: false,
             key: '',
@@ -1260,7 +1260,7 @@ export const FLU_CONFIG = {
             timeoutMs: 8000,
           },
           {
-            id: 'invidious',
+            id: SEARCH_PROVIDER_IDS.INVIDIOUS,
             label: 'Invidious',
             enabled: false,
             key: null,

@@ -231,6 +231,39 @@ export const POLLINATIONS_DEFAULTS = {
 } as const;
 
 /**
+ * Identidades de proveedor de BUSQUEDA (fuente UNICA).
+ *
+ * Misma regla que AI_PROVIDERS: la identidad no se re-escribe en los
+ * consumidores. Antes vivia TRES veces como literal — el catalogo
+ * (fluConfig.js), el dispatch de normalizacion (searchSession.ts) y las
+ * etiquetas de la UI (ImageGrid/VideoGrid) — y podia desincronizarse en
+ * silencio. Guard: tests/providerLiteralGuard.test.ts.
+ */
+export const SEARCH_PROVIDERS = [
+    'tavily',
+    'wikipedia',
+    'commons',
+    'commons-video',
+    'youtube',
+    'invidious',
+    'duckduckgo',
+] as const;
+
+/** Tipo de un proveedor de busqueda valido. */
+export type SearchProviderId = (typeof SEARCH_PROVIDERS)[number];
+
+/** Constantes nombradas: evitan literales de proveedor en los consumidores. */
+export const SEARCH_PROVIDER_IDS = {
+    TAVILY: 'tavily',
+    WIKIPEDIA: 'wikipedia',
+    COMMONS: 'commons',
+    COMMONS_VIDEO: 'commons-video',
+    YOUTUBE: 'youtube',
+    INVIDIOUS: 'invidious',
+    DUCKDUCKGO: 'duckduckgo',
+} as const satisfies Record<string, SearchProviderId>;
+
+/**
  * URLs de recursos remotos de terceros (fuente ÚNICA, C48).
  * Ningún módulo fuera de `src/core/config/**` debe quemar un host remoto.
  */
