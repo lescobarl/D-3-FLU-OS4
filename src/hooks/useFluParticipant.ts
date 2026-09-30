@@ -8,7 +8,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService } from '../services/aiServiceFactory';
-import { hasUsableTextBackend } from '../services/deepseek';
 import { isSpeechBusy } from '../voice/lib/fluSpeech';
 import { logCaughtError } from '../lib/caughtError';
 import { resolveConfiguredTemperature } from '../services/aiTemperature';
@@ -165,7 +164,7 @@ export function useFluParticipant({
                 // Sin backend de texto (ni clave ni endpoint local) la llamada a
                 // generateParticipantEvaluation lanzaría "API key de texto no
                 // configurada"; se bloquea ANTES de disparar la petición inútil.
-                textBackendUsable: hasUsableTextBackend(),
+                textBackendUsable: aiService.canUseTextBackend(),
             })
         ) {
             if (import.meta.env.DEV) {

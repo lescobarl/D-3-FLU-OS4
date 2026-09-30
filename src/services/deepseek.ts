@@ -122,7 +122,7 @@ function buildPersonalizationRule(options: AIRequestOptions, isEnglish: boolean)
 class DeepSeekService extends BaseAIService {
     protected readonly engineLabel = 'DeepSeek';
 
-    protected canUseTextBackend(): boolean {
+    canUseTextBackend(): boolean {
         return hasUsableTextBackend();
     }
 

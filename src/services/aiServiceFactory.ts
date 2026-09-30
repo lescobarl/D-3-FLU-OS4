@@ -112,6 +112,10 @@ function createIntelligentAIService(): IAIService {
         generateParticipantEvaluation: primaryService.generateParticipantEvaluation.bind(primaryService),
         generateConversationSummary: primaryService.generateConversationSummary.bind(primaryService),
         generateVisionAnalysis: primaryService.generateVisionAnalysis.bind(primaryService),
+
+        // Capacidad del SISTEMA (no del adapter): el gate de texto pregunta por el
+        // proveedor activo. Se delega para que la respuesta sea unica.
+        canUseTextBackend: primaryService.canUseTextBackend.bind(primaryService),
         
         // F1/F2/F3 — text-only operations (text engine)
         analyzeDocument: primaryService.analyzeDocument.bind(primaryService),

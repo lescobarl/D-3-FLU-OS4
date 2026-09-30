@@ -78,7 +78,7 @@ function resolveGeminiKeyForRequest(apiKey: string = ''): { apiKey: string; apiK
 class GeminiService extends BaseAIService implements IAIService {
     protected readonly engineLabel = 'Gemini';
 
-    protected canUseTextBackend(): boolean {
+    canUseTextBackend(): boolean {
         return Boolean(resolveGeminiKeyForRequest().apiKey);
     }
 

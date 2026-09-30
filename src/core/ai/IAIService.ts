@@ -163,6 +163,14 @@ export interface GeneratedDocumentResult {
  * Implementations: GeminiService, FallbackService, MockService
  */
 export interface IAIService {
+    /**
+     * ¿Hay backend de texto usable ahora mismo (api key o endpoint local sin clave)?
+     * Es una consulta de CAPACIDAD del sistema: la responde el proveedor SELECCIONADO.
+     * Los consumidores preguntan aqui, no a un proveedor concreto (p.ej. deepseek),
+     * que obligaba a conocer el cableado de proveedores desde fuera.
+     */
+    canUseTextBackend(): boolean;
+
     /** Generate a minute from conversation history */
     generateMinute(
         options: AIRequestOptions,

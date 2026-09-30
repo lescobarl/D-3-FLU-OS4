@@ -16,6 +16,7 @@ import { renderHook, act } from '@testing-library/react';
 import type { RefObject } from 'react';
 import { useFluParticipant } from '../src/hooks/useFluParticipant';
 import { STORAGE_KEYS } from '../src/core/config/appConfig';
+import { hasUsableTextBackend } from '../src/services/deepseek';
 
 const { generateParticipantEvaluationMock } = vi.hoisted(() => ({
     generateParticipantEvaluationMock: vi.fn(),
@@ -24,6 +25,9 @@ const { generateParticipantEvaluationMock } = vi.hoisted(() => ({
 vi.mock('../src/services/aiServiceFactory', () => ({
     aiService: {
         generateParticipantEvaluation: generateParticipantEvaluationMock,
+        // La capacidad NO se stubea: delega en la implementacion real para que este
+        // test siga midiendo que sin clave/endpoint de texto el hook no evalua.
+        canUseTextBackend: () => hasUsableTextBackend(),
     },
 }));
 
@@ -45,7 +49,8 @@ describe('useFluParticipant — turno N con historial desacoplado (regresión OS
     beforeEach(() => {
         generateParticipantEvaluationMock.mockReset();
         generateParticipantEvaluationMock.mockResolvedValue(evaluationResponse);
-        // El hook solo agenda la evaluación si hasUsableTextBackend() es true (sin API key
+        // El hook solo agenda la evaluación si el servicio declara su capacidad de texto
+        // (canUseTextBackend; sin API key
         // ni endpoint local no evalúa, por diseño: ver canScheduleParticipantEvaluation).
         // La clave debe venir del test: resolveDeepSeekApiKey() lee primero este storage y
         // luego OPENROUTER_CONFIG.API_KEY, constante de módulo ya evaluada al importar, así

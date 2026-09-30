@@ -171,8 +171,12 @@ export abstract class BaseAIService implements IAIService {
     /** Etiqueta del backend para logs (`Gemini`, `DeepSeek`, ...). */
     protected abstract readonly engineLabel: string;
 
-    /** ¿Hay backend de texto usable (api key o endpoint local sin clave)? */
-    protected abstract canUseTextBackend(): boolean;
+    /**
+     * ¿Hay backend de texto usable (api key o endpoint local sin clave)? Es la
+     * consulta de capacidad del contrato (IAIService.canUseTextBackend): los
+     * consumidores preguntan al SERVICIO, no a un proveedor concreto.
+     */
+    abstract canUseTextBackend(): boolean;
 
     /** System prompt del análisis de documentos (F1), específico del backend. */
     protected abstract documentAnalysisSystem(language: string): string;
