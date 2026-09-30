@@ -19,6 +19,7 @@
     "src/app/superNoteActions.ts",
     "src/avatar/components/BunnyControlCenter.tsx",
     "src/avatar/config/bunnySceneConfig.ts",
+    "src/avatar/lib/fbxParse.ts",
     "src/avatar/model/BunnyModel.tsx",
     "src/components/AgendaPanel.tsx",
     "src/components/AmbientesPanel.tsx",
