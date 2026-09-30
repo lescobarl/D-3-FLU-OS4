@@ -73,7 +73,12 @@
     "tests/deterministicArbiter.test.ts",
     "scripts/js-ref-metric.mjs",
     "tests/jsReferenceGuard.test.ts",
-    "scripts/session-brief.mjs"
+    "scripts/session-brief.mjs",
+    "src/components/AmbientesPanel.tsx",
+    "src/components/PaletasPanel.tsx",
+    "src/components/SearchCatalogPanel.tsx",
+    "src/avatar/components/BunnyControlCenter.tsx",
+    "src/avatar/config/bunnySceneConfig.ts"
   ],
   "maxFiles": 100,
   "maxLines": 3600,

@@ -3000,3 +3000,29 @@ EFECTO: P7.81 queda DESBLOQUEADO (src/core/games/** SI esta en allow).
   P7.82 (AmbientesPanel/PaletasPanel/SearchCatalogPanel) y P7.83
   (BunnyControlCenter/bunnySceneConfig) siguen BLOQUEADOS: esta enmienda
   sube el TOPE de ficheros, NO amplia `allow`.
+================================================================
+ENMIENDA FORMAL (AGENTS.md 0.14 / 0.B.16) - AUTORIZADA POR EL DUENO
+------------------------------------------------------------------
+FECHA: 2026-09-29
+CAMPO: allow 71 -> 76 (+5 rutas). Sin cambios en maxFiles (100),
+  maxLines (3600), dod, guard, guardExpect, base, e2eScope, ignore
+  ni task.
+RUTAS ANIADIDAS:
+  src/components/AmbientesPanel.tsx
+  src/components/PaletasPanel.tsx
+  src/components/SearchCatalogPanel.tsx
+  src/avatar/components/BunnyControlCenter.tsx
+  src/avatar/config/bunnySceneConfig.ts
+MOTIVO (medido): son las 5 rutas que bloqueaban P7.82 (flujo de
+  guardado/alta copiado en 3 paneles de catalogo) y P7.83 (mapa de
+  color por estado del avatar declarado 2 veces). Estaban FUERA de
+  allow y por eso el agente no podia tocarlas (0.B.16).
+AUTORIZACION: pedido explicito del dueno en este turno
+  ("ya dejate de vueltas ponlo en allow"), tras explicarle que allow es
+  inmutable por el agente y que maxFiles NO amplia allow.
+NOTA: P7.84 (gate rojo por 5 rutas commiteadas fuera de allow) queda
+  RESUELTO por el commit 21303fc del dueno, que anadio esas 5 rutas
+  (allow 66 -> 71) y subio maxLines 2800 -> 3600. Medido: `npm run
+  gate` sale exit 0 ("Alcance OK - tamano OK - DoD OK - guard OK").
+EOL: .task/contract.json viaja en LF (i/lf w/lf); la enmienda no
+  cambia su clase de fin de linea ni introduce marcas U+FFFD.
