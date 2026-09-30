@@ -8,7 +8,7 @@
 // Cumple Rule #1 (no hardcode) y Obligación #2 (JSDoc).
 // ============================================================
 
-import { fetchTextEngineResilient } from '../core/ai/httpClient';
+import { fetchTextEngine, fetchTextEngineResilient } from '../core/ai/httpClient';
 
 /** Endpoint canónico del proxy de contrato (definido UNA sola vez). */
 const GEMINI_CONTRACT_ENDPOINT = '/api/gemini/contract';
@@ -27,7 +27,11 @@ function buildContractInit(payload: Record<string, unknown>): RequestInit {
 }
 
 /**
- * Envía un payload al proxy canónico de Gemini con `fetch` directo.
+ * Envía un payload al proxy canónico de Gemini por el TRANSPORTE ÚNICO.
+ *
+ * El deadline no es opcional: un `fetch` crudo sin abort espera indefinidamente
+ * (antes era un `fetch()` a pelo). Sin reintento: la política de reintento la
+ * elige el consumidor y solo la usa quien la necesita (variante resiliente).
  *
  * Contrato: POST JSON contra el endpoint canónico. No interpreta la
  * respuesta ni normaliza errores: devuelve el `Response` crudo para que
@@ -37,7 +41,7 @@ function buildContractInit(payload: Record<string, unknown>): RequestInit {
  * @returns La respuesta cruda del proxy.
  */
 export async function postGeminiContract(payload: Record<string, unknown>): Promise<Response> {
-    return fetch(GEMINI_CONTRACT_ENDPOINT, buildContractInit(payload));
+    return fetchTextEngine(GEMINI_CONTRACT_ENDPOINT, buildContractInit(payload));
 }
 
 /**

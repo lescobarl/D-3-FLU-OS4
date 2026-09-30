@@ -4,6 +4,7 @@
  */
 import {
   buildPollinationsImageUrl,
+  POLLINATIONS_DEFAULTS,
   VALID_VISUAL_TIPOS,
 } from '../../core/config/sharedConfig'
 import { VISUAL_CONFIG } from './visualConfig.js'
@@ -40,7 +41,7 @@ export function getVisualPipelineConfig() {
   const openverse = image.openverse || {}
   const prompt = image.prompt || {}
   return {
-    primary: String(pipeline.primary || 'pollinations').trim(),
+    primary: String(pipeline.primary || POLLINATIONS_DEFAULTS.ID).trim(),
     visualTypes: Array.isArray(pipeline.visualTypes)
       ? pipeline.visualTypes.map((t) => String(t || '').trim().toLowerCase()).filter(Boolean)
       : [...VALID_VISUAL_TIPOS],
@@ -140,7 +141,7 @@ export function buildPollinationsArtifact(prompt = '', { seedInput = '' } = {}) 
   return {
     image_url,
     trace: {
-      provider: 'pollinations',
+      provider: POLLINATIONS_DEFAULTS.ID,
       model: c.pollinationsModel,
       kind: 'url',
       source: 'pollinations_generation',

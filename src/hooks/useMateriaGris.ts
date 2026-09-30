@@ -99,7 +99,7 @@ export function useMateriaGris({ now }: UseMateriaGrisOptions = {}): UseMateriaG
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useMateriaGris.ts: refresh', e));
   }, [refresh]);
 
   /** Otorga puntos por una acción y refresca el leaderboard. */

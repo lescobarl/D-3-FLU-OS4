@@ -11,6 +11,7 @@ import type { BunnyComponent } from '../avatar/types/bunny';
 import { useEnhancedBranding } from '../core/branding/useEnhancedBranding';
 import { AI_PROVIDERS, BRANDING_MODES, FLU_PROFILE_IDS, UI_LANGUAGES, VOICE_CONFIG_CATALOG } from '../core/config/voiceConfigCatalog';
 import type { ConfigCatalogEntry } from '../core/config/voiceConfigCatalog';
+import { relayLog } from '../lib/clientLogRelay';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { AdvancedConfig, FluProfile, ImageConfig, PersonalityConfig, VoiceConfig } from '../types/bridge';
 import type React from 'react';
@@ -93,18 +94,18 @@ function applyNumberConfig(
 ): boolean {
     const parsed = Number.parseFloat(raw);
     if (Number.isNaN(parsed)) {
-        console.warn(`[applyConfigAction] Valor numérico inválido para "${entry.clave}":`, raw);
+        relayLog('WARN', 'config', `[applyConfigAction] Valor numérico inválido para "${entry.clave}":`, raw);
         return false;
     }
     let value = parsed;
     if (entry.inputUnit === 'minutes') value = value * 60_000;
     else if (entry.inputUnit === 'seconds') value = value * 1_000;
     if (entry.min !== undefined && value < entry.min) {
-        console.warn(`[applyConfigAction] "${entry.clave}" fuera de rango (min ${entry.min}):`, value);
+        relayLog('WARN', 'config', `[applyConfigAction] "${entry.clave}" fuera de rango (min ${entry.min}):`, value);
         return false;
     }
     if (entry.max !== undefined && value > entry.max) {
-        console.warn(`[applyConfigAction] "${entry.clave}" fuera de rango (max ${entry.max}):`, value);
+        relayLog('WARN', 'config', `[applyConfigAction] "${entry.clave}" fuera de rango (max ${entry.max}):`, value);
         return false;
     }
     apply(value);
@@ -123,11 +124,11 @@ export async function applyConfigAction(
 
     const entry = VOICE_CONFIG_CATALOG.find((e) => e.accion === accion && e.clave === clave);
     if (!entry) {
-        console.warn('[applyConfigAction] Clave sin entrada en catálogo:', accion, clave);
+        relayLog('WARN', 'config', '[applyConfigAction] Clave sin entrada en catálogo:', [accion, clave]);
         return;
     }
     if (entry.handler === 'unsupported') {
-        console.info('[applyConfigAction] Opción no soportada por voz, omitida:', clave, entry.motivoNoSoportado ?? '');
+        relayLog('INFO', 'config', '[applyConfigAction] Opción no soportada por voz, omitida:', [clave, entry.motivoNoSoportado ?? '']);
         return;
     }
 
@@ -146,7 +147,7 @@ export async function applyConfigAction(
             if ((BRANDING_MODES as readonly string[]).includes(valor)) {
                 await ctx.branding.seasonalActions.setMode(valor as 'auto' | 'manual' | 'disabled');
             } else {
-                console.warn('[applyConfigAction] Modo branding inválido:', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] Modo branding inválido:', valor);
             }
             break;
         }
@@ -160,7 +161,7 @@ export async function applyConfigAction(
             if (enabled !== null) {
                 await ctx.setCelebrateAchievements?.(enabled);
             } else {
-                console.warn('[applyConfigAction] Booleano inválido para celebrateAchievements:', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] Booleano inválido para celebrateAchievements:', valor);
             }
             break;
         }
@@ -172,7 +173,7 @@ export async function applyConfigAction(
                 const [name = '', mmdd = '', palette = 'cumpleanos'] = parts;
                 const m = mmdd.match(/^(\d{1,2})-(\d{1,2})$/);
                 if (!name || !m) {
-                    console.warn('[applyConfigAction] Festividad personalizada inválida (esperaba "nombre|MM-DD|paleta"):', valor);
+                    relayLog('WARN', 'config', '[applyConfigAction] Festividad personalizada inválida (esperaba "nombre|MM-DD|paleta"):', valor);
                     break;
                 }
                 const id = `custom-${uuidv4()}`;
@@ -185,10 +186,10 @@ export async function applyConfigAction(
                 if (match) {
                     await ctx.branding.seasonalActions.removeCustomEvent(match.id);
                 } else {
-                    console.warn('[applyConfigAction] Festividad personalizada no encontrada:', targetName);
+                    relayLog('WARN', 'config', '[applyConfigAction] Festividad personalizada no encontrada:', targetName);
                 }
             } else {
-                console.warn('[applyConfigAction] customEvent requiere subvalor "add"|"remove":', subvalor);
+                relayLog('WARN', 'config', '[applyConfigAction] customEvent requiere subvalor "add"|"remove":', subvalor);
             }
             break;
         }
@@ -231,7 +232,7 @@ export async function applyConfigAction(
             if ((UI_LANGUAGES as readonly string[]).includes(valor)) {
                 ctx.setLanguage?.(valor as 'es' | 'en' | 'both');
             } else {
-                console.warn('[applyConfigAction] Idioma inválido:', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] Idioma inválido:', valor);
             }
             break;
         }
@@ -275,7 +276,7 @@ export async function applyConfigAction(
             if (selected) {
                 ctx.setVoiceConfig?.({ voiceURI: selected.voiceURI, voiceName: selected.name });
             } else {
-                console.warn('[applyConfigAction] Voz no encontrada (¿voces aún cargándose?):', target);
+                relayLog('WARN', 'config', '[applyConfigAction] Voz no encontrada (¿voces aún cargándose?):', target);
             }
             break;
         }
@@ -294,7 +295,7 @@ export async function applyConfigAction(
             } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
                 next = current.filter((t) => t !== trait);
             } else {
-                console.warn('[applyConfigAction] traits requiere subvalor "add"|"remove":', subvalor);
+                relayLog('WARN', 'config', '[applyConfigAction] traits requiere subvalor "add"|"remove":', subvalor);
                 break;
             }
             ctx.setPersonality?.({ traits: next } as Partial<PersonalityConfig>);
@@ -302,7 +303,7 @@ export async function applyConfigAction(
         }
         case 'personalitySelect': {
             if (entry.opciones && !entry.opciones.includes(valor)) {
-                console.warn(`[applyConfigAction] Valor inválido para "${entry.clave}":`, valor);
+                relayLog('WARN', 'config', `[applyConfigAction] Valor inválido para "${entry.clave}":`, valor);
                 break;
             }
             ctx.setPersonality?.({ [entry.clave]: valor } as Partial<PersonalityConfig>);
@@ -339,7 +340,7 @@ export async function applyConfigAction(
             if (enabled !== null) {
                 ctx.setImageConfig?.({ [entry.clave]: enabled } as Partial<ImageConfig>);
             } else {
-                console.warn(`[applyConfigAction] Booleano inválido para "${entry.clave}":`, valor);
+                relayLog('WARN', 'config', `[applyConfigAction] Booleano inválido para "${entry.clave}":`, valor);
             }
             break;
         }
@@ -353,7 +354,7 @@ export async function applyConfigAction(
             if (component && color && isBunnyComponent(component)) {
                 ctx.setComponentColor?.(component, color);
             } else {
-                console.warn('[applyConfigAction] avatarColor requiere "componente:color":', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] avatarColor requiere "componente:color":', valor);
             }
             break;
         }
@@ -381,7 +382,7 @@ export async function applyConfigAction(
             if ((AI_PROVIDERS as readonly string[]).includes(valor)) {
                 ctx.handleSetAiProvider?.(valor);
             } else {
-                console.warn('[applyConfigAction] Proveedor IA inválido:', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] Proveedor IA inválido:', valor);
             }
             break;
         }
@@ -389,7 +390,7 @@ export async function applyConfigAction(
             if ((FLU_PROFILE_IDS as readonly string[]).includes(valor)) {
                 ctx.applyProfile?.(valor as FluProfile);
             } else {
-                console.warn('[applyConfigAction] Perfil inválido:', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] Perfil inválido:', valor);
             }
             break;
         }
@@ -407,7 +408,7 @@ export async function applyConfigAction(
             } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
                 next = current.filter((w) => w !== word);
             } else {
-                console.warn('[applyConfigAction] wakeWords requiere subvalor "add"|"remove":', subvalor);
+                relayLog('WARN', 'config', '[applyConfigAction] wakeWords requiere subvalor "add"|"remove":', subvalor);
                 break;
             }
             ctx.setWakeWords?.(next.join('\n'));
@@ -418,7 +419,7 @@ export async function applyConfigAction(
             if (enabled !== null) {
                 ctx.setDebugLogsEnabled?.(enabled);
             } else {
-                console.warn('[applyConfigAction] Booleano inválido para debugLogs:', valor);
+                relayLog('WARN', 'config', '[applyConfigAction] Booleano inválido para debugLogs:', valor);
             }
             break;
         }
@@ -428,6 +429,6 @@ export async function applyConfigAction(
         }
 
         default:
-            console.warn('[applyConfigAction] Handler no implementado:', entry.handler);
+            relayLog('WARN', 'config', '[applyConfigAction] Handler no implementado:', entry.handler);
     }
 }

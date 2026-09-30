@@ -66,7 +66,7 @@ export function useVoiceProfiles() {
     }, []);
 
     useEffect(() => {
-        refresh().catch(console.error);
+        refresh().catch((e) => logCaughtError('src/hooks/useVoiceProfiles.ts: refresh', e));
     }, [refresh]);
 
     /** Agregar un perfil de voz */

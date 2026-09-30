@@ -98,7 +98,7 @@ export function useShoppingList({
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useShoppingList.ts: refresh', e));
   }, [refresh]);
 
   /** Agrega un ítem y refresca la lista. */

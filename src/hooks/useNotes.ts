@@ -115,7 +115,7 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useNotes.ts: refresh', e));
   }, [refresh]);
 
   /** Agrega una nota y refresca la lista. */

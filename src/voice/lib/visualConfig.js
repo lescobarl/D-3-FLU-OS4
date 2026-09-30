@@ -10,7 +10,7 @@ export const VISUAL_CONFIG = {
     height: 576,
     /** Pipeline único: brief IA → generación. Stock desactivado por defecto. */
     pipeline: {
-      primary: 'pollinations',
+      primary: POLLINATIONS_DEFAULTS.ID,
       visualTypes: [...VALID_VISUAL_TIPOS],
       /** Tras fallo de generación/proxy: localSvg | none */
       errorFallback: 'localSvg',

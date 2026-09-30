@@ -21,6 +21,16 @@ import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabas
 import { logCaughtError } from '../lib/caughtError';
 import { resolveConfiguredTemperature } from '../services/aiTemperature';
 
+/**
+ * Una escritura de auditoria que falla es un sintoma secundario: se registra con
+ * el evento que se intentaba escribir y no rompe el turno. Un unico sitio.
+ * @param event Clave del evento de auditoria que no se pudo escribir.
+ * @param e Rechazo capturado.
+ */
+function reportAuditWriteFailure(event: string, e: unknown): void {
+    logCaughtError(`useMinuteHandlers: no se pudo escribir el evento de auditoria "${event}"`, e);
+}
+
 /** Draft de minuta producido por `createMinuteDraftFromSummary`. */
 export type MinuteDraft = ReturnType<typeof createMinuteDraftFromSummary>;
 
@@ -123,13 +133,13 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 auditLog.logEvent('minute:generated', 'minute', persisted.id, {
                     titulo: snapshot.titulo,
                     historyLength: history.length,
-                }, 'Minute generated from conversation').catch(console.error);
+                }, 'Minute generated from conversation').catch((e) => reportAuditWriteFailure('minute:generated', e));
             }
         } catch (error) {
             logCaughtError('[useMinuteHandlers] Error generating minute:', error);
             auditLog.logEvent('minute:error', 'minute', uuidv4(), {
                 error: String(error),
-            }, 'Minute generation failed').catch(console.error);
+            }, 'Minute generation failed').catch((e) => reportAuditWriteFailure('minute:error', e));
         } finally {
             setIsGeneratingMinute(false);
             if (prevState === 'IDLE') {
@@ -160,7 +170,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
         const wasListening = voiceStatus === 'listening';
         if (wasListening) {
-            await os2StopListening({ closing: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useMinuteHandlers.ts', e) });
+            await os2StopListening({ closing: true }).catch((e: unknown) => { logCaughtError('src/hooks/useMinuteHandlers.ts', e) });
         }
 
         // FLU "Pensando" (Idle_1) while generating the summary — deterministic
@@ -219,7 +229,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 auditLog.logEvent('summary:generated', 'summary', uuidv4(), {
                     titulo: result.titulo || '',
                     historyLength: history.length,
-                }, 'Summary generated').catch(console.error);
+                }, 'Summary generated').catch((e) => reportAuditWriteFailure('summary:generated', e));
             }
         } catch (error) {
             logCaughtError('[useMinuteHandlers] Error generating summary:', error);
@@ -236,14 +246,14 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             );
             auditLog.logEvent('summary:error', 'summary', uuidv4(), {
                 error: String(error),
-            }, 'Summary generation failed').catch(console.error);
+            }, 'Summary generation failed').catch((e) => reportAuditWriteFailure('summary:error', e));
         } finally {
             setIsSummarizing(false);
             if (prevState === 'IDLE') {
                 integrationStore.setConversationState('IDLE');
             }
             if (wasListening) {
-                os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useMinuteHandlers.ts', e) });
+                os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('src/hooks/useMinuteHandlers.ts', e) });
             }
         }
         return saved;
@@ -294,12 +304,12 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
             auditLog.logEvent('minute:saved', 'minute', persisted.id, {
                 titulo: persisted.summarySnapshot.titulo || '',
-            }, 'Minute saved').catch(console.error);
+            }, 'Minute saved').catch((e) => reportAuditWriteFailure('minute:saved', e));
         } catch (error) {
             logCaughtError('[useMinuteHandlers] Error saving minute:', error);
             auditLog.logEvent('minute:save-error', 'minute', uuidv4(), {
                 error: String(error),
-            }, 'Minute save failed').catch(console.error);
+            }, 'Minute save failed').catch((e) => reportAuditWriteFailure('minute:save-error', e));
         }
     }, [minuteDraft, minuteKnowledge, language, sessionRole, auditLog, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
 
@@ -346,12 +356,12 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 titulo: persisted.summarySnapshot.titulo || '',
                 historyLength: history.length,
                 kind: 'conversacion',
-            }, 'Conversation summary saved on close').catch(console.error);
+            }, 'Conversation summary saved on close').catch((e) => reportAuditWriteFailure('conversation:summary-saved', e));
         } catch (error) {
             logCaughtError('[useMinuteHandlers] Error saving conversation summary:', error);
             auditLog.logEvent('conversation:summary-save-error', 'summary', uuidv4(), {
                 error: String(error),
-            }, 'Conversation summary save failed').catch(console.error);
+            }, 'Conversation summary save failed').catch((e) => reportAuditWriteFailure('conversation:summary-save-error', e));
         }
     }, [integrationStore, minuteKnowledge, auditLog, language, apiKey, sessionRole, getCommandSpeech]);
 

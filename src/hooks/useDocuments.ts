@@ -55,7 +55,7 @@ export function useDocuments({ participantId }: UseDocumentsOptions = {}): UseDo
   }, [service, scope, participantId]);
 
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useDocuments.ts: refresh', e));
   }, [refresh]);
 
   const add = useCallback(

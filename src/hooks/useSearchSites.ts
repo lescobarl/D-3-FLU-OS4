@@ -87,7 +87,7 @@ export function useSearchSites(): UseSearchSitesResult {
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useSearchSites.ts: refresh', e));
   }, [refresh]);
 
   /** Registra un sitio dinámico y refresca (aparece en voz, barra, tiles y resultados). */

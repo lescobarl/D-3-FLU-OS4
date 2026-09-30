@@ -17,6 +17,7 @@
 // ============================================================
 
 import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
+import { POLLINATIONS_DEFAULTS } from '../core/config/sharedConfig';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { logCaughtError } from '../lib/caughtError';
 import type {
@@ -50,7 +51,7 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
 
     const stored = (() => {
         try { return localGet(STORAGE_KEYS.TEXT_API_KEY); } catch (e) {
-        logCaughtError('[catch] src/services/deepseek.ts', e); return null; }
+        logCaughtError('src/services/deepseek.ts', e); return null; }
     })();
     if (stored && stored.trim()) {
         return { apiKey: stored.trim(), apiKeySource: 'localStorage' };
@@ -198,7 +199,7 @@ class DeepSeekService extends BaseAIService {
             try {
                 parsed = JSON.parse(responseText);
             } catch (e) {
-                logCaughtError('[catch] src/services/deepseek.ts', e);
+                logCaughtError('src/services/deepseek.ts', e);
                 // Fallback if JSON parsing fails
                 parsed = {};
             }
@@ -356,7 +357,7 @@ Formato de respuesta (JSON):
             try {
                 parsed = JSON.parse(responseText);
             } catch (e) {
-                logCaughtError('[catch] src/services/deepseek.ts', e);
+                logCaughtError('src/services/deepseek.ts', e);
                 parsed = { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 };
             }
 
@@ -387,8 +388,8 @@ Formato de respuesta (JSON):
             return {
                 image_url: imageUrl,
                 trace: {
-                    provider: 'pollinations',
-                    model: 'pollinations',
+                    provider: POLLINATIONS_DEFAULTS.ID,
+                    model: POLLINATIONS_DEFAULTS.ID,
                     kind: 'url',
                     source: 'pollinations_ai',
                     hasImage: true,
@@ -478,7 +479,7 @@ Formato de respuesta (JSON):
             try {
                 parsed = JSON.parse(responseText);
             } catch (e) {
-                logCaughtError('[catch] src/services/deepseek.ts', e);
+                logCaughtError('src/services/deepseek.ts', e);
                 parsed = {
                     materia: 'Desconocida',
                     problemas: [],

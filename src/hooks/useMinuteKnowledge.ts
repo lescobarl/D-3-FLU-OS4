@@ -222,7 +222,7 @@ export function useMinuteKnowledge(participantId?: string) {
     }, [scope, participantId]);
 
     useEffect(() => {
-        refresh().catch(console.error);
+        refresh().catch((e) => logCaughtError('src/hooks/useMinuteKnowledge.ts: refresh', e));
     }, [refresh]);
 
     /**

@@ -140,8 +140,8 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   // arranque (default activo, no eliminable) y luego refresca el listado.
   useEffect(() => {
     seedAnonymous()
-      .catch(console.error)
-      .finally(() => refresh().catch(console.error));
+      .catch((e) => logCaughtError('src/hooks/useParticipants.ts: seedAnonymous', e))
+      .finally(() => refresh().catch((e) => logCaughtError('src/hooks/useParticipants.ts: refresh', e)));
   }, [seedAnonymous, refresh]);
 
   /** Registra un participante y refresca el listado. */

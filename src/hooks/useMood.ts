@@ -103,7 +103,7 @@ export function useMood({ now }: UseMoodOptions = {}): UseMoodResult {
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useMood.ts: refresh', e));
   }, [refresh]);
 
   /** Registra o actualiza el ánimo del día; refresca si fue exitoso. */

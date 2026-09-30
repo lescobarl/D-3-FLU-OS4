@@ -114,7 +114,7 @@ export function useCommunicationProfiles({
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useCommunicationProfiles.ts: refresh', e));
   }, [refresh]);
 
   /** Asegura el perfil de una persona y refresca el listado. */

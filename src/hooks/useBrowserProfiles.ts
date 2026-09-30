@@ -109,7 +109,7 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useBrowserProfiles.ts: refresh', e));
   }, [refresh]);
 
   /** Asegura el perfil de una persona (defaults de config) y refresca. */

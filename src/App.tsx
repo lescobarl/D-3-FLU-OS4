@@ -746,9 +746,9 @@ function App() {
                     deliveredByVoice = delivery === 'voice' || delivery === 'both';
                 }
                 if (!deliveredByVoice) {
-                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('[catch] src/App.tsx', e); });
+                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('src/App.tsx', e); });
                 }
-                agendaAudioDriver.play(sound).catch((e) => { logCaughtError('[catch] src/App.tsx', e); });
+                agendaAudioDriver.play(sound).catch((e) => { logCaughtError('src/App.tsx', e); });
             } else if (action === 'avisar') {
                 // Recordatorio: notificación + voz (como useReminders), sin tono.
                 const voiceDue = remindersVoice.due || 'Tienes un recordatorio pendiente:';
@@ -760,7 +760,7 @@ function App() {
                     deliveredByVoice = delivery === 'voice' || delivery === 'both';
                 }
                 if (!deliveredByVoice) {
-                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('[catch] src/App.tsx', e); });
+                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('src/App.tsx', e); });
                 }
             } else if (typeof notify === 'function') {
                 // Cita/junta/clase: notificación pasiva (toast), sin voz ni tono.
@@ -1332,7 +1332,7 @@ function App() {
                     speaker: speakerName || undefined,
                     transcript,
                     phase,
-                }, 'Raw transcript logged').catch(console.error);
+                }, 'Raw transcript logged').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
 
                 // NOTE: Do NOT call fluParticipant.onTurnCommitted() here.
                 // conversationStreamCommit.js already calls
@@ -2227,7 +2227,7 @@ function App() {
                         uuidv4(),
                         row,
                         `${row.speaker} transcript logged`,
-                    ).catch(console.error);
+                    ).catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
                 }
             }
 
@@ -2661,7 +2661,7 @@ function App() {
                         try {
                             await speakFluRef.current(ackText, currentLang);
                         } catch (e) {
-        logCaughtError('[catch] src/App.tsx', e);
+        logCaughtError('src/App.tsx', e);
                             // Sin TTS disponible: continuar igual.
                         }
                     }
@@ -2674,7 +2674,7 @@ function App() {
                     // habla del asistente antes de intentar abrir el micrófono.
                     await waitForSpeechIdle();
                 } catch (e) {
-        logCaughtError('[catch] src/App.tsx', e);
+        logCaughtError('src/App.tsx', e);
                     // Sin habla activa / timeout: continuar igual.
                 }
                 // Abre la escucha EN MODO CONVERSACIÓN (dueño único del modo):
@@ -2876,7 +2876,7 @@ function App() {
                     phase: 'local-fast-path',
                 },
                 'CONOCER_FLU command executed (local)',
-            ).catch(console.error);
+            ).catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
             return manifesto;
         },
         [languageRef, auditLog],
@@ -3524,7 +3524,7 @@ function App() {
         const newConfig = setFluParticipantOverrides(overrides);
         setParticipantConfig(newConfig);
         // Audit log
-        auditLog.logChange('config', 'flu-participant', prev, newConfig, 'Participant config updated').catch(console.error);
+        auditLog.logChange('config', 'flu-participant', prev, newConfig, 'Participant config updated').catch((e) => logCaughtError('src/App.tsx: auditLog.logChange', e));
     }, [participantConfig, auditLog]);
 
     const handleSearchConfigChange = useCallback((next: SearchConfigOverrides | ((prev: SearchConfigOverrides) => SearchConfigOverrides)) => {
@@ -3534,7 +3534,7 @@ function App() {
         setSearchOverrides(resolved);
         saveSearchConfigOverrides(resolved);
         // Audit log
-        auditLog.logChange('config', 'search', prev, resolved, 'Search config updated').catch(console.error);
+        auditLog.logChange('config', 'search', prev, resolved, 'Search config updated').catch((e) => logCaughtError('src/App.tsx: auditLog.logChange', e));
     }, [auditLog]);
 
     const handleSearchConfigReset = useCallback(() => {
@@ -3543,7 +3543,7 @@ function App() {
         clearSearchConfigOverrides();
         setSearchOverrides({});
         // Audit log
-        auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch(console.error);
+        auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch((e) => logCaughtError('src/App.tsx: auditLog.logChange', e));
     }, [auditLog]);
 // ---- Minute handlers (extraído a hook) ----
 const minuteHandlers = useMinuteHandlers({
@@ -3602,7 +3602,7 @@ const {
         try {
             lastSessionDay = localGet(dayStorageKey) || '';
         } catch (e) {
-        logCaughtError('[catch] src/App.tsx', e);
+        logCaughtError('src/App.tsx', e);
             lastSessionDay = '';
         }
         void (async () => {
@@ -3631,7 +3631,7 @@ const {
                 // (misma política que localStore). Si no se puede escribir (cuota),
                 // el día queda sin marcar, se reintentará al arrancar y puede
                 // duplicar la minuta: hay que poder enterarse.
-                logCaughtError('[catch] src/App.tsx', e);
+                logCaughtError('src/App.tsx', e);
                 relayLog(
                     'WARN',
                     'App',
@@ -3733,7 +3733,7 @@ const {
 
         const wasListening = voiceStatus === 'listening';
         integrationStore.resetConversationHistory();
-        auditLog.clearAll().catch(console.error);
+        auditLog.clearAll().catch((e) => logCaughtError('src/App.tsx: auditLog.clearAll', e));
 
         // OS2 parity: se entra al modo conversación (dueño único: el controlador)
         conversationMode.enter();
@@ -3780,33 +3780,33 @@ const {
             .where('speakerId')
             .equals(label)
             .primaryKeys()
-            .catch((e) => { logCaughtError('[catch] src/App.tsx', e); return [] as string[]; });
+            .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
         if (speakerRows.length > 0) {
-            await softDeleteConversationRows(speakerRows).catch(console.error);
+            await softDeleteConversationRows(speakerRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
         }
         // Barrido defensivo para filas legacy cuyo speakerId quedó en 'usuario'
         // pero speakerName coincide con el label (speakerName no es índice).
         const legacyRows = await fluDb.conversations
             .filter((r) => String(r?.speakerName || '').trim() === label)
             .primaryKeys()
-            .catch((e) => { logCaughtError('[catch] src/App.tsx', e); return [] as string[]; });
+            .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
         if (legacyRows.length > 0) {
-            await softDeleteConversationRows(legacyRows).catch(console.error);
+            await softDeleteConversationRows(legacyRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
         }
 
         // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado lógico.
-        const localProfile = await findVoiceProfileByLabel(label).catch((e) => { logCaughtError('[catch] src/App.tsx', e); return null; });
+        const localProfile = await findVoiceProfileByLabel(label).catch((e) => { logCaughtError('src/App.tsx', e); return null; });
         if (localProfile?.id) {
-            await deleteVoiceProfile(localProfile.id).catch(console.error);
+            await deleteVoiceProfile(localProfile.id).catch((e) => logCaughtError('src/App.tsx: deleteVoiceProfile', e));
         }
 
         // 5) Speaker de sesión en memoria (diarización) + auditoría.
         os2RemoveSessionSpeaker(label);
         // OS2 parity: delete audit logs for the removed speaker (FluShell.jsx lines 1226-1228)
-        deleteAuditLogsBySpeaker(label).catch(console.error);
+        deleteAuditLogsBySpeaker(label).catch((e) => logCaughtError('src/App.tsx: deleteAuditLogsBySpeaker', e));
         auditLog.logEvent('participant:removed', 'config', uuidv4(), {
             label,
-        }, 'Participant removed').catch(console.error);
+        }, 'Participant removed').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
 
         // 6) Registro multiusuario homónimo (Dexie participants + onboarding).
         //    Causa raíz de "borré ratón/conejo y sigue apareciendo en el
@@ -3857,7 +3857,7 @@ const {
         auditLog.logEvent('profile:renamed', 'config', uuidv4(), {
             profileId,
             newLabel: savedLabel,
-        }, 'Voice profile renamed').catch(console.error);
+        }, 'Voice profile renamed').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
     }, [voiceProfiles, os2RenameSessionSpeaker, auditLog]);
 
     // ============================================================

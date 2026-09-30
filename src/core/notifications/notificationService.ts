@@ -8,6 +8,7 @@
 import { STORAGE_KEYS } from '../config/appConfig';
 import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
+import { v4 as uuidv4 } from 'uuid';
 
 /** Canal de notificación elegido por el usuario. */
 export type NotificationChannel = 'none' | 'toast' | 'voice' | 'both';
@@ -95,7 +96,7 @@ export function createDefaultDriver(): NotificationDriver {
         });
         return true;
       } catch (e) {
-        logCaughtError('[catch] src/core/notifications/notificationService.ts', e);
+        logCaughtError('src/core/notifications/notificationService.ts', e);
         return false;
       }
     },
@@ -183,7 +184,7 @@ export function createNotificationService(
     if (muted(input.category)) return null;
 
     const notification: AppNotification = {
-      id: `${input.category}-${Date.now()}`,
+      id: `${input.category}-${uuidv4()}`,
       category: input.category,
       title: input.title || config.defaultTitle || 'FLU OS4',
       body: input.body,
@@ -209,7 +210,7 @@ export function createNotificationService(
       driver.isSupported() &&
       driver.getPermission() === 'granted'
     ) {
-      driver.showSystemNotification(notification).catch((e) => { logCaughtError('[catch] src/core/notifications/notificationService.ts', e); });
+      driver.showSystemNotification(notification).catch((e) => { logCaughtError('src/core/notifications/notificationService.ts', e); });
     }
 
     return delivery;

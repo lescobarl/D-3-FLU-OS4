@@ -93,7 +93,7 @@ export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useDiary.ts: refresh', e));
   }, [refresh]);
 
   /** Añade una entrada; refresca si fue exitoso. */

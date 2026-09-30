@@ -89,7 +89,7 @@ function loadString(key: string, fallback = ''): string {
         const val = localGet(key);
         return val ?? fallback;
     } catch (e) {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
+        logCaughtError('src/hooks/useConfigPersistence.ts', e);
         return fallback;
     }
 }
@@ -101,7 +101,7 @@ function saveString(key: string, value: string): void {
     try {
         localSet(key, value);
     } catch (e) {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e);
+        logCaughtError('src/hooks/useConfigPersistence.ts', e);
         // Silently ignore storage errors (quota exceeded, private mode, etc.)
     }
 }
@@ -144,7 +144,7 @@ export function useConfigPersistence(): ConfigPersistence {
             const saved = localGet(STORAGE_KEYS.LANGUAGE);
             if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
         } catch (e) {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
+        logCaughtError('src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         return UI_DEFAULTS.LANGUAGE;
     });
 
@@ -221,21 +221,21 @@ export function useConfigPersistence(): ConfigPersistence {
         const prev = apiKey;
         setApiKey(key);
         saveString(STORAGE_KEYS.TEXT_API_KEY, key);
-        auditLog.logChange('config', 'text-api-key', prev, key, 'Text API Key updated').catch(console.error);
+        auditLog.logChange('config', 'text-api-key', prev, key, 'Text API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [apiKey, auditLog]);
 
     const handleTextModelCommit = useCallback((model: string) => {
         const prev = textModel;
         setTextModel(model);
         saveString(STORAGE_KEYS.TEXT_MODEL, model);
-        auditLog.logChange('config', 'text-model', prev, model, 'Text Model updated').catch(console.error);
+        auditLog.logChange('config', 'text-model', prev, model, 'Text Model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [textModel, auditLog]);
 
     const handleTextApiUrlCommit = useCallback((url: string) => {
         const prev = textApiUrl;
         setTextApiUrl(url);
         saveString(STORAGE_KEYS.TEXT_API_URL, url);
-        auditLog.logChange('config', 'text-api-url', prev, url, 'Text API URL updated').catch(console.error);
+        auditLog.logChange('config', 'text-api-url', prev, url, 'Text API URL updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [textApiUrl, auditLog]);
 
     // ---- Gemini nativo (paso 5) config handlers ----
@@ -243,7 +243,7 @@ export function useConfigPersistence(): ConfigPersistence {
         const prev = geminiApiKey;
         setGeminiApiKey(key);
         saveString(STORAGE_KEYS.GEMINI_API_KEY, key);
-        auditLog.logChange('config', 'gemini-api-key', prev, key, 'Gemini API Key updated').catch(console.error);
+        auditLog.logChange('config', 'gemini-api-key', prev, key, 'Gemini API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [geminiApiKey, auditLog]);
 
     // ---- Image (Pollinations) config handlers ----
@@ -251,35 +251,35 @@ export function useConfigPersistence(): ConfigPersistence {
         const prev = imageApiKey;
         setImageApiKey(key);
         saveString(STORAGE_KEYS.IMAGE_API_KEY, key);
-        auditLog.logChange('config', 'image-api-key', prev, key, 'Image API Key updated').catch(console.error);
+        auditLog.logChange('config', 'image-api-key', prev, key, 'Image API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [imageApiKey, auditLog]);
 
     const handleFalApiKeyCommit = useCallback((key: string) => {
         const prev = falApiKey;
         setFalApiKey(key);
         saveString(STORAGE_KEYS.FALAI_API_KEY, key);
-        auditLog.logChange('config', 'falai-api-key', prev, key, 'Fal.ai Video API Key updated').catch(console.error);
+        auditLog.logChange('config', 'falai-api-key', prev, key, 'Fal.ai Video API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [falApiKey, auditLog]);
 
     const handleFalVideoModelCommit = useCallback((model: string) => {
         const prev = falVideoModel;
         setFalVideoModel(model);
         saveString(STORAGE_KEYS.FALAI_VIDEO_MODEL, model);
-        auditLog.logChange('config', 'falai-video-model', prev, model, 'Fal.ai Video model updated').catch(console.error);
+        auditLog.logChange('config', 'falai-video-model', prev, model, 'Fal.ai Video model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [falVideoModel, auditLog]);
 
     const handleImageModelCommit = useCallback((model: string) => {
         const prev = imageModel;
         setImageModel(model);
         saveString(STORAGE_KEYS.IMAGE_MODEL, model);
-        auditLog.logChange('config', 'image-model', prev, model, 'Image Model updated').catch(console.error);
+        auditLog.logChange('config', 'image-model', prev, model, 'Image Model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [imageModel, auditLog]);
 
     const handleImageApiUrlCommit = useCallback((url: string) => {
         const prev = imageApiUrl;
         setImageApiUrl(url);
         saveString(STORAGE_KEYS.IMAGE_API_URL, url);
-        auditLog.logChange('config', 'image-api-url', prev, url, 'Image API URL updated').catch(console.error);
+        auditLog.logChange('config', 'image-api-url', prev, url, 'Image API URL updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [imageApiUrl, auditLog]);
 
     // ---- OCR config handlers (local Tesseract default + endpoint remoto opcional) ----
@@ -287,21 +287,21 @@ export function useConfigPersistence(): ConfigPersistence {
         const prev = ocrApiKey;
         setOcrApiKey(key);
         saveString(STORAGE_KEYS.OCR_API_KEY, key);
-        auditLog.logChange('config', 'ocr-api-key', prev, key, 'OCR API Key updated').catch(console.error);
+        auditLog.logChange('config', 'ocr-api-key', prev, key, 'OCR API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [ocrApiKey, auditLog]);
 
     const handleOcrModelCommit = useCallback((model: string) => {
         const prev = ocrModel;
         setOcrModel(model);
         saveString(STORAGE_KEYS.OCR_MODEL, model);
-        auditLog.logChange('config', 'ocr-model', prev, model, 'OCR Model updated').catch(console.error);
+        auditLog.logChange('config', 'ocr-model', prev, model, 'OCR Model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [ocrModel, auditLog]);
 
     const handleOcrApiUrlCommit = useCallback((url: string) => {
         const prev = ocrApiUrl;
         setOcrApiUrl(url);
         saveString(STORAGE_KEYS.OCR_API_URL, url);
-        auditLog.logChange('config', 'ocr-api-url', prev, url, 'OCR API URL updated').catch(console.error);
+        auditLog.logChange('config', 'ocr-api-url', prev, url, 'OCR API URL updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [ocrApiUrl, auditLog]);
 
     // ---- Rehidratar apiKey desde localStorage cuando cambia (storage event) ----
@@ -344,7 +344,7 @@ export function useConfigPersistence(): ConfigPersistence {
             const toRemove = localKeys().filter((key) => !keep.has(key));
             toRemove.forEach((k) => localRemove(k));
         } catch (e) {
-        logCaughtError('[catch] src/hooks/useConfigPersistence.ts', e); /* ignore */ }
+        logCaughtError('src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         // Rehidratar el estado desde la fuente de verdad (localStorage)
         setApiKey(resolveTextApiKey());
         window.location.reload();

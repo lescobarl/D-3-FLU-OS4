@@ -41,7 +41,7 @@ import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
 import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
 import { postGeminiContractResilient } from '../../services/geminiContractClient'
 import { logCaughtError } from '../../lib/caughtError';
-import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
+import { AI_PROVIDER_IDS, POLLINATIONS_DEFAULTS } from '../../core/config/sharedConfig'
 import { localGet } from '../../core/storage/localStore';
 
 export {
@@ -95,7 +95,7 @@ function hasUsableVoiceBackend(apiKey) {
   try {
     return isLocalTextEndpoint(joinApiUrl(resolveServerTextApiUrl(), '/chat/completions'))
   } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
     return false
   }
 }
@@ -164,7 +164,7 @@ async function postChatCompletion({
   )
 
   if (!response.ok) {
-    const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
+    const detail = await response.text().catch((e) => { logCaughtError('src/voice/lib/gemini.js', e); return ''; })
     const error = new Error(`Gemini/OpenRouter error ${response.status}: ${detail || response.statusText}`)
     error.status = response.status
     error.detail = detail
@@ -308,8 +308,8 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
     return {
       imageUrl,
       trace: {
-        provider: 'pollinations',
-        model: 'pollinations',
+        provider: POLLINATIONS_DEFAULTS.ID,
+        model: POLLINATIONS_DEFAULTS.ID,
         kind: 'url',
         source: 'pollinations_ai',
         hasImage: true,
@@ -318,7 +318,7 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
       },
     }
   } catch (error) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', error);
+        logCaughtError('src/voice/lib/gemini.js', error);
     return {
       imageUrl: '',
       trace: {
@@ -392,7 +392,7 @@ export async function generateOpenRouterImage({
       REQUEST_TIMEOUT_PRESETS.image,
     )
     if (!response.ok) {
-      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
+      const detail = await response.text().catch((e) => { logCaughtError('src/voice/lib/gemini.js', e); return ''; })
       const message = `OpenRouter image error ${response.status}: ${String(detail).slice(0, 300)}`
       console.error('[gemini]', message)
       return {
@@ -465,13 +465,13 @@ function tryParseJsonCandidate(candidate) {
   try {
     return JSON.parse(text)
   } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
     // ignore
   }
   try {
     return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'))
   } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
     return undefined
   }
 }
@@ -1189,7 +1189,7 @@ export async function requestParticipantEvaluation(params) {
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
   }
   const body = {
@@ -1220,7 +1220,7 @@ export async function requestFluContract(params) {
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
     savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
   } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
   }
   const body = {
@@ -1241,7 +1241,7 @@ export async function requestConversationSummary(params) {
   try {
     savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
-  } catch (err) { logCaughtError('[catch] src/voice/lib/gemini.js', err) }
+  } catch (err) { logCaughtError('src/voice/lib/gemini.js', err) }
   const body = {
     ...(params ?? {}),
     model: savedModel || undefined,
@@ -1306,7 +1306,7 @@ export function resolveGeminiModel() {
     const savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     if (savedModel) return savedModel
   } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage (SSR / Node)
   }
   return resolveServerTextModel()
@@ -1730,7 +1730,7 @@ try {
     texto_extraido: String(parsed.texto_extraido || parsed.extracted_text || '').trim(),
   }
 } catch (e) {
-        logCaughtError('[catch] src/voice/lib/gemini.js', e);
+        logCaughtError('src/voice/lib/gemini.js', e);
   // Si no se puede parsear JSON, devolver el texto crudo
   return {
     materia: '',
@@ -1783,7 +1783,7 @@ export async function generateVideoViaFal({
       TIMEOUT_POLICY_MS.falVideoFetchAbort,
     )
     if (!submit.ok) {
-      const detail = await submit.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
+      const detail = await submit.text().catch((e) => { logCaughtError('src/voice/lib/gemini.js', e); return ''; })
       const message = `fal.ai submit error ${submit.status}: ${String(detail).slice(0, 300)}`
       console.error('[falai]', message)
       return {

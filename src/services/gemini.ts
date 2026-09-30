@@ -31,7 +31,7 @@ import type {
 import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import { postGeminiContract } from './geminiContractClient';
 import { logCaughtError } from '../lib/caughtError';
-import { resolveApiKey } from '../core/config/sharedConfig';
+import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
 import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
 import { resolveConfiguredTemperature } from './aiTemperature';
 import {
@@ -142,7 +142,7 @@ Genera la minuta en formato JSON.`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
+            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -192,7 +192,7 @@ Genera la minuta en formato JSON.`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
+            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -280,7 +280,7 @@ Responde como ${botName}:`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
+            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -311,7 +311,7 @@ Responde como ${botName}:`;
         }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.conversation });
 
         if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
+            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             throw new Error(errorData.error || `Proxy returned ${response.status}`);
         }
 
@@ -357,7 +357,7 @@ Responde como ${botName}:`;
                 return {
                     image_url: data.imageUrl,
                     trace: data.trace || {
-                        provider: 'pollinations',
+                        provider: POLLINATIONS_DEFAULTS.ID,
                         hasImage: true,
                         source: 'proxy',
                     },
@@ -369,8 +369,8 @@ Responde como ${botName}:`;
             return {
                 image_url: imageUrl,
                 trace: {
-                    provider: 'pollinations',
-                    model: 'pollinations',
+                    provider: POLLINATIONS_DEFAULTS.ID,
+                    model: POLLINATIONS_DEFAULTS.ID,
                     kind: 'url',
                     source: 'pollinations_ai',
                     hasImage: true,
@@ -387,7 +387,7 @@ Responde como ${botName}:`;
                 return {
                     image_url: imageUrl,
                     trace: {
-                        provider: 'pollinations',
+                        provider: POLLINATIONS_DEFAULTS.ID,
                         hasImage: true,
                         source: 'pollinations_ai_fallback',
                         prompt,
@@ -395,7 +395,7 @@ Responde como ${botName}:`;
                     },
                 };
             } catch (e) {
-                logCaughtError('[catch] src/services/gemini.ts', e);
+                logCaughtError('src/services/gemini.ts', e);
                 return {
                     image_url: '',
                     trace: {
@@ -484,7 +484,7 @@ Responde como ${botName}:`;
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('[catch] src/services/gemini.ts', e); return { error: 'Proxy error' }; });
+            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
             const error = new Error(errorData.error || `Proxy returned ${response.status}`) as Error & {
                 code?: string;
                 status?: number;

@@ -101,7 +101,7 @@ export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useContacts.ts: refresh', e));
   }, [refresh]);
 
   /** Añade un contacto; refresca si fue exitoso. */

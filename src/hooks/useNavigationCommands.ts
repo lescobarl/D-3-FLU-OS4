@@ -134,12 +134,12 @@ export function useNavigationCommands(
                     resumeListeningTimerRef.current = null;
                     if (isSpeechBusy()) return;
                     if (voiceStatus === 'listening') return;
-                    os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useNavigationCommands.ts', e) });
+                    os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('src/hooks/useNavigationCommands.ts', e) });
                 }, 120);
                 return;
             }
             if (voiceStatus === 'listening') return;
-            os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('[catch] src/hooks/useNavigationCommands.ts', e) });
+            os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('src/hooks/useNavigationCommands.ts', e) });
         }, delayMs);
     }, [clearResumeListeningTimer, os2StartListening, voiceStatus, conversationActiveRef, resumeListeningTimerRef, resolveResumeAfterSpeechMs]);
 
@@ -257,7 +257,7 @@ export function useNavigationCommands(
                         response: '',
                         comando: 'ANALIZAR_DOCUMENTO',
                         phase,
-                    }, 'ANALIZAR_DOCUMENTO command executed').catch(console.error);
+                    }, 'ANALIZAR_DOCUMENTO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 if (commandSpeech) {
                     try {
@@ -278,7 +278,7 @@ export function useNavigationCommands(
                         response: '',
                         comando: 'ANALIZAR_APP',
                         phase,
-                    }, 'ANALIZAR_APP command executed').catch(console.error);
+                    }, 'ANALIZAR_APP command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 if (commandSpeech) {
                     try {
@@ -300,7 +300,7 @@ export function useNavigationCommands(
                         response: '',
                         comando: 'GENERAR_DOCUMENTO',
                         phase,
-                    }, 'GENERAR_DOCUMENTO command executed').catch(console.error);
+                    }, 'GENERAR_DOCUMENTO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 if (commandSpeech) {
                     try {
@@ -322,7 +322,7 @@ export function useNavigationCommands(
                         response: '',
                         comando: 'GENERAR_VIDEO',
                         phase,
-                    }, 'GENERAR_VIDEO command executed').catch(console.error);
+                    }, 'GENERAR_VIDEO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 if (commandSpeech) {
                     try {
@@ -350,7 +350,7 @@ export function useNavigationCommands(
                         response: commandSpeech || '',
                         comando: 'FLU_WAKE',
                         phase,
-                    }, 'FLU_WAKE command executed').catch(console.error);
+                    }, 'FLU_WAKE command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
@@ -378,7 +378,7 @@ export function useNavigationCommands(
                         response: commandSpeech || '',
                         comando: 'INICIAR_CONVERSACION',
                         phase,
-                    }, 'INICIAR_CONVERSACION command executed').catch(console.error);
+                    }, 'INICIAR_CONVERSACION command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 if (isResetCmd) {
                     integrationStore.resetConversationHistory();
@@ -406,7 +406,7 @@ export function useNavigationCommands(
                         response: '',
                         comando: 'CERRAR_ESCUCHA',
                         phase,
-                    }, 'CERRAR_ESCUCHA command executed').catch(console.error);
+                    }, 'CERRAR_ESCUCHA command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 integrationStore.setLastResponse('');
                 os2ResetVoiceDisplay?.();
@@ -428,7 +428,7 @@ export function useNavigationCommands(
                         response: '',
                         comando: 'ABRIR_ESCUCHA',
                         phase,
-                    }, 'ABRIR_ESCUCHA command executed').catch(console.error);
+                    }, 'ABRIR_ESCUCHA command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
                 integrationStore.setLastResponse('');
                 os2ResetVoiceDisplay?.();
@@ -505,10 +505,10 @@ export function useNavigationCommands(
                             url: result.url,
                             host: result.host,
                             lang: requestLang,
-                        }, 'NAVEGAR command executed').catch(console.error);
+                        }, 'NAVEGAR command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                     }
                     if (commandSpeech) {
-                        speakFlu(commandSpeech, resolvedLanguage).catch(console.error);
+                        speakFlu(commandSpeech, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
                     }
                     scheduleResumeListening(commandSpeech?.length ?? 0);
                 });
@@ -576,7 +576,7 @@ export function useNavigationCommands(
                             (resolvedLanguage === 'en'
                                 ? 'Done, I already have the results. They are in the Search tab.'
                                 : 'Listo, ya tengo los resultados. Los tenés en la pestaña Buscar.');
-                        speakFlu(readyMsg, resolvedLanguage).catch(console.error);
+                        speakFlu(readyMsg, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
                     });
                     if (transcript) {
                         auditLog.logEvent('command:buscar', 'navigation', uuidv4(), {
@@ -587,10 +587,10 @@ export function useNavigationCommands(
                             phase,
                             query,
                             lang: requestLang,
-                        }, 'BUSCAR command executed').catch(console.error);
+                        }, 'BUSCAR command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                     }
                     if (commandSpeech) {
-                        speakFlu(commandSpeech, resolvedLanguage).catch(console.error);
+                        speakFlu(commandSpeech, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
                     }
                     scheduleResumeListening(commandSpeech?.length ?? 0);
                 });
@@ -621,7 +621,7 @@ export function useNavigationCommands(
                         phase,
                     },
                     'CONOCER_FLU command executed',
-                ).catch(console.error);
+                ).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 scheduleResumeListening(manifesto?.length ?? 0);
                 break;
             }

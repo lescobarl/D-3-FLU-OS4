@@ -108,7 +108,7 @@ export function useHabits({ now }: UseHabitsOptions = {}): UseHabitsResult {
 
   // Carga inicial.
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => logCaughtError('src/hooks/useHabits.ts: refresh', e));
   }, [refresh]);
 
   /** Alta de una meta/hábito; refresca la lista si fue exitosa. */

@@ -37,7 +37,7 @@ export function useAuditLog() {
 
     /** Cargar logs al montar */
     useEffect(() => {
-        refresh().catch(console.error);
+        refresh().catch((e) => logCaughtError('src/hooks/useAuditLog.ts: refresh', e));
     }, [refresh]);
 
     /**
