@@ -32,6 +32,15 @@ export const LECTORES = [
 /** Fallbacks del pipeline de embeddings que declara el dueno. */
 export const FALLBACKS = ['DEFAULT_MIN_SAMPLE_RATIO']
 
+/** Dueno del 16 kHz (leaf de parametros de audio). */
+export const RATE_OWNER = 'src/voice/lib/audioConstants.js'
+
+/** El catalogo de config DECLARA los valores configurados; no es logica de codigo. */
+export const CONFIG_CATALOG = 'src/voice/lib/fluConfig.js'
+
+/** Dueno del umbral de room-rematch. */
+export const ROOM_REMATCH_OWNER = 'src/voice/lib/speakerClusters.js'
+
 function walk(dir: string, acc: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {
         const p = join(dir, entry)
@@ -90,6 +99,38 @@ export function hallazgos(
     ])
 }
 
+/** true si el fuente tiene el literal del 16 kHz. */
+export function tieneLiteral16k(src: string): boolean {
+    return /\b16000\b/.test(src)
+}
+
+/** El 16 kHz solo puede escribirse en el leaf; el catalogo lo DECLARA como config. */
+export function literalRateOffenders(
+    files: Array<{ name: string; src: string }>,
+): string[] {
+    return files
+        .filter(({ name }) => name !== RATE_OWNER && name !== CONFIG_CATALOG)
+        .filter(({ src }) => tieneLiteral16k(src))
+        .map(({ name }) => `${name}: literal 16000 (usa DEFAULT_TARGET_SAMPLE_RATE)`)
+}
+
+/** true si el fuente lleva un umbral 0.xx inline en una linea de `roomRematch`. */
+export function umbralRoomInline(src: string): boolean {
+    return src
+        .split(/\r?\n/)
+        .some((linea) => /roomRematch/.test(linea) && /[:?]\s*0\.[0-9]+\b/.test(linea))
+}
+
+/** El umbral de room-rematch solo puede ser ROOM_REMATCH_STRICT (con nombre). */
+export function inlineRoomRematchOffenders(
+    files: Array<{ name: string; src: string }>,
+): string[] {
+    return files
+        .filter(({ name }) => name !== ROOM_REMATCH_OWNER && name !== CONFIG_CATALOG)
+        .filter(({ src }) => umbralRoomInline(src))
+        .map(({ name }) => `${name}: umbral de room-rematch inline (usa ROOM_REMATCH_STRICT)`)
+}
+
 const VOZ = walk(VOICE).map((f) => ({ name: rel(f), src: readFileSync(f, 'utf8') }))
 
 describe('P7.92 - un solo dueno de la configuracion de identidad de voz', () => {
@@ -97,6 +138,20 @@ describe('P7.92 - un solo dueno de la configuracion de identidad de voz', () => 
         expect(
             hallazgos(VOZ),
             'Estos sitios vuelven a declarar los lectores/fallbacks de embedding o los usan sin importarlos del dueno (P7.92)',
+        ).toEqual([])
+    })
+
+    it('el 16 kHz solo se escribe en el leaf de audio (el catalogo lo declara como config)', () => {
+        expect(
+            literalRateOffenders(VOZ),
+            'El literal 16000 vuelve a estar quemado en la logica de voz (P7.93): usa DEFAULT_TARGET_SAMPLE_RATE',
+        ).toEqual([])
+    })
+
+    it('el umbral de room-rematch no se escribe inline', () => {
+        expect(
+            inlineRoomRematchOffenders(VOZ),
+            'El umbral de room-rematch vuelve a estar inline (P7.93): usa ROOM_REMATCH_STRICT',
         ).toEqual([])
     })
 
@@ -137,5 +192,42 @@ describe('el detector no es decorativo', () => {
         ])
         const conImport = "import { getEmbeddingConfig } from './embeddingConfig.js'\nconst c = getEmbeddingConfig()"
         expect(consumidoresSinImport(conImport, 'src/voice/lib/otro.js')).toEqual([])
+    })
+
+    it('marca el literal 16000 en la logica y no en el leaf ni en el catalogo', () => {
+        const conLiteral = [{ name: 'src/voice/lib/otro.js', src: 'const r = 16000' }]
+        expect(literalRateOffenders(conLiteral)).toEqual([
+            'src/voice/lib/otro.js: literal 16000 (usa DEFAULT_TARGET_SAMPLE_RATE)',
+        ])
+        expect(
+            literalRateOffenders([
+                { name: RATE_OWNER, src: 'export const DEFAULT_TARGET_SAMPLE_RATE = 16000' },
+                { name: CONFIG_CATALOG, src: 'targetSampleRate: 16000,' },
+            ]),
+        ).toEqual([])
+    })
+
+    it('marca el umbral de room-rematch inline y no la constante con nombre', () => {
+        const inline = [{ name: 'src/voice/lib/otro.js', src: 'roomRematchFloor: cfg.r > 0 ? cfg.r : 0.85' }]
+        expect(inlineRoomRematchOffenders(inline)).toEqual([
+            'src/voice/lib/otro.js: umbral de room-rematch inline (usa ROOM_REMATCH_STRICT)',
+        ])
+        expect(
+            inlineRoomRematchOffenders([
+                { name: 'src/voice/lib/otro.js', src: 'roomRematchFloor: cfg.r > 0 ? cfg.r : ROOM_REMATCH_STRICT' },
+                { name: ROOM_REMATCH_OWNER, src: 'export const ROOM_REMATCH_STRICT = 0.85' },
+                { name: CONFIG_CATALOG, src: 'roomRematchThreshold: 0.80,' },
+            ]),
+        ).toEqual([])
+    })
+
+    it('no confunde un umbral inline de OTRA linea con el de room-rematch', () => {
+        const otro = [
+            {
+                name: 'src/voice/lib/otro.js',
+                src: 'roomRematchFloor: payload.roomRematchFloor ?? DEFAULT_MATCH_THRESHOLD,\ncontinuityThreshold: payload.continuityThreshold ?? 0.74,',
+            },
+        ]
+        expect(inlineRoomRematchOffenders(otro)).toEqual([])
     })
 })
