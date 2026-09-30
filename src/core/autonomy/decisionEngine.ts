@@ -653,7 +653,7 @@ export class DecisionEngine {
         
         this.evaluationIntervalId = window.setInterval(() => {
             this.evaluateAndDecide().catch(error => {
-                console.error('Error en evaluación de decisiones:', error);
+                logCaughtError('Error en evaluación de decisiones', error);
             });
         }, this.config.evaluationInterval);
         

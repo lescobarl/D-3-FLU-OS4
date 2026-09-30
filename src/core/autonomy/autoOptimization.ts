@@ -768,7 +768,7 @@ export class AutoOptimizationSystem {
         
         this.evaluationIntervalId = window.setInterval(() => {
             this.evaluateAndOptimize().catch(error => {
-                console.error('Error en optimización automática:', error);
+                logCaughtError('Error en optimización automática', error);
             });
         }, this.config.evaluationInterval);
         

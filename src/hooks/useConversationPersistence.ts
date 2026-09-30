@@ -175,7 +175,7 @@ export function useConversationPersistence(participantId?: string) {
                                     row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
                                 })
                                 .catch((err) => {
-                                    console.error('[ConversationPersistence] Error cleaning up system events from DB:', err);
+                                    logCaughtError('[ConversationPersistence] Error cleaning up system events from DB', err);
                                 });
                         }
                     }
@@ -212,7 +212,7 @@ export function useConversationPersistence(participantId?: string) {
             const newEntries = fullHistory.slice(savedLengthRef.current);
             const rows = newEntries.map((entry) => entryToRow(entry, scope));
             fluDb.conversations.bulkPut(rows).catch((err) => {
-                console.error('[ConversationPersistence] Error saving entries:', err);
+                logCaughtError('[ConversationPersistence] Error saving entries', err);
             });
         }
         savedLengthRef.current = historyLength;
@@ -240,7 +240,7 @@ export function useConversationPersistence(participantId?: string) {
                     : undefined;
             })
             .catch((err) => {
-                console.error('[ConversationPersistence] Error clearing persisted history:', err);
+                logCaughtError('[ConversationPersistence] Error clearing persisted history', err);
             });
     }, [conversationEpoch, scope]);
 }

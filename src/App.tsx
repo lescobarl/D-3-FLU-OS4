@@ -624,7 +624,7 @@ function App() {
                 if (stored.expandedFrameId) setExpandedFrameId(stored.expandedFrameId);
                 if (stored.selectedMinuteId) setSelectedMinuteId(stored.selectedMinuteId);
             })
-            .catch((err) => console.warn('[App] fallo al hidratar la sesión:', err));
+            .catch((err) => logCaughtError('[App] fallo al hidratar la sesión', err));
         return () => {
             cancelled = true;
         };
@@ -1001,7 +1001,7 @@ function App() {
             .then((rows) => {
                 if (active) setBirthdayNear(rows);
             })
-            .catch((err) => console.error('[App] birthdayNear error:', err));
+            .catch((err) => logCaughtError('[App] birthdayNear error', err));
         return () => {
             active = false;
         };
@@ -2116,7 +2116,7 @@ function App() {
                     // regardless of useCallback stale closure
                     const currentSpeakFlu = speakFluRef.current;
                     speakPromise = currentSpeakFlu(respuestaVoz, languageRef.current).catch((speechErr: unknown) => {
-                        console.warn('[App] speakFlu failed:', speechErr);
+                        logCaughtError('[App] speakFlu failed', speechErr);
                     });
                 }
 
@@ -2695,7 +2695,7 @@ function App() {
                         const startOnGesture = () => {
                             cleanup();
                             conversationMode.open({ resume: true }).catch((err2: unknown) =>
-                                console.warn('[App] escucha tras gesto del usuario falló:', err2),
+                                logCaughtError('[App] escucha tras gesto del usuario falló', err2),
                             );
                         };
                         window.addEventListener('pointerdown', startOnGesture);
@@ -2703,7 +2703,7 @@ function App() {
                         window.addEventListener('touchstart', startOnGesture);
                         window.setTimeout(cleanup, TIMEOUT_POLICY_MS.onboardingGestureCleanup);
                     } else {
-                        console.warn('[App] fallo al iniciar escucha tras onboarding:', err);
+                        logCaughtError('[App] fallo al iniciar escucha tras onboarding', err);
                     }
                 });
             };
@@ -3652,7 +3652,7 @@ const {
             conversationSummarySavedRef.current = true;
             // No bloquear el cierre: disparar en background y capturar errores.
             handleSaveConversationSummary({ announce: false }).catch((err) => {
-                console.warn('[App] Conversation summary save on close failed:', err);
+                logCaughtError('[App] Conversation summary save on close failed', err);
             });
         };
         window.addEventListener('pagehide', onPageHide);
@@ -3739,12 +3739,12 @@ const {
         conversationMode.enter();
 
         if (wasListening) {
-            await os2StopListening({ closing: false }).catch((err) => console.warn('[App] fallo al detener la escucha:', err));
-            await conversationMode.open({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
+            await os2StopListening({ closing: false }).catch((err) => logCaughtError('[App] fallo al detener la escucha', err));
+            await conversationMode.open({ resume: true }).catch((err) => logCaughtError('[App] fallo al reiniciar la escucha', err));
             return;
         }
 
-        await conversationMode.open({ resume: true }).catch((err) => console.warn('[App] fallo al reiniciar la escucha:', err));
+        await conversationMode.open({ resume: true }).catch((err) => logCaughtError('[App] fallo al reiniciar la escucha', err));
     }, [language, voiceStatus, integrationStore, auditLog, conversationMode, os2StopListening]);
 
     // ============================================================

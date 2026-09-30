@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
+import { logCaughtError } from './lib/caughtError';
 import './index.css';
 
 // Declaración global del tipo de window.FLU_CONFIG (asignado abajo).
@@ -30,7 +31,7 @@ if (
       // Fuerza la comprobación de una versión nueva del SW en cada arranque.
       registration.update().catch(() => { /* ignorado: la actualizacion del SW no debe romper el arranque */ });
     })
-    .catch((err) => console.error('Error al registrar el Service Worker de la PWA:', err));
+    .catch((err) => logCaughtError('Error al registrar el Service Worker de la PWA', err));
 
   // Auto-actualización: cuando un SW nuevo toma el control, recargar UNA vez
   // para servir el bundle nuevo. Sin esto, un cliente con la shell cacheada

@@ -778,7 +778,7 @@ export class HealthMonitor {
             // Configurar intervalo de monitoreo
             this.monitoringIntervalId = window.setInterval(() => {
                 this.performHealthCheck().catch(error => {
-                    console.error('Error en verificación de salud:', error);
+                    logCaughtError('Error en verificación de salud', error);
                 });
             }, this.config.monitoringInterval);
 
