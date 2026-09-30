@@ -193,6 +193,14 @@ if (lines > maxLines) {
   fail(`Diff demasiado grande: ${lines} líneas > ${maxLines}. Trocea la tarea.`)
 }
 
+// 2b) MODO ALCANCE (`npm run gate:fast` o TASK_GATE_SCOPE_ONLY=1): comprobacion
+// INSTANTANEA de alcance + tamanio, sin correr DoD ni guards. Es lo que se usa
+// mientras se trabaja; el gate completo se reserva al cierre de la tarea.
+if (process.argv.includes('--fast') || process.env.TASK_GATE_SCOPE_ONLY === '1') {
+  console.log('✅ [task-gate] Alcance OK · tamaño OK · (DoD/guard omitidos en modo --fast).')
+  process.exit(0)
+}
+
 // 3) DoD -------------------------------------------------------------------
 if (!c.dod) fail('El contrato no define "dod".')
 console.log(`[task-gate] DoD: ${c.dod}`)
@@ -258,11 +266,14 @@ if (c.skipBaseGuards !== true) {
   // P0.6: los tres guards son puramente estaticos (leen fuentes), asi que un fallo
   // intermitente NO puede venir de ellos. La causa medida era la propia invocacion:
   // arranque en frio de vitest (transform cache) con el testTimeout por defecto de 5s
-  // y varios workers compitiendo. Se fija: sin paralelismo de archivos, timeout holgado
-  // y UN reintento. El reintento NO tapa fallos reales: un guard determinista que falla
-  // por una violacion real vuelve a fallar en el reintento y la puerta sigue en rojo.
+  // y varios workers compitiendo. Se fija: timeout holgado y UN reintento. El reintento
+  // NO tapa fallos reales: un guard determinista que falla por una violacion real vuelve
+  // a fallar en el reintento y la puerta sigue en rojo.
+  // El paralelismo de ficheros SI se deja (2026-09-29): medido sobre el DoD del contrato,
+  // 19.8 s en serie -> 9.5 s en paralelo, mismos 334 tests y exit 0. Lo que evita el fallo
+  // intermitente es el timeout holgado + retry, no la serializacion.
   const BASE_GUARDS =
-    'npx vitest run --no-file-parallelism --testTimeout=30000 --retry=1 --reporter=dot tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts'
+    'npx vitest run --testTimeout=30000 --retry=1 --reporter=dot tests/hardcodeGuard.test.ts tests/protocolGuard.test.ts tests/stability-guards.test.ts'
   console.log(`[task-gate] Guards base: ${BASE_GUARDS}`)
   const bg = sh(BASE_GUARDS)
   if (bg.code !== 0) {
