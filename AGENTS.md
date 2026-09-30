@@ -6,7 +6,7 @@
 > Si otra fuente (chat, README, `kilo.json`, comandos) contradice este archivo,
 > prevalece la formulación más estricta de este archivo.
 
-**Versión:** 8.0 · **Última actualización:** 2026-09-29
+**Versión:** 8.1 · **Última actualización:** 2026-09-29
 
 ---
 
@@ -166,11 +166,22 @@ no depende de la buena voluntad; vive en el repo y en comandos verificables.
     **Arnes:** el mismo `tests/instrumentIntegrityGuard.test.ts`: ficheros tocados ->
     guards que los leen -> estan en `lint:guards` o declarados en su `EXEMPT` con
     motivo. **Estado: MECANIZADO** (0b87331), con control negativo real (quitando un
-    guard del gate, cae nombrando los ficheros que lee). **Deuda viva: P7.87** — 5
-    guards que leen `src/core/games` no pueden entrar al gate todavia: sin prueba de
-    detector crearian teatro nuevo y el baseline de `guardMutationGuard` es
-    shrink-only, asi que van declarados en `EXEMPT` y el guard comprueba que sigan
-    fuera.
+    guard del gate, cae nombrando los ficheros que lee). **P7.87 CERRADO:** los 5 guards
+    que quedaban en `EXEMPT` ganaron su prueba de detector REAL (control negativo medido:
+    rompiendo cada detector, el guard cae), entraron en `lint:guards` y el `EXEMPT` quedo
+    **VACIO**; los 3 con logica inline exponen su predicado para poder falsificarlo. El
+    baseline `shrink-only` de `guardMutationGuard` NO se toco (no crece).
+
+25. **Cobertura de COMPORTAMIENTO del `src` tocado.** 0.24 cubre los guards de **texto**
+    que leen el `src` tocado; esto cubre los **tests de comportamiento**, que son otro
+    agujero: si un cambio toca un fichero de `src`, **todo** test que lo **importe** (por
+    el grafo de imports, no por su nombre) tiene que correr en el gate (`dod`, `guard` o
+    `lint:guards`).
+    **Incumplimiento registrado:** P7.81 cerro en VERDE con la **suite completa en ROJO**
+    (un caso del motor de cuentacuentos): el `dod` del contrato eran 15 ficheros y la suite
+    369.
+    **Arnes:** `tests/dodScopeGuard.test.ts`, con control negativo real (quitando ese test
+    del `dod`, cae nombrándolo). **Estado: MECANIZADO**, cierra P7.88.
 
 ### C. Contrato (formato mínimo)
 

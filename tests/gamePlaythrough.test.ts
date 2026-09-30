@@ -328,18 +328,44 @@ describe('invariante de desenlace declarado', () => {
         const dir = join(process.cwd(), 'src/core/games');
         const faltan: string[] = [];
         for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
-            const lines = readFileSync(join(dir, file), 'utf8').split(/\r?\n/);
-            lines.forEach((line, i) => {
-                if (!/gameOver:\s*true/.test(line)) return;
-                // Propiedades del PROPIO objeto del return (sin cruzar a vecinos).
-                let a = i;
-                while (a > 0 && /^\s+[A-Za-z_'"[`]/.test(lines[a - 1]) && !/return|=>/.test(lines[a - 1])) a -= 1;
-                let b = i;
-                while (b + 1 < lines.length && /^\s+[A-Za-z_'"[`]/.test(lines[b + 1])) b += 1;
-                const body = lines.slice(a, b + 1).join('\n');
-                if (!/\bwon\b/.test(body)) faltan.push(`${file}:${i + 1}`);
-            });
+            faltan.push(...endsWithoutWon(file, readFileSync(join(dir, file), 'utf8').split(/\r?\n/)));
         }
         expect(faltan).toEqual([]);
+    });
+});
+
+/**
+ * Finales de motor (`gameOver: true`) que omiten declarar `won` en su propio
+ * objeto. Detector extraido para poder falsificarlo con lineas sinteticas sin
+ * tocar los fuentes reales.
+ */
+export function endsWithoutWon(file: string, lines: string[]): string[] {
+    const faltan: string[] = [];
+    lines.forEach((line, i) => {
+        if (!/gameOver:\s*true/.test(line)) return;
+        // Propiedades del PROPIO objeto del return (sin cruzar a vecinos).
+        let a = i;
+        while (a > 0 && /^\s+[A-Za-z_'"[`]/.test(lines[a - 1]) && !/return|=>/.test(lines[a - 1])) a -= 1;
+        let b = i;
+        while (b + 1 < lines.length && /^\s+[A-Za-z_'"[`]/.test(lines[b + 1])) b += 1;
+        const body = lines.slice(a, b + 1).join('\n');
+        if (!/\bwon\b/.test(body)) faltan.push(`${file}:${i + 1}`);
+    });
+    return faltan;
+}
+
+describe('invariante de desenlace declarado - prueba de detector', () => {
+    // Prueba de detector: el detector debe marcar el final sintetico SIN won y no
+    // el que SI lo declara. Si no discriminara, P2 seria decorativo.
+    it('el detector marca el final sin won y no el que lo declara', () => {
+        const sinWon = [
+            '        return {',
+            '            prompt: "x",',
+            '            gameOver: true,',
+            '        };',
+        ];
+        expect(endsWithoutWon('malo.ts', sinWon)).toEqual(['malo.ts:3']);
+        const conWon = ['        return gameOverResult("x", 0, { won: true });'];
+        expect(endsWithoutWon('bueno.ts', conWon)).toEqual([]);
     });
 });

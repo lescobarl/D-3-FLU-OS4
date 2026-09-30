@@ -229,12 +229,7 @@ describe('gameCatalog — END_GAME_FRAMES (control data-driven de partida activa
         // loteria conocia las salidas cortas). Los motores deben consumir
         // END_GAME_FRAMES de gameUtils, no volver a escribir las frases.
         const dir = join(process.cwd(), 'src', 'core', 'games');
-        const offenders: string[] = [];
-        for (const file of readdirSync(dir)) {
-            if (!file.endsWith('.ts') || file === 'gameUtils.ts' || file === 'gameCatalog.ts') continue;
-            const src = readFileSync(join(dir, file), 'utf8');
-            if (/'salir del juego'/.test(src)) offenders.push(file);
-        }
+        const offenders = enginesWithOwnEndFrames(sourcesOf(dir));
         expect(offenders).toEqual([]);
     });
     test('cada alias del catalogo resuelve a su propio juego (sin colisiones de especificidad)', () => {
@@ -252,5 +247,36 @@ describe('gameCatalog — END_GAME_FRAMES (control data-driven de partida activa
             }
         }
         expect(perdidos).toEqual([]);
+    });
+});
+
+/** Fuentes de un directorio en la forma que espera el detector de fuente unica. */
+function sourcesOf(dir: string): Array<{ file: string; src: string }> {
+    return readdirSync(dir)
+        .filter((file) => file.endsWith('.ts'))
+        .map((file) => ({ file, src: readFileSync(join(dir, file), 'utf8') }));
+}
+
+/** Motores que vuelven a escribir su propia lista de salida (detector). */
+export function enginesWithOwnEndFrames(sources: Array<{ file: string; src: string }>): string[] {
+    return sources
+        .filter(({ file, src }) => {
+            if (!file.endsWith('.ts') || file === 'gameUtils.ts' || file === 'gameCatalog.ts') return false;
+            return /'salir del juego'/.test(src);
+        })
+        .map(({ file }) => file);
+}
+
+describe('gameCatalog - prueba de detector', () => {
+    // Prueba de detector: el detector debe marcar al que reescribe la lista y NO al
+    // que la consume, ni al dueno (gameUtils/gameCatalog). Sin esto el guard podria
+    // estar verde para siempre sin proteger nada.
+    test('el detector marca al infractor sintetico y no al dueno ni al limpio', () => {
+        const offenders = enginesWithOwnEndFrames([
+            { file: 'ahorcado.ts', src: "const X = ['salir del juego']" },
+            { file: 'limpio.ts', src: "import { END_GAME_FRAMES } from './gameUtils'" },
+            { file: 'gameUtils.ts', src: "const X = ['salir del juego']" },
+        ]);
+        expect(offenders).toEqual(['ahorcado.ts']);
     });
 });

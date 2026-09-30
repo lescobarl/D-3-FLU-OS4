@@ -8,9 +8,9 @@
  *   repiteTraduce, riddles, simonDice, trabalenguas, trivia, veoVeo), además de
  *   la copia en gameUtils. Ahora solo `src/core/games/gameUtils.ts` la tiene.
  */
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
-import { readdirSync, statSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { adoptRandom } from '../src/core/games/gameUtils'
 
@@ -61,5 +61,21 @@ describe('C59 gameAdoptRandom — contrato de comportamiento', () => {
   })
   it('ignora un cfg.random que no es función', () => {
     expect(adoptRandom(rng, { random: 42 })).toBe(rng)
+  })
+})
+
+describe('C59 gameAdoptRandom - prueba de detector', () => {
+  // Prueba de detector: el detector debe marcar al infractor sintetico y NO al
+  // limpio. Si el patron dejara de discriminar, este caso cae y el guard queda
+  // senalado como teatro (P2.4).
+  it('el detector marca una copia sintetica y no el fichero limpio', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'adopt-'))
+    const malo = join(dir, 'malo.ts')
+    const limpio = join(dir, 'limpio.ts')
+    writeFileSync(malo, "if (cfg && typeof cfg.random === 'function') rng = cfg.random\n")
+    writeFileSync(limpio, 'export const x = 1\n')
+    expect(adoptRandomFiles([malo])).toEqual([relative(ROOT, malo).split(sep).join('/')])
+    expect(adoptRandomFiles([limpio])).toEqual([])
+    rmSync(dir, { recursive: true, force: true })
   })
 })

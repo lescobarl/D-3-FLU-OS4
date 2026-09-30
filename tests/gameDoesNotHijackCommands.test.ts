@@ -368,3 +368,15 @@ describe('un solo criterio de "otro dominio reclama el turno" (invariante)', () 
             .toContain('isClaimedByOtherDomain');
     });
 });
+
+describe('prueba de detector - el detector discrimina', () => {
+    // Prueba de detector: el criterio de "otro dominio reclama el turno" tiene que
+    // decir NO a una jugada real y SI a un comando ajeno. Si dijera SI a la jugada,
+    // el juego dejaria de funcionar; si dijera NO al comando ajeno, lo secuestraria.
+    it('dice NO a la jugada real y SI al comando de otro dominio', () => {
+        expect(isClaimedByOtherDomain('siguiente carta', { language: 'es' })).toBe(false);
+        expect(isClaimedByOtherDomain('el sol', { language: 'es' })).toBe(false);
+        expect(isClaimedByOtherDomain('borra la nota del super', { language: 'es' })).toBe(true);
+        expect(isClaimedByOtherDomain('crea una alarma hoy a las 5:59', { language: 'es' })).toBe(true);
+    });
+});

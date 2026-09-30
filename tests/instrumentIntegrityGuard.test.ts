@@ -32,12 +32,11 @@ const base: string = JSON.parse(readFileSync(join(ROOT, '.task/contract.json'), 
  * prueba de detector (lo comprueba el ultimo caso), asi que se vacia sola cuando
  * el motivo desaparece. El motivo es del dueno de P2.4, no de este guard.
  */
-const EXEMPT: Record<string, string> = {
-    'tests/gameAdoptRandomGuard.test.ts': 'sin prueba de detector: entrar en lint:guards lo pone rojo en guardMutationGuard (baseline shrink-only)',
-    'tests/gameRoundsGuard.test.ts': 'sin prueba de detector: entrar en lint:guards lo pone rojo en guardMutationGuard (baseline shrink-only)',
-    'tests/gameCatalog.test.ts': 'sin prueba de detector: entrar en lint:guards lo pone rojo en guardMutationGuard (baseline shrink-only)',
-    'tests/gameDoesNotHijackCommands.test.ts': 'sin prueba de detector: entrar en lint:guards lo pone rojo en guardMutationGuard (baseline shrink-only)',
-    'tests/gamePlaythrough.test.ts': 'sin prueba de detector: entrar en lint:guards lo pone rojo en guardMutationGuard (baseline shrink-only)',
+const EXEMPT: Record<string, string> = {}
+
+/** Entradas de EXEMPT que ya NO valen por estar en el gate (la lista se vacia sola). */
+export function exemptInvalidos(exempt: Record<string, string>, gate: Set<string>): string[] {
+    return Object.keys(exempt).filter((f) => gate.has(f))
 }
 
 /** Guards declarados en un comando de package.json. */
@@ -144,8 +143,7 @@ describe('0.24 instrumento - todo guard que lee un fichero tocado corre en el ga
         ).toEqual([])
     })
     it('lo declarado en EXEMPT sigue fuera del gate (la lista se vacia sola)', () => {
-        const invalidos = Object.keys(EXEMPT).filter((f) => GATE.has(f))
-        expect(invalidos, 'Ya estan en lint:guards: sacalos de EXEMPT').toEqual([])
+        expect(exemptInvalidos(EXEMPT, GATE), 'Ya estan en lint:guards: sacalos de EXEMPT').toEqual([])
     })
 })
 
@@ -173,7 +171,9 @@ describe('el detector no es decorativo', () => {
         const sources = new Map([['tests/g.test.ts', "const DIR = 'src/core/games'\nconst s = readFileSync(join(DIR, f), 'utf8')"]])
         expect(readersOf('src/core/games/quienSoy.ts', sources)).toEqual(['tests/g.test.ts'])
     })
-    it('EXEMPT solo puede nombrar guards que existen y que no estan en el gate', () => {
-        expect(Object.keys(EXEMPT).filter((f) => !GATE.has(f)).length).toBeGreaterThan(0)
+    it('el detector de EXEMPT marca al guard que ya entro en el gate', () => {
+        const gate = new Set(['tests/g.test.ts'])
+        expect(exemptInvalidos({ 'tests/g.test.ts': 'x' }, gate)).toEqual(['tests/g.test.ts'])
+        expect(exemptInvalidos({ 'tests/otro.test.ts': 'x' }, gate)).toEqual([])
     })
 })
