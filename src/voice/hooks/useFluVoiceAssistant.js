@@ -380,6 +380,7 @@ export function useFluVoiceAssistant({
   // `clearTurnBuffers` existe). Evita que la locución ya ejecutada quede en el
   // buffer/spill y se vuelva a procesar (ciclo de comandos repetidos).
   const clearTurnAfterResolveRef = useRef(() => {})
+  const activeTurnIdRef = useRef(0)
   /**
    * §9: par ÚNICO `commit + resolución` del turno. TODAS las ramas cierran por
    * aquí, de modo que el display (commit) y la fila (`transcript`) no puedan
@@ -400,11 +401,11 @@ export function useFluVoiceAssistant({
           userCommitOnly: true,
           transcript: canonicalPhrase,
           speakerName: payload.speakerName,
-          phase: payload.phase,
+          phase: payload.phase, turnId: activeTurnIdRef.current,
         })
         return canonicalPhrase
       }
-      const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase, sameTurn: true })
+      const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase, turnId: activeTurnIdRef.current })
       // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no
       // se reprocese (ciclo de comandos/ambient que repetían la misma orden).
       clearTurnAfterResolveRef.current?.()
@@ -603,7 +604,6 @@ export function useFluVoiceAssistant({
   const _lastTurnHadFinalRef = useRef(false)
   const _allowStableCommitRef = useRef(false)
   const turnCommitIdRef = useRef(0)
-  const activeTurnIdRef = useRef(0)
   const lastCommitAtRef = useRef(0)
   const preflightScheduledForTurnRef = useRef(false)
   const turnBridgeTextRef = useRef('')

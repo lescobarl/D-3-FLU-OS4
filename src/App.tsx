@@ -354,7 +354,7 @@ type ResolvedContract = Omit<FluContract, 'workspace'> & {
 /** Payload entregado por el motor de voz al resolver un contrato. */
 type ContractResolution = FastPathExecutedMarks & {
     userCommitOnly?: boolean; effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
-    sameTurn?: boolean;
+    turnId?: number | string | null; // identidad del turno: la fila se reutiliza por IDENTIDAD
     transcript?: string;
     speakerName?: string;
     rawOnly?: boolean;
@@ -1308,7 +1308,7 @@ function App() {
                     text: transcript,
                     speakerName,
                     replaceLast: resolved?.replaceLastRawLog === true,
-                    sameTurn: resolved?.sameTurn === true,
+                    turnId: resolved?.turnId ?? null,
                 });
             }
             if (userCommitOnly) return;

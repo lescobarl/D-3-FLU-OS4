@@ -7,14 +7,23 @@
 // fila: dentro del TURNO ACTUAL reutiliza la fila y completa su hablante, o la
 // reemplaza si la emisión crece; si no, la agrega. Así una frase ⇒ una fila.
 //
-// El "turno actual" son las filas posteriores a la última respuesta de FLU
-// (role 'flu'); las filas ambiente/sistema no cierran el turno.
+// El "turno actual" se identifica por SU ID (`turnId`, que el hook publica en el
+// commit temprano y en la resolución): la fila se reutiliza por identidad, no por
+// posición. Sin `turnId` (compatibilidad) se usa el criterio posicional: filas
+// posteriores a la última respuesta de FLU (role 'flu'); ambiente/sistema no cierran.
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { phrasesRelate } from './activeListen';
+
+/**
+ * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.
+ * Es lo que permite reutilizar la fila por IDENTIDAD de turno (los dos commits
+ * del turno: temprano y de resolucion) en vez de por posicion respecto a FLU.
+ */
+let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
 export interface UserTurnRowInput {
     /** Frase canónica de la locución (con wake word, tal como se muestra). */
@@ -29,14 +38,15 @@ export interface UserTurnRowInput {
      */
     replaceLast?: boolean;
     /**
-     * `true` = resolución del MISMO turno ya iniciado: reutiliza su fila de
-     * usuario aunque FLU haya hablado en medio. Sin esta marca, la frontera del
-     * turno (posterior a la última fila de FLU) hacía que el cierre volviera a
-     * escribir la MISMA locución como fila nueva (defecto medido: la misma orden
-     * aparecía dos veces en la conversación). Un turno NUEVO no la usa: por eso
-     * repetir a propósito tras una respuesta de FLU sigue abriendo fila propia.
+     * Identidad del TURNO (produccion la aporta: `activeTurnIdRef`). La fila del
+     * usuario se reutiliza DENTRO DEL MISMO TURNO por esta identidad, no por
+     * posicion respecto a las filas de FLU: asi dos resoluciones del mismo turno
+     * siguen siendo una fila aunque el motor hable en medio, y dos locuciones
+     * DISTINTAS (turnos distintos) son dos filas aunque FLU no haya hablado.
+     * Sin `turnId` (llamadores sin identidad de turno) se conserva el criterio
+     * posicional.
      */
-    sameTurn?: boolean;
+    turnId?: number | string | null;
 }
 
 export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
@@ -76,7 +86,7 @@ export function commitUserTurnRow({
     speakerName,
     timestamp,
     replaceLast = false,
-    sameTurn = false,
+    turnId = null,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -111,34 +121,56 @@ export function commitUserTurnRow({
         }
     }
 
-    // 2) Misma LOCUCION ya commiteada en el turno: reutiliza la fila y completa
-    //    hablante. La comparacion es por RELACION (prefijo/sufijo normalizado,
-    //    `phrasesRelate`), no por igualdad estricta: una reemision del ASR que CRECE
-    //    ("Okay Flow empiezas" -> "Okay Flow empiezas Okay Flow empieza tu") o que se
-    //    recorta es la MISMA locucion, y con igualdad abria una SEGUNDA fila (defecto
-    //    medido 18:12:06 y 18:12:34; la respuesta de FLU quedaba alineada a una sola).
-    //    De la reemision se conserva el texto MAS COMPLETO: nunca se pierde lo dicho.
-    //    `sameTurn` (resolucion del MISMO turno) ignora la frontera de FLU: la fila
-    //    del turno ya existe y el cierre debe completarla, no abrir una segunda.
-    const reuseFrom = sameTurn ? 0 : turnStart;
-    for (let i = history.length - 1; i >= reuseFrom; i -= 1) {
-        const entry = history[i];
-        if (!entry || entry.role !== 'user') continue;
-        const previo = cleanForSpeech(entry.text || '');
-        if (!phrasesRelate(previo, raw)) continue;
-        const masCompleto = norm.length > previo.toLowerCase().length;
-        const updated = history.map((e) =>
-            e.id === entry.id
-                ? {
-                    ...e,
-                    text: masCompleto ? raw : e.text,
-                    speakerName: resolved || e.speakerName,
-                    timestamp: masCompleto ? stamp : e.timestamp,
-                }
-                : e,
-        );
-        store.batchLoadHistory(updated);
-        return { id: entry.id, action: 'reused' };
+    // 2) MISMO TURNO: la fila se reutiliza por IDENTIDAD de turno cuando el
+    //    llamador la aporta (produccion: el commit temprano y la resolucion del
+    //    mismo turno comparten `turnId`). Asi el habla de FLU en medio NO la
+    //    duplica, y una locucion DISTINTA del turno siguiente NO se fusiona con
+    //    la anterior aunque FLU no haya hablado (defecto medido: se "borraba" una
+    //    orden real repetida). Sin identidad (compatibilidad) el criterio es el
+    //    posicional: una reemision del ASR que CRECE o se RECORTA es la MISMA
+    //    locucion (relacion prefijo/sufijo, `phrasesRelate`) y se conserva el
+    //    texto MAS COMPLETO: nunca se pierde lo dicho.
+    const mismoTurnoPorId =
+        turnId != null && currentTurn.id === turnId && currentTurn.rowId != null;
+    if (mismoTurnoPorId) {
+        const entry = history.find((e) => e.id === currentTurn.rowId);
+        if (entry && entry.role === 'user') {
+            const previo = cleanForSpeech(entry.text || '');
+            const masCompleto = norm.length > previo.toLowerCase().length;
+            const updated = history.map((e) =>
+                e.id === entry.id
+                    ? {
+                        ...e,
+                        text: masCompleto ? raw : e.text,
+                        speakerName: resolved || e.speakerName,
+                        timestamp: masCompleto ? stamp : e.timestamp,
+                    }
+                    : e,
+            );
+            store.batchLoadHistory(updated);
+            return { id: entry.id, action: 'reused' };
+        }
+    } else if (turnId == null) {
+        for (let i = history.length - 1; i >= turnStart; i -= 1) {
+            const entry = history[i];
+            if (!entry || entry.role !== 'user') continue;
+            const previo = cleanForSpeech(entry.text || '');
+            if (!phrasesRelate(previo, raw)) continue;
+            const masCompleto = norm.length > previo.toLowerCase().length;
+            const updated = history.map((e) =>
+                e.id === entry.id
+                    ? {
+                        ...e,
+                        text: masCompleto ? raw : e.text,
+                        speakerName: resolved || e.speakerName,
+                        timestamp: masCompleto ? stamp : e.timestamp,
+                    }
+                    : e,
+            );
+            store.batchLoadHistory(updated);
+            currentTurn = { id: turnId, rowId: entry.id };
+            return { id: entry.id, action: 'reused' };
+        }
     }
 
     // 3) Fila nueva del turno.
@@ -151,5 +183,6 @@ export function commitUserTurnRow({
         timestamp: stamp,
         sentiment: 'neutral',
     });
+    currentTurn = { id: turnId, rowId: id };
     return { id, action: 'added' };
 }
