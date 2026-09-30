@@ -179,15 +179,12 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                 won: boolean,
             ): GameTurnResult => {
                 state.phase = 'done';
-                return {
-                    prompt,
-                    valid,
-                    gameOver: true,
+                return gameOverResult(prompt, session.score, {
                     won,
-                    score: session.score,
+                    valid,
                     animation: won ? 'Dance' : 'Idle',
                     emotion,
-                };
+                });
             };
 
             // ¿Pide pista? → la PISTA (categoría), nunca revela letras:

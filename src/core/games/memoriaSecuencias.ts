@@ -157,15 +157,12 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
             const normalized = normalizeForMatch(text);
             const finish = (prompt: string, valid: boolean, emotion: string): GameTurnResult => {
                 state.phase = 'done';
-                return {
-                    prompt,
-                    valid,
-                    gameOver: true,
+                return gameOverResult(prompt, session.score, {
                     won: valid,
-                    score: session.score,
+                    valid,
                     animation: 'Dance',
                     emotion,
-                };
+                });
             };
 
             // ¿Pide pista?
