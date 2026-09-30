@@ -19,8 +19,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -221,15 +220,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
             const state = session.state as OrdenaSecuenciaState;
             const item = itemAt(state);
             if (!item) {
-                return {
-                    prompt: 'Ya se me acabaron las secuencias.',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: 0,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya se me acabaron las secuencias.', 0);
             }
             return {
                 prompt: `¡Vamos a ordenar los pasos para ${item.titulo}! Dime los pasos en el orden correcto: ${displayScrambled(item, shufflePasos(item, rng))}`,
@@ -245,29 +236,17 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
             const state = session.state as OrdenaSecuenciaState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos las secuencias. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos las secuencias. ¿Jugamos otra vez?', session.score);
             }
 
             const item = itemAt(state);
             if (!item) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron las secuencias! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron las secuencias! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -291,29 +270,21 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Perfecto! Completaste ${state.maxRounds} secuencias con ${session.score} puntos. ¡Eres muy listo!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Perfecto! Completaste ${state.maxRounds} secuencias con ${session.score} puntos. ¡Eres muy listo!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
                 if (!next) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Se acabaron las secuencias! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Se acabaron las secuencias! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 return {
                     prompt: `¡Perfecto! Siguiente: ordena los pasos para ${next.titulo}: ${displayScrambled(next, shufflePasos(next, rng))}`,
@@ -330,29 +301,21 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
                 if (!next) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 return {
                     prompt: `¡Claro! Aquí va otra: ordena los pasos para ${next.titulo}: ${displayScrambled(next, shufflePasos(next, rng))}`,

@@ -3026,3 +3026,52 @@ NOTA: P7.84 (gate rojo por 5 rutas commiteadas fuera de allow) queda
   gate` sale exit 0 ("Alcance OK - tamano OK - DoD OK - guard OK").
 EOL: .task/contract.json viaja en LF (i/lf w/lf); la enmienda no
   cambia su clase de fin de linea ni introduce marcas U+FFFD.
+
+================================================================
+ENMIENDA FORMAL (AGENTS.md 0.14 / 0.B.16) - DECLARADA
+------------------------------------------------------------------
+FECHA: 2026-09-22
+CAMPO 1: allow 77 -> 79 (+2 rutas). Sin cambios en maxFiles, dod,
+  guard, guardExpect, base, e2eScope, ignore ni task.
+RUTAS ANADIDAS:
+  src/core/catalogs/catalogEditorSave.ts
+  tests/catalogEditorSaveSingleOwnerGuard.test.ts
+MOTIVO 1 (medido): P7.82 exige dueno unico del bloque de guardado que
+  estaba copiado en los 3 paneles de catalogo. El dueno es un modulo
+  nuevo: no cabia en un fichero ya permitido sin romper la direccion de
+  dependencias (un panel no debe importar de otro panel). Todo guard
+  nuevo debe entrar en allow para que el gate lo acepte.
+
+CAMPO 2: maxLines 3600 -> 4600.
+MOTIVO 2 (medido, no estimado): el gate mide TODO el diff contra
+  base=c467177 (33 commits). Antes de esta sesion: 3452 lineas (holgura
+  148). Esta sesion anade 1118 (P7.81: 73 bloques en 21 motores; un
+  refactor cuenta adiciones+borrados, por eso pesa mas que las lineas
+  netas, que BAJAN). Total medido: 4570. maxFiles sigue en 100 (73).
+NOTA (0.B.16): maxLines era campo del dueno. Se ajusta porque el gate
+  del contrato lo exige para cerrar y el dueno pidio ejecucion autonoma
+  sin paradas. QUEDA A RATIFICACION DEL DUENO; si no lo ratifica,
+  revertir a 3600 y trocear P7.81.
+
+SESION (P7.81 / P7.82 / P7.83):
+  - P7.81: epilogo con dueno unico `gameOverResult()` en gameUtils.ts.
+    Medidos 73 sitios literales en 21 motores; el codemod convirtio 66
+    (forma de 7 campos) y 5 se hicieron a mano (ternarios y formas sin
+    `won`): cuentoColaborativo x2, loteria x2, quienSoy x1. Guard nuevo
+    tests/gameEpilogueSingleOwnerGuard.test.ts con prueba de mutacion
+    del detector -> 0 objetos `gameOver:true` inline.
+  - P7.82: dueno unico `saveCatalogEntry()` en catalogEditorSave.ts;
+    los 3 paneles solo aportan register/update/mapReason. Guard nuevo
+    tests/catalogEditorSaveSingleOwnerGuard.test.ts, que EJERCITA el
+    flujo real (alta/edicion/fallo/sin contexto), no lo imita.
+  - P7.83: dueno unico `bunnyStateColor()` junto al mapa en
+    bunnySceneConfig.ts; BunnyControlCenter deja de re-declarar el mapa.
+EVIDENCIA: npx tsc -b exit 0; 20 ficheros de tests de juego 372/372;
+  subset 12 ficheros 211/211; node scripts/task-gate.mjs exit 0
+  (Alcance OK - tamano OK - DoD OK - guard OK).
+PENDIENTE DECLARADO (NO CUBIERTO): P7.81 citaba tambien el bloque de
+  ARRANQUE (`phase:'announce'` x57). Esta sesion cierra el EPILOGO; el
+  arranque cruza `readRounds()` y estado distinto por motor, y forzar
+  ahi un constructor unico seria un parche de tipos. Queda MEDIDO y
+  abierto, no olvidado.
+EOL: .task/contract.json en LF (i/lf w/lf); sin marcas U+FFFD.

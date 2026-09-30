@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { normalizeForMatch, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -177,15 +177,11 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             const state = session.state as SimonDiceState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar Simón dice. ¿Quieres empezar otra partida?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        'Ya terminamos de jugar Simón dice. ¿Quieres empezar otra partida?',
+                        session.score,
+                        {  },
+                    );
             }
 
             if (!state.sequence || state.sequence.length === 0) {
@@ -227,15 +223,11 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
                 const isLastRound = session.round >= state.maxRounds || expected.length >= state.longMax;
                 if (isLastRound) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Perfecto! Completaste ${session.round} ${session.round === 1 ? 'ronda' : 'rondas'} de Simón dice. ¡Eres increíble!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Perfecto! Completaste ${session.round} ${session.round === 1 ? 'ronda' : 'rondas'} de Simón dice. ¡Eres increíble!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 session.round += 1;
                 state.sequence = growSequence(expected, state.verbos, rng);

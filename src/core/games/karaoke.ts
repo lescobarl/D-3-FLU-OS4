@@ -22,8 +22,7 @@ import {
     normalizeForMatch, hasAnyToken,
     adoptRandom,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)
@@ -206,15 +205,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
             const state = session.state as KaraokeState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de cantar. ¿Cantamos otra canción?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de cantar. ¿Cantamos otra canción?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -239,15 +230,11 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
                 session.score += 1;
                 if (state.cursor >= state.lineas.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Cantamos toda la canción "${state.titulo}"! ${state.lineas[state.lineas.length - 1]} ¡Bravo, eres una estrella!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Cantamos toda la canción "${state.titulo}"! ${state.lineas[state.lineas.length - 1]} ¡Bravo, eres una estrella!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 return {
                     prompt: `¡Sigue así! Siguiente línea: "${state.lineas[state.cursor]}" Cántala y dime "sigue".`,

@@ -22,8 +22,7 @@ import {
     readRounds,
     STOPWORDS_ES,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -173,29 +172,17 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
             const state = session.state as AbecedarioState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos con las letras. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos con las letras. ¿Jugamos otra vez?', session.score);
             }
 
             const item = itemAt(state);
             if (!item) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron las letras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron las letras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -219,15 +206,11 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Muy bien! "${word}" empieza con la "${item.letra}". Completaste ${state.maxRounds} letras con ${session.score} puntos. ¡Conoces el abecedario!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Muy bien! "${word}" empieza con la "${item.letra}". Completaste ${state.maxRounds} letras con ${session.score} puntos. ¡Conoces el abecedario!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
@@ -246,15 +229,11 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = itemAt(state);

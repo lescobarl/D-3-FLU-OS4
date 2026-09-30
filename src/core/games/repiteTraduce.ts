@@ -19,8 +19,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -134,29 +133,17 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
             const state = session.state as RepiteTraduceState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de practicar inglés. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de practicar inglés. ¿Jugamos otra vez?', session.score);
             }
 
             const item = itemAt(state);
             if (!item) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron las palabras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron las palabras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -182,15 +169,11 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Muy bien! "${item.es}" es "${item.en}" en inglés. Completaste ${state.maxRounds} palabras con ${session.score} puntos. ¡Eres muy listo!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Muy bien! "${item.es}" es "${item.en}" en inglés. Completaste ${state.maxRounds} palabras con ${session.score} puntos. ¡Eres muy listo!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 return {
@@ -208,15 +191,11 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 return {

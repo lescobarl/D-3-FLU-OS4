@@ -13,6 +13,7 @@ import SignalPanel from './SignalPanel';
 import ControlsPanel from './ControlsPanel';
 import LogPanel from './LogPanel';
 import { useBunnyStore } from '../store/bunnyStore';
+import { bunnyStateColor } from '../config/bunnySceneConfig';
 
 // -----------------------------------------------------------
 // BunnyControlCenter
@@ -38,7 +39,7 @@ export default function BunnyControlCenter() {
                 <div className="bcc-header-right">
                     <div className="bcc-status-bar">
                         <span className="status-item">
-                            Estado: <strong style={{ color: getStateColor(currentState) }}>{currentState}</strong>
+                            Estado: <strong style={{ color: bunnyStateColor(currentState) }}>{currentState}</strong>
                         </span>
                         <span className="status-item">
                             Animación:{' '}
@@ -78,22 +79,4 @@ export default function BunnyControlCenter() {
             </footer>
         </div>
     );
-}
-
-// -----------------------------------------------------------
-// Helper
-// -----------------------------------------------------------
-
-function getStateColor(state: string): string {
-    const colors: Record<string, string> = {
-        IDLE: '#888',
-        LISTENING: '#00ff88',
-        THINKING: '#ffaa00',
-        SPEAKING: '#00aaff',
-        ERROR: '#ff4444',
-        SLEEPING: '#4444aa',
-        CELEBRATING: '#ff66ff',
-        COMPUTING: '#00ffff',
-    };
-    return colors[state] || '#fff';
 }

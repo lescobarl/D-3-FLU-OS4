@@ -25,8 +25,7 @@ import {
     resolveNumericAnswer,
     adoptRandom,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -139,15 +138,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
             const state = session.state as AdivinaNumeroState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de adivinar el número. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de adivinar el número. ¿Jugamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -187,15 +178,11 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
             // ¿Se rinde / no sabe la respuesta? → derrota (sin grito de victoria).
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡El número era ${state.number}! Terminamos con ${session.score} puntos. ¡Otra vez será!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                };
+                return gameOverResult(
+                        `¡El número era ${state.number}! Terminamos con ${session.score} puntos. ¡Otra vez será!`,
+                        session.score,
+                        { emotion: 'encouraging' },
+                    );
             }
 
             // Intento numérico.
@@ -233,15 +220,11 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
             if (guess === state.number) {
                 session.score += 1;
                 state.phase = 'done';
-                return {
-                    prompt: `¡Correcto! El número era ${state.number}. Lo adivinaste en ${state.intentos} ${state.intentos === 1 ? 'intento' : 'intentos'}. ¡Eres un genio!`,
-                    valid: true,
-                    gameOver: true,
-                    won: true,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Correcto! El número era ${state.number}. Lo adivinaste en ${state.intentos} ${state.intentos === 1 ? 'intento' : 'intentos'}. ¡Eres un genio!`,
+                        session.score,
+                        { valid: true, won: true, animation: 'Dance' },
+                    );
             }
             if (guess < state.number) {
                 return {

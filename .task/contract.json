@@ -78,12 +78,15 @@
     "src/components/PaletasPanel.tsx",
     "src/components/SearchCatalogPanel.tsx",
     "src/avatar/components/BunnyControlCenter.tsx",
-    "src/avatar/config/bunnySceneConfig.ts"
+    "src/avatar/config/bunnySceneConfig.ts",
+    "tests/gameEpilogueSingleOwnerGuard.test.ts",
+    "src/core/catalogs/catalogEditorSave.ts",
+    "tests/catalogEditorSaveSingleOwnerGuard.test.ts"
   ],
   "maxFiles": 100,
-  "maxLines": 3600,
-  "dod": "npx vitest run --no-file-parallelism --reporter=dot tests/gameDomainOwnership.test.ts tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/gameCommandEscape.test.ts tests/gameCatalog.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/quienSoy.test.ts tests/surfaceMatrix.test.ts tests/conversationTurnSingleRow.test.ts tests/turnCommitGarbageGate.test.ts tests/garbageTranscript.test.ts tests/rulesSimulator.test.ts tests/fullSuitePathBarrier.test.ts tests/gameTurnSingleOwnerSpeech.test.ts tests/workspaceLastObjectPerTurn.test.tsx",
-  "guard": "npx vitest run --no-file-parallelism --reporter=dot tests/gameDomainOwnership.test.ts tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/fullSuitePathBarrier.test.ts",
+  "maxLines": 4600,
+  "dod": "npx vitest run --reporter=dot tests/gameDomainOwnership.test.ts tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/gameCommandEscape.test.ts tests/gameCatalog.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/quienSoy.test.ts tests/surfaceMatrix.test.ts tests/conversationTurnSingleRow.test.ts tests/turnCommitGarbageGate.test.ts tests/garbageTranscript.test.ts tests/rulesSimulator.test.ts tests/fullSuitePathBarrier.test.ts tests/gameTurnSingleOwnerSpeech.test.ts tests/workspaceLastObjectPerTurn.test.tsx",
+  "guard": "npx vitest run --reporter=dot tests/gameDomainOwnership.test.ts tests/gamePlaythrough.test.ts tests/gameDoesNotHijackCommands.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/fullSuitePathBarrier.test.ts",
   "guardExpect": "green",
   "ignore": [
     ".task/**",

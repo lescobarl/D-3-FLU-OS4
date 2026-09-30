@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -180,29 +180,17 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
             const state = session.state as RiddlesState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos las adivinanzas. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos las adivinanzas. ¿Jugamos otra vez?', session.score);
             }
 
             const riddle = riddleAt(state);
             if (!riddle) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron las adivinanzas! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron las adivinanzas! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -225,15 +213,11 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Correcto, era ${riddle.respuesta[0]}! Completaste ${state.maxRounds} adivinanzas con ${session.score} puntos. ¡Eres muy listo!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Correcto, era ${riddle.respuesta[0]}! Completaste ${state.maxRounds} adivinanzas con ${session.score} puntos. ¡Eres muy listo!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = riddleAt(state);
@@ -252,15 +236,11 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = riddleAt(state);

@@ -24,8 +24,7 @@ import {
     clamp, normalizeForMatch, hasAnyToken,
     adoptRandom,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface CuentoItem {
     inicio: string;
@@ -152,15 +151,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
             const state = session.state as CuentoColaborativoState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos nuestro cuento. ¿Inventamos otro?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos nuestro cuento. ¿Inventamos otro?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -173,15 +164,9 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
                 state.cuento.push(frase);
                 if (state.cuento.length >= state.maxTurnos) {
                     state.phase = 'done';
-                    return {
-                        prompt: closePrompt(state, session.score),
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
+                    return gameOverResult(closePrompt(state, session.score), session.score, {
                         animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    });
                 }
                 return {
                     prompt: `Yo continúo: "${frase}" ¿Y luego qué pasa?`,
@@ -201,15 +186,11 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
                 session.round += 1;
                 if (state.cuento.length >= state.maxTurnos) {
                     state.phase = 'done';
-                    return {
-                        prompt: closePrompt(state, session.score),
-                        valid: true,
-                        gameOver: true,
+                    return gameOverResult(closePrompt(state, session.score), session.score, {
                         won: true,
-                        score: session.score,
+                        valid: true,
                         animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    });
                 }
                 return {
                     prompt: `¡Qué bonita frase! La agrego a nuestro cuento: "${aporte}" ¿Y luego qué pasa?`,

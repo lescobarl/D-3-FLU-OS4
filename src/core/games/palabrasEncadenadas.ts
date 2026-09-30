@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, STOPWORDS_ES, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, STOPWORDS_ES, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -166,15 +166,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
             const state = session.state as PalabrasEncadenadasState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar palabras encadenadas. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de jugar palabras encadenadas. ¿Jugamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -182,15 +174,11 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
             // ¿Cierra la cadena?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Claro! La cadena quedó de ${session.score} ${session.score === 1 ? 'palabra' : 'palabras'}. ¡Muy bien jugado!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Claro! La cadena quedó de ${session.score} ${session.score === 1 ? 'palabra' : 'palabras'}. ¡Muy bien jugado!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             // Palabra del nino: primero el banco (prefiere la que enlaza) y, si no
@@ -239,29 +227,21 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
             session.round += 1;
             if (session.round > state.maxRounds) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Qué buena cadena! Encadenamos ${session.score} palabras. ¡Eres muy creativo!`,
-                    valid: true,
-                    gameOver: true,
-                    won: true,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Qué buena cadena! Encadenamos ${session.score} palabras. ¡Eres muy creativo!`,
+                        session.score,
+                        { valid: true, won: true, animation: 'Dance' },
+                    );
             }
 
             const fluWord = continuationFor(playerWord, state.usadas, rng);
             if (!fluWord) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Me ganaste! No se me ocurre ninguna palabra con la letra ${lastLetter(playerWord).toUpperCase()}. ¡Muy bien!`,
-                    valid: true,
-                    gameOver: true,
-                    won: true,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Me ganaste! No se me ocurre ninguna palabra con la letra ${lastLetter(playerWord).toUpperCase()}. ¡Muy bien!`,
+                        session.score,
+                        { valid: true, won: true, animation: 'Dance' },
+                    );
             }
             state.usadas.push(fluWord);
             state.word = fluWord;

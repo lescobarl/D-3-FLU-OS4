@@ -17,8 +17,7 @@ import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasAnyToken, resolveNumericAnswer,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 const DEFAULT_HASTA = 10;
 const MAX_HASTA = 20;
@@ -92,15 +91,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
             const state = session.state as CuentaConmigoState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de contar. ¿Contamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de contar. ¿Contamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -126,15 +117,11 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
                 state.siguiente += 1;
                 if (state.siguiente > state.hasta) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Contamos del 1 al ${state.hasta}! Dijiste ${session.score} números seguidos. ¡Eres un gran contador!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Contamos del 1 al ${state.hasta}! Dijiste ${session.score} números seguidos. ¡Eres un gran contador!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 return {
                     prompt: `¡Sí, el ${state.siguiente - 1}! Ahora dime: ¿qué número sigue después del ${state.siguiente - 1}?`,
@@ -152,15 +139,11 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
                 state.siguiente += 1;
                 if (state.siguiente > state.hasta) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos de contar hasta ${state.hasta}. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos de contar hasta ${state.hasta}. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 return {
                     prompt: `El ${state.siguiente - 1}. Ahora dime el que sigue.`,

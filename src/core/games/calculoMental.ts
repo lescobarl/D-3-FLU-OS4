@@ -25,8 +25,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -157,15 +156,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
             const state = session.state as CalculoMentalState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar cálculo mental. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de jugar cálculo mental. ¿Jugamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -176,15 +167,11 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 const prevAnswer = state.answer;
                 if (session.round > state.maxRounds) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 const next = generateOperation(state.operaciones, state.maxSuma, rng);
                 Object.assign(state, next);
@@ -221,15 +208,11 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 session.round += 1;
                 if (session.round > state.maxRounds) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Perfecto! Completaste ${state.maxRounds} operaciones con ${session.score} puntos. ¡Eres una calculadora humana!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Perfecto! Completaste ${state.maxRounds} operaciones con ${session.score} puntos. ¡Eres una calculadora humana!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 const next = generateOperation(state.operaciones, state.maxSuma, rng);
                 Object.assign(state, next);

@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -267,16 +267,18 @@ function askNext(state: QuienSoyState, session: GameSession): GameTurnResult {
 
 function finishFluGuessing(session: GameSession, state: QuienSoyState, won: boolean): GameTurnResult {
     state.phase = 'done';
-    return {
-        prompt: won
+    return gameOverResult(
+        won
             ? `¡Sí! Adiviné tu animal. ¡Soy un gran detective!`
             : '¡Me rindo! ¿Cuál era tu animal? La próxima te adivino.',
-        valid: won,
-        gameOver: true,
-        score: session.score,
-        animation: won ? 'Dance' : 'Idle',
-        emotion: won ? 'happy' : 'encouraging',
-    };
+        session.score,
+        {
+            valid: won,
+            won,
+            animation: won ? 'Dance' : 'Idle',
+            emotion: won ? 'happy' : 'encouraging',
+        },
+    );
 }
 
 function turnFluGuessing(session: GameSession, state: QuienSoyState, normalized: string): GameTurnResult {
@@ -490,29 +492,17 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             const state = session.state as QuienSoyState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar ¿Quién soy?. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de jugar ¿Quién soy?. ¿Jugamos otra vez?', session.score);
             }
 
             const item = itemAt(state);
             if (!item) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron los animales! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron los animales! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -581,15 +571,11 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Correcto, era ${item.nombre}! Completaste ${state.maxRounds} animales con ${session.score} puntos. ¡Eres un gran detective!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Correcto, era ${item.nombre}! Completaste ${state.maxRounds} animales con ${session.score} puntos. ¡Eres un gran detective!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 advanceSkippingMentioned(state);
                 const next = itemAt(state);
@@ -614,15 +600,11 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 advanceSkippingMentioned(state);
                 const next = itemAt(state);

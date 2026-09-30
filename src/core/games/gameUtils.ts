@@ -9,6 +9,40 @@
 
 export type RandomSource = () => number;
 
+import type { AvatarAnimation, GameTurnResult } from './types';
+
+/**
+ * EPILOGO de un motor: la forma UNICA de un resultado de fin de partida.
+ * Fuente unica de P7.81: antes cada motor re-declaraba el objeto entero
+ * (`prompt/valid/gameOver/won/score/animation/emotion`, 73 sitios medidos en 21
+ * motores), asi que un cambio de forma habia que hacerlo 21 veces y ya habian
+ * divergido. Los valores por defecto son los mayoritarios (valid:false,
+ * won:false, animation:'Idle', emotion:'happy'): el motor solo pasa lo que
+ * difiere, y lo que no pasa es exactamente lo mismo que antes.
+ */
+export function gameOverResult(
+    prompt: string,
+    score: number,
+    options: {
+        won?: boolean;
+        valid?: boolean;
+        animation?: AvatarAnimation;
+        emotion?: string;
+        error?: string;
+    } = {},
+): GameTurnResult {
+    return {
+        prompt,
+        valid: options.valid ?? false,
+        gameOver: true,
+        won: options.won ?? false,
+        score,
+        animation: options.animation ?? 'Idle',
+        emotion: options.emotion ?? 'happy',
+        ...(options.error === undefined ? {} : { error: options.error }),
+    };
+}
+
 export function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return min;
     return Math.min(max, Math.max(min, Math.round(value)));

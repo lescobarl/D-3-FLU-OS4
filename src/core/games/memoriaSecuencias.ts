@@ -19,8 +19,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -155,15 +154,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
             const state = session.state as MemoriaSecuenciasState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos con la memoria. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos con la memoria. ¿Jugamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);

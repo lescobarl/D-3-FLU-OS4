@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasGameOrderFrame, isBareAffirmation, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasGameOrderFrame, isBareAffirmation, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -132,15 +132,11 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         state.cursor += 1;
         if (!cardAt(state)) {
             state.phase = 'done';
-            return {
-                prompt: '¡Se acabaron las cartas! ¿Jugamos otra vez?',
-                valid: false,
-                gameOver: true,
-                won: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-            };
+            return gameOverResult(
+                    '¡Se acabaron las cartas! ¿Jugamos otra vez?',
+                    session.score,
+                    { emotion: 'encouraging' },
+                );
         }
         return {
             prompt: cantarPrompt(state),
@@ -184,17 +180,12 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             const state = session.state as LoteriaState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: state.winner
+                return gameOverResult(
+                    state.winner
                         ? `¡${state.winner} ganó la lotería! ¿Jugamos otra vez?`
                         : 'Ya terminamos la lotería. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                    session.score,
+                );
             }
 
             const card = cardAt(state);
@@ -218,17 +209,13 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                     rawId,
                 );
                 state.winner = rawName || (rawId && !uuidLike ? rawId : '') || null;
-                return {
-                    prompt: state.winner
+                return gameOverResult(
+                    state.winner
                         ? `¡LOTERÍA! ¡Ganó ${state.winner}! ¡A celebrar!`
                         : '¡LOTERÍA! ¡Ganaste! ¡A celebrar!',
-                    valid: true,
-                    gameOver: true,
-                    won: true,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                    session.score,
+                    { won: true, valid: true, animation: 'Dance' },
+                );
             }
 
             // "repite" / "pista" → repetir la carta actual.

@@ -28,6 +28,7 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { saveCatalogEntry } from '../core/catalogs/catalogEditorSave';
 import type {
     RegisterResult,
     UpdateResult,
@@ -168,21 +169,17 @@ export function AmbientesPanel({
     };
 
     const handleEditorSubmit = async (payload: EnvironmentDefinition): Promise<string | null> => {
-        if (!editor) return ui.invalidError || 'No se puede guardar sin contexto.';
-        if (editor.mode === 'create') {
-            const result = await onRegister(payload);
-            if (result.ok) {
-                setEditor(null);
-                return null;
-            }
-            return mapReason(result.reason);
-        }
-        const result = await onUpdate(editor.id, payload);
-        if (result.ok) {
-            setEditor(null);
-            return null;
-        }
-        return mapReason(result.reason);
+        const error = await saveCatalogEntry({
+            editor,
+            payload,
+            invalidError: ui.invalidError || 'No se puede guardar sin contexto.',
+            register: onRegister,
+            update: onUpdate,
+            mapReason,
+        });
+        if (error) return error;
+        setEditor(null);
+        return null;
     };
 
     const handleRemove = async (ambiente: EnvironmentDefinition) => {

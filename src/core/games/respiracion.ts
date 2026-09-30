@@ -18,8 +18,7 @@ import type { GameSession, GameTurnResult } from './types';
 import {
     clamp, normalizeForMatch, hasAnyToken, resolveNumericAnswer,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;
@@ -99,15 +98,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
             const state = session.state as RespiracionState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya respiramos tranquilos. ¿Quieres hacer otro ejercicio?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya respiramos tranquilos. ¿Quieres hacer otro ejercicio?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -132,15 +123,11 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
                 state.step += 1;
                 if (state.step >= state.totalSteps) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Muy bien! Respíramos ${state.totalSteps / 2} veces. Ahora te sientes más tranquilo, ¿verdad?`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Muy bien! Respíramos ${state.totalSteps / 2} veces. Ahora te sientes más tranquilo, ¿verdad?`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 return {
                     prompt: `¡Sigue respirando! ${stepPrompt(state.step)} Dime "listo" cuando termines.`,

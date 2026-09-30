@@ -20,8 +20,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -188,29 +187,17 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
             const state = session.state as TriviaState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos la trivia. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos la trivia. ¿Jugamos otra vez?', session.score);
             }
 
             const question = questionAt(state);
             if (!question) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron las preguntas! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron las preguntas! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -235,15 +222,11 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
                     session.round += 1;
                     if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                         state.phase = 'done';
-                        return {
-                            prompt: `¡Correcto, era ${question.opciones[question.correcta]}! Completaste ${state.maxRounds} preguntas con ${session.score} puntos. ¡Eres muy listo!`,
-                            valid: true,
-                            gameOver: true,
-                            won: true,
-                            score: session.score,
-                            animation: 'Dance',
-                            emotion: 'happy',
-                        };
+                        return gameOverResult(
+                                `¡Correcto, era ${question.opciones[question.correcta]}! Completaste ${state.maxRounds} preguntas con ${session.score} puntos. ¡Eres muy listo!`,
+                                session.score,
+                                { valid: true, won: true, animation: 'Dance' },
+                            );
                     }
                     state.cursor += 1;
                     return {
@@ -271,15 +254,11 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 return {

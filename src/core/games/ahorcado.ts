@@ -17,8 +17,7 @@ import {
     clamp, normalizeForMatch, hasToken, hasAnyToken, pickRandom,
     adoptRandom,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface AhorcadoWord {
     palabra: string;
@@ -174,15 +173,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
             const state = session.state as AhorcadoState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos el ahorcado. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos el ahorcado. ¿Jugamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);

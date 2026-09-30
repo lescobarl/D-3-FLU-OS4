@@ -26,8 +26,7 @@ import {
     pickRandom,
     adoptRandom,
     END_GAME_FRAMES,
-    matchesEndGameFrames,
-} from './gameUtils';
+    matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
 
@@ -238,15 +237,11 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
             const scene = state.escenas[0];
             if (!scene) {
                 state.phase = 'done';
-                return {
-                    prompt: 'No tengo ningún cuento preparado ahora. ¿Jugamos otra cosa?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return gameOverResult(
+                        'No tengo ningún cuento preparado ahora. ¿Jugamos otra cosa?',
+                        session.score,
+                        { emotion: 'neutral' },
+                    );
             }
             state.phase = 'narrating';
             return {
@@ -263,15 +258,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
             const state = session.state as StorytellerState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos el cuento. ¿Jugamos otra cosa?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos el cuento. ¿Jugamos otra cosa?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -294,15 +281,11 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
                 const scene = state.escenas[state.cursor];
                 if (!scene) {
                     state.phase = 'done';
-                    return {
-                        prompt: 'Y colorín colorado, este cuento se ha acabado. ¡Me encantó contarlo contigo!',
-                        valid: false,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            'Y colorín colorado, este cuento se ha acabado. ¡Me encantó contarlo contigo!',
+                            session.score,
+                            { won: true, animation: 'Dance' },
+                        );
                 }
                 return sceneResult(state, scene);
             }
@@ -337,16 +320,11 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
             const scene = state.escenas[0];
             if (!scene) {
                 state.phase = 'done';
-                return {
-                    prompt: 'No recibí las escenas del cuento. Prueba de nuevo o pídeme un cuento de mi libro.',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'cuento vacío',
-                };
+                return gameOverResult(
+                        'No recibí las escenas del cuento. Prueba de nuevo o pídeme un cuento de mi libro.',
+                        session.score,
+                        { emotion: 'neutral' },
+                    );
             }
             return {
                 prompt: `Vamos a contar ${state.titulo}. ${scene.texto}`,

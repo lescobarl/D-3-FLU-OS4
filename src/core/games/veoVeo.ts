@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -197,29 +197,17 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
             const state = session.state as VeoVeoState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar veo veo. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de jugar veo veo. ¿Jugamos otra vez?', session.score);
             }
 
             const item = itemAt(state);
             if (!item) {
                 state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron los objetos! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    won: false,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        `¡Se acabaron los objetos! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                        session.score,
+                        { animation: 'Dance' },
+                    );
             }
 
             const normalized = normalizeForMatch(text);
@@ -242,15 +230,11 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Correcto, es ${item.nombre}! Completaste ${state.maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
-                        valid: true,
-                        gameOver: true,
-                        won: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Correcto, es ${item.nombre}! Completaste ${state.maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
@@ -269,15 +253,11 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
                 session.round += 1;
                 if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        won: false,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
