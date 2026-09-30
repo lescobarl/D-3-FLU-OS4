@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -233,36 +233,15 @@ function guessPrompt(nombre: string): string {
 function askNext(state: QuienSoyState, session: GameSession): GameTurnResult {
     if (state.candidatos.length <= 1) {
         state.fluGuess = QUIEN_SOY_BANK[state.candidatos[0]]?.nombre ?? QUIEN_SOY_BANK[0].nombre;
-        return {
-            prompt: guessPrompt(state.fluGuess),
-            valid: false,
-            gameOver: false,
-            score: session.score,
-            animation: 'Idle',
-            emotion: 'thinking',
-        };
+        return turnResult(guessPrompt(state.fluGuess), session.score, { emotion: 'thinking' });
     }
     const attribute = bestSplitAttribute(state.candidatos, state.asked);
     if (!attribute) {
         state.fluGuess = QUIEN_SOY_BANK[state.candidatos[0]].nombre;
-        return {
-            prompt: guessPrompt(state.fluGuess),
-            valid: false,
-            gameOver: false,
-            score: session.score,
-            animation: 'Idle',
-            emotion: 'thinking',
-        };
+        return turnResult(guessPrompt(state.fluGuess), session.score, { emotion: 'thinking' });
     }
     state.asked.push(attribute);
-    return {
-        prompt: `${ATTRIBUTE_QUESTIONS[attribute]} Di "sí" o "no".`,
-        valid: false,
-        gameOver: false,
-        score: session.score,
-        animation: 'Idle',
-        emotion: 'thinking',
-    };
+    return turnResult(`${ATTRIBUTE_QUESTIONS[attribute]} Di "sí" o "no".`, session.score, { emotion: 'thinking' });
 }
 
 function finishFluGuessing(session: GameSession, state: QuienSoyState, won: boolean): GameTurnResult {
@@ -310,7 +289,8 @@ function turnFluGuessing(session: GameSession, state: QuienSoyState, normalized:
 }
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'dame otra pista', 'otra pista', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'dame otra pista', 'otra pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -460,14 +440,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             reset(session, optionsConfig);
             const state = session.state as QuienSoyState;
             const item = itemAt(state);
-            return {
-                prompt: `¡Vamos a jugar a ¿Quién soy?! Soy un animal. ${item ? cluePrompt(state, item) : ''}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a ¿Quién soy?! Soy un animal. ${item ? cluePrompt(state, item) : ''}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -512,38 +485,17 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             // ¿Pide otra pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
                 if (state.clueIndex + 1 >= quienSoyHints(item).length) {
-                    return {
-                        prompt: `Ya te di todas las pistas. ${cluePrompt(state, item)}`,
-                        valid: false,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Idle',
-                        emotion: 'thinking',
-                    };
+                    return turnResult(`Ya te di todas las pistas. ${cluePrompt(state, item)}`, session.score, { emotion: 'thinking' });
                 }
                 state.clueIndex += 1;
-                return {
-                    prompt: cluePrompt(state, item),
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(cluePrompt(state, item), session.score, { emotion: 'thinking' });
             }
 
             // ¿Pregunta sí/no (20 preguntas)? No gasta intento ni pista.
             const siNoAttribute = resolveSiNoQuestion(normalized);
             if (siNoAttribute) {
                 const afirmativo = item.atributos?.[siNoAttribute] === true;
-                return {
-                    prompt: afirmativo ? 'Sí.' : 'No.',
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(afirmativo ? 'Sí.' : 'No.', session.score, { emotion: 'thinking' });
             }
 
             // ¿Intenta adivinar el animal?
@@ -561,14 +513,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 }
                 advanceSkippingMentioned(state);
                 const next = itemAt(state);
-                return {
-                    prompt: `¡Correcto, era ${item.nombre}! Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Correcto, era ${item.nombre}! Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             /**
@@ -590,14 +535,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 }
                 advanceSkippingMentioned(state);
                 const next = itemAt(state);
-                return {
-                    prompt: `${apertura} Era ${item.nombre}. Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`${apertura} Era ${item.nombre}. Siguiente: Soy un animal. ${next ? cluePrompt(state, next) : ''}`, session.score);
             };
 
             // ¿Salta al siguiente animal?
@@ -623,15 +561,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
                 return cerrarAnimal('¡Se acabaron las pistas!');
             }
             state.clueIndex += 1;
-            return {
-                prompt: `${namedSameCategory ? '¡Casi! Inténtalo otra vez.' : 'No, ese no es. Inténtalo otra vez.'} ${cluePrompt(state, item)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return turnResult(`${namedSameCategory ? '¡Casi! Inténtalo otra vez.' : 'No, ese no es. Inténtalo otra vez.'} ${cluePrompt(state, item)}`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {

@@ -14,12 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp, normalizeForMatch, hasToken, hasAnyToken,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, turnResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -31,7 +26,8 @@ const DEFAULT_LONG_MAX = 6;
 const MAX_LONG_MAX = MEMORY_LETTERS.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'repite', 'no escuche', 'no escuché',
+    ...HELP_CORE_FRAMES,
+    'repite', 'no escuche', 'no escuché',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -137,14 +133,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as MemoriaSecuenciasState;
-            return {
-                prompt: `¡Vamos a entrenar la memoria! Memoriza esta secuencia: ${sequencePrompt(state.sequence)}. Repítela en orden.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a entrenar la memoria! Memoriza esta secuencia: ${sequencePrompt(state.sequence)}. Repítela en orden.`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -167,14 +156,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `La secuencia es: ${sequencePrompt(state.sequence)}. Repítela en orden.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`La secuencia es: ${sequencePrompt(state.sequence)}. Repítela en orden.`, session.score, { emotion: 'thinking' });
             }
 
             const letters = extractLetters(normalized);
@@ -188,14 +170,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
                     return finish(`¡Memoria de elefante! Completaste ${state.maxRounds} rondas con ${session.score} puntos. ¡Eres muy listo!`, true, 'happy');
                 }
                 state.sequence = buildSequence(nextLength, rng);
-                return {
-                    prompt: `¡Exacto! ${sequencePrompt(letters)}. Siguiente secuencia: ${sequencePrompt(state.sequence)}. Repítela.`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Exacto! ${sequencePrompt(letters)}. Siguiente secuencia: ${sequencePrompt(state.sequence)}. Repítela.`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta?
@@ -206,38 +181,15 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
                 }
                 const nextLength = Math.min(state.sequence.length + 1, state.longMax);
                 state.sequence = buildSequence(nextLength, rng);
-                return {
-                    prompt: `¡Claro! Siguiente secuencia: ${sequencePrompt(state.sequence)}. Repítela.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Siguiente secuencia: ${sequencePrompt(state.sequence)}. Repítela.`, session.score);
             }
 
             // Intentó pero falló → reintenta la misma secuencia.
             if (letters.length > 0) {
-                return {
-                    prompt: `Casi. La secuencia era ${sequencePrompt(state.sequence)}. Inténtalo de nuevo.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'secuencia incorrecta',
-                };
+                return turnResult(`Casi. La secuencia era ${sequencePrompt(state.sequence)}. Inténtalo de nuevo.`, session.score, { emotion: 'encouraging', error: 'secuencia incorrecta' });
             }
 
-            return {
-                prompt: `No te escuché bien. Repite la secuencia: ${sequencePrompt(state.sequence)}.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'neutral',
-                error: 'sin letras reconocidas',
-            };
+            return turnResult(`No te escuché bien. Repite la secuencia: ${sequencePrompt(state.sequence)}.`, session.score, { error: 'sin letras reconocidas' });
         },
 
         isGameCommand(text = ''): boolean {

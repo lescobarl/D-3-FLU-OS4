@@ -43,6 +43,46 @@ export function gameOverResult(
     };
 }
 
+/**
+ * Nucleo COMPARTIDO de "pedir ayuda": un solo dueno (P7.89). Antes cada motor
+ * declaraba su propia copia de `['pista','ayuda','ayudame']` (18 medidos), asi
+ * que un sinonimo nuevo habia que anadirlo 18 veces y el que se olvidaba hacia
+ * que ese juego respondiera distinto. Las COLAS siguen siendo de cada juego
+ * (divergen a proposito: "me rindo", "despacio", "no escuche"...) y se componen
+ * al lado SIN cambiar el orden, asi que cada lista queda identica a antes.
+ */
+export const HELP_CORE_FRAMES: readonly string[] = Object.freeze(['pista', 'ayuda', 'ayudame'])
+
+/**
+ * EPILOGO intermedio de un motor: la forma UNICA de un resultado que NO cierra
+ * la partida (`gameOver: false`). Hermano de `gameOverResult`, que solo cubria
+ * el final; por eso el turno intermedio seguia escrito a mano en cada motor
+ * (107 sitios medidos en 21 motores, P7.90). Defaults = los mayoritarios
+ * (valid:false, animation:'Idle', emotion:'neutral'); lo que difiere se pasa.
+ * NO emite `won`: un turno que no cierra la partida no declara ganador, y
+ * anadirlo cambiaria la forma del objeto.
+ */
+export function turnResult(
+    prompt: string,
+    score: number,
+    options: {
+        valid?: boolean;
+        animation?: AvatarAnimation;
+        emotion?: string;
+        error?: string;
+    } = {},
+): GameTurnResult {
+    return {
+        prompt,
+        valid: options.valid ?? false,
+        gameOver: false,
+        score,
+        animation: options.animation ?? 'Idle',
+        emotion: options.emotion ?? 'neutral',
+        ...(options.error === undefined ? {} : { error: options.error }),
+    };
+}
+
 export function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return min;
     return Math.min(max, Math.max(min, Math.round(value)));

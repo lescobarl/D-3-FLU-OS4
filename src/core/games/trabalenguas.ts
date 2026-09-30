@@ -13,12 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    normalizeForMatch, hasToken, hasAnyToken,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -41,7 +36,8 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = TRABALENGUAS_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'repite', 'no escuche', 'no escuché', 'despacio',
+    ...HELP_CORE_FRAMES,
+    'repite', 'no escuche', 'no escuché', 'despacio',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -105,14 +101,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as TrabalenguasState;
-            return {
-                prompt: `¡Vamos a jugar con trabalenguas! ${currentPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar con trabalenguas! ${currentPrompt(state)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -136,14 +125,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Vamos despacio: ${item.texto} Recuerda: ${item.pista}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Vamos despacio: ${item.texto} Recuerda: ${item.pista}`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Lo repite correctamente? (todas las claves presentes)
@@ -161,14 +143,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
-                return {
-                    prompt: `¡Muy bien! Siguiente: ${next ? currentPrompt(state) : ''}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Muy bien! Siguiente: ${next ? currentPrompt(state) : ''}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta?
@@ -183,26 +158,11 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
                         );
                 }
                 state.cursor += 1;
-                return {
-                    prompt: `¡Claro! Aquí va otro: ${currentPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Aquí va otro: ${currentPrompt(state)}`, session.score);
             }
 
             // Reintenta el mismo trabalenguas.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez: ${item.texto}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'repite no válido',
-            };
+            return turnResult(`¡Casi! Inténtalo otra vez: ${item.texto}`, session.score, { emotion: 'encouraging', error: 'repite no válido' });
         },
 
         isGameCommand(text = ''): boolean {

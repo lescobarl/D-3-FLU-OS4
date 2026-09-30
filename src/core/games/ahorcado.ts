@@ -13,11 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp, normalizeForMatch, hasToken, hasAnyToken, pickRandom,
-    adoptRandom,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
 
 export interface AhorcadoWord {
     palabra: string;
@@ -46,7 +42,8 @@ const DEFAULT_INTENTOS = 6;
 const MAX_INTENTOS = 10;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista',
+    ...HELP_CORE_FRAMES,
+    'dame una pista',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -154,14 +151,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as AhorcadoState;
-            return {
-                prompt: `¡Vamos a jugar al ahorcado! La palabra tiene ${state.palabra.length} letras: ${displayWord(state)}. Dime una letra.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar al ahorcado! La palabra tiene ${state.palabra.length} letras: ${displayWord(state)}. Dime una letra.`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -191,14 +181,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
             // antes la pista destapaba letras sin coste (se ganaba pidiendo
             // "pista" repetidas veces) y anulaba el juego.
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Pista: ${state.pista} ${displayWord(state)} Dime una letra.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Pista: ${state.pista} ${displayWord(state)} Dime una letra.`, session.score, { emotion: 'thinking' });
             }
 
             // ¿La palabra completa? (acepta que venga dentro de la frase:
@@ -225,27 +208,12 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                     if (state.intentos <= 0) {
                         return finish(`Se acabaron los intentos. La palabra era ${state.palabra}. ¡Otra vez será!`, false, 'encouraging', false);
                     }
-                    return {
-                        prompt: `"${soloGuess[0]}" no es. Te quedan ${state.intentos} intentos. ${displayWord(state)}`,
-                        valid: false,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Idle',
-                        emotion: 'encouraging',
-                        error: 'palabra incorrecta',
-                    };
+                    return turnResult(`"${soloGuess[0]}" no es. Te quedan ${state.intentos} intentos. ${displayWord(state)}`, session.score, { emotion: 'encouraging', error: 'palabra incorrecta' });
                 }
             }
             if (letter) {
                 if (state.adivinadas.includes(letter)) {
-                    return {
-                        prompt: `La letra "${letter}" ya la adivinaste. ${displayWord(state)} Dime otra letra.`,
-                        valid: false,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Idle',
-                        emotion: 'neutral',
-                    };
+                    return turnResult(`La letra "${letter}" ya la adivinaste. ${displayWord(state)} Dime otra letra.`, session.score);
                 }
                 if (state.palabra.includes(letter)) {
                     state.adivinadas.push(letter);
@@ -253,40 +221,17 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
                         session.score += 1;
                         return finish(`¡Correcto! La palabra era ${state.palabra}. ¡Eres muy listo!`, true, 'happy', true);
                     }
-                    return {
-                        prompt: `¡La letra "${letter}" está! ${displayWord(state)} Sigue así.`,
-                        valid: true,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Jump_in_place',
-                        emotion: 'happy',
-                    };
+                    return turnResult(`¡La letra "${letter}" está! ${displayWord(state)} Sigue así.`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
                 }
                 state.intentos -= 1;
                 if (state.intentos <= 0) {
                     return finish(`Se acabaron los intentos. La palabra era ${state.palabra}. ¡Otra vez será!`, false, 'encouraging', false);
                 }
-                return {
-                    prompt: `La letra "${letter}" no está. Quedan ${state.intentos} intentos. ${displayWord(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'letra incorrecta',
-                };
+                return turnResult(`La letra "${letter}" no está. Quedan ${state.intentos} intentos. ${displayWord(state)}`, session.score, { emotion: 'encouraging', error: 'letra incorrecta' });
             }
 
             // No entendió → repite la consigna.
-            return {
-                prompt: `No te escuché bien. Dime una letra o la palabra completa. ${displayWord(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'neutral',
-                error: 'sin letra reconocida',
-            };
+            return turnResult(`No te escuché bien. Dime una letra o la palabra completa. ${displayWord(state)}`, session.score, { error: 'sin letra reconocida' });
         },
 
         isGameCommand(text = ''): boolean {

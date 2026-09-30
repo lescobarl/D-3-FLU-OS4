@@ -17,15 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp,
-    normalizeForMatch,
-    hasToken,
-    hasAnyToken,
-    resolveNumericAnswer,
-    adoptRandom,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -33,7 +25,8 @@ const DEFAULT_PISTAS_MAX = 5;
 const MAX_RANGE = 100;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'otra pista',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'otra pista',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -120,14 +113,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
             session.state = state;
             session.score = 0;
             session.round = 1;
-            return {
-                prompt: `¡Vamos a jugar a adivinar el número! Estoy pensando en un número entre ${state.min} y ${state.max}. ¿Cuál es?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a adivinar el número! Estoy pensando en un número entre ${state.min} y ${state.max}. ¿Cuál es?`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -150,25 +136,11 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
                     `mi número está entre ${Math.max(state.min, state.number - margin)} y ${Math.min(state.max, state.number + margin)}`,
                 ];
                 if (state.pistasUsadas >= state.pistasMax || state.pistasUsadas >= hints.length) {
-                    return {
-                        prompt: 'Ya te di todas mis pistas. ¡Sigue adivinando!',
-                        valid: false,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Idle',
-                        emotion: 'neutral',
-                    };
+                    return turnResult('Ya te di todas mis pistas. ¡Sigue adivinando!', session.score);
                 }
                 const hint = hints[state.pistasUsadas];
                 state.pistasUsadas += 1;
-                return {
-                    prompt: `Te doy una pista: ${hint}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Te doy una pista: ${hint}.`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Se rinde / no sabe la respuesta? → derrota (sin grito de victoria).
@@ -184,26 +156,10 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
             // Intento numérico.
             const guess = resolveNumericAnswer(normalized);
             if (guess === null) {
-                return {
-                    prompt: `No logré reconocer un número. Dime un número entre ${state.min} y ${state.max}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'no se reconoció ningún número',
-                };
+                return turnResult(`No logré reconocer un número. Dime un número entre ${state.min} y ${state.max}.`, session.score, { error: 'no se reconoció ningún número' });
             }
             if (guess < state.min || guess > state.max) {
-                return {
-                    prompt: `Mi número está entre ${state.min} y ${state.max}. Inténtalo otra vez.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'número fuera de rango',
-                };
+                return turnResult(`Mi número está entre ${state.min} y ${state.max}. Inténtalo otra vez.`, session.score, { error: 'número fuera de rango' });
             }
 
             state.intentos += 1;
@@ -223,23 +179,9 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
                     );
             }
             if (guess < state.number) {
-                return {
-                    prompt: `Mi número es más grande que ${guess}. ${heat} Sigue intentando.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                };
+                return turnResult(`Mi número es más grande que ${guess}. ${heat} Sigue intentando.`, session.score, { emotion: 'encouraging' });
             }
-            return {
-                prompt: `Mi número es más pequeño que ${guess}. ${heat} Sigue intentando.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-            };
+            return turnResult(`Mi número es más pequeño que ${guess}. ${heat} Sigue intentando.`, session.score, { emotion: 'encouraging' });
         },
 
         isGameCommand(text = ''): boolean {

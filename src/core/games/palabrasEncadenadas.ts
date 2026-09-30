@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, STOPWORDS_ES, END_GAME_FRAMES, matchesEndGameFrames, pickRandom, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, stripDiacritics, turnResult } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -144,14 +144,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as PalabrasEncadenadasState;
-            return {
-                prompt: `¡Vamos a jugar a palabras encadenadas! Empiezo yo con ${state.word}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a palabras encadenadas! Empiezo yo con ${state.word}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -181,37 +174,13 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
                 ? bankWord
                 : realWordWithLetter(normalized, state.nextLetter);
             if (playerWord && state.usadas.includes(playerWord)) {
-                return {
-                    prompt: `Ya dijiste "${playerWord}". Di una palabra nueva que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'palabra repetida',
-                };
+                return turnResult(`Ya dijiste "${playerWord}". Di una palabra nueva que empiece con la letra ${state.nextLetter.toUpperCase()}.`, session.score, { error: 'palabra repetida' });
             }
             if (!playerWord && bankWord) {
-                return {
-                    prompt: `¡Casi! Tu palabra debe empezar con la letra ${state.nextLetter.toUpperCase()}. Inténtalo otra vez.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'la palabra no empieza con la letra pedida',
-                };
+                return turnResult(`¡Casi! Tu palabra debe empezar con la letra ${state.nextLetter.toUpperCase()}. Inténtalo otra vez.`, session.score, { emotion: 'encouraging', error: 'la palabra no empieza con la letra pedida' });
             }
             if (!playerWord) {
-                return {
-                    prompt: `No reconozco esa palabra. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'palabra desconocida',
-                };
+                return turnResult(`No reconozco esa palabra. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`, session.score, { error: 'palabra desconocida' });
             }
 
             state.usadas.push(playerWord);
@@ -238,14 +207,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
             state.usadas.push(fluWord);
             state.word = fluWord;
             state.nextLetter = lastLetter(fluWord);
-            return {
-                prompt: `¡Genial, ${playerWord}! Sigue tú: yo digo ${fluWord}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`,
-                valid: true,
-                gameOver: false,
-                score: session.score,
-                animation: 'Jump_in_place',
-                emotion: 'happy',
-            };
+            return turnResult(`¡Genial, ${playerWord}! Sigue tú: yo digo ${fluWord}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
         },
 
         isGameCommand(text = ''): boolean {

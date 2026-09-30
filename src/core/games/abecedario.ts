@@ -15,14 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    stripDiacritics,
-    normalizeForMatch, hasAnyToken,
-    adoptRandom,
-    readRounds,
-    STOPWORDS_ES,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -64,7 +57,8 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = ABECEDARIO_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'no se', 'no sé', 'dame otra',
+    ...HELP_CORE_FRAMES,
+    'no se', 'no sé', 'dame otra',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -146,14 +140,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
             reset(session, optionsConfig);
             const state = session.state as AbecedarioState;
             const item = itemAt(state);
-            return {
-                prompt: `¡Vamos a jugar con el abecedario! Dime una palabra que empiece con la letra "${item ? item.letra : ''}".`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar con el abecedario! Dime una palabra que empiece con la letra "${item ? item.letra : ''}".`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -177,14 +164,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `La palabra "${item.palabra}" empieza con la "${item.letra}". ${item.pista} Ahora dime otra que empiece con la "${item.letra}".`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`La palabra "${item.palabra}" empieza con la "${item.letra}". ${item.pista} Ahora dime otra que empiece con la "${item.letra}".`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Acierta? Una palabra REAL del niño con la letra inicial.
@@ -202,14 +182,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
-                return {
-                    prompt: `¡Muy bien! "${word}" empieza con la "${item.letra}". Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Muy bien! "${word}" empieza con la "${item.letra}". Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta?
@@ -225,26 +198,11 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
-                return {
-                    prompt: `¡Claro! Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`, session.score);
             }
 
             // No acierta → reintenta la misma letra.
-            return {
-                prompt: `Casi... Dime una palabra que empiece con la letra "${item.letra}".`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'palabra incorrecta',
-            };
+            return turnResult(`Casi... Dime una palabra que empiece con la letra "${item.letra}".`, session.score, { emotion: 'encouraging', error: 'palabra incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {

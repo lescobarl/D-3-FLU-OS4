@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { RandomSource, normalizeForMatch, hasToken, hasAnyToken, hasGameOrderFrame, isBareAffirmation, shuffleOrder, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -82,7 +82,8 @@ export const LOTERIA_BANK: readonly LoteriaCard[] = Object.freeze([
 ]);
 
 const REPEAT_FRAMES: readonly string[] = Object.freeze([
-    'repite', 'repetir', 'pista', 'ayuda', 'ayudame', 'no escuche', 'no escuché', 'otra vez',
+    'repite', 'repetir', ...HELP_CORE_FRAMES,
+    'no escuche', 'no escuché', 'otra vez',
 ]);
 
 const NEXT_FRAMES: readonly string[] = Object.freeze([
@@ -138,14 +139,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
                     { emotion: 'encouraging' },
                 );
         }
-        return {
-            prompt: cantarPrompt(state),
-            valid: false,
-            gameOver: false,
-            score: session.score,
-            animation: 'Idle',
-            emotion: 'neutral',
-        };
+        return turnResult(cantarPrompt(state), session.score);
     };
 
     return {
@@ -166,14 +160,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             session.score = 0;
             session.round = 1;
             const first = cardAt(state);
-            return {
-                prompt: `¡Vamos a jugar a la lotería! Yo canto las cartas y cada quien marca su cartón. Primera carta: ${first ? first.copla : ''}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a la lotería! Yo canto las cartas y cada quien marca su cartón. Primera carta: ${first ? first.copla : ''}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = '', context?: GameTurnContext): GameTurnResult {
@@ -220,14 +207,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
 
             // "repite" / "pista" → repetir la carta actual.
             if (hasAnyToken(normalized, REPEAT_FRAMES)) {
-                return {
-                    prompt: `La carta es: ${card.nombre}. ${card.copla}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`La carta es: ${card.nombre}. ${card.copla}`, session.score, { emotion: 'thinking' });
             }
 
             // "siguiente" / "otra" → canta la siguiente.
@@ -237,15 +217,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             }
 
             // No entendió → repite la carta actual.
-            return {
-                prompt: `La carta es: ${card.nombre}. ${card.copla}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta no reconocida',
-            };
+            return turnResult(`La carta es: ${card.nombre}. ${card.copla}`, session.score, { emotion: 'encouraging', error: 'respuesta no reconocida' });
         },
 
         isGameCommand(text = ''): boolean {

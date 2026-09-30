@@ -14,16 +14,14 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp, normalizeForMatch, hasAnyToken, resolveNumericAnswer,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, clamp, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_HASTA = 10;
 const MAX_HASTA = 20;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'no se', 'no sé', 'cual sigue',
+    ...HELP_CORE_FRAMES,
+    'no se', 'no sé', 'cual sigue',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -77,14 +75,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as CuentaConmigoState;
-            return {
-                prompt: `¡Vamos a contar juntos del 1 al ${state.hasta}! Yo digo 1. ¿Qué número sigue?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a contar juntos del 1 al ${state.hasta}! Yo digo 1. ¿Qué número sigue?`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -98,14 +89,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `El número que sigue es el ${state.siguiente}. Dilo para seguir contando.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`El número que sigue es el ${state.siguiente}. Dilo para seguir contando.`, session.score, { emotion: 'thinking' });
             }
 
             const numero = resolveNumericAnswer(normalized);
@@ -123,14 +107,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
                             { valid: true, won: true, animation: 'Dance' },
                         );
                 }
-                return {
-                    prompt: `¡Sí, el ${state.siguiente - 1}! Ahora dime: ¿qué número sigue después del ${state.siguiente - 1}?`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Sí, el ${state.siguiente - 1}! Ahora dime: ¿qué número sigue después del ${state.siguiente - 1}?`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta?
@@ -145,26 +122,11 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
                             { animation: 'Dance' },
                         );
                 }
-                return {
-                    prompt: `El ${state.siguiente - 1}. Ahora dime el que sigue.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`El ${state.siguiente - 1}. Ahora dime el que sigue.`, session.score);
             }
 
             // Número incorrecto o no reconocido → reintenta.
-            return {
-                prompt: `Casi... Estamos en el ${state.siguiente - 1}. ¿Qué número va después?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'número incorrecto',
-            };
+            return turnResult(`Casi... Estamos en el ${state.siguiente - 1}. ¿Qué número va después?`, session.score, { emotion: 'encouraging', error: 'número incorrecto' });
         },
 
         isGameCommand(text = ''): boolean {

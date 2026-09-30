@@ -15,16 +15,14 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp, normalizeForMatch, hasAnyToken, resolveNumericAnswer,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, clamp, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'otra vez', 'no entendi', 'no entendí',
+    ...HELP_CORE_FRAMES,
+    'otra vez', 'no entendi', 'no entendí',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -85,14 +83,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as RespiracionState;
-            return {
-                prompt: `Vamos a calmarnos respirando juntos. ${stepPrompt(state.step)} Dime "listo" cuando termines.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`Vamos a calmarnos respirando juntos. ${stepPrompt(state.step)} Dime "listo" cuando termines.`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -106,14 +97,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
 
             // ¿Pide repetir la instrucción?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Claro, te repito: ${stepPrompt(state.step)} Dime "listo" cuando termines.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Claro, te repito: ${stepPrompt(state.step)} Dime "listo" cuando termines.`, session.score, { emotion: 'thinking' });
             }
 
             // Avanza si dice "listo"/"sigue" o si cuenta 1-4 (respiró al ritmo).
@@ -130,25 +114,11 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
                             { valid: true, won: true, animation: 'Dance' },
                         );
                 }
-                return {
-                    prompt: `¡Sigue respirando! ${stepPrompt(state.step)} Dime "listo" cuando termines.`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Sigue respirando! ${stepPrompt(state.step)} Dime "listo" cuando termines.`, session.score, { valid: true, emotion: 'happy' });
             }
 
             // Recordatorio amable (nunca hay error real en un ejercicio de calma).
-            return {
-                prompt: `Concéntrate en tu respiración. ${stepPrompt(state.step)} Dime "listo" cuando termines.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-            };
+            return turnResult(`Concéntrate en tu respiración. ${stepPrompt(state.step)} Dime "listo" cuando termines.`, session.score, { emotion: 'encouraging' });
         },
 
         isGameCommand(text = ''): boolean {

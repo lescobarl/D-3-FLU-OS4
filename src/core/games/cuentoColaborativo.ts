@@ -20,11 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp, normalizeForMatch, hasAnyToken,
-    adoptRandom,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, turnResult } from './gameUtils';
 
 export interface CuentoItem {
     inicio: string;
@@ -66,7 +62,8 @@ const DEFAULT_TURNOS = 4;
 const MAX_TURNOS = 8;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'no se', 'no sé', 'sigue tu', 'tu sigue',
+    ...HELP_CORE_FRAMES,
+    'no se', 'no sé', 'sigue tu', 'tu sigue',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -133,14 +130,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as CuentoColaborativoState;
-            return {
-                prompt: `¡Vamos a inventar un cuento juntos! Yo empiezo: "${state.cuento[0]}" ¿Qué pasa después?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a inventar un cuento juntos! Yo empiezo: "${state.cuento[0]}" ¿Qué pasa después?`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -164,14 +154,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
                         animation: 'Dance',
                     });
                 }
-                return {
-                    prompt: `Yo continúo: "${frase}" ¿Y luego qué pasa?`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Yo continúo: "${frase}" ¿Y luego qué pasa?`, session.score, { emotion: 'thinking' });
             }
 
             // El niño aporta su propia oración.
@@ -188,25 +171,10 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
                         animation: 'Dance',
                     });
                 }
-                return {
-                    prompt: `¡Qué bonita frase! La agrego a nuestro cuento: "${aporte}" ¿Y luego qué pasa?`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Qué bonita frase! La agrego a nuestro cuento: "${aporte}" ¿Y luego qué pasa?`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
-            return {
-                prompt: `Cuéntame qué pasa en nuestra historia. ${state.cuento[state.cuento.length - 1]} ¿Y luego?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'texto vacío',
-            };
+            return turnResult(`Cuéntame qué pasa en nuestra historia. ${state.cuento[state.cuento.length - 1]} ¿Y luego?`, session.score, { emotion: 'encouraging', error: 'texto vacío' });
         },
 
         isGameCommand(text = ''): boolean {

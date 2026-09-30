@@ -17,16 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameNarrativeScene, GameSession, GameTurnResult } from './types';
-import {
-    RandomSource,
-    clamp,
-    normalizeForMatch,
-    hasToken,
-    hasAnyToken,
-    pickRandom,
-    adoptRandom,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
 
@@ -95,7 +86,8 @@ export const STORY_BANK: readonly Story[] = Object.freeze([
 ]);
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -244,14 +236,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
                     );
             }
             state.phase = 'narrating';
-            return {
-                prompt: `¡Vamos a contar un cuento! Se llama "${state.titulo}". ${scene.texto}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: toAnimation(scene.animacion),
-                emotion: scene.emocion || 'excited',
-            };
+            return turnResult(`¡Vamos a contar un cuento! Se llama "${state.titulo}". ${scene.texto}`, session.score, { animation: toAnimation(scene.animacion), emotion: scene.emocion || 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -265,14 +250,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
 
             // ¿Pide ayuda? (solo repite la instrucción)
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: 'Solo dime "sigue" para que continúe el cuento, o "terminar el juego" si quieres parar.',
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult('Solo dime "sigue" para que continúe el cuento, o "terminar el juego" si quieres parar.', session.score, { emotion: 'thinking' });
             }
 
             // ¿Avanza a la siguiente escena?
@@ -291,15 +269,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
             }
 
             // No reconoció → invita a seguir.
-            return {
-                prompt: '¿Quieres que siga el cuento? Dime "sigue".',
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta no reconocida',
-            };
+            return turnResult('¿Quieres que siga el cuento? Dime "sigue".', session.score, { emotion: 'encouraging', error: 'respuesta no reconocida' })
         },
 
         narrate(session: GameSession, scenes: GameNarrativeScene[], optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -326,14 +296,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
                         { emotion: 'neutral', error: 'cuento vacío' },
                     );
             }
-            return {
-                prompt: `Vamos a contar ${state.titulo}. ${scene.texto}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: toAnimation(scene.animacion),
-                emotion: scene.emocion || 'excited',
-            };
+            return turnResult(`Vamos a contar ${state.titulo}. ${scene.texto}`, session.score, { animation: toAnimation(scene.animacion), emotion: scene.emocion || 'excited' });
         },
 
         isGameCommand(text = ''): boolean {

@@ -13,16 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    RandomSource,
-    normalizeForMatch,
-    hasToken,
-    hasAnyToken,
-    shuffleOrder,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -93,7 +84,8 @@ const MAX_ROUNDS = SONG_BANK.length;
 const NUM_OPTIONS = 3;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -189,14 +181,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as AdivinaCancionState;
-            return {
-                prompt: `¡Vamos a adivinar canciones! Escucha con atención. ${songPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a adivinar canciones! Escucha con atención. ${songPrompt(state)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -220,14 +205,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Escúchala otra vez. ${songPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Escúchala otra vez. ${songPrompt(state)}`, session.score, { emotion: 'thinking' });
             }
 
             const answered = matchesAnyOption(normalized, SONG_BANK);
@@ -245,27 +223,12 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
                         );
                 }
                 advance(session, state);
-                return {
-                    prompt: `¡Correcto, era "${song.titulo}"! Siguiente canción: ${songPrompt(state)}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Correcto, era "${song.titulo}"! Siguiente canción: ${songPrompt(state)}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Dijo una opción equivocada?
             if (answered) {
-                return {
-                    prompt: `¡Casi! Esa no era. Escucha otra vez. ${songPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'canción incorrecta',
-                };
+                return turnResult(`¡Casi! Esa no era. Escucha otra vez. ${songPrompt(state)}`, session.score, { emotion: 'encouraging', error: 'canción incorrecta' });
             }
 
             // ¿Salta a la siguiente?
@@ -280,26 +243,11 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
                         );
                 }
                 advance(session, state);
-                return {
-                    prompt: `¡Claro! Otra canción: ${songPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Otra canción: ${songPrompt(state)}`, session.score);
             }
 
             // No reconoció → reintenta la misma.
-            return {
-                prompt: `No te escuché bien. ${songPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta no reconocida',
-            };
+            return turnResult(`No te escuché bien. ${songPrompt(state)}`, session.score, { emotion: 'encouraging', error: 'respuesta no reconocida' });
         },
 
         isGameCommand(text = ''): boolean {

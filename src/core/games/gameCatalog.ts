@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameId } from './types';
-import { normalizeForMatch, hasToken, hasGameOrderFrame, NEGATIVE_INTENT_FRAMES } from './gameUtils';
+import { NEGATIVE_INTENT_FRAMES, hasGameOrderFrame, hasToken, normalizeForMatch, turnResult } from './gameUtils';
 import { createSimonDiceEngine } from './simonDice';
 import { createRiddlesEngine } from './riddles';
 import { createVeoVeoEngine } from './veoVeo';
@@ -429,15 +429,7 @@ function withStartOrderWall(engine: GameEngine): GameEngine {
         ...engine,
         turn(session, text = '', context) {
             if (hasGameOrderFrame(normalizeForMatch(text))) {
-                return {
-                    prompt: '',
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'orden de arranque, no una jugada',
-                };
+                return turnResult('', session.score, { error: 'orden de arranque, no una jugada' });
             }
             return turn(session, text, context);
         },

@@ -15,12 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    normalizeForMatch, hasToken, hasAnyToken, resolveNumericAnswer,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, resolveNumericAnswer, shuffleOrder, turnResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -46,7 +41,8 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = TRIVIA_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista',
+    ...HELP_CORE_FRAMES,
+    'dame una pista',
 ]);
 
 // "no sé" = rendirse → SALTAR (antes era código muerto: el hint iba primero).
@@ -163,14 +159,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as TriviaState;
-            return {
-                prompt: `¡Vamos a jugar a la trivia! ${currentPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a la trivia! ${currentPrompt(state)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -194,14 +183,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Aquí va una pista: ${question.pista}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Aquí va una pista: ${question.pista}`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Responde?
@@ -219,24 +201,9 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
                             );
                     }
                     state.cursor += 1;
-                    return {
-                        prompt: `¡Correcto, era ${question.opciones[question.correcta]}! Siguiente: ${currentPrompt(state)}`,
-                        valid: true,
-                        gameOver: false,
-                        score: session.score,
-                        animation: 'Jump_in_place',
-                        emotion: 'happy',
-                    };
+                    return turnResult(`¡Correcto, era ${question.opciones[question.correcta]}! Siguiente: ${currentPrompt(state)}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
                 }
-                return {
-                    prompt: `¡Casi! Esa no era. ${currentPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'opción incorrecta',
-                };
+                return turnResult(`¡Casi! Esa no era. ${currentPrompt(state)}`, session.score, { emotion: 'encouraging', error: 'opción incorrecta' });
             }
 
             // ¿Salta?
@@ -251,25 +218,10 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
                         );
                 }
                 state.cursor += 1;
-                return {
-                    prompt: `¡Claro! Aquí va otra: ${currentPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Aquí va otra: ${currentPrompt(state)}`, session.score);
             }
 
-            return {
-                prompt: `No te escuché bien. Dime el número, la letra o el nombre. ${currentPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'neutral',
-                error: 'sin opción reconocida',
-            };
+            return turnResult(`No te escuché bien. Dime el número, la letra o el nombre. ${currentPrompt(state)}`, session.score, { error: 'sin opción reconocida' });
         },
 
         isGameCommand(text = ''): boolean {

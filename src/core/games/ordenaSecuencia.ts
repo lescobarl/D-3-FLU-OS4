@@ -14,12 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    normalizeForMatch, hasToken, hasAnyToken, findTokenIndex,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -91,7 +86,8 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = ORDENA_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'repite',
+    ...HELP_CORE_FRAMES,
+    'repite',
 ]);
 
 // "no sé" / "me rindo" = el niño se rinde → SALTAR (no dar la respuesta).
@@ -206,14 +202,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
             if (!item) {
                 return gameOverResult('Ya se me acabaron las secuencias.', 0);
             }
-            return {
-                prompt: `¡Vamos a ordenar los pasos para ${item.titulo}! Dime los pasos en el orden correcto: ${displayScrambled(item, shufflePasos(item, rng))}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a ordenar los pasos para ${item.titulo}! Dime los pasos en el orden correcto: ${displayScrambled(item, shufflePasos(item, rng))}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -237,14 +226,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `El orden correcto es: ${item.pasos.map((paso) => paso.texto).join(', ')}. ${item.pista}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`El orden correcto es: ${item.pasos.map((paso) => paso.texto).join(', ')}. ${item.pista}`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Recita TODOS los pasos en el orden correcto?
@@ -270,14 +252,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                             { valid: true, won: true, animation: 'Dance' },
                         );
                 }
-                return {
-                    prompt: `¡Perfecto! Siguiente: ordena los pasos para ${next.titulo}: ${displayScrambled(next, shufflePasos(next, rng))}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Perfecto! Siguiente: ordena los pasos para ${next.titulo}: ${displayScrambled(next, shufflePasos(next, rng))}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta?
@@ -301,38 +276,15 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                             { animation: 'Dance' },
                         );
                 }
-                return {
-                    prompt: `¡Claro! Aquí va otra: ordena los pasos para ${next.titulo}: ${displayScrambled(next, shufflePasos(next, rng))}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Aquí va otra: ordena los pasos para ${next.titulo}: ${displayScrambled(next, shufflePasos(next, rng))}`, session.score);
             }
 
             // Intentó pero el orden está incompleto o desordenado.
             if (countRecognized(normalized, item) > 0) {
-                return {
-                    prompt: `Casi. El orden correcto es: ${item.pasos.map((paso) => paso.texto).join(', ')}. Inténtalo de nuevo.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'encouraging',
-                    error: 'orden incorrecto',
-                };
+                return turnResult(`Casi. El orden correcto es: ${item.pasos.map((paso) => paso.texto).join(', ')}. Inténtalo de nuevo.`, session.score, { emotion: 'encouraging', error: 'orden incorrecto' });
             }
 
-            return {
-                prompt: `No te escuché bien. Dime los pasos para ${item.titulo} en orden.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'neutral',
-                error: 'sin pasos reconocidos',
-            };
+            return turnResult(`No te escuché bien. Dime los pasos para ${item.titulo} en orden.`, session.score, { error: 'sin pasos reconocidos' });
         },
 
         isGameCommand(text = ''): boolean {

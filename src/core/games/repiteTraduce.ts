@@ -14,12 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    normalizeForMatch, hasToken, hasAnyToken,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -44,7 +39,8 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = REPITE_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'repite', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'repite', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -108,14 +104,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as RepiteTraduceState;
-            return {
-                prompt: `¡Vamos a practicar inglés! ${currentPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a practicar inglés! ${currentPrompt(state)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -139,14 +128,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `"${item.es}" en inglés se dice "${item.en}". ${item.pista} Ahora repítelo.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`"${item.es}" en inglés se dice "${item.en}". ${item.pista} Ahora repítelo.`, session.score, { emotion: 'thinking' });
             }
 
             // Acierto SOLO con la traducción al inglés: el prompt pregunta
@@ -165,14 +147,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
                         );
                 }
                 state.cursor += 1;
-                return {
-                    prompt: `¡Muy bien! "${item.es}" es "${item.en}". Siguiente: ${currentPrompt(state)}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Muy bien! "${item.es}" es "${item.en}". Siguiente: ${currentPrompt(state)}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta?
@@ -187,25 +162,10 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
                         );
                 }
                 state.cursor += 1;
-                return {
-                    prompt: `¡Claro! Aquí va otra: ${currentPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Aquí va otra: ${currentPrompt(state)}`, session.score);
             }
 
-            return {
-                prompt: `¡Casi! "${item.es}" en inglés se dice "${item.en}". Inténtalo otra vez.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'traducción incorrecta',
-            };
+            return turnResult(`¡Casi! "${item.es}" en inglés se dice "${item.en}". Inténtalo otra vez.`, session.score, { emotion: 'encouraging', error: 'traducción incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {

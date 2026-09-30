@@ -18,11 +18,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    normalizeForMatch, hasAnyToken,
-    adoptRandom,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, turnResult } from './gameUtils';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)
@@ -127,7 +123,8 @@ export const KARAOKE_SONG_BANK: readonly KaraokeSong[] = Object.freeze([
 ]);
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'otra vez', 'repite',
+    ...HELP_CORE_FRAMES,
+    'otra vez', 'repite',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -187,14 +184,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
             reset(session, optionsConfig);
             const state = session.state as KaraokeState;
             state.phase = 'singing';
-            return {
-                prompt: `¡Hora de cantar! Vamos a cantar "${state.titulo}" juntos. La pista ya suena. Escucha la primera línea: "${state.lineas[0]}" Cántala conmigo y dime "sigue" para la siguiente.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Hora de cantar! Vamos a cantar "${state.titulo}" juntos. La pista ya suena. Escucha la primera línea: "${state.lineas[0]}" Cántala conmigo y dime "sigue" para la siguiente.`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -209,14 +199,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
 
             // ¿Pide repetir la línea?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Claro, la repito: "${lineaActual}" Cántala conmigo y dime "sigue" para la siguiente.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Claro, la repito: "${lineaActual}" Cántala conmigo y dime "sigue" para la siguiente.`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Avanza a la siguiente línea?
@@ -232,25 +215,11 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
                             { valid: true, won: true, animation: 'Dance' },
                         );
                 }
-                return {
-                    prompt: `¡Sigue así! Siguiente línea: "${state.lineas[state.cursor]}" Cántala y dime "sigue".`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Sigue así! Siguiente línea: "${state.lineas[state.cursor]}" Cántala y dime "sigue".`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // Sin validación de canto: invita a cantar la línea actual.
-            return {
-                prompt: `¡Canta conmigo! "${lineaActual}" Cuando la cantes, dime "sigue" para la siguiente línea.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-            };
+            return turnResult(`¡Canta conmigo! "${lineaActual}" Cuando la cantes, dime "sigue" para la siguiente línea.`, session.score, { emotion: 'encouraging' });
         },
 
         isGameCommand(text = ''): boolean {

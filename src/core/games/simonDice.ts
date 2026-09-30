@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames, clamp, pickRandom, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -96,14 +96,7 @@ function describeSequence(sequence: readonly AvatarAnimation[]): string {
 }
 
 function announcePrompt(sequence: readonly AvatarAnimation[]): GameTurnResult {
-    return {
-        prompt: `¡Simón dice: ${describeSequence(sequence)}! Repite los movimientos en el mismo orden.`,
-        valid: false,
-        gameOver: false,
-        score: 0,
-        animation: sequence[0] ?? 'Idle',
-        emotion: 'excited',
-    };
+    return turnResult(`¡Simón dice: ${describeSequence(sequence)}! Repite los movimientos en el mismo orden.`, 0, { animation: sequence[0] ?? 'Idle', emotion: 'excited' })
 }
 
 function growSequence(current: readonly AvatarAnimation[], verbos: readonly AvatarAnimation[], rng: RandomSource): AvatarAnimation[] {
@@ -195,15 +188,7 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
 
             const got = extractOrderedVerbs(normalized, state.verbos);
             if (got.length === 0) {
-                return {
-                    prompt: `No logré reconocer un movimiento. Repite: ${describeSequence(state.sequence)}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: state.sequence[0] ?? 'Idle',
-                    emotion: 'neutral',
-                    error: 'no se reconoció ningún verbo de movimiento',
-                };
+                return turnResult(`No logré reconocer un movimiento. Repite: ${describeSequence(state.sequence)}.`, session.score, { animation: state.sequence[0] ?? 'Idle', error: 'no se reconoció ningún verbo de movimiento' })
             }
 
             const expected = state.sequence;
@@ -233,26 +218,11 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             // ¿Empezó bien pero incompleto? → "sigue".
             if (got.length < expected.length && isOrderedSubsequence(got, expected)) {
                 const remaining = expected.slice(got.length);
-                return {
-                    prompt: `¡Vas muy bien! Sigue: ${describeSequence(remaining)}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: remaining[0] ?? state.sequence[0] ?? 'Idle',
-                    emotion: 'excited',
-                };
+                return turnResult(`¡Vas muy bien! Sigue: ${describeSequence(remaining)}.`, session.score, { animation: remaining[0] ?? state.sequence[0] ?? 'Idle', emotion: 'excited' })
             }
 
             // Desorden / movimientos de más.
-            return {
-                prompt: `¡Casi! Inténtalo de nuevo en orden: ${describeSequence(expected)}.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: expected[0] ?? 'Idle',
-                emotion: 'encouraging',
-                error: 'secuencia en desorden o con movimientos de más',
-            };
+            return turnResult(`¡Casi! Inténtalo de nuevo en orden: ${describeSequence(expected)}.`, session.score, { animation: expected[0] ?? 'Idle', emotion: 'encouraging', error: 'secuencia en desorden o con movimientos de más' })
         },
 
         isGameCommand(text = ''): boolean {

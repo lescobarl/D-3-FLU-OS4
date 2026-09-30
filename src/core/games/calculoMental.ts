@@ -15,17 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    clamp,
-    normalizeForMatch,
-    hasToken,
-    hasAnyToken,
-    pickRandom,
-    resolveNumericAnswer,
-    adoptRandom,
-    readRounds,
-    END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -138,14 +128,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
             const state = session.state as CalculoMentalState;
-            return {
-                prompt: `¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -171,28 +154,13 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 }
                 const next = generateOperation(state.operaciones, state.maxSuma, rng);
                 Object.assign(state, next);
-                return {
-                    prompt: `Era ${prevAnswer}. ${operationPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`Era ${prevAnswer}. ${operationPrompt(state)}`, session.score);
             }
 
             // Intento numérico.
             const answer = resolveNumericAnswer(normalized);
             if (answer === null) {
-                return {
-                    prompt: `No logré reconocer un número. ${operationPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'no se reconoció ningún número',
-                };
+                return turnResult(`No logré reconocer un número. ${operationPrompt(state)}`, session.score, { error: 'no se reconoció ningún número' });
             }
 
             if (answer === state.answer) {
@@ -212,26 +180,11 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 }
                 const next = generateOperation(state.operaciones, state.maxSuma, rng);
                 Object.assign(state, next);
-                return {
-                    prompt: `¡Correcto! ${a} ${OP_WORD[op]} ${b} es ${result}. Siguiente: ${operationPrompt(state)}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Correcto! ${a} ${OP_WORD[op]} ${b} es ${result}. Siguiente: ${operationPrompt(state)}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // Respuesta incorrecta → reintenta la misma operación.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez. ${operationPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return turnResult(`¡Casi! Inténtalo otra vez. ${operationPrompt(state)}`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {

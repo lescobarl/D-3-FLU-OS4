@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -91,7 +91,8 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = RIDDLE_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -154,14 +155,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            return {
-                prompt: `¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as RiddlesState)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as RiddlesState)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -185,14 +179,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
 
             // ¿Pide pista?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Aquí va una pista: ${riddle.pista}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`Aquí va una pista: ${riddle.pista}`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Intenta responder?
@@ -209,14 +196,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
                 }
                 state.cursor += 1;
                 const next = riddleAt(state);
-                return {
-                    prompt: `¡Correcto, era ${riddle.respuesta[0]}! Siguiente: ${next ? next.pregunta : ''} ¿Qué soy?`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Correcto, era ${riddle.respuesta[0]}! Siguiente: ${next ? next.pregunta : ''} ¿Qué soy?`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta a la siguiente?
@@ -232,26 +212,11 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
                 }
                 state.cursor += 1;
                 const next = riddleAt(state);
-                return {
-                    prompt: `¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`, session.score);
             }
 
             // Respuesta incorrecta → reintenta la misma.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez. ${riddle.pregunta} ¿Qué soy?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return turnResult(`¡Casi! Inténtalo otra vez. ${riddle.pregunta} ¿Qué soy?`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {

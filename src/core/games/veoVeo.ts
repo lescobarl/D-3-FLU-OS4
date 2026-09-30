@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -94,7 +94,8 @@ const MAX_ROUNDS = VEO_VEO_BANK.length;
 // "no sé" = el niño está atascado → PISTA de la categoría (documentado).
 // Se elimina de SKIP: tenerlo en ambas listas era código muerto (HINT gana).
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
@@ -167,14 +168,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
             reset(session, optionsConfig);
             const state = session.state as VeoVeoState;
             const item = itemAt(state);
-            return {
-                prompt: `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -198,14 +192,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
 
             // ¿Pide pista (categoría)?
             if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `¡Uy! Te doy una pista: es algo de ${item.categoria}. ¿Ya sabes qué es?`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
+                return turnResult(`¡Uy! Te doy una pista: es algo de ${item.categoria}. ¿Ya sabes qué es?`, session.score, { emotion: 'thinking' });
             }
 
             // ¿Intenta adivinar el objeto?
@@ -222,14 +209,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
-                return {
-                    prompt: `¡Correcto, es ${item.nombre}! ${next ? itemPrompt(next) : ''}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Correcto, es ${item.nombre}! ${next ? itemPrompt(next) : ''}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // ¿Salta al siguiente objeto?
@@ -245,26 +225,11 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
                 }
                 state.cursor += 1;
                 const next = itemAt(state);
-                return {
-                    prompt: `¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`, session.score);
             }
 
             // Respuesta incorrecta → reintenta el mismo objeto.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez. ${itemPrompt(item)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return turnResult(`¡Casi! Inténtalo otra vez. ${itemPrompt(item)}`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {
