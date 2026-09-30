@@ -3,7 +3,6 @@
  * Diarización estricta: sin atajos optimistas; voz distinta → nuevo Hablante N.
  */
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
-import { FLU_CONFIG } from '../lib/fluConfig.js'
 import {
   assignSpeaker,
   compareCosineSignatures,
@@ -14,6 +13,12 @@ import {
 import { downsampleTo16k, tensorToEmbeddingVector } from '../lib/embeddingFrames.js'
 import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
 import { logCaughtError } from '../../lib/caughtError';
+import {
+  getEmbeddingConfig,
+  getMinSamples,
+  getModelId,
+  getTargetSampleRate,
+} from '../lib/embeddingConfig.js'
 
 const DEFAULT_MATCH_THRESHOLD = 0.85
 
@@ -22,25 +27,6 @@ env.allowRemoteModels = true
 env.useBrowserCache = true
 
 let modelBundlePromise = null
-
-function getEmbeddingConfig() {
-  return FLU_CONFIG.voiceIdentity?.capture?.embedding || {}
-}
-
-function getModelId(cfg = getEmbeddingConfig()) {
-  return cfg.modelId
-}
-
-function getTargetSampleRate(cfg = getEmbeddingConfig()) {
-  const rate = Number(cfg.targetSampleRate)
-  return Number.isFinite(rate) && rate > 0 ? rate : 16000
-}
-
-function getMinSamples(cfg = getEmbeddingConfig()) {
-  const ratio = Number(cfg.minSampleRatio)
-  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.35
-  return Math.floor(getTargetSampleRate(cfg) * safeRatio)
-}
 
 async function ensureModel(modelId = getModelId(), quantized = true) {
   if (!modelBundlePromise) {

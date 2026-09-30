@@ -2,6 +2,7 @@
  * Cliente Web Worker: zero-copy (Transferable) + drop policy (solo el audio más reciente).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { getEmbeddingConfig } from './embeddingConfig.js'
 import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig'
 import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
@@ -21,10 +22,6 @@ let embedDroppedCount = 0
 
 function isWorkerRuntime() {
   return typeof Worker !== 'undefined' && typeof window !== 'undefined'
-}
-
-function getEmbeddingConfig() {
-  return FLU_CONFIG.voiceIdentity?.capture?.embedding || {}
 }
 
 /** Búfer transferible: propiedad pasa al worker (zero-copy). */

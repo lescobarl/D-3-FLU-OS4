@@ -3,10 +3,15 @@
  * El navegador usa voiceId.worker.js vía voiceIdWorkerClient.
  */
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
-import { FLU_CONFIG } from './fluConfig.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from './embeddingFrames.js'
 import { normalizeEmbeddingVector } from './speakerCore.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import {
+  getEmbeddingConfig,
+  getMinSamples,
+  getModelId,
+  getTargetSampleRate,
+} from './embeddingConfig.js'
 
 let modelBundlePromise = null
 let preloadError = null
@@ -15,25 +20,6 @@ env.allowLocalModels = false
 env.allowRemoteModels = true
 if (typeof window !== 'undefined') {
   env.useBrowserCache = true
-}
-
-function getEmbeddingConfig() {
-  return FLU_CONFIG.voiceIdentity?.capture?.embedding || {}
-}
-
-function getModelId(cfg = getEmbeddingConfig()) {
-  return cfg.modelId
-}
-
-function getTargetSampleRate(cfg = getEmbeddingConfig()) {
-  const rate = Number(cfg.targetSampleRate)
-  return Number.isFinite(rate) && rate > 0 ? rate : 16000
-}
-
-function getMinSamples(cfg = getEmbeddingConfig()) {
-  const ratio = Number(cfg.minSampleRatio)
-  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.35
-  return Math.floor(getTargetSampleRate(cfg) * safeRatio)
 }
 
 async function createModelBundle(cfg) {
