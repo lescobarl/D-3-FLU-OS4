@@ -61,6 +61,7 @@
     "tests/gameTurnSingleOwnerSpeech.test.ts",
     "tests/workspaceLastObjectPerTurn.test.tsx",
     "tests/turnRowNoDuplicate.test.ts",
+    "tests/speakerIdentitySession.test.ts",
     "tests/palabrasEncadenadas.test.ts",
     "tests/abecedario.test.ts",
     "tests/loteria.test.ts",

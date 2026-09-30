@@ -1684,7 +1684,7 @@ export function useFluVoiceAssistant({
           })
           .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
       }
-
+      if (introducedName && isProperSpeakerName(introducedName)) sessionPrimarySpeakerRef.current = introducedName
       lastSpeakerRef.current = resolvedSpeakerName
       lastTurnSignatureRef.current = signatureVector
       return {
