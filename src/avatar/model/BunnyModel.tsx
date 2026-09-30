@@ -29,12 +29,12 @@ import * as THREE from 'three';
 import { useBunnyStore } from '../store/bunnyStore';
 import { unifySkeletons } from './bunnySkeleton';
 import { repairFBXMaterials } from './bunnyMaterials';
+import { logCaughtError } from '../../lib/caughtError';
 import { BunnyAnimator } from './bunnyAnimator';
 import { applyComponentVisibility, applyComponentColor } from './bunnyComponents';
 import { loadFbx } from '../workers/fbxWorkerClient';
 import { DecorationsRenderer } from '../decorations/DecorationsRenderer';
 import type { BunnyAnimation } from '../types/bunny';
-import { logCaughtError } from '../../lib/caughtError';
 
 export default function BunnyModel({ orientation = 0.525 }: { orientation?: number }) {
     // ---- Refs (no causan re-render) ----
@@ -146,7 +146,7 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
             })
             .catch((err) => {
                 if (disposed) return;
-                console.error('[BunnyViewer] Error:', err);
+                logCaughtError('[BunnyViewer] error al cargar el modelo 3D', err);
                 setError('Error al cargar el modelo 3D');
                 setLoading(false);
             });
