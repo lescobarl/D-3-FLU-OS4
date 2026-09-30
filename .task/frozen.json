@@ -54,7 +54,7 @@
   "tests/stackDocGuard.test.ts": "64ef6a39d2032e1e0618af2efe2210c8ad79d0e10db324b5f935aafd7a052ef3",
   "tests/ttsPuntoUnicoGuard.test.ts": "400b071efe184278ccc5dc2655086a00c483252fea1104786f9dca9cb784bf11",
   "tests/syncTupleInlineGuard.test.ts": "44cf536613abbddfc687fe1ddb5e79f04c7ee6b034eaa54f865538e1c13a1dab",
-  "tests/providerLiteralGuard.test.ts": "b92bb369833144a3da7508772fedf84dbc7b0e9b9ea3c82fed7202473b951d73",
+  "tests/providerLiteralGuard.test.ts": "192b85f2814fba7b0aa57a34e43d490d66721d911f19969899757af3afc1da85",
   "tests/aiServiceSingleImplGuard.test.ts": "d3e4f985e02c14bc29e91607047487c219bec2aa8cd1aabcd185e77c6a4285a1",
   "tests/specificDeadGuard.test.ts": "7ca29cc7a8a4815b140624ca17f60fd6d5636d4f0bfe5b1ec89a3a41274b9b33",
   "tests/textUtilsSingleSourceGuard.test.ts": "f90d1c3b4a83a87ba0949790e1290f6d4e2887b6d299fea6380af7fb44bcc611",
