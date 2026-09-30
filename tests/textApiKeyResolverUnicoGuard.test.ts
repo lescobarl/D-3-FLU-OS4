@@ -16,6 +16,16 @@ const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const ALLOWED = new Set(['src/core/config/appConfig.ts', 'src/core/config/sharedConfig.ts'])
 const RE = /import\.meta\.env\.VITE_OPENROUTER_API_KEY/
+/** Detector PURO de la regla: lineas de UN fuente que la infringen. La prueba de que
+ *  discrimina (y de que no esta siempre-rojo) vive en el describe de abajo (P2.4). */
+export function findOffenders(content: string, file = 'src/sintetico.ts'): string[] {
+  const out: string[] = []
+  content.split(/\r?\n/).forEach((line, i) => {
+    if (RE.test(line)) out.push(`${file}:${i + 1}:${line.trim().slice(0, 110)}`)
+  })
+  return out
+}
+
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -32,15 +42,19 @@ describe('C5 textApiKeyResolverUnico — la key de texto sale del resolver centr
     for (const f of walk(SRC)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (ALLOWED.has(r) || r.startsWith('src/dev/')) continue
-      readFileSync(f, 'utf8')
-        .split(/\r?\n/)
-        .forEach((line, i) => {
-          if (RE.test(line)) offenders.push(`${r}:${i + 1}:${line.trim().slice(0, 110)}`)
-        })
+      offenders.push(...findOffenders(readFileSync(f, 'utf8'), r))
     }
     expect(
       offenders,
       `Lecturas directas de la key de texto (N=${offenders.length}); usa resolveTextApiKey():\n  ${offenders.join('\n  ')}`,
     ).toEqual([])
+  })
+})
+
+/** P2.4: el detector no es decorativo; marca una entrada infractora y perdona una limpia. */
+describe('P2.4 textApiKeyResolverUnicoGuard - el detector no es decorativo', () => {
+  it('marca una entrada infractora sintetica y no marca una limpia', () => {
+    expect(findOffenders("const k = import.meta.env.VITE_OPENROUTER_API_KEY", 'src/sintetico.ts')).toHaveLength(1)
+    expect(findOffenders("const k = resolveTextApiKey()", 'src/sintetico.ts')).toHaveLength(0)
   })
 })

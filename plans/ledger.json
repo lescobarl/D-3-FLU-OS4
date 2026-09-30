@@ -1071,9 +1071,9 @@
     },
     {
       "id": "P7.99",
-      "estado": "blocked",
-      "titulo": "Endurecer catchSilenciosoGuard (console.* no cuenta como registro) BLOQUEADO por la propia barrera 0.24 + guardMutation",
-      "evidencia": "Medido con la misma funcion readersOf del guard: src/App.tsx tiene 34 guards de texto lectores y solo 1 tiene prueba de detector; src/hooks/** tiene 5. 0.24 exige que todo guard que lee un fichero tocado este en la puerta, y guardMutationGuard exige prueba de detector para todo guard de lint:guards con baseline shrink-only: no se pueden meter sin volverlos teatro. Via de desbloqueo: (1) dar prueba de detector a esos guards (trabajo aparte, 33 ficheros) o (2) declararlos en EXEMPT con motivo medido, lo que neutra 0.24 para la raiz de src. Mientras tanto el endurecimiento no se aplica porque la puerta nace ROJA con los 36 sitios de P7.98."
+      "estado": "in_progress",
+      "titulo": "Endurecer catchSilenciosoGuard (console.* no cuenta como registro): DESBLOQUEADO en curso por la via B (prueba de detector)",
+      "evidencia": "Via B en ejecucion: dar prueba de detector REAL (caso sintetico infractor + caso limpio) a los 33 guards de texto que bloquean 0.24 sobre src/App.tsx, src/main.tsx y src/hooks/**. Lote 1/5 cerrado: aiProviderStorageKeyUnicaGuard, borradoLogicoGuard, consoleDebugGuard, textApiKeyResolverUnicoGuard, textKeyLiteralesGuard, timeoutsConfigGuard, uuidV4InsercionGuard (detector extraido a funcion pura, comportamiento identico, +2 tests cada uno). Orden obligado: (A) pruebas -> (B) registrar en lint:guards -> (C) arreglar los 24 sitios de console.* (commit solo-src) -> (D) endurecer catchSilenciosoGuard (commit solo-test, 0.22)."
     },
     {
       "id": "P7.100",
