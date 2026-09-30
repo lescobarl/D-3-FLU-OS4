@@ -959,6 +959,27 @@
       "estado": "todo",
       "evidencia": "PENDIENTE declarado al escribir las constraints (AGENTS.md 0.23 y 0.24). Falta el arnes de (a) ALANCE: que todo cierre lleve el campo CUBIERTO / NO CUBIERTO con valor real, y (b) COBERTURA: que todo guard que lee un fichero tocado este en lint:guards (o el cierre declare por que no). El caso que lo motiva esta medido: en P7.75-P7.77 dos guards del flujo (gameTurnSingleDispatch, commandAndGameCoverage) quedaron ROJOS fuera de lint:guards, que es solo higiene, y el pre-commit paso en verde. Remediado en e529bda (los dos guards entran en lint:guards, 57 -> 59), pero el CALCULO automatico (ficheros tocados -> guards que los leen -> en el gate?) no existe. Requiere enmienda de allow si se implementa como guard de test.",
       "origen": "auditoria-flujo"
+    },
+    {
+      "id": "P7.81",
+      "titulo": "Duplicacion medida en los 21 motores de juegos: el epilogo de resultado y el bloque de arranque se copian por motor",
+      "estado": "todo",
+      "evidencia": "Medido 2026-09-29 sobre HEAD 23f4c2c: `animation: 'Dance'` aparece 45 veces y `phase: 'announce'` 57 veces repartidas por src/core/games/*.ts (21 motores). La forma del epilogo {valid, gameOver:true, won, score:session.score, animation:'Dance', emotion:'happy'} (src/core/games/veoVeo.ts:220) y la del arranque {cursor:0, maxRounds:readRounds(...), phase:'announce', score:0, round:1} (src/core/games/veoVeo.ts:110) se repiten literales; solo varia el prompt. Detector propio (ventana de 8 lineas utiles, descartando listas de argumentos) da 83 bloques repetidos en >1 fichero, y estos dos son los clusters mayores. NO lo ve el sensor (scripts/auditoria.mjs: 28/28 en META) ni ningun guard, y gameUtils.ts no publica constructor de resultado: la FORMA no tiene dueno unico. Bloqueo: src/core/games/** SI esta en allow, pero el arreglo toca ~21 ficheros y excede maxFiles 60 (base ya cambia 49) -> requiere ENMIENDA del dueno.",
+      "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.82",
+      "titulo": "Flujo guardar/registrar/actualizar del editor copiado en 3 paneles de catalogo (mismo bloque de 15 lineas)",
+      "estado": "todo",
+      "evidencia": "src/components/AmbientesPanel.tsx:171, src/components/PaletasPanel.tsx:130 y src/components/SearchCatalogPanel.tsx:349: el bloque `if (!editor) return ...; if (editor.mode === 'create') { const result = await onRegister(payload); if (result.ok) { setEditor(null); return null } return mapReason(result.reason) } const result = await onUpdate(editor.id, payload); ...` esta copiado literal en los tres (solo cambian el tipo del item y las etiquetas). Deberia tener un dueno unico. Los 3 ficheros NO estan en allow (solo lo estan WorkspaceHub.tsx y ResultFeed.tsx) -> requiere ENMIENDA.",
+      "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.83",
+      "titulo": "Mapa de color por estado del avatar duplicado (BunnyControlCenter vs bunnySceneConfig)",
+      "estado": "todo",
+      "evidencia": "src/avatar/components/BunnyControlCenter.tsx:94 y src/avatar/config/bunnySceneConfig.ts:80 declaran el mismo mapa de 6 estados {IDLE:'#888', LISTENING:'#00ff88', THINKING:'#ffaa00', SPEAKING:'#00aaff', ERROR:'#ff4444', SLEEPING:'#4444aa'}: 6 literales de color repetidos (hardcode duplicado del mismo dato). Deberia salir de una sola fuente. Fuera de allow -> requiere ENMIENDA.",
+      "origen": "auditoria-codigo"
     }
   ],
   "done": [
