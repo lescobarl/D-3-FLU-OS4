@@ -1074,6 +1074,12 @@
       "estado": "blocked",
       "titulo": "Endurecer catchSilenciosoGuard (console.* no cuenta como registro) BLOQUEADO por la propia barrera 0.24 + guardMutation",
       "evidencia": "Medido con la misma funcion readersOf del guard: src/App.tsx tiene 34 guards de texto lectores y solo 1 tiene prueba de detector; src/hooks/** tiene 5. 0.24 exige que todo guard que lee un fichero tocado este en la puerta, y guardMutationGuard exige prueba de detector para todo guard de lint:guards con baseline shrink-only: no se pueden meter sin volverlos teatro. Via de desbloqueo: (1) dar prueba de detector a esos guards (trabajo aparte, 33 ficheros) o (2) declararlos en EXEMPT con motivo medido, lo que neutra 0.24 para la raiz de src. Mientras tanto el endurecimiento no se aplica porque la puerta nace ROJA con los 36 sitios de P7.98."
+    },
+    {
+      "id": "P7.100",
+      "estado": "in_progress",
+      "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
+      "evidencia": "VEREDICTO MEDIDO de las 5 sospechas de duplicacion/parche/hardcode que el informe dejaba abiertas: (1) UI de catalogos (AmbientesPanel 305 lineas, PaletasPanel 266, SearchCatalogPanel 475): NO son copia; solo comparten 2 nombres de handler genericos. (2) src/services/gemini.ts (585 lineas, exporta la clase geminiService) vs src/voice/lib/gemini.js (1837, 22 exports): CERO exports compartidos; son el cliente del motor de texto y el motor de voz, no dos copias. (3) avatar 3D: BunnyControlCenter.tsx (83) IMPORTA de src/avatar/config/bunnySceneConfig.ts (95) y no repite ni un literal numerico de los suyos; existe UNA sola copia de bunnySceneConfig. (4) hasUsableTextBackend tiene UN solo dueno (src/services/deepseek.ts:73) y un unico importador externo (src/hooks/useFluParticipant.ts:11): no hay implementaciones duplicadas; si queda acoplamiento (un hook tirando de un proveedor concreto para una capacidad que es del contrato) pero NO es un dato con dos duenos. (5) src/lib/fluParticipant.ts:215 textBackendUsable = true NO es un hardcode: es un parametro por defecto documentado en :224-228, el hook pasa el valor real y hay test de las dos ramas (tests/fluParticipant.test.ts:117 y :126)."
     }
   ],
   "done": [
