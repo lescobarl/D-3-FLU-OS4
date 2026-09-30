@@ -1036,6 +1036,13 @@
       "estado": "done",
       "evidencia": "tests/embeddingConfigSingleSourceGuard.test.ts",
       "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.93",
+      "titulo": "Auditoria de CODIGO: un solo dueno del 16 kHz (hard code en 5 modulos de voz) y del umbral de room-rematch",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/audioConstants.js",
+      "origen": "auditoria-codigo"
     }
   ],
   "done": [

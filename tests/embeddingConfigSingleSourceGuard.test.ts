@@ -29,8 +29,8 @@ export const LECTORES = [
     'getMinSamples',
 ]
 
-/** Fallbacks del pipeline, declarados una sola vez (en el dueno). */
-export const FALLBACKS = ['DEFAULT_TARGET_SAMPLE_RATE', 'DEFAULT_MIN_SAMPLE_RATIO']
+/** Fallbacks del pipeline de embeddings que declara el dueno. */
+export const FALLBACKS = ['DEFAULT_MIN_SAMPLE_RATIO']
 
 function walk(dir: string, acc: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {
