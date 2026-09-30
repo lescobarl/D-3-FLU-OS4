@@ -2976,3 +2976,27 @@ GUARDS QUE CAZARON DEFECTOS PROPIOS (medido, no supuesto): tsStrictGuard (doble
   -> comprimido a linea neta). Tambien un CRLF introducido en un fichero LF.
 LEDGER: P7.75 / P7.76 / P7.77 (done, con commit). Tracker: sin pendientes de
   codigo en este camino; P7.49 sigue done (0ebee8c, ruido ASR del arranque).
+================================================================
+ENMIENDA FORMAL (AGENTS.md 0.14 / 0.B.16) - AUTORIZADA POR EL DUENO
+------------------------------------------------------------------
+FECHA: 2026-09-29
+CAMPO: maxFiles 60 -> 100. UNICO campo tocado. Sin cambios en allow,
+  maxLines, dod, guard, guardExpect, base, e2eScope, ignore ni task.
+MOTIVO (medido, no supuesto): la auditoria de CODIGO sobre HEAD 23f4c2c
+  (una pasada, sin informes) registro 3 duplicaciones reales como
+  P7.81/P7.82/P7.83. El arreglo de P7.81 (epilogo de resultado x45 y
+  bloque de arranque x57 repartidos por los 21 motores de
+  src/core/games/*.ts) toca ~21 ficheros, y la base ya cambia 49: con el
+  tope anterior (60) la holgura era 11, insuficiente para una tarea que
+  se hace de raiz y no a trozos.
+MEDIDO ANTES: base c467177, cambiados 49 (seguidos 49 + nuevos 0),
+  maxFiles 60.
+AUTORIZACION: pedido explicito del dueno en este turno
+  ("cambia el limite de maxfiles a 100").
+HASHES CONGELADOS: .task/frozen.json NO incluye .task/contract.json
+  (congela guards y scripts del gate), asi que la enmienda no invalida
+  ningun hash del criterio. Verificado leyendo scripts/task-gate.mjs.
+EFECTO: P7.81 queda DESBLOQUEADO (src/core/games/** SI esta en allow).
+  P7.82 (AmbientesPanel/PaletasPanel/SearchCatalogPanel) y P7.83
+  (BunnyControlCenter/bunnySceneConfig) siguen BLOQUEADOS: esta enmienda
+  sube el TOPE de ficheros, NO amplia `allow`.
