@@ -1,5 +1,6 @@
 import { cleanForSpeech } from './audioMath.js'
 import { normalizeConfiguracion } from './configCommands.js'
+import { asMusicAction } from '../../core/media/musicActions'
 import { FLU_CONFIG } from './fluConfig.js'
 import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
 import { buildVisualGenerationPrompt } from './fluVisualPipeline.js'
@@ -1577,11 +1578,11 @@ export async function generateFluContract({
   const animacion = parsed.animacion ? String(parsed.animacion).trim() : undefined
   const emocion = parsed.emocion ? String(parsed.emocion).trim() : undefined
   const rawMusica = parsed.musica && typeof parsed.musica === 'object' ? parsed.musica : undefined
+  const musicaAccion = asMusicAction(rawMusica?.accion)
   const musicaFromModel =
-    rawMusica &&
-    ['play_music', 'pause_music', 'stop_music'].includes(String(rawMusica.accion || '').trim())
+    rawMusica && musicaAccion
       ? {
-          accion: String(rawMusica.accion).trim(),
+          accion: musicaAccion,
           cancion: rawMusica.cancion ? String(rawMusica.cancion).trim() : undefined,
         }
       : undefined

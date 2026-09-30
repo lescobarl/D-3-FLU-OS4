@@ -89,15 +89,11 @@ function formatTimeLabel(ms: number): string {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const WEEK_DAYS: ReadonlyArray<{ day: number; label: string }> = [
-    { day: 1, label: 'Lunes' },
-    { day: 2, label: 'Martes' },
-    { day: 3, label: 'Miércoles' },
-    { day: 4, label: 'Jueves' },
-    { day: 5, label: 'Viernes' },
-    { day: 6, label: 'Sábado' },
-    { day: 0, label: 'Domingo' },
-];
+/** Selector de dia: etiquetas derivadas de la fuente canonica (inicial en mayuscula). */
+const WEEK_DAYS: ReadonlyArray<{ day: number; label: string }> = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
+    day,
+    label: WEEKDAY_DISPLAY_ES[day].charAt(0).toUpperCase() + WEEKDAY_DISPLAY_ES[day].slice(1),
+}));
 
 function dayOfWeekOf(ms: number): number {
     return new Date(ms).getDay(); // 0=Domingo..6=Sábado

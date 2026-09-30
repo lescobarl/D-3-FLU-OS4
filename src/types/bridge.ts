@@ -7,6 +7,7 @@
 
 import type { AvatarState, AvatarExpression } from '../avatar';
 import type { VisualTipo, WorkspaceTipo } from '../core/config/sharedConfig';
+import type { MusicAction } from '../core/media/musicActions';
 
 /**
  * Estados del ciclo de conversación integrado.
@@ -429,7 +430,7 @@ export interface FluContract {
      * público) en src/services/musicPlayer.ts (playSong).
      */
     musica?: {
-        accion: 'play_music' | 'pause_music' | 'stop_music';
+        accion: MusicAction;
         cancion?: string;
     };
     /**

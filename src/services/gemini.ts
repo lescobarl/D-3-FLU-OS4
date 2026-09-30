@@ -19,6 +19,7 @@
 import { GEMINI_CONFIG, STORAGE_KEYS, isWorkspaceTipo, buildPollinationsUrl, readStorage, resolveTextApiKey } from '../core/config/appConfig';
 import type { VisualTipo } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
+import { asMusicAction } from '../core/media/musicActions';
 import type {
     IAIService,
     AIRequestOptions,
@@ -521,11 +522,11 @@ Responde como ${botName}:`;
         const animacion = contract.animacion ? String(contract.animacion).trim() : undefined;
         const emocion = contract.emocion ? String(contract.emocion).trim() : undefined;
         const rawMusica = contract.musica as { accion?: unknown; cancion?: unknown } | undefined;
+        const musicaAccion = asMusicAction(rawMusica?.accion);
         const musica =
-            rawMusica &&
-            ['play_music', 'pause_music', 'stop_music'].includes(String(rawMusica.accion || '').trim())
+            rawMusica && musicaAccion
                 ? {
-                    accion: String(rawMusica.accion).trim() as 'play_music' | 'pause_music' | 'stop_music',
+                    accion: musicaAccion,
                     cancion: rawMusica.cancion ? String(rawMusica.cancion).trim() : undefined,
                 }
                 : undefined;
