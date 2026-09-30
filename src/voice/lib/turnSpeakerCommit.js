@@ -10,6 +10,7 @@ import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { detectNextSpeakerPhrase, nextSpeakerLabel } from './activeListen.js'
 import { isNewAudioSegment, getLastCommitPerfAt } from './audioSegmentClock.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
+import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
 function clusterSignatureFor(clusters = [], { speakerId = '', speakerName = '' } = {}) {
   const sid = String(speakerId || '').trim()
@@ -184,9 +185,9 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   if (!name) return
   if (refs.lastSpeakerRef) refs.lastSpeakerRef.current = name
   if (refs.lastLoggedSpeakerRef) refs.lastLoggedSpeakerRef.current = name
-  if (refs.sessionPrimarySpeakerRef && !refs.sessionPrimarySpeakerRef.current) {
-    refs.sessionPrimarySpeakerRef.current = name
-  }
+  // Ruta unica: el dueno de `sessionPrimarySpeakerRef` es `setSessionPrimarySpeaker`
+  // (precedencia declarada). Aqui solo se RELLENA si sigue vacio.
+  setSessionPrimarySpeaker(refs.sessionPrimarySpeakerRef, name, 'resolved')
   if (resolved.workingClusters?.length) {
     // §9: el único escritor de clusters es `setSpeakerClusters`; fallback al ref.
     if (typeof refs.setSpeakerClusters === 'function') {

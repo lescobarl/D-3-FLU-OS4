@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
+import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -86,13 +86,16 @@ const REPEAT_FRAMES: readonly string[] = Object.freeze([
     'no escuche', 'no escuché', 'otra vez',
 ]);
 
-const NEXT_FRAMES: readonly string[] = Object.freeze([
-    'siguiente', 'otra', 'canta otra', 'siguiente carta', 'paso', 'sigo', 'otra carta', 'dale',
-    // Afirmaciones: en la lotería el jugador no "responde"; un "sí"/"continúa"
-    // significa "canta la siguiente" (antes repetía la misma carta en ciclo).
-    'si', 'sí', 'continua', 'continúa', 'continuar', 'sigue', 'ok', 'okey', 'vale', 'adelante',
-    'yes', 'next', 'listo', 'vamos',
+// Órdenes de avance PROPIAS de la lotería. Las afirmaciones sueltas ("sí",
+// "dale", "adelante") NO se re-enumeran aquí: en la lotería el jugador no
+// "responde", un "sí"/"continúa" significa "canta la siguiente", pero el
+// CONJUNTO de afirmaciones tiene dueño único (`BARE_AFFIRMATION_FRAMES`), así
+// que se compone. Re-enumerarlo era una segunda copia del mismo dato.
+const OWN_ORDERS: readonly string[] = Object.freeze([
+    'siguiente', 'otra', 'canta otra', 'siguiente carta', 'paso', 'sigo', 'otra carta', 'next',
 ]);
+
+const NEXT_FRAMES: readonly string[] = Object.freeze([...OWN_ORDERS, ...BARE_AFFIRMATION_FRAMES]);
 
 const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 

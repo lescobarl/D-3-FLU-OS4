@@ -7,16 +7,13 @@
 // fila: dentro del TURNO ACTUAL reutiliza la fila y completa su hablante, o la
 // reemplaza si la emisión crece; si no, la agrega. Así una frase ⇒ una fila.
 //
-// El "turno actual" se identifica por SU ID (`turnId`, que el hook publica en el
-// commit temprano y en la resolución): la fila se reutiliza por identidad, no por
-// posición. Sin `turnId` (compatibilidad) se usa el criterio posicional: filas
-// posteriores a la última respuesta de FLU (role 'flu'); ambiente/sistema no cierran.
+// El "turno actual" se identifica por SU ID (`turnId`): la fila se reutiliza por
+// IDENTIDAD, no por posicion respecto a las filas de FLU. Criterio unico.
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
-import { phrasesRelate } from './activeListen';
 
 /**
  * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.
@@ -38,15 +35,11 @@ export interface UserTurnRowInput {
      */
     replaceLast?: boolean;
     /**
-     * Identidad del TURNO (produccion la aporta: `activeTurnIdRef`). La fila del
-     * usuario se reutiliza DENTRO DEL MISMO TURNO por esta identidad, no por
-     * posicion respecto a las filas de FLU: asi dos resoluciones del mismo turno
-     * siguen siendo una fila aunque el motor hable en medio, y dos locuciones
-     * DISTINTAS (turnos distintos) son dos filas aunque FLU no haya hablado.
-     * Sin `turnId` (llamadores sin identidad de turno) se conserva el criterio
-     * posicional.
+     * Identidad del TURNO (obligatoria): la produce el dueno del turno al ABRIRLO
+     * y la comparten el commit temprano, la emision que crece, el log crudo y la
+     * resolucion. Es el UNICO criterio de reutilizacion de la fila.
      */
-    turnId?: number | string | null;
+    turnId: number | string | null;
 }
 
 export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
@@ -86,7 +79,7 @@ export function commitUserTurnRow({
     speakerName,
     timestamp,
     replaceLast = false,
-    turnId = null,
+    turnId,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -121,17 +114,13 @@ export function commitUserTurnRow({
         }
     }
 
-    // 2) MISMO TURNO: la fila se reutiliza por IDENTIDAD de turno cuando el
-    //    llamador la aporta (produccion: el commit temprano y la resolucion del
-    //    mismo turno comparten `turnId`). Asi el habla de FLU en medio NO la
-    //    duplica, y una locucion DISTINTA del turno siguiente NO se fusiona con
-    //    la anterior aunque FLU no haya hablado (defecto medido: se "borraba" una
-    //    orden real repetida). Sin identidad (compatibilidad) el criterio es el
-    //    posicional: una reemision del ASR que CRECE o se RECORTA es la MISMA
-    //    locucion (relacion prefijo/sufijo, `phrasesRelate`) y se conserva el
-    //    texto MAS COMPLETO: nunca se pierde lo dicho.
-    const mismoTurnoPorId =
-        turnId != null && currentTurn.id === turnId && currentTurn.rowId != null;
+    // 2) MISMO TURNO: la fila se reutiliza por IDENTIDAD de turno. El commit
+    //    temprano y la resolucion del mismo turno comparten `turnId`, asi que el
+    //    habla de FLU en medio NO la duplica, y una locucion DISTINTA (turno
+    //    distinto) NO se fusiona con la anterior aunque FLU no haya hablado.
+    //    Un solo criterio: la rama POSICIONAL (relacion prefijo/sufijo) se retiro
+    //    porque era un segundo criterio para la misma decision.
+    const mismoTurnoPorId = currentTurn.id === turnId && currentTurn.rowId != null;
     if (mismoTurnoPorId) {
         const entry = history.find((e) => e.id === currentTurn.rowId);
         if (entry && entry.role === 'user') {
@@ -148,27 +137,6 @@ export function commitUserTurnRow({
                     : e,
             );
             store.batchLoadHistory(updated);
-            return { id: entry.id, action: 'reused' };
-        }
-    } else if (turnId == null) {
-        for (let i = history.length - 1; i >= turnStart; i -= 1) {
-            const entry = history[i];
-            if (!entry || entry.role !== 'user') continue;
-            const previo = cleanForSpeech(entry.text || '');
-            if (!phrasesRelate(previo, raw)) continue;
-            const masCompleto = norm.length > previo.toLowerCase().length;
-            const updated = history.map((e) =>
-                e.id === entry.id
-                    ? {
-                        ...e,
-                        text: masCompleto ? raw : e.text,
-                        speakerName: resolved || e.speakerName,
-                        timestamp: masCompleto ? stamp : e.timestamp,
-                    }
-                    : e,
-            );
-            store.batchLoadHistory(updated);
-            currentTurn = { id: turnId, rowId: entry.id };
             return { id: entry.id, action: 'reused' };
         }
     }

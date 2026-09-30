@@ -61,6 +61,7 @@ import {
   pruneGhostSpeakerClusters,
   trimAudioChunkBuffer,
 } from '../lib/voiceIdentity'
+import { clearSessionPrimarySpeaker, setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
 import {
   getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
@@ -603,7 +604,6 @@ export function useFluVoiceAssistant({
   const listeningAckTimerRef = useRef(null)
   const _lastTurnHadFinalRef = useRef(false)
   const _allowStableCommitRef = useRef(false)
-  const turnCommitIdRef = useRef(0)
   const lastCommitAtRef = useRef(0)
   const preflightScheduledForTurnRef = useRef(false)
   const turnBridgeTextRef = useRef('')
@@ -631,7 +631,7 @@ export function useFluVoiceAssistant({
     const skipDefaults = FLU_CONFIG.multiuser?.skipDefaults || {}
     const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase()
     if (name.toLowerCase() === anonymousName) return
-    sessionPrimarySpeakerRef.current = name
+    setSessionPrimarySpeaker(sessionPrimarySpeakerRef, name, 'participant')
   }, [activeParticipantName])
 
   useEffect(() => {
@@ -1503,7 +1503,6 @@ export function useFluVoiceAssistant({
       }
 
       preflightScheduledForTurnRef.current = true
-      activeTurnIdRef.current += 1
       const turnId = activeTurnIdRef.current
       startContinuousIdentityPipeline(
         turnId,
@@ -1684,7 +1683,7 @@ export function useFluVoiceAssistant({
           })
           .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
       }
-      if (introducedName && isProperSpeakerName(introducedName)) sessionPrimarySpeakerRef.current = introducedName
+      setSessionPrimarySpeaker(sessionPrimarySpeakerRef, introducedName, 'presented')
       lastSpeakerRef.current = resolvedSpeakerName
       lastTurnSignatureRef.current = signatureVector
       return {
@@ -1751,6 +1750,7 @@ export function useFluVoiceAssistant({
         speakerName,
         speakerAlias: null,
         phase,
+        turnId: activeTurnIdRef.current,
         timestamp: currentClock,
         signature: lastTurnSignatureRef.current,
         language: detectTranscriptLanguage(capture),
@@ -1829,7 +1829,6 @@ export function useFluVoiceAssistant({
           applyConversationSpeaker,
           flushPendingStreamLog,
           logRowsTextRef: userRowsTextView,
-          turnCommitIdRef,
           activeTurnIdRef,
           flushPcmAfterTurnCommit,
           lastCommitAtRef,
@@ -2789,7 +2788,7 @@ export function useFluVoiceAssistant({
         setSpeakerClusters([])
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-        sessionPrimarySpeakerRef.current = ''
+        clearSessionPrimarySpeaker(sessionPrimarySpeakerRef)
         // Fase E: tras reiniciar la sesión, re-sembrar el participante activo (Juan/Luis)
         // como sessionPrimary para que sus turnos sigan etiquetándose con su nombre.
         seedSessionPrimaryFromActiveName()

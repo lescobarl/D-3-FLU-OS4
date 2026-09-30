@@ -61,7 +61,6 @@ import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
  * @property {(phrase: string, fallbackSpeaker: string, options?: object) => void} applyConversationSpeaker
  * @property {() => void} flushPendingStreamLog
  * @property {import('react').MutableRefObject<string[]>} logRowsTextRef
- * @property {import('react').MutableRefObject<number>} turnCommitIdRef
  * @property {import('react').MutableRefObject<number>} activeTurnIdRef
  * @property {() => void} flushPcmAfterTurnCommit
  * @property {import('react').MutableRefObject<number>} lastCommitAtRef
@@ -116,7 +115,6 @@ export function handleConversationStreamSync(
     applyConversationSpeaker,
     flushPendingStreamLog,
     logRowsTextRef,
-    turnCommitIdRef,
     activeTurnIdRef,
     flushPcmAfterTurnCommit,
     lastCommitAtRef,
@@ -158,6 +156,17 @@ export function handleConversationStreamSync(
     return
   }
 
+  // El ID del turno nace al ABRIR el turno (una sola vez), no al resolverlo: el
+  // commit temprano, la emision que crece, la resolucion y el log crudo
+  // comparten SIEMPRE el mismo id. Antes la resolucion acuñaba el id tarde (y
+  // solo con diarizacion activa), asi que la fila del usuario tenia que
+  // deduplicarse por POSICION: dos criterios para la misma decision.
+  const ensureTurnId = () => {
+    if (openPreviewTurnRef.current) return
+    openPreviewTurnRef.current = true
+    activeTurnIdRef.current += 1
+  }
+
   if (!turnCommit) {
     if (wouldShrinkListenLog(capture, publishedLiveRef.current)) {
       if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'shrink-preview' })
@@ -167,7 +176,7 @@ export function handleConversationStreamSync(
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
-    openPreviewTurnRef.current = true
+    ensureTurnId()
     if (turnBoundary || atTurnBoundary) {
       const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
       const phrase = cleanForSpeech(utterance) || capture
@@ -186,6 +195,9 @@ export function handleConversationStreamSync(
   }
 
   flushPendingStreamLog()
+  // Un commit directo (sin preview) tambien abre turno: el id debe existir antes
+  // de que nada de este turno escriba (fila, log crudo, resolucion).
+  ensureTurnId()
 
   // El preview ya protegia el recorte por ruido ASR, pero aqui se commiteaba el
   // texto recortado: la fila quedaba mas corta que lo mostrado y se perdia la cola.
@@ -218,9 +230,7 @@ export function handleConversationStreamSync(
   }
 
   const finalizeTurnCommit = () => {
-    turnCommitIdRef.current += 1
-    const turnId = activeTurnIdRef.current || turnCommitIdRef.current
-    finalizeTurnIdentityPipeline(turnId)
+    finalizeTurnIdentityPipeline(activeTurnIdRef.current)
     flushPcmAfterTurnCommit()
     lastCommitAtRef.current = Date.now()
     turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
@@ -287,7 +297,7 @@ export function handleConversationStreamSync(
     utterancesSameRevision(lastCommittedRow, capture)
 
   markCommitPerfNow()
-  const turnId = activeTurnIdRef.current || turnCommitIdRef.current + 1
+  const turnId = activeTurnIdRef.current
   const preflight = finalizeTurnIdentityPipeline(turnId, () =>
     createSpeakerAudioResolver({
       atTurnBoundary: true,
