@@ -8,6 +8,7 @@
  * Config: `FLU_CONFIG.transcript.asr.vad` (sin valores quemados en el motor).
  */
 import { FLU_CONFIG } from '../fluConfig.js'
+import { DEFAULT_TARGET_SAMPLE_RATE } from '../audioConstants.js'
 
 /**
  * @typedef {{ type: 'speech-start', atMs: number }} SpeechStartEvent
@@ -26,7 +27,7 @@ export function getVadConfig() {
 
 export function getAsrSampleRate(config = getAsrConfig()) {
   const rate = Number(config.targetSampleRate)
-  return Number.isFinite(rate) && rate > 0 ? rate : 16000
+  return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_TARGET_SAMPLE_RATE
 }
 
 function rootMeanSquare(samples) {

@@ -3,6 +3,8 @@
  * (Node/fallback) y el Worker de identidad de voz. Un solo cuerpo (V18).
  */
 
+import { DEFAULT_TARGET_SAMPLE_RATE } from './audioConstants.js'
+
 /**
  * Remuestrea por decimación a la tasa objetivo (por defecto 16 kHz).
  * @param samples Muestras de entrada (Float32Array o array numérico).
@@ -12,7 +14,7 @@
  */
 export function downsampleTo16k(samples, sampleRate, targetRate) {
   if (!samples?.length) return new Float32Array(0)
-  const safeTargetRate = Number(targetRate) > 0 ? Number(targetRate) : 16000
+  const safeTargetRate = Number(targetRate) > 0 ? Number(targetRate) : DEFAULT_TARGET_SAMPLE_RATE
   if (sampleRate <= safeTargetRate) {
     return samples instanceof Float32Array ? samples : new Float32Array(samples)
   }

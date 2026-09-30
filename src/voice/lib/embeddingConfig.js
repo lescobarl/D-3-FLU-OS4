@@ -7,9 +7,7 @@
  * de configuración. Aquí el valor vive una sola vez.
  */
 import { FLU_CONFIG } from './fluConfig.js'
-
-/** Tasa objetivo del pipeline de embeddings (Hz). */
-export const DEFAULT_TARGET_SAMPLE_RATE = 16000
+import { DEFAULT_TARGET_SAMPLE_RATE } from './audioConstants.js'
 
 /** Fracción mínima de muestras para aceptar un embedding. */
 export const DEFAULT_MIN_SAMPLE_RATIO = 0.35

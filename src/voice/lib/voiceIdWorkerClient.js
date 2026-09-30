@@ -3,6 +3,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { getEmbeddingConfig } from './embeddingConfig.js'
+import { ROOM_REMATCH_STRICT } from './speakerClusters.js'
 import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig'
 import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
@@ -266,7 +267,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
       : null,
     fallbackSpeaker: fallbackName,
     roomRematchFloor:
-      Number(cfg.roomRematchThreshold) > 0 ? Number(cfg.roomRematchThreshold) : 0.85,
+      Number(cfg.roomRematchThreshold) > 0 ? Number(cfg.roomRematchThreshold) : ROOM_REMATCH_STRICT,
     soloNewVoiceFactor:
       Number(FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.soloNewVoiceFactor) || 0.82,
   }

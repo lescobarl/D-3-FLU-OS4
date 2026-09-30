@@ -1,6 +1,9 @@
 /**
  * PCM lineal 16-bit mono para STT streaming.
  */
+
+import { DEFAULT_TARGET_SAMPLE_RATE } from './audioConstants.js'
+
 export function float32ToInt16(samples) {
   const out = new Int16Array(samples.length)
   for (let i = 0; i < samples.length; i += 1) {
@@ -28,7 +31,7 @@ export function resampleLinear(input, fromRate, toRate) {
   return out
 }
 
-export function encodePcmChunk(float32, sampleRate, targetRate = 16000) {
+export function encodePcmChunk(float32, sampleRate, targetRate = DEFAULT_TARGET_SAMPLE_RATE) {
   if (!float32?.length) return new Int16Array(0)
   const resampled = resampleLinear(float32, sampleRate, targetRate)
   return float32ToInt16(resampled)
