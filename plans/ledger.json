@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-22",
+  "updated": "2026-09-30",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1074,6 +1074,12 @@
       "estado": "done",
       "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
       "evidencia": "VEREDICTO MEDIDO de las 5 sospechas de duplicacion/parche/hardcode que el informe dejaba abiertas: (1) UI de catalogos (AmbientesPanel 305 lineas, PaletasPanel 266, SearchCatalogPanel 475): NO son copia; solo comparten 2 nombres de handler genericos. (2) src/services/gemini.ts (585 lineas, exporta la clase geminiService) vs src/voice/lib/gemini.js (1837, 22 exports): CERO exports compartidos; son el cliente del motor de texto y el motor de voz, no dos copias. (3) avatar 3D: BunnyControlCenter.tsx (83) IMPORTA de src/avatar/config/bunnySceneConfig.ts (95) y no repite ni un literal numerico de los suyos; existe UNA sola copia de bunnySceneConfig. (4) hasUsableTextBackend tiene UN solo dueno (src/services/deepseek.ts:73) y un unico importador externo (src/hooks/useFluParticipant.ts:11): no hay implementaciones duplicadas; si queda acoplamiento (un hook tirando de un proveedor concreto para una capacidad que es del contrato) pero NO es un dato con dos duenos. (5) src/lib/fluParticipant.ts:215 textBackendUsable = true NO es un hardcode: es un parametro por defecto documentado en :224-228, el hook pasa el valor real y hay test de las dos ramas (tests/fluParticipant.test.ts:117 y :126)."
+    },
+    {
+      "id": "P7.102",
+      "estado": "in_progress",
+      "titulo": "El rechazo que acaba SOLO en la consola: 63 sitios por REFERENCIA (.catch(console.X)) + el 2o punto ciego del guard",
+      "evidencia": "Node directo + AST medida sobre src/: 63 sitios .catch(console.X) en 19 ficheros (App.tsx 13, useNavigationCommands 14, useConfigPersistence 12, useMinuteHandlers 8, useParticipants 2, +14 hooks 1 c/u) FIXED; guard tests/catchSilenciosoGuard.test.ts solo miraba arrow/function, no la consola por REFERENCIA; 4 logCaughtError de promesa dentro de try/catch se atribuian al catch externo."
     }
   ],
   "done": [

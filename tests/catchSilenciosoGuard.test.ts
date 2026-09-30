@@ -19,6 +19,14 @@
  *      no propaga y ni siquiera usa el rechazo. Antes solo miraba el handler VACIO,
  *      asi que `.catch(() => undefined)` o `.catch(() => '')` (que tragan igual)
  *      pasaban sin decir nada. (P7.9)
+ *      P7.102: el handler de un `.catch(...)` puede ser la CONSOLA por REFERENCIA
+ *      (`.catch(console.error)`). Antes solo se miraban arrow/function, asi que el
+ *      mismo trago con otra sintaxis pasaba sin decir nada: el guard tenia dientes
+ *      para una forma y para la otra no (medido: 63 sitios en 19 ficheros).
+ *      P7.102: una llamada dentro de un handler de promesa pertenece a ESE rechazo,
+ *      no al `catch` que la envuelve (misma razon que los catch anidados): sin esto,
+ *      `try { ... } catch (error) { p.catch((e) => logCaughtError(ctx, e)) }` se leia
+ *      como si el registro del `catch` externo perdiera `error`.
  *      P7.99: entregar el rechazo a la CONSOLA no cuenta como usarlo. Un handler
  *      `.catch((e) => console.warn(e))` deja el hecho en un sitio que nadie lee (y
  *      que en produccion puede no existir): o va al registro central
@@ -80,9 +88,21 @@ export function findViolations(src: string, fileName = 'synthetic.ts'): Violatio
   const line = (pos: number) => sf.getLineAndCharacterOfPosition(pos).line + 1
   const log: ts.CallExpression[] = []
   const cat: ts.CatchClause[] = []
+  /** Handlers de promesa (`.catch(arrow|function)`): el registro que va dentro
+   *  pertenece a ESE rechazo, no al `catch` que lo envuelve. */
+  const manejadores: ts.Node[] = []
   const gather = (n: ts.Node): void => {
     if (ts.isCallExpression(n) && n.expression.getText(sf) === 'logCaughtError') log.push(n)
     if (ts.isCatchClause(n)) cat.push(n)
+    if (
+      ts.isCallExpression(n) &&
+      ts.isPropertyAccessExpression(n.expression) &&
+      n.expression.name.text === 'catch' &&
+      n.arguments.length === 1 &&
+      (ts.isArrowFunction(n.arguments[0]) || ts.isFunctionExpression(n.arguments[0]))
+    ) {
+      manejadores.push(n.arguments[0])
+    }
     ts.forEachChild(n, gather)
   }
   gather(sf)
@@ -91,6 +111,7 @@ export function findViolations(src: string, fileName = 'synthetic.ts'): Violatio
     nodes.filter(
       (n) =>
         contains(c.block, n.pos) &&
+        !manejadores.some((m) => contains(m, n.pos)) &&
         !cat.some(
           (o) => o !== c && contains(c.block, o.block.pos) && o.block.end <= c.block.end && contains(o.block, n.pos),
         ),
@@ -156,7 +177,15 @@ export function findViolations(src: string, fileName = 'synthetic.ts'): Violatio
       n.arguments.length === 1
     ) {
       const a = n.arguments[0]
-      if (ts.isArrowFunction(a) || ts.isFunctionExpression(a)) {
+      if (
+        ts.isPropertyAccessExpression(a) &&
+        ts.isIdentifier(a.expression) &&
+        a.expression.text === 'console'
+      ) {
+        // La consola por REFERENCIA (`.catch(console.error)`) es el mismo trago que
+        // `.catch((e) => console.error(e))`, solo que sin arrow: no registra nada.
+        out.push({ line: line(n.getStart(sf)), kind: 'catchConsolaDirecta', detail: '.catch(console.*) no registra el rechazo' })
+      } else if (ts.isArrowFunction(a) || ts.isFunctionExpression(a)) {
         const cuerpo = a.body.getText(sf)
         if (!IGN_DECL.test(cuerpo) && !registra(cuerpo)) {
           const p = a.parameters[0]
@@ -226,6 +255,18 @@ describe('C13 catchSilencioso - el detector no es decorativo', () => {
     expect(findViolations('p.catch((e) => { console.warn(e) })')).toHaveLength(1)
     expect(findViolations("p.catch((e) => console.error('x', e))")).toHaveLength(1)
     expect(findViolations('p.catch((e) => { console.info(String(e)) })')).toHaveLength(1)
+  })
+  it('marca .catch(console.X) POR REFERENCIA (P7.102: el trago con otra sintaxis)', () => {
+    expect(findViolations('p.catch(console.error)')).toHaveLength(1)
+    expect(findViolations('p.catch(console.warn)')).toHaveLength(1)
+    expect(findViolations('p.catch(console.debug)')).toHaveLength(1)
+  })
+  it('no atribuye el registro de una promesa al catch que la envuelve (P7.102)', () => {
+    const src =
+      "try { f() } catch (error) { p.catch((e) => { logCaughtError('x', e) }) ; logCaughtError('y', error) }"
+    expect(findViolations(src)).toHaveLength(0)
+    const sinRegistro = "try { f() } catch (error) { p.catch((e) => { logCaughtError('x', e) }) }"
+    expect(findViolations(sinRegistro)).toHaveLength(1)
   })
   it('no marca .catch que usa el rechazo en un reportero que NO es la consola', () => {
     expect(findViolations('p.catch((e) => { console.warn(e); reportar(e) })')).toHaveLength(0)

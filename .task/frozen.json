@@ -46,7 +46,7 @@
   "tests/voiceProfilesLocalStorageGuard.test.ts": "8c5966ea9042536ea604d017f2847546442d20aa9b9464c9e0a9b22786e13804",
   "tests/longTermMemoryDeleteGuard.test.ts": "f9a7b784a70ca3970250d6dbbbbcbe70d2c4248304309d8fddfff30f3d3c2bf4",
   "tests/memoryItemSyncGuard.test.ts": "3a21e104a4316a1ef3de6b1cd461f10865835979dc0a944cb4003430f3fbb605",
-  "tests/catchSilenciosoGuard.test.ts": "f6201a3ed19f00aaec4c4c52f79e17f3afedff1063f478c649ebecd1262d2b0c",
+  "tests/catchSilenciosoGuard.test.ts": "3d2d36efd68b3cf022def80489ebaba4e2421dc15c941ce3a119ab8d57c3d15e",
   "tests/modulosMuertosGuard.test.ts": "a5b33b05fb30f2e42c5a57f24499d1d7abbd56ef9e2592fbf35ecd617a47003d",
   "tests/huerfanosGuard.test.ts": "d7a1b972538b5501ed0eb23c2c3b0b7209351ee3350e307f6efd272dc5c16bc7",
   "tests/fallbackResponsesGuard.test.ts": "e24a0557c57bf1144dd9b7ba158c32258c2e0a8c4cf064bd0653a3077bf5f58f",
