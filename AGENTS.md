@@ -6,7 +6,7 @@
 > Si otra fuente (chat, README, `kilo.json`, comandos) contradice este archivo,
 > prevalece la formulación más estricta de este archivo.
 
-**Versión:** 8.0 · **Última actualización:** 2026-09-22
+**Versión:** 8.0 · **Última actualización:** 2026-09-29
 
 ---
 
@@ -143,20 +143,34 @@ no depende de la buena voluntad; vive en el repo y en comandos verificables.
     **Incumplimiento registrado (no repetir):** en P7.75-P7.77 dos guards quedaron en
     ROJO y el agente los edito en el **mismo turno** que el codigo que median, dejando
     indistinguible "guard mal escrito" de "codigo mal escrito".
-    **Arnes:** los ficheros del commit vs los tests que hacen `readFileSync` de ese
-    `src`. **Estado: PENDIENTE DE ENMIENDA** (el guard necesita entrar en `allow`).
+    **Arnes:** `tests/instrumentIntegrityGuard.test.ts` (un solo dueno del escaneo
+    "que guard lee que fichero"), que compara los ficheros de cada commit del rango
+    — y lo que esta en el INDICE, que es el commit en curso — con los tests que
+    hacen `readFileSync` de ese `src`. **Estado: MECANIZADO** (0b87331), con
+    control negativo real sobre el arbol.
 23. **Alcance declarado en TODO cierre.** Sin el campo `CUBIERTO` / `NO CUBIERTO`
     (formato en 0.E) un cierre **no** es valido. Una evidencia estrecha **no** se narra
     como suficiente: "gate verde" no es "nada roto" si hay guards **fuera** de ese gate.
     **Incumplimiento registrado:** se declaro "verificacion final, nada roto" con 2
     guards en ROJO, fuera del gate que se habia ejecutado.
-    **Estado: PENDIENTE DE ARNES** (campo obligatorio en el gate del ledger).
+    **Arnes:** `tests/ledgerClosureScopeGuard.test.ts`, trinquete NO retroactivo: el
+    punto de arranque es el commit que introduce el guard, resuelto del propio git
+    (`--diff-filter=A`) y no de una constante a mano, y compara el REGISTRO
+    (`done[]`) por id, no el commit que el cierre cita. **Estado: MECANIZADO**
+    (0b87331), con control negativo real (un cierre sintetico sin campo cae).
 24. **Cobertura de los guards de COMPORTAMIENTO.** Si un cambio toca un fichero que un
     guard lee, ese guard **debe** estar en `lint:guards`, o el cierre declara por que no.
     `lint:guards` es **higiene** (rutas, fuentes, hardcode), **no** comportamiento: es el
     agujero por el que dos guards del flujo quedaron fuera sin que el pre-commit lo
-    dijera. **Arnes:** ficheros tocados -> guards que los leen -> estan en el gate?.
-    **Estado: PARCIAL** (declarado por escrito; falta el calculo automatico).
+    dijera.
+    **Arnes:** el mismo `tests/instrumentIntegrityGuard.test.ts`: ficheros tocados ->
+    guards que los leen -> estan en `lint:guards` o declarados en su `EXEMPT` con
+    motivo. **Estado: MECANIZADO** (0b87331), con control negativo real (quitando un
+    guard del gate, cae nombrando los ficheros que lee). **Deuda viva: P7.87** — 5
+    guards que leen `src/core/games` no pueden entrar al gate todavia: sin prueba de
+    detector crearian teatro nuevo y el baseline de `guardMutationGuard` es
+    shrink-only, asi que van declarados en `EXEMPT` y el guard comprueba que sigan
+    fuera.
 
 ### C. Contrato (formato mínimo)
 

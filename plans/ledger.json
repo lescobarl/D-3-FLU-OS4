@@ -949,14 +949,14 @@
     {
       "id": "P7.79",
       "titulo": "Arnes PENDIENTE de la constraint 0.22 (integridad del instrumento): falta el guard que impide tocar src y sus guards de texto en el mismo commit",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "PENDIENTE declarado al escribir la constraint (AGENTS.md 0.22). Falta el arnes que hace IMPOSIBLE el incumplimiento en vez de confiar en la disciplina: un guard que compare los ficheros de un commit con la lista de tests que hacen readFileSync de ese mismo src como texto (guard de estructura) y falle si ambos aparecen en el MISMO commit. Hoy la regla esta escrita y su incumplimiento esta registrado, pero NO es mecanica. Bloqueo: el guard es un fichero de test nuevo, y para que el gate lo acepte debe entrar en allow (maxFiles 60, hoy justo). Requiere ENMIENDA del dueno en .task/contract.json (allow/maxFiles), inmutable por el agente (AGENTS.md 0.B.16).",
       "origen": "auditoria-flujo"
     },
     {
       "id": "P7.80",
       "titulo": "Arnes PENDIENTE de las constraints 0.23/0.24: falta exigir el campo CUBIERTO/NO CUBIERTO y calcular la cobertura de guards por fichero tocado",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "PENDIENTE declarado al escribir las constraints (AGENTS.md 0.23 y 0.24). Falta el arnes de (a) ALANCE: que todo cierre lleve el campo CUBIERTO / NO CUBIERTO con valor real, y (b) COBERTURA: que todo guard que lee un fichero tocado este en lint:guards (o el cierre declare por que no). El caso que lo motiva esta medido: en P7.75-P7.77 dos guards del flujo (gameTurnSingleDispatch, commandAndGameCoverage) quedaron ROJOS fuera de lint:guards, que es solo higiene, y el pre-commit paso en verde. Remediado en e529bda (los dos guards entran en lint:guards, 57 -> 59), pero el CALCULO automatico (ficheros tocados -> guards que los leen -> en el gate?) no existe. Requiere enmienda de allow si se implementa como guard de test.",
       "origen": "auditoria-flujo"
     },
@@ -998,8 +998,15 @@
     {
       "id": "P7.86",
       "titulo": "La puerta del contrato esta ROJA por maxLines: el presupuesto acumulado de la tarea (4600) esta agotado",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "node scripts/task-gate.mjs -> \"❌ Diff demasiado grande: 5183 lineas > 4600. Trocea la tarea.\" MEDIDO: la metrica del gate es la suma de (inserciones+borrados) de git diff --numstat <base> sobre los ficheros de alcance, acumulada desde base=c467177 y sin distinguir sesiones; en d77bbfc (justo antes del cierre de P7.85) valia 4598/4600, es decir la tarea llevaba 2 lineas de holgura. Consecuencia MEDIDA: cualquier cierre posterior, incluido uno NETO NEGATIVO como el de P7.85 (168 inserciones / 314 borrados), la pone roja, porque la metrica cuenta tambien los borrados. Bloqueo: base/maxLines viven en .task/contract.json y no son del agente (AGENTS.md 0.B.16). Enmienda necesaria (una de las dos): base c467177 -> d77bbfc, o maxLines 4600 -> >= 5250. Hasta entonces no hay \"puerta verde\" para el cierre.",
+      "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.87",
+      "titulo": "Cinco guards que leen src/core/games no tienen prueba de detector: no pueden entrar en lint:guards y quedan fuera del gate",
+      "estado": "todo",
+      "evidencia": "MEDIDO en 0b87331 (cierre de P7.80). De los tests que LEEN src/core/games, 8 estan ya en lint:guards (uno de ellos entro en 0b87331: gameDomainOwnership, que SI tiene prueba de detector). Los otros 5 no pueden entrar: gameAdoptRandomGuard, gameRoundsGuard, gameCatalog, gameDoesNotHijackCommands y gamePlaythrough no declaran prueba de detector, y el baseline de guardMutationGuard (.task/guard-proof-baseline.json) es shrink-only, asi que meterlos en el gate crearia teatro NUEVO y pondria ROJO guardMutationGuard. Quedan declarados en EXEMPT de tests/instrumentIntegrityGuard.test.ts con ese motivo, y el propio guard comprueba que sigan fuera del gate, asi que la lista se vacia sola. Cerrar = dar prueba de detector a cada uno (alimentar una entrada infractora y comprobar la marca), meterlos en lint:guards y sacarlos de EXEMPT.",
       "origen": "auditoria-codigo"
     }
   ],
@@ -1993,6 +2000,24 @@
       "commit": "2030344",
       "titulo": "Duplicacion del bloque de ARRANQUE del motor de juegos (phase:announce x56 en 21 motores): un solo dueno por motor",
       "evidencia": "CERRADO en 2030344 (src) + 783fe56 (guard: las dos mitades de P7.81). Un solo dueno del arranque POR MOTOR, buildState(cfg), la forma que 3 motores ya tenian. Y el barajado vuelve a su dueno, gameUtils.shuffleOrder. MEDIDO: announce 56 -> 41; 21/21 motores con un buildState usado; tsc -b 0; dod 15/334; guard 5/158; lint:guards 61/463; gate exit 0."
+    },
+    {
+      "id": "P7.86",
+      "commit": "dee4179",
+      "titulo": "La puerta del contrato esta ROJA por maxLines: el presupuesto acumulado de la tarea (4600) esta agotado",
+      "evidencia": ".task/contract.json: CERRADO en dee4179 (OCTAVA ENMIENDA, autorizada por el dueno con \"poder amplio\"). Causa raiz, no sintoma: la metrica de la puerta suma (inserciones+borrados) ACUMULADOS desde base y sin distinguir sesiones, asi que medía la tarea multi-sesion entera; en d77bbfc (punto ya verde y registrado) quedaban 2 lineas de holgura y el cierre NETO NEGATIVO de P7.85 (168 ins / 314 borrados) no cabia. Arreglo: base c467177 -> d77bbfc, que devuelve a la puerta su alcance real (la sesion). NO se inflo maxLines (sigue 4600) ni maxFiles (100): subirlos habria tapado la causa y obligado a otra enmienda en el siguiente saneamiento. Alcance real (obligatorio, 0.23): CUBIERTO=medicion exacta del presupuesto (4598/4600 en d77bbfc) y de la nueva base, con la puerta en verde; NO CUBIERTO=la metrica sigue contando borrados, asi que un cierre neto negativo grande en una sesion larga volvera a chocar y habra que trocear la sesion."
+    },
+    {
+      "id": "P7.79",
+      "commit": "0b87331",
+      "titulo": "Arnes PENDIENTE de la constraint 0.22 (integridad del instrumento): falta el guard que impide tocar src y sus guards de texto en el mismo commit",
+      "evidencia": "CERRADO en 0b87331. tests/instrumentIntegrityGuard.test.ts mecaniza 0.22: un commit que toca src/** no puede tocar a la vez un guard que lea ese src como texto. Se evalua base..HEAD MAS el indice (el commit en curso, que es justo donde el pre-commit puede pararlo), asi que el incumplimiento es IMPOSIBLE de colar, no solo punible. CONTROL NEGATIVO REAL sobre el arbol: con src/core/games/gameUtils.ts y su guard en el indice, ROJO con el mensaje exacto; restaurado despues. Alcance real (obligatorio, 0.23): CUBIERTO=el rango de commits y el indice, con control negativo real; NO CUBIERTO=no mira ramas ajenas ni el historial anterior a base (el trinquete no es retroactivo a proposito)."
+    },
+    {
+      "id": "P7.80",
+      "commit": "0b87331",
+      "titulo": "Arnes PENDIENTE de las constraints 0.23/0.24: falta exigir el campo CUBIERTO/NO CUBIERTO y calcular la cobertura de guards por fichero tocado",
+      "evidencia": "CERRADO en 0b87331, las dos mitades. (a) ALANCE (0.23): tests/ledgerClosureScopeGuard.test.ts exige CUBIERTO= y NO CUBIERTO= en todo cierre NUEVO del registro, con trinquete no retroactivo cuyo punto de arranque se resuelve del propio git (--diff-filter=A) y que compara done[] por ID y no por el commit citado, para que no haya hueco citando un commit viejo. (b) COBERTURA (0.24): el mismo guard de instrumento exige que todo guard que lee un fichero tocado este en lint:guards o declarado en EXEMPT con motivo, y el escaneo reconoce la forma real de los guards (join(DIR, f)). CONTROLES NEGATIVOS REALES: 0.23 -> con un cierre sintetico sin campo en el registro, ROJO nombrandolo; 0.24 -> quitando gameDomainOwnership de lint:guards, ROJO con los 18 ficheros que lee. El test de detector encontro un agujero REAL en el detector de 0.23 (NO CUBIERTO= CONTIENE la subcadena CUBIERTO=, luego la mitad negativa sola daba por bueno el cierre): corregido. lint:guards 61 -> 64. Alcance real (obligatorio, 0.23): CUBIERTO=las dos mitades con control negativo real y el escaneo de los 364 tests; NO CUBIERTO=5 guards que leen src/core/games no pueden entrar en el gate todavia (sin prueba de detector, baseline shrink-only): quedan declarados en EXEMPT y abren P7.87."
     }
   ]
 }
