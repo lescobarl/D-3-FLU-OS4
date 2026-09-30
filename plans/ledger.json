@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-29",
+  "updated": "2026-09-30",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1029,13 +1029,6 @@
       "estado": "done",
       "origen": "auditoria-codigo",
       "evidencia": "CERRADO en e062686 (guard y hueco de gate en 3a3407e). MEDIDO: el resultado FINAL del turno tenia dueno unico (gameOverResult) pero el INTERMEDIO no: la forma {gameOver:false, ...} estaba escrita a mano en 107 sitios de 21 motores, asi que anadir un campo al turno obligaba a tocar los 21 y el que se olvidara rompia el contrato en silencio. AHORA: gameUtils.turnResult construye el resultado intermedio; ningun motor escribe el objeto. Se eliminaron tambien los \"gameOver:false\" manuales que quedaban fuera de gameUtils. Medida: la forma literal ya no aparece en src/core/games (lo comprueba el guard, con prueba de detector). Sin cambio de comportamiento: las 21 superficies verificadas semanticamente HEAD vs actual y la suite completa en verde (3958/3958). Alcance real (0.23): CUBIERTO=todos los sitios de escritura del turno intermedio en los 21 motores y el fin de partida intacto (gameOverResult sin tocar); NO CUBIERTO=el tipo GameTurnResult, que se dejo como estaba a proposito."
-    },
-    {
-      "id": "P7.91",
-      "titulo": "Duplicados menores de fuente: nombres de dia para mostrar (2 duenos) e ids de accion de musica (2 duenos)",
-      "estado": "todo",
-      "origen": "auditoria-codigo",
-      "evidencia": "MEDIDO en e062686 sobre el arbol, con el coste real de cada mitad calculado con la logica de 0.24 (lectores de texto) y de P7.88 (tests de comportamiento por grafo de imports); la cifra decide el alcance, no la impresion. (a) NOMBRES DE DIA: 2 duenos, src/components/AgendaPanel.tsx:92 WEEK_DAYS (capitalizado, orden Lun..Dom) frente a src/core/temporal/calendarNames.ts:36 WEEKDAY_DISPLAY_ES (minusculas, indexado por getDay()). La reparacion esta IMPLEMENTADA y verificada (WEEK_DAYS se deriva de WEEKDAY_DISPLAY_ES conservando las 7 etiquetas byte a byte, comprobado con escapes Unicode) pero NO se commitea en esta pasada: tocar src/components/AgendaPanel.tsx mete en lint:guards, por 0.24, a los 5 guards que RECORREN todo src o mencionan la carpeta src/components (dateKeyGuard, pollinationsFuenteUnicaGuard, providerLiteralGuard, specificDeadGuard e integration.test.ts) y el trinquete shrink-only de P2.4 exige prueba de detector REAL para cada uno: es cirugia de instrumento, no de producto, y la decide el dueno. (b) IDS DE ACCION DE MUSICA: 3 copias literales de [\"play_music\",\"pause_music\",\"stop_music\"] (src/services/gemini.ts:526 y :528, y src/voice/lib/gemini.js:1582) mientras el TIPO vivia solo en src/types/bridge.ts:432. Reparado y verificado en esta sesion (dueno unico del valor + tipo + asMusicAction) y REVERTIDO A PROPOSITO por medida: tocar solo esos 3 ficheros arrastra al gate +14 tests de comportamiento y +29 guards de texto, con la misma exigencia de prueba de detector por guard. Coste medido frente al beneficio (deduplicar un enumerado estable de 3 ids): desproporcionado en una sola pasada. Deciden el dueno (a) y (b); ninguna de las dos es un defecto de comportamiento, ambas son deuda de fuente unica."
     }
   ],
   "done": [
@@ -2070,6 +2063,24 @@
       "commit": "e062686",
       "titulo": "Un solo dueno del resultado NO final del turno (turnResult)",
       "evidencia": "CERRADO en e062686 (guard y hueco de gate en 3a3407e). MEDIDO: el resultado FINAL del turno tenia dueno unico (gameOverResult) pero el INTERMEDIO no: la forma {gameOver:false, ...} estaba escrita a mano en 107 sitios de 21 motores, asi que anadir un campo al turno obligaba a tocar los 21 y el que se olvidara rompia el contrato en silencio. AHORA: gameUtils.turnResult construye el resultado intermedio; ningun motor escribe el objeto. Se eliminaron tambien los \"gameOver:false\" manuales que quedaban fuera de gameUtils. Medida: la forma literal ya no aparece en src/core/games (lo comprueba el guard, con prueba de detector). Sin cambio de comportamiento: las 21 superficies verificadas semanticamente HEAD vs actual y la suite completa en verde (3958/3958). Alcance real (0.23): CUBIERTO=todos los sitios de escritura del turno intermedio en los 21 motores y el fin de partida intacto (gameOverResult sin tocar); NO CUBIERTO=el tipo GameTurnResult, que se dejo como estaba a proposito."
+    },
+    {
+      "id": "P7.91a",
+      "commit": "73aef76",
+      "titulo": "Nombres de dia para mostrar: la 2a copia de AgendaPanel se deriva de la fuente canonica",
+      "evidencia": "CERRADO en 73aef76. src/components/AgendaPanel.tsx:92 repetia los 7 nombres capitalizados (Lunes..Domingo) mientras src/core/temporal/calendarNames.ts:36 ya los tenia (WEEKDAY_DISPLAY_ES, minusculas, indexado por getDay()). AHORA WEEK_DAYS se DERIVA de esa fuente con la inicial en mayuscula: el orden del selector [1,2,3,4,5,6,0] queda explicito y las 7 etiquetas son identicas a las anteriores (el caso del panel de agenda corre en el dod). CUBIERTO=la duplicacion desaparece y el orden se conserva; NO CUBIERTO=nada: no habia defecto de comportamiento, era duplicacion de fuente. El coste de instrumento que P7.91 midio (los guards que recorren src entran al gate) se pago en P7.91c."
+    },
+    {
+      "id": "P7.91b",
+      "commit": "73aef76",
+      "titulo": "Ids de accion de musica: un solo dueno del valor y del tipo",
+      "evidencia": "CERRADO en 73aef76. La lista ['play_music','pause_music','stop_music'] estaba copiada como literal en src/services/gemini.ts:526 y :528 y en src/voice/lib/gemini.js:1582, mientras el TIPO vivia solo en src/types/bridge.ts:432. Un id nuevo o renombrado obligaba a tocar 3 sitios y el olvido falla en SILENCIO: el validador filtra la accion, no suena nada y no hay error visible. AHORA src/core/media/musicActions.ts es el dueno de MUSIC_ACTIONS (valor), MusicAction (tipo) y asMusicAction (normalizacion trim+includes); los 3 consumidores y el tipo de bridge solo lo LEEN. Forma del contrato y comportamiento IDENTICOS. CUBIERTO=0 copias literales fuera del dueno; NO CUBIERTO=nada medido."
+    },
+    {
+      "id": "P7.91c",
+      "commit": "867a8b8",
+      "titulo": "DECIMA ENMIENDA - prueba de detector en los 26 guards de texto del src tocado + gate al doble + re-sellado de 12 congelados",
+      "evidencia": "CERRADO en 867a8b8, autorizado por el dueno ('allow a todo, amplia el gate al doble, ejecuta todo'). (1) PRUEBA DE DETECTOR: los 26 guards de texto del src tocado que no la tenian ahora EXPONEN su predicado (o el criterio que decide) y lo alimentan con un infractor sintetico, comprobando que lo marca Y que no marca el codigo sano; los 34 guards del src tocado quedan cubiertos. (2) GATE AL DOBLE: lint:guards 71 -> 105 ficheros (los 71 originales MAS los 34, sin perder ninguno); maxFiles 100 -> 200 y maxLines 4600 -> 9200; el dod se RECALCULO con el criterio real de tests/dodScopeGuard.test.ts (grafo de imports: 63 tests importan el src tocado) sobre el DoD original, quedando 71 ficheros y 0 huecos. (3) RE-SELLADO (enmienda B.14, mismo procedimiento que P7.26): 12 guards congelados (vozInstanciaUnica, searchAllowlistFuenteUnica, pollinationsFuenteUnica, consumidoresNorm, finalizeSingleRoute, fetchProveedor, umbralesConfig, aiServiceSingleImpl, textUtilsSingleSource, interimPriorStripSingleSource, dateKey, providerUrl) cambian de hash SOLO por ganar el caso de detector: su CRITERIO de medida no cambia ni una linea, y .task/frozen.json se re-sello. MEDIDO AL CIERRE: puerta COMPLETA en verde (Alcance OK - tamano 67 ficheros/3305 lineas de 200/9200 - DoD OK - guard OK); lint:guards 105 ficheros / 1115 casos verde; ESLint exit 0; tsc -b exit 0; suite COMPLETA 371 ficheros / 3985 casos verde, 0 fallos, exit 0 (FLU_AUTH_FULL_SUITE=1); trinquete de teatro P2.4 SIN deriva (0 teatro nuevo: los 9 de .task/guard-proof-baseline.json siguen igual y ninguno de los 105 carece de prueba). Riesgo declarado: el gate crece al doble, asi que el pre-commit multiplica su coste (~40 s solo lint:guards). Alcance real (obligatorio, 0.23): CUBIERTO=los 26 guards con prueba de detector y los 34 del src tocado cubiertos; lint:guards 105 ficheros en verde; dod 71 ficheros sin huecos; puerta completa en verde; suite completa 371/3985 con 0 fallos. NO CUBIERTO=el coste del gate solo se midio en esta maquina y el DoD-producto (pantalla/uso real) sigue pendiente del usuario."
     }
   ]
 }
