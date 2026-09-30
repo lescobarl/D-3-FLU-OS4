@@ -45,6 +45,24 @@ export function pollinationsUrlBuilders(src: string, fileName: string): string[]
 export function rawFetchCalls(src: string): number {
   return (src.match(/await fetch\(/g) || []).length;
 }
+
+/** Dueno UNICO de las rutas del proxy local de imagen/video. */
+export const VISUAL_PROXY_OWNER = 'src/voice/lib/visualConfig.js'
+/** Quien las PRODUCE (registra el middleware); queda fuera de alcance a proposito. */
+export const VISUAL_PROXY_PRODUCER = 'src/server/geminiProxy.ts'
+const VISUAL_ROUTE_RE = /['"]\/api\/(?:workspace-image|openrouter-image|fal-video)['"]/g
+
+/**
+ * Rutas del proxy visual escritas a mano en un consumidor. Se exceptuan el dueno
+ * (que las declara) y el servidor (que las registra); la capa de consumo debe
+ * importarlas. Nace del hallazgo medido: '/api/workspace-image' estaba escrito en
+ * src/services/gemini.ts y en src/voice/lib/imageGeneration.js a la vez.
+ */
+export function visualRouteLiterals(src: string, fileName: string): string[] {
+  if (fileName === VISUAL_PROXY_OWNER || fileName === VISUAL_PROXY_PRODUCER) return []
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+  return code.match(VISUAL_ROUTE_RE) ?? []
+}
 describe('P4.1/P4.6/P4.7 transporte - un origen por dato', () => {
   it('la resolucion de API key existe solo en su dueno', () => {
     const offenders = walk(SRC).flatMap((f) => apiKeyResolutionCopies(readFileSync(f, 'utf8'), rel(f)));
@@ -63,6 +81,27 @@ describe('P4.1/P4.6/P4.7 transporte - un origen por dato', () => {
   it('POLLINATIONS_CONFIG deriva del catalogo en vez de re-declarar sus campos', () => {
     const cfg = read('src/core/config/appConfig.ts');
     expect(cfg).toContain('...POLLINATIONS_DEFAULTS');
+  });
+  it('las rutas del proxy visual se declaran solo en su dueno', () => {
+    const offenders = walk(SRC).flatMap((f) => {
+      const file = rel(f)
+      return visualRouteLiterals(readFileSync(f, 'utf8'), file).map((r) => file + ': ' + r)
+    })
+    expect(
+      offenders,
+      'Ruta del proxy visual escrita a mano (importala de VISUAL_CONFIG.image.proxies):\n  ' + offenders.join('\n  '),
+    ).toEqual([])
+    const owner = read(VISUAL_PROXY_OWNER)
+    expect(owner).toContain("workspaceImage: '/api/workspace-image'")
+    expect(owner).toContain("falVideo: '/api/fal-video'")
+  });
+  it('el transporte con deadline es unico: estos consumidores no usan fetch crudo', () => {
+    // Hallazgo medido: useWorkspaceSearch no tenia deadline de cliente y musicSearch
+    // llevaba su propio AbortController. Los dos delegan ahora en fetchTextEngine.
+    for (const f of ['src/hooks/useWorkspaceSearch.ts', 'src/services/musicSearch.ts']) {
+      expect(rawFetchCalls(read(f)), 'fetch crudo en ' + f).toBe(0)
+      expect(read(f), f + ' debe usar el transporte compartido').toContain('fetchTextEngine')
+    }
   });
 });
 describe('P4.1/P4.6/P4.7 transporte - el detector no es decorativo', () => {
@@ -84,5 +123,26 @@ describe('P4.1/P4.6/P4.7 transporte - el detector no es decorativo', () => {
   it('cuenta las llamadas crudas a fetch', () => {
     expect(rawFetchCalls("await fetch('/x', {})")).toBe(1);
     expect(rawFetchCalls("await fetchTextEngineResilient('/x', {})")).toBe(0);
+  });
+  it('marca la ruta visual copiada, no al dueno, al servidor ni un comentario', () => {
+    // Las cadenas EXACTAS que estaban en el arbol antes de C77.
+    expect(visualRouteLiterals("        '/api/workspace-image',", 'src/services/gemini.ts')).toHaveLength(1)
+    expect(
+      visualRouteLiterals("      '/api/fal-video',", 'src/voice/lib/imageGeneration.js'),
+    ).toHaveLength(1)
+    // El dueno declara, el servidor registra: ninguno de los dos es infraccion.
+    expect(
+      visualRouteLiterals("    workspaceImage: '/api/workspace-image',", VISUAL_PROXY_OWNER),
+    ).toEqual([])
+    expect(
+      visualRouteLiterals("server.middlewares.use('/api/workspace-image', handler)", VISUAL_PROXY_PRODUCER),
+    ).toEqual([])
+    // Una mencion en un comentario no es la ruta escrita a mano.
+    expect(visualRouteLiterals("// POST /api/fal-video -> { videoUrl }", 'src/voice/lib/x.js')).toEqual([])
+    expect(visualRouteLiterals("/* antes: '/api/workspace-image' */", 'src/services/y.ts')).toEqual([])
+    // El consumidor que importa la ruta pasa.
+    expect(
+      visualRouteLiterals('VISUAL_CONFIG.image.proxies.workspaceImage', 'src/services/gemini.ts'),
+    ).toEqual([])
   });
 });
