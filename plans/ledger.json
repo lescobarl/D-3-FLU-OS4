@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-29",
+  "updated": "2026-09-22",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -963,29 +963,36 @@
     {
       "id": "P7.81",
       "titulo": "Duplicacion medida en los 21 motores de juegos: el epilogo de resultado y el bloque de arranque se copian por motor",
-      "estado": "todo",
-      "evidencia": "Medido 2026-09-29 sobre HEAD 23f4c2c: `animation: 'Dance'` aparece 45 veces y `phase: 'announce'` 57 veces repartidas por src/core/games/*.ts (21 motores). La forma del epilogo {valid, gameOver:true, won, score:session.score, animation:'Dance', emotion:'happy'} (src/core/games/veoVeo.ts:220) y la del arranque {cursor:0, maxRounds:readRounds(...), phase:'announce', score:0, round:1} (src/core/games/veoVeo.ts:110) se repiten literales; solo varia el prompt. Detector propio (ventana de 8 lineas utiles, descartando listas de argumentos) da 83 bloques repetidos en >1 fichero, y estos dos son los clusters mayores. NO lo ve el sensor (scripts/auditoria.mjs: 28/28 en META) ni ningun guard, y gameUtils.ts no publica constructor de resultado: la FORMA no tiene dueno unico. Bloqueo: src/core/games/** SI esta en allow, pero el arreglo toca ~21 ficheros y excede maxFiles 60 (base ya cambia 49) -> requiere ENMIENDA del dueno.",
+      "estado": "done",
+      "evidencia": "CERRADO en 49b64b1 (epilogo). src/core/games/gameUtils.ts:23 - dueno unico gameOverResult(): los 73 bloques de epilogo literales de los 21 motores pasan a una llamada (66 por codemod -forma de 7 campos-, 5 a mano: cuentoColaborativo x2, loteria x2, quienSoy x1, que eran ternarios o formas sin won). Guard tests/gameEpilogueSingleOwnerGuard.test.ts exige 0 objetos gameOver:true inline y trae prueba de mutacion del detector. MEDIDO: tsc -b 0; 20 ficheros de tests de juego 372/372; node scripts/task-gate.mjs exit 0. NO CUBIERTO: el bloque de ARRANQUE (phase:announce x57) queda abierto como P7.85.",
       "origen": "auditoria-codigo"
     },
     {
       "id": "P7.82",
       "titulo": "Flujo guardar/registrar/actualizar del editor copiado en 3 paneles de catalogo (mismo bloque de 15 lineas)",
-      "estado": "todo",
-      "evidencia": "src/components/AmbientesPanel.tsx:171, src/components/PaletasPanel.tsx:130 y src/components/SearchCatalogPanel.tsx:349: el bloque `if (!editor) return ...; if (editor.mode === 'create') { const result = await onRegister(payload); if (result.ok) { setEditor(null); return null } return mapReason(result.reason) } const result = await onUpdate(editor.id, payload); ...` esta copiado literal en los tres (solo cambian el tipo del item y las etiquetas). Deberia tener un dueno unico. Los 3 ficheros NO estan en allow (solo lo estan WorkspaceHub.tsx y ResultFeed.tsx) -> requiere ENMIENDA.",
+      "estado": "done",
+      "evidencia": "CERRADO en 49b64b1. src/core/catalogs/catalogEditorSave.ts:1 - dueno unico saveCatalogEntry() del flujo contexto -> alta(register)/edicion(update) -> cerrar o traducir motivo; el bloque de 15 lineas copiado en AmbientesPanel.tsx:170, PaletasPanel.tsx:129 y SearchCatalogPanel.tsx:348 pasa a uno. Guard tests/catalogEditorSaveSingleOwnerGuard.test.ts EJERCITA el flujo real (sin contexto, alta, edicion con id, fallo con motivo traducido), no lo imita. MEDIDO: tsc -b 0; gate exit 0.",
       "origen": "auditoria-codigo"
     },
     {
       "id": "P7.83",
       "titulo": "Mapa de color por estado del avatar duplicado (BunnyControlCenter vs bunnySceneConfig)",
-      "estado": "todo",
-      "evidencia": "src/avatar/components/BunnyControlCenter.tsx:94 y src/avatar/config/bunnySceneConfig.ts:80 declaran el mismo mapa de 6 estados {IDLE:'#888', LISTENING:'#00ff88', THINKING:'#ffaa00', SPEAKING:'#00aaff', ERROR:'#ff4444', SLEEPING:'#4444aa'}: 6 literales de color repetidos (hardcode duplicado del mismo dato). Deberia salir de una sola fuente. Fuera de allow -> requiere ENMIENDA.",
+      "estado": "done",
+      "evidencia": "CERRADO en 49b64b1. src/avatar/config/bunnySceneConfig.ts:92 - dueno unico bunnyStateColor() junto al mapa de 8 estados; BunnyControlCenter.tsx deja de re-declarar el mismo mapa y el mismo fallback (hardcode duplicado del mismo dato). MEDIDO: tsc -b 0; gate exit 0. PENDIENTE DECLARADO: BunnyViewer.tsx:70 resuelve el color con el mismo patron (colores[estado] || fallback) pero NO estaba en allow; se deja anotado sin tocar (0.B.16).",
       "origen": "auditoria-codigo"
     },
     {
       "id": "P7.84",
       "titulo": "El gate del contrato esta ROJO en HEAD: 5 ficheros commiteados viven fuera de allow y ninguna barrera por commit lo impide",
+      "estado": "done",
+      "evidencia": ".task/contract.json:1 - CERRADO en allow/gate por el dueno: 21303fc (allow 66 -> 71 con las 5 rutas), b247784 (maxFiles 60 -> 100) y 6c09af2 (allow 71 -> 76). MEDIDO: node scripts/task-gate.mjs exit 0 (Alcance OK - tamano OK - DoD OK - guard OK), tambien tras la sesion P7.81/P7.82/P7.83. CAUSA RAIZ ABIERTA: el pre-commit solo corre lint+typecheck y el gate es manual, asi que nada impide volver a commitear fuera de allow; sigue pendiente el arnes de P7.79 (0.22).",
+      "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.85",
+      "titulo": "Duplicacion pendiente del bloque de ARRANQUE del motor de juegos (phase:announce x57 en 21 motores)",
       "estado": "todo",
-      "evidencia": "Medido 2026-09-29 sobre HEAD 23f4c2c: `npm run gate` sale exit 1 con 'Archivos FUERA de alcance (prohibido)': src/app/arbiterDispatch.ts, src/app/arbiterDomainRoutes.ts, tests/commandAndGameCoverage.test.ts, tests/gameAliasTruncatedName.test.ts, tests/gameTurnSingleDispatch.test.ts. PROBADO PREEXISTENTE (no lo causa la subida de maxFiles): `allow` es IDENTICO en HEAD y en el arbol (JSON.stringify comparado, true) y el conjunto fuera-de-allow es el MISMO antes y despues de la enmienda. Nunca estuvieron en allow: `git log -S 'arbiterDispatch' -- .task/contract.json` sale vacio. Entraron en c73bbcb, 6b9c89b, e529bda y 894871b. Los commits pasaron porque el pre-commit corre solo lint+typecheck y el gate es MANUAL (de cierre de tarea), asi que nada impide commitear fuera de allow. Arreglo: declararlos en allow (enmienda del dueno, allow es inmutable por el agente) o revertir los 4 commits. Misma clase de defecto que 0.23/0.24 (alcance declarado).",
+      "evidencia": "Mitad NO cubierta de P7.81, medida 2026-09-29: `phase: \"announce\"` aparece 57 veces en src/core/games/*.ts y la forma de arranque {cursor:0, maxRounds:readRounds(...), phase:\"announce\", score:0, round:1} se repite literal en los 21 motores; solo varia el prompt. NO se cerro en P7.81 a proposito: a diferencia del epilogo (forma constante), el arranque cruza readRounds() con el estado propio de cada motor (cursor/indice/orden), y forzar ahi un constructor unico obligaria a pasar el estado entero por parametro: seria un parche de tipos, no una fuente unica real. Se deja MEDIDO y abierto en vez de tapado. src/core/games/** SI esta en allow, asi que no requiere enmienda.",
       "origen": "auditoria-codigo"
     }
   ],
@@ -1949,6 +1956,30 @@
       "commit": "e529bda",
       "titulo": "Dos guards del flujo quedaron EN ROJO con el refactor (no estaban en lint:guards): vuelven a medir el invariante y entran en el gate",
       "evidencia": "tests/commandAndGameCoverage.test.ts:1"
+    },
+    {
+      "id": "P7.81",
+      "commit": "49b64b1",
+      "titulo": "Duplicacion medida en los 21 motores de juegos: el epilogo de resultado y el bloque de arranque se copian por motor",
+      "evidencia": "CERRADO en 49b64b1 (epilogo). src/core/games/gameUtils.ts:23 - dueno unico gameOverResult(): los 73 bloques de epilogo literales de los 21 motores pasan a una llamada (66 por codemod -forma de 7 campos-, 5 a mano: cuentoColaborativo x2, loteria x2, quienSoy x1, que eran ternarios o formas sin won). Guard tests/gameEpilogueSingleOwnerGuard.test.ts exige 0 objetos gameOver:true inline y trae prueba de mutacion del detector. MEDIDO: tsc -b 0; 20 ficheros de tests de juego 372/372; node scripts/task-gate.mjs exit 0. NO CUBIERTO: el bloque de ARRANQUE (phase:announce x57) queda abierto como P7.85."
+    },
+    {
+      "id": "P7.82",
+      "commit": "49b64b1",
+      "titulo": "Flujo guardar/registrar/actualizar del editor copiado en 3 paneles de catalogo (mismo bloque de 15 lineas)",
+      "evidencia": "CERRADO en 49b64b1. src/core/catalogs/catalogEditorSave.ts:1 - dueno unico saveCatalogEntry() del flujo contexto -> alta(register)/edicion(update) -> cerrar o traducir motivo; el bloque de 15 lineas copiado en AmbientesPanel.tsx:170, PaletasPanel.tsx:129 y SearchCatalogPanel.tsx:348 pasa a uno. Guard tests/catalogEditorSaveSingleOwnerGuard.test.ts EJERCITA el flujo real (sin contexto, alta, edicion con id, fallo con motivo traducido), no lo imita. MEDIDO: tsc -b 0; gate exit 0."
+    },
+    {
+      "id": "P7.83",
+      "commit": "49b64b1",
+      "titulo": "Mapa de color por estado del avatar duplicado (BunnyControlCenter vs bunnySceneConfig)",
+      "evidencia": "CERRADO en 49b64b1. src/avatar/config/bunnySceneConfig.ts:92 - dueno unico bunnyStateColor() junto al mapa de 8 estados; BunnyControlCenter.tsx deja de re-declarar el mismo mapa y el mismo fallback (hardcode duplicado del mismo dato). MEDIDO: tsc -b 0; gate exit 0. PENDIENTE DECLARADO: BunnyViewer.tsx:70 resuelve el color con el mismo patron (colores[estado] || fallback) pero NO estaba en allow; se deja anotado sin tocar (0.B.16)."
+    },
+    {
+      "id": "P7.84",
+      "commit": "21303fc",
+      "titulo": "El gate del contrato esta ROJO en HEAD: 5 ficheros commiteados viven fuera de allow y ninguna barrera por commit lo impide",
+      "evidencia": ".task/contract.json:1 - CERRADO en allow/gate por el dueno: 21303fc (allow 66 -> 71 con las 5 rutas), b247784 (maxFiles 60 -> 100) y 6c09af2 (allow 71 -> 76). MEDIDO: node scripts/task-gate.mjs exit 0 (Alcance OK - tamano OK - DoD OK - guard OK), tambien tras la sesion P7.81/P7.82/P7.83. CAUSA RAIZ ABIERTA: el pre-commit solo corre lint+typecheck y el gate es manual, asi que nada impide volver a commitear fuera de allow; sigue pendiente el arnes de P7.79 (0.22)."
     }
   ]
 }
