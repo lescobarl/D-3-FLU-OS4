@@ -80,9 +80,9 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
         expect(userRows()).toHaveLength(2);
     });
 
-    it('COMPATIBILIDAD: sin turnId, el commit temprano y la resolucion siguen siendo una fila', () => {
-        commitUserTurnRow({ text: ORDEN });
-        commitUserTurnRow({ text: ORDEN, speakerName: 'Hablante 1' });
+    it('los DOS commits del turno comparten identidad: commit temprano + resolucion = una fila', () => {
+        commitUserTurnRow({ text: ORDEN, turnId: 108 });
+        commitUserTurnRow({ text: ORDEN, speakerName: 'Hablante 1', turnId: 108 });
 
         expect(userRows()).toHaveLength(1);
     });
@@ -94,7 +94,7 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
         expect(app).toMatch(/turnId: resolved\?\.turnId \?\? null/);
     });
 
-    it('GUARD: el hook publica la identidad del turno en los DOS commits', async () => {
+    it('GUARD: el hook publica la identidad del turno en TODOS los puntos de escritura', async () => {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const hook = fs.readFileSync(
@@ -102,7 +102,9 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
             'utf8',
         );
         const marcas = hook.match(/turnId: activeTurnIdRef\.current/g) || [];
-        expect(marcas).toHaveLength(2);
+        // Commit temprano + resolucion + LOG CRUDO (el path raw tambien escribe
+        // fila: sin identidad caia al criterio posicional, ya retirado).
+        expect(marcas).toHaveLength(3);
     });
 
     // ------------------------------------------------------------

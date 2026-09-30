@@ -18,14 +18,14 @@ describe('conversación — filas intercaladas no duplican al usuario', () => {
     });
 
     it('commit temprano + fila sistema + commit final = 1 fila de usuario con hablante', () => {
-        commitUserTurnRow({ text: 'ok flu platícame de los aviones' });
+        commitUserTurnRow({ text: 'ok flu platícame de los aviones', turnId: 1 });
         useIntegrationStore.getState().addConversationEntry({
             id: 'sys-1',
             role: 'system',
             text: '[stream]',
             timestamp: Date.now(),
         });
-        commitUserTurnRow({ text: 'ok flu platícame de los aviones', speakerName: 'Hablante 1' });
+        commitUserTurnRow({ text: 'ok flu platícame de los aviones', speakerName: 'Hablante 1', turnId: 1 });
 
         const rows = userRows();
         expect(rows).toHaveLength(1);

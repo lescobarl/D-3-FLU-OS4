@@ -15,20 +15,38 @@ const strip = (line: string) => {
   return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
 }
 
+/**
+ * Predicado del guard (expuesto para poder FALSIFICARLO con una entrada
+ * sintetica, sin tocar el motor real): lineas de `src` que re-normalizan o
+ * re-derivan la frase canonica.
+ */
+export function findReNormalizaciones(src: string): string[] {
+  const offenders: string[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    const s = strip(line)
+    if (/normalizeTranscriptText\s*\(/.test(s)) offenders.push(`${TARGET}:${i + 1}:${line.trim().slice(0, 110)}`)
+    if (/cleanForSpeech\(\s*wakeAnalysis\.afterWake/.test(s))
+      offenders.push(`${TARGET}:${i + 1}:${line.trim().slice(0, 110)}`)
+  })
+  return offenders
+}
+
 describe('C39 motorNormaliza — sin segundo normalizador ni re-derivación', () => {
   it('el motor no re-normaliza ni re-deriva la frase canónica', () => {
-    const offenders: string[] = []
-    readFileSync(join(ROOT, TARGET), 'utf8')
-      .split(/\r?\n/)
-      .forEach((line, i) => {
-        const s = strip(line)
-        if (/normalizeTranscriptText\s*\(/.test(s)) offenders.push(`${TARGET}:${i + 1}:${line.trim().slice(0, 110)}`)
-        if (/cleanForSpeech\(\s*wakeAnalysis\.afterWake/.test(s))
-          offenders.push(`${TARGET}:${i + 1}:${line.trim().slice(0, 110)}`)
-      })
+    const offenders = findReNormalizaciones(readFileSync(join(ROOT, TARGET), 'utf8'))
     expect(
       offenders,
       `Re-normalización en el motor (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
     ).toEqual([])
+  })
+})
+
+// P2.4 — prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C39 motorNormaliza — el detector no es decorativo', () => {
+  it('marca la re-normalizacion sintetica y deja pasar la frase limpia', () => {
+    expect(findReNormalizaciones('const a = normalizeTranscriptText(text)')).toHaveLength(1)
+    expect(findReNormalizaciones('commitVisibleTranscript(cleanForSpeech(wakeAnalysis.afterWake))')).toHaveLength(1)
+    expect(findReNormalizaciones('commitVisibleTranscript(cleanForSpeech(phrase))')).toHaveLength(0)
+    expect(findReNormalizaciones('// normalizeTranscriptText(text)')).toHaveLength(0)
   })
 })

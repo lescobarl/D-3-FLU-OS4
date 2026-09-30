@@ -20,7 +20,7 @@ describe('una locución → una fila de usuario por turno', () => {
     });
 
     it('el commit temprano y el final no duplican: completan el hablante', () => {
-        commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy' });
+        commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy', turnId: 1 });
         expect(userRows()).toHaveLength(1);
         expect(userRows()[0].speakerName).toBeUndefined();
 
@@ -32,20 +32,20 @@ describe('una locución → una fila de usuario por turno', () => {
             timestamp: Date.now(),
         });
 
-        commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy', speakerName: 'Hablante 1' });
+        commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy', speakerName: 'Hablante 1', turnId: 1 });
         expect(userRows()).toHaveLength(1);
         expect(userRows()[0].speakerName).toBe('Hablante 1');
     });
 
     it('un turno nuevo (tras la respuesta de FLU) sí agrega otra fila', () => {
-        commitUserTurnRow({ text: 'Okay flu pon la alarma', speakerName: 'Hablante 1' });
+        commitUserTurnRow({ text: 'Okay flu pon la alarma', speakerName: 'Hablante 1', turnId: 1 });
         useIntegrationStore.getState().addConversationEntry({
             id: 'flu-1',
             role: 'flu',
             text: 'Listo.',
             timestamp: Date.now(),
         });
-        commitUserTurnRow({ text: 'Okay flu pon la alarma', speakerName: 'Hablante 1' });
+        commitUserTurnRow({ text: 'Okay flu pon la alarma', speakerName: 'Hablante 1', turnId: 2 });
         expect(userRows()).toHaveLength(2);
     });
 });
@@ -75,25 +75,25 @@ describe('una locución → una fila (el fast-path de estado no reescribe la fil
 
     it('temprano + efecto de fast-path + final = 1 fila, con la wake y con hablante', () => {
         // 1) commit temprano del turno (transcripción visible de inmediato).
-        commitUserTurnRow({ text: LOCUCION });
+        commitUserTurnRow({ text: LOCUCION, turnId: 1 });
         // 2) efecto del fast-path de estado: reenvía la MISMA locución canónica.
-        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1' });
+        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1', turnId: 1 });
         // 3) commit final del turno.
-        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1' });
+        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1', turnId: 1 });
 
         expect(userRows()).toHaveLength(1);
         expect(userRows()[0].text).toBe(LOCUCION);
         expect(userRows()[0].speakerName).toBe('Hablante 1');
     });
 
-    it('el escritor deduplica por TEXTO: dos textos distintos en un turno = dos filas', () => {
-        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1' });
-        // Reenviar la re-derivación (sin wake) duplica: por eso el turno tiene un
-        // texto único y el fast-path debe reenviar ESE, no uno derivado.
-        commitUserTurnRow({ text: RE_DERIVADA, speakerName: 'Hablante 1' });
+    it('el MISMO turno no abre fila aunque el fast-path reenvíe un texto derivado', () => {
+        commitUserTurnRow({ text: LOCUCION, speakerName: 'Hablante 1', turnId: 1 });
+        // Reenviar la re-derivación (sin wake) del MISMO turno sigue siendo la
+        // misma locución: la fila se reutiliza y conserva el texto más completo.
+        commitUserTurnRow({ text: RE_DERIVADA, speakerName: 'Hablante 1', turnId: 1 });
 
-        expect(userRows()).toHaveLength(2);
-        expect(userRows().map((row) => row.text)).toEqual([LOCUCION, RE_DERIVADA]);
+        expect(userRows()).toHaveLength(1);
+        expect(userRows()[0].text).toBe(LOCUCION);
     });
 });
 
@@ -122,11 +122,12 @@ describe('eco de la wake: una sola locucion (con wake) y una sola fila', () => {
 
     it('commit crudo + commit del turno = 1 fila con la wake', () => {
         // 1) commit de la emision cruda (eco incluido).
-        commitUserTurnRow({ text: resolveTurnCommitPhrase({ capture: ECO }) });
+        commitUserTurnRow({ text: resolveTurnCommitPhrase({ capture: ECO }), turnId: 1 });
         // 2) commit temprano/final del turno: misma frase canonica + respaldo.
         commitUserTurnRow({
             text: resolveTurnCommitPhrase({ capture: ECO, fallback: POST_WAKE }),
             speakerName: 'Hablante 1',
+            turnId: 1,
         });
 
         const rows = userRows();

@@ -30,47 +30,47 @@ beforeEach(() => {
 
 describe('commitUserTurnRow — un solo escritor de la fila del usuario', () => {
     it('temprano → cruda → final deja UNA sola fila', () => {
-        commitUserTurnRow({ text: FRASE });                       // commit temprano
-        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1' }); // emisión cruda
-        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1' }); // commit final
+        commitUserTurnRow({ text: FRASE, turnId: 1 });                       // commit temprano
+        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', turnId: 1 }); // emisión cruda
+        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', turnId: 1 }); // commit final
         const rows = history().filter((e) => e.role === 'user');
         expect(rows).toHaveLength(1);
         expect(rows[0].text).toBe(FRASE);
     });
 
     it('emisión que crece REEMPLAZA la fila (1 fila con el texto final)', () => {
-        commitUserTurnRow({ text: 'okay flow', speakerName: 'Hablante 1', replaceLast: true });
-        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', replaceLast: true });
+        commitUserTurnRow({ text: 'okay flow', speakerName: 'Hablante 1', replaceLast: true, turnId: 1 });
+        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', replaceLast: true, turnId: 1 });
         const rows = history().filter((e) => e.role === 'user');
         expect(rows).toHaveLength(1);
         expect(rows[0].text).toBe(FRASE);
     });
 
     it('el commit final completa el hablante sin agregar fila', () => {
-        commitUserTurnRow({ text: FRASE });                              // sin hablante
-        commitUserTurnRow({ text: FRASE, speakerName: 'Luis' });         // completa
+        commitUserTurnRow({ text: FRASE, turnId: 1 });                              // sin hablante
+        commitUserTurnRow({ text: FRASE, speakerName: 'Luis', turnId: 1 });         // completa
         const rows = history().filter((e) => e.role === 'user');
         expect(rows).toHaveLength(1);
         expect(rows[0].speakerName).toBe('Luis');
     });
 
     it('tras la respuesta de FLU, la misma frase es fila NUEVA (turno distinto)', () => {
-        commitUserTurnRow({ text: FRASE, speakerName: 'Luis' });
+        commitUserTurnRow({ text: FRASE, speakerName: 'Luis', turnId: 1 });
         useIntegrationStore.getState().addConversationEntry({
             id: 'flu-1', role: 'flu', text: 'Listo', timestamp: Date.now(), sentiment: 'neutral',
         });
-        commitUserTurnRow({ text: FRASE, speakerName: 'Luis' });
+        commitUserTurnRow({ text: FRASE, speakerName: 'Luis', turnId: 2 });
         expect(history().filter((e) => e.role === 'user')).toHaveLength(2);
     });
 
-    it('frases distintas en el mismo turno son filas distintas', () => {
-        commitUserTurnRow({ text: FRASE, speakerName: 'Luis' });
-        commitUserTurnRow({ text: 'okay flow pon una alarma', speakerName: 'Luis' });
+    it('dos locuciones distintas (turnos distintos) son filas distintas', () => {
+        commitUserTurnRow({ text: FRASE, speakerName: 'Luis', turnId: 1 });
+        commitUserTurnRow({ text: 'okay flow pon una alarma', speakerName: 'Luis', turnId: 2 });
         expect(history().filter((e) => e.role === 'user')).toHaveLength(2);
     });
 
     it('texto vacío no escribe nada', () => {
-        commitUserTurnRow({ text: '   ' });
+        commitUserTurnRow({ text: '   ', turnId: 1 });
         expect(history()).toHaveLength(0);
     });
 });

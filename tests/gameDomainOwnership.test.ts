@@ -219,23 +219,24 @@ describe('6. una locucion = una fila (reemision que crece)', () => {
     beforeEach(() => useIntegrationStore.getState().resetConversationHistory());
 
     test('la reemision de 18:12:06 no abre una segunda fila', () => {
-        commitUserTurnRow({ text: 'Okay Flow empiezas' });
-        commitUserTurnRow({ text: 'Okay Flow empiezas Okay Flow empieza tu' });
+        commitUserTurnRow({ text: 'Okay Flow empiezas', turnId: 1 });
+        commitUserTurnRow({ text: 'Okay Flow empiezas Okay Flow empieza tu', turnId: 1 });
         expect(userRows()).toHaveLength(1);
         expect(userRows()[0].text).toBe('Okay Flow empiezas Okay Flow empieza tu');
     });
 
     test('la reemision de 18:12:34 (eco + frase) no abre una segunda fila', () => {
-        commitUserTurnRow({ text: 'o prefieres que te cuente algo mas esta' });
+        commitUserTurnRow({ text: 'o prefieres que te cuente algo mas esta', turnId: 2 });
         commitUserTurnRow({
             text: 'o prefieres que te cuente algo mas esta Okay flu estabamos jugando Adivina quien',
+            turnId: 2,
         });
         expect(userRows()).toHaveLength(1);
     });
 
-    test('una locucion DISTINTA del mismo turno si es otra fila', () => {
-        commitUserTurnRow({ text: 'Okay Flow empiezas' });
-        commitUserTurnRow({ text: 'Okay Flow pon la alarma' });
+    test('una locucion DISTINTA (turno distinto) si es otra fila', () => {
+        commitUserTurnRow({ text: 'Okay Flow empiezas', turnId: 3 });
+        commitUserTurnRow({ text: 'Okay Flow pon la alarma', turnId: 4 });
         expect(userRows()).toHaveLength(2);
     });
 });

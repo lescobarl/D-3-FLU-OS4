@@ -11,13 +11,28 @@
 // nombre; (b) el control inverso: una voz DISTINTA no hereda el nombre.
 // ============================================================
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization';
+import {
+    clearSessionPrimarySpeaker,
+    setSessionPrimarySpeaker,
+} from '../src/voice/lib/sessionPrimarySpeaker';
 
-/** El hook fija el primario de sesion al oir la presentacion (mismo criterio del guard). */
-export function hookSetsSessionPrimary(src: string): boolean {
-    return /if \(introducedName && isProperSpeakerName\(introducedName\)\) sessionPrimarySpeakerRef\.current = introducedName/.test(
-        src,
-    );
+const hookSource = () =>
+    readFileSync(join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'), 'utf8');
+
+/**
+ * El hook enruta la presentacion por voz al DUENO UNICO del primario
+ * (`setSessionPrimarySpeaker`, fuente 'presented'): ya no escribe el ref a mano.
+ */
+export function hookRoutesPresentedToOwner(src: string): boolean {
+    return /setSessionPrimarySpeaker\(sessionPrimarySpeakerRef,\s*introducedName,\s*'presented'\)/.test(src);
+}
+
+/** Escritores DIRECTOS del ref en un fuente (debe ser 0: el dueno es el modulo). */
+export function directSessionPrimaryWrites(src: string): number {
+    return (src.match(/sessionPrimarySpeakerRef\.current\s*=/g) || []).length;
 }
 
 const vozA = Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.1));
@@ -59,21 +74,66 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
         expect(otra).not.toBe('Luis');
     });
 
-    it('GUARD: el hook fija el primario de sesion al detectar la presentacion por voz', async () => {
-        const fs = await import('node:fs');
-        const path = await import('node:path');
-        const hook = fs.readFileSync(
-            path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
-            'utf8',
-        );
-        expect(hookSetsSessionPrimary(hook)).toBe(true);
+    it('GUARD: el hook enruta la presentacion por voz al dueno unico del primario', () => {
+        expect(hookRoutesPresentedToOwner(hookSource())).toBe(true);
+    });
+
+    it('GUARD: no queda ningun escritor DIRECTO del ref en src (dueno unico)', () => {
+        expect(directSessionPrimaryWrites(hookSource())).toBe(0);
+        expect(
+            directSessionPrimaryWrites(
+                readFileSync(join(process.cwd(), 'src', 'voice', 'lib', 'turnSpeakerCommit.js'), 'utf8'),
+            ),
+        ).toBe(0);
     });
 });
 
 // P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
 describe('identidad de hablante - el detector no es decorativo', () => {
-    it('marca el hook que fija el primario y no el que no lo hace', () => {
-        expect(hookSetsSessionPrimary('if (introducedName && isProperSpeakerName(introducedName)) sessionPrimarySpeakerRef.current = introducedName')).toBe(true)
-        expect(hookSetsSessionPrimary('const x = introducedName')).toBe(false)
+    it('marca el hook que enruta la presentacion y no el que la ignora', () => {
+        expect(hookRoutesPresentedToOwner("setSessionPrimarySpeaker(sessionPrimarySpeakerRef, introducedName, 'presented')")).toBe(true)
+        expect(hookRoutesPresentedToOwner('const x = introducedName')).toBe(false)
+        expect(directSessionPrimaryWrites('sessionPrimarySpeakerRef.current = name')).toBe(1)
+        expect(directSessionPrimaryWrites('setSessionPrimarySpeaker(ref, name)')).toBe(0)
     })
 })
+
+describe('precedencia del primario de sesion - decide el dueno unico', () => {
+    const nuevoRef = () => ({ current: '' });
+
+    it('presented MANDA: el participante no lo pisa', () => {
+        const ref = nuevoRef();
+        expect(setSessionPrimarySpeaker(ref, 'Luis', 'presented')).toBe(true);
+        expect(setSessionPrimarySpeaker(ref, 'Juan', 'participant')).toBe(false);
+        expect(ref.current).toBe('Luis');
+    });
+
+    it('participant siembra y presented lo puede corregir', () => {
+        const ref = nuevoRef();
+        expect(setSessionPrimarySpeaker(ref, 'Juan', 'participant')).toBe(true);
+        expect(setSessionPrimarySpeaker(ref, 'Luis', 'presented')).toBe(true);
+        expect(ref.current).toBe('Luis');
+    });
+
+    it('resolved solo RELLENA si esta vacio', () => {
+        const ref = nuevoRef();
+        expect(setSessionPrimarySpeaker(ref, 'Luis', 'resolved')).toBe(true);
+        expect(setSessionPrimarySpeaker(ref, 'Juan', 'resolved')).toBe(false);
+        expect(ref.current).toBe('Luis');
+    });
+
+    it('no acepta etiquetas automaticas ni vacio', () => {
+        const ref = nuevoRef();
+        expect(setSessionPrimarySpeaker(ref, 'Hablante 1', 'presented')).toBe(false);
+        expect(setSessionPrimarySpeaker(ref, '', 'participant')).toBe(false);
+        expect(ref.current).toBe('');
+    });
+
+    it('clear limpia el ref y su rango (sesion nueva vuelve a sembrar)', () => {
+        const ref = nuevoRef();
+        setSessionPrimarySpeaker(ref, 'Luis', 'presented');
+        clearSessionPrimarySpeaker(ref);
+        expect(ref.current).toBe('');
+        expect(setSessionPrimarySpeaker(ref, 'Juan', 'participant')).toBe(true);
+    });
+});
