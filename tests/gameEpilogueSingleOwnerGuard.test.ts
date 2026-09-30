@@ -40,9 +40,11 @@ const DIR = 'src/core/games';
 /** El dueno del epilogo: se excluye porque es donde el objeto DEBE estar. */
 const OWNER = 'gameUtils.ts';
 
-/** Objeto literal con `prompt:` seguido de `gameOver: true` (el epilogo a mano). */
+/** Objeto literal con `prompt` seguido de `gameOver: true` (el epilogo a mano).
+ *  Caza las DOS formas: `prompt:` y la abreviada `prompt,` (por la que se
+ *  colaban ahorcado y memoriaSecuencias, que el detector anterior no veia). */
 export function countInlineEpilogue(src: string): number {
-    return (src.match(/\{\s*\n\s*prompt:[\s\S]{0,400}?gameOver:\s*true/g) || []).length;
+    return (src.match(/\{\s*\n\s*prompt[:,][\s\S]{0,400}?gameOver:\s*true/g) || []).length;
 }
 
 function engines(): string[] {
