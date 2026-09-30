@@ -14,6 +14,31 @@ import { resolveTurnArtifactKind } from '../src/lib/turnArtifactKind';
 
 const APP_SRC = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
 
+/** Predicado y marcas de la regla (extraidos para poder probar el DETECTOR, P2.4). */
+const clearDeImagenPorTurno = (src: string): string[] =>
+    src
+        .split(/\r?\n/)
+        .filter((line) => /workspaceImage\.clear\(/.test(line) && !line.includes('`'));
+
+const MARCAS_APP_TURNO = [
+    'integrationStore.setWorkspaceArtifact(null);',
+    'const turnKind = resolveTurnArtifactKind(workspace?.tipo, navegacion?.comando);',
+    'setTurnFocus({ kind: turnKind, seq: turnFocusSeqRef.current });',
+];
+
+const PROHIBIDOS_APP_TURNO = ["turnKind === 'image'", 'const focusKindNow'];
+
+describe('P2.4 turnArtifactKindPerTurn - el detector no es decorativo', () => {
+    it('marca la limpieza de imagen y la marca ausente en un App sintetico', () => {
+        expect(clearDeImagenPorTurno('a\nworkspaceImage.clear()\nb')).toHaveLength(1);
+        expect(clearDeImagenPorTurno('a\nb')).toHaveLength(0);
+        const completo = [MARCAS_APP_TURNO[0], MARCAS_APP_TURNO[1], MARCAS_APP_TURNO[2]].join('\n');
+        expect(MARCAS_APP_TURNO.every((m) => completo.includes(m))).toBe(true);
+        expect(MARCAS_APP_TURNO[1].includes('resolveTurnArtifactKind')).toBe(true);
+        expect(PROHIBIDOS_APP_TURNO.some((p) => completo.includes(p))).toBe(false);
+    });
+});
+
 describe('resolveTurnArtifactKind — tipo de objeto que produce el turno', () => {
     it('un tipo visual produce una imagen', () => {
         expect(resolveTurnArtifactKind('image_prompt', undefined)).toBe('image');
@@ -49,26 +74,21 @@ describe('App — la limpieza por turno está acotada al tipo del turno', () => 
         // con un guard, fue QUITARLA: su ruta unica (generateFromContract ->
         // beginImageRequest) ya invalida la anterior. Este test falsa la vuelta
         // atras: si reaparece una limpieza por turno, cae.
-        const clearCalls = APP_SRC.split(/\r?\n/).filter(
-            (line) => /workspaceImage\.clear\(/.test(line) && !line.includes('`'),
-        );
-        expect(clearCalls).toHaveLength(0);
+        expect(clearDeImagenPorTurno(APP_SRC)).toHaveLength(0);
     });
 
     it('el objeto de tipo artifact se reemplaza por su ruta unica, no por un guard de tipo', () => {
         // El artifact (objeto 'todo') si se limpia por turno: es el texto del turno.
-        expect(APP_SRC).toContain('integrationStore.setWorkspaceArtifact(null);');
+        expect(APP_SRC).toContain(MARCAS_APP_TURNO[0]);
         // Y la limpieza NO puede depender de haber pedido imagen: eso era el bug.
-        expect(APP_SRC).not.toContain('turnKind === \'image\'');
+        expect(APP_SRC).not.toContain(PROHIBIDOS_APP_TURNO[0]);
     });
 
     it('el tipo del turno sale del motor único (no recopiado en App)', () => {
-        expect(APP_SRC).toContain(
-            'const turnKind = resolveTurnArtifactKind(workspace?.tipo, navegacion?.comando);',
-        );
-        expect(APP_SRC).toContain('setTurnFocus({ kind: turnKind, seq: turnFocusSeqRef.current });');
+        expect(APP_SRC).toContain(MARCAS_APP_TURNO[1]);
+        expect(APP_SRC).toContain(MARCAS_APP_TURNO[2]);
         // La derivación vieja (tres copias del vocabulario en un ternario) no
         // puede volver: sería un segundo criterio de tipo.
-        expect(APP_SRC).not.toContain('const focusKindNow');
+        expect(APP_SRC).not.toContain(PROHIBIDOS_APP_TURNO[1]);
     });
 });

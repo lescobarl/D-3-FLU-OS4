@@ -30,3 +30,14 @@ describe('C8 conversacionEscritorUnico — un solo escritor de conversación', (
     ).toHaveLength(1)
   })
 })
+
+/** P2.4 - prueba de DETECTOR: el predicado del guard marca una entrada infractora
+ *  sintetica y PERDONA una limpia. Si alguien lo neutra (regex vacio, `true`...),
+ *  este caso cae; el bucle sobre src que lo aplica lo cubre la asercion de arriba. */
+describe('P2.4 conversacionEscritorUnicoGuard - el detector no es decorativo', () => {
+  it('marca una entrada infractora y no marca una limpia', () => {
+    const pred = (texto: string) => RE.test(texto)
+    expect(pred("fluDb.conversations.put(row)")).toBe(true)
+    expect(pred("fluDb.notes.put(row)")).toBe(false)
+  })
+})

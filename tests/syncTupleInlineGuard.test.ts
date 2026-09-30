@@ -6,7 +6,8 @@
 // inline con `updated_at: new Date().toISOString()` repartidas por src.
 // Inspecciona el CÓDIGO REAL (fs + regex) y lista `archivo:simbolo:linea`.
 // ============================================================
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSyncTuple } from '../src/core/db/syncTuple'
@@ -36,10 +37,10 @@ const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line)
  * definición/uso de `newSyncTuple`/`bumpSync` y por cada `updated_at` inline,
  * fuera de la fuente canónica.
  */
-export function findSyncTupleViolations(): string[] {
+export function findSyncTupleViolations(root: string = SRC): string[] {
   const violations: string[] = []
-  for (const file of walk(SRC)) {
-    const rel = relative(ROOT, file).replace(/\\/g, '/')
+  for (const file of walk(root)) {
+    const rel = relative(root, file).replace(/\\/g, '/')
     if (rel === CANONICAL) continue
     readFileSync(file, 'utf8')
       .split(/\r?\n/)
@@ -83,5 +84,29 @@ describe('buildSyncTuple — comportamiento canónico (§3.7)', () => {
     const stillDeleted = buildSyncTuple({ ...first, deleted: true }, t0 + 2000)
     expect(stillDeleted.revision).toBe(2)
     expect(stillDeleted.deleted).toBe(true)
+  })
+})
+
+/** P2.4 - prueba de DETECTOR: escribe entradas sinteticas en un directorio temporal
+ *  y comprueba que el detector MARCA la infractora y PERDONA la limpia. */
+function dirSintetico(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'p24-'))
+  for (const [n, c] of Object.entries(files)) writeFileSync(join(dir, n), c)
+  return dir
+}
+
+describe('P2.4 syncTupleInlineGuard - el detector no es decorativo', () => {
+  it('marca la tupla inline sintetica y perdona la canonica', () => {
+    const dir = dirSintetico({
+      'infractor.ts': 'const t = newSyncTuple(x)',
+      'limpio.ts': 'const t = buildSyncTuple(x)',
+    })
+    try {
+      const v = findSyncTupleViolations(dir)
+      expect(v).toHaveLength(1)
+      expect(v[0]).toContain('infractor.ts')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

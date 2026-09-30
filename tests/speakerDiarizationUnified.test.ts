@@ -8,7 +8,8 @@
 //   G2  — UN solo resolver de hablante (hoy: resolveConversationSpeaker ×2 + assignSpeakerStrictCosine).
 //   G3  — sin "Hablante 1" hardcodeado fuera de config (debe venir de FLU_CONFIG).
 // ============================================================
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -23,23 +24,23 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-function grepExportFn(names: string[]): string[] {
+function grepExportFn(names: string[], root: string = join(ROOT, 'src')): string[] {
   const re = new RegExp(`export\\s+function\\s+(${names.join('|')})\\b`)
   const out: string[] = []
-  for (const f of walk(join(ROOT, 'src'))) {
+  for (const f of walk(root)) {
     readFileSync(f, 'utf8')
       .split(/\r?\n/)
       .forEach((line, i) => {
-        if (re.test(line)) out.push(`${relative(ROOT, f).replace(/\\/g, '/')}:${i + 1}`)
+        if (re.test(line)) out.push(`${relative(root, f).replace(/\\/g, '/')}:${i + 1}`)
       })
   }
   return out
 }
 
-function grepLiteral(lit: string, exclude: RegExp): string[] {
+function grepLiteral(lit: string, exclude: RegExp, root: string = join(ROOT, 'src')): string[] {
   const out: string[] = []
-  for (const f of walk(join(ROOT, 'src'))) {
-    const rf = relative(ROOT, f).replace(/\\/g, '/')
+  for (const f of walk(root)) {
+    const rf = relative(root, f).replace(/\\/g, '/')
     if (exclude.test(rf)) continue
     readFileSync(f, 'utf8')
       .split(/\r?\n/)
@@ -70,5 +71,28 @@ describe('diarización — un solo motor, sin duplicados ni hardcode', () => {
   it('G3: sin "Hablante 1" hardcodeado fuera de config', () => {
     const hits = grepLiteral('Hablante 1', /fluConfig\.js$/)
     expect(hits, `"Hablante 1" quemado (N=${hits.length}); debe vivir en FLU_CONFIG:\n  ${hits.join('\n  ')}`).toHaveLength(0)
+  })
+})
+
+/** P2.4 - prueba de DETECTOR: escribe entradas sinteticas en un directorio temporal
+ *  y comprueba que el detector MARCA la infractora y PERDONA la limpia. */
+function dirSintetico(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'p24-'))
+  for (const [n, c] of Object.entries(files)) writeFileSync(join(dir, n), c)
+  return dir
+}
+
+describe('P2.4 speakerDiarizationUnified - el detector no es decorativo', () => {
+  it('marca un export duplicado sintetico y el literal quemado', () => {
+    const dir = dirSintetico({
+      'a.ts': 'export function compareAudioSignatures(a, b) {}',
+      'b.ts': "const etiqueta = 'Hablante 1'",
+    })
+    try {
+      expect(grepExportFn(['compareAudioSignatures', 'compareCosineSignatures'], dir)).toHaveLength(1)
+      expect(grepLiteral('Hablante 1', /nada-que-excluya/, dir)).toHaveLength(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

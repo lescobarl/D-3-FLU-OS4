@@ -34,3 +34,14 @@ describe('C30 indexedDbSingle — una sola base IndexedDB propia', () => {
     ).toEqual([])
   })
 })
+
+/** P2.4 - prueba de DETECTOR: el predicado del guard marca una entrada infractora
+ *  sintetica y PERDONA una limpia. Si alguien lo neutra (regex vacio, `true`...),
+ *  este caso cae; el bucle sobre src que lo aplica lo cubre la asercion de arriba. */
+describe('P2.4 indexedDbSingleGuard - el detector no es decorativo', () => {
+  it('marca una entrada infractora y no marca una limpia', () => {
+    const pred = (texto: string) => RE.test(texto)
+    expect(pred("const db = indexedDB.open('otra')")).toBe(true)
+    expect(pred("const db = new Dexie('flu')")).toBe(false)
+  })
+})

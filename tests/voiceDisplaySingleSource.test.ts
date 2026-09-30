@@ -10,7 +10,8 @@
  *   C4  `selectVisiblePhrase` es el ÚNICO selector de frase visible.
  */
 import { describe, expect, it } from 'vitest'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
@@ -85,5 +86,28 @@ describe('voiceDisplaySingleSource — 1 sola derivación de frase visible (§9.
     const uses = count(/selectVisiblePhrase\s*\(/, FILES) - definition
     expect(definition, `selectVisiblePhrase debe definirse 1 vez (N=${definition})`).toBe(1)
     expect(uses, `selectVisiblePhrase debe usarse al menos 1 vez (N=${uses})`).toBeGreaterThanOrEqual(1)
+  })
+})
+
+/** P2.4 - prueba de DETECTOR: escribe entradas sinteticas en un directorio temporal
+ *  y comprueba que el detector MARCA la infractora y PERDONA la limpia. */
+function dirSintetico(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'p24-'))
+  for (const [n, c] of Object.entries(files)) writeFileSync(join(dir, n), c)
+  return dir
+}
+
+describe('P2.4 voiceDisplaySingleSource - el detector no es decorativo', () => {
+  it('marca la derivacion muerta sintetica y ve el selector canonico', () => {
+    const dir = dirSintetico({
+      'infractor.ts': 'const phraseDisplay = x',
+      'limpio.ts': 'const visible = selectVisiblePhrase(row)',
+    })
+    try {
+      expect(grep(/phraseDisplay/, walk(dir))).toHaveLength(1)
+      expect(grep(/selectVisiblePhrase\s*\(/, walk(dir))).toHaveLength(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

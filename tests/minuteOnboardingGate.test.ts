@@ -43,6 +43,22 @@ import { useMinuteKnowledge } from '../src/hooks/useMinuteKnowledge';
 
 beforeEach(() => minutesMock.__reset());
 
+/** Marcas exigidas a App.tsx (extraidas para poder probar el DETECTOR, P2.4). */
+const MARCAS_APP_ONBOARDING: RegExp[] = [
+    /useMinuteKnowledge\(realParticipantId\)/,
+    /sessionReady\s*&&\s*activeParticipantId/,
+    /setSessionReady\(true\)/,
+];
+
+describe('P2.4 minuteOnboardingGate - el detector no es decorativo', () => {
+    it('marca la marca ausente en un App sintetico mutilado', () => {
+        const completo = 'useMinuteKnowledge(realParticipantId)\nconst realParticipantId = sessionReady && activeParticipantId\nsetSessionReady(true)';
+        const mutilado = 'useMinuteKnowledge(realParticipantId)\nsetSessionReady(true)';
+        expect(MARCAS_APP_ONBOARDING.every((re) => re.test(completo))).toBe(true);
+        expect(MARCAS_APP_ONBOARDING.every((re) => re.test(mutilado))).toBe(false);
+    });
+});
+
 describe('minuta — no se lee sin usuario (antes/después del onboarding)', () => {
     it('sin usuario real NO lee la tabla de minutas', async () => {
         const { result } = renderHook(() => useMinuteKnowledge(undefined));
@@ -61,12 +77,9 @@ describe('minuta — no se lee sin usuario (antes/después del onboarding)', () 
 describe('minuta — App usa el usuario REAL (post-onboarding)', () => {
     const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
 
-    it('pasa realParticipantId, no el centinela', () => {
-        expect(app).toContain('useMinuteKnowledge(realParticipantId)');
-    });
-
-    it('realParticipantId exige sessionReady (se enciende al completar onboarding)', () => {
-        expect(app).toMatch(/sessionReady\s*&&\s*activeParticipantId/);
-        expect(app).toContain('setSessionReady(true)');
+    it('pasa realParticipantId y exige sessionReady (se enciende al completar onboarding)', () => {
+        for (const re of MARCAS_APP_ONBOARDING) {
+            expect(app, `falta en App.tsx: ${re}`).toMatch(re);
+        }
     });
 });

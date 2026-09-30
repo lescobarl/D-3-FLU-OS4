@@ -7,7 +7,8 @@
  * `archivo:línea:contenido`.
  */
 import { describe, expect, it } from 'vitest'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
@@ -140,5 +141,28 @@ describe('voiceSingleEngineGuard — 1 motor + 1 fuente de verdad', () => {
       viaHelper.length,
       `computeTurnSignature debe consumirse (N=${viaHelper.length})`,
     ).toBeGreaterThanOrEqual(1)
+  })
+})
+
+/** P2.4 - prueba de DETECTOR: escribe entradas sinteticas en un directorio temporal
+ *  y comprueba que el detector MARCA la infractora y PERDONA la limpia. */
+function dirSintetico(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'p24-'))
+  for (const [n, c] of Object.entries(files)) writeFileSync(join(dir, n), c)
+  return dir
+}
+
+describe('P2.4 voiceSingleEngineGuard - el detector no es decorativo', () => {
+  it('grep marca la adquisicion sintetica y no ve el motor Whisper', () => {
+    const dir = dirSintetico({
+      'infractor.js': 'engine.acquireSpeechRecognition(cb)',
+      'limpio.js': 'const x = 1',
+    })
+    try {
+      expect(grep(/acquireSpeechRecognition\s*\(/, walk(dir))).toHaveLength(1)
+      expect(grep(/createWhisperRecognitionEngine/, walk(dir))).toHaveLength(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

@@ -26,3 +26,14 @@ describe('C32 longTermMemoryDelete — borrado lógico', () => {
     ).toEqual([])
   })
 })
+
+/** P2.4 - prueba de DETECTOR: el predicado del guard marca una entrada infractora
+ *  sintetica y PERDONA una limpia. Si alguien lo neutra (regex vacio, `true`...),
+ *  este caso cae; el bucle sobre src que lo aplica lo cubre la asercion de arriba. */
+describe('P2.4 longTermMemoryDeleteGuard - el detector no es decorativo', () => {
+  it('marca una entrada infractora y no marca una limpia', () => {
+    const pred = (texto: string) => RE.test(texto)
+    expect(pred("await store.delete(id)")).toBe(true)
+    expect(pred("await store.update(id, { deleted: true })")).toBe(false)
+  })
+})
