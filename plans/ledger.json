@@ -1053,21 +1053,27 @@
     },
     {
       "id": "P7.96",
-      "estado": "in_progress",
+      "estado": "done",
       "titulo": "Vocabulario de SALTO triplicado en 3 motores de juegos (copia literal de 6 marcos)",
       "evidencia": "src/core/games/gameUtils.ts:64 SKIP_CORE_FRAMES (dueno unico); adivinaCancion.ts:92, memoriaSecuencias.ts:34 y repiteTraduce.ts:47 componen con [...SKIP_CORE_FRAMES]. Medido antes: 3 listas literales identicas entre si y distintos de los otros 17 motores, que difieren a proposito."
     },
     {
       "id": "P7.97",
-      "estado": "in_progress",
+      "estado": "done",
       "titulo": "Fetch crudo SIN deadline a proveedor externo (fal.ai) y deadline triplicado en el proxy local",
       "evidencia": "src/voice/lib/gemini.js:1774 (submit) y :1802/:1808 (poll y descarga) por fetchTextEngine con TIMEOUT_POLICY_MS.falVideoFetchAbort y Math.max(1, deadline - Date.now()); src/voice/lib/imageGeneration.js:26 postJsonToProxy (AbortController unico, antes 3 copias en :155,:253,:344)."
     },
     {
       "id": "P7.98",
-      "estado": "in_progress",
+      "estado": "done",
       "titulo": "console.* como registro de un catch (la constraint exige logCaughtError) en los ficheros limpios",
       "evidencia": "src/app/gameActions.ts:72 src/components/BrowserProfilesPanel.tsx:96 src/components/ParticipantsPanel.tsx:104,:112 src/core/branding/useSeasonalBranding.ts:194 src/services/musicPlayer.ts:94,:150 src/voice/hooks/useFluVoiceAssistant.js:3819 por logCaughtError; src/voice/lib/fluTrace.js:107 con omision DECLARADA (ignorado:) por ser sink solo-dev."
+    },
+    {
+      "id": "P7.99",
+      "estado": "blocked",
+      "titulo": "Endurecer catchSilenciosoGuard (console.* no cuenta como registro) BLOQUEADO por la propia barrera 0.24 + guardMutation",
+      "evidencia": "Medido con la misma funcion readersOf del guard: src/App.tsx tiene 34 guards de texto lectores y solo 1 tiene prueba de detector; src/hooks/** tiene 5. 0.24 exige que todo guard que lee un fichero tocado este en la puerta, y guardMutationGuard exige prueba de detector para todo guard de lint:guards con baseline shrink-only: no se pueden meter sin volverlos teatro. Via de desbloqueo: (1) dar prueba de detector a esos guards (trabajo aparte, 33 ficheros) o (2) declararlos en EXEMPT con motivo medido, lo que neutra 0.24 para la raiz de src. Mientras tanto el endurecimiento no se aplica porque la puerta nace ROJA con los 36 sitios de P7.98."
     }
   ],
   "done": [
@@ -2138,6 +2144,24 @@
       "commit": "a35b9fa",
       "titulo": "Auditoria de CODIGO: un dueno por DATO en el dominio conversacional (id del turno, criterio de fila, primario de sesion y conjunto de afirmaciones)",
       "evidencia": "AUDITORIA DE CODIGO (no documental; el resumen del chat NO se uso como fuente: se midio con git y Node directo), en UNA sola pasada, sin respaldo, sin parches y sin hard code. HALLAZGO 1 (real, arreglado): el id del TURNO tenia DOS acunadores (finalizeTurnCommit en conversationStreamCommit.js y el camino de diarizacion en useFluVoiceAssistant.js) y la fila del usuario se reutilizaba por DOS criterios (identidad de turno + POSICION con phrasesRelate, que seguia vivo en conversationTurnRow.ts); ese segundo criterio era el que permitia abrir FILA DUPLICADA al reemitir una locucion. AHORA el id nace al ABRIR el turno (ensureTurnId, una sola vez), viaja por los 3 puntos de escritura (commit temprano, resolucion y log crudo), se elimino el segundo contador turnCommitIdRef y se retiro la rama posicional: turnId es obligatorio en la fila. HALLAZGO 2 (real, arreglado): BARE_AFFIRMATION_FRAMES estaba re-enumerado entero en src/core/games/loteria.ts ademas de en src/core/games/gameUtils.ts (dos duenos del MISMO conjunto; el guard P7.92/93 solo miraba el texto de la presentacion de voz) -> loteria COMPONE desde el dueno unico (mismo valor, mismo comportamiento). HALLAZGO 3 (real, arreglado): sessionPrimarySpeakerRef se escribia desde TRES sitios sin precedencia (el hook via ref, la presentacion y resolvedContract) -> dueno unico src/voice/lib/sessionPrimarySpeaker.js con precedencia declarada presented > participant > resolved. INSTRUMENTO NUEVO: tests/stateOwnershipGuard.test.ts hace la pregunta que la auditoria por CLONES (V18/D0) no puede hacer: por cada dato critico cuenta ESCRITORES y CRITERIOS, con prueba de detector (marca al motor que re-enumera el conjunto y no al que compone; marca al segundo acunador y no al unico). EFECTO COLATERAL CERRADO (medido, no supuesto): al tocar el hook, el criterio 0.24 marco 4 guards que LEEN el hook y estaban FUERA de la barrera (motorNormalizaGuard, sampleRateConfigGuard, voiceLiveSingleWriter, voiceOfflineFallback); entraron en lint:guards y se les dio prueba de detector REAL (predicado extraido y falsificado con entrada infractora), con re-sello DECLARADO de sus hashes por ser endurecimiento y no cambio de criterio. ERROR DE ENTORNO MIO, corregido: el editor convirtio 10 ficheros de LF a CRLF (diff inflado a 15.778 lineas y eolGuard en rojo); se normalizo con el reparador del propio repo (scripts/fix-eol.mjs). Sin el, el gate habria fallado por tamano. Medido al cierre: gate Alcance/tamano/DoD/guard OK; lint:guards 111 ficheros / 1150 casos VERDE; eslint 0; tsc -b 0; ledger:check OK. Alcance real (obligatorio, 0.23): CUBIERTO=un solo dueno del id del turno (nace al abrir, 3 puntos de escritura, sin segundo contador), un solo criterio de fila (sin rama posicional ni phrasesRelate en el escritor), un solo dueno del primario de sesion con precedencia declarada, un solo dueno del conjunto de afirmaciones, guard mecanico con prueba de detector para los 4 datos, los 4 lectores del hook dentro de lint:guards con prueba de detector, gate verde, lint:guards verde, eslint 0, tsc 0, ledger OK. NO CUBIERTO=no queda ningun caso ABIERTO de ruta duplicada en el dominio auditado; lo que sigue abierto NO es codigo: (a) la suite COMPLETA (369 ficheros) no se re-ejecuto en esta sesion porque exige autorizacion expresa (el gate SI corrio su DoD completo); (b) el DoD-producto (pantalla/uso real) sigue pendiente del usuario; (c) no se toco ningun criterio de producto ni instrumento de items ya cerrados salvo el endurecimiento declarado de los 4 guards, y no se toco el contrato inmutable (base d77bbfc, maxFiles 300, maxLines 9200, guard, guardExpect); (d) el anclaje del EOL de .task/contract.json se arreglo a mano porque fix-eol.mjs omite .task/**."
+    },
+    {
+      "id": "P7.96",
+      "commit": "eedf525",
+      "titulo": "Vocabulario de SALTO triplicado en 3 motores de juegos (copia literal de 6 marcos)",
+      "evidencia": "CUBIERTO= src/core/games/gameUtils.ts:64 SKIP_CORE_FRAMES es el dueno UNICO del nucleo de salto compartido; adivinaCancion.ts:92, memoriaSecuencias.ts:34 y repiteTraduce.ts:47 lo componen con [...SKIP_CORE_FRAMES]. Medido antes: las 3 listas eran literales identicos entre si. Los consumidores son de pertenencia (hasAnyToken/hasToken/includes), no de orden -> cero cambio de comportamiento; la puerta (dod, que incluye los tests de esos 3 motores) pasa en verde. NO CUBIERTO= los otros 17 motores conservan su lista propia a proposito (difieren: \"me rindo\", \"otra palabra\"...); la suite COMPLETA (370 ficheros) no se ejecuto (exige autorizacion expresa del dueno, regla de la casa)."
+    },
+    {
+      "id": "P7.97",
+      "commit": "eedf525",
+      "titulo": "Fetch crudo SIN deadline a proveedor externo (fal.ai) y deadline triplicado en el proxy local",
+      "evidencia": "CUBIERTO= dos defectos de red reales: (a) src/voice/lib/gemini.js tenia 3 fetch crudo SIN deadline y CON credencial a fal.ai (submit :1774, poll :1802, descarga :1808) -> ahora por fetchTextEngine (transporte unico) con TIMEOUT_POLICY_MS.falVideoFetchAbort y el presupuesto restante Math.max(1, deadline - Date.now()); (b) src/voice/lib/imageGeneration.js repetia AbortController+setTimeout+clearTimeout en 3 funciones (:155, :253, :344) -> un solo postJsonToProxy (:26) que conserva AbortError porque los trace distinguen *_timeout de fallo generico. Verificado: tsc -b, eslint --max-warnings=0 y task-gate en verde; godFileSize gemini.js 1837/1848 (no crece). NO CUBIERTO= no se probo un timeout REAL contra fal.ai (no se llamo al proveedor) ni se ejecuto la suite completa (370 ficheros) ni e2e."
+    },
+    {
+      "id": "P7.98",
+      "commit": "eedf525",
+      "titulo": "console.* como registro de un catch (la constraint exige logCaughtError) en los ficheros limpios",
+      "evidencia": "CUBIERTO= 8 catches cuyo UNICO registro era console.* pasan a logCaughtError(contexto, error): gameActions.ts:72, BrowserProfilesPanel.tsx:96, ParticipantsPanel.tsx:104 y :112, useSeasonalBranding.ts:194, musicPlayer.ts:94 y :150, useFluVoiceAssistant.js:3819. El sink de trazas solo-dev de fluTrace.js:107 se declara omision deliberada con el mecanismo previsto (comentario ignorado: + motivo) en vez de fingir un registro que en produccion no aplica. De paso se limpio un comentario de useFluVoiceAssistant.js que habia quedado CORRUPTO por una sustitucion automatica anterior. NO CUBIERTO= quedan 36 sitios MEDIDOS con console.* como unico registro y NO son arreglables en esta pasada: viven en src/App.tsx y src/main.tsx (34 guards de texto leen App.tsx y 33 de ellos no tienen prueba de detector) y en src/hooks/** (5 guards lectores). Tocar esos ficheros obliga a meter ~39 guards en lint:guards, y guardMutationGuard (baseline de teatro shrink-only) lo prohibe: la puerta nace ROJA. Registrado como P7.99 (blocked) con la via de desbloqueo medida."
     }
   ]
 }
