@@ -98,7 +98,13 @@ describe('P4.1/P4.6/P4.7 transporte - un origen por dato', () => {
   it('el transporte con deadline es unico: estos consumidores no usan fetch crudo', () => {
     // Hallazgo medido: useWorkspaceSearch no tenia deadline de cliente y musicSearch
     // llevaba su propio AbortController. Los dos delegan ahora en fetchTextEngine.
-    for (const f of ['src/hooks/useWorkspaceSearch.ts', 'src/services/musicSearch.ts']) {
+    // fbxParse se sumo despues (C78): su camino main-thread estaba sin tope aunque el
+    // de worker ya lo tuviera.
+    for (const f of [
+      'src/hooks/useWorkspaceSearch.ts',
+      'src/services/musicSearch.ts',
+      'src/avatar/lib/fbxParse.ts',
+    ]) {
       expect(rawFetchCalls(read(f)), 'fetch crudo en ' + f).toBe(0)
       expect(read(f), f + ' debe usar el transporte compartido').toContain('fetchTextEngine')
     }

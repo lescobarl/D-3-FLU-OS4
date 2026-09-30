@@ -2203,6 +2203,12 @@
       "commit": "ea1c073",
       "titulo": "el transporte guarda tambien las rutas del proxy visual",
       "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=el guard tests/transportSingleOwnerGuard.test.ts suma dos reglas (ruta del proxy visual solo en su dueno; los 2 consumidores con 0 fetch crudos) mas prueba de detector con las cadenas exactas y con lo que no debe marcar (dueno, servidor, comentario); frozen re-sellado por endurecimiento; lint:guards 145 ficheros / 1267 tests OK. NO CUBIERTO=no cambia comportamiento de runtime: es solo instrumento, ninguna regla nueva toca src (va en commit aparte del src, 0.22)."
+    },
+    {
+      "id": "C78",
+      "commit": "376d164",
+      "titulo": "El fetch del FBX lleva deadline: el respaldo main-thread colgaba",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=src/avatar/lib/fbxParse.ts:40 hacia `await fetch(url)` sin deadline. El camino de worker YA estaba acotado por el cliente (fbxWorkerClient aplica REQUEST_TIMEOUT_DEFAULTS.WORKER_MS como tope de la peticion), pero runMainThreadFallback() llama a fetchFbxJson() directo y ahi no habia tope: un servidor que no responde colgaba la carga del modelo. Ahora usa fetchTextEngine(url, {}, WORKER_MS), el mismo limite que el camino de worker, asi que los dos caminos coinciden. Medida posterior: `await fetch(` en src/ queda solo en el propio transporte (src/core/ai/httpClient.ts), en el wrapper deliberado de imageGeneration.js (conserva AbortError para los trace) y en los servidores (src/server/*), que PRODUCEN las respuestas. gate OK; lint:guards 145 ficheros / 1267 tests; tsc OK. allow 297 -> 298 (maxFiles 300). NO CUBIERTO=(a) src/dev/asrLab/AsrLab.tsx:191 sigue con fetch sin deadline a proposito: se declara arnes DEV \"NO produccion\" y esta gateado en main.tsx (isAsrLab), asi que no es ruta de producto. (b) los ternarios de idioma siguen sin fuente unica: 98 sitios en 29 ficheros medidos, no abordados. (c) no se añade guard de texto para este caso: la clase ya queda cubierta por la lista de consumidores sin fetch crudo del guard de transporte."
     }
   ]
 }
