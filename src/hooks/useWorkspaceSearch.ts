@@ -34,6 +34,7 @@ import {
 import { dayKey } from '../lib/dateKey';
 import { postGeminiContract } from '../services/geminiContractClient';
 import { logCaughtError } from '../lib/caughtError';
+import { fetchTextEngine } from '../core/ai/httpClient';
 
 export type SearchLevel = 'simple' | 'detallado' | 'avanzado';
 
@@ -240,7 +241,7 @@ export async function fetchTypeResults(
     params.set('timeout', String(timeoutMs));
     params.set('max', String(maxResults));
     try {
-        const response = await fetch(`${endpoint}?${params.toString()}`);
+        const response = await fetchTextEngine(`${endpoint}?${params.toString()}`, {}, timeoutMs);
         const data = await response.json().catch((e) => { logCaughtError('[catch] src/hooks/useWorkspaceSearch.ts', e); return null; });
         if (response.ok && data?.ok && Array.isArray(data.results)) {
             return {

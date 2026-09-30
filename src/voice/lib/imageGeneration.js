@@ -176,7 +176,7 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
   const promise = (async () => {
     try {
       const response = await postJsonToProxy(
-        '/api/workspace-image',
+        VISUAL_CONFIG.image.proxies.workspaceImage,
         {
           workspace,
           language,
@@ -267,7 +267,7 @@ export async function fetchOpenRouterImageFallback({
   const prompt = buildVisualGenerationPrompt(workspace, language)
   try {
     const response = await postJsonToProxy(
-      '/api/openrouter-image',
+      VISUAL_CONFIG.image.proxies.openrouterImage,
       {
         prompt,
         language,
@@ -351,7 +351,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
   }
   try {
     const response = await postJsonToProxy(
-      '/api/fal-video',
+      VISUAL_CONFIG.image.proxies.falVideo,
       { prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) },
       TIMEOUT_POLICY_MS.falVideoFetchAbort,
     )

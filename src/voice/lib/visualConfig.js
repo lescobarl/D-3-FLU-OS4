@@ -178,6 +178,17 @@ export const VISUAL_CONFIG = {
     cache: {
       ttlMs: 24 * 60 * 60 * 1000,
     },
+    /**
+     * Rutas del proxy local de imagen/video: dueno UNICO del valor.
+     * Los consumidores las importan en vez de re-escribir el literal —
+     * '/api/workspace-image' estaba escrito en servicios y en el pipeline.
+     * Guard: tests/transportSingleOwnerGuard.test.ts.
+     */
+    proxies: {
+      workspaceImage: '/api/workspace-image',
+      openrouterImage: '/api/openrouter-image',
+      falVideo: '/api/fal-video',
+    },
     /** Timeout cliente → POST /api/workspace-image y /api/openrouter-image (evita «Cargando…» infinito). */
     clientFetchTimeoutMs: 100000,
   },

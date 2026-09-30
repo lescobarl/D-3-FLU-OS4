@@ -34,6 +34,7 @@ import { logCaughtError } from '../lib/caughtError';
 import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
 import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
 import { resolveConfiguredTemperature } from './aiTemperature';
+import { VISUAL_CONFIG } from '../voice/lib/visualConfig';
 import {
     BaseAIService,
     type AIVisionAnalysisResult,
@@ -336,7 +337,7 @@ Responde como ${botName}:`;
         language: string,
     ): Promise<AIWorkspaceImageResult> {
         try {
-            const response = await fetchTextEngineResilient('/api/workspace-image', {
+            const response = await fetchTextEngineResilient(VISUAL_CONFIG.image.proxies.workspaceImage, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
