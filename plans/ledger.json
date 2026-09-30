@@ -980,6 +980,13 @@
       "estado": "todo",
       "evidencia": "src/avatar/components/BunnyControlCenter.tsx:94 y src/avatar/config/bunnySceneConfig.ts:80 declaran el mismo mapa de 6 estados {IDLE:'#888', LISTENING:'#00ff88', THINKING:'#ffaa00', SPEAKING:'#00aaff', ERROR:'#ff4444', SLEEPING:'#4444aa'}: 6 literales de color repetidos (hardcode duplicado del mismo dato). Deberia salir de una sola fuente. Fuera de allow -> requiere ENMIENDA.",
       "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.84",
+      "titulo": "El gate del contrato esta ROJO en HEAD: 5 ficheros commiteados viven fuera de allow y ninguna barrera por commit lo impide",
+      "estado": "todo",
+      "evidencia": "Medido 2026-09-29 sobre HEAD 23f4c2c: `npm run gate` sale exit 1 con 'Archivos FUERA de alcance (prohibido)': src/app/arbiterDispatch.ts, src/app/arbiterDomainRoutes.ts, tests/commandAndGameCoverage.test.ts, tests/gameAliasTruncatedName.test.ts, tests/gameTurnSingleDispatch.test.ts. PROBADO PREEXISTENTE (no lo causa la subida de maxFiles): `allow` es IDENTICO en HEAD y en el arbol (JSON.stringify comparado, true) y el conjunto fuera-de-allow es el MISMO antes y despues de la enmienda. Nunca estuvieron en allow: `git log -S 'arbiterDispatch' -- .task/contract.json` sale vacio. Entraron en c73bbcb, 6b9c89b, e529bda y 894871b. Los commits pasaron porque el pre-commit corre solo lint+typecheck y el gate es MANUAL (de cierre de tarea), asi que nada impide commitear fuera de allow. Arreglo: declararlos en allow (enmienda del dueno, allow es inmutable por el agente) o revertir los 4 commits. Misma clase de defecto que 0.23/0.24 (alcance declarado).",
+      "origen": "auditoria-codigo"
     }
   ],
   "done": [
