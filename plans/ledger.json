@@ -5,12 +5,6 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
-      "id": "P7.101",
-      "estado": "todo",
-      "titulo": "Acoplamiento: el hook de participante pregunta la capacidad de texto al proveedor CONCRETO (deepseek)",
-      "evidencia": "DESBLOQUEADO Y MEDIDO (P7.99): el muro que lo tenia blocked (3 guards congelados por hash + allow) ya no existe: la union medida con el criterio de 0.24 de guards lectores de src/hooks/useFluParticipant.ts, src/services/deepseek.ts y src/services/aiServiceFactory.ts que NO corren en el gate es CERO. hasUsableTextBackend sigue con UN solo dueno (src/services/deepseek.ts:73, usado en :126) y un solo consumidor externo (src/hooks/useFluParticipant.ts:11 y :168). NO hay dato duplicado; el defecto es la DIRECCION: un hook pregunta por una capacidad del sistema a un proveedor concreto, cuando la seleccion de proveedor vive en src/services/aiServiceFactory.ts. Arreglo limpio ya medido: (1) declarar la capacidad en el contrato src/core/ai/IAIService.ts (hoy protected abstract en src/core/ai/aiServiceBase.ts:175, con implementaciones en deepseek.ts:125 y gemini.ts:81), (2) exponerla por la costura en aiServiceFactory.ts (aiService, :173), (3) que el hook importe del seam y no de deepseek. Sin mocks de ../services/deepseek en los tests (solo lecturas de fichero para guards): blast radius pequeno. NO EJECUTADO en esta pasada: toca el contrato del servicio de IA, fuera del alcance del cierre de P7.99."
-    },
-    {
       "id": "P0.1",
       "titulo": "Ledger de pendientes en el repo (esta propia tarea)",
       "estado": "done",
@@ -2180,6 +2174,11 @@
       "commit": "7ce61ee",
       "titulo": "El catch deja de entregar la excepcion solo a la consola: 17 sitios de src al registro central y catchSilenciosoGuard endurecido (la consola no cuenta como registro)",
       "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO= los 17 sitios MEDIDOS por AST donde el unico registro de un error capturado era console.* (16 en App.tsx/main.tsx/useConversationPersistence/autonomia + BunnyModel.tsx:147 que solo el guard endurecido destapa) pasan a logCaughtError con contexto y excepcion (ee5f3d8, df390b5); catchSilenciosoGuard endurecido por AST para que entregar el rechazo a la consola no cuente como usarlo, con la ex-lenidad convertida en caso infractor y un caso limpio que NO debe marcarse (7ce61ee); allow 222->264 y lint:guards 144->145 por acoplamiento MEDIDO con el criterio de 0.24 (onboardingWriterGuard lee los ficheros nuevos) y dod += conversationLiveNotWiped por P7.88; gate verde (alcance/tamano/DoD 78 ficheros y 1490 tests/guard) y ledger:check OK. NO CUBIERTO= la suite completa (370 ficheros) NO se ejecuto en esta pasada: la evidencia de no-regresion es el DoD del gate mas los 145 guards (1253 tests), no el total del repo. P7.101 (acoplamiento del hook al proveedor concreto) queda DESBLOQUEADO y medido, sin ejecutar. Los informes/planes previos no se re-auditaron: la medicion es de CODIGO."
+    },
+    {
+      "id": "P7.101",
+      "commit": "de83969",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO= canUseTextBackend deja de ser detalle protegido del adapter y pasa a CAPACIDAD del contrato (src/core/ai/IAIService.ts), implementada por el adapter del proveedor (src/core/ai/aiServiceBase.ts la declara abstracta; deepseek.ts:125 y gemini.ts:81 acompanan la visibilidad) y EXPUESTA por la costura (src/services/aiServiceFactory.ts delega en el primario). src/hooks/useFluParticipant.ts deja de importar ../services/deepseek (import eliminado) y pregunta al servicio; en la ruta por defecto la respuesta es la MISMA funcion (integro->deepseek), asi que no hay cambio de comportamiento, solo de direccion de dependencia. Verificado: union de guards lectores=0 y de importadores fuera del gate=4, resueltos con allow +3 (contrato, base, adapter) y dod +4 (analysisFallbacks, generationPrompts, localAi y fluParticipantHook, que importan el src tocado, P7.88); el mock del test del hook recibe la capacidad delegando en la implementacion REAL, no en un true de pega; tsc limpio, 44/44 en los tests del seam y gate ✅; 0.22 no aplica (test de comportamiento, no guard). NO CUBIERTO= la suite completa (370 ficheros) sigue SIN ejecutar (exige FLU_AUTH_FULL_SUITE expreso; el usuario ordeno no ejecutarla): la no-regresion es el DoD del gate + los 145 guards. No se verifico en pantalla que el proveedor nativo (gemini) siga agendando la evaluacion del participante con su propia clave: es el unico tramo con semantica distinta a la anterior (antes preguntaba siempre al motor de texto, ahora al proveedor activo)."
     }
   ]
 }
