@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-22",
+  "updated": "2026-09-29",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -990,9 +990,9 @@
     },
     {
       "id": "P7.85",
-      "titulo": "Duplicacion pendiente del bloque de ARRANQUE del motor de juegos (phase:announce x57 en 21 motores)",
-      "estado": "todo",
-      "evidencia": "Mitad NO cubierta de P7.81, medida 2026-09-29: `phase: \"announce\"` aparece 57 veces en src/core/games/*.ts y la forma de arranque {cursor:0, maxRounds:readRounds(...), phase:\"announce\", score:0, round:1} se repite literal en los 21 motores; solo varia el prompt. NO se cerro en P7.81 a proposito: a diferencia del epilogo (forma constante), el arranque cruza readRounds() con el estado propio de cada motor (cursor/indice/orden), y forzar ahi un constructor unico obligaria a pasar el estado entero por parametro: seria un parche de tipos, no una fuente unica real. Se deja MEDIDO y abierto en vez de tapado. src/core/games/** SI esta en allow, asi que no requiere enmienda.",
+      "titulo": "Duplicacion del bloque de ARRANQUE del motor de juegos (phase:announce x56 en 21 motores): un solo dueno por motor",
+      "estado": "done",
+      "evidencia": "Mitad NO cubierta de P7.81, medida 2026-09-29: `phase: \"announce\"` aparece 57 veces en src/core/games/*.ts y la forma de arranque {cursor:0, maxRounds:readRounds(...), phase:\"announce\", score:0, round:1} se repite literal en los 21 motores; solo varia el prompt. NO se cerro en P7.81 a proposito: a diferencia del epilogo (forma constante), el arranque cruza readRounds() con el estado propio de cada motor (cursor/indice/orden), y forzar ahi un constructor unico obligaria a pasar el estado entero por parametro: seria un parche de tipos, no una fuente unica real. Se deja MEDIDO y abierto en vez de tapado. src/core/games/** SI esta en allow, asi que no requiere enmienda. CERRADO en 2030344 (src) + 783fe56 (guard). Dueño POR MOTOR, no global: `buildState(cfg)` en los 21 motores, la forma que adivinaCancion/loteria/storyteller YA usaban (asi se evita el parche de tipos que este item dejo anotado). 18 motores tocados: 15 escribian el literal dos veces (reset + createSession), adivinaNumero TRES (el literal + los mismos 8 campos en start) y respiracion con phase breathing (un detector anclado a announce la tapaba). Ademas: 13 barridos Fisher-Yates a mano + 4 reimplementaciones locales pasan a gameUtils.shuffleOrder(rng, length), y 3 copias literales de clases de gameUtils (clamp y pickRandom en simonDice, pickRandom en palabrasEncadenadas) pasan a importarse (0 redefiniciones de dueno vivo en el dominio). MEDIDO: phase announce 56 -> 41 (41 = 21 uniones de tipo + 20 sitios de valor); 21/21 motores con exactamente un buildState y usandolo; tsc -b exit 0; dod 15 ficheros/334 tests exit 0; guard 5 ficheros/158 tests exit 0; lint:guards 61/463 exit 0; gate exit 0. Guard: gameEpilogueSingleOwnerGuard cubre ya las dos mitades de P7.81 (epilogo + arranque), con prueba de detector y control negativo real (renombrando buildState en respiracion.ts cae con \"respiracion.ts: 0 definiciones de buildState\").",
       "origen": "auditoria-codigo"
     }
   ],
@@ -1980,6 +1980,12 @@
       "commit": "21303fc",
       "titulo": "El gate del contrato esta ROJO en HEAD: 5 ficheros commiteados viven fuera de allow y ninguna barrera por commit lo impide",
       "evidencia": ".task/contract.json:1 - CERRADO en allow/gate por el dueno: 21303fc (allow 66 -> 71 con las 5 rutas), b247784 (maxFiles 60 -> 100) y 6c09af2 (allow 71 -> 76). MEDIDO: node scripts/task-gate.mjs exit 0 (Alcance OK - tamano OK - DoD OK - guard OK), tambien tras la sesion P7.81/P7.82/P7.83. CAUSA RAIZ ABIERTA: el pre-commit solo corre lint+typecheck y el gate es manual, asi que nada impide volver a commitear fuera de allow; sigue pendiente el arnes de P7.79 (0.22)."
+    },
+    {
+      "id": "P7.85",
+      "commit": "2030344",
+      "titulo": "Duplicacion del bloque de ARRANQUE del motor de juegos (phase:announce x56 en 21 motores): un solo dueno por motor",
+      "evidencia": "CERRADO en 2030344 (src) + 783fe56 (guard: las dos mitades de P7.81). Un solo dueno del arranque POR MOTOR, buildState(cfg), la forma que 3 motores ya tenian. Y el barajado vuelve a su dueno, gameUtils.shuffleOrder. MEDIDO: announce 56 -> 41; 21/21 motores con un buildState usado; tsc -b 0; dod 15/334; guard 5/158; lint:guards 61/463; gate exit 0."
     }
   ]
 }
