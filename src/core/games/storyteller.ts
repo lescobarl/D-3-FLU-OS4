@@ -323,7 +323,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
                 return gameOverResult(
                         'No recibí las escenas del cuento. Prueba de nuevo o pídeme un cuento de mi libro.',
                         session.score,
-                        { emotion: 'neutral' },
+                        { emotion: 'neutral', error: 'cuento vacío' },
                     );
             }
             return {
