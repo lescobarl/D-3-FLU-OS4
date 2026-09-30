@@ -46,12 +46,16 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         return clamp(hasta, 3, MAX_HASTA);
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentaConmigoState => {
-        const state: CuentaConmigoState = {
+    const buildState = (cfg: Record<string, unknown> | undefined): CuentaConmigoState => {
+        return {
             siguiente: 2,
             hasta: readHasta(cfg),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentaConmigoState => {
+        const state: CuentaConmigoState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -64,11 +68,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentaConmigoState> {
             return {
                 id: 'cuenta_conmigo',
-                state: {
-                    siguiente: 2,
-                    hasta: readHasta(optionsConfig),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

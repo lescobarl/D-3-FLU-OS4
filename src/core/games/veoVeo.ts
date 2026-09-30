@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, END_GAME_FRAMES, matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -112,20 +112,6 @@ interface VeoVeoState {
 
 type RandomSource = () => number;
 
-
-
-
-
-/** Baraja determinista (Fisher-Yates) de los índices del banco. */
-function shuffleOrder(rng: RandomSource): number[] {
-    const order = VEO_VEO_BANK.map((_, index) => index);
-    for (let i = order.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(rng() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-    }
-    return order;
-}
-
 function itemAt(state: VeoVeoState): VeoVeoItem | null {
     const index = state.order[state.cursor];
     return index === undefined ? null : VEO_VEO_BANK[index];
@@ -147,14 +133,18 @@ function itemPrompt(item: VeoVeoItem): string {
 
 export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine<VeoVeoState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): VeoVeoState => {
         rng = adoptRandom(rng, cfg);
-        const state: VeoVeoState = {
-            order: shuffleOrder(rng),
+        return {
+            order: shuffleOrder(rng, VEO_VEO_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState => {
+        const state: VeoVeoState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -165,15 +155,9 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         id: 'veo_veo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<VeoVeoState> {
-            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'veo_veo',
-                state: {
-                    order: shuffleOrder(rng),
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

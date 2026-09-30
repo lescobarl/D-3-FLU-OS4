@@ -19,7 +19,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -75,18 +75,18 @@ function currentPrompt(state: RepiteTraduceState): string {
 
 export function createRepiteTraduceEngine(options?: { random?: RandomSource }): GameEngine<RepiteTraduceState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RepiteTraduceState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): RepiteTraduceState => {
         rng = adoptRandom(rng, cfg);
-        const state: RepiteTraduceState = {
-            order: REPITE_BANK.map((_, index) => index),
+        return {
+            order: shuffleOrder(rng, REPITE_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        for (let i = state.order.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(rng() * (i + 1));
-            [state.order[i], state.order[j]] = [state.order[j], state.order[i]];
-        }
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RepiteTraduceState => {
+        const state: RepiteTraduceState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -97,20 +97,9 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
         id: 'repite_traduce',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RepiteTraduceState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const order = REPITE_BANK.map((_, index) => index);
-            for (let i = order.length - 1; i > 0; i -= 1) {
-                const j = Math.floor(rng() * (i + 1));
-                [order[i], order[j]] = [order[j], order[i]];
-            }
             return {
                 id: 'repite_traduce',
-                state: {
-                    order,
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

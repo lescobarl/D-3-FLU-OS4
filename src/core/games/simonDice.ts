@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { normalizeForMatch, adoptRandom, END_GAME_FRAMES, matchesEndGameFrames, clamp, pickRandom, gameOverResult } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -66,15 +66,6 @@ interface SimonDiceState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
-    return items[Math.floor(rng() * items.length)];
-}
 
 /** Extrae los verbos mencionados en el texto, en orden, ignorando relleno. */
 function extractOrderedVerbs(normalized: string, verbos: readonly AvatarAnimation[]): AvatarAnimation[] {
@@ -139,35 +130,35 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         };
     };
 
+    const buildState = (cfg: Record<string, unknown> | undefined): SimonDiceState => {
+        rng = adoptRandom(rng, cfg);
+        const config = readConfig(cfg);
+        return {
+            verbos: config.verbos,
+            sequence: [],
+            maxRounds: config.rounds,
+            longMax: config.longMax,
+            phase: 'announce',
+        };
+    };
+
     return {
         id: 'simon_dice',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<SimonDiceState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const cfg = readConfig(optionsConfig);
+            const state = buildState(optionsConfig);
             return {
                 id: 'simon_dice',
-                state: {
-                    verbos: cfg.verbos,
-                    sequence: [],
-                    maxRounds: cfg.rounds,
-                    longMax: cfg.longMax,
-                    phase: 'announce',
-                },
+                state,
                 score: 0,
                 round: 1,
             };
         },
 
         start(session: GameSession<SimonDiceState>, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            rng = adoptRandom(rng, optionsConfig);
-            const cfg = readConfig(optionsConfig);
-            const state = session.state as SimonDiceState;
-            state.verbos = cfg.verbos;
-            state.maxRounds = cfg.rounds;
-            state.longMax = cfg.longMax;
-            state.sequence = [pickRandom(cfg.verbos, rng)];
-            state.phase = 'announce';
+            const state = buildState(optionsConfig);
+            state.sequence = [pickRandom(state.verbos, rng)];
+            session.state = state;
             session.score = 0;
             session.round = 1;
             return announcePrompt(state.sequence);

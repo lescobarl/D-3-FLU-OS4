@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, STOPWORDS_ES, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { stripDiacritics, normalizeForMatch, adoptRandom, readRounds, hasToken, hasAnyToken, STOPWORDS_ES, END_GAME_FRAMES, matchesEndGameFrames, pickRandom, gameOverResult } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -58,10 +58,6 @@ type RandomSource = () => number;
 
 
 
-
-function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
-    return items[Math.floor(rng() * items.length)];
-}
 
 function firstLetter(word: string): string {
     return stripDiacritics(word).trim()[0]?.toLowerCase() ?? '';
@@ -113,16 +109,20 @@ function realWordWithLetter(normalized: string, letra: string): string | null {
 
 export function createPalabrasEncadenadasEngine(options?: { random?: RandomSource }): GameEngine<PalabrasEncadenadasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState => {
         rng = adoptRandom(rng, cfg);
         const startWord = pickRandom(WORD_BANK, rng);
-        const state: PalabrasEncadenadasState = {
+        return {
             word: startWord,
             nextLetter: lastLetter(startWord),
             usadas: [startWord],
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState => {
+        const state: PalabrasEncadenadasState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -133,17 +133,9 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         id: 'palabras_encadenadas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<PalabrasEncadenadasState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const startWord = pickRandom(WORD_BANK, rng);
             return {
                 id: 'palabras_encadenadas',
-                state: {
-                    word: startWord,
-                    nextLetter: lastLetter(startWord),
-                    usadas: [startWord],
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

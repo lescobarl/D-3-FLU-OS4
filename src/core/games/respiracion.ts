@@ -53,12 +53,16 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         return clamp(rondas, 1, MAX_RONDAS);
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RespiracionState => {
-        const state: RespiracionState = {
+    const buildState = (cfg: Record<string, unknown> | undefined): RespiracionState => {
+        return {
             step: 0,
             totalSteps: readRondas(cfg) * 2,
             phase: 'breathing',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RespiracionState => {
+        const state: RespiracionState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -69,13 +73,10 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         id: 'respiracion',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RespiracionState> {
+            const state = buildState(optionsConfig);
             return {
                 id: 'respiracion',
-                state: {
-                    step: 0,
-                    totalSteps: readRondas(optionsConfig) * 2,
-                    phase: 'breathing',
-                },
+                state,
                 score: 0,
                 round: 1,
             };

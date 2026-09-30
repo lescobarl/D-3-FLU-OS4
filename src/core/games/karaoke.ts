@@ -151,16 +151,20 @@ interface KaraokeState {
 export function createKaraokeEngine(options?: { random?: RandomSource }): GameEngine<KaraokeState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): KaraokeState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): KaraokeState => {
         rng = adoptRandom(rng, cfg);
         const song = KARAOKE_SONG_BANK[Math.floor(rng() * KARAOKE_SONG_BANK.length)];
-        const state: KaraokeState = {
+        return {
             songId: song.id,
             titulo: song.titulo,
             lineas: song.lineas,
             cursor: 0,
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): KaraokeState => {
+        const state: KaraokeState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -171,17 +175,9 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
         id: 'karaoke',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<KaraokeState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const song = KARAOKE_SONG_BANK[Math.floor(rng() * KARAOKE_SONG_BANK.length)];
             return {
                 id: 'karaoke',
-                state: {
-                    songId: song.id,
-                    titulo: song.titulo,
-                    lineas: song.lineas,
-                    cursor: 0,
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

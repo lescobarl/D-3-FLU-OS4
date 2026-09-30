@@ -20,7 +20,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -129,23 +129,19 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
 
 export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine<TriviaState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const shuffledOrder = (): number[] => {
-        const order = TRIVIA_BANK.map((_, index) => index);
-        for (let i = order.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(rng() * (i + 1));
-            [order[i], order[j]] = [order[j], order[i]];
-        }
-        return order;
-    };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TriviaState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): TriviaState => {
         rng = adoptRandom(rng, cfg);
-        const state: TriviaState = {
-            order: shuffledOrder(),
+        return {
+            order: shuffleOrder(rng, TRIVIA_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TriviaState => {
+        const state: TriviaState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -156,15 +152,9 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
         id: 'trivia',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TriviaState> {
-            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'trivia',
-                state: {
-                    order: shuffledOrder(),
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

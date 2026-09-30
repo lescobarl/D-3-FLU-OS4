@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { normalizeForMatch, hasToken, hasAnyToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -392,16 +392,6 @@ export function quienSoyCategory(item: QuienSoyItem): string {
 
 type RandomSource = () => number;
 
-/** Baraja determinista (Fisher-Yates) de los índices del banco. */
-function shuffleOrder(rng: RandomSource): number[] {
-    const order = QUIEN_SOY_BANK.map((_, index) => index);
-    for (let i = order.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(rng() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-    }
-    return order;
-}
-
 function itemAt(state: QuienSoyState): QuienSoyItem | null {
     const index = state.order[state.cursor];
     return index === undefined ? null : QUIEN_SOY_BANK[index];
@@ -430,10 +420,10 @@ function advanceSkippingMentioned(state: QuienSoyState): void {
 
 export function createQuienSoyEngine(options?: { random?: RandomSource }): GameEngine<QuienSoyState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): QuienSoyState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): QuienSoyState => {
         rng = adoptRandom(rng, cfg);
-        const state: QuienSoyState = {
-            order: shuffleOrder(rng),
+        return {
+            order: shuffleOrder(rng, QUIEN_SOY_BANK.length),
             cursor: 0,
             clueIndex: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
@@ -444,6 +434,10 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             asked: [],
             fluGuess: null,
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): QuienSoyState => {
+        const state: QuienSoyState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -454,21 +448,9 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         id: 'quien_soy',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<QuienSoyState> {
-            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'quien_soy',
-                state: {
-                    order: shuffleOrder(rng),
-                    cursor: 0,
-                    clueIndex: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                    mentioned: [],
-                    mode: 'kid',
-                    candidatos: [],
-                    asked: [],
-                    fluGuess: null,
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

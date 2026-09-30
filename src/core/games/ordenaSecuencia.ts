@@ -19,7 +19,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -116,12 +116,7 @@ function itemAt(state: OrdenaSecuenciaState): OrdenaSecuenciaItem | null {
 }
 
 function shufflePasos(item: OrdenaSecuenciaItem, rng: RandomSource): number[] {
-    const idx = item.pasos.map((_, index) => index);
-    for (let i = idx.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(rng() * (i + 1));
-        [idx[i], idx[j]] = [idx[j], idx[i]];
-    }
-    return idx;
+    return shuffleOrder(rng, item.pasos.length);
 }
 
 function displayScrambled(item: OrdenaSecuenciaItem, shuffled: number[]): string {
@@ -174,18 +169,18 @@ function countRecognized(normalized: string, item: OrdenaSecuenciaItem): number 
 
 export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine<OrdenaSecuenciaState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState => {
         rng = adoptRandom(rng, cfg);
-        const state: OrdenaSecuenciaState = {
-            order: ORDENA_BANK.map((_, index) => index),
+        return {
+            order: shuffleOrder(rng, ORDENA_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        for (let i = state.order.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(rng() * (i + 1));
-            [state.order[i], state.order[j]] = [state.order[j], state.order[i]];
-        }
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState => {
+        const state: OrdenaSecuenciaState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -196,20 +191,9 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
         id: 'ordena_secuencia',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<OrdenaSecuenciaState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const order = ORDENA_BANK.map((_, index) => index);
-            for (let i = order.length - 1; i > 0; i -= 1) {
-                const j = Math.floor(rng() * (i + 1));
-                [order[i], order[j]] = [order[j], order[i]];
-            }
             return {
                 id: 'ordena_secuencia',
-                state: {
-                    order,
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

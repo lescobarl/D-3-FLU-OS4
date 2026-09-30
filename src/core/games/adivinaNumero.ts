@@ -87,41 +87,37 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         };
     };
 
+    const buildState = (cfg: Record<string, unknown> | undefined): AdivinaNumeroState => {
+        rng = adoptRandom(rng, cfg);
+        const config = readConfig(cfg);
+        return {
+            number: pickNumber(config.min, config.max, rng),
+            min: config.min,
+            max: config.max,
+            pistasUsadas: 0,
+            pistasMax: config.pistasMax,
+            intentos: 0,
+            lastDistance: null,
+            phase: 'announce',
+        };
+    };
+
     return {
         id: 'adivina_numero',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaNumeroState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const cfg = readConfig(optionsConfig);
+            const state = buildState(optionsConfig);
             return {
                 id: 'adivina_numero',
-                state: {
-                    number: pickNumber(cfg.min, cfg.max, rng),
-                    min: cfg.min,
-                    max: cfg.max,
-                    pistasUsadas: 0,
-                    pistasMax: cfg.pistasMax,
-                    intentos: 0,
-                    lastDistance: null,
-                    phase: 'announce',
-                },
+                state,
                 score: 0,
                 round: 1,
             };
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            rng = adoptRandom(rng, optionsConfig);
-            const cfg = readConfig(optionsConfig);
-            const state = session.state as AdivinaNumeroState;
-            state.number = pickNumber(cfg.min, cfg.max, rng);
-            state.min = cfg.min;
-            state.max = cfg.max;
-            state.pistasUsadas = 0;
-            state.pistasMax = cfg.pistasMax;
-            state.intentos = 0;
-            state.lastDistance = null;
-            state.phase = 'announce';
+            const state = buildState(optionsConfig);
+            session.state = state;
             session.score = 0;
             session.round = 1;
             return {

@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, gameOverResult } from './gameUtils';
+import { normalizeForMatch, hasAnyToken, hasToken, adoptRandom, readRounds, END_GAME_FRAMES, matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -109,16 +109,6 @@ interface RiddlesState {
 
 type RandomSource = () => number;
 
-/** Baraja determinista (Fisher-Yates) de los índices del banco. */
-function shuffleOrder(rng: RandomSource): number[] {
-    const order = RIDDLE_BANK.map((_, index) => index);
-    for (let i = order.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(rng() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-    }
-    return order;
-}
-
 function riddleAt(state: RiddlesState): Riddle | null {
     const index = state.order[state.cursor];
     return index === undefined ? null : RIDDLE_BANK[index];
@@ -132,14 +122,18 @@ function currentPrompt(state: RiddlesState): string {
 
 export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): RiddlesState => {
         rng = adoptRandom(rng, cfg);
-        const state: RiddlesState = {
-            order: shuffleOrder(rng),
+        return {
+            order: shuffleOrder(rng, RIDDLE_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
+        const state: RiddlesState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -150,15 +144,9 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         id: 'adivinanzas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RiddlesState> {
-            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'adivinanzas',
-                state: {
-                    order: shuffleOrder(rng),
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

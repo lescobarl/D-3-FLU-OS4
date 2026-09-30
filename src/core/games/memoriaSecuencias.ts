@@ -103,15 +103,19 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         return clamp(longMax, 1, MAX_LONG_MAX);
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState => {
         rng = adoptRandom(rng, cfg);
-        const state: MemoriaSecuenciasState = {
+        return {
             sequence: buildSequence(2, rng),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             longMax: readLongMax(cfg),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState => {
+        const state: MemoriaSecuenciasState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -122,16 +126,9 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         id: 'memoria_secuencias',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<MemoriaSecuenciasState> {
-            rng = adoptRandom(rng, optionsConfig);
             return {
                 id: 'memoria_secuencias',
-                state: {
-                    sequence: buildSequence(2, rng),
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    longMax: readLongMax(optionsConfig),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

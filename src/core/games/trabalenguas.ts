@@ -18,7 +18,7 @@ import {
     adoptRandom,
     readRounds,
     END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -72,18 +72,18 @@ function currentPrompt(state: TrabalenguasState): string {
 
 export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): TrabalenguasState => {
         rng = adoptRandom(rng, cfg);
-        const state: TrabalenguasState = {
-            order: TRABALENGUAS_BANK.map((_, index) => index),
+        return {
+            order: shuffleOrder(rng, TRABALENGUAS_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        for (let i = state.order.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(rng() * (i + 1));
-            [state.order[i], state.order[j]] = [state.order[j], state.order[i]];
-        }
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState => {
+        const state: TrabalenguasState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -94,20 +94,9 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
         id: 'trabalenguas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TrabalenguasState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const order = TRABALENGUAS_BANK.map((_, index) => index);
-            for (let i = order.length - 1; i > 0; i -= 1) {
-                const j = Math.floor(rng() * (i + 1));
-                [order[i], order[j]] = [order[j], order[i]];
-            }
             return {
                 id: 'trabalenguas',
-                state: {
-                    order,
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

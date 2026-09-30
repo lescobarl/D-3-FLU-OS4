@@ -103,16 +103,20 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
             operaciones: operaciones.length > 0 ? operaciones : [...DEFAULT_OPERACIONES],
         };
     };
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CalculoMentalState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): CalculoMentalState => {
         rng = adoptRandom(rng, cfg);
         const config = readConfig(cfg);
-        const state: CalculoMentalState = {
+        return {
             ...generateOperation(config.operaciones, config.maxSuma, rng),
             maxSuma: config.maxSuma,
             operaciones: config.operaciones,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CalculoMentalState => {
+        const state: CalculoMentalState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -123,17 +127,9 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         id: 'calculo_mental',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CalculoMentalState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const config = readConfig(optionsConfig);
             return {
                 id: 'calculo_mental',
-                state: {
-                    ...generateOperation(config.operaciones, config.maxSuma, rng),
-                    maxSuma: config.maxSuma,
-                    operaciones: config.operaciones,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

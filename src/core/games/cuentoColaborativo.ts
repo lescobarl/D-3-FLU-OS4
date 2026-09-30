@@ -98,16 +98,20 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         return clamp(turnos, 2, MAX_TURNOS);
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentoColaborativoState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): CuentoColaborativoState => {
         rng = adoptRandom(rng, cfg);
         const item = CUENTO_BANK[Math.floor(rng() * CUENTO_BANK.length)];
-        const state: CuentoColaborativoState = {
+        return {
             cuento: [item.inicio],
             cierre: item.cierre,
             continuaciones: item.continuaciones,
             maxTurnos: readTurnos(cfg),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentoColaborativoState => {
+        const state: CuentoColaborativoState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -118,17 +122,9 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         id: 'cuento_colaborativo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentoColaborativoState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const item = CUENTO_BANK[Math.floor(rng() * CUENTO_BANK.length)];
             return {
                 id: 'cuento_colaborativo',
-                state: {
-                    cuento: [item.inicio],
-                    cierre: item.cierre,
-                    continuaciones: item.continuaciones,
-                    maxTurnos: readTurnos(optionsConfig),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

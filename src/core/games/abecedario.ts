@@ -22,7 +22,7 @@ import {
     readRounds,
     STOPWORDS_ES,
     END_GAME_FRAMES,
-    matchesEndGameFrames, gameOverResult } from './gameUtils';
+    matchesEndGameFrames, shuffleOrder, gameOverResult } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -112,19 +112,18 @@ function matchedWord(texto: string, normalized: string, item: AbecedarioItem): s
 
 export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine<AbecedarioState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AbecedarioState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): AbecedarioState => {
         rng = adoptRandom(rng, cfg);
-        const order = ABECEDARIO_BANK.map((_, index) => index);
-        for (let i = order.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(rng() * (i + 1));
-            [order[i], order[j]] = [order[j], order[i]];
-        }
-        const state: AbecedarioState = {
-            order,
+        return {
+            order: shuffleOrder(rng, ABECEDARIO_BANK.length),
             cursor: 0,
             maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AbecedarioState => {
+        const state: AbecedarioState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -135,20 +134,9 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
         id: 'abecedario',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AbecedarioState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const order = ABECEDARIO_BANK.map((_, index) => index);
-            for (let i = order.length - 1; i > 0; i -= 1) {
-                const j = Math.floor(rng() * (i + 1));
-                [order[i], order[j]] = [order[j], order[i]];
-            }
             return {
                 id: 'abecedario',
-                state: {
-                    order,
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig, DEFAULT_ROUNDS, MAX_ROUNDS),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };

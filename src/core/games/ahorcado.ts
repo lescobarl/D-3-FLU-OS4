@@ -118,10 +118,10 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         return clamp(intentos, 3, MAX_INTENTOS);
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AhorcadoState => {
+    const buildState = (cfg: Record<string, unknown> | undefined): AhorcadoState => {
         rng = adoptRandom(rng, cfg);
         const word = pickRandom(AHORCADO_BANK, rng);
-        const state: AhorcadoState = {
+        return {
             palabra: word.palabra,
             pista: word.pista,
             adivinadas: [],
@@ -129,6 +129,10 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
             maxIntentos: readIntentos(cfg),
             phase: 'announce',
         };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AhorcadoState => {
+        const state: AhorcadoState = buildState(cfg);
         session.state = state;
         session.score = 0;
         session.round = 1;
@@ -139,18 +143,9 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         id: 'ahorcado',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AhorcadoState> {
-            rng = adoptRandom(rng, optionsConfig);
-            const word = pickRandom(AHORCADO_BANK, rng);
             return {
                 id: 'ahorcado',
-                state: {
-                    palabra: word.palabra,
-                    pista: word.pista,
-                    adivinadas: [],
-                    intentos: readIntentos(optionsConfig),
-                    maxIntentos: readIntentos(optionsConfig),
-                    phase: 'announce',
-                },
+                state: buildState(optionsConfig),
                 score: 0,
                 round: 1,
             };
