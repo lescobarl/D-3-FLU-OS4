@@ -5,6 +5,12 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P7.101",
+      "estado": "todo",
+      "titulo": "Acoplamiento: el hook de participante pregunta la capacidad de texto al proveedor CONCRETO (deepseek)",
+      "evidencia": "DESBLOQUEADO Y MEDIDO (P7.99): el muro que lo tenia blocked (3 guards congelados por hash + allow) ya no existe: la union medida con el criterio de 0.24 de guards lectores de src/hooks/useFluParticipant.ts, src/services/deepseek.ts y src/services/aiServiceFactory.ts que NO corren en el gate es CERO. hasUsableTextBackend sigue con UN solo dueno (src/services/deepseek.ts:73, usado en :126) y un solo consumidor externo (src/hooks/useFluParticipant.ts:11 y :168). NO hay dato duplicado; el defecto es la DIRECCION: un hook pregunta por una capacidad del sistema a un proveedor concreto, cuando la seleccion de proveedor vive en src/services/aiServiceFactory.ts. Arreglo limpio ya medido: (1) declarar la capacidad en el contrato src/core/ai/IAIService.ts (hoy protected abstract en src/core/ai/aiServiceBase.ts:175, con implementaciones en deepseek.ts:125 y gemini.ts:81), (2) exponerla por la costura en aiServiceFactory.ts (aiService, :173), (3) que el hook importe del seam y no de deepseek. Sin mocks de ../services/deepseek en los tests (solo lecturas de fichero para guards): blast radius pequeno. NO EJECUTADO en esta pasada: toca el contrato del servicio de IA, fuera del alcance del cierre de P7.99."
+    },
+    {
       "id": "P0.1",
       "titulo": "Ledger de pendientes en el repo (esta propia tarea)",
       "estado": "done",
@@ -1070,22 +1076,10 @@
       "evidencia": "src/app/gameActions.ts:72 src/components/BrowserProfilesPanel.tsx:96 src/components/ParticipantsPanel.tsx:104,:112 src/core/branding/useSeasonalBranding.ts:194 src/services/musicPlayer.ts:94,:150 src/voice/hooks/useFluVoiceAssistant.js:3819 por logCaughtError; src/voice/lib/fluTrace.js:107 con omision DECLARADA (ignorado:) por ser sink solo-dev."
     },
     {
-      "id": "P7.99",
-      "estado": "in_progress",
-      "titulo": "Endurecer catchSilenciosoGuard (console.* no cuenta como registro): BLOQUEADO por el criterio INMUTABLE de guards",
-      "evidencia": "Via B EJECUTADA: los 33 guards de texto que 0.24 obliga a gatear tienen prueba de detector REAL (no la marca textual). 27 estaban congelados por hash; descongelados y RE-congelados con su contenido nuevo en el mismo commit. Registrados en lint:guards (111 -> 144). Prueba verificada: 144 guards / 1253 tests verdes. Pendiente: arreglar los 24 sitios de console.* en commit SOLO-src y endurecer catchSilenciosoGuard en commit SOLO-test (0.22)."
-    },
-    {
       "id": "P7.100",
       "estado": "done",
       "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
       "evidencia": "VEREDICTO MEDIDO de las 5 sospechas de duplicacion/parche/hardcode que el informe dejaba abiertas: (1) UI de catalogos (AmbientesPanel 305 lineas, PaletasPanel 266, SearchCatalogPanel 475): NO son copia; solo comparten 2 nombres de handler genericos. (2) src/services/gemini.ts (585 lineas, exporta la clase geminiService) vs src/voice/lib/gemini.js (1837, 22 exports): CERO exports compartidos; son el cliente del motor de texto y el motor de voz, no dos copias. (3) avatar 3D: BunnyControlCenter.tsx (83) IMPORTA de src/avatar/config/bunnySceneConfig.ts (95) y no repite ni un literal numerico de los suyos; existe UNA sola copia de bunnySceneConfig. (4) hasUsableTextBackend tiene UN solo dueno (src/services/deepseek.ts:73) y un unico importador externo (src/hooks/useFluParticipant.ts:11): no hay implementaciones duplicadas; si queda acoplamiento (un hook tirando de un proveedor concreto para una capacidad que es del contrato) pero NO es un dato con dos duenos. (5) src/lib/fluParticipant.ts:215 textBackendUsable = true NO es un hardcode: es un parametro por defecto documentado en :224-228, el hook pasa el valor real y hay test de las dos ramas (tests/fluParticipant.test.ts:117 y :126)."
-    },
-    {
-      "id": "P7.101",
-      "estado": "blocked",
-      "titulo": "Acoplamiento: el hook de participante pregunta la capacidad de texto al proveedor CONCRETO (deepseek)",
-      "evidencia": "hasUsableTextBackend tiene UN solo dueno (src/services/deepseek.ts:73, usado en :126) y un solo consumidor externo (src/hooks/useFluParticipant.ts:11 y :168). NO hay dato duplicado; el defecto es la DIRECCION de la dependencia: un hook pregunta por una capacidad del sistema a un proveedor concreto, cuando la seleccion de proveedor vive en src/services/aiServiceFactory.ts (getPreferredAIProvider/setPreferredAIProvider). Arreglo limpio: declarar la capacidad en el contrato (src/core/ai/IAIService.ts) y exponerla por la costura (aiServiceFactory), dejando que deepseek conserve su implementacion. allow YA ampliado con los 3 ficheros. BLOQUEADO por el mismo muro: tocar src/hooks/useFluParticipant.ts arrastra 5 guards (mediaRouteSingle y minuteOnboardingGate libres; minutosDobleEscrituraGuard, onboardingWriterGuard y voiceProfilesEscritorUnicoGuard CONGELADOS)."
     }
   ],
   "done": [
@@ -2180,6 +2174,12 @@
       "commit": "9ce07ad",
       "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
       "evidencia": "CUBIERTO= las 5 sospechas quedaron medidas con el codigo delante (tamanos, exports compartidos, literales repetidos y duenos reales): 4 son falsas y 1 es acoplamiento sin dato duplicado. Evita que se reabran a ciegas o que alguien las toque rompiendo lo ya validado. NO CUBIERTO= la revision fue de CODIGO sobre esos 5 puntos; no es una auditoria exhaustiva de todo src: los 36 sitios de console.* de P7.98 siguen abiertos y P7.99 sigue blocked."
+    },
+    {
+      "id": "P7.99",
+      "commit": "7ce61ee",
+      "titulo": "El catch deja de entregar la excepcion solo a la consola: 17 sitios de src al registro central y catchSilenciosoGuard endurecido (la consola no cuenta como registro)",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO= los 17 sitios MEDIDOS por AST donde el unico registro de un error capturado era console.* (16 en App.tsx/main.tsx/useConversationPersistence/autonomia + BunnyModel.tsx:147 que solo el guard endurecido destapa) pasan a logCaughtError con contexto y excepcion (ee5f3d8, df390b5); catchSilenciosoGuard endurecido por AST para que entregar el rechazo a la consola no cuente como usarlo, con la ex-lenidad convertida en caso infractor y un caso limpio que NO debe marcarse (7ce61ee); allow 222->264 y lint:guards 144->145 por acoplamiento MEDIDO con el criterio de 0.24 (onboardingWriterGuard lee los ficheros nuevos) y dod += conversationLiveNotWiped por P7.88; gate verde (alcance/tamano/DoD 78 ficheros y 1490 tests/guard) y ledger:check OK. NO CUBIERTO= la suite completa (370 ficheros) NO se ejecuto en esta pasada: la evidencia de no-regresion es el DoD del gate mas los 145 guards (1253 tests), no el total del repo. P7.101 (acoplamiento del hook al proveedor concreto) queda DESBLOQUEADO y medido, sin ejecutar. Los informes/planes previos no se re-auditaron: la medicion es de CODIGO."
     }
   ]
 }
