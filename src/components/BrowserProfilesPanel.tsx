@@ -17,6 +17,7 @@
 // ============================================================
 import { useEffect, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { logCaughtError } from '../lib/caughtError';
 import type { BrowserProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type {
   BrowserLanguage,
@@ -93,7 +94,7 @@ function BrowserProfileEditor({
     // El rol se reenvía para que ensure siembre los escalares desde los
     // defaults por rol cuando aún no existe registro (primer edit manual).
     onUpdate(participantId, patch, participantName, role).catch((error) => {
-      console.error('[BrowserProfilesPanel] No se pudo guardar el perfil de navegador:', error);
+      logCaughtError('[BrowserProfilesPanel] guardar perfil de navegador', error);
     });
   };
 

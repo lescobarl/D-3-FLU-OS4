@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -43,9 +43,7 @@ const HINT_FRAMES: readonly string[] = Object.freeze([
     'repite', 'no se', 'no sé',
 ]);
 
-const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'paso', 'siguiente', 'otra', 'sigo', 'no se', 'no sé',
-]);
+const SKIP_FRAMES: readonly string[] = Object.freeze([...SKIP_CORE_FRAMES]);
 
 const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 

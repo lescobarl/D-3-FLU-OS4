@@ -69,7 +69,7 @@ async function speakGameText(text: string, ctx: ApplyGameContext, opts?: GameSpe
 
     const currentSpeakFlu = ctx.speakFluRef.current;
     const speakPromise = currentSpeakFlu(text, ctx.languageRef.current, opts).catch((speechErr: unknown) => {
-        console.warn('[Juego] speakFlu failed:', speechErr);
+        logCaughtError('[Juego] speakFlu', speechErr);
     });
 
     useIntegrationStore.getState().setConversationState('SPEAKING');

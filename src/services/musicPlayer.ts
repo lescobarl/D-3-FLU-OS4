@@ -91,7 +91,7 @@ function startAudio(url: string, loop: boolean, volume?: number): void {
   audio.loop = loop
   if (audio.src !== url) audio.src = url
   audio.play().catch((err) => {
-    console.warn('[musicPlayer] no se pudo reproducir:', err)
+    logCaughtError('[musicPlayer] no se pudo reproducir', err)
   })
 }
 
@@ -147,7 +147,7 @@ export function resumeMusic(): void {
   audioRef
     ?.play()
     .catch((err) => {
-      console.warn('[musicPlayer] no se pudo reanudar:', err)
+      logCaughtError('[musicPlayer] no se pudo reanudar', err)
     })
 }
 

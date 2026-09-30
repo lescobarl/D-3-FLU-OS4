@@ -104,6 +104,7 @@ function scheduleAgentSink() {
         headers: { 'Content-Type': 'application/json' },
         body,
       }).catch((error) => {
+        // ignorado: sink de trazas que SOLO existe en desarrollo; en produccion el endpoint no esta y fallar es lo esperado.
         if (IS_DEV) console.warn('[Flu][trace] agent sink failed:', error?.message || error)
       })
     } catch (e) {

@@ -1772,17 +1772,16 @@ export async function generateVideoViaFal({
   }
 
   try {
-    const submit = await fetch(`${base}/${model}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Key ${apiKey}`,
+    // Proveedor externo con credencial: por el transporte unico y con deadline (antes era fetch crudo SIN timeout).
+    const submit = await fetchTextEngine(
+      `${base}/${model}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Key ${apiKey}` },
+        body: JSON.stringify({ prompt, aspect_ratio: aspectRatio || FALAI_DEFAULTS.ASPECT_RATIO }),
       },
-      body: JSON.stringify({
-        prompt,
-        aspect_ratio: aspectRatio || FALAI_DEFAULTS.ASPECT_RATIO,
-      }),
-    })
+      TIMEOUT_POLICY_MS.falVideoFetchAbort,
+    )
     if (!submit.ok) {
       const detail = await submit.text().catch((e) => { logCaughtError('[catch] src/voice/lib/gemini.js', e); return ''; })
       const message = `fal.ai submit error ${submit.status}: ${String(detail).slice(0, 300)}`
@@ -1800,13 +1799,13 @@ export async function generateVideoViaFal({
 
     const deadline = Date.now() + FALAI_DEFAULTS.POLL_TIMEOUT_MS
     while (Date.now() < deadline) {
-      const statusRes = await fetch(statusUrl, { headers: { Authorization: `Key ${apiKey}` } })
+      const statusRes = await fetchTextEngine(statusUrl, { headers: { Authorization: `Key ${apiKey}` } }, Math.max(1, deadline - Date.now()))
       if (statusRes.ok) {
         const statusPayload = await statusRes.json()
         if (statusPayload?.status === 'COMPLETED') {
           const resultUrl = String(statusPayload?.response_url || '')
           if (resultUrl) {
-            const resultRes = await fetch(resultUrl, { headers: { Authorization: `Key ${apiKey}` } })
+            const resultRes = await fetchTextEngine(resultUrl, { headers: { Authorization: `Key ${apiKey}` } }, Math.max(1, deadline - Date.now()))
             const resultPayload = await resultRes.json()
             const videoUrl = String(resultPayload?.video?.url || resultPayload?.url || '')
             return {

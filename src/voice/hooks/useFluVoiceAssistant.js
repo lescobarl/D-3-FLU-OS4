@@ -3807,16 +3807,14 @@ export function useFluVoiceAssistant({
         lastSpeakerRef.current ||
         fallbackSpeaker
 
-      // Diarización pesada corriendo EN PARALELO con la API. .catch((e) => { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e); return null; }) la hace
-      // no-fatal (mismo policy que el lote conversacional vía Promise.allSettled): si la
-      // diarización fallara, se degrada al orador rápido + firma calculada bajo demanda.
+      // Diarización pesada EN PARALELO con la API; el catch de abajo la hace no-fatal (misma policy que el lote conversacional vía Promise.allSettled): si falla, se degrada al orador rápido.
       const speakerPromise = resolveSpeaker(
         capturedTranscript,
         audioSnapshot,
         sampleRate,
         fallbackSpeaker,
       ).catch((speakerError) => {
-        console.error('processCapture resolveSpeaker falló; se usa orador rápido:', speakerError?.message || speakerError)
+        logCaughtError('processCapture resolveSpeaker; se usa orador rapido', speakerError)
         return null
       })
 

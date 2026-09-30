@@ -54,6 +54,16 @@ export function gameOverResult(
 export const HELP_CORE_FRAMES: readonly string[] = Object.freeze(['pista', 'ayuda', 'ayudame'])
 
 /**
+ * Nucleo COMPARTIDO de "pasar / saltar turno": un solo dueno (P7.96). Tres motores
+ * (`adivinaCancion`, `memoriaSecuencias`, `repiteTraduce`) declaraban la MISMA copia
+ * literal de estos 6 marcos. El resto de motores NO entra aqui a proposito: su lista
+ * difiere (anaden "me rindo", "otra palabra", "que sigue"...), asi que la cola propia
+ * se compone al lado de este nucleo y cada lista queda igual a antes. Los consumidores
+ * son de pertenencia (`hasAnyToken`/`hasToken`/`includes`), no de orden.
+ */
+export const SKIP_CORE_FRAMES: readonly string[] = Object.freeze(['otra', 'siguiente', 'sigo', 'paso', 'no se', 'no sé'])
+
+/**
  * EPILOGO intermedio de un motor: la forma UNICA de un resultado que NO cierra
  * la partida (`gameOver: false`). Hermano de `gameOverResult`, que solo cubria
  * el final; por eso el turno intermedio seguia escrito a mano en cada motor

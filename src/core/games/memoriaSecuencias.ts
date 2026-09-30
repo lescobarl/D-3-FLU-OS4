@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, turnResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -30,9 +30,7 @@ const HINT_FRAMES: readonly string[] = Object.freeze([
     'repite', 'no escuche', 'no escuché',
 ]);
 
-const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'paso', 'siguiente', 'otra', 'sigo', 'no se', 'no sé',
-]);
+const SKIP_FRAMES: readonly string[] = Object.freeze([...SKIP_CORE_FRAMES]);
 
 const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 

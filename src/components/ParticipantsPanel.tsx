@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { logCaughtError } from '../lib/caughtError';
 import type { CommunicationProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { ParticipantInput, RegisterResult } from '../core/multiuser/participantRegistry';
 import {
@@ -101,7 +102,7 @@ export function ParticipantsPanel({
   const handleSetLevel = (item: ParticipantRecord, value: string) => {
     if (!value || !onSetManual) return;
     onSetManual(item.id, { explanationLevel: value as ExplanationLevel }, item.name).catch((error) => {
-      console.error('[ParticipantsPanel] No se pudo guardar el nivel manual:', error);
+      logCaughtError('[ParticipantsPanel] guardar nivel manual', error);
     });
   };
 
@@ -109,7 +110,7 @@ export function ParticipantsPanel({
   const handleSetTone = (item: ParticipantRecord, value: string) => {
     if (!value || !onSetManual) return;
     onSetManual(item.id, { tone: value as PersonalityTone }, item.name).catch((error) => {
-      console.error('[ParticipantsPanel] No se pudo guardar el tono manual:', error);
+      logCaughtError('[ParticipantsPanel] guardar tono manual', error);
     });
   };
 

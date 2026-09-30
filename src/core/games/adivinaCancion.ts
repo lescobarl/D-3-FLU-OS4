@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -88,9 +88,7 @@ const HINT_FRAMES: readonly string[] = Object.freeze([
     'dame una pista', 'no se', 'no sé',
 ]);
 
-const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'otra', 'siguiente', 'sigo', 'paso', 'no se', 'no sé',
-]);
+const SKIP_FRAMES: readonly string[] = Object.freeze([...SKIP_CORE_FRAMES]);
 
 const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 

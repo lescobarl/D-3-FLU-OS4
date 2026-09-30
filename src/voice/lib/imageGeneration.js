@@ -22,6 +22,28 @@ export {
 
 const workspaceImageSourceCache = new Map()
 
+/**
+ * Deadline UNICO de las llamadas al proxy local (`/api/*`). Antes cada funcion
+ * repetia su propio `AbortController` + `setTimeout` + `clearTimeout` con el mismo
+ * `timeoutMs` (3 copias medidas). Se conserva el `AbortError` a proposito: los
+ * `trace` distinguen timeout (`*_timeout`) de fallo generico, y cambiar el tipo de
+ * error cambiaria esa etiqueta.
+ */
+async function postJsonToProxy(url, body, timeoutMs) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify(body),
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 function escapeXml(value = '') {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -152,21 +174,16 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
   if (cached?.promise) return cached.promise
 
   const promise = (async () => {
-    const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-
     try {
-      const response = await fetch('/api/workspace-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
+      const response = await postJsonToProxy(
+        '/api/workspace-image',
+        {
           workspace,
           language,
           ...(apiKey ? { apiKey } : {}),
-        }),
-      })
+        },
+        Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs),
+      )
 
       if (!response.ok) {
         const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
@@ -215,8 +232,6 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
         return resolveErrorFallback(workspace, language, 'workspace_image_timeout')
       }
       throw error
-    } finally {
-      clearTimeout(timer)
     }
   })()
 
@@ -250,21 +265,16 @@ export async function fetchOpenRouterImageFallback({
   apiKey = '',
 } = {}) {
   const prompt = buildVisualGenerationPrompt(workspace, language)
-  const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
   try {
-    const response = await fetch('/api/openrouter-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
+    const response = await postJsonToProxy(
+      '/api/openrouter-image',
+      {
         prompt,
         language,
         ...(apiKey ? { apiKey } : {}),
-      }),
-    })
+      },
+      Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs),
+    )
 
     if (!response.ok) {
       const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
@@ -323,8 +333,6 @@ export async function fetchOpenRouterImageFallback({
         prompt,
       },
     }
-  } finally {
-    clearTimeout(timer)
   }
 }
 
@@ -341,15 +349,12 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
       trace: { provider: 'falai', source: 'empty_prompt', hasVideo: false, prompt },
     }
   }
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_POLICY_MS.falVideoFetchAbort)
   try {
-    const response = await fetch('/api/fal-video', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({ prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) }),
-    })
+    const response = await postJsonToProxy(
+      '/api/fal-video',
+      { prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) },
+      TIMEOUT_POLICY_MS.falVideoFetchAbort,
+    )
     if (!response.ok) {
       const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
       return {
@@ -380,7 +385,5 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
         prompt,
       },
     }
-  } finally {
-    clearTimeout(timer)
   }
 }

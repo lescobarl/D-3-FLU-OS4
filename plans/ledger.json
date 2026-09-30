@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-30",
+  "updated": "2026-09-22",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1050,6 +1050,24 @@
       "estado": "done",
       "evidencia": "tests/stateOwnershipGuard.test.ts",
       "origen": "auditoria-codigo"
+    },
+    {
+      "id": "P7.96",
+      "estado": "in_progress",
+      "titulo": "Vocabulario de SALTO triplicado en 3 motores de juegos (copia literal de 6 marcos)",
+      "evidencia": "src/core/games/gameUtils.ts:64 SKIP_CORE_FRAMES (dueno unico); adivinaCancion.ts:92, memoriaSecuencias.ts:34 y repiteTraduce.ts:47 componen con [...SKIP_CORE_FRAMES]. Medido antes: 3 listas literales identicas entre si y distintos de los otros 17 motores, que difieren a proposito."
+    },
+    {
+      "id": "P7.97",
+      "estado": "in_progress",
+      "titulo": "Fetch crudo SIN deadline a proveedor externo (fal.ai) y deadline triplicado en el proxy local",
+      "evidencia": "src/voice/lib/gemini.js:1774 (submit) y :1802/:1808 (poll y descarga) por fetchTextEngine con TIMEOUT_POLICY_MS.falVideoFetchAbort y Math.max(1, deadline - Date.now()); src/voice/lib/imageGeneration.js:26 postJsonToProxy (AbortController unico, antes 3 copias en :155,:253,:344)."
+    },
+    {
+      "id": "P7.98",
+      "estado": "in_progress",
+      "titulo": "console.* como registro de un catch (la constraint exige logCaughtError) en los ficheros limpios",
+      "evidencia": "src/app/gameActions.ts:72 src/components/BrowserProfilesPanel.tsx:96 src/components/ParticipantsPanel.tsx:104,:112 src/core/branding/useSeasonalBranding.ts:194 src/services/musicPlayer.ts:94,:150 src/voice/hooks/useFluVoiceAssistant.js:3819 por logCaughtError; src/voice/lib/fluTrace.js:107 con omision DECLARADA (ignorado:) por ser sink solo-dev."
     }
   ],
   "done": [

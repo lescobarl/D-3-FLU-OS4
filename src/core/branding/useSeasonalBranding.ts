@@ -191,7 +191,7 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
             setConfig(cfg);
             setLoaded(true);
         }).catch((err) => {
-            console.error('[useSeasonalBranding] Error loading config:', err);
+            logCaughtError('[useSeasonalBranding] cargar config', err);
             setLoaded(true); // Still mark as loaded so UI works with defaults
         });
     }, []);
