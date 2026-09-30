@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 const app = (): string => readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
 const dispatchModule = (): string =>
     readFileSync(join(process.cwd(), 'src/app/arbiterDispatch.ts'), 'utf8');
-const count = (src: string, re: RegExp): number => (src.match(re) || []).length;
+export const count = (src: string, re: RegExp): number => (src.match(re) || []).length;
 
 describe('auditoría de rutas de ejecución (una por intención)', () => {
     it('navegación: un único punto de ejecución (handleNavigationCommand)', () => {
@@ -52,3 +52,12 @@ describe('auditoría de rutas de ejecución (una por intención)', () => {
         expect(src).not.toMatch(/dispatchFluEvent\(\s*FLU_EVENTS\.GENERATE_DOCUMENT/);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('auditoria de rutas de ejecucion - el detector no es decorativo', () => {
+  it('marca la ruta duplicada y no la unica', () => {
+    expect(count('await handleNavigationCommand(x)', /await handleNavigationCommand\(/g)).toBe(1)
+    expect(count('await handleNavigationCommand(x)\nawait handleNavigationCommand(y)', /await handleNavigationCommand\(/g)).toBe(2)
+    expect(count('const a = 1', /await handleNavigationCommand\(/g)).toBe(0)
+  })
+})

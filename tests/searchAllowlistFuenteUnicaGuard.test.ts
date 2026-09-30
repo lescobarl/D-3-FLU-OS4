@@ -25,21 +25,34 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+/** Literales de allowlist de busqueda (mismo criterio del guard). */
+export function allowlistLiterals(src: string, file: string): string[] {
+  const offenders: string[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (RE.test(line)) offenders.push(`${file}:${i + 1}:${line.trim().slice(0, 110)}`)
+  })
+  return offenders
+}
+
 describe('C2 searchAllowlistFuenteUnica — allowlist solo desde config', () => {
   it('no hay literales de allowlist fuera de fluConfig.js', () => {
     const offenders: string[] = []
     for (const f of walk(SRC)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (r === CONFIG) continue
-      readFileSync(f, 'utf8')
-        .split(/\r?\n/)
-        .forEach((line, i) => {
-          if (RE.test(line)) offenders.push(`${r}:${i + 1}:${line.trim().slice(0, 110)}`)
-        })
+      offenders.push(...allowlistLiterals(readFileSync(f, 'utf8'), r))
     }
     expect(
       offenders,
       `Allowlist duplicada fuera de config (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
     ).toEqual([])
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C2 searchAllowlistFuenteUnica - el detector no es decorativo', () => {
+  it('marca la allowlist literal y deja pasar la que sale de config', () => {
+    expect(allowlistLiterals("const a = ['wikipedia.org','educ.ar']", 'f.ts')).toHaveLength(1)
+    expect(allowlistLiterals('const a = FLU_CONFIG.browser.search.allowlist', 'f.ts')).toEqual([])
   })
 })

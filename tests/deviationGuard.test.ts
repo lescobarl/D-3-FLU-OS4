@@ -44,21 +44,30 @@ interface Hit {
 function scan(pattern: RegExp): Hit[] {
     const hits: Hit[] = [];
     for (const file of walk(SRC)) {
-        const lines = fs.readFileSync(file, 'utf-8').split(/\r?\n/);
-        lines.forEach((line, index) => {
-            if (pattern.test(line)) {
-                hits.push({
-                    ref: `${path.relative(ROOT, file).replace(/\\/g, '/')}:${index + 1}`,
-                    text: line.trim().slice(0, 100),
-                });
-            }
-        });
+        hits.push(
+            ...scanText(
+                fs.readFileSync(file, 'utf-8'),
+                path.relative(ROOT, file).replace(/\\/g, '/'),
+                pattern,
+            ),
+        );
     }
     return hits;
 }
 
 function summary(hits: Hit[]): string {
     return hits.map((h) => `  ${h.ref}  ${h.text}`).join('\n');
+}
+
+/** Cada coincidencia de un pattern en un texto, como archivo:linea (alimentable). */
+export function scanText(src: string, rel: string, pattern: RegExp): Hit[] {
+    const hits: Hit[] = []
+    src.split(/\r?\n/).forEach((line, index) => {
+        if (pattern.test(line)) {
+            hits.push({ ref: rel + ":" + (index + 1), text: line.trim().slice(0, 100) })
+        }
+    })
+    return hits
 }
 
 function read(rel: string): string {
@@ -118,3 +127,11 @@ describe('Guard de desviaciones (anti-regresión)', () => {
         expect(read('src/lib/textUtils.ts')).toContain('export function normalizeForMatch');
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('deviationGuard - el detector no es decorativo', () => {
+  it('marca la desviacion sintetica y no el codigo limpio', () => {
+    expect(scanText('function stripDiacritics() {}', 'f.ts', /\bfunction\s+stripDiacritics\b/)).toHaveLength(1)
+    expect(scanText('const a = 1', 'f.ts', /\bfunction\s+stripDiacritics\b/)).toEqual([])
+  })
+})

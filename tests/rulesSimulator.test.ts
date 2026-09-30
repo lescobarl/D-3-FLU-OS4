@@ -187,8 +187,9 @@ const SIN_GUARD_CONGELADOS = [7, 8, 16];
 // ------------------------------------------------------------
 // ANTI-DERIVA: las reglas que AGENTS.md declara
 // ------------------------------------------------------------
-function reglasDeclaradasEnAgents(): number[] {
-    const md = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8').split(/\r?\n/);
+/** Reglas declaradas en el Anexo B de un texto (mismo criterio del simulador). */
+export function rulesDeclaredIn(mdText: string): number[] {
+    const md = mdText.split(/\r?\n/);
     const inicio = md.findIndex((l) => /^##\s*Anexo B/.test(l));
     if (inicio < 0) return [];
     const ids: number[] = [];
@@ -198,6 +199,10 @@ function reglasDeclaradasEnAgents(): number[] {
         if (m) ids.push(Number(m[1]));
     }
     return [...new Set(ids)].sort((a, b) => a - b);
+}
+
+function reglasDeclaradasEnAgents(): number[] {
+    return rulesDeclaredIn(readFileSync(join(ROOT, 'AGENTS.md'), 'utf8'));
 }
 
 describe('simulador de reglas - AGENTS.md Anexo B', () => {
@@ -259,5 +264,14 @@ describe('simulador de reglas - escenarios ejercitados con entrada real', () => 
 
     it('el mismo item repetido no duplica la lista', () => {
         expect(regla10SinDuplicado()).toBeNull();
+    });
+});
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('simulador de reglas - el detector no es decorativo', () => {
+    it('marca las reglas declaradas bajo el Anexo B y no las de fuera', () => {
+        const md = ['## Anexo B', '1. **uno**', '2. **dos**', '## Otra', '9. **nueve**'].join('\n');
+        expect(rulesDeclaredIn(md)).toEqual([1, 2]);
+        expect(rulesDeclaredIn('## Otra\n1. **uno**')).toEqual([]);
     });
 });

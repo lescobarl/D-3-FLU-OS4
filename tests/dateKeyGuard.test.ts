@@ -31,23 +31,29 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+/** Un fuente define el formateador de dia local (mismo criterio del guard). */
+export function isDateKeyImplementation(src: string): boolean {
+  const lines = src.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    if (isCommentLine(lines[i]) || !/getFullYear\s*\(/.test(lines[i])) continue
+    const win = lines.slice(i, i + 6).join("\n")
+    if (
+      /`[^`]*\$\{[^`}]*\}-\$\{[^`}]*\}-\$\{[^`}]*\}[^`]*`/.test(win) &&
+      /getMonth\(\)\s*\+\s*1/.test(win) &&
+      /getDate\(\)/.test(win) &&
+      !/getHours\(|getMinutes\(|getDay\(/.test(win)
+    ) return true
+  }
+  return false
+}
+
 /** Archivos con una implementación del formateador local getFullYear/getMonth/getDate. */
 export function dateKeyImplementations(files: string[] = walk(SRC)): string[] {
   const hits: string[] = []
   for (const f of files) {
-    const lines = readFileSync(f, 'utf8').split(/\r?\n/)
-    let found = false
-    for (let i = 0; i < lines.length && !found; i++) {
-      if (isCommentLine(lines[i]) || !/getFullYear\s*\(/.test(lines[i])) continue
-      const win = lines.slice(i, i + 6).join('\n')
-      const ok =
-        /`[^`]*\$\{[^}`]*\}-\$\{[^}`]*\}-\$\{[^}`]*\}[^`]*`/.test(win) &&
-        /getMonth\(\)\s*\+\s*1/.test(win) &&
-        /getDate\(\)/.test(win) &&
-        !/getHours\(|getMinutes\(|getDay\(/.test(win)
-      if (ok) found = true
+    if (isDateKeyImplementation(readFileSync(f, 'utf8'))) {
+      hits.push(relative(ROOT, f).replace(/\\/g, '/'))
     }
-    if (found) hits.push(relative(ROOT, f).replace(/\\/g, '/'))
   }
   return hits.sort()
 }
@@ -76,5 +82,19 @@ describe('C58 dayKey — contrato de comportamiento', () => {
   })
   it('rellena mes y día con dos dígitos', () => {
     expect(dayKey(new Date(2026, 2, 9))).toBe('2026-03-09')
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C58 dayKey - el detector no es decorativo', () => {
+  it('marca el formateador de dia sintetico y no el que solo formatea la hora', () => {
+    const impl = [
+      'const d = new Date()',
+      'const k = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`',
+    ].join('\n')
+    expect(isDateKeyImplementation(impl)).toBe(true)
+    const conHora = impl.replace('d.getDate()', 'd.getDate()}H${d.getHours()')
+    expect(isDateKeyImplementation(conHora)).toBe(false)
+    expect(isDateKeyImplementation('import { dayKey } from "../lib/dateKey"')).toBe(false)
   })
 })

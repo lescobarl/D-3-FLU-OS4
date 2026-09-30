@@ -14,14 +14,15 @@ import {
 
 const SRC = path.resolve(__dirname, '../src/voice/lib/conversationStream.js');
 
+/** Bucles de recorte en un fuente, ignorando comentarios (mismo criterio del guard). */
+export function stripLoopCount(src: string): number {
+  const body = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  return (body.match(/while \(chunk !== prev && passes < 12\)/g) || []).length;
+}
+
 describe('recorte de turnos previos del interino — fuente única', () => {
   it('existe un solo bucle de recorte en el módulo (ignorando comentarios)', () => {
-    const body = fs
-      .readFileSync(SRC, 'utf-8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|[^:])\/\/.*$/gm, '$1');
-    const matches = body.match(/while \(chunk !== prev && passes < 12\)/g) || [];
-    expect(matches.length).toBe(1);
+    expect(stripLoopCount(fs.readFileSync(SRC, 'utf-8'))).toBe(1);
   });
 
   it('stripPriorTurnsFromInterim equivale a recortar con todos los turnos', () => {
@@ -36,3 +37,12 @@ describe('recorte de turnos previos del interino — fuente única', () => {
     expect(stripLastClosedTurnFromInterim('eco anterior resto', ['eco anterior'])).toBe('resto');
   });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('recorte de turnos previos - el detector no es decorativo', () => {
+  it('marca el bucle real y no el comentado', () => {
+    expect(stripLoopCount('while (chunk !== prev && passes < 12) {}')).toBe(1)
+    expect(stripLoopCount('// while (chunk !== prev && passes < 12) {}')).toBe(0)
+    expect(stripLoopCount('const a = 1')).toBe(0)
+  })
+})

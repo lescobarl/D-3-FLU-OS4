@@ -12,6 +12,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 
+/** El fuente respeta el parametro de idioma (mismo criterio que las aserciones). */
+export function usesLanguageParam(src: string): boolean {
+    return src.includes('isEnglish');
+}
+
 // ============================================================
 // Helper: extraer lista de parámetros de una función
 // ============================================================
@@ -87,3 +92,11 @@ describe('🧪 Language Regression — GeminiService methods accept language par
         expect(src).toContain('language');
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('Language Regression - el detector no es decorativo', () => {
+    it('marca el fuente sin idioma y no el que lo usa', () => {
+        expect(usesLanguageParam('async generateResponse() { return 1 }')).toBe(false)
+        expect(usesLanguageParam(readFileSync('./src/services/gemini.ts', 'utf-8'))).toBe(true)
+    })
+})

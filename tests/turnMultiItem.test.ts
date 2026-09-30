@@ -11,6 +11,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseNoteIntentText } from '../src/voice/lib/noteIntentParser';
 
+/** El dedup del turno es por dominio+TEXTO (mismo criterio del guard). */
+export function dedupsByDomainAndText(src: string): boolean {
+    return src.includes('coveredKeys') && !src.includes('coveredDomains');
+}
+
 describe('turno con dos ítems del MISMO dominio', () => {
     it('dos fragmentos de nota distintos se estructuran por separado', () => {
         const a = parseNoteIntentText('apunta comprar pan');
@@ -24,7 +29,14 @@ describe('turno con dos ítems del MISMO dominio', () => {
         const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
         // La clave de cobertura combina dominio y texto → mismo dominio, distinto
         // fragmento, se conserva; el fragmento idéntico se descarta.
-        expect(app).toContain('coveredKeys');
-        expect(app).not.toContain('coveredDomains');
+        expect(dedupsByDomainAndText(app)).toBe(true);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('turno con dos items del MISMO dominio - el detector no es decorativo', () => {
+    it('marca el dedup por texto y no el dedup por dominio solo', () => {
+        expect(dedupsByDomainAndText('const k = coveredKeys')).toBe(true)
+        expect(dedupsByDomainAndText('const k = coveredDomains')).toBe(false)
+    })
+})

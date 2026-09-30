@@ -11,6 +11,11 @@ import { join } from 'node:path';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { logFluReply } from '../src/voice/lib/fluConversationLog';
 
+/** Llamadas directas a addFluMessage en un fuente (mismo criterio del guard). */
+export function addFluMessageCalls(src: string): string[] {
+    return src.match(/addFluMessage\(/g) || [];
+}
+
 const fluRows = () =>
     useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'flu');
 
@@ -48,8 +53,14 @@ describe('fluConversationLog — hablar deja fila en el historial', () => {
 
 describe('fluConversationLog — un solo escritor de la fila de FLU', () => {
     it('App.tsx no llama addFluMessage directo', () => {
-        const source = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
-        const calls = source.match(/addFluMessage\(/g) || [];
-        expect(calls).toEqual([]);
+        expect(addFluMessageCalls(readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8'))).toEqual([]);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('fluConversationLog - el detector no es decorativo', () => {
+    it('marca la escritura directa de la fila y no el escritor unico', () => {
+        expect(addFluMessageCalls('addFluMessage(text)')).toHaveLength(1)
+        expect(addFluMessageCalls('logFluReply(text)')).toEqual([])
+    })
+})

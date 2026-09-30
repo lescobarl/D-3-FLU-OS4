@@ -33,15 +33,22 @@ function hookSources(): Array<{ path: string; src: string }> {
   return out
 }
 
+/** Rutas /api/ literales en un fuente (mismo criterio del guard). */
+export function apiLiterals(src: string, rel: string): string[] {
+  const hits: string[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (isComment(line)) return
+    if (LITERAL_RE.test(line)) hits.push(rel + ":" + (i + 1))
+  })
+  return hits
+}
+
 describe('C63 - rutas del proxy de busqueda con dueno unico', () => {
   it('la capa de consumo (src/hooks) no hardcodea rutas /api/', () => {
     const hits: string[] = []
     for (const { path, src } of hookSources()) {
       const rel = path.slice(process.cwd().length + 1).replace(/\\/g, '/')
-      src.split(/\r?\n/).forEach((line, i) => {
-        if (isComment(line)) return
-        if (LITERAL_RE.test(line)) hits.push(`${rel}:${i + 1}`)
-      })
+      hits.push(...apiLiterals(src, rel))
     }
     expect(
       hits,
@@ -79,5 +86,14 @@ describe('C64 - el alias search.endpoint no duplica la ruta en la config', () =>
     const s = FLU_CONFIG.browser.search as { endpoint?: string; endpoints?: Record<string, string> }
     if (s.endpoint === undefined) return
     expect(s.endpoints?.web, 'hay alias search.endpoint pero no endpoints.web').toBe(s.endpoint)
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C63 - rutas del proxy - el detector no es decorativo', () => {
+  it('marca la ruta literal y deja pasar la resuelta por config', () => {
+    expect(apiLiterals("fetch('/api/search/web')", 'src/hooks/x.ts')).toHaveLength(1)
+    expect(apiLiterals("// fetch('/api/search/web')", 'src/hooks/x.ts')).toEqual([])
+    expect(apiLiterals('fetch(SEARCH_ENDPOINT_DEFAULTS.web)', 'src/hooks/x.ts')).toEqual([])
   })
 })

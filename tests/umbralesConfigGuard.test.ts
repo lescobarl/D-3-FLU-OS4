@@ -16,12 +16,25 @@ const FILES = [
 ]
 const RE = /0\.[0-9]{2}/
 
+/** Umbral numerico inline en un fuente (mismo criterio del guard). */
+export function hasInlineThreshold(src: string): boolean {
+  return RE.test(src)
+}
+
 describe('C38 umbralesConfig — umbrales desde config', () => {
   it('ningún módulo define umbrales numéricos inline', () => {
-    const offenders = FILES.filter((p) => existsSync(join(ROOT, p)) && RE.test(readFileSync(join(ROOT, p), 'utf8')))
+    const offenders = FILES.filter((p) => existsSync(join(ROOT, p)) && hasInlineThreshold(readFileSync(join(ROOT, p), 'utf8')))
     expect(
       offenders,
       `Módulos con umbrales inline (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
     ).toEqual([])
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C38 umbralesConfig - el detector no es decorativo', () => {
+  it('marca el umbral inline y deja pasar el que sale de config', () => {
+    expect(hasInlineThreshold('const umbral = 0.42')).toBe(true)
+    expect(hasInlineThreshold('const umbral = THRESHOLDS.voz')).toBe(false)
   })
 })

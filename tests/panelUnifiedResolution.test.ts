@@ -11,6 +11,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter';
 
+/** El fuente tiene una ruta PARALELA del panel (mismo criterio del guard). */
+export function hasParallelPanelRoute(src: string): boolean {
+    return ['accion.nombre', 'accion.contenido', 'resolveNoteRescue', 'resolvePanelRescue', 'panelRescue', 'viaDomain: true'].some(
+        (m) => src.includes(m),
+    );
+}
+
 const NOW = new Date(2026, 8, 17, 10, 0, 0, 0).getTime();
 const OPTS = { now: NOW } as never;
 
@@ -47,12 +54,7 @@ describe('panel derecho — un solo resolutor (árbitro determinista)', () => {
     // Guard ESTRUCTURAL: App tiene UNA sola rama que estructura el panel.
     it('App NO estructura por IA ni usa rescate/segunda ruta', () => {
         const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
-        expect(app.includes('accion.nombre')).toBe(false);
-        expect(app.includes('accion.contenido')).toBe(false);
-        expect(app.includes('resolveNoteRescue')).toBe(false);
-        expect(app.includes('resolvePanelRescue')).toBe(false);
-        expect(app.includes('panelRescue')).toBe(false);
-        expect(app.includes('viaDomain: true')).toBe(false);
+        expect(hasParallelPanelRoute(app)).toBe(false);
     });
 
     it('el schema del LLM ya no pide nombre/contenido de nota', () => {
@@ -60,3 +62,12 @@ describe('panel derecho — un solo resolutor (árbitro determinista)', () => {
         expect(/nombre\s*:/.test(g)).toBe(false);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('panel derecho - el detector no es decorativo', () => {
+    it('marca la ruta paralela sintetica y no el resolutor unico', () => {
+        expect(hasParallelPanelRoute('const x = accion.nombre')).toBe(true)
+        expect(hasParallelPanelRoute('const x = resolvePanelRescue(a, b)')).toBe(true)
+        expect(hasParallelPanelRoute('const x = resolveDeterministicCommand(t)')).toBe(false)
+    })
+})

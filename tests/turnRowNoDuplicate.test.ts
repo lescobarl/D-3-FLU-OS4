@@ -16,6 +16,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/lib/conversationTurnRow';
 
+/** Marcas `effectOnly: true` en un fuente (mismo criterio del guard). */
+export function effectOnlyMarks(src: string): number {
+    return (src.match(/\beffectOnly: true,/g) || []).length;
+}
+
 const userRows = () =>
     useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user');
 
@@ -137,5 +142,17 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
     ];
     it.each(PUERTA)('puerta de fila: %s', (_caso, payload, hayTexto, hablable, esperado) => {
         expect(escribeFilaDeUsuario(payload, { hayTexto, hablable })).toBe(esperado);
+    });
+});
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('fila del turno - el detector no es decorativo', () => {
+    it('la puerta distingue el efecto de servicio de la orden real', () => {
+        expect(escribeFilaDeUsuario({ effectOnly: true }, { hayTexto: true, hablable: true })).toBe(false);
+        expect(escribeFilaDeUsuario({}, { hayTexto: true, hablable: true })).toBe(true);
+    });
+    it('cuenta las marcas effectOnly del hook', () => {
+        expect(effectOnlyMarks('effectOnly: true,\neffectOnly: true,')).toBe(2);
+        expect(effectOnlyMarks('const a = 1')).toBe(0);
     });
 });

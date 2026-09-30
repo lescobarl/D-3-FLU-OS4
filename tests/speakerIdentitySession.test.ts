@@ -13,6 +13,13 @@
 import { describe, it, expect } from 'vitest';
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization';
 
+/** El hook fija el primario de sesion al oir la presentacion (mismo criterio del guard). */
+export function hookSetsSessionPrimary(src: string): boolean {
+    return /if \(introducedName && isProperSpeakerName\(introducedName\)\) sessionPrimarySpeakerRef\.current = introducedName/.test(
+        src,
+    );
+}
+
 const vozA = Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.1));
 const vozB = Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.37));
 
@@ -59,8 +66,14 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
             path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
             'utf8',
         );
-        expect(hook).toMatch(
-            /if \(introducedName && isProperSpeakerName\(introducedName\)\) sessionPrimarySpeakerRef\.current = introducedName/,
-        );
+        expect(hookSetsSessionPrimary(hook)).toBe(true);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('identidad de hablante - el detector no es decorativo', () => {
+    it('marca el hook que fija el primario y no el que no lo hace', () => {
+        expect(hookSetsSessionPrimary('if (introducedName && isProperSpeakerName(introducedName)) sessionPrimarySpeakerRef.current = introducedName')).toBe(true)
+        expect(hookSetsSessionPrimary('const x = introducedName')).toBe(false)
+    })
+})

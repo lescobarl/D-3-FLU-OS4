@@ -87,11 +87,11 @@ function summary(hits: Hit[]): string {
     return hits.map((h) => `  ${h.ref}  ${h.text}`).join('\n');
 }
 
-function outsideCanonical(hits: Hit[]): Hit[] {
+export function outsideCanonical(hits: Hit[]): Hit[] {
     return hits.filter((h) => !h.ref.startsWith(`${CANONICAL}:`));
 }
 
-function defPattern(name: string): RegExp {
+export function defPattern(name: string): RegExp {
     return new RegExp(`(?:export\\s+)?(?:function|const)\\s+${name}\\b`);
 }
 
@@ -173,5 +173,19 @@ describe('Contrato de comportamiento de las utilidades canónicas', () => {
         const { normalizeForMatch: mpNormalize } = await import('../src/services/musicPlayer');
         expect(mpNormalize('la   cancion')).toBe('la   cancion');
         expect(mpNormalize('  Canción  ')).toBe('cancion');
+    });
+});
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('utilidades de texto de fuente unica - el detector no es decorativo', () => {
+    it('marca la definicion fuera del canonico y no la del canonico', () => {
+        const hits: Hit[] = [
+            { ref: 'src/services/otro.ts:9', text: 'function shortText(x) {}' },
+            { ref: 'src/lib/textUtils.ts:9', text: 'function shortText(x) {}' },
+        ];
+        expect(outsideCanonical(hits)).toHaveLength(1);
+        expect(outsideCanonical(hits)[0].ref).toBe('src/services/otro.ts:9');
+        expect(defPattern('shortText').test('export function shortText')).toBe(true);
+        expect(defPattern('shortText').test('const otro = 1')).toBe(false);
     });
 });

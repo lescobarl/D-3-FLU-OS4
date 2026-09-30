@@ -15,6 +15,12 @@ import { isProgressiveExtension, resolveIngressCaptureText } from '../src/voice/
 const ROOT = process.cwd()
 const INGRESS = join(ROOT, 'src', 'voice', 'lib', 'transcriptIngress.js')
 
+/** transcriptIngress usa la MISMA funcion en finales e interims (mismo criterio del guard). */
+export function ingressReusesSingleTextFn(src: string): boolean {
+  const uses = (src.match(/resolveIngressCaptureText/g) || []).length
+  return uses >= 2 && src.includes('isProgressiveExtension') && !/cleanedInterim\.toLowerCase\(\)\.startsWith\(lastCommitted/.test(src)
+}
+
 describe('voiceProgressExtension — única fuente del texto de turno (§9)', () => {
   it('reconoce la extensión progresiva del caso real del log', () => {
     expect(
@@ -33,20 +39,17 @@ describe('voiceProgressExtension — única fuente del texto de turno (§9)', ()
   })
 
   it('transcriptIngress usa la MISMA función en finales e interims', () => {
-    const src = readFileSync(INGRESS, 'utf8')
-    const uses = (src.match(/resolveIngressCaptureText/g) || []).length
-    expect(
-      uses,
-      `transcriptIngress debe decidir el texto en UN solo lugar (finales + interims); usos=${uses}`,
-    ).toBeGreaterThanOrEqual(2)
-    // No debe re-derivar el criterio de "emisión que crece" por su cuenta.
-    expect(
-      src.includes('isProgressiveExtension'),
-      'transcriptIngress debe usar isProgressiveExtension, no re-derivar startsWith',
-    ).toBe(true)
-    expect(
-      /cleanedInterim\.toLowerCase\(\)\.startsWith\(lastCommitted/.test(src),
-      'transcriptIngress no debe re-derivar la extensión con startsWith propio',
-    ).toBe(false)
+        expect(ingressReusesSingleTextFn(readFileSync(INGRESS, 'utf8'))).toBe(true)
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('voiceProgressExtension - el detector no es decorativo', () => {
+  it('marca el fuente que re-deriva el criterio y no el que usa la fuente unica', () => {
+    const bueno = 'resolveIngressCaptureText(a, b)\nresolveIngressCaptureText(c, d)\nisProgressiveExtension(x, y)'
+    expect(ingressReusesSingleTextFn(bueno)).toBe(true)
+    const malo = bueno + "\nconst e = cleanedInterim.toLowerCase().startsWith(lastCommitted)"
+    expect(ingressReusesSingleTextFn(malo)).toBe(false)
+    expect(ingressReusesSingleTextFn('const a = 1')).toBe(false)
   })
 })

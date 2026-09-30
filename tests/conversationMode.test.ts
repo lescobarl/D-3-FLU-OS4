@@ -14,6 +14,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createConversationModeController } from '../src/voice/lib/conversationMode';
 
+/** Escrituras directas del flag de modo en un fuente (mismo criterio del guard). */
+export function directModeWrites(src: string): string[] {
+    const codeLines = src.split('\n').filter((line) => {
+        const t = line.trim();
+        return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+    });
+    return codeLines.flatMap(
+        (line) => line.match(/conversationActiveRef\.current\s*=\s*(true|false)/g) || [],
+    );
+}
+
 describe('conversationMode — comportamiento (orden y única llamada)', () => {
     it('open() fija el modo ANTES de arrancar la escucha y la llama una vez', async () => {
         const conversationActiveRef = { current: false };
@@ -62,16 +73,7 @@ describe('conversationMode — comportamiento (orden y única llamada)', () => {
 describe('conversationMode — una sola ruta (sin doble escritor del flag)', () => {
     it('App.tsx no escribe conversationActiveRef.current a mano', () => {
         const source = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
-        const codeLines = source
-            .split('\n')
-            .filter((line) => {
-                const trimmed = line.trim();
-                return !trimmed.startsWith('//') && !trimmed.startsWith('*') && !trimmed.startsWith('/*');
-            });
-        const directWrites = codeLines.flatMap(
-            (line) => line.match(/conversationActiveRef\.current\s*=\s*(true|false)/g) || [],
-        );
-        expect(directWrites).toEqual([]);
+        expect(directModeWrites(source)).toEqual([]);
     });
 
     it('el arranque tras onboarding abre la escucha por el controlador', () => {
@@ -87,3 +89,12 @@ describe('conversationMode — una sola ruta (sin doble escritor del flag)', () 
         );
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('conversationMode - el detector no es decorativo', () => {
+    it('marca la escritura directa del flag y no la delegada', () => {
+        expect(directModeWrites('conversationActiveRef.current = true')).toHaveLength(1)
+        expect(directModeWrites('// conversationActiveRef.current = true')).toEqual([])
+        expect(directModeWrites('conversationMode.enter()')).toEqual([])
+    })
+})

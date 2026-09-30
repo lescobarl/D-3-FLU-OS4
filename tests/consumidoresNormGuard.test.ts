@@ -20,21 +20,34 @@ const strip = (line: string) => {
   return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
 }
 
+/** Barrido de un fuente con el MISMO criterio del guard, alimentable. */
+export function normOffenders(src: string, file: string): string[] {
+  const offenders: string[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    const s = strip(line)
+    if (/^\s*import/.test(s)) return
+    if (RE.test(s)) offenders.push(`${file}:${i + 1}:${line.trim().slice(0, 110)}`)
+  })
+  return offenders
+}
+
 describe('C36 consumidoresNorm — consumidores no re-normalizan', () => {
   it('ningún consumidor llama normalizadores de la frase canónica', () => {
     const offenders: string[] = []
-    for (const p of FILES) {
-      readFileSync(join(ROOT, p), 'utf8')
-        .split(/\r?\n/)
-        .forEach((line, i) => {
-          const s = strip(line)
-          if (/^\s*import/.test(s)) return
-          if (RE.test(s)) offenders.push(`${p}:${i + 1}:${line.trim().slice(0, 110)}`)
-        })
-    }
+    for (const p of FILES) offenders.push(...normOffenders(readFileSync(join(ROOT, p), 'utf8'), p))
     expect(
       offenders,
       `Re-normalización en consumidores (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
     ).toEqual([])
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C36 consumidoresNorm - el detector no es decorativo', () => {
+  it('marca la re-normalizacion y deja pasar el codigo limpio', () => {
+    expect(normOffenders('const t = cleanForSpeech(x)', 'f.ts')).toHaveLength(1)
+    expect(normOffenders('const t = collapseStutter(x)', 'f.ts')).toHaveLength(1)
+    expect(normOffenders('// cleanForSpeech(x)', 'f.ts')).toEqual([])
+    expect(normOffenders('const t = 1', 'f.ts')).toEqual([])
   })
 })

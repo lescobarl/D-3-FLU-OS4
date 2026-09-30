@@ -35,16 +35,22 @@ function walk(dir: string, acc: string[] = []): string[] {
 }
 
 /** `archivo:línea` con un literal de URL de proveedor fuera de la config canónica. */
+/** Literales de URL de proveedor en un fuente (mismo criterio del guard). */
+export function providerUrlLines(src: string, rel: string): string[] {
+  const hits: string[] = []
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (isCommentLine(line)) return
+    if (PROVIDER_URL.test(line)) hits.push(rel + ":" + (i + 1))
+  })
+  return hits
+}
+
 export function providerUrlLiterals(files: string[] = walk(SRC)): string[] {
   const hits: string[] = []
   for (const f of files) {
     const rel = relative(ROOT, f).split(sep).join('/')
     if (CANONICAL.has(rel)) continue
-    const lines = readFileSync(f, 'utf8').split(/\r?\n/)
-    lines.forEach((line, i) => {
-      if (isCommentLine(line)) return
-      if (PROVIDER_URL.test(line)) hits.push(`${rel}:${i + 1}`)
-    })
+    hits.push(...providerUrlLines(readFileSync(f, 'utf8'), rel))
   }
   return hits
 }
@@ -64,5 +70,14 @@ describe('C41 providerUrlLiterals — contrato de comportamiento', () => {
     expect(`${OPENROUTER_DEFAULTS.API_URL}/chat/completions`).toBe(
       'https://openrouter.ai/api/v1/chat/completions',
     )
+  })
+})
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('C41 providerUrlLiterals - el detector no es decorativo', () => {
+  it('marca la URL literal y deja pasar la que sale de la config', () => {
+    expect(providerUrlLines("const u = 'https://openrouter.ai/api/v1'", 'x.ts')).toHaveLength(1)
+    expect(providerUrlLines('// https://openrouter.ai/api/v1', 'x.ts')).toEqual([])
+    expect(providerUrlLines('const u = OPENROUTER_DEFAULTS.API_URL', 'x.ts')).toEqual([])
   })
 })

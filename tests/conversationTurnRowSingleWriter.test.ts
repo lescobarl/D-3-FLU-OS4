@@ -15,6 +15,11 @@ import { useIntegrationStore } from '../src/store/integrationStore';
 
 const FRASE = 'okay flow crea una cita';
 
+/** Llamadas a commitUserTurnRow en un fuente (mismo criterio del guard). */
+export function commitUserTurnRowCalls(src: string): number {
+    return (src.match(/commitUserTurnRow\(/g) || []).length;
+}
+
 function history() {
     return useIntegrationStore.getState().conversationHistory;
 }
@@ -79,7 +84,15 @@ describe('unificación — un solo escritor de la fila del usuario', () => {
     });
 
     it('App delega la fila del usuario en commitUserTurnRow (un solo sitio)', () => {
-        const calls = appSource().match(/commitUserTurnRow\(/g) || [];
-        expect(calls.length).toBe(1);
+        expect(commitUserTurnRowCalls(appSource())).toBe(1);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('un solo escritor - el detector no es decorativo', () => {
+    it('cuenta los escritores sinteticos y no el que delega', () => {
+        expect(commitUserTurnRowCalls('commitUserTurnRow({ text })')).toBe(1)
+        expect(commitUserTurnRowCalls('commitUserTurnRow(a)\ncommitUserTurnRow(b)')).toBe(2)
+        expect(commitUserTurnRowCalls('row.commit({ text })')).toBe(0)
+    })
+})

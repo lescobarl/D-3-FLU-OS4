@@ -56,7 +56,7 @@ function methodDeclLine(content: string, method: string): number {
     return content.slice(0, match.index).split('\n').length;
 }
 
-function implementsEngine(content: string): boolean {
+export function implementsEngine(content: string): boolean {
     return IAISERVICE_METHODS.every((m) => methodDeclLine(content, m) > 0);
 }
 
@@ -111,3 +111,12 @@ describe('Guard — una sola implementación del motor IAIService', () => {
         ).toEqual([]);
     });
 });
+
+// P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
+describe('aiServiceSingleImpl - el detector no es decorativo', () => {
+  it('marca el motor sintetico completo y no el que le falta un metodo', () => {
+    const motor = IAISERVICE_METHODS.map((m) => "  async " + m + "() {}").join("\n")
+    expect(implementsEngine(motor)).toBe(true)
+    expect(implementsEngine(motor.replace("async generateDocument", "generateDocument"))).toBe(false)
+  })
+})
