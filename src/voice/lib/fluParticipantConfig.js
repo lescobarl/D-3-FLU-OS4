@@ -4,6 +4,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { normalizeLang } from '../../core/config/localeConfig';
 import { hasLocalStorage, localGet, localRemove, localSet } from '../../core/storage/localStore';
 
 export const FLU_PARTICIPANT_STORAGE_KEY = 'flu-participant-settings'
@@ -164,13 +165,13 @@ export function isFluParticipantEnabled(config = FLU_CONFIG) {
 
 export function resolveFluParticipantFieldLabel(key = '', language = 'es', config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.fields?.[key] || {}
-  const lang = language === 'en' && entry.en ? 'en' : 'es'
+  const lang = normalizeLang(language)
   return entry[lang] || entry.es || entry.en || key
 }
 
 export function resolveFluParticipantFieldHint(key = '', language = 'es', config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.fieldHints?.[key] || {}
-  const lang = language === 'en' && entry.en ? 'en' : 'es'
+  const lang = normalizeLang(language)
   return entry[lang] || entry.es || entry.en || ''
 }
 

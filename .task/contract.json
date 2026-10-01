@@ -131,6 +131,7 @@
     "src/voice/lib/embeddingConfig.js",
     "src/voice/lib/embeddingFrames.js",
     "src/voice/lib/fluConfig.js",
+    "src/voice/lib/fluParticipantConfig.js",
     "src/voice/lib/fluSpeech.js",
     "src/voice/lib/fluTrace.js",
     "src/voice/lib/fluVisualPipeline.js",
