@@ -73,7 +73,7 @@ interface ApplyConfigContext {
 // ============================================================
 
 /** Convierte un valor booleano lenient ("true"/"false"/"1"/"0"/"sí"/"no"). */
-function parseBoolean(value: string): boolean | null {
+export function parseBoolean(value: string): boolean | null {
     const v = value.trim().toLowerCase();
     const truthy = ['true', '1', 'yes', 'si', 'sí', 'on', 'activar', 'activa', 'encender', 'mostrar', 'visible'];
     const falsy = ['false', '0', 'no', 'off', 'desactivar', 'desactiva', 'apagar', 'ocultar', 'oculta', 'invisible'];
@@ -87,7 +87,7 @@ function parseBoolean(value: string): boolean | null {
  * y convirtiendo unidades de entrada (minutes/seconds) a ms si hace falta.
  * `apply` recibe el número ya validado para el store objetivo.
  */
-function applyNumberConfig(
+export function applyNumberConfig(
     entry: ConfigCatalogEntry,
     raw: string,
     apply: (n: number) => void,
