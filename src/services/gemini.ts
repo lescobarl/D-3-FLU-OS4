@@ -50,7 +50,7 @@ import { pickText } from '../lib/uiStrings';
 /**
  * Build diagnostics metadata for a Gemini response.
  */
-function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics {
+export function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics {
     const savedModel = readStorage<string | null>(STORAGE_KEYS.TEXT_MODEL, null);
     return {
         provider: 'google-gemini',

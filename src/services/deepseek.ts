@@ -86,7 +86,7 @@ export function hasUsableTextBackend(): boolean {
  * Devuelve una cadena vacía cuando no hay personalización activa (sin cambios de
  * comportamiento en el caso por defecto).
  */
-function buildPersonalizationRule(options: AIRequestOptions, isEnglish: boolean): string {
+export function buildPersonalizationRule(options: AIRequestOptions, isEnglish: boolean): string {
     const parts: string[] = [];
     if (options.traits && options.traits.length > 0) {
         parts.push(
