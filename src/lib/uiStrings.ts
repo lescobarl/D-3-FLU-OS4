@@ -92,12 +92,40 @@ export const UI_STRINGS = {
     sin_clave_la_generacion_de_video_produce_s: { es: 'Sin clave, la generación de video produce solo guion/storyboard (no video real).', en: 'Without a key, video generation produces only script/storyboard.' },
     tu_lista_de_compras_esta_vacia: { es: 'Tu lista de compras está vacía.', en: 'Your shopping list is empty.' },
     url_de_api: { es: 'URL de API', en: 'API URL' },
+    actualice_label: { es: 'Actualicé "{label}".', en: 'Updated "{label}".' },
+    cancelado_scoped: { es: 'Cancelado{scoped}.', en: 'Cancelled{scoped}.' },
+    contexto_de_documento_subido_por_el_usua: { es: '[Contexto de documento subido por el usuario: {texto_extraido}]', en: '[Document context uploaded by user: {texto_extraido}]' },
+    contexto_de_documento_subido_por_el_usua_2: { es: '[Contexto de documento subido por el usuario: {ctx}]', en: '[Document context uploaded by user: {ctx}]' },
+    de_nivel_nivel: { es: 'de nivel {nivel}', en: 'at {nivel} level' },
+    el_dd_mm_yyyy_a_las_time: { es: 'el {dd}/{mm}/{yyyy} a las {time}', en: 'on {yyyy}-{mm}-{dd} at {time}' },
+    encontre_length_elementos: { es: 'Encontré {length} elementos.', en: 'I found {length} items.' },
+    error_http_de_gemini_status: { es: 'Error HTTP de Gemini ({status}).', en: 'Gemini HTTP error {status}.' },
+    hoy_a_las_time: { es: 'hoy a las {time}', en: 'today at {time}' },
+    label_no_esta_en_la_lista_de_compras: { es: '"{label}" no está en la lista de compras.', en: '"{label}" is not on the shopping list.' },
+    lista_de_compras_lines: { es: 'Lista de compras: {lines}', en: 'Shopping list: {lines}' },
+    listo_guarde_en_tu_diario_content: { es: 'Listo, guardé en tu diario: "{content}".', en: 'Done, I saved your diary entry: "{content}".' },
+    listo_quite_item_de_la_lista: { es: 'Listo, quité {item} de la lista.', en: 'Done, I removed {item} from the list.' },
+    manana_a_las_time: { es: 'mañana a las {time}', en: 'tomorrow at {time}' },
+    no_encontre_item_en_la_lista: { es: 'No encontré "{item}" en la lista.', en: 'I couldn\'t find "{item}" in the list.' },
+    no_tengo_a_name_en_tus_contactos: { es: 'No tengo a {name} en tus contactos.', en: 'I don\'t have {name} in your contacts.' },
+    no_tengo_correo_de_name: { es: 'No tengo correo de {name}.', en: 'I don\'t have an email for {name}.' },
+    no_tengo_telefono_de_name: { es: 'No tengo teléfono de {name}.', en: 'I don\'t have a phone number for {name}.' },
+    quite_label_de_la_lista_de_compras: { es: 'Quité "{label}" de la lista de compras.', en: 'Removed "{label}" from the shopping list.' },
+    sobre_materia: { es: 'sobre {materia}', en: 'about {materia}' },
 } as const;
 
 export type UiStringKey = keyof typeof UI_STRINGS;
 
-/** Texto de UI en el idioma activo. */
-export function pickText(language: string, key: UiStringKey): string {
+/** Texto de UI en el idioma activo. Soporta marcadores {nombre} via params. */
+export function pickText(
+    language: string,
+    key: UiStringKey,
+    params?: Record<string, string | number>,
+): string {
     const labels = UI_STRINGS[key];
-    return pickLabel(labels, language, labels.es);
+    const texto: string = pickLabel(labels, language, labels.es);
+    if (!params) return texto;
+    return texto.replace(/\{(\w+)\}/g, (marcador, nombre) =>
+        nombre in params ? String(params[nombre]) : marcador,
+    );
 }

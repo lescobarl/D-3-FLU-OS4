@@ -1,4 +1,5 @@
 import { normalizeLang } from '../config/localeConfig';
+import { pickText } from '../../lib/uiStrings';
 // ============================================================
 // diaryIntentParser — Reconocimiento determinista del DIARIO
 // ------------------------------------------------------------
@@ -53,9 +54,7 @@ export function parseDiaryIntent(
     handled: true,
     action: 'diary.addEntry',
     reply:
-      lang === 'en'
-        ? `Done, I saved your diary entry: "${content}".`
-        : `Listo, guardé en tu diario: "${content}".`,
+      pickText(lang, 'listo_guarde_en_tu_diario_content', { content }),
     data: { content },
   };
 }

@@ -142,21 +142,19 @@ function formatReminderWhen(at: number, language: 'es' | 'en'): string {
     const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
     if (date.toDateString() === now.toDateString()) {
-        return language === 'en' ? `today at ${time}` : `hoy a las ${time}`;
+        return pickText(language, 'hoy_a_las_time', { time });
     }
 
     const tomorrow = new Date(now);
     tomorrow.setDate(now.getDate() + 1);
     if (date.toDateString() === tomorrow.toDateString()) {
-        return language === 'en' ? `tomorrow at ${time}` : `mañana a las ${time}`;
+        return pickText(language, 'manana_a_las_time', { time });
     }
 
     const dd = String(date.getDate()).padStart(2, '0');
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const yyyy = date.getFullYear();
-    return language === 'en'
-        ? `on ${yyyy}-${mm}-${dd} at ${time}`
-        : `el ${dd}/${mm}/${yyyy} a las ${time}`;
+    return pickText(language, 'el_dd_mm_yyyy_a_las_time', { yyyy, mm, dd, time });
 }
 
 /**

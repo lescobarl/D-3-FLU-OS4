@@ -7,6 +7,7 @@
 // ============================================================
 import type { DocumentContract } from '../../types/documentContracts';
 
+import { pickText } from '../../lib/uiStrings';
 export function buildDocumentInsumo(
   contract: DocumentContract | null | undefined,
   language = 'es',
@@ -14,7 +15,5 @@ export function buildDocumentInsumo(
   if (!contract) return null;
   const ctx = String(contract.qa_context || contract.resumen || '').trim();
   if (!ctx) return null;
-  return language === 'en'
-    ? `[Document context uploaded by user: ${ctx}]`
-    : `[Contexto de documento subido por el usuario: ${ctx}]`;
+  return pickText(language, 'contexto_de_documento_subido_por_el_usua_2', { ctx });
 }

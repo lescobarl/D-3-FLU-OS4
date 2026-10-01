@@ -108,9 +108,7 @@ export function formatGeminiUserMessage(error = null, language = 'es', { fallbac
   }
   if (code.startsWith('gemini_http_')) {
     const status = error?.status || code.replace('gemini_http_', '')
-    return lang === 'en'
-      ? `Gemini HTTP error ${status}.`
-      : `Error HTTP de Gemini (${status}).`
+    return pickText(lang, 'error_http_de_gemini_status', { status })
   }
   if (raw.startsWith('Gemini error')) {
     return raw.length > 120 ? `${raw.slice(0, 117)}…` : raw

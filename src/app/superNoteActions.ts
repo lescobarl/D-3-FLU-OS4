@@ -115,9 +115,7 @@ export function superNoteItemRemovedReply(
 ): string {
     if (!result.ok) return pickText(lang, 'no_pude_actualizar_la_nota');
     if (!result.removed) {
-        return lang === 'en'
-            ? `I couldn't find "${item}" in the list.`
-            : `No encontré "${item}" en la lista.`;
+        return pickText(lang, 'no_encontre_item_en_la_lista', { item });
     }
-    return lang === 'en' ? `Done, I removed ${item} from the list.` : `Listo, quité ${item} de la lista.`;
+    return pickText(lang, 'listo_quite_item_de_la_lista', { item });
 }

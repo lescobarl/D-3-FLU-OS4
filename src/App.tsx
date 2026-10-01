@@ -861,7 +861,7 @@ function App() {
                     const scoped = cmd.scopeDays?.length
                         ? ` (${describeWeekdays(cmd.scopeDays, lang)})`
                         : '';
-                    return lang === 'en' ? `Cancelled${scoped}.` : `Cancelado${scoped}.`;
+                    return pickText(lang, 'cancelado_scoped', { scoped });
                 }
                 case 'agenda.update': {
                     if (!kind) return '';
@@ -2813,14 +2813,10 @@ function App() {
                         (i) => i.label.toLowerCase() === label.toLowerCase(),
                     );
                     if (!item) {
-                        return lang === 'en'
-                            ? `"${label}" is not on the shopping list.`
-                            : `"${label}" no está en la lista de compras.`;
+                        return pickText(lang, 'label_no_esta_en_la_lista_de_compras', { label });
                     }
                     await shopping.toggle(item.id);
-                    return lang === 'en'
-                        ? `Updated "${item.label}".`
-                        : `Actualicé "${item.label}".`;
+                    return pickText(lang, 'actualice_label', { label: item.label });
                 }
                 case 'shopping.remove': {
                     const label = String(data.label || '').trim();
@@ -2828,14 +2824,10 @@ function App() {
                         (i) => i.label.toLowerCase() === label.toLowerCase(),
                     );
                     if (!item) {
-                        return lang === 'en'
-                            ? `"${label}" is not on the shopping list.`
-                            : `"${label}" no está en la lista de compras.`;
+                        return pickText(lang, 'label_no_esta_en_la_lista_de_compras', { label });
                     }
                     await shopping.remove(item.id);
-                    return lang === 'en'
-                        ? `Removed "${item.label}" from the shopping list.`
-                        : `Quité "${item.label}" de la lista de compras.`;
+                    return pickText(lang, 'quite_label_de_la_lista_de_compras', { label: item.label });
                 }
                 case 'shopping.list': {
                     const pending = shopping.items.filter((i) => !i.checked);
@@ -2843,9 +2835,7 @@ function App() {
                         return pickText(lang, 'tu_lista_de_compras_esta_vacia');
                     }
                     const lines = pending.map((i) => i.label).join(' | ');
-                    return lang === 'en'
-                        ? `Shopping list: ${lines}`
-                        : `Lista de compras: ${lines}`;
+                    return pickText(lang, 'lista_de_compras_lines', { lines });
                 }
                 default:
                     return '';
@@ -2909,24 +2899,18 @@ function App() {
             if (result.reason === 'missing-phone') {
                 return (
                     fill(voice.missingPhone) ||
-                    (lang === 'en'
-                        ? `I don't have a phone number for ${name}.`
-                        : `No tengo teléfono de ${name}.`)
+                    (pickText(lang, 'no_tengo_telefono_de_name', { name }))
                 );
             }
             if (result.reason === 'missing-email') {
                 return (
                     fill(voice.missingEmail) ||
-                    (lang === 'en'
-                        ? `I don't have an email for ${name}.`
-                        : `No tengo correo de ${name}.`)
+                    (pickText(lang, 'no_tengo_correo_de_name', { name }))
                 );
             }
             return (
                 fill(voice.contactNotFound) ||
-                (lang === 'en'
-                    ? `I don't have ${name} in your contacts.`
-                    : `No tengo a ${name} en tus contactos.`)
+                (pickText(lang, 'no_tengo_a_name_en_tus_contactos', { name }))
             );
         },
         [deviceActions, languageRef],
@@ -3217,9 +3201,7 @@ function App() {
                 if (result.texto_extraido) {
                     // 1. El contexto entra al historial (única fuente de verdad); Gemini
                     //    lo ve por derivación del store, sin canal lateral.
-                    const contextLabel = language === 'en'
-                        ? `[Document context uploaded by user: ${result.texto_extraido}]`
-                        : `[Contexto de documento subido por el usuario: ${result.texto_extraido}]`;
+                    const contextLabel = pickText(language, 'contexto_de_documento_subido_por_el_usua', { texto_extraido: result.texto_extraido });
                     const entry = {
                         id: uuidv4(),
                         role: 'system' as const,
@@ -3250,13 +3232,13 @@ function App() {
                     const profileTemplates = greetingCfg?.[profile] || greetingCfg?.default || {};
                     const template = profileTemplates[normalizeLang(language)] || profileTemplates.es || '';
                     const itemsLabel = result.problemas.length > 0
-                        ? (language === 'en' ? `I found ${result.problemas.length} items.` : `Encontré ${result.problemas.length} elementos.`)
+                        ? (pickText(language, 'encontre_length_elementos', { length: result.problemas.length }))
                         : '';
                     const materiaLabel = result.materia
-                        ? (language === 'en' ? `about ${result.materia}` : `sobre ${result.materia}`)
+                        ? (pickText(language, 'sobre_materia', { materia: result.materia }))
                         : '';
                     const nivelLabel = result.nivel
-                        ? (language === 'en' ? `at ${result.nivel} level` : `de nivel ${result.nivel}`)
+                        ? (pickText(language, 'de_nivel_nivel', { nivel: result.nivel }))
                         : '';
                     const greeting = template
                         .replace(/\{materia\}/g, materiaLabel)
