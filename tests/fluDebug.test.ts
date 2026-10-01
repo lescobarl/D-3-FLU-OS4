@@ -103,9 +103,12 @@ describe('fluDebug — contadores del informe', () => {
         expect(report.recentViolations).toEqual([]);
     });
 
-    it('clearFluDebug vacia contadores y violaciones (el informe vuelve a cero)', () => {
+    it('clearFluDebug deja una sesion NUEVA: contadores, ultimo valor y contexto', () => {
         debugRecordHistoryError('fallo');
         debugRecordStreamSkip('empty-capture');
+        debugRecordStreamEmit('hola', true, false, false, '');
+        debugRecordLogEmit('hola', 'Hablante 1', false);
+        debugUpdateContext('listening', true, 7);
         expect(getFluDebugReport().counters.violations).toBeGreaterThan(0);
 
         clearFluDebug();
@@ -113,9 +116,15 @@ describe('fluDebug — contadores del informe', () => {
 
         expect(report.counters.micEvents).toBe(0);
         expect(report.counters.streamSkips).toBe(0);
+        expect(report.counters.logEmits).toBe(0);
         expect(report.counters.violations).toBe(0);
         expect(report.last.micInterim).toBe('');
         expect(report.last.log).toBe('');
+        expect(report.last.speaker).toBe('');
+        // El CONTEXTO no se hereda: la sesion anterior dejo 7 filas y "listening".
+        expect(check('log-rows-tracked')?.detail).toBe('0 filas UI / 0 debug');
+        expect(check('log-rows-tracked')?.pass).toBe(true);
+        expect(check('recognition-alive')?.detail).toBe('idle');
     });
 });
 
@@ -256,9 +265,8 @@ describe('fluDebug — invariantes de dominio', () => {
     });
 
     it('los checks anti-vacuidad tienen umbral: 10 syncs sin filas dejan el log en rojo', () => {
-        // HALLAZGO: clearFluDebug() NO reinicia el contexto (logRowCount, listeningStatus),
-        // asi que 'log-rows-tracked' quedaria verde por herencia de otro test. Se fija a 0.
-        debugUpdateContext('idle', false, 0);
+        // Sin fijar el contexto a mano: esto mide que clearFluDebug (en el beforeEach)
+        // SI deja la sesion en cero. Si volviera a heredar logRowCount, este caso cae.
         for (let i = 0; i < 10; i += 1) {
             debugRecordStreamEmit(`vuelta ${i}`, false, false, false, '');
         }

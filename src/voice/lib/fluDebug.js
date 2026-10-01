@@ -846,7 +846,15 @@ export function getFluDebugReport() {
   }
 }
 
+/**
+ * Reinicia la SESION de diagnostico: contadores, colecciones, ultimo valor
+ * visto y CONTEXTO. Un clear a medias dejaba el informe verde por herencia:
+ * 'log-rows-tracked' y 'recognition-alive' leen campos de contexto
+ * (logRowCount, listeningStatus) que antes sobrevivian al clear, asi que la
+ * sesion nueva arrancaba con el estado de la anterior.
+ */
 export function clearFluDebug() {
+  // Contadores de la sesion
   state.micEvents = 0
   state.streamSyncs = 0
   state.logEmits = 0
@@ -857,23 +865,47 @@ export function clearFluDebug() {
   state.recognitionEnds = 0
   state.speakerNews = 0
   state.speakerPrunes = 0
+  state.speakerRegisters = 0
+  state.speakerChangeCommits = 0
+  state.finalShorterThanInterim = 0
+  state.commandDispatches = 0
+  state.commandSkips = 0
+  state.commandLogCommits = 0
+  state.historyErrors = 0
+  state.liveShrinks = 0
+  state.logShrinks = 0
+  state.workspaceImageRequests = 0
+  state.workspaceImageSuccess = 0
+  state.workspaceImageFail = 0
+  // Colecciones
   state.logSpeakerLabels = []
   state.clusterLabels = []
+  state.violations = []
+  state.logRowTexts = []
+  state.logRowsPrefixChainOk = true
+  // Ultimo valor visto (lo que el panel muestra como "ahora")
+  state.lastMicAt = 0
+  state.lastMicInterim = ''
+  state.lastMicFinal = ''
+  state.lastLive = ''
+  state.lastLogText = ''
+  state.lastLogSpeaker = ''
+  state.lastSession = ''
+  state.lastCommandPlan = ''
+  state.lastCommandId = ''
+  state.lastOnresultAt = 0
+  state.workspaceImageLastSource = ''
   state.maxLiveLen = 0
   state.maxLogLen = 0
   state.minuteKnowledgeRows = 0
   state.minuteKnowledgePromptRows = 0
   state.minuteKnowledgePromptChars = 0
   state.minuteKnowledgeTrimmed = false
-  state.liveShrinks = 0
-  state.logShrinks = 0
-  state.violations = []
-  state.logRowTexts = []
-  state.logRowsPrefixChainOk = true
-  state.lastMicInterim = ''
-  state.lastMicFinal = ''
-  state.lastLive = ''
-  state.lastLogText = ''
+  // Contexto: la sesion nueva no hereda el estado de la anterior
+  state.recognitionActive = false
+  state.listeningStatus = 'idle'
+  state.conversationActive = false
+  state.logRowCount = 0
   state.startedAt = Date.now()
 }
 
