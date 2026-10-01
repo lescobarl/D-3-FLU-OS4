@@ -183,7 +183,7 @@ interface AIProviderMetrics {
 // Evaluador de factores
 // -----------------------------------------------------------
 
-class FactorEvaluator {
+export class FactorEvaluator {
     private metricsHistory: Map<string, AIProviderMetrics[]> = new Map();
     private readonly maxHistorySize = 100;
     
