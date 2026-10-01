@@ -57,6 +57,15 @@ export default defineConfig({
         // a 3 en un runner de 4 vCPU.
         maxWorkers: Math.max(2, Math.min(10, availableParallelism() - 1)),
         minWorkers: 2,
+        // Cobertura (v8). Una corrida SIN filtro sigue exigiendo autorizacion
+        // (assertSuiteScope): cubrir todo el repo es la suite completa (AGENTS.md 5).
+        coverage: {
+            provider: 'v8',
+            include: ['src/**/*.{ts,tsx,js,jsx}'],
+            exclude: ['src/dev/**', 'src/server/**', '**/*.d.ts'],
+            reporter: ['text-summary', 'json-summary'],
+            reportsDirectory: 'reports/coverage',
+        },
     },
     resolve: {
         // dedupe: fuerza a vitest a resolver 'three' SIEMPRE desde el

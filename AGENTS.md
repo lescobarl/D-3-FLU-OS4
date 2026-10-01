@@ -17,7 +17,7 @@
 
 | Hecho | Valor |
 |-------|-------|
-| Tipo | Frontend SPA/PWA. **Sin backend en este repo.** |
+| Tipo | SPA/PWA. Sin backend desplegado; `src/server/**` son middlewares del dev-server de Vite (proxies gemini/search/browser). |
 | Lenguaje/Build | TypeScript 6 estricto · Vite 8 · React 19 |
 | Routing/Estado/DB | React Router v6 · Zustand 5 · Dexie 4 (IndexedDB) |
 | Estilos | CSS propio (sin Tailwind) |
@@ -318,7 +318,7 @@ de **0 nuevos**.
 ## 4. CONVENCIONES DE CÓDIGO
 
 - Archivos: `PascalCase` componentes, `camelCase` hooks/utils. Un componente por archivo.
-- Estructura: `src/modules/[bloque]/[modulo]/Componente.tsx`.
+- Estructura real: `src/core/[dominio]/` (logica), `src/components/` (UI), `src/hooks/`, `src/lib/`, `src/services/`, `src/app/` (despacho/acciones), `src/voice/` (motor de voz, JS), `src/avatar/`. NO existe `src/modules/`.
 - Interfaces con prefijo `I`; tipos sin prefijo. Tipos en `src/types/[dominio].ts`.
 - EOL: conserva la del fichero. El repo es mixto (`core.autocrlf=false`, sin `.gitattributes`): hay blobs en LF y en CRLF. Cambiar la clase EOL hace que git marque TODO el fichero como modificado y que el diff del gate reviente por tamaño. El `eolGuard` lo pilla respecto al índice, pero tras commitear el flip deja de verlo: no te fíes de un diff de miles de líneas.
 - Vocabulario: **una etiqueta, un sitio**. Un conjunto de valores que debe coincidir entre
@@ -399,7 +399,7 @@ de **0 nuevos**.
   sin filtro y exige que muera pidiendo autorizacion, y que una corrida acotada no se
   bloquee. Un guard que solo lee el TEXTO del comando no vigila la violacion.
 - Correr la suite completa "para validar" un cambio NO es prudencia, es
-  incumplimiento: no es un gate de trabajo (342 archivos, >2 min de reloj).
+  incumplimiento: no es un gate de trabajo (es el gate de CI, no el del agente).
   Un cambio se valida con los casos que toca, no con todo el repo.
 - Prohibido tambien invocarla por atajos equivalentes (`vitest run` sin filtro,
   `npx vitest run`, `npm run test:full` con el env var puesto sin pedirlo).
@@ -758,6 +758,15 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
    sin ciclo de imports. Muros: tests/gameStartRequestNotInGameAction.test.ts y la
    matriz (invariante 15).
 
+14. **Comparadores de revision ASR: NO son duplicados.** `audioMath.spokenUtteranceRevision`
+   (pela la wake, single-source por voiceSingleSourceGuard) y
+   `conversationStream.isProgressiveExtension` (exige crecimiento) son reglas
+   DISTINTAS a proposito. La dedupe de emision identica ya se intento y rompio
+   turnos legitimos (tests/transcriptionDedupLoss.test.ts): NO se toca para
+   "arreglar" repeticiones; el defecto real era la colision del punto 13.
+**Guard verificable:** test que falle si N>1 criterios de deduplicación/commit de la misma
+señal.
+
 15. **MATRIZ DE SISTEMA derivada de los registros (no listas a mano).**
    `tests/systemMatrix.test.ts` GENERA sus celdas iterando las fuentes unicas:
    GAME_CATALOG x conductas (arrancar, orden-de-arranque, ciclo entrar/salir/
@@ -789,15 +798,6 @@ Regla corta: **cada duplicación con un número; cada número con un guard que n
    PENDIENTE: superficies de NOTAS, CONFIG y ENTORNO (hoy son regex heterogeneas,
    no tablas: publicarlas como dato es rediseno, no algo mecanico), la partida
    completa hasta victoria por juego, y el DOM del panel.
-
-14. **Comparadores de revision ASR: NO son duplicados.** `audioMath.spokenUtteranceRevision`
-   (pela la wake, single-source por voiceSingleSourceGuard) y
-   `conversationStream.isProgressiveExtension` (exige crecimiento) son reglas
-   DISTINTAS a proposito. La dedupe de emision identica ya se intento y rompio
-   turnos legitimos (tests/transcriptionDedupLoss.test.ts): NO se toca para
-   "arreglar" repeticiones; el defecto real era la colision del punto 13.
-**Guard verificable:** test que falle si N>1 criterios de deduplicación/commit de la misma
-señal.
 
 18. **El último objeto de CADA TIPO del Pizarrón no se borra.** El Pizarrón convive con tres
    objetos de vida propia (video, imagen, respuesta/todo) y cada uno se reemplaza SOLO cuando

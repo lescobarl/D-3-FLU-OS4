@@ -270,73 +270,6 @@ export interface MateriaGrisRecord {
     sync: SyncTuple;
 }
 
-// -----------------------------------------------------------
-// Goal Record (persistente) — Hábitos y metas (Fase 4, Módulo G)
-// -----------------------------------------------------------
-
-export type GoalStatus = 'active' | 'done' | 'paused' | 'archived';
-
-/**
- * Registro persistente de una meta o hábito por participante.
- * - `targetDays`: días objetivo para un hábito (base de la racha/progreso).
- * - `unit`: unidad legible del progreso (p. ej. 'días').
- */
-export interface GoalRecord {
-    id: string; // UUIDv4
-    participantId: string;
-    participantName?: string;
-    title: string;
-    description?: string;
-    category: string;
-    status: GoalStatus;
-    targetDays?: number;
-    unit?: string;
-    createdAt: number;
-    updatedAt: number;
-    sync: SyncTuple;
-}
-
-// -----------------------------------------------------------
-// Goal Check-In Record (persistente) — Hábitos y metas (Fase 4, Módulo G)
-// -----------------------------------------------------------
-
-/**
- * Registro persistente de un check-in diario de una meta/hábito.
- * `date` es la clave de día local 'YYYY-MM-DD' (un único check-in por meta y día).
- */
-export interface GoalCheckInRecord {
-    id: string; // UUIDv4
-    goalId: string;
-    participantId: string;
-    date: string; // 'YYYY-MM-DD' (día local de referencia)
-    done: boolean;
-    note?: string;
-    createdAt: number;
-    updatedAt: number;
-    sync: SyncTuple;
-}
-
-// -----------------------------------------------------------
-// Mood Record (persistente) — Bienestar/Ánimo (Fase 5, Módulo H)
-// -----------------------------------------------------------
-
-/**
- * Registro persistente de un registro diario de ánimo por participante.
- * `date` es la clave de día local 'YYYY-MM-DD' (un único registro por
- * participante y día; si se vuelve a registrar el mismo día se actualiza).
- * `mood` es el ánimo en la escala 1..scaleMax (configurable en FLU_CONFIG).
- */
-export interface MoodRecord {
-    id: string; // UUIDv4
-    participantId: string;
-    participantName?: string;
-    date: string; // 'YYYY-MM-DD' (día local de referencia)
-    mood: number; // escala 1..scaleMax
-    note?: string;
-    createdAt: number;
-    updatedAt: number;
-    sync: SyncTuple;
-}
 
 // -----------------------------------------------------------
 // Contact Record (persistente) — Contactos (Fase 6, Módulo I)
@@ -655,6 +588,14 @@ const DEXIE_VERSIONS: ReadonlyArray<{
     { version: 23, stores: {
         minutes: 'id, sequence',
     } },
+    // v24: ELIMINAR las tablas de Habitos/Metas (v7) y Bienestar/Animo (v8).
+    // Sus servicios (habitService/moodService) eran codigo muerto sin importador
+    // de produccion y se retiraron; las tablas quedaban declaradas sin uso.
+    { version: 24, stores: {
+        goals: null,
+        goalCheckIns: null,
+        moodCheckIns: null,
+    } },
 ];
 
 /** Tablas resultantes del esquema: altas menos bajas, en orden de aparicion. */
@@ -684,9 +625,6 @@ export class FluDatabase extends Dexie {
     shoppingItems!: EntityTable<ShoppingItemRecord, 'id'>;
     participants!: EntityTable<ParticipantRecord, 'id'>;
     materiaGris!: EntityTable<MateriaGrisRecord, 'id'>;
-    goals!: EntityTable<GoalRecord, 'id'>;
-    goalCheckIns!: EntityTable<GoalCheckInRecord, 'id'>;
-    moodCheckIns!: EntityTable<MoodRecord, 'id'>;
     contacts!: EntityTable<ContactRecord, 'id'>;
     diaryEntries!: EntityTable<DiaryEntryRecord, 'id'>;
     ambientes!: EntityTable<AmbienteCatalogRecord, 'id'>;
