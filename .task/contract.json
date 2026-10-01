@@ -46,6 +46,7 @@
     "src/core/config/localeConfig.ts",
     "src/core/config/sharedConfig.ts",
     "src/core/diary/diaryIntentParser.ts",
+    "src/core/documents/documentInsumo.ts",
     "src/core/environments/environmentIntents.ts",
     "src/core/games/**",
     "src/core/games/abecedario.ts",
