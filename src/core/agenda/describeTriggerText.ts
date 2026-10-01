@@ -9,11 +9,12 @@ import { formatTimeOfDayMeridiem } from '../temporal/scheduleEngine';
 import type { AgendaTrigger } from './agendaModel';
 import { SPEECH_LOCALES } from '../../core/config/localeConfig';
 
+import { normalizeLang } from '../config/localeConfig';
 /** 2024-01-07 fue DOMINGO (getDay() === 0): base para mapear índice → nombre. */
 const SUNDAY_REF = 7;
 
 function weekdayName(dayIndex: number, lang: string): string {
-    const locale = lang === 'en' ? SPEECH_LOCALES.en : SPEECH_LOCALES.es;
+    const locale = SPEECH_LOCALES[normalizeLang(lang)];
     const date = new Date(2024, 0, SUNDAY_REF + dayIndex);
     return date.toLocaleDateString(locale, { weekday: 'long' });
 }

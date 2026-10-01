@@ -33,6 +33,7 @@ import {
 } from '../core/onboarding/onboardingService';
 import { localRemove, localSet } from '../core/storage/localStore';
 
+import { normalizeLang } from '../core/config/localeConfig';
 export interface UseOnboardingOptions {
   speak: (text: string, lang: string) => Promise<void>;
   language?: string;
@@ -85,7 +86,7 @@ export function useOnboarding({
     () => (FLU_CONFIG.onboarding || { enabled: false, steps: [] }) as OnboardingConfig,
     [],
   );
-  const lang = language === 'en' ? 'en' : 'es';
+  const lang = normalizeLang(language);
   const isPerUser =
     participantId !== undefined && participantId !== '' && participantId !== DEFAULT_ONBOARDING_USER;
 

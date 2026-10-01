@@ -1,3 +1,5 @@
+import { pickText } from '../../lib/uiStrings';
+import { normalizeLang } from '../../core/config/localeConfig';
 /**
  * Mensajes de error Gemini legibles para la UI (es/en).
  */
@@ -38,7 +40,7 @@ const HINTS = {
 }
 
 function pickLang(language = 'es') {
-  return language === 'en' ? 'en' : 'es'
+  return normalizeLang(language)
 }
 
 const GENERIC_FAILURE_ES = 'Gemini no respondió.'
@@ -95,20 +97,20 @@ export function formatGeminiUserMessage(error = null, language = 'es', { fallbac
   }
   // Handle raw "missing_api_key" message (from processCapture path that uses error.message directly)
   if (raw === 'missing_api_key') {
-    return lang === 'en' ? 'Gemini: missing API key.' : 'Gemini: falta la API key.'
+    return pickText(lang, 'gemini_falta_la_api_key')
   }
 
   if (code === 'missing_api_key') {
-    return lang === 'en' ? 'Gemini: missing API key.' : 'Gemini: falta la API key.'
+    return pickText(lang, 'gemini_falta_la_api_key')
   }
   if (code === 'gemini_quota_429') {
-    return lang === 'en' ? 'Gemini: quota exceeded (429).' : 'Gemini: cuota agotada (429).'
+    return pickText(lang, 'gemini_cuota_agotada_429')
   }
   if (code === 'gemini_403') {
-    return lang === 'en' ? 'Gemini: access denied (403).' : 'Gemini: acceso denegado (403).'
+    return pickText(lang, 'gemini_acceso_denegado_403')
   }
   if (code === 'invalid_json') {
-    return lang === 'en' ? 'Gemini: invalid response.' : 'Gemini: respuesta inválida.'
+    return pickText(lang, 'gemini_respuesta_invalida')
   }
   if (code.startsWith('gemini_http_')) {
     const status = error?.status || code.replace('gemini_http_', '')

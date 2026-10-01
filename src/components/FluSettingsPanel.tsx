@@ -24,6 +24,7 @@ import { useAuditLog } from '../hooks/useAuditLog';
 import { loadSearchConfigOverrides, saveSearchConfigOverrides, getLastStorageError, type SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 import { useSettingsSaveRegistration } from './SettingsSaveContext';
 
+import { pickText } from '../lib/uiStrings';
 export interface FluSettingsPanelProps {
     // External Services Config props
     voiceConfig?: VoiceConfig;
@@ -243,7 +244,7 @@ export function FluSettingsPanel({
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'Model' : 'Modelo'}
+                                        {pickText(language, 'modelo')}
                                     </span>
                                     <input
                                         type="text"
@@ -256,14 +257,14 @@ export function FluSettingsPanel({
                                 </label>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API Key (optional)' : 'API Key (opcional)'}
+                                        {pickText(language, 'api_key_opcional')}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
                                             type="password"
                                             className="flu-settings-image-config__input flu-settings-input-mono"
                                             style={{ flex: 1 }}
-                                            placeholder={language === 'en' ? 'Optional: OpenRouter API key' : 'Opcional: OpenRouter API key'}
+                                            placeholder={pickText(language, 'opcional_openrouter_api_key')}
                                             defaultValue={apiKey}
                                             onChange={(e) => handleTextApiKeyCommit(e.target.value)}
                                         />
@@ -278,18 +279,18 @@ export function FluSettingsPanel({
                                                 }
                                             }}
                                         >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                            {pickText(language, 'mostrar_ocultar')}
                                         </button>
                                     </div>
                                     {apiKey && (
                                         <span className="flu-settings-api-badge">
-                                            ✅ {language === 'en' ? 'API key configured' : 'API key configurada'}
+                                            ✅ {pickText(language, 'api_key_configurada')}
                                         </span>
                                     )}
                                 </label>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API URL' : 'URL de API'}
+                                        {pickText(language, 'url_de_api')}
                                     </span>
                                     <input
                                         type="text"
@@ -308,27 +309,27 @@ export function FluSettingsPanel({
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'Model' : 'Modelo'}
+                                        {pickText(language, 'modelo')}
                                     </span>
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input"
                                         style={{ fontFamily: 'monospace' }}
-                                        placeholder={language === 'en' ? 'Pollinations (default)' : 'Pollinations (default)'}
+                                        placeholder={'Pollinations (default)'}
                                         defaultValue={imageModel}
                                         onChange={(e) => handleImageModelCommit(e.target.value)}
                                     />
                                 </label>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API Key' : 'API Key'}
+                                        {'API Key'}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
                                             type="password"
                                             className="flu-settings-image-config__input flu-settings-input-mono"
                                             style={{ flex: 1 }}
-                                            placeholder={language === 'en' ? 'Optional API key for image service' : 'API key opcional para servicio de imagen'}
+                                            placeholder={pickText(language, 'api_key_opcional_para_servicio_de_imagen')}
                                             defaultValue={imageApiKey}
                                             onChange={(e) => handleImageApiKeyCommit(e.target.value)}
                                         />
@@ -343,13 +344,13 @@ export function FluSettingsPanel({
                                                 }
                                             }}
                                         >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                            {pickText(language, 'mostrar_ocultar')}
                                         </button>
                                     </div>
                                 </label>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'API URL' : 'URL de API'}
+                                        {pickText(language, 'url_de_api')}
                                     </span>
                                     <input
                                         type="text"
@@ -368,14 +369,14 @@ export function FluSettingsPanel({
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en' ? 'Gemini API Key (dedicated)' : 'Gemini API Key (dedicada)'}
+                                        {pickText(language, 'gemini_api_key_dedicada')}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
                                             type="password"
                                             className="flu-settings-image-config__input flu-settings-input-mono"
                                             style={{ flex: 1 }}
-                                            placeholder={language === 'en' ? 'Optional: Gemini native API key' : 'Opcional: Gemini API key nativa'}
+                                            placeholder={pickText(language, 'opcional_gemini_api_key_nativa')}
                                             defaultValue={geminiApiKey}
                                             onChange={(e) => handleGeminiApiKeyCommit(e.target.value)}
                                         />
@@ -390,7 +391,7 @@ export function FluSettingsPanel({
                                                 }
                                             }}
                                         >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                            {pickText(language, 'mostrar_ocultar')}
                                         </button>
                                     </div>
                                 </label>
@@ -441,7 +442,7 @@ export function FluSettingsPanel({
                             <h4 className="flu-settings-section__title">🎬 Video</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                    <span>{language === 'en' ? 'fal.ai API key' : 'Clave API de fal.ai'}</span>
+                                    <span>{pickText(language, 'clave_api_de_fal_ai')}</span>
                                     <div className="flu-settings-row">
                                         <input
                                             type={revealFalKey ? 'text' : 'password'}
@@ -457,7 +458,7 @@ export function FluSettingsPanel({
                                             className="flu-settings-reveal-btn"
                                             onClick={() => setRevealFalKey((prev) => !prev)}
                                         >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                            {pickText(language, 'mostrar_ocultar')}
                                         </button>
                                     </div>
                                 </label>
@@ -467,7 +468,7 @@ export function FluSettingsPanel({
                                         : 'Sin clave, la generación de video produce solo guion/storyboard (no video real).'}
                                 </p>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
-                                    <span>{language === 'en' ? 'Video model (fal.ai)' : 'Modelo de video (fal.ai)'}</span>
+                                    <span>{pickText(language, 'modelo_de_video_fal_ai')}</span>
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input flu-settings-input-mono"
@@ -509,7 +510,7 @@ export function FluSettingsPanel({
                                             className="flu-settings-reveal-btn"
                                             onClick={() => setRevealWeb((prev) => ({ ...prev, tavily: !prev.tavily }))}
                                         >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                            {pickText(language, 'mostrar_ocultar')}
                                         </button>
                                     </div>
                                 </label>
@@ -535,7 +536,7 @@ export function FluSettingsPanel({
                                             className="flu-settings-reveal-btn"
                                             onClick={() => setRevealWeb((prev) => ({ ...prev, openrouter: !prev.openrouter }))}
                                         >
-                                            {language === 'en' ? 'Show/Hide' : 'Mostrar/Ocultar'}
+                                            {pickText(language, 'mostrar_ocultar')}
                                         </button>
                                     </div>
                                     {webSave.failed ? (
@@ -591,7 +592,7 @@ export function FluSettingsPanel({
                                         if (confirmed) onClearCache();
                                     }}
                                 >
-                                    🧹 {language === 'en' ? 'Clear cache & reload' : 'Limpiar caché y recargar'}
+                                    🧹 {pickText(language, 'limpiar_cache_y_recargar')}
                                 </button>
                             </div>
                         )}

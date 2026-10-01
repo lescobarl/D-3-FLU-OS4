@@ -13,6 +13,7 @@
 import type { GenerationInput } from '../core/ai/IAIService';
 import type { GenerationFormato } from '../types/documentContracts';
 
+import { pickText } from './uiStrings';
 /** Instrucción de formato del contenido que debe devolver el LLM por tipo de formato. */
 function formatContentInstruction(formato: GenerationFormato): string {
     switch (formato) {
@@ -49,7 +50,7 @@ export function buildGenerationSystemPrompt(language = 'es'): string {
 
 /** Prompt de usuario para generación de contenido a partir de fuentes/parámetros. */
 export function buildGenerationPrompt(payload: GenerationInput, language = 'es'): string {
-    const langInstr = language === 'en' ? 'Respond in English only.' : 'Responde únicamente en español.';
+    const langInstr = pickText(language, 'responde_unicamente_en_espanol');
     const fuentes = Array.isArray(payload.fuentes) && payload.fuentes.length
         ? payload.fuentes.map((f, i) => `${i + 1}. [${f.tipo}] ${f.ref}`).join('\n')
         : 'Ninguna fuente explícita (genera contenido general).';

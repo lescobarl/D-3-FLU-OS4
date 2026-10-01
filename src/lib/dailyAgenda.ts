@@ -14,6 +14,7 @@
 import { normalizeSpaces } from './textUtils';
 import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
 
+import { pickText } from './uiStrings';
 // -----------------------------------------------------------
 // Types
 // -----------------------------------------------------------
@@ -235,7 +236,7 @@ export function mergeRemindersIntoAgenda(
     return buildPendingSection(
         items,
         reminders,
-        language === 'en' ? 'Pending reminders' : 'Recordatorios pendientes',
+        pickText(language, 'recordatorios_pendientes'),
         cfg.maxReminders,
         language,
     );
@@ -255,7 +256,7 @@ export function appendPendingCalendar(
     title?: string,
 ): DailyAgendaItem[] {
     const cfg: DailyAgendaConfig = { ...DEFAULT_AGENDA_CONFIG, ...config };
-    const sectionTitle = title || (language === 'en' ? 'Pending calendar' : 'Calendario pendiente');
+    const sectionTitle = title || (pickText(language, 'calendario_pendiente'));
     return buildPendingSection(items, entries, sectionTitle, cfg.maxReminders, language);
 }
 

@@ -86,6 +86,8 @@ import {
 } from './lib/transcriptProcessor';
 import { useEnhancedBranding } from './core/branding/useEnhancedBranding';
 import { SeasonalEffects } from './core/branding/SeasonalEffects';
+import { pickText } from './lib/uiStrings';
+import { normalizeLang } from './core/config/localeConfig';
 // Fase 4: el CSS de la app (antes App.css) vive en src/styles/unified.css
 // (vía @import desde src/index.css). Aquí solo queda el CSS del BunnyViewer.
 // OS1 visual parity: import BunnyViewer styles for 3D avatar rendering
@@ -752,7 +754,7 @@ function App() {
             } else if (action === 'avisar') {
                 // Recordatorio: notificación + voz (como useReminders), sin tono.
                 const voiceDue = remindersVoice.due || 'Tienes un recordatorio pendiente:';
-                const dueTitle = lang === 'en' ? 'Reminder' : 'Recordatorio';
+                const dueTitle = pickText(lang, 'recordatorio');
                 const dueBody = `${voiceDue} ${item.label}`;
                 let deliveredByVoice = false;
                 if (typeof notify === 'function') {
@@ -764,7 +766,7 @@ function App() {
                 }
             } else if (typeof notify === 'function') {
                 // Cita/junta/clase: notificación pasiva (toast), sin voz ni tono.
-                notify({ category: item.kind, title: lang === 'en' ? 'Agenda' : 'Agenda', body: item.label, urgent: false });
+                notify({ category: item.kind, title: 'Agenda', body: item.label, urgent: false });
             }
         },
     });
@@ -804,9 +806,9 @@ function App() {
                     // Sin éxito falso: la confirmación solo se da si la escritura
                     // ocurrió de verdad (el panel muestra lo mismo que se vació).
                     if (cleared === 0) {
-                        return lang === 'en' ? "There's nothing to clear." : 'No había nada que vaciar.';
+                        return pickText(lang, 'no_habia_nada_que_vaciar');
                     }
-                    return lang === 'en' ? 'Done, cleared your agenda.' : 'Listo, vacié tu agenda.';
+                    return pickText(lang, 'listo_vacie_tu_agenda');
                 }
                 case 'agenda.list': {
                     const items = await agendaList({ personId: realParticipantIdRef.current, status: 'pending' });
@@ -834,8 +836,8 @@ function App() {
                     });
                     if (!result.ok) {
                         return result.reason === 'duplicado'
-                            ? (lang === 'en' ? 'That item already exists.' : 'Ese evento ya existe.')
-                            : (lang === 'en' ? "I couldn't create it." : 'No pude crearlo.');
+                            ? (pickText(lang, 'ese_evento_ya_existe'))
+                            : (pickText(lang, 'no_pude_crearlo'));
                     }
                     const item = result.item;
                     const when = item?.trigger ? describeTriggerWhen(item.trigger, lang) : '';
@@ -854,7 +856,7 @@ function App() {
                         ...(cmd.scopeDays?.length ? { daysOfWeek: cmd.scopeDays } : {}),
                     });
                     if (count === 0) {
-                        return lang === 'en' ? 'Nothing to cancel.' : 'No encontré nada que cancelar.';
+                        return pickText(lang, 'no_encontre_nada_que_cancelar');
                     }
                     const scoped = cmd.scopeDays?.length
                         ? ` (${describeWeekdays(cmd.scopeDays, lang)})`
@@ -871,9 +873,9 @@ function App() {
                         },
                     );
                     if (count === 0) {
-                        return lang === 'en' ? 'Nothing to update.' : 'No encontré nada que cambiar.';
+                        return pickText(lang, 'no_encontre_nada_que_cambiar');
                     }
-                    return lang === 'en' ? 'Updated.' : 'Actualizado.';
+                    return pickText(lang, 'actualizado');
                 }
                 default:
                     return '';
@@ -908,7 +910,7 @@ function App() {
             const voice = FLU_CONFIG.horario?.voice || {};
             const okMsg = String(
                 voice.structureOk ||
-                (language === 'en' ? 'I registered the schedule entries.' : 'Registré las entradas del horario.')
+                (pickText(language, 'registre_las_entradas_del_horario'))
             );
             speakFluRef.current?.(okMsg, language);
         } finally {
@@ -1083,7 +1085,7 @@ function App() {
                         dedupCacheRef.current = new Set([dedupKey]);
                         dedupCacheLastPruneRef.current = now;
                     }
-                    const entry = buildSystemConversationEntry(systemEvent, language === 'en' ? 'en' : 'es');
+                    const entry = buildSystemConversationEntry(systemEvent, normalizeLang(language));
                     // Store único (§9): el evento entra al historial (única fuente de
                     // verdad) y Gemini lo ve por derivación; no hay canal lateral.
                     integrationStore.addConversationEntry(entry);
@@ -2298,7 +2300,7 @@ function App() {
                             environmentAction.tipo === 'reset'
                                 ? resetEnvironment()
                                 : applyEnvironment(environmentAction.ambienteId);
-                        const envLang = languageRef.current === 'en' ? 'en' : 'es';
+                        const envLang = normalizeLang(languageRef.current);
                         await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
                     }
                 } catch (err) {
@@ -2510,7 +2512,7 @@ function App() {
             onboarding.currentStep.acceptVoice !== false);
     const onboardingVoice = useOnboardingVoiceCapture({
         enabled: onboardingVoiceEnabled,
-        language: language === 'en' ? 'en' : 'es',
+        language: normalizeLang(language),
         onFinal: handleOnboardingAnswer,
     });
     // Mantener el ref en sync con los métodos reales del hook de voz.
@@ -2648,7 +2650,7 @@ function App() {
                     const completeStep = steps.find((s) => s.id === 'complete');
                     const name = participants.participants.find((p) => p.id === id)?.name as string;
                     const ackText = completeStep
-                        ? String(completeStep[currentLang === 'en' ? 'en' : 'es'] || '')
+                        ? String(completeStep[normalizeLang(currentLang)] || '')
                               .replace('{name}', name || '')
                         : currentLang === 'en'
                           ? 'Done! Talk to me whenever you want.'
@@ -2944,10 +2946,10 @@ function App() {
             const notesVoice = FLU_CONFIG.notes?.voice || {};
             const addedMsg =
                 notesVoice.added ||
-                (lang === 'en' ? 'Done, I added it to your notes.' : 'Listo, lo agregué a las notas.');
+                (pickText(lang, 'listo_lo_agregue_a_las_notas'));
             const removedMsg =
                 notesVoice.removed ||
-                (lang === 'en' ? 'Done, I removed it from your notes.' : 'Listo, lo quité de las notas.');
+                (pickText(lang, 'listo_lo_quite_de_las_notas'));
 
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro, que ya extrajo data.label), se ejecuta DIRECTAMENTE sin
@@ -2971,10 +2973,10 @@ function App() {
             // despacho ÚNICO en src/app/noteRemovalActions (0 llamadas a IA). La
             // confirmación del manejador es la autoridad del turno.
             const removal = await runNoteRemovalIntent(intent, notes, notes?.notes ?? [], lang, {
-                cleared: lang === 'en' ? 'Done, I cleared all your notes.' : 'Listo, borré todas tus notas.',
-                clearedEmpty: lang === 'en' ? "There's nothing to clear." : 'No había nada que borrar.',
+                cleared: pickText(lang, 'listo_borre_todas_tus_notas'),
+                clearedEmpty: pickText(lang, 'no_habia_nada_que_borrar'),
                 removed: removedMsg,
-                notFound: lang === 'en' ? "I couldn't find that note." : 'No encontré esa nota.',
+                notFound: pickText(lang, 'no_encontre_esa_nota'),
             });
             if (removal) {
                 lastActionFailed = removal.failed;
@@ -3085,7 +3087,7 @@ function App() {
     const onboardingPrompt = onboarding.currentStep
         ? promptForStep(
               onboarding.currentStep,
-              language === 'en' ? 'en' : 'es',
+              normalizeLang(language),
               onboarding.state.captured,
           )
         : '';
@@ -3258,7 +3260,7 @@ function App() {
                     //    Placeholders: {materia}, {nivel}, {items} are replaced with actual analysis data.
                     const greetingCfg = FLU_CONFIG.vision?.visionGreeting;
                     const profileTemplates = greetingCfg?.[profile] || greetingCfg?.default || {};
-                    const template = profileTemplates[language === 'en' ? 'en' : 'es'] || profileTemplates.es || '';
+                    const template = profileTemplates[normalizeLang(language)] || profileTemplates.es || '';
                     const itemsLabel = result.problemas.length > 0
                         ? (language === 'en' ? `I found ${result.problemas.length} items.` : `Encontré ${result.problemas.length} elementos.`)
                         : '';
@@ -3891,7 +3893,7 @@ const {
     // Usa WELCOME_MESSAGE desde appConfig (Rule #1: NO HARDCODE)
     // Selecciona el idioma según la configuración actual del usuario
     // ============================================================
-    const welcomeText = language === 'en' ? WELCOME_MESSAGE.en : WELCOME_MESSAGE.es;
+    const welcomeText = pickLabel(WELCOME_MESSAGE, language, WELCOME_MESSAGE.es);
     // Frases de acuse transitorias (p. ej. "Preparando el video.") que FLU
     // dice al reconocer un comando, pero que NO son una respuesta sustantiva.
     // Se excluyen del campo de Respuesta para que, tras recargar la página,
@@ -4601,7 +4603,7 @@ const {
                 reject={onboarding.currentStep?.reject}
                 stepOptions={onboarding.currentStep?.options?.map((o) => ({
                     value: o.value,
-                    label: language === 'en' ? o.en : o.es,
+                    label: pickLabel(o, language, o.es),
                 }))}
                 userSuggestions={onboardingUserSuggestions}
                 onAnswer={handleOnboardingAnswer}

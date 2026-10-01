@@ -14,6 +14,7 @@ import {
     DEFAULT_AMBIENTE_ID,
 } from './environmentRegistry';
 
+import { normalizeLang } from '../config/localeConfig';
 /**
  * Intent de ambiente: `activar` aplica un oficio; `reset` restaura el
  * ambiente por defecto (`asistente`).
@@ -24,7 +25,7 @@ export type EnvironmentIntent =
 
 /** Mapea el idioma detectado a la clave de frases (`en` → en, resto → es). */
 function resolveLangKey(lang = ''): 'es' | 'en' {
-    return lang === 'en' ? 'en' : 'es';
+    return normalizeLang(lang);
 }
 
 /**

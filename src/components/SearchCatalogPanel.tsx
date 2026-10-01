@@ -32,6 +32,7 @@ import type {
 } from '../core/search/searchSiteTypes';
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
 
+import { pickText } from '../lib/uiStrings';
 export interface SearchCatalogPanelProps {
   /** Catálogo fusionado vigente (built-ins + dinámicos). */
   sites: readonly SearchSite[];
@@ -77,7 +78,7 @@ function emptySeed(): SearchSite {
 function languageLabel(labels: Record<string, string>, lang: string): string {
   return (
     labels[`lang_${lang}`] ||
-    (lang === 'es' ? 'Español' : lang === 'en' ? 'English' : 'Ambos')
+    (lang === 'es' ? 'Español' : pickText(lang, 'ambos'))
   );
 }
 

@@ -1,3 +1,4 @@
+import { pickLabel } from '../../lib/textUtils';
 /**
  * Pipeline visual: brief de workspace IA → prompt de generación. Sin números mágicos aquí.
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
@@ -82,12 +83,12 @@ export function resolveVisualBriefCore(workspace = {}) {
 function templateForType(tipo = '', language = 'es') {
   const promptCfg = cfg().prompt || {}
   if (tipo === 'diagram') {
-    return language === 'en' ? promptCfg.diagram3dLead?.en : promptCfg.diagramLead?.es
+    return pickLabel(promptCfg.diagramLead, language, promptCfg.diagramLead?.es ?? '')
   }
   if (tipo === '3d') {
-    return language === 'en' ? promptCfg.diagram3dLead?.en : promptCfg.diagram3dLead?.es
+    return pickLabel(promptCfg.diagram3dLead, language, promptCfg.diagram3dLead?.es ?? '')
   }
-  return language === 'en' ? promptCfg.imagePromptLeadReal?.en : promptCfg.imagePromptLeadReal?.es
+  return pickLabel(promptCfg.imagePromptLeadReal, language, promptCfg.imagePromptLeadReal?.es ?? '')
 }
 
 /**

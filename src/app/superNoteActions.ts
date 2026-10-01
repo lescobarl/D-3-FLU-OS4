@@ -14,6 +14,7 @@ import {
     type SuperNoteRow,
 } from '../core/notes/superNoteTarget';
 
+import { pickText } from '../lib/uiStrings';
 /** Operaciones de notas que la escritura necesita (las de `useNotes`). */
 export interface SuperNoteStore {
     add: (input: {
@@ -112,7 +113,7 @@ export function superNoteItemRemovedReply(
     result: SuperNoteRemoveResult,
     lang: 'es' | 'en',
 ): string {
-    if (!result.ok) return lang === 'en' ? "I couldn't update the note." : 'No pude actualizar la nota.';
+    if (!result.ok) return pickText(lang, 'no_pude_actualizar_la_nota');
     if (!result.removed) {
         return lang === 'en'
             ? `I couldn't find "${item}" in the list.`

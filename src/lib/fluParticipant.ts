@@ -8,6 +8,8 @@
 // ============================================================
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
+import { pickText } from './uiStrings';
+import { normalizeLang } from '../core/config/localeConfig';
 // -----------------------------------------------------------
 // Types
 // -----------------------------------------------------------
@@ -113,7 +115,7 @@ const UI_LABELS: Record<string, { es: string; en: string }> = {
 export function resolveFluParticipantLabel(key: string, language: string): string {
     const entry = UI_LABELS[key];
     if (!entry) return '';
-    const lang = language === 'en' ? 'en' : 'es';
+    const lang = normalizeLang(language);
     return entry[lang] || entry.es || '';
 }
 
@@ -170,7 +172,7 @@ export function buildParticipantLogWindow(
 
 export function formatParticipantLogForPrompt(rows: LogRow[], language: string = 'es'): string {
     if (!rows.length) {
-        return language === 'en' ? '(empty conversation)' : '(conversación vacía)';
+        return pickText(language, 'conversacion_vacia');
     }
     return rows.map((row, index) => `${index + 1}. ${row.speaker}: ${row.text}`).join('\n');
 }

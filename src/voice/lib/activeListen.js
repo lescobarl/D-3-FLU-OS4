@@ -1,3 +1,4 @@
+import { pickLabel } from '../../lib/textUtils';
 /**
  * Escucha activa: estado, hablantes, finales. Motor de texto en conversationStream.js.
  */
@@ -247,7 +248,7 @@ export function getRecognitionLanguage(language = 'es', activeLocale = '') {
   if (language === 'both') {
     return bilingual?.defaultLocale || languages.es
   }
-  return language === 'en' ? languages.en : languages.es
+  return pickLabel(languages, language, languages.es)
 }
 
 /** Modo escucha: es | en | both (bilingüe). */

@@ -40,6 +40,7 @@ import {
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
 import { logCaughtError } from '../lib/caughtError';
 
+import { normalizeLang } from '../core/config/localeConfig';
 /** Dependencias externas que el hook necesita para activar/rebrandear. */
 export interface CatalogsSettingsDeps {
     /** Id del ambiente activo (useEnvironmentStore). */
@@ -163,7 +164,7 @@ export function useCatalogsSettings({
         async (ambienteId: string) => {
             try {
                 const ambiente = applyEnvironment(ambienteId);
-                const envLang = languageRef.current === 'en' ? 'en' : 'es';
+                const envLang = normalizeLang(languageRef.current);
                 await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
             } catch (err) {
                 logCaughtError('[App] applyEnvironment failed (non-critical)', err);

@@ -26,6 +26,7 @@ import type {
   BrowserReadingLevel,
 } from '../core/browser/browserProfileService';
 
+import { pickText } from '../lib/uiStrings';
 export interface BrowserProfilesPanelProps {
   items: ParticipantRecord[];
   loading: boolean;
@@ -196,7 +197,7 @@ function BrowserProfileEditor({
             {config.languages.map((lang) => (
               <option key={lang} value={lang}>
                 {ui[`lang_${lang}`] ||
-                  (lang === 'es' ? 'Español' : lang === 'en' ? 'English' : 'Ambos')}
+                  (lang === 'es' ? 'Español' : pickText(lang, 'ambos'))}
               </option>
             ))}
           </select>

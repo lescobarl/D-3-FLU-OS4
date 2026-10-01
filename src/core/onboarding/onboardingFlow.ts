@@ -1,3 +1,4 @@
+import { pickLabel } from '../../lib/textUtils';
 // ============================================================
 // Onboarding Flow — Primera configuración asistida por voz (Fase 1, D1)
 // ------------------------------------------------------------
@@ -87,7 +88,7 @@ export function fillTemplate(template: string, values: Record<string, string>): 
 }
 
 function localized(entry: { es: string; en: string } | undefined, lang: 'es' | 'en'): string {
-  return entry ? (lang === 'en' ? entry.en : entry.es) : '';
+  return entry ? (pickLabel(entry, lang, entry.es)) : '';
 }
 
 /** Texto (localizado y con plantillas) de un paso dado. */
@@ -97,7 +98,7 @@ export function promptForStep(
   captured: Record<string, string>,
 ): string {
   if (!step) return '';
-  return fillTemplate(lang === 'en' ? step.en : step.es, captured);
+  return fillTemplate(pickLabel(step, lang, step.es), captured);
 }
 
 /**

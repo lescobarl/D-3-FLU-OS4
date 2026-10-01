@@ -31,6 +31,7 @@ import { buildSelfManifesto } from '../core/selfKnowledge/selfKnowledge';
 import type { AuditLogEntry } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
 
+import { normalizeLang } from '../core/config/localeConfig';
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
     volume?: number;
@@ -600,7 +601,7 @@ export function useNavigationCommands(
             // Gemini. FLU responde enumerando sus capacidades reales compiladas
             // desde la configuración (buildSelfManifesto, nunca hardcode).
             case 'CONOCER_FLU': {
-                const manifestoLang: 'es' | 'en' = resolvedLanguage === 'en' ? 'en' : 'es';
+                const manifestoLang: 'es' | 'en' = normalizeLang(resolvedLanguage);
                 const manifesto = buildSelfManifesto(manifestoLang);
                 if (manifesto) {
                     try {

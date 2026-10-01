@@ -1,3 +1,4 @@
+import { normalizeLang } from '../core/config/localeConfig';
 // ============================================================
 // textUtils — Utilidades compartidas de texto
 // ============================================================
@@ -87,5 +88,5 @@ export function pickLabel(
     fallback: string,
 ): string {
     if (!labels) return fallback;
-    return labels[language === 'en' ? 'en' : 'es'] || labels.es || fallback;
+    return labels[normalizeLang(language)] || labels.es || fallback;
 }

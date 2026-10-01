@@ -18,6 +18,7 @@ import {
   type NotificationService,
 } from '../core/notifications/notificationService';
 
+import { normalizeLang } from '../core/config/localeConfig';
 export interface NotificationToast {
   id: string;
   title: string;
@@ -79,7 +80,7 @@ export function useNotificationCenter({
     webApiEnabled: config.webApiEnabled,
     mutedCategories: config.mutedCategories,
   };
-  const lang = language === 'en' ? 'en' : 'es';
+  const lang = normalizeLang(language);
 
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado referencia `service`, y una referencia en la zona muerta

@@ -14,6 +14,7 @@
 import { normalizeHost } from '../browser/browserSession';
 import { stripDiacritics } from '../../lib/textUtils';
 
+import { normalizeLang } from '../config/localeConfig';
 export type ResolvedLanguage = 'es' | 'en';
 
 /** Marcadores por idioma: config-driven (browser.languageWords). */
@@ -66,7 +67,7 @@ export function resolveSearchLanguage(
 ): ResolvedLanguage {
     const detected = extractLanguageFromPhrase(phrase, languageWords);
     if (detected) return detected;
-    return profileLang === 'en' ? 'en' : 'es';
+    return normalizeLang(profileLang);
 }
 
 /**

@@ -1,3 +1,4 @@
+import { normalizeLang } from '../config/localeConfig';
 // ============================================================
 // diaryIntentParser — Reconocimiento determinista del DIARIO
 // ------------------------------------------------------------
@@ -47,7 +48,7 @@ export function parseDiaryIntent(
   const content = match?.[1]?.trim();
   if (!content) return { handled: false, action: null, reply: '' };
 
-  const lang = options.language === 'en' ? 'en' : 'es';
+  const lang = normalizeLang(options.language);
   return {
     handled: true,
     action: 'diary.addEntry',

@@ -51,6 +51,7 @@ import type { DocumentContract, AppAnalysisContract } from '../../types/document
 import { logCaughtError } from '../../lib/caughtError';
 import { SPEECH_LOCALES } from '../config/localeConfig';
 
+import { pickLabel } from '../../lib/textUtils';
 // -----------------------------------------------------------
 // Helpers compartidos (exportados para tests/adapters)
 // -----------------------------------------------------------
@@ -415,7 +416,7 @@ export abstract class BaseAIService implements IAIService {
     ): Promise<AppAnalysisContract> {
         if (!this.canUseTextBackend()) return buildHeuristicAppAnalysis(payload);
 
-        const system = language === 'en' ? APP_ANALYSIS_SYSTEM.en : APP_ANALYSIS_SYSTEM.es;
+        const system = pickLabel(APP_ANALYSIS_SYSTEM, language, APP_ANALYSIS_SYSTEM.es);
 
         try {
             const prompt = [

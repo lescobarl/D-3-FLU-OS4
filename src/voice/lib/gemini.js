@@ -44,6 +44,7 @@ import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_IDS, POLLINATIONS_DEFAULTS } from '../../core/config/sharedConfig'
 import { localGet } from '../../core/storage/localStore';
 
+import { pickText } from '../../lib/uiStrings';
 export {
   buildVisualAnchorBlock,
   extractVisualSubject,
@@ -981,7 +982,7 @@ export async function generateConversationSummary({
     // Graceful fallback: return empty summary instead of throwing
     return {
       summary: {
-        titulo: language === 'en' ? 'Conversation minutes' : 'Minuta de conversacion',
+        titulo: pickText(language, 'minuta_de_conversacion'),
         participantes: [],
         resumen: '',
         acuerdos: [],
