@@ -610,7 +610,7 @@ class RecoveryActionExecutor {
 // Evaluador de condiciones
 // -----------------------------------------------------------
 
-class ConditionEvaluator {
+export class ConditionEvaluator {
     evaluateCondition(
         condition: RecoveryCondition,
         componentHealth: ComponentHealth,
