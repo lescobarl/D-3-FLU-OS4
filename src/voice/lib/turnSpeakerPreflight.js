@@ -11,6 +11,11 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 const preflightByTurn = new Map()
 
+/**
+ * @param {number} turnId
+ * @param {Function} run
+ * @param {{ onClusters?: Function, continuous?: boolean }} [options]
+ */
 export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuous = false } = {}) {
   const id = Number(turnId)
   if (!Number.isFinite(id) || id <= 0 || typeof run !== 'function') return
@@ -122,7 +127,9 @@ export function scheduleClusterRefresh(run, onSuccess) {
   })
 }
 
-/** Job de audio → hablante (preflight o refresh de clusters). */
+/** Job de audio → hablante (preflight o refresh de clusters).
+ * @param {{ getAudioBuffer?: Function, getSampleRate?: Function, getTurnStartSample?: Function, getSpeakerClusters?: Function, getLastSpeaker?: Function, getLastSignature?: Function, getFallbackSpeaker?: Function, getUtteranceText?: Function, atTurnBoundary?: boolean, allowNewCluster?: boolean, getPreferSpeaker?: Function, getSessionPrimary?: Function, getReservedLabels?: Function, getAudioStartSample?: Function, getAudioStartedAtMs?: Function }} [options]
+ */
 export function createTurnSpeakerAudioResolver({
   getAudioBuffer,
   getSampleRate,
