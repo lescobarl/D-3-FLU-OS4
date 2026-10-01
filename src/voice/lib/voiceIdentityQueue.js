@@ -49,6 +49,7 @@ function drainQueue() {
 
 /**
  * Encola identidad. Si hay pending sin iniciar → DROP. Si inFlight → solo la más reciente espera.
+ * @param {{ rowId?: string, run?: Function, onSuccess?: Function, onError?: Function, onDrop?: Function, fallback?: unknown }} [job]
  */
 export function enqueueSpeakerIdentityJob({
   rowId = '',
