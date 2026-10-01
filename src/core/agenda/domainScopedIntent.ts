@@ -23,6 +23,7 @@
 import { parseAgendaCommand } from './agendaCommandParser';
 import type { AgendaKind } from './agendaModel';
 
+import { pickText } from '../../lib/uiStrings';
 /** Forma minima compatible con `ArbiterResult` de App (no importa de App). */
 export interface AgendaDomainIntent {
     matched: boolean;
@@ -35,9 +36,7 @@ export interface AgendaDomainIntent {
 
 /** Frase con la que se pide la hora cuando el texto no trae instante. */
 export function askMissingInstant(language: 'es' | 'en' = 'es'): string {
-    return language === 'en'
-        ? 'When should I remind you? Tell me the time, please.'
-        : '¿Para cuándo te lo recuerdo? Dime la hora, por favor.';
+    return pickText(language, 'para_cuando_te_lo_recuerdo_dime_la_hora_po');
 }
 
 export interface AgendaDomainIntentOptions {

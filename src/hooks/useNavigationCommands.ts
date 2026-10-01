@@ -32,6 +32,7 @@ import type { AuditLogEntry } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
 
 import { normalizeLang } from '../core/config/localeConfig';
+import { pickText } from '../lib/uiStrings';
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
     volume?: number;
@@ -574,9 +575,7 @@ export function useNavigationCommands(
                         offReady();
                         const readyMsg =
                             ('resultsReady' in searchUi ? String(searchUi.resultsReady) : '') ||
-                            (resolvedLanguage === 'en'
-                                ? 'Done, I already have the results. They are in the Search tab.'
-                                : 'Listo, ya tengo los resultados. Los tenés en la pestaña Buscar.');
+                            (pickText(resolvedLanguage, 'listo_ya_tengo_los_resultados_los_tenes_en'));
                         speakFlu(readyMsg, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
                     });
                     if (transcript) {

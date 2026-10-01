@@ -42,6 +42,7 @@ import {
     type TextCompletionRequest,
 } from '../core/ai/aiServiceBase';
 
+import { pickText } from '../lib/uiStrings';
 // -----------------------------------------------------------
 // Helpers específicos del transporte Gemini
 // -----------------------------------------------------------
@@ -84,9 +85,7 @@ class GeminiService extends BaseAIService implements IAIService {
     }
 
     protected documentAnalysisSystem(language: string): string {
-        return language === 'en'
-            ? 'You are a document analyst. Respond in English only. Return valid JSON.'
-            : 'Eres un analista de documentos. Responde únicamente en español. Devuelve JSON válido.';
+        return pickText(language, 'eres_un_analista_de_documentos_responde_un_2');
     }
 
     /**

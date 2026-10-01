@@ -15,6 +15,7 @@
 import type { DocumentSheetInfo, DocumentTipo, DocumentContract } from '../types/documentContracts';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 
+import { pickText } from './uiStrings';
 export interface ChunkContext {
   tipo: DocumentTipo;
   nombre: string;
@@ -60,9 +61,7 @@ export function buildMapPrompt(
   language = 'es'
 ): string {
   const langInstr =
-    language === 'en'
-      ? 'Respond in English only.'
-      : 'Responde únicamente en español.';
+    pickText(language, 'responde_unicamente_en_espanol');
   return [
     `Eres un analista de documentos. Contexto del documento:`,
     buildContextBlock(ctx),
@@ -84,9 +83,7 @@ export function buildReducePrompt(
   language = 'es'
 ): string {
   const langInstr =
-    language === 'en'
-      ? 'Respond in English only.'
-      : 'Responde únicamente en español.';
+    pickText(language, 'responde_unicamente_en_espanol');
   const serialized = partials
     .map((p) => `--- Fragmento ${p.indice} ---\nResumen: ${p.resumen}\nPuntos: ${p.puntos_clave.join(' | ')}`)
     .join('\n\n');
@@ -110,9 +107,7 @@ export function buildSingleAnalysisPrompt(
   language = 'es'
 ): string {
   const langInstr =
-    language === 'en'
-      ? 'Respond in English only.'
-      : 'Responde únicamente en español.';
+    pickText(language, 'responde_unicamente_en_espanol');
   return [
     `Eres un analista de documentos. Contexto del documento:`,
     buildContextBlock(ctx),

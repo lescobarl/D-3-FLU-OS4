@@ -36,6 +36,7 @@ import {
 import { localGet } from '../core/storage/localStore';
 import { resolveConfiguredTemperature } from './aiTemperature';
 
+import { pickText } from '../lib/uiStrings';
 // -----------------------------------------------------------
 // Helpers específicos del transporte de texto
 // -----------------------------------------------------------
@@ -128,9 +129,7 @@ class DeepSeekService extends BaseAIService {
     }
 
     protected documentAnalysisSystem(language: string): string {
-        return language === 'en'
-            ? 'You are a document analyst. Respond in English only.'
-            : 'Eres un analista de documentos. Responde únicamente en español.';
+        return pickText(language, 'eres_un_analista_de_documentos_responde_un');
     }
 
     /**

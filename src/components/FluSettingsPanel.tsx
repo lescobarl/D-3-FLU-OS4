@@ -396,9 +396,7 @@ export function FluSettingsPanel({
                                     </div>
                                 </label>
                                 <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                                    {language === 'en'
-                                        ? 'If empty, falls back to the OpenRouter key. Image fallback is generated via OpenRouter using the cheapest model (google/gemini-2.5-flash-image) and activates automatically when a key is set.'
-                                        : 'Si está vacía, se usa la API key de OpenRouter. La imagen se genera via OpenRouter con el modelo más barato (google/gemini-2.5-flash-image) y se activa automáticamente cuando hay una clave configurada.'}
+                                    {pickText(language, 'si_esta_vacia_se_usa_la_api_key_de_openrou')}
                                 </p>
                             </div>
                         </div>
@@ -463,9 +461,7 @@ export function FluSettingsPanel({
                                     </div>
                                 </label>
                                 <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
-                                    {language === 'en'
-                                        ? 'Without a key, video generation produces only script/storyboard.'
-                                        : 'Sin clave, la generación de video produce solo guion/storyboard (no video real).'}
+                                    {pickText(language, 'sin_clave_la_generacion_de_video_produce_s')}
                                 </p>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span>{pickText(language, 'modelo_de_video_fal_ai')}</span>
@@ -479,9 +475,7 @@ export function FluSettingsPanel({
                                     />
                                 </label>
                                 <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
-                                    {language === 'en'
-                                        ? 'Cheap: fal-ai/wan-25-preview/text-to-video ($0.05/s). Veo3 costs $0.40/s.'
-                                        : 'Barato: fal-ai/wan-25-preview/text-to-video ($0.05/s). Veo3 cuesta $0.40/s.'}
+                                    {pickText(language, 'barato_fal_ai_wan_25_preview_text_to_video')}
                                 </p>
                             </div>
                         </div>
@@ -516,9 +510,7 @@ export function FluSettingsPanel({
                                 </label>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en'
-                                            ? 'OpenRouter API key (web search)'
-                                            : 'Clave API de OpenRouter (búsqueda web)'}
+                                        {pickText(language, 'clave_api_de_openrouter_busqueda_web')}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
@@ -554,9 +546,7 @@ export function FluSettingsPanel({
                                 </label>
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
                                     <span className="flu-settings-image-config__section-label">
-                                        {language === 'en'
-                                            ? 'OpenRouter model (web search)'
-                                            : 'Modelo de OpenRouter (búsqueda web)'}
+                                        {pickText(language, 'modelo_de_openrouter_busqueda_web')}
                                     </span>
                                     <input
                                         type="text"
@@ -570,9 +560,7 @@ export function FluSettingsPanel({
                                     />
                                 </label>
                                 <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                                    {language === 'en'
-                                        ? 'Web search chain: Tavily → OpenRouter → Wikipedia. Keys are stored in the search settings (same source as the Search Control Center).'
-                                        : 'Cadena de búsqueda web: Tavily → OpenRouter → Wikipedia. Las claves se guardan en la configuración del buscador (misma fuente que el Centro de Control).'}
+                                    {pickText(language, 'cadena_de_busqueda_web_tavily_openrouter_w')}
                                 </p>
                             </div>
                         </div>
@@ -585,9 +573,7 @@ export function FluSettingsPanel({
                                     className="flu-settings-clear-cache-btn"
                                     onClick={() => {
                                         const confirmed = window.confirm(
-                                            language === 'en'
-                                                ? 'Clear app cache and reload? Your API key and essential settings will be kept.'
-                                                : '¿Limpiar caché de la app y recargar? Se conservarán tu API key y ajustes esenciales.'
+                                            pickText(language, 'limpiar_cache_de_la_app_y_recargar_se_cons')
                                         );
                                         if (confirmed) onClearCache();
                                     }}
@@ -693,15 +679,11 @@ export function FluSettingsPanel({
                                     personality: { ...integrationStore.config.personality, customInstructions: e.target.value },
                                 });
                             }}
-                            placeholder={language === 'en'
-                                ? 'e.g. Be more expressive, use animations, be kind...'
-                                : 'Ej: compórtate más expresivo, usa estas animaciones, sé amable...'}
+                            placeholder={pickText(language, 'ej_comportate_mas_expresivo_usa_estas_anim')}
                             className="flu-settings-textarea"
                         />
                         <div className="flu-settings-hint">
-                            {language === 'en'
-                                ? 'These instructions are injected into Gemini\'s system prompt at the start of each session.'
-                                : 'Estas instrucciones se inyectan en el prompt del sistema de Gemini al inicio de cada sesión.'}
+                            {pickText(language, 'estas_instrucciones_se_inyectan_en_el_prom')}
                         </div>
                     </div>
 

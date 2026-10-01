@@ -998,15 +998,9 @@ export async function generateConversationSummary({
   }
 
   const systemPrompt = [
-    language === 'en'
-      ? 'Respond ONLY in valid JSON, without markdown, bullet points or any extra text.'
-      : 'Responde SOLO en JSON valido sin markdown, sin viñetas y sin texto adicional.',
-    language === 'en'
-      ? 'Be concise, factual and grounded in the conversation log. Do not invent participants or agreements.'
-      : 'Se conciso, factual y fiel al registro de conversacion. No inventes participantes ni acuerdos.',
-    language === 'en'
-      ? 'The summary is a meeting minute, not a reply to the user.'
-      : 'La minuta es un acta de acuerdos, no una respuesta al usuario.',
+    pickText(language, 'responde_solo_en_json_valido_sin_markdown_'),
+    pickText(language, 'se_conciso_factual_y_fiel_al_registro_de_c'),
+    pickText(language, 'la_minuta_es_un_acta_de_acuerdos_no_una_re'),
   ].join(' ')
 
   const userPrompt = buildConversationSummaryPrompt({ history, language, role, theme })
@@ -1409,9 +1403,7 @@ export async function generateFluContract({
   if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
     // Graceful fallback: return a no-op contract instead of throwing.
     // The voice system will use local fallback responses and continue without blocking.
-    const fallbackText = language === 'en'
-      ? 'API key not configured. Set it in the settings panel.'
-      : 'API key no configurada. Configúrala en el panel de ajustes.'
+    const fallbackText = pickText(language, 'api_key_no_configurada_configurala_en_el_p')
     return {
       contract: {
         respuesta_voz: fallbackText,
@@ -1477,9 +1469,7 @@ export async function generateFluContract({
   const formatCorrection = {
     role: 'user',
     content:
-      language === 'en'
-        ? 'INVALID FORMAT. Reply with ONLY a JSON object that includes a non-empty "respuesta_voz" string. No text outside the JSON.'
-        : 'FORMATO INVÁLIDO. Responde SOLO con un objeto JSON que incluya el campo "respuesta_voz" (texto no vacío). Sin texto fuera del JSON.',
+      pickText(language, 'formato_invalido_responde_solo_con_un_obje'),
   }
 
   let text = ''
@@ -1675,15 +1665,9 @@ const model = resolveGeminiModel()
 
 // Prompt según perfil
 const prompts = {
-  tutor: language === 'en'
-    ? 'Analyze this homework image. Extract in JSON format:\n- materia: subject (math, science, etc.)\n- problemas: list of problems/questions\n- instrucciones: general instructions\n- nivel: education level (elementary, middle, high)\n- texto_extraido: all readable text\n\nRespond with ONLY the JSON, no markdown.'
-    : 'Analiza esta imagen de una tarea escolar. Extrae en formato JSON:\n- materia: la materia (matematicas, espanol, ciencias, etc.)\n- problemas: lista de problemas o preguntas\n- instrucciones: instrucciones generales de la tarea\n- nivel: nivel educativo (primaria, secundaria, preparatoria)\n- texto_extraido: todo el texto que puedas leer en la imagen\n\nResponde SOLO con el JSON, sin markdown ni explicaciones.',
-  laboral: language === 'en'
-    ? 'Analyze this work document/image. Extract in JSON format:\n- materia: document type (report, contract, etc.)\n- problemas: list of key points or action items\n- instrucciones: summary of required actions\n- nivel: priority level\n- texto_extraido: all readable text\n\nRespond with ONLY the JSON, no markdown.'
-    : 'Analiza este documento/imagen laboral. Extrae en formato JSON:\n- materia: tipo de documento (reporte, contrato, etc.)\n- problemas: lista de puntos clave o acciones requeridas\n- instrucciones: resumen de acciones necesarias\n- nivel: nivel de prioridad\n- texto_extraido: todo el texto legible\n\nResponde SOLO con el JSON, sin markdown ni explicaciones.',
-  coach: language === 'en'
-    ? 'Analyze this image. Extract in JSON format:\n- materia: main topic or theme\n- problemas: list of goals or objectives\n- instrucciones: coaching observations\n- nivel: current level or stage\n- texto_extraido: all readable text\n\nRespond with ONLY the JSON, no markdown.'
-    : 'Analiza esta imagen. Extrae en formato JSON:\n- materia: tema o área principal\n- problemas: lista de objetivos o metas\n- instrucciones: observaciones de coaching\n- nivel: nivel o etapa actual\n- texto_extraido: todo el texto legible\n\nResponde SOLO con el JSON, sin markdown ni explicaciones.',
+  tutor: pickText(language, 'analiza_esta_imagen_de_una_tarea_escolar_e'),
+  laboral: pickText(language, 'analiza_este_documento_imagen_laboral_extr'),
+  coach: pickText(language, 'analiza_esta_imagen_extrae_en_formato_json'),
 }
 
 const prompt = prompts[profile] || prompts.tutor

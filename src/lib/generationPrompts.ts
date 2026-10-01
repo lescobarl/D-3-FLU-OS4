@@ -43,9 +43,7 @@ function formatContentInstruction(formato: GenerationFormato): string {
 
 /** Prompt de sistema para generación de contenido. */
 export function buildGenerationSystemPrompt(language = 'es'): string {
-    return language === 'en'
-        ? 'You are FLU, a document-generation assistant. Produce precise, executive content following the requested format exactly.'
-        : 'Eres FLU, un asistente de generación de documentos. Produce contenido preciso y ejecutivo siguiendo exactamente el formato solicitado.';
+    return pickText(language, 'eres_flu_un_asistente_de_generacion_de_doc');
 }
 
 /** Prompt de usuario para generación de contenido a partir de fuentes/parámetros. */
@@ -89,9 +87,7 @@ function safeFuenteLabel(fuente: { tipo?: string; ref?: string } | undefined, in
 
 /** Contenido de respaldo cuando no hay LLM disponible (degradación elegante). */
 export function buildGenerationFallbackContent(payload: GenerationInput, language = 'es'): string {
-    const langInstr = language === 'en'
-        ? 'Generated without AI (offline fallback).'
-        : 'Generado sin IA (respaldo sin conexión).';
+    const langInstr = pickText(language, 'generado_sin_ia_respaldo_sin_conexion');
     const tema = payload.parametros?.tema || 'Documento';
     if (payload.formato === 'xlsx') {
         return JSON.stringify({

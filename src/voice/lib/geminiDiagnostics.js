@@ -77,23 +77,17 @@ export function formatGeminiUserMessage(error = null, language = 'es', { fallbac
   // Timeout del motor de texto (fetchTextEngine aborta a los 45s y normaliza
   // el fallo a code 'gemini_timeout' / status 408). Ya no es un "Failed to fetch".
   if (code === 'gemini_timeout') {
-    return lang === 'en'
-      ? 'Gemini: the AI service took too long to respond. Wait a moment and retry.'
-      : 'Gemini: el servicio de IA tardó demasiado en responder. Espera un momento y reintenta.'
+    return pickText(lang, 'gemini_el_servicio_de_ia_tardo_demasiado_e')
   }
   // Fallo de transporte normalizado por fetchTextEngineResilient (cliente):
   // ya fue reintentado 1 vez; aquí solo se presenta el mensaje accionable.
   if (code === 'gemini_network') {
-    return lang === 'en'
-      ? 'Gemini: could not reach the AI server. If you just restarted it, reload the page (F5) to reconnect.'
-      : 'Gemini: no se pudo conectar con el servidor de IA. Si acabas de reiniciarlo, recarga la página (F5) para reconectar.'
+    return pickText(lang, 'gemini_no_se_pudo_conectar_con_el_servidor')
   }
   // Handle TypeError (network errors like "Failed to fetch") — no .code property
   // (transport error residual: el servidor real no respondió a tiempo)
   if (!code && raw === 'Failed to fetch') {
-    return lang === 'en'
-      ? 'Gemini: the connection to the AI service was interrupted. Check that the dev server is running (npm run dev), retry, and verify the API key in settings.'
-      : 'Gemini: la conexión con el servicio de IA se interrumpió. Verifica que el servidor esté activo (npm run dev), reintenta y revisa la API key en ajustes.'
+    return pickText(lang, 'gemini_la_conexion_con_el_servicio_de_ia_s')
   }
   // Handle raw "missing_api_key" message (from processCapture path that uses error.message directly)
   if (raw === 'missing_api_key') {
@@ -134,17 +128,13 @@ export function formatGeminiErrorHint(error = null, language = 'es', { fallback 
   const entry = HINTS[code]
   if (entry) return entry[lang]
   if (code.startsWith('gemini_http_400')) {
-    return lang === 'en'
-      ? 'Check that your API key is correct.'
-      : 'Revisa que la API key sea correcta.'
+    return pickText(lang, 'revisa_que_la_api_key_sea_correcta')
   }
   const raw = String(error?.message || error?.error || '').trim()
   if (!fallback && !code && !raw) return ''
   if (!raw || raw === GENERIC_FAILURE_ES || raw === GENERIC_FAILURE_EN) {
     if (!fallback) return ''
-    return lang === 'en'
-      ? 'Voice capture still works. Check your API key, quota, and browser console (F12).'
-      : 'La transcripción sigue funcionando. Revisa la API key, la cuota y la consola del navegador (F12).'
+    return pickText(lang, 'la_transcripcion_sigue_funcionando_revisa_')
   }
   return ''
 }

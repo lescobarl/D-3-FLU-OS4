@@ -2652,9 +2652,7 @@ function App() {
                     const ackText = completeStep
                         ? String(completeStep[normalizeLang(currentLang)] || '')
                               .replace('{name}', name || '')
-                        : currentLang === 'en'
-                          ? 'Done! Talk to me whenever you want.'
-                          : '¡Listo! Háblame cuando quieras.';
+                        : pickText(currentLang, 'listo_hablame_cuando_quieras');
                     if (ackText) {
                         // Esperar a que el saludo TERMINE de hablarse antes de abrir
                         // el micrófono: si se abre durante el TTS, FLU se escucha a sí
@@ -2842,9 +2840,7 @@ function App() {
                 case 'shopping.list': {
                     const pending = shopping.items.filter((i) => !i.checked);
                     if (pending.length === 0) {
-                        return lang === 'en'
-                            ? 'Your shopping list is empty.'
-                            : 'Tu lista de compras está vacía.';
+                        return pickText(lang, 'tu_lista_de_compras_esta_vacia');
                     }
                     const lines = pending.map((i) => i.label).join(' | ');
                     return lang === 'en'
@@ -3004,9 +3000,7 @@ function App() {
                 );
                 lastActionFailed = !written.ok;
                 if (!written.ok) {
-                    return lang === 'en'
-                        ? "I couldn't update the note."
-                        : 'No pude actualizar la nota.';
+                    return pickText(lang, 'no_pude_actualizar_la_nota');
                 }
                 return addedMsg;
             }
@@ -3018,9 +3012,7 @@ function App() {
             });
             lastActionFailed = !result.ok;
             if (!result.ok) {
-                return lang === 'en'
-                    ? "I couldn't create the note."
-                    : 'No pude crear la nota.';
+                return pickText(lang, 'no_pude_crear_la_nota');
             }
             return addedMsg;
         },
@@ -3039,9 +3031,7 @@ function App() {
             const diaryVoice = FLU_CONFIG.diary?.voice || {};
             const addedMsg =
                 diaryVoice.entryAdded ||
-                (lang === 'en'
-                    ? 'Done, I saved your diary entry.'
-                    : 'Listo, he guardado tu entrada del diario.');
+                (pickText(lang, 'listo_he_guardado_tu_entrada_del_diario'));
 
             // Punto único de parseo: si el despacho ya pasó el intent estructurado
             // (del árbitro, que ya extrajo data.content), se ejecuta DIRECTAMENTE
@@ -3070,9 +3060,7 @@ function App() {
                 title: opts?.personName || undefined,
             });
             if (!result.ok) {
-                return lang === 'en'
-                    ? "I couldn't save the diary entry."
-                    : 'No pude guardar la entrada del diario.';
+                return pickText(lang, 'no_pude_guardar_la_entrada_del_diario');
             }
             return addedMsg;
         },
