@@ -76,6 +76,9 @@ export class ContinuousAudioBuffer {
   }
 
   /** Ventana de turno (misma semántica que extractTurnAudioForDiarize, solo copia). */
+  /**
+   * @param {{ turnAudioStartSample?: number, atTurnBoundary?: boolean, minVoicedMs?: number }} [options]
+   */
   snapshotTurnWindow({
     turnAudioStartSample = 0,
     atTurnBoundary = false,
@@ -240,6 +243,12 @@ export function extractTurnAudioSnapshot(buffer, sampleRate, options = {}) {
 }
 
 /** Cola de solapamiento (ms) desde chunks legacy o ContinuousAudioBuffer. */
+/**
+ * Cola de solapamiento (ms) desde chunks legacy o ContinuousAudioBuffer.
+ * @param {Float32Array[]|{ snapshotTurnWindow: Function, copySampleRange: Function, getTotalSamples: Function }} chunks
+ * @param {number} [sampleRate]
+ * @param {number} [overlapMs]
+ */
 export function extractTurnAudioOverlapTail(chunks = [], sampleRate = DEFAULT_SAMPLE_RATE, overlapMs = 800) {
   if (chunks?.snapshotTurnWindow) {
     const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE
