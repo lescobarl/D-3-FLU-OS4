@@ -213,7 +213,7 @@ interface PerformanceMetrics {
 // Optimizador de parámetros
 // -----------------------------------------------------------
 
-class ParameterOptimizer {
+export class ParameterOptimizer {
     private metricsHistory: PerformanceMetrics[] = [];
     private optimizationHistory: OptimizationResult[] = [];
     private readonly maxHistorySize = 1000;
