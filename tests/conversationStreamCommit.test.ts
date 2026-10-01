@@ -10,13 +10,16 @@
  * resolveInlineWakeAtCommit, resolveTurnSpeakerAtCommit...): el oraculo es la
  * conducta observada por los callbacks, no una reimplementacion de las reglas.
  *
- * NO CUBIERTO (declarado): la RAMA SEGMENTADA (planAsrTurnSegments >= 2 tramos)
- * exige un preflight con snapshots de diarizacion y prior embebido; necesita su
- * propio arnes y va aparte.
+ * La RAMA SEGMENTADA se cubre con snapshots de identidad REALES (cola de
+ * identidad incluida): un prior embebido se omite y solo la voz nueva abre fila.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { handleConversationStreamSync } from '../src/voice/lib/conversationStreamCommit.js';
 import { createActiveListenState } from '../src/voice/lib/activeListen.js';
+import {
+    resetTurnSpeakerPreflights,
+    scheduleTurnSpeakerPreflight,
+} from '../src/voice/lib/turnSpeakerPreflight.js';
 
 /** Opciones del log, tal como las lee el test (el typedef las declara `object`). */
 type EmitOptions = { speakerName?: string; turnCommit?: boolean; replaceLastRawLog?: boolean };
@@ -68,6 +71,35 @@ function makeDeps(over: Record<string, unknown> = {}) {
 /** Opciones del ultimo log emitido, ya tipadas para el test. */
 function lastEmitOptions(deps: ReturnType<typeof makeDeps>): EmitOptions {
   return deps.emitConversationLog.mock.calls[0][1] as EmitOptions;
+}
+
+// --- Rama segmentada: captura = [relleno corto][fila YA commitida][voz nueva] ---
+const PRIOR_ROW = 'el examen de sociales queda para el viernes';
+const NOVEL_TAIL = 'entonces hoy repasamos fracciones y hacemos ejercicios practicos';
+const SEGMENTABLE_CAPTURE = `hola a todos ${PRIOR_ROW} ${NOVEL_TAIL}`;
+
+/**
+ * Snapshots de identidad REALES para el turno 1. La cola de identidad corre en
+ * macrotareas (setTimeout 0), asi que se le dan ticks entre encolados.
+ */
+async function preflightSnapshots(labels: string[]): Promise<void> {
+    resetTurnSpeakerPreflights();
+    for (const speakerName of labels) {
+        scheduleTurnSpeakerPreflight(1, () =>
+            Promise.resolve({
+                speakerName,
+                speakerId: `id-${speakerName}`,
+                signatureVector: [1, 0.5, 0.25],
+                workingClusters: [],
+                reason: 'ok',
+                audioStartSample: 0,
+                audioStartedAtMs: 0,
+            }),
+        );
+        for (let tick = 0; tick < 3; tick += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+    }
 }
 
 describe('conversationStreamCommit — puertas de entrada', () => {
@@ -302,6 +334,46 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(tailCapture).toContain('oye flu');
         expect(tailAction.kind).toBe('flu');
         expect(tailAction.question).toContain('hora');
+    });
+
+    it('con UN solo hablante en el preflight no se trocea: una fila con todo el texto', async () => {
+        const deps = makeDeps({
+            logRowsTextRef: { current: ['buenos dias a todos'] },
+            logRowSpeakersRef: { current: ['Hablante 2'] },
+        });
+        await preflightSnapshots(['Hablante 2', 'Hablante 2']);
+
+        handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true });
+
+        expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
+        expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
+        expect(deps.commitTurnToSessionRows.mock.calls[0][0]).toBe(SEGMENTABLE_CAPTURE);
+    });
+
+    it('rama SEGMENTADA: el prior embebido se omite y la voz nueva abre fila propia', async () => {
+        const deps = makeDeps({
+            logRowsTextRef: { current: [PRIOR_ROW, 'buenos dias a todos'] },
+            logRowSpeakersRef: { current: ['Hablante 3', 'Hablante 2'] },
+        });
+        await preflightSnapshots(['Hablante 2', 'Hablante 2', 'Hablante 3', 'Hablante 3']);
+
+        handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true });
+
+        // Solo la voz NUEVA abre fila; el tramo ya commitido no se duplica.
+        expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
+        const [emitText, emitOpts] = deps.emitConversationLog.mock.calls[0] as [string, EmitOptions];
+        expect(emitText).toBe(NOVEL_TAIL);
+        expect(emitText).not.toContain('examen de sociales');
+        expect(emitOpts.turnCommit).toBe(true);
+        expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
+        const [rowText, rowSpeaker] = deps.commitTurnToSessionRows.mock.calls[0];
+        expect(rowText).toBe(NOVEL_TAIL);
+        expect(rowSpeaker).toBe('Hablante 2');
+
+        // El turno cierra igual (una sola ruta de cierre) y deja el texto COMPLETO como marca.
+        expect(deps.flushPcmAfterTurnCommit).toHaveBeenCalledTimes(1);
+        expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
+        expect(deps.lastEmittedTranscriptRef.current).toBe(SEGMENTABLE_CAPTURE);
     });
 
     it('el id del turno se comparte entre preview y commit (un solo turno, una sola fila)', () => {
