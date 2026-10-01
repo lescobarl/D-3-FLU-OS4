@@ -333,7 +333,10 @@ export function getActiveSeason(
     // 2. Birthday (priority: 3)
     if (userBirthday) {
         try {
-            const bday = new Date(userBirthday);
+            // 'YYYY-MM-DD' lo parsea JS como UTC y se compara con getMonth()/getDate()
+            // (LOCAL): eso desplaza el cumpleanos un dia al oeste de UTC. Se compone en local.
+            const bd = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(userBirthday).trim());
+            const bday = bd ? new Date(Number(bd[1]), Number(bd[2]) - 1, Number(bd[3])) : new Date(userBirthday);
             if (!isNaN(bday.getTime())) {
                 const bdayMonth = bday.getMonth() + 1;
                 const bdayDay = bday.getDate();
