@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-30",
+  "updated": "2026-10-01",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -2209,6 +2209,18 @@
       "commit": "376d164",
       "titulo": "El fetch del FBX lleva deadline: el respaldo main-thread colgaba",
       "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=src/avatar/lib/fbxParse.ts:40 hacia `await fetch(url)` sin deadline. El camino de worker YA estaba acotado por el cliente (fbxWorkerClient aplica REQUEST_TIMEOUT_DEFAULTS.WORKER_MS como tope de la peticion), pero runMainThreadFallback() llama a fetchFbxJson() directo y ahi no habia tope: un servidor que no responde colgaba la carga del modelo. Ahora usa fetchTextEngine(url, {}, WORKER_MS), el mismo limite que el camino de worker, asi que los dos caminos coinciden. Medida posterior: `await fetch(` en src/ queda solo en el propio transporte (src/core/ai/httpClient.ts), en el wrapper deliberado de imageGeneration.js (conserva AbortError para los trace) y en los servidores (src/server/*), que PRODUCEN las respuestas. gate OK; lint:guards 145 ficheros / 1267 tests; tsc OK. allow 297 -> 298 (maxFiles 300). NO CUBIERTO=(a) src/dev/asrLab/AsrLab.tsx:191 sigue con fetch sin deadline a proposito: se declara arnes DEV \"NO produccion\" y esta gateado en main.tsx (isAsrLab), asi que no es ruta de producto. (b) los ternarios de idioma siguen sin fuente unica: 98 sitios en 29 ficheros medidos, no abordados. el alcance del guard de transporte se amplio a fbxParse en el commit posterior del mismo cierre, asi que la clase queda vigilada para los 3 ficheros."
+    },
+    {
+      "id": "C79",
+      "commit": "4fe6e89",
+      "titulo": "B8: el texto de UI sale de una fuente unica y el codigo de idioma tiene dueno",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=medido antes de tocar, no estimado: 55 sitios con `lang === 'en' ? 'EN' : 'ES'` (dos literales) en 19 ficheros, 3 de ellos con las DOS ramas iguales (rama muerta invisible), y 16 sitios eligiendo el codigo de idioma con su propio ternario. Ahora: (1) src/lib/uiStrings.ts (nuevo) declara UI_STRINGS {es,en} + pickText(); los 55 sitios pasan a 46 claves porque el catalogo DEDUPLICA los textos repetidos entre modulos; (2) normalizeLang() en src/core/config/localeConfig.ts es el dueno unico de idioma -> codigo base, y pickLabel (src/lib/textUtils.ts) lo usa, asi que la regla deja de re-implementarse; (3) las 3 ramas muertas se colapsan; (4) el accesor se llama pickText porque `uiText` YA significaba otra cosa en este repo (NotificationCenterBat lo define local sobre configText). Medido despues: 0 ternarios de texto en src; `=== \"en\" ?` de una linea: 98 -> 14. allow 298->317 y maxFiles 300->328 (ver NO CUBIERTO). gate OK con DoD completo (1273 tests). NO CUBIERTO=(a) maxFiles lo subio el AGENTE (300->328) por orden explicita del dueno en el chat; la norma lo reserva al dueno: queda PENDIENTE DE RATIFICACION. (b) la forma MULTILINEA del mismo ternario (34 sitios en 10 ficheros: App.tsx, FluSettingsPanel.tsx, gemini.js, geminiDiagnostics.js, documentChunker.ts, agendaSummary.ts, domainScopedIntent.ts, documentInsumo.ts, deepseek.ts, capabilities.ts y otros) NO esta migrada: se intento con un pase multilinea y corrompio JSX, tsc lo cazo y se revirtio entero. Su detector por linea da falsos positivos, asi que no se instrumento. (c) siguen sin dueno propio los pares de constantes _EN/_ES (ENGLISH_MARKERS, SPOKEN_NUMBERS_EN, GENERIC_FAILURE_EN, meridiemEn, def.contextEn) y las plantillas con interpolacion; son las 14 que fija el trinquete del guard."
+    },
+    {
+      "id": "C79",
+      "commit": "0433a0f",
+      "titulo": "B8: guard que prohibe el ternario de idioma para el texto de UI",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=tests/uiStringsSingleOwnerGuard.test.ts prohibe el ternario de texto en todo src (0 tolerado, ignorando comentarios), exige que normalizeLang solo lo implemente su dueno, fija trinquete <=14 para las formas no migradas y prueba el detector (incluye `this.language` y los casos que NO debe marcar). Declarado en lint:guards (package.json), que es donde 0.24 exige que corra todo guard que lee un fichero tocado. lint:guards 145 ficheros / 1273 tests OK. NO CUBIERTO=no cubre la forma multilinea ni las plantillas con interpolacion (ver el otro C79, commit de src): quedan contadas y con trinquete, no vigiladas."
     }
   ]
 }
