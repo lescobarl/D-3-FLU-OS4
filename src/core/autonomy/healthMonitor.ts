@@ -673,7 +673,7 @@ async function checkReactComponents(): Promise<ComponentHealth> {
 // Helper functions
 // -----------------------------------------------------------
 
-function determineComponentStatus(
+export function determineComponentStatus(
     responseTime: number,
     hasError: boolean,
     thresholds: ComponentThresholds
@@ -693,7 +693,7 @@ function determineComponentStatus(
     return 'healthy';
 }
 
-function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
+export function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
     if (components.length === 0) return 'healthy';
     
     const statusWeights: Record<HealthStatus, number> = {
@@ -719,6 +719,13 @@ function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
 // Clase principal del monitor de salud
 // -----------------------------------------------------------
 
+/**
+ * Verificadores de componente INYECTABLES (§2.4). Sin esto, la clase solo se podia
+ * probar golpeando las APIs reales (fetch/indexedDB/navigator): añadir la costura
+ * permite un doble de prueba y hace determinista `performHealthCheck`.
+ */
+export type ComponentCheckers = Record<string, () => Promise<ComponentHealth>>;
+
 export class HealthMonitor {
     private config: HealthMonitorConfig;
     private metricTracker: HealthMetricTracker;
@@ -731,21 +738,22 @@ export class HealthMonitor {
     /** Punto de composición de dependencias (§2.4). */
     static create(
         config: Partial<HealthMonitorConfig> = {},
-        deps: { metricTracker?: HealthMetricTracker } = {},
+        deps: { metricTracker?: HealthMetricTracker; componentCheckers?: ComponentCheckers } = {},
     ): HealthMonitor {
         return new HealthMonitor(config, {
             metricTracker: deps.metricTracker ?? new HealthMetricTracker(),
+            componentCheckers: deps.componentCheckers,
         });
     }
 
     constructor(
         config: Partial<HealthMonitorConfig> = {},
-        deps: { metricTracker: HealthMetricTracker },
+        deps: { metricTracker: HealthMetricTracker; componentCheckers?: ComponentCheckers },
     ) {
         this.config = { ...DEFAULT_HEALTH_CONFIG, ...config };
         this.metricTracker = deps.metricTracker;
         
-        this.componentCheckers = {
+        this.componentCheckers = deps.componentCheckers ?? {
             'ai-service': checkAIService,
             'speech-recognition': checkSpeechRecognition,
             'speech-synthesis': checkSpeechSynthesis,
@@ -927,7 +935,7 @@ export class HealthMonitor {
     }
 
     getConfig(): HealthMonitorConfig {
-        return { ...this.config };
+        return { ...this.config, monitoredComponents: [...this.config.monitoredComponents] };
     }
 
     clearHistory(): void {
