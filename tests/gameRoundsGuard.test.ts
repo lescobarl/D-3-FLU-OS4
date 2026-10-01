@@ -12,28 +12,22 @@
  * `defaultRondas` (contrato de config distinto); unificarlo cambiaría su
  * comportamiento y su config. Se documenta como decisión, no como deuda.
  */
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readRounds } from '../src/core/games/gameUtils'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const PATTERN =
   /Number\(cfg\?\.rounds\)\s*\|\|\s*Number\(cfg\?\.defaultRounds\)\s*\|\|\s*DEFAULT_ROUNDS/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** Archivos con una copia local de la lectura de rounds. */
-export function roundsCopyFiles(files: string[] = walk(SRC)): string[] {
+export function roundsCopyFiles(files: string[] = walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)): string[] {
   const hits: string[] = []
   for (const f of files) {
     if (PATTERN.test(readFileSync(f, 'utf8'))) {

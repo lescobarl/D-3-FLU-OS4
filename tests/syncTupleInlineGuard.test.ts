@@ -6,11 +6,12 @@
 // inline con `updated_at: new Date().toISOString()` repartidas por src.
 // Inspecciona el CÓDIGO REAL (fs + regex) y lista `archivo:simbolo:linea`.
 // ============================================================
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSyncTuple } from '../src/core/db/syncTuple'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -21,15 +22,6 @@ const DUPLICATE_HELPER_RE = /\b(newSyncTuple|bumpSync)\b/
 /** Construcción inline del campo `updated_at` de la tupla. */
 const INLINE_UPDATED_AT_RE = /updated_at\s*:\s*new Date\(\)\.toISOString\(\)/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
-
 const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line)
 
 /**
@@ -39,7 +31,7 @@ const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line)
  */
 export function findSyncTupleViolations(root: string = SRC): string[] {
   const violations: string[] = []
-  for (const file of walk(root)) {
+  for (const file of walkFiles(root, /\.(ts|tsx|js|jsx)$/)) {
     const rel = relative(root, file).replace(/\\/g, '/')
     if (rel === CANONICAL) continue
     readFileSync(file, 'utf8')

@@ -7,23 +7,15 @@
  *
  * Nace ROJO (2 literales fuera de config) y pasa cuando ambos leen FLU_CONFIG.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const CONFIG = 'src/voice/lib/fluConfig.js'
 const RE = /\[\s*'wikipedia\.org'\s*,\s*'educ\.ar'\s*\]/
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
 
 /** Literales de allowlist de busqueda (mismo criterio del guard). */
 export function allowlistLiterals(src: string, file: string): string[] {
@@ -37,7 +29,7 @@ export function allowlistLiterals(src: string, file: string): string[] {
 describe('C2 searchAllowlistFuenteUnica — allowlist solo desde config', () => {
   it('no hay literales de allowlist fuera de fluConfig.js', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (r === CONFIG) continue
       offenders.push(...allowlistLiterals(readFileSync(f, 'utf8'), r))

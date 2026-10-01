@@ -14,7 +14,7 @@
  * Este guard NO valida runtime: es una barrera estructural anti-cascada (§8.6).
  */
 import { describe, expect, it } from 'vitest'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 import { ARBITER_DOMAINS, resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter'
@@ -24,21 +24,13 @@ import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
 import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const FLU_CONFIG_REL = 'src/voice/lib/fluConfig.js'
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
-
-const FILES = walk(SRC)
+const FILES = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 const fileLines = (f: string) => readFileSync(f, 'utf8').split(/\r?\n/)
 const stripLineComment = (line: string) => {

@@ -9,9 +9,10 @@
  * El segundo describe comprueba el detector (AGENTS.md §B11/B12): un guard que no
  * distingue el defecto no es barrera.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const CONFIG = 'src/voice/lib/fluConfig.js'
@@ -38,21 +39,14 @@ const WAKE_RE = new RegExp(
 function isWakeLiteral(line: string): boolean {
   return WAKE_RE.test(strip(line))
 }
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 describe('C6 wakeWordRuntime — wake word solo de config', () => {
   it('la config conserva las variantes canonicas (4 prefijos x 4 alias ASR)', () => {
     expect(WAKE_WORDS.length).toBeGreaterThanOrEqual(CANONICAL_COUNT)
   })
   it('no hay wake words en codigo fuera de fluConfig.js', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (r === CONFIG) continue
       readFileSync(f, 'utf8')

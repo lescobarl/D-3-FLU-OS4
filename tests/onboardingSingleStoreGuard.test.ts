@@ -15,25 +15,19 @@
  * REGLA: las claves legacy no pueden reaparecer en src/ y useOnboarding.ts no
  * puede tocar localStorage para nada que no sea el espejo del nombre (nameKey).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const LEGACY = /ONBOARDING_COMPLETED|ONBOARDING_STEP|flu-onboarding-completed|flu-onboarding-step/
 const LOCAL = /localStorage\.(?:setItem|getItem|removeItem)\s*\(/
 const isCommentLine = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 /** Referencias vivas a las claves legacy de onboarding (fuera de comentarios). */
-export function legacyOnboardingHits(files: string[] = walk(SRC)): string[] {
+export function legacyOnboardingHits(files: string[] = walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)): string[] {
   const hits: string[] = []
   for (const f of files) {
     readFileSync(f, 'utf8')
@@ -58,7 +52,7 @@ describe('C45 onboardingSingleStore - estado de onboarding solo en Dexie', () =>
     expect(hits, 'Claves legacy de onboarding vivas: ' + hits.join(', ')).toEqual([])
   })
   it('src/ no nombra el lector legacy retirado', () => {
-    const hits = walk(SRC).filter((f) => /readLegacyOnboarding/.test(readFileSync(f, 'utf8')))
+    const hits = walkFiles(SRC, /\.(ts|tsx|js|jsx)$/).filter((f) => /readLegacyOnboarding/.test(readFileSync(f, 'utf8')))
     expect(hits.map(rel)).toEqual([])
   })
   it('useOnboarding solo usa localStorage para el espejo del nombre', () => {
@@ -70,7 +64,7 @@ describe('C45 onboardingSingleStore - estado de onboarding solo en Dexie', () =>
     expect(/serviceRef\.current\?\.(?:save|load|reset)\(/.test(src)).toBe(true)
   })
   it('el universo analizado no es vacio (anti-vacuidad)', () => {
-    expect(walk(SRC).length).toBeGreaterThan(100)
+    expect(walkFiles(SRC, /\.(ts|tsx|js|jsx)$/).length).toBeGreaterThan(100)
   })
 })
 describe('C45 onboardingSingleStore - el detector no es decorativo', () => {

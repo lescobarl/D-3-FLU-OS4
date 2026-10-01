@@ -19,21 +19,10 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { walkFiles } from './_helpers'
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'src');
-
-function walk(dir: string, acc: string[] = []): string[] {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            walk(full, acc);
-        } else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) {
-            acc.push(full);
-        }
-    }
-    return acc;
-}
 
 interface Hit {
     ref: string;
@@ -43,7 +32,7 @@ interface Hit {
 /** Devuelve cada coincidencia de `pattern` como "archivo:línea". */
 function scan(pattern: RegExp): Hit[] {
     const hits: Hit[] = [];
-    for (const file of walk(SRC)) {
+    for (const file of walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)) {
         hits.push(
             ...scanText(
                 fs.readFileSync(file, 'utf-8'),

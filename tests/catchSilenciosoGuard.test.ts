@@ -39,10 +39,11 @@
  * fallar no es una barrera (AGENTS.md 0.12). Si el detector no marca una entrada
  * infractora sintetica, el guard es decorativo.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import * as ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const PROP = /\b(throw|reject\s*\(|emit\w*\s*\(|setError|onError|reportError)\b/
@@ -50,14 +51,7 @@ const PROP = /\b(throw|reject\s*\(|emit\w*\s*\(|setError|onError|reportError)\b/
  *  contenga el texto no declara nada (era el agujero de P7.9). */
 const IGN_DECL = /\/\*[\s\S]*?ignorado:\s*\S[\s\S]*?\*\/|\/\/[^\n]*ignorado:\s*\S/
 export type Violation = { line: number; kind: string; detail: string }
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 function kindOf(file: string): ts.ScriptKind {
   if (file.endsWith('.tsx')) return ts.ScriptKind.TSX
   if (file.endsWith('.jsx')) return ts.ScriptKind.JSX
@@ -204,7 +198,7 @@ export function findViolations(src: string, fileName = 'synthetic.ts'): Violatio
 describe('C13 catchSilencioso - todo catch registra la excepcion con su contexto', () => {
   it('no hay bloques catch que traguen el error ni registren sin la excepcion', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const rel = relative(ROOT, f).replace(/\\/g, '/')
       for (const v of findViolations(readFileSync(f, 'utf8'), f)) {
         offenders.push(`${rel}:${v.line}: ${v.detail}`)

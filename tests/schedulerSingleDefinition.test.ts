@@ -8,28 +8,20 @@
 //
 // Nace ROJO: hoy `reminderScheduler.ts` redeclara las 3.
 // ============================================================
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 export const CANONICAL = 'src/core/temporal/scheduleEngine.ts'
 export const SYMBOLS = ['isDue', 'collectDue', 'collectDueOrdered'] as const
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
-
 /** Definiciones `export function <symbol>` en todo `src`, como `archivo:linea`. */
 export function findDefinitions(symbols: readonly string[] = SYMBOLS): string[] {
   const re = new RegExp(`export\\s+function\\s+(${symbols.join('|')})\\b`)
   const out: string[] = []
-  for (const f of walk(join(ROOT, 'src'))) {
+  for (const f of walkFiles(join(ROOT, 'src'), /\.(ts|tsx|js|jsx)$/)) {
     readFileSync(f, 'utf8')
       .split(/\r?\n/)
       .forEach((line, i) => {

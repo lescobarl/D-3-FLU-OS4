@@ -10,23 +10,15 @@
  *   C4  `selectVisiblePhrase` es el ÚNICO selector de frase visible.
  */
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
-
-const FILES = walk(SRC)
+const FILES = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 const fileLines = (f: string) => readFileSync(f, 'utf8').split(/\r?\n/)
 const stripLineComment = (line: string) => {
@@ -104,8 +96,8 @@ describe('P2.4 voiceDisplaySingleSource - el detector no es decorativo', () => {
       'limpio.ts': 'const visible = selectVisiblePhrase(row)',
     })
     try {
-      expect(grep(/phraseDisplay/, walk(dir))).toHaveLength(1)
-      expect(grep(/selectVisiblePhrase\s*\(/, walk(dir))).toHaveLength(1)
+      expect(grep(/phraseDisplay/, walkFiles(dir, /\.(ts|tsx|js|jsx|mjs)$/))).toHaveLength(1)
+      expect(grep(/selectVisiblePhrase\s*\(/, walkFiles(dir, /\.(ts|tsx|js|jsx|mjs)$/))).toHaveLength(1)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

@@ -8,23 +8,17 @@
  * El segundo describe prueba que el detector marca de verdad (0.12): un guard
  * de conteo que no puede fallar no es una barrera.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const ALLOWED = 'src/core/config/localeConfig.ts'
 const RE = /['"`](?:es|en)-(?:MX|US|ES|GB)['"`]/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** Líneas con un literal de locale es/en fuera de la fuente única. */
 function findLocaleLiterals(rel: string, src: string): number[] {
@@ -42,7 +36,7 @@ function findLocaleLiterals(rel: string, src: string): number[] {
 describe('C47 localeConfig — un solo origen de locales', () => {
   it('no hay literales de locale fuera de localeConfig.ts', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       for (const line of findLocaleLiterals(r, readFileSync(f, 'utf8'))) {
         offenders.push(`${r}:${line}: locale literal`)

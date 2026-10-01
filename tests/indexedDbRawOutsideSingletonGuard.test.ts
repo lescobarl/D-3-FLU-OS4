@@ -16,9 +16,10 @@
  * (fluDatabase.ts) habla con indexedDB a traves de Dexie y expone la sonda
  * probeIndexedDb() para quien necesite comprobar disponibilidad.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, 'src');
@@ -26,15 +27,6 @@ const SRC = join(ROOT, 'src');
 export const RAW_INDEXEDDB = /indexeddb\s*\.\s*(?:open|deletedatabase)\s*\(/i;
 export const SINGLETON_OWNER = 'src/core/db/fluDatabase.ts';
 const NL = String.fromCharCode(10);
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p);
-  }
-  return acc;
-}
 
 /** Lineas de CODIGO (no comentario) que abren/borran IndexedDB a mano. */
 export function rawIndexedDbLines(src: string): number[] {
@@ -50,7 +42,7 @@ export function rawIndexedDbLines(src: string): number[] {
 describe('P1.7 indexedDB crudo - una base y un dueno', () => {
   it('ningun fuente de src/ toca indexedDB a mano', () => {
     const offenders: string[] = [];
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/');
       for (const ln of rawIndexedDbLines(readFileSync(f, 'utf8'))) offenders.push(r + ':' + ln);
     }

@@ -17,21 +17,13 @@
  * `/eslint-disable/` como patron al analizar proyectos importados: no es una directiva
  * y no debe marcarse. El detector lo distingue y hay prueba de ello.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
 
 /** Directivas eslint-disable de COMENTARIO sin descripcion `-- motivo`. */
 export function supresionesSinMotivo(src: string): number {
@@ -42,7 +34,7 @@ export function supresionesSinMotivo(src: string): number {
 
 describe('eslint-disable', () => {
   it('toda supresion de barrera lleva motivo', () => {
-    const offenders = walk(SRC)
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .filter((f) => supresionesSinMotivo(readFileSync(f, 'utf8')) > 0)
       .map((f) => relative(ROOT, f).replace(/\\/g, '/'))
     expect(

@@ -8,23 +8,17 @@
  *
  * El segundo describe prueba que el detector falla de verdad (0.12).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const DOUBLE_CAST = /as unknown as/
 const ANY_TYPE = /\bas\s+any\b|<any\b|:\s*any\b|\bany\s*\[\]/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** Líneas con doble cast (`as unknown as`) en un fuente. */
 function findDoubleCasts(src: string): number[] {
@@ -40,7 +34,7 @@ function findDoubleCasts(src: string): number[] {
 describe('C49 tsStrict — sin doble cast', () => {
   it('no hay "as unknown as" en src', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       for (const line of findDoubleCasts(readFileSync(f, 'utf8'))) {
         offenders.push(`${r}:${line}`)
@@ -73,7 +67,7 @@ function findAnyTypes(src: string): number[] {
 describe('C49 tsStrict — sin `any` de tipo', () => {
   it('no hay `any` en posición de tipo en src', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       for (const line of findAnyTypes(readFileSync(f, 'utf8'))) {
         offenders.push(`${r}:${line}`)

@@ -6,10 +6,11 @@
 //      ya no se importan en NINGÚN lado (se retiran).
 //   B) el panel UNICO AgendaPanel esta CONECTADO (importado Y renderizado) en la app.
 // ============================================================
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 // Enmienda 2026-09-22 (C49): la asercion B media presencia del texto 'AgendaPanel'
 // en App.tsx y solo pasaba por un import MUERTO (TS6133). El diseno real monta el
@@ -22,18 +23,9 @@ const RE_PANELES_VIEJOS = /from\s+['"][^'"]*(RemindersPanel|TemporalItemsPanel|H
 const RE_IMPORT_AGENDA = /import\s*\{[^}]*\bAgendaPanel\b[^}]*\}\s*from\s*['"][^'"]*AgendaPanel['"]/
 const RE_RENDER_AGENDA = /<\s*AgendaPanel\b/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
-
 function grep(re: RegExp, root: string = join(ROOT, 'src')): string[] {
   const out: string[] = []
-  for (const f of walk(root)) {
+  for (const f of walkFiles(root, /\.(ts|tsx|js|jsx)$/)) {
     const rf = relative(root, f).replace(/\\/g, '/')
     readFileSync(f, 'utf8')
       .split(/\r?\n/)

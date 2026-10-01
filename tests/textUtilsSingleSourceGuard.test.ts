@@ -31,14 +31,10 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import {
-    normalizeForMatch,
-    normalizeSpaces,
-    shortText,
-    stripDiacritics,
-} from '../src/lib/textUtils';
+import { normalizeForMatch, normalizeSpaces, shortText, stripDiacritics } from '../src/lib/textUtils';
 import { stripDiacritics as stripDiacriticsFromAudioMath, detectTranscriptLanguage } from '../src/voice/lib/audioMath.js';
 import { clasificarDia } from '../src/core/agenda/agendaShared';
+import { walkFiles } from './_helpers'
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'src');
@@ -47,18 +43,6 @@ const CANONICAL = 'src/lib/textUtils.ts';
 interface Hit {
     ref: string;
     text: string;
-}
-
-function walk(dir: string, acc: string[] = []): string[] {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            walk(full, acc);
-        } else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) {
-            acc.push(full);
-        }
-    }
-    return acc;
 }
 
 function rel(file: string): string {
@@ -72,7 +56,7 @@ function read(relPath: string): string {
 /** Cada coincidencia de `pattern` en src/ como archivo:línea. */
 function scan(pattern: RegExp): Hit[] {
     const hits: Hit[] = [];
-    for (const file of walk(SRC)) {
+    for (const file of walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)) {
         const lines = fs.readFileSync(file, 'utf-8').split(/\r?\n/);
         lines.forEach((line, index) => {
             if (pattern.test(line)) {

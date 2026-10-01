@@ -14,9 +14,10 @@
  *
  * AMBITO: todo src/, sin exclusiones (AGENTS.md 7.7.d).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const STORE = 'src/store/integrationStore.ts'
@@ -24,14 +25,7 @@ const STORE = 'src/store/integrationStore.ts'
 export const KEY_RE = /MINUTE_HISTORY|flu-minute-history/
 /** Escritura del espejo del historial en el store. */
 export const MIRROR_RE = /minuteHistory\s*:/
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 const isComment = (t: string) => t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')
 /** Lineas de CODIGO (no comentario) que usan la clave localStorage de minutas. */
@@ -75,7 +69,7 @@ function codeOnly(src: string): string {
     .join(String.fromCharCode(10))
 }
 
-const FILES = walk(SRC)
+const FILES = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
 const read = (f: string) => readFileSync(f, 'utf8')
 describe('P1.1 minutas - un solo almacen (Dexie)', () => {
   it('la clave localStorage de minutas ya no existe en src/', () => {

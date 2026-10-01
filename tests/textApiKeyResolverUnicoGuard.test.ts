@@ -8,9 +8,10 @@
  * Nace ROJO (1 lectura directa fuera de config) y pasa cuando usa el resolver.
  * `src/dev/**` queda fuera de alcance (laboratorio de desarrollo).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -26,20 +27,10 @@ export function findOffenders(content: string, file = 'src/sintetico.ts'): strin
   return out
 }
 
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
-
 describe('C5 textApiKeyResolverUnico — la key de texto sale del resolver central', () => {
   it('no hay lecturas directas de import.meta.env.VITE_OPENROUTER_API_KEY fuera de config/dev', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (ALLOWED.has(r) || r.startsWith('src/dev/')) continue
       offenders.push(...findOffenders(readFileSync(f, 'utf8'), r))

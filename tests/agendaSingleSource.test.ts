@@ -6,10 +6,11 @@
 //   B) ningún consumidor importa los módulos viejos de CRUD.
 // Nace ROJO mientras convivan agendaService + los 3 CRUD viejos.
 // ============================================================
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 
@@ -17,18 +18,9 @@ const ROOT = process.cwd()
 const RE_CRUD_VIEJO = /export\s+function\s+create(Reminder|Temporal|Horario)Service\b/
 const RE_IMPORT_VIEJO = /from\s+['"][^'"]*(reminderService|temporalService|horarioService)['"]/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
-
 function grep(re: RegExp, root: string = join(ROOT, 'src')): string[] {
   const out: string[] = []
-  for (const f of walk(root)) {
+  for (const f of walkFiles(root, /\.(ts|tsx|js|jsx)$/)) {
     const rf = relative(root, f).replace(/\\/g, '/')
     readFileSync(f, 'utf8')
       .split(/\r?\n/)

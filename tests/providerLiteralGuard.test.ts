@@ -23,9 +23,10 @@
  * renombrar en la config rompia la normalizacion en silencio. Ahora todos derivan
  * de SEARCH_PROVIDERS / SEARCH_PROVIDER_IDS (sharedConfig.ts).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -104,15 +105,6 @@ const SELECTION_MODULES = new Set<string>([
   'src/components/FluSettingsPanel.tsx',
 ])
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
-
 /** Quita comentarios preservando el número de línea (bloques → saltos). */
 function stripComments(source: string): string {
   return source
@@ -147,7 +139,7 @@ describe('providerLiteralGuard — proveedores de IA solo desde config', () => {
 
   it('no hay literales de proveedor fuera del módulo de configuración', () => {
     const offenders: string[] = []
-    for (const file of walk(SRC)) {
+    for (const file of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const relPath = relative(ROOT, file).replace(/\\/g, '/')
       if (relPath.startsWith(CONFIG_DIR)) continue
 

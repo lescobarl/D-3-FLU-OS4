@@ -17,23 +17,14 @@
  *
  * AMBITO: src/ + tests/. Toda clave nueva debe nacer referenciada.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd();
 const CFG = join(ROOT, 'src/core/config/appConfig.ts');
 const PREFIX = 'flu-';
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    if (['node_modules', '.git', 'dist'].includes(e)) continue;
-    const p = join(dir, e);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(e)) acc.push(p);
-  }
-  return acc;
-}
 
 /** Claves declaradas en el objeto STORAGE_KEYS (nombre -> valor). */
 export function declaredStorageKeys(src: string): Record<string, string> {
@@ -47,7 +38,7 @@ export function declaredStorageKeys(src: string): Record<string, string> {
 export function referencedStorageKeys(roots: string[]): Set<string> {
   const found = new Set<string>();
   for (const r of roots) {
-    for (const f of walk(join(ROOT, r))) {
+    for (const f of walkFiles(join(ROOT, r), /\.(ts|tsx|js|jsx|mjs|cjs)$/)) {
       const t = readFileSync(f, 'utf8');
       for (const m of t.matchAll(/STORAGE_KEYS\.([A-Z][A-Z0-9_]*)/g)) found.add(m[1]);
     }

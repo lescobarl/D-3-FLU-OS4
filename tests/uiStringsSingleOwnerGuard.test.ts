@@ -21,9 +21,10 @@
  *
  * TRINQUETE: el tope solo puede BAJAR.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const SRC = 'src'
 const UI_STRINGS_OWNER = 'src/lib/uiStrings.ts'
@@ -35,14 +36,7 @@ const TOPE_TERNAMIOS_COLGADOS = 13
 /** Ternarios colgados cuyas ramas abren plantilla retrocomilla. Solo baja. */
 const TOPE_TERNAMIOS_PLANTILLA = 4
 
-function walk(dir: string, acc: string[] = []): string[] {
-    for (const e of readdirSync(dir)) {
-        const p = join(dir, e)
-        if (statSync(p).isDirectory()) walk(p, acc)
-        else if (/\.(ts|tsx|js)$/.test(e)) acc.push(p)
-    }
-    return acc
-}
+
 
 function rel(p: string): string {
     return relative(process.cwd(), p).replace(/\\/g, '/')
@@ -121,7 +115,7 @@ export function ternariosPlantilla(src: string): number[] {
 
 describe('B8 textos de UI - una sola fuente', () => {
     it('no queda ningun ternario de idioma con dos literales de texto', () => {
-        const offenders = walk(SRC).flatMap((f) =>
+        const offenders = walkFiles(SRC, /\.(ts|tsx|js)$/).flatMap((f) =>
             ternariosDeTextoLiteral(readFileSync(f, 'utf8')).map((m) => rel(f) + ': ' + m),
         )
         expect(
@@ -131,14 +125,14 @@ describe('B8 textos de UI - una sola fuente', () => {
     })
 
     it('el codigo base de idioma lo decide normalizeLang, y solo su dueno lo implementa', () => {
-        const definen = walk(SRC).filter((f) =>
+        const definen = walkFiles(SRC, /\.(ts|tsx|js)$/).filter((f) =>
             /function normalizeLang|normalizeLang\s*=/.test(readFileSync(f, 'utf8')),
         )
         expect(definen.map(rel)).toEqual([NORMALIZE_OWNER])
     })
 
     it('tampoco queda el mismo ternario partido en varias lineas', () => {
-        const offenders = walk(SRC).flatMap((f) =>
+        const offenders = walkFiles(SRC, /\.(ts|tsx|js)$/).flatMap((f) =>
             ternariosColgadosDeTexto(readFileSync(f, 'utf8')).map((n) => rel(f) + ':' + n),
         )
         expect(
@@ -149,7 +143,7 @@ describe('B8 textos de UI - una sola fuente', () => {
     })
 
     it('los ternarios de idioma restantes no crecen (trinquete)', () => {
-        const total = walk(SRC).reduce((n, f) => n + ternariosIdioma(readFileSync(f, 'utf8')).length, 0)
+        const total = walkFiles(SRC, /\.(ts|tsx|js)$/).reduce((n, f) => n + ternariosIdioma(readFileSync(f, 'utf8')).length, 0)
         expect(
             total,
             'Aumentaron los ternarios de idioma. Migra a pickLabel (texto) o normalizeLang (codigo); ' +
@@ -158,7 +152,7 @@ describe('B8 textos de UI - una sola fuente', () => {
     })
 
     it('las formas colgadas que quedan no crecen (trinquete)', () => {
-        const total = walk(SRC).reduce(
+        const total = walkFiles(SRC, /\.(ts|tsx|js)$/).reduce(
             (n, f) =>
                 n +
                 readFileSync(f, 'utf8')
@@ -173,7 +167,7 @@ describe('B8 textos de UI - una sola fuente', () => {
     })
 
     it('los ternarios con plantilla que quedan no crecen (trinquete)', () => {
-        const sitios = walk(SRC).flatMap((f) =>
+        const sitios = walkFiles(SRC, /\.(ts|tsx|js)$/).flatMap((f) =>
             ternariosPlantilla(readFileSync(f, 'utf8')).map((n) => rel(f) + ':' + n),
         )
         expect(

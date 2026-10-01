@@ -11,9 +11,10 @@
  * src/voice/lib/embeddingConfig.js; los consumidores los IMPORTAN de ahi.
  * No sustituye a duplicationGuard, que cubre otros cinco algoritmos.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = join(__dirname, '..')
 const VOICE = join(ROOT, 'src/voice')
@@ -40,15 +41,6 @@ export const CONFIG_CATALOG = 'src/voice/lib/fluConfig.js'
 
 /** Dueno del umbral de room-rematch. */
 export const ROOM_REMATCH_OWNER = 'src/voice/lib/speakerClusters.js'
-
-function walk(dir: string, acc: string[] = []): string[] {
-    for (const entry of readdirSync(dir)) {
-        const p = join(dir, entry)
-        if (statSync(p).isDirectory()) walk(p, acc)
-        else if (/\.(ts|tsx|js|jsx)$/.test(entry)) acc.push(p)
-    }
-    return acc
-}
 
 export const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 
@@ -131,7 +123,7 @@ export function inlineRoomRematchOffenders(
         .map(({ name }) => `${name}: umbral de room-rematch inline (usa ROOM_REMATCH_STRICT)`)
 }
 
-const VOZ = walk(VOICE).map((f) => ({ name: rel(f), src: readFileSync(f, 'utf8') }))
+const VOZ = walkFiles(VOICE, /\.(ts|tsx|js|jsx)$/).map((f) => ({ name: rel(f), src: readFileSync(f, 'utf8') }))
 
 describe('P7.92 - un solo dueno de la configuracion de identidad de voz', () => {
     it('no hay lectores, fallbacks ni consumidores sin importar fuera del dueno', () => {

@@ -6,20 +6,12 @@
 //      (no solo al lab dev src/dev/asrLab).
 //   B) existe una ruta que degrada a motor local ante error 'network'/'no-speech'.
 // ============================================================
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
 
 /** Predicados del guard, expuestos para poder FALSIFICARLOS con entradas sinteticas. */
 export const LOCAL_ENGINE_RE = /voiceLocalFallback|whisperRecognitionEngine|whisperWasmTranscriber|createWhisperRecognitionEngine/
@@ -42,7 +34,7 @@ describe('voz — fallback offline (Whisper local) ante error de red', () => {
   })
 
   it('B: hay degradación a motor local ante error network/no-speech', () => {
-    const sources = walk(join(ROOT, 'src/voice')).map((f) => readFileSync(f, 'utf8'))
+    const sources = walkFiles(join(ROOT, 'src/voice'), /\.(ts|tsx|js|jsx)$/).map((f) => readFileSync(f, 'utf8'))
     expect(hasLocalFallbackRoute(sources)).toBe(true)
   })
 })

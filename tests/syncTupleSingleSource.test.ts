@@ -5,29 +5,21 @@
 // UNA sola vez. Hoy está copiada en 15 servicios core.
 // Nace ROJO y lista `archivo:linea` de cada copia.
 // ============================================================
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 export const CANONICAL = 'src/core/db/syncTuple.ts'
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
 
 /** Definiciones de buildSync/buildSyncTuple (function o const) en todo src. */
 export function findBuildSyncDefs(root: string = join(ROOT, 'src')): string[] {
   const re = /(?:function|const)\s+buildSync(?:Tuple)?\s*[=(]/
   const isComment = (l: string) => /^\s*(\/\/|\*|\/\*)/.test(l)
   const out: string[] = []
-  for (const f of walk(root)) {
+  for (const f of walkFiles(root, /\.(ts|tsx|js|jsx)$/)) {
     readFileSync(f, 'utf8')
       .split(/\r?\n/)
       .forEach((line, i) => {

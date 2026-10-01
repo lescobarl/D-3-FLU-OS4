@@ -5,20 +5,14 @@
  * escrita dos o mas veces, de modo que arreglar una copia no arregla las otras.
  * El guard lee los fuentes y exige que el algoritmo viva en un solo sitio.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { AI_PROVIDERS, AI_PROVIDER_SYNONYMS } from '../src/core/config/sharedConfig';
+import { walkFiles } from './_helpers'
 const ROOT = join(__dirname, '..');
 const SRC = join(ROOT, 'src');
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p);
-  }
-  return acc;
-}
+
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/');
 /** Dueno unico del algoritmo de acentos. */
 export const DIACRITICS_OWNER = 'src/lib/textUtils.ts';
@@ -62,25 +56,25 @@ export function requestUrlOffenders(src: string, fileName: string): string[] {
 }
 describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () => {
   it('el plegado NFD existe solo en su dueno', () => {
-    const offenders = walk(SRC).flatMap((f) => nfdOffenders(readFileSync(f, 'utf8'), rel(f)));
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => nfdOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'plegado NFD reimplementado fuera de ' + DIACRITICS_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
   });
   it('el algoritmo de slug existe solo en su dueno; slugifyAmbiente delega', () => {
     const ambiente = readFileSync(join(ROOT, 'src/core/environments/ambienteFactory.ts'), 'utf8');
     expect(ambiente).toContain('slugifyPalette(nombre)');
-    const owners = walk(SRC).filter((f) => /\.replace\(\/\[\^a-z0-9\]\+\/g, '-'\)/.test(readFileSync(f, 'utf8')));
+    const owners = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).filter((f) => /\.replace\(\/\[\^a-z0-9\]\+\/g, '-'\)/.test(readFileSync(f, 'utf8')));
     expect(owners.map(rel), 'algoritmo de slug duplicado').toEqual(['src/core/branding/paletaFactory.ts']);
   });
   it('la tokenizacion de frases existe solo en su dueno', () => {
     // La capa de voz ya NO se llama igual que la de juegos (C70: hasVoiceToken /
     // findVoiceTokenIndex), asi que no reabre este contrato y no necesita exencion: se
     // eximia a proposito y la exencion se retiro para que este guard no tenga zona ciega.
-    const offenders = walk(SRC)
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .flatMap((f) => tokenHelperOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'token helpers redefinidos fuera de ' + TOKEN_HELPERS_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
   });
   it('parseAllowlist se define una sola vez y los proxies la importan', () => {
-    const defs = walk(join(SRC, 'server')).filter((f) => allowlistDefinitions(readFileSync(f, 'utf8')) > 0).map(rel);
+    const defs = walkFiles(join(SRC, 'server'), /\.(ts|tsx|js|jsx|mjs)$/).filter((f) => allowlistDefinitions(readFileSync(f, 'utf8')) > 0).map(rel);
     expect(defs, 'parseAllowlist definida en varios sitios').toEqual(['src/server/allowlist.ts']);
     for (const p of ['src/server/searchProxy.ts', 'src/server/browserProxy.ts']) {
       expect(readFileSync(join(ROOT, p), 'utf8'), p + ' no importa la allowlist compartida').toContain("from './allowlist'");
@@ -92,7 +86,7 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
     expect(cfg).toContain('CURATED_ALLOWLIST');
   });
   it('el parseo del URL del request se define una sola vez y los proxies lo importan', () => {
-    const offenders = walk(join(SRC, 'server'))
+    const offenders = walkFiles(join(SRC, 'server'), /\.(ts|tsx|js|jsx|mjs)$/)
       .flatMap((f) => requestUrlOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'parseo del URL del request copiado fuera de ' + REQUEST_URL_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
     for (const p of ['src/server/searchProxy.ts', 'src/server/browserProxy.ts']) {
@@ -133,7 +127,7 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo',
 describe('P7.20 duplicacion - isAIProvider con un solo dueno', () => {
   const DEFINICION = /export\s+function\s+isAIProvider\b/;
   it('isAIProvider se define una sola vez en src', () => {
-    const defs = walk(SRC).filter((f) => DEFINICION.test(readFileSync(f, 'utf8'))).map(rel);
+    const defs = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).filter((f) => DEFINICION.test(readFileSync(f, 'utf8'))).map(rel);
     expect(defs, 'isAIProvider definido en varios sitios').toEqual(['src/core/config/sharedConfig.ts']);
   });
   it('appTypeGuards re-exporta en vez de redefinir', () => {
@@ -146,13 +140,13 @@ describe('P7.20 duplicacion - isAIProvider con un solo dueno', () => {
 describe('P7.24 - el formato de clave de dia tiene un solo dueno', () => {
   const LITERAL = '/^\\d{4}-\\d{2}-\\d{2}$/';
   it('el literal solo aparece en src/lib/dateKey.ts', () => {
-    const con = walk(SRC)
+    const con = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .filter((f) => readFileSync(f, 'utf8').includes(LITERAL))
       .map(rel);
     expect(con, 'formato de clave de dia copiado:\n  ' + con.join('\n  ')).toEqual(['src/lib/dateKey.ts']);
   });
   it('ningun modulo re-declara DATE_KEY_RE', () => {
-    const con = walk(SRC).filter((f) => readFileSync(f, 'utf8').includes('DATE_KEY_RE')).map(rel);
+    const con = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).filter((f) => readFileSync(f, 'utf8').includes('DATE_KEY_RE')).map(rel);
     expect(con).toEqual([]);
   });
 });
@@ -209,17 +203,17 @@ export function monitoredComponentsOffenders(src: string, fileName: string): str
 
 describe('P4.x duplicacion - nombres de calendario y componentes de salud, un solo dueno', () => {
   it('la tabla de meses solo vive en su dueno', () => {
-    const cops = walk(SRC)
+    const cops = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .flatMap((f) => nameTableOffenders(readFileSync(f, 'utf8'), rel(f), MONTHS_ES, 6, CALENDAR_NAMES_OWNER));
     expect(cops, 'tabla de meses copiada:\n  ' + cops.join('\n  ')).toEqual([]);
   });
   it('la tabla de dias solo vive en su dueno', () => {
-    const cops = walk(SRC)
+    const cops = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .flatMap((f) => nameTableOffenders(readFileSync(f, 'utf8'), rel(f), DAYS_ES, 5, CALENDAR_NAMES_OWNER));
     expect(cops, 'tabla de dias copiada:\n  ' + cops.join('\n  ')).toEqual([]);
   });
   it('la lista de componentes monitoreados solo vive en su dueno', () => {
-    const cops = walk(SRC)
+    const cops = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .flatMap((f) => monitoredComponentsOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(cops, 'lista de componentes copiada:\n  ' + cops.join('\n  ')).toEqual([]);
   });

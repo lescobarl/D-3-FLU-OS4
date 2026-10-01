@@ -20,11 +20,12 @@
  *
  * AMBITO: todo src/, sin exclusiones (AGENTS.md 7.7.d).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import type { MinuteUIEntry } from '../src/hooks/useMinuteKnowledge'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -35,15 +36,6 @@ const NL = String.fromCharCode(10)
 /** Formas reales de publicar en integrationStore. */
 export const STORE_ADD_MINUTE =
   /(?:useIntegrationStore\s*[.]\s*getState\s*[(]\s*[)]|integrationStore)\s*[.]\s*addMinute\s*[(]/
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
 
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 
@@ -84,7 +76,7 @@ function makeMinute(id: string, titulo: string): MinuteUIEntry {
 describe('P1.2 minutosSinglePublisher - un solo publicador', () => {
   it('solo el dueno de la minuta publica en integrationStore', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       offenders.push(...publisherSites(readFileSync(f, 'utf8'), rel(f)))
     }
     expect(

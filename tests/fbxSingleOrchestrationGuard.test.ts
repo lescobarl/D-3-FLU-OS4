@@ -13,9 +13,10 @@
  *
  * AMBITO: todo src/, sin excluir la carpeta donde vivia el duplicado (7.7.d).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, 'src');
@@ -28,15 +29,6 @@ export const FBX_CONSUMERS: readonly string[] = [
   'src/avatar/workers/fbxWorkerClient.ts',
 ];
 const FETCH_ERROR = 'fetch FBX';
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p);
-  }
-  return acc;
-}
 
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/');
 const read = (f: string) => readFileSync(join(ROOT, f), 'utf8');
@@ -56,7 +48,7 @@ export function orchestrationSites(src: string, fileName: string): string[] {
 describe('P4.2 FBX - una sola orquestacion de carga', () => {
   it('solo el dueno llama a parseFbxBuffer()', () => {
     const offenders: string[] = [];
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       offenders.push(...orchestrationSites(readFileSync(f, 'utf8'), rel(f)));
     }
     expect(

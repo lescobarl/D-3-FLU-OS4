@@ -16,7 +16,7 @@
  * El segundo describe comprueba el propio detector: un guard que nunca puede fallar no
  * es una barrera (AGENTS.md 0.12).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseAgendaCommand } from '../src/core/agenda/agendaCommandParser'
@@ -27,18 +27,12 @@ import {
     SPOKEN_NUMBERS_ES,
     resolveSpokenNumber,
 } from '../src/lib/spokenNumbers'
+import { walkFiles } from './_helpers'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 /** Origen unico declarado del sample rate. */
 export const SAMPLE_RATE_OWNER = 'src/voice/lib/audioConstants.js'
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
 /** Archivos de src/ (excepto el dueno) que contienen el literal del sample rate. */
 export function sampleRateOffenders(files: string[], read: (f: string) => string): string[] {
@@ -57,7 +51,7 @@ export function literalOffenders(src: string, fileName: string): string[] {
 }
 describe('P5.2 configSingleSource - el sample rate tiene un solo origen', () => {
   it('ningun modulo de src repite el literal 48000', () => {
-    const files = walk(SRC)
+    const files = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
     expect(files.map(rel)).toContain(SAMPLE_RATE_OWNER)
     const offenders = sampleRateOffenders(files, (f) => readFileSync(f, 'utf8'))
     expect(offenders, `literales 48000 fuera de ${SAMPLE_RATE_OWNER}:\n  ${offenders.join('\n  ')}`).toEqual([])
@@ -125,15 +119,15 @@ export function tokenBudgetOffenders(src: string, fileName: string): string[] {
 }
 describe('P5.5/P5.6/P5.7 configSingleSource - locales, proveedores y presupuestos', () => {
   it('ningun modulo de src declara un locale BCP-47 fuera del catalogo hoja', () => {
-    const offenders = walk(SRC).flatMap((f) => localeLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => localeLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
     expect(offenders, `locales fuera de ${LOCALE_OWNER}:\n  ${offenders.join('\n  ')}`).toEqual([])
   })
   it('ningun modulo compara o asigna un id de proveedor con literal', () => {
-    const offenders = walk(SRC).flatMap((f) => providerLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => providerLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
     expect(offenders, `ids de proveedor literales (usa AI_PROVIDER_IDS):\n  ${offenders.join('\n  ')}`).toEqual([])
   })
   it('ningun modulo fuera del catalogo quema un presupuesto de tokens', () => {
-    const offenders = walk(SRC).flatMap((f) => tokenBudgetOffenders(readFileSync(f, 'utf8'), rel(f)))
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => tokenBudgetOffenders(readFileSync(f, 'utf8'), rel(f)))
     expect(offenders, `presupuestos quemados:\n  ${offenders.join('\n  ')}`).toEqual([])
   })
   it('el catalogo de proveedores sigue siendo el origen unico', () => {
@@ -159,7 +153,6 @@ describe('P5.5/P5.6/P5.7 configSingleSource - el detector no es decorativo', () 
     expect(tokenBudgetOffenders('maxOutputTokens: 2048,', 'src/voice/lib/fluConfig.js')).toEqual([])
   })
 })
-
 
 // ------------------------------------------------------------
 // P5.8 - El léxico de números hablados tiene UN solo origen y la hora lo usa.

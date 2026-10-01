@@ -8,26 +8,18 @@
 //   G2  — UN solo resolver de hablante (hoy: resolveConversationSpeaker ×2 + assignSpeakerStrictCosine).
 //   G3  — sin "Hablante 1" hardcodeado fuera de config (debe venir de FLU_CONFIG).
 // ============================================================
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
 
 function grepExportFn(names: string[], root: string = join(ROOT, 'src')): string[] {
   const re = new RegExp(`export\\s+function\\s+(${names.join('|')})\\b`)
   const out: string[] = []
-  for (const f of walk(root)) {
+  for (const f of walkFiles(root, /\.(ts|tsx|js|jsx|mjs)$/)) {
     readFileSync(f, 'utf8')
       .split(/\r?\n/)
       .forEach((line, i) => {
@@ -39,7 +31,7 @@ function grepExportFn(names: string[], root: string = join(ROOT, 'src')): string
 
 function grepLiteral(lit: string, exclude: RegExp, root: string = join(ROOT, 'src')): string[] {
   const out: string[] = []
-  for (const f of walk(root)) {
+  for (const f of walkFiles(root, /\.(ts|tsx|js|jsx|mjs)$/)) {
     const rf = relative(root, f).replace(/\\/g, '/')
     if (exclude.test(rf)) continue
     readFileSync(f, 'utf8')

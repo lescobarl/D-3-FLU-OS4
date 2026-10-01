@@ -2,9 +2,10 @@
  * C12 — textKeyLiterales: las claves de texto salen de STORAGE_KEYS.
  * Nace ROJO (7 literales en voice/lib/gemini.js).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -25,19 +26,11 @@ const strip = (line: string) => {
   if (t.startsWith('*') || t.startsWith('/*') || t.startsWith('//')) return ''
   return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
 }
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
 
 describe('C12 textKeyLiterales — claves de texto desde STORAGE_KEYS', () => {
   it('no hay literales de claves de texto fuera de appConfig.ts', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (r === CONFIG) continue
       offenders.push(...findOffenders(readFileSync(f, 'utf8'), r))

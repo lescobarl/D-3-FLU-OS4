@@ -10,10 +10,11 @@
  * `src/core/config/appConfig.ts` (Gemini/DeepSeek legacy). Los `.tsx` de UI
  * (placeholders) quedan fuera: los cubre `tests/remoteResourceGuard.test.ts`.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { OPENROUTER_DEFAULTS } from '../src/core/config/sharedConfig'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -25,14 +26,7 @@ const CANONICAL = new Set([
 ])
 const isCommentLine = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|js)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** `archivo:línea` con un literal de URL de proveedor fuera de la config canónica. */
 /** Literales de URL de proveedor en un fuente (mismo criterio del guard). */
@@ -45,7 +39,7 @@ export function providerUrlLines(src: string, rel: string): string[] {
   return hits
 }
 
-export function providerUrlLiterals(files: string[] = walk(SRC)): string[] {
+export function providerUrlLiterals(files: string[] = walkFiles(SRC, /\.(ts|js)$/)): string[] {
   const hits: string[] = []
   for (const f of files) {
     const rel = relative(ROOT, f).split(sep).join('/')

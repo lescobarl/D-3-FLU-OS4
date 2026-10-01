@@ -12,24 +12,18 @@
  *   - src/core/multiuser/participantRegistry.ts (toDateKey)
  * Ahora solo `src/lib/dateKey.ts` lo implementa; el resto lo importa.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { dayKey } from '../src/lib/dateKey'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const CANONICAL = 'src/lib/dateKey.ts'
 const isCommentLine = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** Un fuente define el formateador de dia local (mismo criterio del guard). */
 export function isDateKeyImplementation(src: string): boolean {
@@ -48,7 +42,7 @@ export function isDateKeyImplementation(src: string): boolean {
 }
 
 /** Archivos con una implementación del formateador local getFullYear/getMonth/getDate. */
-export function dateKeyImplementations(files: string[] = walk(SRC)): string[] {
+export function dateKeyImplementations(files: string[] = walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)): string[] {
   const hits: string[] = []
   for (const f of files) {
     if (isDateKeyImplementation(readFileSync(f, 'utf8'))) {

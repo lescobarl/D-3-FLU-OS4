@@ -9,23 +9,15 @@
  * Nace ROJO (AsrLab instancia reconocimiento por su cuenta) y pasa cuando todo
  * consumidor usa la fábrica central.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const CENTRAL = 'src/voice/lib/speechRecognitionLocal.js'
 const RE = /new\s+Recognition\s*\(|new\s+(?:window\.)?(?:webkit)?SpeechRecognition\s*\(/
-
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
 
 /** Instancias de reconocimiento creadas en un fuente (mismo criterio del guard). */
 export function newRecognitionCalls(src: string, file: string): string[] {
@@ -39,7 +31,7 @@ export function newRecognitionCalls(src: string, file: string): string[] {
 describe('C1 vozInstanciaUnica — una sola puerta de instancia (§9.1)', () => {
   it('ninguna instancia de reconocimiento se crea fuera de speechRecognitionLocal.js', () => {
     const offenders: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (r === CENTRAL) continue
       offenders.push(...newRecognitionCalls(readFileSync(f, 'utf8'), r))

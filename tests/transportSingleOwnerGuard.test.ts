@@ -6,19 +6,13 @@
  *   P4.6  la misma resolucion de API key copiada en cliente y servidor;
  *   P4.7  la URL de Pollinations construida a mano fuera del constructor.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { walkFiles } from './_helpers'
 const ROOT = join(__dirname, '..');
 const SRC = join(ROOT, 'src');
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p);
-  }
-  return acc;
-}
+
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 /** Fuente unica de la resolucion de API key. */
@@ -65,12 +59,12 @@ export function visualRouteLiterals(src: string, fileName: string): string[] {
 }
 describe('P4.1/P4.6/P4.7 transporte - un origen por dato', () => {
   it('la resolucion de API key existe solo en su dueno', () => {
-    const offenders = walk(SRC).flatMap((f) => apiKeyResolutionCopies(readFileSync(f, 'utf8'), rel(f)));
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => apiKeyResolutionCopies(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'resolucion de API key copiada:\n  ' + offenders.join('\n  ')).toEqual([]);
     expect(read(API_KEY_OWNER)).toContain('export function resolveApiKey(');
   });
   it('la URL de Pollinations se construye solo en el constructor canonico', () => {
-    const offenders = walk(SRC).flatMap((f) => pollinationsUrlBuilders(readFileSync(f, 'utf8'), rel(f)));
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => pollinationsUrlBuilders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'URL de Pollinations construida a mano:\n  ' + offenders.join('\n  ')).toEqual([]);
     expect(read(POLLINATIONS_OWNER)).toContain('export function buildPollinationsImageUrl(');
   });
@@ -83,7 +77,7 @@ describe('P4.1/P4.6/P4.7 transporte - un origen por dato', () => {
     expect(cfg).toContain('...POLLINATIONS_DEFAULTS');
   });
   it('las rutas del proxy visual se declaran solo en su dueno', () => {
-    const offenders = walk(SRC).flatMap((f) => {
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => {
       const file = rel(f)
       return visualRouteLiterals(readFileSync(f, 'utf8'), file).map((r) => file + ': ' + r)
     })

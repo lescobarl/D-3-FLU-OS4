@@ -7,19 +7,13 @@
  * P5.8: los datos de muestra por proveedor del motor de decision llevaban numeros
  *       incrustados junto a otros que ya venian del catalogo.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { walkFiles } from './_helpers'
 const ROOT = join(__dirname, '..');
 const SRC = join(ROOT, 'src');
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p);
-  }
-  return acc;
-}
+
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 /** Dueno unico del orden de aplicacion del resultado de imagen. */
@@ -44,14 +38,14 @@ export function inlineProviderMetrics(src: string, fileName: string): string[] {
 }
 describe('P4.8/P5.8 - un orden y un umbral', () => {
   it('la cascada de imagen aplica el resultado en un solo sitio', () => {
-    const offenders = walk(SRC).flatMap((f) => cascadeResultOrderCopies(readFileSync(f, 'utf8'), rel(f)));
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => cascadeResultOrderCopies(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'orden de la cascada copiado:\n  ' + offenders.join('\n  ')).toEqual([]);
     const owner = read(CASCADE_OWNER);
     expect(owner).toContain('const applyImageResult');
     expect((owner.match(/applyImageResult\(result, requestId\)/g) || []).length).toBeGreaterThanOrEqual(3);
   });
   it('el motor de decision no lleva metricas de proveedor incrustadas', () => {
-    const offenders = walk(SRC).flatMap((f) => inlineProviderMetrics(readFileSync(f, 'utf8'), rel(f)));
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => inlineProviderMetrics(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'metricas incrustadas:\n  ' + offenders.join('\n  ')).toEqual([]);
   });
 });

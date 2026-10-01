@@ -10,9 +10,10 @@
  * (son config), hosts locales (`localhost/127.0.0.1/::1`), el namespace XML
  * `www.w3.org` y las URLs que solo son texto de UI (placeholders, hints).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -23,14 +24,7 @@ const HOST_EXCLUDE = new Set(['localhost', '127.0.0.1', '::1', 'www.w3.org'])
 const CODE_POS = /(?:[:,(]\s*|=\s+)['"`]https?:\/\//
 const URL_LITERAL = /['"`](https?:\/\/[^'"`\s]+)['"`]/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** Host remoto quemado en una línea, o null si no aplica. */
 export function hardcodedRemoteHost(line: string): string | null {
@@ -49,7 +43,7 @@ export function hardcodedRemoteHost(line: string): string | null {
 /** Archivos fuera de config con algún host remoto quemado. */
 function offenders(): string[] {
   const hits: string[] = []
-  for (const f of walk(SRC)) {
+  for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)) {
     const r = relative(ROOT, f).replace(/\\/g, '/')
     if (CONFIG_OWNED(r)) continue
     const bad = readFileSync(f, 'utf8')
@@ -99,7 +93,7 @@ describe('C65 remoteResource - el texto de UI no RE-TECLEA un valor de config', 
     const urls = [...new Set([...cfg.matchAll(/['"`](https?:\/\/[^'"`\s]+)['"`]/g)].map((m) => m[1]))]
     expect(urls.length, 'la config no declara URLs: el detector seria vacio').toBeGreaterThan(0)
     const hits: string[] = []
-    for (const f of walk(SRC)) {
+    for (const f of walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)) {
       const r = relative(ROOT, f).replace(/\\/g, '/')
       if (CONFIG_OWNED(r)) continue
       readFileSync(f, 'utf8')

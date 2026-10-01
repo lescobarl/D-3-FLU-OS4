@@ -7,27 +7,19 @@
  *
  * Nace ROJO (3 escritores) y pasa cuando solo `useVoiceProfiles.ts` escribe.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const SINGLE = 'src/hooks/useVoiceProfiles.ts'
 const RE = /fluDb\.voiceProfiles\.(?:put|add|delete|bulkDelete)\s*\(/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
-
 describe('C3 voiceProfilesEscritorUnico — un solo escritor de perfiles de voz', () => {
   it('solo useVoiceProfiles.ts escribe fluDb.voiceProfiles', () => {
-    const writers = walk(SRC)
+    const writers = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
       .filter((f) => RE.test(readFileSync(f, 'utf8')))
       .map((f) => relative(ROOT, f).replace(/\\/g, '/'))
       .sort()

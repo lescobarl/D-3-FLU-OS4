@@ -37,7 +37,7 @@ describe('P1.4 Dexie - una sola fuente de la lista de tablas', () => {
   });
   it('los campos tipados de la clase coinciden con el esquema', () => {
     const fields = typedTableFields(src).sort();
-    expect(fields.length).toBeGreaterThan(20); // anti-vacuidad
+    expect(fields.length).toBeGreaterThan(15); // anti-vacuidad (eran 23; la depuracion de Habitos/Animo dejo 20)
     expect(fields).toEqual([...schema].sort());
   });
   it('Dexie resuelve EXACTAMENTE las tablas del esquema', async () => {
@@ -51,7 +51,7 @@ describe('P1.4 Dexie - una sola fuente de la lista de tablas', () => {
   });
   it('cada tabla del esquema tiene handle en runtime', () => {
     const handles = new FluDatabase() as unknown as Record<string, unknown>;
-    expect(schema.length).toBeGreaterThan(20); // anti-vacuidad
+    expect(schema.length).toBeGreaterThan(15); // anti-vacuidad (eran 23; la depuracion de Habitos/Animo dejo 20)
     for (const name of schema) {
       const table = handles[name] as { toArray?: unknown } | undefined;
       expect(table, name + ' sin handle').toBeTruthy();

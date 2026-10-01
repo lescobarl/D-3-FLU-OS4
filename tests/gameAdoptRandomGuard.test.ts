@@ -8,28 +8,22 @@
  *   repiteTraduce, riddles, simonDice, trabalenguas, trivia, veoVeo), además de
  *   la copia en gameUtils. Ahora solo `src/core/games/gameUtils.ts` la tiene.
  */
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { adoptRandom } from '../src/core/games/gameUtils'
+import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const CANONICAL = 'src/core/games/gameUtils.ts'
 const PATTERN = /typeof\s+cfg\.random\s*===\s*'function'/
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx)$/.test(e)) acc.push(p)
-  }
-  return acc
-}
+
 
 /** Archivos que reimplementan la adopción del RNG. */
-export function adoptRandomFiles(files: string[] = walk(SRC)): string[] {
+export function adoptRandomFiles(files: string[] = walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)): string[] {
   const hits: string[] = []
   for (const f of files) {
     if (PATTERN.test(readFileSync(f, 'utf8'))) {
