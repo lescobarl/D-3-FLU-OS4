@@ -173,6 +173,9 @@ function assignEmbeddedSegments(embedded, speakerRuns = [], fallbackSpeaker = ''
  * Plan de commit: [{ text, speaker }] o [] → una sola fila con texto completo.
  * Solo modo embedded-prior (TV ya commitida + voz nueva); sin troceo proporcional.
  */
+/**
+ * @param {{ phrase?: string, priorTexts?: string[], priorSpeakers?: string[], preflight?: { snapshots?: object[] }|null, fallbackSpeaker?: string, config?: object }} [options]
+ */
 export function planAsrTurnSegments({
   phrase = '',
   priorTexts = [],
