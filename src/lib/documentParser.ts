@@ -91,7 +91,7 @@ export function getDocumentTipo(file: { name: string; type: string }): {
   return { tipo, mime };
 }
 
-function inferTipoFromMime(mime: string): DocumentTipo {
+export function inferTipoFromMime(mime: string): DocumentTipo {
   const m = (mime || '').toLowerCase();
   if (m.includes('spreadsheet') || m.includes('excel')) return m.includes('macro') ? 'xlsm' : 'xlsx';
   if (m.includes('presentation') || m.includes('powerpoint')) return 'pptx';
@@ -115,7 +115,7 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-function readArrayBufferAsUtf8(data: ArrayBuffer): string {
+export function readArrayBufferAsUtf8(data: ArrayBuffer): string {
   try {
     return new TextDecoder('utf-8').decode(data);
   } catch (e) {
