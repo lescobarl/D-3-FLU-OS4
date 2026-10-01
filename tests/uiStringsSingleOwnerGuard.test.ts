@@ -29,9 +29,11 @@ const SRC = 'src'
 const UI_STRINGS_OWNER = 'src/lib/uiStrings.ts'
 const NORMALIZE_OWNER = 'src/core/config/localeConfig.ts'
 /** Ternarios de idioma que quedan (formas no literales). Solo puede bajar. */
-const TOPE_TERNAMIOS_IDIOMA = 14
+const TOPE_TERNAMIOS_IDIOMA = 7
 /** Lineas `... === 'en'` colgadas (ternario partido en varias lineas). Solo baja. */
-const TOPE_TERNAMIOS_COLGADOS = 27
+const TOPE_TERNAMIOS_COLGADOS = 13
+/** Ternarios colgados cuyas ramas abren plantilla retrocomilla. Solo baja. */
+const TOPE_TERNAMIOS_PLANTILLA = 4
 
 function walk(dir: string, acc: string[] = []): string[] {
     for (const e of readdirSync(dir)) {
@@ -94,6 +96,29 @@ function ternariosColgadosDeTexto(src: string): number[] {
     return fuera
 }
 
+/**
+ * Ternario de idioma cuyas ramas abren plantilla retrocomilla (`...`), en una
+ * linea o partido. Es la forma que el catalogo resuelve con marcadores {param},
+ * asi que no deberia crecer; lo que queda son casos con marcadores distintos
+ * entre ramas o nombres de parametro ambiguos.
+ */
+export function ternariosPlantilla(src: string): number[] {
+    const lineas = src.split(/\r?\n/)
+    const fuera: number[] = []
+    for (let i = 0; i < lineas.length; i++) {
+        if (/[\w.]+\s*===\s*'en'\s*\?\s*`/.test(sinComentario(lineas[i]))) {
+            fuera.push(i + 1)
+            continue
+        }
+        if (!/[\w.]+\s*===\s*'en'\s*$/.test(lineas[i])) continue
+        const dos = lineas[i + 1]?.trim() ?? ''
+        const tres = lineas[i + 2]?.trim() ?? ''
+        if (dos.startsWith('?') && dos.includes('`') && tres.startsWith(':') && tres.includes('`'))
+            fuera.push(i + 1)
+    }
+    return fuera
+}
+
 describe('B8 textos de UI - una sola fuente', () => {
     it('no queda ningun ternario de idioma con dos literales de texto', () => {
         const offenders = walk(SRC).flatMap((f) =>
@@ -147,6 +172,18 @@ describe('B8 textos de UI - una sola fuente', () => {
         ).toBeLessThanOrEqual(TOPE_TERNAMIOS_COLGADOS)
     })
 
+    it('los ternarios con plantilla que quedan no crecen (trinquete)', () => {
+        const sitios = walk(SRC).flatMap((f) =>
+            ternariosPlantilla(readFileSync(f, 'utf8')).map((n) => rel(f) + ':' + n),
+        )
+        expect(
+            sitios.length,
+            'Aumentaron los ternarios de idioma con plantilla:\n  ' +
+                sitios.join('\n  ') +
+                '\nUsa el catalogo con marcadores: pickText(lang, clave, { param }).',
+        ).toBeLessThanOrEqual(TOPE_TERNAMIOS_PLANTILLA)
+    })
+
     it('el catalogo de UI delega la eleccion de idioma en el resolutor canonico', () => {
         const owner = readFileSync(UI_STRINGS_OWNER, 'utf8')
         expect(owner).toContain("import { pickLabel } from './textUtils'")
@@ -179,5 +216,16 @@ describe('B8 - el detector no es decorativo', () => {
         expect(ternariosColgadosDeTexto("const x = lang === 'en'\n ? a.en\n : a.es")).toEqual([])
         // el condicional no acaba la linea: no es la forma que se vigila aqui
         expect(ternariosColgadosDeTexto("const isEn = lang === 'en'\nconst h = isEn ? 'A' : 'B'")).toEqual([])
+    })
+
+    it('detecta el ternario con plantilla en sus dos formas y no el ternario simple', () => {
+        expect(ternariosPlantilla('const x = lang === \'en\' ? `Hi ${n}` : `Hola ${n}`')).toEqual([1])
+        expect(ternariosPlantilla("const x = lang === 'en'\n ? `Hi ${n}`\n : `Hola ${n}`")).toEqual([1])
+        // ramas literales simples: las vigila el otro detector
+        expect(ternariosPlantilla("const x = lang === 'en' ? 'A' : 'B'")).toEqual([])
+        // colgada con ramas sin plantilla: fuera de este detector
+        expect(ternariosPlantilla("const x = lang === 'en'\n ? a.en\n : a.es")).toEqual([])
+        // ya migrado
+        expect(ternariosPlantilla("pickText(lang, 'hola_n', { n })")).toEqual([])
     })
 })

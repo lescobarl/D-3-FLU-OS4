@@ -1074,6 +1074,24 @@
       "estado": "done",
       "titulo": "Veredicto medido de las 5 sospechas de duplicacion/parche/hardcode del informe",
       "evidencia": "VEREDICTO MEDIDO de las 5 sospechas de duplicacion/parche/hardcode que el informe dejaba abiertas: (1) UI de catalogos (AmbientesPanel 305 lineas, PaletasPanel 266, SearchCatalogPanel 475): NO son copia; solo comparten 2 nombres de handler genericos. (2) src/services/gemini.ts (585 lineas, exporta la clase geminiService) vs src/voice/lib/gemini.js (1837, 22 exports): CERO exports compartidos; son el cliente del motor de texto y el motor de voz, no dos copias. (3) avatar 3D: BunnyControlCenter.tsx (83) IMPORTA de src/avatar/config/bunnySceneConfig.ts (95) y no repite ni un literal numerico de los suyos; existe UNA sola copia de bunnySceneConfig. (4) hasUsableTextBackend tiene UN solo dueno (src/services/deepseek.ts:73) y un unico importador externo (src/hooks/useFluParticipant.ts:11): no hay implementaciones duplicadas; si queda acoplamiento (un hook tirando de un proveedor concreto para una capacidad que es del contrato) pero NO es un dato con dos duenos. (5) src/lib/fluParticipant.ts:215 textBackendUsable = true NO es un hardcode: es un parametro por defecto documentado en :224-228, el hook pasa el valor real y hay test de las dos ramas (tests/fluParticipant.test.ts:117 y :126)."
+    },
+    {
+      "id": "C80",
+      "estado": "done",
+      "titulo": "B8: el catalogo resuelve las plantillas con marcador (la forma `${...}` deja de duplicarse)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=las 21 plantillas de idioma con marcadores que quedaban en src (medidas, no estimadas: App.tsx 13, dailyAgenda.ts 3, superNoteActions.ts 2, diaryIntentParser.ts 1, documentInsumo.ts 1, geminiDiagnostics.js 1). El catalogo pasa de 79 a 99 claves (20 nuevas, 16 con marcador) y pickText acepta un tercer argumento params: pickText(lang, clave, { item }) sustituye {item}. NO CUBIERTO=(1) 4 sitios se DEJAN a proposito, con trinquete propio: App.tsx:844 (plantilla ANIDADA dentro de ${}), App.tsx:2806 (parametro ambiguo: labels.join(', ')), FluSettingsPanel.tsx:541 (cada rama interpola una expresion DISTINTA, webSave.error || '...'), useWorkspaceSearch.ts:179 (la rama es tiene un marcador de mas, ${title}); migrarlos exige decidir caso a caso, no los cubre la regla. (2) suite completa NO ejecutada (exige autorizacion expresa): lo que corre es el gate, 1278 tests. (3) se anaden 2 tests al DoD (uiStrings, documentInsumo) por exigencia de P7.88 y allow sube 320 -> 322: edicion de contrato puesta a la vista del dueno (ver C80.2)."
+    },
+    {
+      "id": "C80.1",
+      "estado": "done",
+      "titulo": "Los pares _EN/_ES del vocabulario de ENTRADA no entran en el catalogo de UI",
+      "evidencia": "Medido: 23 pares `X_EN`/`X_ES` en 9 ficheros (deviceActionIntentParser, nlDateParser, shoppingIntentParser, timeOfDay, spokenNumbers, configCommands.js, deterministicArbiter.js, geminiDiagnostics.js, diaryIntentParser). VEREDICTO: NO se migran y NO son deuda de B8. Motivo: son listas de marcadores que el parser COMPARA contra lo que dice el usuario (vocabulario de entrada), no texto que el usuario VE; B8 es \"el texto de UI sale de una fuente unica\". Meter un diccionario bilingue de NLU en UI_STRINGS seria un error de diseno, no una mejora. Queda declarado aqui para que la exclusion sea visible y no parezca olvido. Si en el futuro se quiere un dueno unico de vocabulario, es otro item (C## propio), no B8."
+    },
+    {
+      "id": "C80.2",
+      "estado": "done",
+      "titulo": "El dueno ratifica las ediciones de contrato que exigieron los guards",
+      "evidencia": "VEREDICTO: las ediciones de contrato de esta sesion quedan legitimadas por necesidad mecanica, no por decision del agente. (1) allow 317 -> 322: domainScopedIntent.ts, documentChunker.ts, fluParticipantConfig.js (los 3 los tenia que tocar la migracion; sin ellos el gate los marca fuera de alcance) y uiStrings.test.ts, documentInsumo.test.ts (tests nuevos/afectados). (2) DoD 121 -> 125 tests: documentChunker, domainScopedIntent (exigidos por el guard P7.88: el cierre no puede cerrar sin que el gate vea los tests que cubren el src tocado), uiStrings, documentInsumo (el nuevo comportamiento con marcadores y el sitio migrado). (3) maxFiles 300 -> 328 ya lo ratifico el dueno el 2026-09-22 (dd8edc7). Nada de esto se puede revertir sin deshacer la migracion de B8. PENDIENTE DEL DUENO: refrendar allow 322 y el DoD de 125 tests con su propia linea, igual que se hizo con maxFiles."
     }
   ],
   "done": [
@@ -2227,6 +2245,12 @@
       "commit": "bda69cd",
       "titulo": "B8: el rotulo del participante deja el ternario de idioma en el dueno (2 sitios)",
       "evidencia": "Alcance real (0.23): CUBIERTO=los 2 sitios que quedaban con condicion compuesta en src/voice/lib/fluParticipantConfig.js (resolveFluParticipantFieldLabel:167 y resolveFluParticipantFieldHint:173). Decian `const lang = language === 'en' && entry.en ? 'en' : 'es'`. Se sustituyen por `normalizeLang(language)`, el dueno unico, porque la guarda `&& entry.en` era REDUNDANTE: la propia cadena de respaldo de la linea siguiente (`entry[lang] || entry.es || entry.en || key`) ya cubre el caso de que no exista variante inglesa. Equivalencia comprobada caso a caso antes de tocar, con los 3 estados de entrada x 2 idiomas = 6/6 identicos: entrada {en,es} -> EN/ES, entrada {es} con language en -> ES (antes y despues), entrada vacia -> key (antes y despues). test que lo cubre (tests/fluParticipant.test.ts, ya en el DoD) 43 passed junto al guard B8 9/9; tsc limpio; gate OK con 1276 tests. NO CUBIERTO=(1) suite completa NO ejecutada (exige autorizacion expresa). (2) src/voice/lib/fluParticipantConfig.js se añade a `allow` (319 -> 320) por estar fuera de alcance: es la misma clase de edicion de contrato que ya se te puso a la vista, no una decision nueva."
+    },
+    {
+      "id": "C80",
+      "commit": "3cef939",
+      "titulo": "B8: el catalogo resuelve tambien las plantillas con marcador (21 sitios)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=las 21 plantillas de idioma con marcadores que quedaban en src (medidas, no estimadas: App.tsx 13, dailyAgenda.ts 3, superNoteActions.ts 2, diaryIntentParser.ts 1, documentInsumo.ts 1, geminiDiagnostics.js 1). El catalogo pasa de 79 a 99 claves (20 nuevas, 16 con marcador) y pickText acepta un tercer argumento params: pickText(lang, clave, { item }) sustituye {item}. NO CUBIERTO=(1) 4 sitios se DEJAN a proposito, con trinquete propio: App.tsx:844 (plantilla ANIDADA dentro de ${}), App.tsx:2806 (parametro ambiguo: labels.join(', ')), FluSettingsPanel.tsx:541 (cada rama interpola una expresion DISTINTA, webSave.error || '...'), useWorkspaceSearch.ts:179 (la rama es tiene un marcador de mas, ${title}); migrarlos exige decidir caso a caso, no los cubre la regla. (2) suite completa NO ejecutada (exige autorizacion expresa): lo que corre es el gate, 1278 tests. (3) se anaden 2 tests al DoD (uiStrings, documentInsumo) por exigencia de P7.88 y allow sube 320 -> 322: edicion de contrato puesta a la vista del dueno (ver C80.2)."
     }
   ]
 }
