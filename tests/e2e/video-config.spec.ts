@@ -12,11 +12,16 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function openFlu(page: Page): Promise<void> {
-    const skip = page.locator('[data-testid="onboarding-skip"]');
-    if (await skip.isVisible().catch(() => false)) {
-        await skip.click().catch(() => undefined);
-        await page.waitForTimeout(300);
-    }
+    // Clic in-page (ver tests/e2e/_helpers.ts): misma carrera con
+    // autoSkipOnboarding; un clic de Playwright sobre un boton ya retirado
+    // esperaria su accionabilidad hasta agotar el timeout (P8.24).
+    await page
+        .evaluate(() => {
+            const b = document.querySelector('[data-testid="onboarding-skip"]');
+            if (b instanceof HTMLElement) b.click();
+        })
+        .catch(() => undefined);
+    await page.waitForTimeout(300);
     const settingsTab = page.locator('#flu-tab-settings');
     await settingsTab.waitFor({ state: 'attached', timeout: 45000 });
     await settingsTab.click({ force: true });

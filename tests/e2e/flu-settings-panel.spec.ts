@@ -26,11 +26,16 @@ test.beforeEach(async ({ page }) => {
 async function openFluSettings(page: Page): Promise<void> {
     // El onboarding (estado per-user) puede reabrirse y su backdrop bloquea
     // clics; se omite y los clics no dependen de él (force).
-    const skip = page.locator('[data-testid="onboarding-skip"]');
-    if (await skip.isVisible().catch(() => false)) {
-        await skip.click().catch(() => undefined);
-        await page.waitForTimeout(300);
-    }
+    // Clic in-page (ver tests/e2e/_helpers.ts): el boton puede desaparecer entre
+    // el check y el clic porque autoSkipOnboarding lo retira, y el clic de
+    // Playwright esperaria su accionabilidad hasta agotar el timeout (P8.24).
+    await page
+        .evaluate(() => {
+            const b = document.querySelector('[data-testid="onboarding-skip"]');
+            if (b instanceof HTMLElement) b.click();
+        })
+        .catch(() => undefined);
+    await page.waitForTimeout(300);
 
     // Pestaña principal de Configuración
     const settingsTab = page.locator('#flu-tab-settings');

@@ -237,8 +237,13 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
 
         const records = await readStore(page, 'notes');
         expect(records.length).toBeGreaterThan(0);
-        const note = records[records.length - 1];
-        expect(note.label).toContain('comprar pan');
+        // NO se asevera sobre records[records.length - 1]: readStore usa
+        // getAll(), que ordena por CLAVE (uuid), no por insercion, y el DEMO seed
+        // de App.tsx (buildDemoNotes) puede re-sembrar notas DESPUES del clearStore
+        // (carrera). La asercion correcta: que EXISTA la nota con el contenido
+        // esperado (mismo criterio que el test 9 de la nota Super).
+        const note = records.find((n: any) => String(n.label || '').includes('comprar pan'));
+        expect(note, 'debe existir la nota "comprar pan"').toBeTruthy();
         // El ack del manejador gana (regla unica, App.tsx); el `respuesta_voz` del LLM no.
         expect(reply).not.toContain('Anotado: comprar pan');
         expect(reply.length).toBeGreaterThan(0);

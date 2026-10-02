@@ -38,16 +38,24 @@ export async function gotoClean(page: Page, options: GotoCleanOptions = {}): Pro
     });
     // El onboarding puede aparecer async (estado per-user en IndexedDB): su
     // backdrop bloquea la interacción, así que se omite dentro del bucle.
-    const skipBtn = page.locator('[data-testid="onboarding-skip"]');
     const tablistSelectors = ['nav[role="tablist"]', '[role="tablist"]', '.flu-shell-tabs'];
     const timeout = 45000;
     const start = Date.now();
     let lastError: any;
     while (Date.now() - start < timeout) {
-        if (await skipBtn.isVisible().catch(() => false)) {
-            await skipBtn.click().catch(() => undefined);
-            await page.waitForTimeout(300);
-        }
+        // Clic IN-PAGE, no con la accion de Playwright: autoSkipOnboarding retira
+        // el boton por su cuenta (intervalo cada 150 ms), asi que `skip.click()`
+        // puede quedarse esperando la accionabilidad de un boton que ya no existe
+        // -> cuelga hasta agotar el timeout del test, y Playwright lo reporta como
+        // "Target page, context or browser has been closed" (P8.24). Evaluado en
+        // la pagina: si el boton ya no esta, no pasa nada.
+        await page
+            .evaluate(() => {
+                const b = document.querySelector('[data-testid="onboarding-skip"]');
+                if (b instanceof HTMLElement) b.click();
+            })
+            .catch(() => undefined);
+        await page.waitForTimeout(300);
         for (const sel of tablistSelectors) {
             const loc = page.locator(sel).first();
             const count = await loc.count().catch(() => 0);
