@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, gamePrompt } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -115,11 +115,8 @@ function riddleAt(state: RiddlesState): Riddle | null {
     return index === undefined ? null : RIDDLE_BANK[index];
 }
 
-function currentPrompt(state: RiddlesState): string {
-    const riddle = riddleAt(state);
-    if (!riddle) return 'Ya se me acabaron las adivinanzas.';
-    return `${riddle.pregunta} ¿Qué soy?`;
-}
+const currentPrompt = (state: RiddlesState) =>
+    gamePrompt(state, riddleAt, (riddle) => `${riddle.pregunta} ¿Qué soy?`, 'Ya se me acabaron las adivinanzas.');
 
 export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;

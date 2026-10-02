@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, gamePrompt } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -56,16 +56,15 @@ interface RepiteTraduceState {
     phase: 'announce' | 'done';
 }
 
-function itemAt(state: RepiteTraduceState): RepiteTraduceItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : REPITE_BANK[index];
-}
+const itemAt = (state: RepiteTraduceState) => bankItemAt(state, REPITE_BANK);
 
-function currentPrompt(state: RepiteTraduceState): string {
-    const item = itemAt(state);
-    if (!item) return 'Ya se me acabaron las palabras.';
-    return `¿Cómo se dice "${item.es}" en inglés?`;
-}
+const currentPrompt = (state: RepiteTraduceState) =>
+    gamePrompt(
+        state,
+        itemAt,
+        (item) => `¿Cómo se dice "${item.es}" en inglés?`,
+        'Ya se me acabaron las palabras.',
+    );
 
 export function createRepiteTraduceEngine(options?: { random?: RandomSource }): GameEngine<RepiteTraduceState> {
     let rng: RandomSource = options?.random ?? Math.random;

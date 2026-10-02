@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult, bankItemAt } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -76,10 +76,7 @@ interface AbecedarioState {
     phase: 'announce' | 'done';
 }
 
-function itemAt(state: AbecedarioState): AbecedarioItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : ABECEDARIO_BANK[index];
-}
+const itemAt = (state: AbecedarioState) => bankItemAt(state, ABECEDARIO_BANK);
 
 /**
  * STOPWORDS_ES vive en `gameUtils` (fuente unica): es el mismo criterio de

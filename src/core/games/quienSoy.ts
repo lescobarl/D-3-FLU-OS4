@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -372,10 +372,7 @@ export function quienSoyCategory(item: QuienSoyItem): string {
 
 type RandomSource = () => number;
 
-function itemAt(state: QuienSoyState): QuienSoyItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : QUIEN_SOY_BANK[index];
-}
+const itemAt = (state: QuienSoyState) => bankItemAt(state, QUIEN_SOY_BANK);
 
 function clueAt(state: QuienSoyState, item: QuienSoyItem): string {
     const pistas = quienSoyHints(item);

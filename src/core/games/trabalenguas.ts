@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, gamePrompt } from './gameUtils';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -55,16 +55,10 @@ interface TrabalenguasState {
     phase: 'announce' | 'done';
 }
 
-function itemAt(state: TrabalenguasState): TrabalenguasItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : TRABALENGUAS_BANK[index];
-}
+const itemAt = (state: TrabalenguasState) => bankItemAt(state, TRABALENGUAS_BANK);
 
-function currentPrompt(state: TrabalenguasState): string {
-    const item = itemAt(state);
-    if (!item) return 'Ya se me acabaron los trabalenguas.';
-    return `${item.texto} Repítelo después de mí.`;
-}
+const currentPrompt = (state: TrabalenguasState) =>
+    gamePrompt(state, itemAt, (item) => `${item.texto} Repítelo después de mí.`, 'Ya se me acabaron los trabalenguas.');
 
 export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;

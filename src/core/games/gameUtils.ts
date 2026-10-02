@@ -470,3 +470,30 @@ export function finishRoundsIfLast(
 export function roundsOverMessage(score: number): string {
     return `Terminamos con ${score} puntos. ¡Muy bien jugado!`;
 }
+
+/**
+ * Item del banco que apunta el cursor del estado. DUENO UNICO (auditoria
+ * 2026-10-02): estaba copiado con el mismo cuerpo en 6 motores.
+ */
+export function bankItemAt<S extends { order: readonly number[]; cursor: number }, T>(
+    state: S,
+    bank: readonly T[],
+): T | null {
+    const index = state.order[state.cursor];
+    return index === undefined ? null : bank[index];
+}
+
+/**
+ * Prompt del turno: rinde el item elegido o el mensaje de fin. DUENO UNICO:
+ * el mismo esqueleto estaba copiado en 4 motores.
+ */
+export function gamePrompt<S, T>(
+    state: S,
+    pick: (state: S) => T | null | undefined,
+    render: (item: T) => string,
+    empty: string,
+): string {
+    const item = pick(state);
+    if (!item) return empty;
+    return render(item);
+}

@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult, bankItemAt } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -113,10 +113,7 @@ interface VeoVeoState {
 
 type RandomSource = () => number;
 
-function itemAt(state: VeoVeoState): VeoVeoItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : VEO_VEO_BANK[index];
-}
+const itemAt = (state: VeoVeoState) => bankItemAt(state, VEO_VEO_BANK);
 
 /** Primera letra del nombre (sin acentos, en mayúscula) → la pista del juego. */
 function itemLetter(item: VeoVeoItem): string {

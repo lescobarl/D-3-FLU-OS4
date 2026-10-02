@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { roundsOverMessage, finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { roundsOverMessage, finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -106,10 +106,7 @@ interface OrdenaSecuenciaState {
     phase: 'announce' | 'done';
 }
 
-function itemAt(state: OrdenaSecuenciaState): OrdenaSecuenciaItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : ORDENA_BANK[index];
-}
+const itemAt = (state: OrdenaSecuenciaState) => bankItemAt(state, ORDENA_BANK);
 
 function shufflePasos(item: OrdenaSecuenciaItem, rng: RandomSource): number[] {
     return shuffleOrder(rng, item.pasos.length);

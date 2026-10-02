@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, resolveNumericAnswer, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, resolveNumericAnswer, shuffleOrder, turnResult, gamePrompt } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -85,11 +85,13 @@ function optionsPrompt(question: TriviaQuestion): string {
         .join(', ');
 }
 
-function currentPrompt(state: TriviaState): string {
-    const question = questionAt(state);
-    if (!question) return 'Ya se me acabaron las preguntas.';
-    return `${question.pregunta} Opciones: ${optionsPrompt(question)}`;
-}
+const currentPrompt = (state: TriviaState) =>
+    gamePrompt(
+        state,
+        questionAt,
+        (question) => `${question.pregunta} Opciones: ${optionsPrompt(question)}`,
+        'Ya se me acabaron las preguntas.',
+    );
 
 function resolveOptionIndex(normalized: string, question: TriviaQuestion): number | null {
     // 1) Texto completo de la opción ("la luna") o su palabra significativa
