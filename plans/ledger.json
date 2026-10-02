@@ -1155,6 +1155,48 @@
       "estado": "todo",
       "evidencia": "src/avatar/workers/fbxWorkerClient.ts:38, src/voice/lib/voiceIdWorkerClient.js:71, src/voice/lib/asr/whisperWasmTranscriber.js:25 (medido: el resto del hallazgo P8.4 no era duplicado)",
       "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.10",
+      "titulo": "speechWords DIVERGENTE: audioMath.js normaliza a minusculas y conversationStream.js no (misma clase de defecto que minuteKey)",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/audioMath.js:432 (con .toLowerCase()) vs src/voice/lib/conversationStream.js:98 (sin)",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.11",
+      "titulo": "getAsrConfig duplicado: mismo nombre y misma pregunta de configuracion en dos sitios",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/asr/voiceActivitySegmenter.js:20 vs src/voice/workers/whisperAsr.worker.js:17",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.12",
+      "titulo": "Homonimos por verificar par a par (candidatos, no confirmados): sourceLabel, cleanLabel, normalize, pickLabel, newId, toUI, resetTurn, downsample",
+      "estado": "todo",
+      "evidencia": "ImageGrid.tsx:76 vs VideoGrid.tsx:52; deviceActionIntentParser.ts:113 vs shoppingIntentParser.ts:44; agendaCommandParser.ts:86 vs nlDateParser.ts:112; lib/textUtils.ts:93 vs selfKnowledge.ts:128; fluDatabase.ts:669 vs documentsService.ts:38; useMinuteKnowledge.ts:49 vs useVoiceProfiles.ts:36; voiceActivitySegmenter.js:84 vs whisperRecognitionEngine.js:168; whisperRecognitionEngine.js:24 vs dev/asrLab/AsrLab.tsx:48",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.13",
+      "titulo": "Boilerplate de hook replicado: el mismo patron serviceRef + TDZ (\"Cannot access service before initialization\") en 12 hooks",
+      "estado": "todo",
+      "evidencia": "12 ficheros de src/hooks con serviceRef (useNotes, useContacts, useDiary, useShoppingList, useCommunicationProfiles, useParticipants, useMateriaGris, useNotificationCenter, useBrowserProfiles, useDocuments, useSearchSites, useOnboarding)",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.14",
+      "titulo": "Modelo NO env-overridable en la config de OpenRouter: sharedConfig fija MODEL/IMAGE_MODEL con literal, mientras appConfig usa import.meta.env",
+      "estado": "todo",
+      "evidencia": "src/core/config/sharedConfig.ts:120 (MODEL) y :125 (IMAGE_MODEL) vs src/core/config/appConfig.ts:189 (VITE_DEEPSEEK_MODEL || default)",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.15",
+      "titulo": "Nota obsoleta en el catalogo de auditoria: V19 dice \"sin config eslint\" y eslint.config.mjs existe",
+      "estado": "todo",
+      "evidencia": "scripts/auditoria.mjs:433 vs eslint.config.mjs (existe en la raiz)",
+      "origen": "auditoria-codigo-2026-10-02"
     }
   ],
   "done": [
