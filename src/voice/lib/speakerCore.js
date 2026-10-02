@@ -69,11 +69,22 @@ export function compareCosineSignatures(sig1 = [], sig2 = []) {
   return Math.max(0, Math.min(1, similarity))
 }
 
+/** Coincide con la etiqueta automatica «Hablante N». FUENTE UNICA del patron (antes
+ * reimplementado en activeListen, fluDebug, speakerPolicy y useFluVoiceAssistant). */
+export function parseSpeakerIndex(label = '') {
+  const match = String(label || '').trim().match(/^Hablante\s+(\d+)$/i)
+  return match ? Number(match[1]) : null
+}
+
+export function isAutoSpeakerLabel(label = '') {
+  return /^Hablante\s+\d+$/i.test(String(label || '').trim())
+}
+
 /** Id estable a partir de la etiqueta de hablante («Hablante 3» → speaker_3). */
 export function labelToSpeakerIdSimple(label = '') {
   const text = String(label || '').trim()
-  const match = text.match(/^Hablante\s+(\d+)$/i)
-  if (match) return `speaker_${match[1]}`
+  const index = parseSpeakerIndex(text)
+  if (index !== null) return `speaker_${index}`
   const slug = stripDiacriticsLower(text)
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
@@ -170,7 +181,7 @@ export function assignSpeaker(
     : thresholdFromConfig('productionClusterReuseThreshold', 0.76, config)
   const autoClusters = clusters.filter(
     (c) =>
-      /^Hablante\s+\d+$/i.test(String(c?.label || '').trim()) &&
+      isAutoSpeakerLabel(c?.label) &&
       Array.isArray(c?.signature) &&
       c.signature.length,
   )

@@ -156,6 +156,7 @@ import {
   getDialogueContextSlice,
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
+import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
@@ -292,7 +293,7 @@ async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cac
 
   if (clusterMatch && clusterSimilarity >= MATCH_THRESHOLD) {
     const label = clusterMatch.label || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-    if (isPlausiblePersonName(label) || /^Hablante\s+\d+$/i.test(label)) {
+    if (isPlausiblePersonName(label) || isAutoSpeakerLabel(label)) {
       // Cluster con NOMBRE PROPIO = ancla de esa persona: no se mezcla con la voz
       // entrante (la arrastraría hacia sí misma). Los «Hablante N» sí adaptan.
       if (!isPlausiblePersonName(label)) {

@@ -11,6 +11,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { rowDuplicatesPrior, utterancesRelate, validateLogRowsNoPrefixDup } from './conversationStream.js'
 import { sortSessionSpeakers } from './voiceIdentity.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { parseSpeakerIndex } from './speakerCore.js';
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const VIOLATION_RING = 40
@@ -723,9 +724,8 @@ export function runFluDebugChecks() {
   })
 
   const speakerIndexes = state.clusterLabels
-    .map((label) => String(label || '').match(/^Hablante\s+(\d+)$/i)?.[1])
-    .filter(Boolean)
-    .map(Number)
+    .map((label) => parseSpeakerIndex(label))
+    .filter((n) => n !== null)
     .sort((a, b) => a - b)
   let gapFree = true
   for (let i = 1; i < speakerIndexes.length; i += 1) {

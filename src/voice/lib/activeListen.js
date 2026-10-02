@@ -44,6 +44,7 @@ export {
 } from './conversationStream.js'
 
 import { shouldRelaxIngressTextGuards } from './ingressGuards.js'
+import { parseSpeakerIndex } from './speakerCore.js';
 
 export { isSpeakerVoiceAbruptChange, shouldRelaxIngressTextGuards } from './ingressGuards.js'
 
@@ -312,9 +313,8 @@ export function advanceSpeaker(state) {
 }
 
 export function syncSpeakerIndexFromLabel(state, label = '') {
-  const match = String(label || '').match(/^Hablante\s+(\d+)$/i)
-  if (!match) return
-  const index = Number(match[1])
+  const index = parseSpeakerIndex(label)
+  if (index === null) return
   if (!Number.isFinite(index) || index < 1) return
   state.speakerIndex = index
 }

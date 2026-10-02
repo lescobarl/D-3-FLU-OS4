@@ -4,7 +4,9 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpaces, stripDiacritics } from './audioMath.js'
-import { autoSpeakerLabel, getFallbackSpeaker } from './speakerCore.js'
+import { autoSpeakerLabel, getFallbackSpeaker, isAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
+
+export { isAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
 
 export function getVoiceIdentityConfig(config = FLU_CONFIG) {
   return config.voiceIdentity || FLU_CONFIG.voiceIdentity
@@ -12,15 +14,6 @@ export function getVoiceIdentityConfig(config = FLU_CONFIG) {
 
 export function foldSpeakerKey(label = '') {
   return stripDiacritics(normalizeSpaces(label)).toLowerCase()
-}
-
-export function parseSpeakerIndex(label = '') {
-  const match = String(label || '').match(/^Hablante\s+(\d+)$/i)
-  return match ? Number(match[1]) : null
-}
-
-export function isAutoSpeakerLabel(label = '') {
-  return /^Hablante\s+\d+$/i.test(String(label || '').trim())
 }
 
 /** Nombre propio registrado (no «Hablante N»). */

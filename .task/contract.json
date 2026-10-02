@@ -528,7 +528,9 @@
     "src/core/notes/notesService.ts",
     "src/core/reminders/shoppingService.ts",
     "src/core/personalization/communicationProfileService.ts",
-    "src/voice/lib/wakeWord.js"
+    "src/voice/lib/wakeWord.js",
+    "src/voice/lib/speakerCore.js",
+    "src/voice/lib/speakerLabels.js"
   ],
   "maxFiles": 504,
   "maxLines": 9200,

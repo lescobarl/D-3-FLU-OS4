@@ -13,6 +13,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { detectWakeIntroducedName } from './audioMath.js'
 import { isAutoSpeakerLabel, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
+import { parseSpeakerIndex } from './speakerCore.js';
 
 export function getRoomCaptureCfg() {
   return FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
@@ -43,8 +44,7 @@ export function isSoloRoomSticky() {
 
 /** Índice numérico de «Hablante N» (0 si no aplica). */
 export function parseAutoSpeakerIndex(label = '') {
-  const match = String(label || '').trim().match(/^Hablante\s+(\d+)$/i)
-  return match ? Number(match[1]) : 0
+  return parseSpeakerIndex(label) ?? 0
 }
 
 /**
