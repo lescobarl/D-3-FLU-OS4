@@ -3430,3 +3430,24 @@ createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
     estaban declarados en e2eScope: src/components/AmbienteEditorForm.tsx, src/components/PaletaEditorForm.tsx,
     src/core/documents/documentsService.ts, src/voice/lib/voiceCommands.js, src/voice/workers/whisperAsr.worker.js.
     Allow 556 -> 561. Los 3 primeros y whisperAsr vienen de P8.16/P8.17/P8.11; voiceCommands.js de P8.19.
+
+[P8.10] speechWords divergente: la copia local de conversationStream.js pasa al dueno (audioMath)
+  - DoD (metrica 1 -> 0, target 0): `rg -n "function speechWords" src/voice | findstr /V audioMath.js | find /c /v "@@@"`.
+    Base 494ee76 = 1 (conversationStream.js:98); arbol = 0. Homonimo `speechWords` en el auditor 2 -> 0.
+  - Se midio ANTES: los 4 usos de la copia solo miran el NUMERO de palabras (o ya bajan a minusculas por
+    palabra) -> la divergencia NO cambiaba conducta; la copia sobraba. Guard nacido ROJO -> VERDE.
+  - Incidencia declarada: hacer que countSpeechWords delegara en el dueno rompio tests/fluTranscriptPause.test.ts
+    (su vi.mock de audioMath solo aporta cleanForSpeech); se revirtio esa parte.
+  - 100 tests de voz en verde; typecheck limpio. Commits: 2e5fdd9 (guard+lint:guards) y 33dc14f (src), por 0.22.
+
+[CIERRE-PARCIAL] P8.9 / P8.21 / P8.8 quedan ABIERTOS con clasificacion MEDIDA (no maquillados)
+  - P8.9: esqueleto de worker copiado 3x (fbx 37/75, voiceId 72/103, whisper 25/55). Extraer el puente es
+    posible, pero VALIDARLO exige el arranque real de los 3 workers; no hay test que lo ejercite (el guard de
+    FBX es de TEXTO, speakerEmbedding usa fakes). Declararlo hecho incumpliria AGENTS 1.1/1.6.
+  - P8.21: el vocabulario de ids tiene YA una declaracion (voiceCommands.NAVIGATION_COMMAND_IDS) pero el literal
+    se reescribe en 8 ficheros (lista archivo:linea en el item). El rewire no es mecanico: (1) INICIAR_CONVERSACION
+    ya tiene dueno (FLU_CONFIG.navigation.sessionResetCommand, P8.19) -> un registro nuevo crearia un SEGUNDO dueno;
+    (2) las claves de ui.commandSpeech no pueden derivar del registro dentro del propio literal; (3) audioMath no
+    puede importar voiceCommands (ciclo) y 4 ficheros tienen trinquete de tamano. Rediseno (AGENTS 7.7.e).
+  - P8.8: no hay spec e2e de minutas (`npm run e2e:plan` ROJO). Playwright+chromium SI estan instalados; falta
+    escribir el spec (con el LLM stubbeado) y CORRERLO. No se declara un mapeo falso para ponerlo verde.

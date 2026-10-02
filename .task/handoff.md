@@ -42,18 +42,25 @@ SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
   control negativo, un guard verde no prueba nada.
 - La fuente de lo que falta es plans/ledger.json, NO el resumen del chat ni el catalogo.
 
-ESTADO DE HOY (2026-10-02, cierre de la auditoria de codigo): 4 pendientes en el ledger.
+ESTADO DE HOY (2026-10-02, cierre de la auditoria de codigo): 3 pendientes en el ledger,
+TODOS con clasificacion MEDIDA (el detalle archivo:linea vive en el item).
   P8.8  el flujo de minutas NO tiene spec e2e (`npm run e2e:plan` esta ROJO a proposito,
-        nombrando los 3 ficheros; no se declaro un mapeo falso)
-  P8.9  esqueleto de ensureWorker copiado 3 veces (fbx / voiceId / whisper) con politica y
-        timeout distintos: extraer un puente con la politica inyectada (no se puede medir
-        sin la app delante)
-  P8.10 speechWords DIVERGENTE: audioMath.js:432 pasa a minusculas, conversationStream.js:98 no
-        (unificar puede cambiar el corte del turno de voz: no se toca sin dueno)
-  P8.21 el VOCABULARIO de ids de comando (ABRIR_ESCUCHA, CERRAR_ESCUCHA, GENERAR_RESUMEN,
-        GUARDAR_MINUTA, FLU_WAKE) no tiene dueno unico: literales en arbitro, filtro, listas
-        de comandos, rutas, getCommandSpeech y claves de FLU_CONFIG.ui.commandSpeech. Es un
-        REGISTRO de ids (rediseno), no algo mecanico (AGENTS 7.7.e). archivo:linea en el item.
+        nombrando los 3 ficheros). Playwright+chromium SI estan instalados; falta escribir
+        el spec (LLM stubbeado) y CORRERLO. No se declara un mapeo falso para ponerlo verde.
+  P8.9  esqueleto de ensureWorker copiado 3 veces (fbx/voiceId/whisper). Extraer el puente es
+        posible, pero validarlo exige el arranque REAL de los 3 workers y no hay test que lo
+        ejercite -> sin app no se puede cerrar (AGENTS 1.1/1.6).
+  P8.21 el VOCABULARIO de ids de comando se reescribe como literal en 8 ficheros. El rewire
+        NO es mecanico: INICIAR_CONVERSACION ya tiene dueno (navigation.sessionResetCommand,
+        P8.19) -> un registro nuevo crearia un SEGUNDO dueno; las claves de ui.commandSpeech
+        no pueden derivar dentro del propio literal; audioMath no puede importar voiceCommands
+        (ciclo); 4 ficheros con trinquete de tamano. Rediseno (AGENTS 7.7.e).
+
+CERRADO despues (2026-10-02):
+  P8.10 speechWords divergente (audioMath lowercases / conversationStream no): la copia local
+  de conversationStream.js pasa al dueno (audioMath.speechWords). Los 4 usos solo miraban el
+  numero de palabras -> sin cambio de conducta. Metrica 1 -> 0. Guard speechWordsSingleOwnerGuard
+  (2e5fdd9 + 33dc14f).
 
 CERRADO en esa auditoria (P8.1-P8.20, con guard nacido ROJO y verificacion por conducta):
   minutas (clave/formato/comparador/secuencia/etiqueta a dueno unico), sendJson unico en
