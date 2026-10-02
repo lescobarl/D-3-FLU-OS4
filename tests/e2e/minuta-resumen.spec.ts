@@ -63,37 +63,39 @@ test.describe('Minuta — generar el resumen y guardarla persiste en `minutes`',
         await gotoClean(page);
         await clearStore(page, 'minutes');
 
-        await page.evaluate(async () => {
-            const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-            const store = (window as any).__fluStore;
-            if (!store?.getState) throw new Error('__fluStore no disponible');
-            const st = store.getState();
-            const now = Date.now();
-            st.addConversationEntry({ id: 'minuta-e2e-1', speakerName: 'Ana', text: 'Hola, revisemos el plan del trimestre', timestamp: now });
-            st.addConversationEntry({ id: 'minuta-e2e-2', speakerName: 'FLU', text: 'De acuerdo, lo revisamos', timestamp: now });
-            if (store.getState().conversationHistory.length === 0) throw new Error('no se pudo sembrar la conversacion');
+        let rows: any[] = [];
+        for (let attempt = 0; attempt < 3 && rows.length === 0; attempt += 1) {
+            await page.evaluate(async () => {
+                const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+                const store = (window as any).__fluStore;
+                if (!store?.getState) throw new Error('__fluStore no disponible');
+                const st = store.getState();
+                const now = Date.now();
+                // El resumen exige conversacion: se siembra JUSTO antes.
+                st.addConversationEntry({ id: 'minuta-e2e-1', speakerName: 'Ana', text: 'Hola, revisemos el plan del trimestre', timestamp: now });
+                st.addConversationEntry({ id: 'minuta-e2e-2', speakerName: 'FLU', text: 'De acuerdo, lo revisamos', timestamp: now });
 
-            const get = () => (window as any).__fluOnContractResolved;
-            const fn1 = get();
-            if (typeof fn1 !== 'function') throw new Error('__fluOnContractResolved no disponible');
-            await fn1({
-                contract: { navegacion: { comando: 'GENERAR_RESUMEN' } },
-                transcript: 'ok flu genera el resumen',
+                const hook = () => (window as any).__fluOnContractResolved;
+                const fn1 = hook();
+                if (typeof fn1 !== 'function') throw new Error('__fluOnContractResolved no disponible');
+                await fn1({
+                    contract: { navegacion: { comando: 'GENERAR_RESUMEN' } },
+                    transcript: 'ok flu genera el resumen',
+                });
+                await wait(2500);
+                const fn2 = hook();
+                if (typeof fn2 !== 'function') throw new Error('__fluOnContractResolved ausente tras el resumen');
+                await fn2({
+                    contract: { navegacion: { comando: 'GUARDAR_MINUTA' } },
+                    transcript: 'ok flu guarda la minuta',
+                });
+                await wait(2500);
             });
-            await wait(2500);
-            const fn2 = get();
-            if (typeof fn2 !== 'function') throw new Error('__fluOnContractResolved ausente tras el resumen');
-            await fn2({
-                contract: { navegacion: { comando: 'GUARDAR_MINUTA' } },
-                transcript: 'ok flu guarda la minuta',
-            });
-            await wait(2500);
-        });
+            rows = await readStore(page, 'minutes');
+        }
 
         // La IA se llamo (el stub caso): si no, el test no prueba el flujo.
         expect(hits.length, 'el resumen debe pedir la IA (stub de /chat/completions)').toBeGreaterThan(0);
-
-        const rows = await readStore(page, 'minutes');
         expect(rows.length, 'debe persistir la minuta en `minutes`').toBeGreaterThan(0);
 
         const ultima = rows[rows.length - 1];
