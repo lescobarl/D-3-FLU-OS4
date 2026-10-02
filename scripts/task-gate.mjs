@@ -202,13 +202,19 @@ if (process.argv.includes('--fast') || process.env.TASK_GATE_SCOPE_ONLY === '1')
 }
 
 // 3) DoD -------------------------------------------------------------------
+// El DoD puede ser UN comando (string) o VARIOS (array). Se trocea porque el
+// comando acumulado (todas las pruebas de comportamiento) supera el limite de
+// linea de cmd.exe (~8191): un solo string ya no cabe. Cada trozo debe pasar.
 if (!c.dod) fail('El contrato no define "dod".')
-console.log(`[task-gate] DoD: ${c.dod}`)
-const dod = sh(c.dod)
-if (dod.code !== 0) {
-  console.log(dod.out)
-  console.error(dod.err)
-  fail('El comando DoD FALLÓ. La tarea NO está hecha (no sustituir por parcial).')
+const dodCmds = Array.isArray(c.dod) ? c.dod : [c.dod]
+for (const cmd of dodCmds) {
+  console.log(`[task-gate] DoD: ${cmd}`)
+  const dod = sh(cmd)
+  if (dod.code !== 0) {
+    console.log(dod.out)
+    console.error(dod.err)
+    fail('El comando DoD FALLÓ. La tarea NO está hecha (no sustituir por parcial).')
+  }
 }
 
 // 4) GUARD -----------------------------------------------------------------
