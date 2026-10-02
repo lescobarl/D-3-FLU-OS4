@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, turnResult } from './gameUtils';
+import { roundsOverMessage, END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -147,7 +147,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 if (session.round > state.maxRounds) {
                     state.phase = 'done';
                     return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            roundsOverMessage(session.score),
                             session.score,
                             { animation: 'Dance' },
                         );

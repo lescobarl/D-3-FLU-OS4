@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { roundsOverMessage, finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -265,7 +265,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
                 if (!next) {
                     state.phase = 'done';
                     return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
+                            roundsOverMessage(session.score),
                             session.score,
                             { animation: 'Dance' },
                         );

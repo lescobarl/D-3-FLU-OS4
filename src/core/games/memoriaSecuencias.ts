@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, turnResult } from './gameUtils';
+import { roundsOverMessage, isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, turnResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -175,7 +175,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
                 if (session.round > state.maxRounds) {
-                    return finish(`Terminamos con ${session.score} puntos. ¡Muy bien jugado!`, false, 'happy');
+                    return finish(roundsOverMessage(session.score), false, 'happy');
                 }
                 const nextLength = Math.min(state.sequence.length + 1, state.longMax);
                 state.sequence = buildSequence(nextLength, rng);

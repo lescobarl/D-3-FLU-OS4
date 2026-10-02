@@ -459,7 +459,12 @@ export function finishRoundsIfLast(
 ): GameTurnResult | null {
     if (!isLastRound(state)) return null;
     state.phase = 'done';
-    return gameOverResult(`Terminamos con ${session.score} puntos. ¡Muy bien jugado!`, session.score, {
+    return gameOverResult(roundsOverMessage(session.score), session.score, {
         animation: 'Dance',
     });
+}
+
+/** Mensaje unico de fin por rondas agotadas (antes copiado literal en varios motores). */
+export function roundsOverMessage(score: number): string {
+    return `Terminamos con ${score} puntos. ¡Muy bien jugado!`;
 }
