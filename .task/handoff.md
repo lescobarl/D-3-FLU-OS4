@@ -50,7 +50,7 @@ ESTADO DE HOY (2026-10-02): 1 pendiente en el ledger.
         test, NO un hallazgo de la auditoria de codigo. CI usa --retries=1.
 
 AUDITORIA DE CODIGO: CERRADA (0 hallazgos abiertos; P8.1-P8.23 arreglados con guard o medidos).
-Ademas se arreglo P8.22 (la app NO compilaba: import duplicado) — antes de eso DEV, build y e2e
+Ademas se arreglo P8.22 (la app NO compilaba: import duplicado) - antes de eso DEV, build y e2e
 estaban rotos y por eso el e2e nunca corria.
 
 NO VERIFICADO (limites declarados, no pendientes): DoD-producto (tu pantalla); suite completa
