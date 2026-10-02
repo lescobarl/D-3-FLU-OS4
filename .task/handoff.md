@@ -42,12 +42,15 @@ SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
   control negativo, un guard verde no prueba nada.
 - La fuente de lo que falta es plans/ledger.json, NO el resumen del chat ni el catalogo.
 
-ESTADO DE HOY (2026-10-02): 1 pendiente en el ledger.
-  P8.24 el BLOQUE e2e acotado falla de forma intermitente (2 de 40 tipicos) por un CRASH del
-        renderer al pulsar el skip del onboarding (_helpers.ts:49), en pruebas DISTINTAS cada
-        corrida; a veces la corrida aborta. Cada spec PASA EN AISLAMIENTO. Ya mitigado (timeout
-        90 s, spec de minuta robusto); FALTA la causa raiz (app vs headless-GL). Es infra de
-        test, NO un hallazgo de la auditoria de codigo. CI usa --retries=1.
+ESTADO DE HOY (2026-10-02): 0 pendientes en el ledger.
+  P8.24 CERRADO (commit 35f7974): el fallo del bloque e2e NO era un crash del renderer. Era un
+        CLICK de Playwright sobre [data-testid="onboarding-skip"] que nunca terminaba porque
+        autoSkipOnboarding (intervalo 150 ms) ya retiraba el boton; Playwright esperaba su
+        accionabilidad hasta agotar el timeout del test y lo reportaba como "Target page...
+        closed", en una prueba DISTINTA cada corrida (3 de 4 corridas en rojo antes). Fix: skip
+        IN-PAGE en _helpers.ts (gotoClean), flu-settings-panel.spec.ts y video-config.spec.ts; y
+        el test 6 de auditoria-acciones-llm.spec.ts deja de asertar records[length-1] (getAll
+        ordena por uuid) y busca la nota por contenido. Medido: e2e:scoped 40 passed / 1 skipped 2x.
 
 AUDITORIA DE CODIGO: CERRADA (0 hallazgos abiertos; P8.1-P8.23 arreglados con guard o medidos).
 Ademas se arreglo P8.22 (la app NO compilaba: import duplicado) - antes de eso DEV, build y e2e

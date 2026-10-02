@@ -3498,3 +3498,38 @@ createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
     en pruebas DISTINTAS cada corrida; a veces la corrida aborta (3-14 "did not run"). Cada spec
     pasa EN AISLAMIENTO. Descartado por medicion: procesos huerfanos (los 20 chrome.exe son del
     usuario) y disco (728 GB libres). Mitigado: timeout 90 s + spec robusto. Falta la causa raiz.
+
+---
+
+## P8.24 - el bloque e2e: causa raiz medida y cierre (commit 35f7974)
+
+Cambios aplicados:
+- tests/e2e/_helpers.ts (gotoClean): el skip del onboarding se pulsa IN-PAGE
+  (page.evaluate -> boton.click()); antes era un click de Playwright que podia esperar la
+  accionabilidad de un boton ya retirado por autoSkipOnboarding.
+- tests/e2e/flu-settings-panel.spec.ts (openFluSettings) y tests/e2e/video-config.spec.ts
+  (openFlu): mismo fix in-page.
+- tests/e2e/auditoria-acciones-llm.spec.ts (test 6): records[length-1] -> records.find(label
+  con el contenido esperado).
+- .task/contract.json: allow += los 3 ficheros e2e tocados.
+
+Causa raiz MEDIDA (NO era el crash del renderer que decia el ledger):
+- El trace del fallo tiene una accion sin cerrar (11 before / 10 after): el click de
+  [data-testid="onboarding-skip"].
+- El snapshot en el fallo muestra la app YA renderizada (tablist + Pizarron).
+- El log de eventos de Windows no registra fallo de proceso.
+- La asercion fallida del test 6 venia de getAll() (orden por uuid) + el DEMO seed de App.tsx.
+
+Validado contra:
+- npm run e2e:scoped -> 40 passed / 1 skipped (fixme visible de cita) / 0 failed, DOS corridas
+  seguidas. ANTES: 3 de 4 corridas del bloque en rojo (matriz 8, flu-settings 4, pizarron 1.1,
+  test 6 de auditoria).
+- npm run lint: 162 ficheros de guards, 1362 tests en verde. npm run typecheck: 0 errores.
+- npm run ledger:check: OK.
+
+No validado (pendiente del usuario / declarado):
+- DoD-producto (tu pantalla). Suite completa (npm run test:full) y suite e2e COMPLETA: exigen
+  autorizacion; no se corrieron.
+- Observacion medida sin pendiente: el runner node acumula ~2-3 GB durante el bloque; no
+  reprodujo el fallo una vez corregido el click, asi que no se abre pendiente.
+Alcance real (obligatorio, 0.23): CUBIERTO=el cierre del click de skip del onboarding en los 3 ficheros e2e y la asercion del test 6, medido con el bloque e2e completo (41 tests) 2x y con lint (162 guards) + typecheck; NO CUBIERTO=la suite e2e COMPLETA, la suite completa (test:full) y el DoD-producto (pantalla del usuario).
