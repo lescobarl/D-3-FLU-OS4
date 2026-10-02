@@ -816,6 +816,9 @@
     ],
     "src/voice/lib/minuteKnowledge.js": [
       "tests/e2e/minuta-resumen.spec.ts"
+    ],
+    "src/voice/lib/asr/whisperWasmTranscriber.js": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
     ]
   },
   "invariant": {
