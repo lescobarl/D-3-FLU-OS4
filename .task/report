@@ -3287,3 +3287,26 @@ No validado: DoD-producto. La politica de reintento del worker no se puede medir
 
 Alcance real: CUBIERTO = isWorkerRuntime + la reclasificacion medida. NO CUBIERTO = P8.9
 (esqueleto de ensureWorker), e2e por cliente, suite completa.
+
+## HITO auditoria-codigo (2026-10-02) — la auditoria de codigo queda en el repo
+
+Cambios aplicados: scripts/auditoria-codigo.mjs (6 senales + --self-test) y su barrera
+tests/auditCodeSignalsGuard.test.ts en lint:guards. Responde a "si pido la auditoria en otra
+sesion me dira que esta limpia?": no, si la auditoria es de CODIGO, porque las senales estan en
+el repo y reportan los candidatos que quedan.
+
+Validado contra:
+  - node scripts/auditoria-codigo.mjs -> cuerpos duplicados 2 grupos, homonimos 14,
+    colisiones de export 0, literales repetidos 520, parches 0, hardcode fuera de config 3.
+  - --self-test OK (6/6 senales disparan). La senal de "mismo cuerpo" FALLO su primer control
+    negativo (umbral de 80 chars: no disparaba con un cuerpo copiado de 4 lineas) y se calibro a 40;
+    con eso aparecio un candidato nuevo (setField duplicado, P8.16). El control negativo caza al
+    detector flojo, que es lo que hacia parecer limpio el catalogo.
+  - Leidos uno a uno: las 5 URLs fuera de config y los 3 "as any/@ts-ignore" eran 0 violaciones
+    reales (comentarios, xmlns de un SVG, el detector interno de appAnalyzer, una cadena de datos).
+  - La puerta RECHAZO el primer invariante (metrica base=9 actual=9) porque el gate copia los
+    guardFiles al worktree base: la metrica no puede vivir en un fichero que viaja al base. Corregido.
+  - lint 155 ficheros / 1324 tests; baseline [] = 0 fallos nuevos.
+
+No validado: e2e (hueco P8.8, visible en e2e:plan). DoD-producto: del usuario.
+Pendientes tras el hito: P8.8-P8.16 (9).
