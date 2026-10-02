@@ -22,6 +22,7 @@ import {
 } from '../core/notes/notesService';
 import { filterNotesByScope, notesRemaining } from '../core/notes/notesList';
 import { logCaughtError } from '../lib/caughtError';
+import { INVALID_INPUT } from '../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -123,7 +124,7 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
     async (input: NewNoteInput): Promise<AddNoteResult> => {
       // Toda nota pertenece a un usuario: sin usuario real no se crea (una nota
       // sin personId quedaría en 'global' y se filtraría a otros contextos).
-      if (!participantId) return { ok: false, reason: 'invalid-input' };
+      if (!participantId) return { ok: false, reason: INVALID_INPUT };
       const result = await service.add({
         ...input,
         personId: input.personId || participantId,

@@ -16,6 +16,8 @@ import { shoppingItemsTable } from '../notes/notesService';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import { filterItems, itemsRemaining, type ShoppingListFilter } from './shoppingList';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -52,7 +54,7 @@ export interface ShoppingServiceOptions {
 export interface AddShoppingItemResult {
   ok: boolean;
   record?: ShoppingItemRecord;
-  reason?: 'invalid-input';
+  reason?: InvalidInput;
 }
 
 // ------------------------------------------------------------
@@ -68,7 +70,7 @@ export function createShoppingService({
 
   const add = async (input: NewShoppingItemInput): Promise<AddShoppingItemResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
-    if (!label) return { ok: false, reason: 'invalid-input' };
+    if (!label) return { ok: false, reason: INVALID_INPUT };
     const t = timestamp();
     const record: ShoppingItemRecord = {
       id: newId(),

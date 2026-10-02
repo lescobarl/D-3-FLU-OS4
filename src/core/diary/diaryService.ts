@@ -19,6 +19,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type DiaryEntryRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -77,18 +79,18 @@ export interface DiaryEntryPatch {
 export interface AddDiaryResult {
   ok: boolean;
   record?: DiaryEntryRecord;
-  reason?: 'invalid-input' | 'limit-reached';
+  reason?: InvalidInput | 'limit-reached';
 }
 
 export interface UpdateDiaryResult {
   ok: boolean;
   record?: DiaryEntryRecord;
-  reason?: 'invalid-input' | 'diary-not-found';
+  reason?: InvalidInput | 'diary-not-found';
 }
 
 export interface RemoveDiaryResult {
   ok: boolean;
-  reason?: 'invalid-input' | 'diary-not-found';
+  reason?: InvalidInput | 'diary-not-found';
 }
 
 // ------------------------------------------------------------
@@ -116,7 +118,7 @@ export function createDiaryService({
       !input.content ||
       !input.content.trim()
     ) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     if (config.maxEntriesPerDay !== undefined) {
       const all = await db.diaryEntries.toArray();
@@ -153,12 +155,12 @@ export function createDiaryService({
   };
 
   const updateEntry = async (id: string, patch: DiaryEntryPatch): Promise<UpdateDiaryResult> => {
-    if (!id) return { ok: false, reason: 'invalid-input' };
+    if (!id) return { ok: false, reason: INVALID_INPUT };
     if (patch.date !== undefined && !isDayKey(patch.date)) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     if (patch.content !== undefined && !patch.content.trim()) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     const existing = await db.diaryEntries.get(id);
     if (!existing) return { ok: false, reason: 'diary-not-found' };
@@ -210,7 +212,7 @@ export function createDiaryService({
   };
 
   const removeEntry = async (id: string): Promise<RemoveDiaryResult> => {
-    if (!id) return { ok: false, reason: 'invalid-input' };
+    if (!id) return { ok: false, reason: INVALID_INPUT };
     const entry = await db.diaryEntries.get(id);
     if (!entry) return { ok: false, reason: 'diary-not-found' };
     const updated: DiaryEntryRecord = {

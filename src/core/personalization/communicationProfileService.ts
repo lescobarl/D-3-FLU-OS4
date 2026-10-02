@@ -22,6 +22,7 @@ import {
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import type { PersonalityTone } from '../../lib/discourseMarkers';
+import { INVALID_INPUT } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Re-export del tipo de registro (fuente única de verdad — DB)
@@ -333,7 +334,7 @@ export function createCommunicationProfileService({
     patch: ManualProfilePatch,
     participantName?: string,
   ): Promise<CommunicationProfileRecord> => {
-    if (!participantId) throw new Error('invalid-input');
+    if (!participantId) throw new Error(INVALID_INPUT);
     const existing = await getForPerson(participantId);
     const base = existing
       ? { ...existing }

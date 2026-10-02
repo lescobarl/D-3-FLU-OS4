@@ -518,7 +518,16 @@
     "src/hooks/useAppAnalysis.ts",
     "src/hooks/useDocumentAnalysis.ts",
     "src/hooks/useDocumentGeneration.ts",
-    "src/core/autonomy/autonomyPolicy.ts"
+    "src/core/autonomy/autonomyPolicy.ts",
+    "src/lib/resultReasons.ts",
+    "src/core/browser/browserProfileService.ts",
+    "src/core/contacts/contactService.ts",
+    "src/core/diary/diaryService.ts",
+    "src/core/multiuser/materiaGrisService.ts",
+    "src/core/multiuser/participantRegistry.ts",
+    "src/core/notes/notesService.ts",
+    "src/core/reminders/shoppingService.ts",
+    "src/core/personalization/communicationProfileService.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,

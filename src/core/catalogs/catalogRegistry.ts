@@ -14,6 +14,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type SyncTuple } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -57,11 +59,11 @@ export interface CatalogRegistryOptions<T> {
 
 export type RegisterResult<T> =
     | { ok: true; record: CatalogRecord<T> }
-    | { ok: false; reason: 'invalid-input' | 'duplicate' | 'reserved' };
+    | { ok: false; reason: InvalidInput | 'duplicate' | 'reserved' };
 
 export type UpdateResult<T> =
     | { ok: true; record: CatalogRecord<T> }
-    | { ok: false; reason: 'invalid-input' | 'not-found' | 'duplicate' | 'reserved' };
+    | { ok: false; reason: InvalidInput | 'not-found' | 'duplicate' | 'reserved' };
 
 // ------------------------------------------------------------
 // Service
@@ -86,12 +88,12 @@ export function createCatalogRegistry<T>({
     const isReserved = (id: string): boolean => schema.reservedIds.has(id);
 
     const register = async (data: T): Promise<RegisterResult<T>> => {
-        if (!data) return { ok: false, reason: 'invalid-input' };
+        if (!data) return { ok: false, reason: INVALID_INPUT };
         const error = schema.validate(data);
-        if (error) return { ok: false, reason: 'invalid-input' };
+        if (error) return { ok: false, reason: INVALID_INPUT };
 
         const canonicalId = schema.idOf(data);
-        if (!canonicalId) return { ok: false, reason: 'invalid-input' };
+        if (!canonicalId) return { ok: false, reason: INVALID_INPUT };
         if (isReserved(canonicalId)) return { ok: false, reason: 'reserved' };
 
         const all = await db.toArray();
@@ -113,11 +115,11 @@ export function createCatalogRegistry<T>({
     };
 
     const update = async (canonicalId: string, data: T): Promise<UpdateResult<T>> => {
-        if (!canonicalId || !data) return { ok: false, reason: 'invalid-input' };
+        if (!canonicalId || !data) return { ok: false, reason: INVALID_INPUT };
         if (isReserved(canonicalId)) return { ok: false, reason: 'reserved' };
 
         const error = schema.validate(data);
-        if (error) return { ok: false, reason: 'invalid-input' };
+        if (error) return { ok: false, reason: INVALID_INPUT };
 
         const targetId = schema.idOf(data);
         if (!targetId || isReserved(targetId)) return { ok: false, reason: 'reserved' };

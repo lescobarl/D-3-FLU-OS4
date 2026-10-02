@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type MateriaGrisRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -58,7 +60,7 @@ export interface AwardInput {
 export interface AwardResult {
   ok: boolean;
   record?: MateriaGrisRecord;
-  reason?: 'invalid-input' | 'unknown-action' | 'limit-reached';
+  reason?: InvalidInput | 'unknown-action' | 'limit-reached';
 }
 
 export interface LeaderboardRow {
@@ -82,7 +84,7 @@ export function createMateriaGrisService({
 
   const awardPoints = async (input: AwardInput): Promise<AwardResult> => {
     if (!input || !input.participantId || !input.action) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     const configured = config.actions[input.action];
     const points = input.points ?? configured;

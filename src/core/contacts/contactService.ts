@@ -19,6 +19,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -84,18 +86,18 @@ export interface ContactPatch {
 export interface AddContactResult {
   ok: boolean;
   record?: ContactRecord;
-  reason?: 'invalid-input' | 'limit-reached';
+  reason?: InvalidInput | 'limit-reached';
 }
 
 export interface UpdateContactResult {
   ok: boolean;
   record?: ContactRecord;
-  reason?: 'invalid-input' | 'contact-not-found';
+  reason?: InvalidInput | 'contact-not-found';
 }
 
 export interface RemoveContactResult {
   ok: boolean;
-  reason?: 'invalid-input' | 'contact-not-found';
+  reason?: InvalidInput | 'contact-not-found';
 }
 
 export interface BirthdayContact {
@@ -145,10 +147,10 @@ export function createContactService({
 
   const addContact = async (input: ContactInput): Promise<AddContactResult> => {
     if (!input || !input.name || !input.name.trim()) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     if (input.birthday !== undefined && input.birthday !== '' && !isDayKey(input.birthday)) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     if (config.maxContacts !== undefined) {
       const all = await db.contacts.toArray();
@@ -187,12 +189,12 @@ export function createContactService({
   };
 
   const updateContact = async (id: string, patch: ContactPatch): Promise<UpdateContactResult> => {
-    if (!id) return { ok: false, reason: 'invalid-input' };
+    if (!id) return { ok: false, reason: INVALID_INPUT };
     if (patch.name !== undefined && !patch.name.trim()) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     if (patch.birthday !== undefined && patch.birthday !== '' && !isDayKey(patch.birthday)) {
-      return { ok: false, reason: 'invalid-input' };
+      return { ok: false, reason: INVALID_INPUT };
     }
     const existing = await db.contacts.get(id);
     if (!existing) return { ok: false, reason: 'contact-not-found' };
@@ -240,7 +242,7 @@ export function createContactService({
   };
 
   const removeContact = async (id: string): Promise<RemoveContactResult> => {
-    if (!id) return { ok: false, reason: 'invalid-input' };
+    if (!id) return { ok: false, reason: INVALID_INPUT };
     const contact = await db.contacts.get(id);
     if (!contact) return { ok: false, reason: 'contact-not-found' };
     const updated: ContactRecord = {

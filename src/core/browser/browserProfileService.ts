@@ -17,6 +17,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type BrowserProfileRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -100,7 +102,7 @@ export interface ResolvedBrowserProfile extends RoleBrowserDefaults {
 export interface SaveResult {
   ok: boolean;
   record?: BrowserProfileRecord;
-  reason?: 'invalid-input' | 'not-found';
+  reason?: InvalidInput | 'not-found';
 }
 
 // ------------------------------------------------------------
@@ -126,7 +128,7 @@ export function createBrowserProfileService({
     overrides: BrowserProfileInput = {},
     role?: string,
   ): Promise<SaveResult> => {
-    if (!participantId) return { ok: false, reason: 'invalid-input' };
+    if (!participantId) return { ok: false, reason: INVALID_INPUT };
     const existing = await db.get(participantId);
     const previous = existing ? { ...existing } : null;
     const t = timestamp();
@@ -172,7 +174,7 @@ export function createBrowserProfileService({
   };
 
   const update = async (participantId: string, patch: BrowserProfilePatch): Promise<SaveResult> => {
-    if (!participantId || !patch) return { ok: false, reason: 'invalid-input' };
+    if (!participantId || !patch) return { ok: false, reason: INVALID_INPUT };
     const row = await db.get(participantId);
     if (!row) return { ok: false, reason: 'not-found' };
     const previous = { ...row };

@@ -20,6 +20,8 @@ import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
 import { stripDiacriticsLower } from '../../lib/textUtils';
+import { INVALID_INPUT } from '../../lib/resultReasons';
+import type { InvalidInput } from '../../lib/resultReasons';
 
 // ------------------------------------------------------------
 // Tipos
@@ -98,13 +100,13 @@ export interface ParticipantRegistryOptions {
 export interface RegisterResult {
   ok: boolean;
   record?: ParticipantRecord;
-  reason?: 'invalid-input' | 'duplicate';
+  reason?: InvalidInput | 'duplicate';
 }
 
 export interface UpsertResult {
   ok: boolean;
   record?: ParticipantRecord;
-  reason?: 'invalid-input' | 'not-found';
+  reason?: InvalidInput | 'not-found';
 }
 
 export interface NextBirthday {
@@ -185,7 +187,7 @@ export function createParticipantRegistry({
 
   const register = async (input: ParticipantInput): Promise<RegisterResult> => {
     const name = normalizeName(input?.name);
-    if (!name) return { ok: false, reason: 'invalid-input' };
+    if (!name) return { ok: false, reason: INVALID_INPUT };
 
     const all = await db.toArray();
     const duplicate = all.some((p) => !p.sync?.deleted && p.name.toLowerCase() === name.toLowerCase());
@@ -306,12 +308,12 @@ export function createParticipantRegistry({
   };
 
   const upsert = async (id: string, patch: ParticipantPatch): Promise<UpsertResult> => {
-    if (!id || !patch) return { ok: false, reason: 'invalid-input' };
+    if (!id || !patch) return { ok: false, reason: INVALID_INPUT };
     const row = await db.get(id);
     if (!row) return { ok: false, reason: 'not-found' };
 
     const name = patch.name === undefined ? row.name : normalizeName(patch.name);
-    if (!name) return { ok: false, reason: 'invalid-input' };
+    if (!name) return { ok: false, reason: INVALID_INPUT };
 
     const previous = { ...row };
     const updated: ParticipantRecord = {
