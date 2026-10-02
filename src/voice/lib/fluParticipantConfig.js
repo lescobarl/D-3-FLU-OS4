@@ -53,6 +53,9 @@ export const FLU_PARTICIPANT_EDITABLE_FIELDS = Object.freeze([
   { key: 'minDraftChars', type: 'number', min: 8, max: 200, step: 1 },
 ])
 
+/**
+ * @returns {Record<string, unknown>}
+ */
 function pickDefaultsFrom(config = FLU_CONFIG) {
   const block = config.fluParticipant
   if (!block || typeof block !== 'object') {
@@ -115,10 +118,16 @@ function coerceParticipantValue(key, value) {
   return num
 }
 
+/**
+ * @returns {Record<string, unknown>}
+ */
 export function getFluParticipantDefaults(config = FLU_CONFIG) {
   return pickDefaultsFrom(config)
 }
 
+/**
+ * @returns {Record<string, unknown>}
+ */
 export function getFluParticipantConfig(config = FLU_CONFIG) {
   const merged = { ...pickDefaultsFrom(config) }
   const overrides = readStorageOverrides()
@@ -135,6 +144,10 @@ export function getFluParticipantConfig(config = FLU_CONFIG) {
   return merged
 }
 
+/**
+ * @param {Record<string, unknown>} [partial]
+ * @returns {Record<string, unknown>}
+ */
 export function setFluParticipantOverrides(partial = {}) {
   if (!hasLocalStorage()) return getFluParticipantConfig()
   const current = readStorageOverrides()
