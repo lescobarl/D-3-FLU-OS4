@@ -35,6 +35,13 @@ La ultima sesion (2026-10-02) cerro el saneamiento de COBERTURA:
   acumulado superaba el limite de linea de cmd.exe (~8191) y task-gate.mjs ya ejecuta cada trozo. Commit fceaf6f.
 - Bug de voz arreglado: showListeningAck pintaba el ack y lo borraba en el mismo tick (el chip "Te escucho"
   nunca se veia). Commit 9dfa99f, test de conducta nacido ROJO -> VERDE, arreglo neutro en lineas.
+Auditoria INDEPENDIENTE (2026-10-02) y su cierre (heuristicas propias sobre los 378 ficheros de src):
+- console.* como registro de un catch -> logCaughtError (9 sitios; 23517b2). Guard endurecido para vetar
+  console.* dentro de catch, con prueba de detector y allowlist al logger (7c4157c).
+- Hardcode de politica en src/core/autonomy -> fuente unica autonomyPolicy.ts (~165 numeros; c9d92ca).
+- Literal 'invalid-input' (40 sitios, 10 ficheros) -> src/lib/resultReasons.ts (cefe45b).
+- Predicado de ultima ronda copiado 18x en 9 motores -> gameUtils.isLastRound (644ba16).
+Limpio (medido): 0 var/eval/catch-vacio/as-any/claves API/storage directo/TODO real; los 34 '==' son '== null'.
 Los ultimos cierres de tickets son:
 - Lotería (cada 2 turnos no cambiaba carta / perdia ejecucion): cerrado, commit 033cc69.
 - ¿Quién soy? (pistas vagas / fallo que repetia la ultima pista): cerrado, commit 80aa99d.
