@@ -39,7 +39,7 @@ export function sendJson(
     res: ServerResponse,
     status: number,
     data: unknown,
-    label: string,
+    label: string = '[server] sendJson: respuesta no entregada (socket cerrado)',
     contentType: string = 'application/json; charset=utf-8',
 ): void {
     try {
