@@ -43,6 +43,8 @@ Auditoria INDEPENDIENTE (2026-10-02) y su cierre (heuristicas propias sobre los 
 - Esqueleto de motores de juego a duenos unicos en gameUtils: isLastRound (18 sitios, 644ba16),
   isGameCommandSurface (17 motores, 0c67f4f), finishRoundsIfLast + roundsOverMessage (mensaje de fin;
   c7bd867/6ef1d66). Duplicacion de bloques de 4 lineas: 12 -> 5 (los 5 son patrones de LLAMADA compartidos).
+- Suite COMPLETA verde (483 ficheros / 5450 tests, 2026-10-02). Base del contrato avanzado a 769994e
+  (headroom de alcance: el diff acumulado iba por 400/504 ficheros).
 Limpio (medido): 0 var/eval/catch-vacio/as-any/claves API/storage directo/TODO real; los 34 '==' son '== null'.
 Los ultimos cierres de tickets son:
 - Lotería (cada 2 turnos no cambiaba carta / perdia ejecucion): cerrado, commit 033cc69.
