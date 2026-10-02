@@ -3351,3 +3351,18 @@ Validado contra:
   - typecheck limpio; lint 156 ficheros / 1329 tests; baseline [] = 0 fallos nuevos.
 
 No validado: politica de reintento del worker (P8.9), e2e por spec, suite completa.
+
+## HITO parsers-normalizacion (2026-10-02) — normalize() al dueno
+
+Cambios aplicados: agendaCommandParser y nlDateParser borran su `function normalize()` y usan el
+dueno de src/lib/textUtils.ts; cada uno recibe la variante que ya tenia por comportamiento
+(normalizeForMatchExact para agenda, normalizeForMatch para fechas).
+
+Validado contra:
+  - guard ROJO -> VERDE (tests/parsersNormalizeSingleOwnerGuard.test.ts) listando
+    src/core/agenda/agendaCommandParser.ts:86 y src/core/reminders/nlDateParser.ts:112
+  - metrica 2 -> 0 definiciones locales (target 0)
+  - conducta del dueno: las dos variantes NO son la misma (espacios internos)
+  - 36 tests de parsers/agenda; typecheck limpio; lint 157 / 1334; baseline [] = 0 nuevos
+
+No validado: e2e declarado por area; suite completa.

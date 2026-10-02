@@ -1215,7 +1215,7 @@
     {
       "id": "P8.18",
       "titulo": "CONFIRMADO en el triaje: normalize() casi duplicado y DIVERGENTE (nlDateParser colapsa espacios, agendaCommandParser no): el mismo texto normaliza distinto en cada parser",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/reminders/nlDateParser.ts:112 vs src/core/agenda/agendaCommandParser.ts:86",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -2469,6 +2469,12 @@
       "commit": "44c0114",
       "titulo": "newId: documentsService importa el generador de src/core/db/fluDatabase.ts y borra su copia de uuidv4",
       "evidencia": "Alcance real (0.23): CUBIERTO=los 3 duplicados que el triaje confirmo leyendo el cuerpo (no el nombre), unificados con guard nacido ROJO y verificacion por conducta: (1) getAsrConfig estaba en src/voice/lib/asr/voiceActivitySegmenter.js:20 y src/voice/workers/whisperAsr.worker.js:17 con el mismo cuerpo; el dueno vive en asrConfig.js y el segmentador lo re-exporta (import + export, AGENTS 4) para no cambiar su API: los tests de voz (voiceSegmenter, asrTurnSegmentation, whisperAsr.worker, asrTurnSegmentation) siguen verdes; (2) newId estaba en src/core/db/fluDatabase.ts:669 (exportado) y src/core/documents/documentsService.ts:38 (return uuidv4()): el consumidor importa el dueno y el guard comprueba que devuelve uuid v4 (3.6); (3) setField estaba copiado en src/components/AmbienteEditorForm.tsx:63 y src/components/PaletaEditorForm.tsx:58 (mismo cuerpo, solo cambiaba el tipo del patch, que en runtime no existe): el dueno es src/hooks/useEditableFields.ts y los dos formularios siguen ejercitados por tests/ambienteEditorForm.test.tsx y tests/paletaEditorForm.test.tsx. Evidencia: senal de cuerpos duplicados y de homonimos del auditor persistido ANTES (setField x2, getAsrConfig x2, newId x2) y DESPUES (las tres familias fuera; el canario de tests/auditCodeSignalsGuard.test.ts lo vigila: si vuelven, cae); metrica 6 -> 3 definiciones (target 3); guard pequeno ROJO -> VERDE; 73 tests de los ficheros tocados; typecheck limpio; lint 156 ficheros / 1329 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) la POLITICA de reintento del worker sigue sin poder medirse sin la app (eso es P8.9, no este hito). (2) e2e declarado por area (flu-settings-panel para los formularios, auditoria-acciones-llm para el ASR, documento-insumo para documentos), no verificado dentro del spec. (3) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.18",
+      "commit": "2db6253",
+      "titulo": "normalize() de agenda y fechas pasa al dueno de textUtils (que ya tenia las DOS variantes: colapsar / no colapsar)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=las DOS copias locales de normalizacion confirmadas por el triaje (src/core/agenda/agendaCommandParser.ts:86 y src/core/reminders/nlDateParser.ts:112). La fuente unica ya existia en src/lib/textUtils.ts y ademas con las dos variantes que cada parser necesita: `normalizeForMatch` (colapsa espacios internos) y `normalizeForMatchExact` (NO colapsa; su JSDoc documenta que colapsar ampliaria los matches por `includes`). Decision declarada: se conserva la SEMANTICA de cada parser (el de agenda recibe la variante exacta, que es lo que hacia su copia; el de fechas la que colapsa) -- el defecto no era que difirieran, era que no tuvieran dueno: cambiar `stripDiacritics` obligaba a acordarse de tres sitios. Evidencia: guard tests/parsersNormalizeSingleOwnerGuard.test.ts ROJO antes listando los dos sitios (agendaCommandParser.ts:86, nlDateParser.ts:112) y VERDE despues; metrica 2 -> 0 definiciones locales (target 0); la prueba de conducta del dueno fija que las dos variantes NO son la misma (normalizeForMatch(\"a   b\") = \"a b\" y normalizeForMatchExact(\"a   b\") = \"a   b\"); 36 tests de los parsers tocados + agenda en verde; typecheck limpio; lint 157 ficheros / 1334 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) e2e: nlDateParser se declara contra cita-agenda.spec.ts (es el spec de citas/recordatorios) y agendaCommandParser ya lo estaba contra auditoria-acciones-llm.spec.ts; es declaracion de area, no verificacion dentro del spec. (2) suite completa NO ejecutada (exige autorizacion expresa)."
     }
   ]
 }
