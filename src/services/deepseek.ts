@@ -37,6 +37,7 @@ import { localGet } from '../core/storage/localStore';
 import { resolveConfiguredTemperature } from './aiTemperature';
 
 import { pickText } from '../lib/uiStrings';
+import { GENERATION_FAILED_SOURCE } from '../lib/generationTrace';
 // -----------------------------------------------------------
 // Helpers específicos del transporte de texto
 // -----------------------------------------------------------
@@ -404,7 +405,7 @@ Formato de respuesta (JSON):
                 trace: {
                     provider: 'error',
                     hasImage: false,
-                    source: 'generation_failed',
+                    source: GENERATION_FAILED_SOURCE,
                     error: detail || 'unknown',
                     prompt,
                 },

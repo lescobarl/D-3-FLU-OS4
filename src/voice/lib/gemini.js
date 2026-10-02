@@ -45,6 +45,7 @@ import { AI_PROVIDER_IDS, POLLINATIONS_DEFAULTS } from '../../core/config/shared
 import { localGet } from '../../core/storage/localStore';
 
 import { pickText } from '../../lib/uiStrings';
+import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace';
 export {
   buildVisualAnchorBlock,
   extractVisualSubject,
@@ -325,7 +326,7 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
       trace: {
         provider: 'error',
         hasImage: false,
-        source: 'generation_failed',
+        source: GENERATION_FAILED_SOURCE,
         error: error?.message || 'unknown',
         prompt,
       },

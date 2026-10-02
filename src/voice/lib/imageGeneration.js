@@ -11,6 +11,7 @@ import {
   resolveVisualBriefCore,
   shouldUseLocalSvgOnError,
 } from './fluVisualPipeline.js'
+import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace';
 
 export {
   buildVisualGenerationPrompt,
@@ -133,7 +134,7 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
       trace: {
         provider: 'local-proxy',
         kind: 'blob',
-        source: 'generation_failed',
+        source: GENERATION_FAILED_SOURCE,
         hasImage: false,
         error: error || 'unknown',
         prompt: buildVisualGenerationPrompt(workspace, language),
@@ -326,7 +327,7 @@ export async function fetchOpenRouterImageFallback({
         provider: AI_PROVIDER_IDS.OPENROUTER,
         model: '',
         kind: 'images',
-        source: error?.name === 'AbortError' ? 'openrouter_image_timeout' : 'generation_failed',
+        source: error?.name === 'AbortError' ? 'openrouter_image_timeout' : GENERATION_FAILED_SOURCE,
         hasImage: false,
         error: error?.message || 'unknown',
         prompt,
@@ -378,7 +379,7 @@ export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '',
       video_url: '',
       trace: {
         provider: 'falai',
-        source: error?.name === 'AbortError' ? 'fal_video_timeout' : 'generation_failed',
+        source: error?.name === 'AbortError' ? 'fal_video_timeout' : GENERATION_FAILED_SOURCE,
         hasVideo: false,
         error: error?.message || 'unknown',
         prompt,

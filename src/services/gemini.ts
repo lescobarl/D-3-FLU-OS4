@@ -43,6 +43,7 @@ import {
 } from '../core/ai/aiServiceBase';
 
 import { pickText } from '../lib/uiStrings';
+import { GENERATION_FAILED_SOURCE } from '../lib/generationTrace';
 // -----------------------------------------------------------
 // Helpers específicos del transporte Gemini
 // -----------------------------------------------------------
@@ -401,7 +402,7 @@ Responde como ${botName}:`;
                     trace: {
                         provider: 'error',
                         hasImage: false,
-                        source: 'generation_failed',
+                        source: GENERATION_FAILED_SOURCE,
                         error: (error && typeof error === 'object' && 'message' in error ? error.message : undefined) || 'unknown',
                         prompt,
                     },

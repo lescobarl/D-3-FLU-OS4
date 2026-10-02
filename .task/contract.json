@@ -530,7 +530,8 @@
     "src/core/personalization/communicationProfileService.ts",
     "src/voice/lib/wakeWord.js",
     "src/voice/lib/speakerCore.js",
-    "src/voice/lib/speakerLabels.js"
+    "src/voice/lib/speakerLabels.js",
+    "src/lib/generationTrace.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
