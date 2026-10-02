@@ -3395,3 +3395,29 @@ Validado contra:
 Incidencias declaradas: el transformador aplano 2 fabricas con comentarios dentro (las caza tsc, se
 rehacen a mano); el guard no puede ser .test.tsx en lint:guards (reescrito en .test.ts con
 createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
+
+[P8.19] INICIAR_CONVERSACION: el id de arranque se lee del dueno unico de config (5 consumidores)
+  - DoD (metrica 9 -> 0, target 0). ANTES medido en la base 494ee76 con git show por fichero
+    (audioMath 1 + voiceCommands 2 + gemini 1 + useFluVoiceAssistant 3 + useNavigationCommands 2 = 9);
+    DESPUES 0. Las 3 apariciones restantes son COMENTARIO o texto de log (fuera de la metrica).
+  - Guard tests/sessionResetCommandSingleOwnerGuard.test.ts: ROJO (archivo:linea) -> VERDE.
+    Prueba de DETECTOR (0.24): alimenta el literal y comprueba que lo marca; el codigo limpio no.
+  - 0.22 respetado: d1fce59 (guard+package.json+contrato) y 2e97f08 (los 5 src) en commits SEPARADOS.
+  - Incidencia declarada: el guard nacio con 2 secuencias de mojibake; lo caza C53 y se repara con node
+    en UTF-8 (no PowerShell, AGENTS 7.7.f(6)).
+  - NO CUBIERTO: la misma cadena como CLAVE de FLU_CONFIG.ui.commandSpeech (App.tsx:3696,
+    FluAvatarVoiceBridge.tsx:386) -> registrada como P8.21; repeatedLiterals la lista como co-ocurrencia
+    explicada; suite completa no ejecutada (exige autorizacion expresa).
+
+[BARRERA] Hueco de I5 en el ledger: el guard del pre-commit no medIa lo mismo que ledger:check
+  - MEDIDO: tests/taskLedgerGuard.test.ts llamaba a validateLedger SIN subjects/files, y validateLedger
+    hace `if (!subject) continue`: I5 (cierre justificado por su commit) se aprobaba por VACIO en el
+    pre-commit, mientras `npm run ledger:check` (que SI los pasa) lo evaluaba. La barrera que vigila el
+    ledger no cubria I5 (AGENTS 7.7.f(2)).
+  - FIX: el guard pasa readGitEvidence() (subjects+files), con prueba de DETECTOR de los dos lados
+    (sin subjects el cierre ajeno pasa; con subjects+files cae).
+  - DEUDA SALDADA por el mismo hueco: 17 cierres P8.x tenian `done[].evidencia` en prosa (no empezaba
+    por la ruta que el commit toco), asi que I5 los rechazaba. Se les antepuso la ruta REAL que su
+    commit toco (verificado con `git show --name-only`). No se toco el contenido CUBIERTO/NO CUBIERTO (0.23).
+  - Evidencia: `npm run ledger:check` -> ledger OK (4 pendientes: P8.8, P8.9, P8.10, P8.21);
+    tests/taskLedgerGuard.test.ts + ledgerClosureScopeGuard + instrumentIntegrityGuard 34 passed.

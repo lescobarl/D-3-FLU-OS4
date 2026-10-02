@@ -19,6 +19,7 @@ import fs from 'node:fs'
 import {
   readLedger,
   readGitClosures,
+  readGitEvidence,
   commitExists,
   validateLedger,
   parseClosureCommits,
@@ -29,10 +30,32 @@ describe('taskLedger - el ledger no puede desincronizarse de git', () => {
   it('I1..I7 - el ledger REAL contra git esta sincronizado', () => {
     const ledger = readLedger(LEDGER_PATH)
     const closures = readGitClosures()
-    const { ok, failures } = validateLedger(ledger, { closures, exists: commitExists })
+    // I5 exige el mensaje Y los ficheros de cada commit: sin `subjects`/`files`,
+    // validateLedger hace `continue` y aprueba I5 por VACIO (AGENTS 7.7.f(2)).
+    // Antes este guard llamaba sin ellos, asi que `npm run ledger:check` (que si
+    // los pasa) medía I5 y este guard no: la barrera del pre-commit no veia el
+    // hueco. Ahora los dos caminos miden lo mismo.
+    const { subjects, files } = readGitEvidence()
+    const { ok, failures } = validateLedger(ledger, { closures, exists: commitExists, subjects, files })
     // Muestra el listado programatico de lo que falta (archivo:sujeto).
     expect(failures.join('\n')).toBe('')
     expect(ok).toBe(true)
+  })
+
+  it('PRUEBA DE DETECTOR: sin `subjects` I5 aprueba por VACIO (el hueco medido)', () => {
+    // Cierre colgado de un commit ajeno, sin el id en el mensaje y con la ruta
+    // citada NO tocada por el commit: con subjects+files cae; sin subjects (la
+    // llamada que hacia este guard) pasaba, porque validateLedger hace `continue`.
+    const l = {
+      items: [],
+      done: [{ id: 'P8.13', commit: '929bca0', titulo: 'y', evidencia: 'src/otro.ts: cierre' }],
+    }
+    const subjects = new Map([['929bca0', 'refactor(hooks): sin el id en el mensaje']])
+    const files = new Map([['929bca0', new Set(['src/hooks/useServiceRef.ts'])]])
+    // La barrera REAL (con evidencia): el commit no toco la ruta citada -> cae.
+    expect(validateLedger(l, { exists: () => true, subjects, files }).ok).toBe(false)
+    // El hueco: sin `subjects`, I5 se salta y el mismo cierre pasa.
+    expect(validateLedger(l, { exists: () => true }).ok).toBe(true)
   })
 })
 
