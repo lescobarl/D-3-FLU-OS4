@@ -41,5 +41,15 @@ export function logCaughtError(context: string, ...details: unknown[]): void {
     }
     void import('./clientLogRelay')
         .then((mod) => mod.relayLog('ERROR', 'catch', message, { detail }))
-        .catch((e: unknown) => { logCaughtError('[catch] src/lib/caughtError.ts', e) });
+        .catch((e: unknown) => {
+            // Un fallo del relay NO se re-reporta por el registro central: ese
+            // registro ES este mismo camino, asi que re-reportarlo era un bucle
+            // SIN FIN (medido: un worker de vitest llego a 5,8 GB y el proceso
+            // moria). El fallo se queda en la consola, que es donde se lee.
+            try {
+                console.error(`[catch] relay ${message}`, describe(e));
+            } catch {
+                /* ignorado: la consola no esta disponible en este contexto */
+            }
+        });
 }
