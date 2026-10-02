@@ -25,7 +25,7 @@ export async function createMicCaptureWorkletNode(audioContext) {
  * @param {{
  *   audioContext: AudioContext,
  *   source: MediaStreamAudioSourceNode,
- *   onPcmBlock?: (samples: Float32Array, meta: { sampleIndex: number }) => void,
+ *   onPcmBlock?: (samples: Float32Array, meta: { sampleIndex: number, audioStartedAtMs: number }) => void,
  *   pushSttPcm?: (int16: Int16Array) => void,
  *   sampleRate?: number,
  *   sttTargetRate?: number,
