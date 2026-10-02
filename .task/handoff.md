@@ -42,19 +42,19 @@ SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
   control negativo, un guard verde no prueba nada.
 - La fuente de lo que falta es plans/ledger.json, NO el resumen del chat ni el catalogo.
 
-ESTADO DE HOY (2026-10-02): **0 pendientes** en el ledger (la auditoria de codigo esta
-cerrada: todo hallazgo arreglado con guard o clasificado como medicion).
+ESTADO DE HOY (2026-10-02): 1 pendiente en el ledger.
+  P8.24 el BLOQUE e2e acotado falla de forma intermitente (2 de 40 tipicos) por un CRASH del
+        renderer al pulsar el skip del onboarding (_helpers.ts:49), en pruebas DISTINTAS cada
+        corrida; a veces la corrida aborta. Cada spec PASA EN AISLAMIENTO. Ya mitigado (timeout
+        90 s, spec de minuta robusto); FALTA la causa raiz (app vs headless-GL). Es infra de
+        test, NO un hallazgo de la auditoria de codigo. CI usa --retries=1.
 
-SI PIDES "UNA AUDITORIA" OTRA VEZ: una sesion nueva reproducira los MISMOS candidatos
-(`node scripts/auditoria-codigo.mjs`) y leera el MISMO ledger. Con 0 pendientes, dira
-"no hay pendientes registrados" PERO seguira listando CANDIDATOS (el auditor no da
-veredictos: hay que leer cada sitio). Ojo: `scripts/auditoria.mjs` (catalogo de 28 puntos)
-NO es la auditoria de codigo.
+AUDITORIA DE CODIGO: CERRADA (0 hallazgos abiertos; P8.1-P8.23 arreglados con guard o medidos).
+Ademas se arreglo P8.22 (la app NO compilaba: import duplicado) — antes de eso DEV, build y e2e
+estaban rotos y por eso el e2e nunca corria.
 
-NO VERIFICADO (no son pendientes, son limites declarados): DoD-producto (tu pantalla);
-suite completa (`npm run test:full`, exige autorizacion); suite e2e COMPLETA (solo se corrio
-el bloque acotado: 8 specs, 34+20+12 pasan; el flake del setup se mitigo subiendo el timeout
-a 90 s, sin confirmar con la suite entera).
+NO VERIFICADO (limites declarados, no pendientes): DoD-producto (tu pantalla); suite completa
+(`npm run test:full`, exige autorizacion); suite e2e COMPLETA (se corrio el bloque acotado).
 
 CERRADO (P8.21, P8.9, P8.10, P8.22 + los anteriores P8.1-P8.20 salvo refutados):
   P8.21 vocabulario de ids a commandIds.js; P8.9 esqueleto de worker a workerPendingBridge.js

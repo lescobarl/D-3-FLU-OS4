@@ -1256,9 +1256,9 @@
     },
     {
       "id": "P8.24",
-      "titulo": "FLAKE: el setup de _helpers.gotoClean podia pasar del timeout de 60s del test (app pesada) y dejaba una prueba en rojo de forma intermitente",
-      "estado": "done",
-      "evidencia": "tests/e2e/_helpers.ts:28-62 (goto 30s + `.flu-shell` 45s + bucle onboarding 45s > 60s) vs playwright.config.ts timeout 60000. Medido: 1 de 46 pruebas fallaba de forma INTERMITENTE por agotar 60 s EN EL SETUP (no en la prueba), en una prueba DISTINTA en cada corrida; al reintentar pizarron-funcionalidades solo, 12/12 passed. Fix: timeout 60000 -> 90000 en playwright.config.ts (no toca la logica de ninguna prueba). NO CUBIERTO: no se corrio la suite e2e completa para confirmar la desaparicion total del flake.",
+      "titulo": "FLAKE/CRASH de e2e: el bloque acotado falla de forma intermitente (2 de 40 tipicos) por un CRASH del renderer al pulsar el skip del onboarding en _helpers.gotoClean",
+      "estado": "todo",
+      "evidencia": "REMEDIDO 2026-10-02 (4 corridas del bloque): fallan 1-5 pruebas DISTINTAS cada vez (notas, pizarron 2.1/4.1/8.1-OCR, shopping, cita-agenda, carta, flu-settings, minuta), siempre con \"Target page, context or browser has been closed\" en el click del skip de onboarding (_helpers.ts:49) o en el click del pill de settings; a veces la corrida ABORTA y deja 3-14 \"did not run\". Cada spec PASA EN AISLAMIENTO (medido: minuta 1/1, cita-agenda+flu-settings 5/5, pizarron 12/12). `--retries=1` (lo de CI) reduce pero no elimina. HIPOTESIS medida: carga acumulada del worker (app pesada: three/WASM/transformers) + headless; NO son procesos huerfanos (medido: los 20 chrome.exe son del usuario, no quedan chromium de Playwright) ni disco (728 GB libres). YA MITIGADO PARCIALMENTE: timeout del test 60 s -> 90 s (playwright.config.ts) y el spec de minuta reintenta+relee. PENDIENTE: identificar la causa del crash del renderer (app vs headless-GL) o correr e2e en CI con retries.",
       "origen": "auditoria-codigo-2026-10-02"
     }
   ],
@@ -2563,12 +2563,6 @@
       "commit": "bbf0700",
       "titulo": "Los especs e2e de nota se alinean al modelo canonico (items en el body)",
       "evidencia": "tests/e2e/auditoria-acciones-llm.spec.ts: Alcance real (0.23): CUBIERTO=los 2 especs que asertaban el modelo viejo de la nota del super (label \"Super: {items}\"). Ahora comprueban el canonico: label empieza por \"Super\" y el item vive en label+body. Evidencia: `npx playwright test` de los 2 especs -> 20/20 passed (5.6m). NO CUBIERTO= el resto de la suite e2e."
-    },
-    {
-      "id": "P8.24",
-      "commit": "bbf0700",
-      "titulo": "Sube el timeout del test de e2e por el setup de gotoClean",
-      "evidencia": "playwright.config.ts: Alcance real (0.23): CUBIERTO=el timeout del test (60 s -> 90 s), que el setup de gotoClean podia agotar bajo carga. Evidencia: pizarron-funcionalidades 12/12 passed tras el cambio (y 1 fallo intermitente en el setup antes). NO CUBIERTO= confirmacion con la suite e2e completa."
     }
   ]
 }

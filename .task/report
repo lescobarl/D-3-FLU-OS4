@@ -3488,3 +3488,13 @@ createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
     timeout 60000 -> 90000 en playwright.config.ts.
   - Evidencia conjunta: bloque acotado de los 3 especs 20/20 passed (5.6m); pizarron 12/12
     (3.0m) al reintentar. ledger: 0 pendientes.
+
+[P8.8/P8.23/P8.24] Cierre del e2e de minutas + medicion del flake del bloque
+  - P8.8: el spec pasa en aislamiento (28.9 s) y en el bloque (37/40, con el spec en verde).
+    Se endurecio: reintenta el flujo (hasta 3 veces) y RELEE la tienda (IndexedDB puede tardar).
+  - P8.23: los 2 especs de nota se alinearon al modelo canonico (label "Super" + items en body).
+  - P8.24 REABIERTO (era prematuro cerrarlo): el bloque acotado falla de forma intermitente
+    (2 de 40 tipicos) por un CRASH del renderer al pulsar el skip del onboarding (_helpers.ts:49),
+    en pruebas DISTINTAS cada corrida; a veces la corrida aborta (3-14 "did not run"). Cada spec
+    pasa EN AISLAMIENTO. Descartado por medicion: procesos huerfanos (los 20 chrome.exe son del
+    usuario) y disco (728 GB libres). Mitigado: timeout 90 s + spec robusto. Falta la causa raiz.
