@@ -1172,9 +1172,9 @@
     },
     {
       "id": "P8.12",
-      "titulo": "Homonimos por verificar par a par (candidatos, no confirmados): sourceLabel, cleanLabel, normalize, pickLabel, newId, toUI, resetTurn, downsample",
-      "estado": "todo",
-      "evidencia": "ImageGrid.tsx:76 vs VideoGrid.tsx:52; deviceActionIntentParser.ts:113 vs shoppingIntentParser.ts:44; agendaCommandParser.ts:86 vs nlDateParser.ts:112; lib/textUtils.ts:93 vs selfKnowledge.ts:128; fluDatabase.ts:669 vs documentsService.ts:38; useMinuteKnowledge.ts:49 vs useVoiceProfiles.ts:36; voiceActivitySegmenter.js:84 vs whisperRecognitionEngine.js:168; whisperRecognitionEngine.js:24 vs dev/asrLab/AsrLab.tsx:48",
+      "titulo": "TRIADO: homonimos verificados par a par (9 son colisiones de nombre, no defecto; 2 se promovieron a P8.17/P8.18)",
+      "estado": "done",
+      "evidencia": "NO son defecto (distinto trabajo, mismo nombre): runMainThreadFallback, scheduleIdle, pickLabel, toUI, flush, resetTurn, cleanLabel, sourceLabel, downsample (este ultimo solo en src/dev). CONFIRMADOS: newId -> P8.17, normalize -> P8.18.",
       "origen": "auditoria-codigo-2026-10-02"
     },
     {
@@ -1200,9 +1200,23 @@
     },
     {
       "id": "P8.16",
-      "titulo": "setField duplicado en los dos formularios de editor (mismo cuerpo): hallado por la senal de cuerpos duplicados ya calibrada (el umbral viejo de 80 chars lo ocultaba)",
+      "titulo": "CONFIRMADO: setField copiado en los dos formularios de editor (mismo cuerpo; solo cambia el tipo del patch)",
       "estado": "todo",
       "evidencia": "src/components/AmbienteEditorForm.tsx:63 vs src/components/PaletaEditorForm.tsx:58 (node scripts/auditoria-codigo.mjs)",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.17",
+      "titulo": "CONFIRMADO en el triaje: newId() copiado (fluDatabase.ts exporta el generador uuid y documentsService.ts tiene su propia copia del mismo cuerpo)",
+      "estado": "todo",
+      "evidencia": "src/core/db/fluDatabase.ts:669 vs src/core/documents/documentsService.ts:38 (ambos: return uuidv4())",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.18",
+      "titulo": "CONFIRMADO en el triaje: normalize() casi duplicado y DIVERGENTE (nlDateParser colapsa espacios, agendaCommandParser no): el mismo texto normaliza distinto en cada parser",
+      "estado": "todo",
+      "evidencia": "src/core/reminders/nlDateParser.ts:112 vs src/core/agenda/agendaCommandParser.ts:86",
       "origen": "auditoria-codigo-2026-10-02"
     }
   ],
@@ -2411,6 +2425,12 @@
       "commit": "fefefbb",
       "titulo": "Workers: isWorkerRuntime a dueno unico (el resto del hallazgo, re-medido y reclasificado)",
       "evidencia": "Alcance real (0.23): CUBIERTO=la parte del hallazgo P8.4 que resiste la medicion. Se midio cada par uno a uno (cuerpo, firma y semantica) en vez de aceptar el agrupamiento del informe: (1) `isWorkerRuntime` SI era la misma pregunta copiada en dos sitios (src/avatar/workers/fbxWorkerClient.ts:34 y src/voice/lib/voiceIdWorkerClient.js:23, esta con una guarda extra `&& typeof window !== 'undefined'` que solo cambia fuera del hilo principal, donde ese cliente no corre) -> dueno unico en src/lib/workerRuntime.ts, con guard + comportamiento (responde a la existencia real de Worker, medido borrando e inyectando el global); metrica 2 -> 1 (target 1). (2) `runMainThreadFallback` (2 copias) NO es duplicado: cada cliente tiene SU respaldo (fbx: fetchFbxJson; voz: computo local del embedding); mismo nombre, trabajo distinto -> no se toca. (3) `scheduleIdle` (2 copias) NO es duplicado: voiceIdentityQueue devuelve void (fire-and-forget) y voiceIdWorkerClient devuelve Promise; misma firma aparente, semantica distinta -> no se toca. Evidencia: guard ROJO antes nombrando las 3 definiciones; typecheck limpio; 48 tests de worker/embeddings/fbx en verde; lint en el cierre. NO CUBIERTO=(1) el UNICO duplicado real que sobrevive dentro del hallazgo: el esqueleto de `ensureWorker` (crear perezoso + pendientes por id + rechazar todos en onerror), copiado 3 veces con politica distinta (fbx marca muerto y no recrea / voz rechaza / whisper termina y recrea) y timeouts distintos; extraerlo es un puente con la politica inyectada y se registra como P8.9 (con su evidencia medida) en vez de entregarlo a medias o sin verificar: los tests de worker cubren el protocolo, no la politica de reintento end-to-end, y esa parte no se puede validar sin la app delante. (2) e2e declarado por arranque de app, no verificado por cliente. (3) suite completa NO ejecutada."
+    },
+    {
+      "id": "P8.12",
+      "commit": "5097f42",
+      "titulo": "Triaje de los 14 homonimos del informe: 9 colisiones de nombre, 2 confirmados como duplicado/divergencia",
+      "evidencia": "Alcance real (0.23): CUBIERTO=los 14 homonimos que reportaba la senal `homonymFunctions` de scripts/auditoria-codigo.mjs, leidos uno a uno (cuerpo y firma) para separar duplicado de colision de nombre. Verdicto por simbolo: (a) NO son defecto = runMainThreadFallback (fbx usa fetchFbxJson, voz calcula el embedding en local), scheduleIdle (uno devuelve void, el otro Promise), pickLabel (selfKnowledge compone {labelEs,labelEn}; textUtils elige por idioma), toUI (proyecta MinuteUIEntry vs VoiceProfileUI), flush (lote de logs vs estado del VAD), resetTurn (dos maquinas de estado del ASR con campos distintos), cleanLabel (uno normaliza fuerte y el otro no: es un SUBCONJUNTO, no la misma regla), sourceLabel (cada grid tiene su tabla de proveedores y su tipo de ui), downsample (solo en src/dev, laboratorio). (b) CONFIRMADOS como duplicado o divergencia: newId -> P8.17 (mismo cuerpo), normalize -> P8.18 (mismo proposito, distinto resultado). (c) Ya registrados del mismo bloque: ensureWorker -> P8.9, speechWords -> P8.10, getAsrConfig -> P8.11. Nada se unifico en este triaje: su DoD era clasificar, no tocar (7.7.e). NO CUBIERTO=(1) los 520 literales repetidos que reporta la misma senal NO se han leido caso a caso: quedan como ruido no triado (muchos son clases CSS, rutas de import y claves de config). (2) el triaje es de los homonimos, no de los ficheros completos. (3) suite completa NO ejecutada (exige autorizacion expresa)."
     }
   ]
 }

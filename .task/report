@@ -3310,3 +3310,14 @@ Validado contra:
 
 No validado: e2e (hueco P8.8, visible en e2e:plan). DoD-producto: del usuario.
 Pendientes tras el hito: P8.8-P8.16 (9).
+
+## TRIAJE de los 14 homonimos (2026-10-02)
+
+El triaje cierra P8.12 (su DoD era clasificar, no unificar) y promueve lo que resulto ser
+duplicado real: newId (P8.17) y normalize (P8.18). setField (P8.16) queda CONFIRMADO por la
+senal de cuerpos duplicados. Lo demas (runMainThreadFallback, scheduleIdle, pickLabel, toUI,
+flush, resetTurn, cleanLabel, sourceLabel, downsample) es colision de nombre: mismo nombre,
+trabajo distinto -> NO se toca (7.7: si no producen lo mismo por el mismo motivo, no es ruta doble).
+
+Metodo: leer cuerpo y firma de cada par (no fiarse del nombre), que es lo que separa "duplicado"
+de "colision". Sin ese paso, el numero 14 se lee como 14 defectos y no lo son.
