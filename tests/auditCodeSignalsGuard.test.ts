@@ -49,14 +49,18 @@ describe('auditCodeSignalsGuard — la auditoria de codigo mide de verdad', () =
         expect(parches[0]).toContain('src/a.ts:1');
     });
 
-    it('COMPORTAMIENTO contra el arbol real: el eje cerrado sigue a 0 y el reporte recorre src', () => {
+    it('COMPORTAMIENTO contra el arbol real: lo cerrado no vuelve y el reporte recorre src', () => {
         const sources = readSources('src');
         expect(sources.length).toBeGreaterThan(300);
         // Las colisiones de export se cerraron (P8.6): 6 -> 0. Si vuelven, la senal lo dice.
         expect(exportedCollisions(sources)).toEqual([]);
-        // El reporte es del arbol, no una constante: los homonimos que quedan son los del ledger.
+        // El reporte es del arbol, no una constante: los duplicados que YA se unificaron
+        // no pueden reaparecer (si alguien vuelve a copiarlos, esta prueba cae).
         const nombres = buildReport('src').homonymFunctions.map((h) => h.name);
-        expect(nombres).toContain('getAsrConfig');
         expect(nombres).not.toContain('buildMinuteKey');
+        expect(nombres).not.toContain('getAsrConfig');
+        expect(nombres).not.toContain('newId');
+        // Y los que siguen abiertos y registrados (P8.9) SI aparecen: la senal ve el arbol.
+        expect(nombres).toContain('ensureWorker');
     });
 });
