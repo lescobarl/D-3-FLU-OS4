@@ -3139,3 +3139,28 @@ No validado: DoD-producto (pantalla). e2e del flujo de minutas sigue SIN spec (P
 
 Alcance real: CUBIERTO = las 3 familias + identidad + comportamiento de la KB de voz.
 NO CUBIERTO = e2e de minutas, el resto del informe (P8.3-P8.7) y la verificacion visual.
+
+## HITO servidor-1 (2026-10-02) — un escritor JSON en los proxies
+
+Cambios aplicados: `src/server/geminiProxy.ts` deja de reimplementar `sendJson` y de
+escribir `res.writeHead(...)` a mano (7 sitios). Importa el dueno unico
+(`src/server/httpJson.ts`), cuya etiqueta de log pasa a opcional (default) para no
+reescribir 25 llamadas. Los 3 sinks de diagnostico dejan de escribir fuera de try.
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/serverResponseSingleOwnerGuard.test.ts
+    ANTES (rojo):
+      sendJson definido 2 veces (debe ser 1): src/server/geminiProxy.ts:214, src/server/httpJson.ts:38
+      writeHead JSON a mano: src/server/geminiProxy.ts:221, 656, 671, 685, 709, 729, 747, 775
+    Y por CONDUCTA (el defecto real): el proxy respondia 'application/json' donde el
+    dueno unico responde 'application/json; charset=utf-8'.
+  - METRICA ((definiciones de sendJson !== 1) + writeHead JSON a mano) : 9 -> 0 (target 0).
+  - CONDUCTA: servidor HTTP real + middleware del proxy: POST /api/gemini/text {} ->
+    400 missing_prompt con charset UTF-8.
+  - tests httpJson + guard = 15 passed; tsc limpio; lint:guards 150 / 1301; baseline [] = 0 nuevos.
+  - El criterio alineado va en el commit del guard (0.22: src y su guard no viajan juntos).
+
+No validado: DoD-producto. e2e declarado por pipeline (no medido dentro del spec).
+
+Alcance real: CUBIERTO = el escritor unico + la conducta del proxy. NO CUBIERTO = e2e del
+proxy dentro del spec, P8.4-P8.7 y la verificacion visual.
