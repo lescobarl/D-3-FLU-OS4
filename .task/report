@@ -3366,3 +3366,16 @@ Validado contra:
   - 36 tests de parsers/agenda; typecheck limpio; lint 157 / 1334; baseline [] = 0 nuevos
 
 No validado: e2e declarado por area; suite completa.
+
+## HITO instrumento-lint + P8.14 refutado (2026-10-02)
+
+P8.15: V19 del catalogo decia "npm run lint no es lint real (sin config eslint)" y era obsoleto:
+eslint.config.mjs existe y el pre-commit corre lint:guards + lint:eslint. El item pasa a
+"Lint real presente" y su predicado (findMissingEslintConfig) se muda al dueno de detectores
+(scripts/audit-detectors.mjs) para poder probarlo: marca la AUSENCIA del config, no la presencia.
+Hashes re-sellados en .task/frozen.json.
+
+P8.14 REFUTADO: el modelo SI es env-overridable. sharedConfig.ts:513 lo resuelve con readServerEnv
+y appConfig.ts:210 con import.meta.env; la cabecera de sharedConfig declara "sin import.meta.env"
+a proposito porque lo importan los middlewares del servidor. El defecto era mi lectura, no el
+codigo (7.7.f(5)): se cierra el hallazgo, no se toca el codigo.

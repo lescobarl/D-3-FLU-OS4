@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { findBrokenImports, findLibraryMonkeyPatches } from '../scripts/audit-detectors.mjs';
+import { findBrokenImports, findLibraryMonkeyPatches, findMissingEslintConfig } from '../scripts/audit-detectors.mjs';
 
 const ROOT = process.cwd();
 
@@ -73,8 +73,14 @@ describe('auditVacuityGuard — los detectores de auditoria miden de verdad', ()
         expect(legitimo).toEqual([]);
     });
 
-    it('los dos objetivos vacios del catalogo ya no existen (el detector no puede serlo por ausencia)', () => {
-        expect(
+    it('V19 lint real: no marca con el config presente y SI marca su ausencia', () => {
+        expect(findMissingEslintConfig(ROOT, () => true)).toEqual([]);
+        expect(findMissingEslintConfig(ROOT, () => false).join('\n')).toContain('sin config eslint');
+        // El verde de hoy es por realidad, no por vaciedad: el config EXISTE en el repo.
+        expect(statSync(join(ROOT, 'eslint.config.mjs'), { throwIfNoEntry: false })?.isFile()).toBe(true);
+    });
+
+    it('los dos objetivos vacios del catalogo ya no existen (el detector no puede serlo por ausencia)', () => {        expect(
             [
                 'src/avatar/lib/masterBinding.ts',
                 'src/server/handlers/workspaceImageHandler.mjs',

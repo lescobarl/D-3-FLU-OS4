@@ -1186,8 +1186,8 @@
     },
     {
       "id": "P8.14",
-      "titulo": "Modelo NO env-overridable en la config de OpenRouter: sharedConfig fija MODEL/IMAGE_MODEL con literal, mientras appConfig usa import.meta.env",
-      "estado": "todo",
+      "titulo": "REFUTADO: el modelo SI es env-overridable (mi hallazgo era falso positivo: lei el literal sin leer el resolutor de al lado)",
+      "estado": "done",
       "evidencia": "src/core/config/sharedConfig.ts:120 (MODEL) y :125 (IMAGE_MODEL) vs src/core/config/appConfig.ts:189 (VITE_DEEPSEEK_MODEL || default)",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -2475,6 +2475,12 @@
       "commit": "2db6253",
       "titulo": "normalize() de agenda y fechas pasa al dueno de textUtils (que ya tenia las DOS variantes: colapsar / no colapsar)",
       "evidencia": "Alcance real (0.23): CUBIERTO=las DOS copias locales de normalizacion confirmadas por el triaje (src/core/agenda/agendaCommandParser.ts:86 y src/core/reminders/nlDateParser.ts:112). La fuente unica ya existia en src/lib/textUtils.ts y ademas con las dos variantes que cada parser necesita: `normalizeForMatch` (colapsa espacios internos) y `normalizeForMatchExact` (NO colapsa; su JSDoc documenta que colapsar ampliaria los matches por `includes`). Decision declarada: se conserva la SEMANTICA de cada parser (el de agenda recibe la variante exacta, que es lo que hacia su copia; el de fechas la que colapsa) -- el defecto no era que difirieran, era que no tuvieran dueno: cambiar `stripDiacritics` obligaba a acordarse de tres sitios. Evidencia: guard tests/parsersNormalizeSingleOwnerGuard.test.ts ROJO antes listando los dos sitios (agendaCommandParser.ts:86, nlDateParser.ts:112) y VERDE despues; metrica 2 -> 0 definiciones locales (target 0); la prueba de conducta del dueno fija que las dos variantes NO son la misma (normalizeForMatch(\"a   b\") = \"a b\" y normalizeForMatchExact(\"a   b\") = \"a   b\"); 36 tests de los parsers tocados + agenda en verde; typecheck limpio; lint 157 ficheros / 1334 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) e2e: nlDateParser se declara contra cita-agenda.spec.ts (es el spec de citas/recordatorios) y agendaCommandParser ya lo estaba contra auditoria-acciones-llm.spec.ts; es declaracion de area, no verificacion dentro del spec. (2) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.14",
+      "commit": "d7afd1d",
+      "titulo": "P8.14 refutado con evidencia: la ausencia de import.meta.env en sharedConfig es deliberada y el env se lee en su resolutor",
+      "evidencia": "Alcance real (0.23): CUBIERTO=la refutacion. Mi hallazgo decia \"MODEL/IMAGE_MODEL con literal, no env-overridable, a diferencia de appConfig\". Es FALSO: (1) sharedConfig.ts:513 resuelve el modelo del servidor con `readServerEnv(\"VITE_OPENROUTER_MODEL\")` y cae al literal solo si no hay env; (2) appConfig.ts:210 hace lo mismo en el cliente con `import.meta.env.VITE_OPENROUTER_MODEL || OPENROUTER_DEFAULTS.MODEL`; (3) la cabecera de sharedConfig declara la regla a proposito: \"Defaults (Rule #1: NO HARDCODE) -- sin import.meta.env\", porque ese modulo lo importan los middlewares del servidor (searchProxy, geminiProxy, browserProxy), donde import.meta.env no existe. Es el falso positivo que 7.7.f(5) describe: el defecto era mi LECTURA (vi el literal y no el resolutor de la linea siguiente), no el codigo; se corrige el hallazgo, no el codigo. NO CUBIERTO=(1) si en algun consumidor se usa OPENROUTER_DEFAULTS.MODEL saltandose los resolutores (gemini.js lo usa como \"default final\" declarado en su JSDoc; geminiProxy lo usa como respaldo del body) eso es por diseno y esta documentado. (2) suite completa NO ejecutada (exige autorizacion expresa)."
     }
   ]
 }

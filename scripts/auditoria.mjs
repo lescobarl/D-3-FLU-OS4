@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 // Detectores reales de V6/V17 (dueno unico compartido con su guard de barrera).
-import { findBrokenImports, findLibraryMonkeyPatches } from './audit-detectors.mjs'
+import { findBrokenImports, findLibraryMonkeyPatches, findMissingEslintConfig } from './audit-detectors.mjs'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -427,15 +427,10 @@ const FINDINGS = [
     note: 'Unificar/renombrar por pares; verificar equivalencia real antes; no forzar los dispares.',
   },
   {
-    id: 'V19', sev: 'baja', info: true, title: 'npm run lint no es lint real (sin config eslint)',
+    id: 'V19', sev: 'baja', info: true, title: 'Lint real presente (configuracion de ESLint)',
     target: 0,
-    detect: () => {
-      const has = ['.eslintrc', '.eslintrc.json', '.eslintrc.js', 'eslint.config.js', 'eslint.config.mjs'].some(
-        (p) => existsSync(join(ROOT, p)),
-      )
-      return has ? [] : ['sin config eslint; npm run lint solo corre test-guards (estructurales)']
-    },
-    note: 'Agregar eslint real + >=1 test de comportamiento por invariante critico (§0.12).',
+    detect: () => findMissingEslintConfig(ROOT, existsSync),
+    note: 'Medido 2026-10-02: eslint.config.mjs EXISTE y el pre-commit corre lint:guards + lint:eslint, asi que el titulo viejo (sin config eslint) era obsoleto. El detector marca la AUSENCIA del config, no la presencia.',
   },
 
   // -------- nombres repetidos NO duplicados (no tocar) --------

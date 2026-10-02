@@ -62,3 +62,26 @@ export function findBrokenImports(files, readSource) {
   }
   return out;
 }
+
+/** Configs de lint que el repo reconoce (misma lista que usaba V19 inline). */
+export const ESLINT_CONFIGS = [
+  '.eslintrc',
+  '.eslintrc.json',
+  '.eslintrc.js',
+  'eslint.config.js',
+  'eslint.config.mjs',
+];
+
+/**
+ * V19 — lint real: marca la AUSENCIA de configuracion de ESLint.
+ *
+ * El catalogo nacio cuando "npm run lint" solo corria test-guards; desde que existe
+ * eslint.config.mjs el pre-commit corre `lint:guards && lint:eslint`. El detector
+ * mide la ausencia (no la presencia), para que perder el config no pase inadvertido.
+ * @param {string} root Raiz del repo.
+ * @param {(p: string) => boolean} exists Existencia de un fichero (inyectada: se prueba).
+ */
+export function findMissingEslintConfig(root, exists) {
+  const has = ESLINT_CONFIGS.some((p) => exists(join(root, p)));
+  return has ? [] : ['sin config eslint; npm run lint solo corre test-guards (estructurales)'];
+}
