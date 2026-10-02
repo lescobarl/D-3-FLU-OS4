@@ -12,10 +12,10 @@
 // (transiciones de estado, guardas de arranque/parada, reset, ack, avance de
 // hablante, concesion de palabra) NO se mockea.
 //
-// HALLAZGOS (no se arreglan aqui, solo se documentan):
-//  1. showListeningAck: hace setListeningAck(mensaje) y a continuacion
-//     clearListeningAck() (que hace setListeningAck('')). En el mismo tick de
-//     React el segundo set gana => el ack NUNCA se pinta. Ver caso marcado.
+// HALLAZGOS:
+//  1. showListeningAck pintaba el ack y lo borraba en el mismo tick (clear tras
+//     set) => el chip NUNCA se veia. ARREGLADO en src: el mensaje se fija tras
+//     clearListeningAck. El caso de "ack de escucha" lo fija (nacio ROJO).
 //  2. advanceConversationSpeaker depende de getActiveListenConfig().speakers;
 //     sin conversacion activa cae en nextSpeakerLabel(labels).
 // ============================================================
@@ -362,19 +362,24 @@ describe('useFluVoiceAssistant - estado expuesto', () => {
 // Bloque: ack de escucha
 // ------------------------------------------------------------
 describe('useFluVoiceAssistant - ack de escucha', () => {
-  it('HALLAZGO: showListeningAck queda anulado (set mensaje + clear en el mismo tick)', () => {
+  it('showListeningAck pinta el mensaje y lo borra al expirar su duracion', () => {
     vi.useFakeTimers();
     const { result } = montar();
-    const { message } = getConversationConfig().listeningAck;
+    const { message, durationMs } = getConversationConfig().listeningAck;
     expect(message).toBeTruthy();
 
     act(() => result.current.showListeningAck());
+    // El ack es visible durante su ventana (antes del arreglo quedaba '' por el
+    // clearListeningAck() inmediato: esta asercion nacIo ROJA).
+    expect(result.current.listeningAck).toBe(message);
 
-    // El clearListeningAck() inmediato hace ganar el setState '' -> el ack no se ve.
+    act(() => {
+      vi.advanceTimersByTime(durationMs);
+    });
     expect(result.current.listeningAck).toBe('');
   });
 
-  it('resetConversationSession limpia el ack (aunque nunca llegue a mostrarse)', () => {
+  it('resetConversationSession limpia el ack', () => {
     const { result } = montar();
 
     act(() => result.current.resetConversationSession());

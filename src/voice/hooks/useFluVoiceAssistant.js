@@ -813,9 +813,9 @@ export function useFluVoiceAssistant({
 
   const showListeningAck = useCallback(() => {
     const { listeningAck: ackCfg } = getConversationConfig()
-    setListeningAck(ackCfg.message)
-    if (typeof window === 'undefined') return
     clearListeningAck()
+    if (typeof window === 'undefined') return
+    setListeningAck(ackCfg.message)
     listeningAckTimerRef.current = window.setTimeout(() => {
       listeningAckTimerRef.current = null
       setListeningAck('')
