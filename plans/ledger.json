@@ -1197,6 +1197,13 @@
       "estado": "todo",
       "evidencia": "scripts/auditoria.mjs:433 vs eslint.config.mjs (existe en la raiz)",
       "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.16",
+      "titulo": "setField duplicado en los dos formularios de editor (mismo cuerpo): hallado por la senal de cuerpos duplicados ya calibrada (el umbral viejo de 80 chars lo ocultaba)",
+      "estado": "todo",
+      "evidencia": "src/components/AmbienteEditorForm.tsx:63 vs src/components/PaletaEditorForm.tsx:58 (node scripts/auditoria-codigo.mjs)",
+      "origen": "auditoria-codigo-2026-10-02"
     }
   ],
   "done": [
