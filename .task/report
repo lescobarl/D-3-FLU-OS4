@@ -3164,3 +3164,34 @@ No validado: DoD-producto. e2e declarado por pipeline (no medido dentro del spec
 
 Alcance real: CUBIERTO = el escritor unico + la conducta del proxy. NO CUBIERTO = e2e del
 proxy dentro del spec, P8.4-P8.7 y la verificacion visual.
+
+## HITO vocabulario-1 (2026-10-02) — un dueno por tipo de dominio
+
+Cambios aplicados: AgendaFireAction -> agendaMotor; DndSchedule -> dndPolicy; NewShoppingItemInput
+-> shoppingList; NewNoteInput -> notesList (ANCHADO con `body`, aditivo); ParticipantConfig de
+lib/fluParticipant renombrado a ParticipantEvaluationConfig y RegisterResult de participantRegistry
+renombrado a ParticipantRegisterResult (eran colisiones de nombre, no duplicados). Los consumidores
+importan/re-exportan del dueno (AGENTS.md 4: importa Y re-exporta si el modulo tambien lo usa).
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/typesSingleOwnerGuard.test.ts
+    ANTES (rojo) listaba: AgendaFireAction (2), DndSchedule (2), NewShoppingItemInput (2),
+    NewNoteInput (2), ParticipantConfig (2), ParticipantEvaluationConfig (0), RegisterResult (2),
+    ParticipantRegisterResult (0)
+  - METRICA (familias con !=1 declaracion, recorre TODO src): 8 -> 0 (target 0).
+    El contador se corrigio dos veces y se declara: (a) contaba las lineas de `import { type X }`
+    (falso positivo que mi propio caso anti-falso-positivo destapo) y (b) exigia un espacio tras el
+    nombre, asi que `export type RegisterResult<T>` contaba 0; (c) el primer intento de metrica
+    quedo con una llave sin cerrar (programa invalido, no problema del shell).
+  - El guard recorre src entero (no una lista a mano): una copia fuera de la lista no pasaria.
+  - COMPORTAMIENTO: NewNoteInput del dueno acepta body; DndSchedule es {start,end}; la union de
+    agenda cubre 3 acciones. Para TIPOS el juez de compilacion es tsc (pre-commit + CI).
+  - typecheck limpio; lint 151 ficheros / 1308 tests; baseline [] = 0 fallos nuevos.
+  - INCIDENCIA: el renombrado con PowerShell dejo 50 secuencias de mojibake en un fichero
+    versionado (PS5 Get-Content decodifica con ANSI). Lo caza hygieneIndicatorsGuard (C53); se
+    repara con `git checkout --` + rename en node. Declarado, no silenciado.
+
+No validado: DoD-producto. e2e declarado por area, no verificado por tipo.
+
+Alcance real: CUBIERTO = las 8 familias + el ancho de NewNoteInput. NO CUBIERTO = e2e por tipo,
+P8.4/P8.5/P8.7 y la verificacion visual.
