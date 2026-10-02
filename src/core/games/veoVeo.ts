@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -215,14 +215,8 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
             // ¿Salta al siguiente objeto?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                            session.score,
-                            { animation: 'Dance' },
-                        );
-                }
+                const finRonda = finishRoundsIfLast(session, state);
+                if (finRonda) return finRonda;
                 state.cursor += 1;
                 const next = itemAt(state);
                 return turnResult(`¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`, session.score);

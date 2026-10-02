@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -149,14 +149,8 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                            session.score,
-                            { animation: 'Dance' },
-                        );
-                }
+                const finRonda = finishRoundsIfLast(session, state);
+                if (finRonda) return finRonda;
                 state.cursor += 1;
                 return turnResult(`¡Claro! Aquí va otro: ${currentPrompt(state)}`, session.score);
             }

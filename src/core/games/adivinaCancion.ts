@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -232,14 +232,8 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
             // ¿Salta a la siguiente?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                            session.score,
-                            { animation: 'Dance' },
-                        );
-                }
+                const finRonda = finishRoundsIfLast(session, state);
+                if (finRonda) return finRonda;
                 advance(session, state);
                 return turnResult(`¡Claro! Otra canción: ${songPrompt(state)}`, session.score);
             }

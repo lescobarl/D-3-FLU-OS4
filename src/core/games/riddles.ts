@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -202,14 +202,8 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
             // ¿Salta a la siguiente?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                            session.score,
-                            { animation: 'Dance' },
-                        );
-                }
+                const finRonda = finishRoundsIfLast(session, state);
+                if (finRonda) return finRonda;
                 state.cursor += 1;
                 const next = riddleAt(state);
                 return turnResult(`¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`, session.score);

@@ -446,4 +446,20 @@ export function isGameCommandSurface(
         hasAnyToken(normalized, frames.hint) ||
         hasAnyToken(normalized, frames.skip)
     );
+}
+
+/**
+ * Si el cursor esta en la ultima ronda: cierra la partida (phase done) y devuelve
+ * el resultado final; si no, null. Unico dueno del mensaje de fin por rondas
+ * agotadas (antes copiado literal en 11 motores).
+ */
+export function finishRoundsIfLast(
+    session: { score: number },
+    state: { cursor: number; maxRounds: number; order: readonly unknown[]; phase: string },
+): GameTurnResult | null {
+    if (!isLastRound(state)) return null;
+    state.phase = 'done';
+    return gameOverResult(`Terminamos con ${session.score} puntos. ¡Muy bien jugado!`, session.score, {
+        animation: 'Dance',
+    });
 }

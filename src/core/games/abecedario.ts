@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -188,14 +188,8 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                            session.score,
-                            { animation: 'Dance' },
-                        );
-                }
+                const finRonda = finishRoundsIfLast(session, state);
+                if (finRonda) return finRonda;
                 state.cursor += 1;
                 const next = itemAt(state);
                 return turnResult(`¡Claro! Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`, session.score);
