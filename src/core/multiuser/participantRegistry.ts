@@ -97,7 +97,7 @@ export interface ParticipantRegistryOptions {
   newId?: () => string;
 }
 
-export interface RegisterResult {
+export interface ParticipantRegisterResult {
   ok: boolean;
   record?: ParticipantRecord;
   reason?: InvalidInput | 'duplicate';
@@ -185,7 +185,7 @@ export function createParticipantRegistry({
     return value;
   };
 
-  const register = async (input: ParticipantInput): Promise<RegisterResult> => {
+  const register = async (input: ParticipantInput): Promise<ParticipantRegisterResult> => {
     const name = normalizeName(input?.name);
     if (!name) return { ok: false, reason: INVALID_INPUT };
 

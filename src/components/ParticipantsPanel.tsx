@@ -18,7 +18,7 @@ import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { logCaughtError } from '../lib/caughtError';
 import type { CommunicationProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
-import type { ParticipantInput, RegisterResult } from '../core/multiuser/participantRegistry';
+import type { ParticipantInput, ParticipantRegisterResult } from '../core/multiuser/participantRegistry';
 import {
   EXPLANATION_LEVELS,
   TONE_OPTIONS,
@@ -32,7 +32,7 @@ export interface ParticipantsPanelProps {
   loading: boolean;
   /** Participantes con cumpleaños dentro de la ventana config (B9). */
   birthdayNear?: ParticipantRecord[];
-  onRegister: (input: ParticipantInput) => Promise<RegisterResult>;
+  onRegister: (input: ParticipantInput) => Promise<ParticipantRegisterResult>;
   onRemove: (id: string) => Promise<void>;
   /** FASE P — Perfiles de comunicación cargados por persona (opcional). */
   profiles?: CommunicationProfileRecord[];

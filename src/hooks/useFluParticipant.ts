@@ -28,7 +28,7 @@ import {
     canGrantParticipantFloor,
     shouldIgnoreParticipantFloorGrant,
     DEFAULT_PARTICIPANT_CONFIG,
-    type ParticipantConfig,
+    type ParticipantEvaluationConfig,
     type ParticipantState,
     type ParticipantUiPresentation,
 } from '../lib/fluParticipant';
@@ -39,7 +39,7 @@ export interface UseFluParticipantOptions {
     conversationActiveRef?: React.RefObject<boolean>;
     session?: { role?: string; theme?: string };
     getLogSnapshot?: () => { texts: string[]; speakers: string[] };
-    config?: Partial<ParticipantConfig>;
+    config?: Partial<ParticipantEvaluationConfig>;
     /**
      * Callback for avatar emotional reactions to participant events.
      * event: 'granted' | 'ignored' | 'rejected' | 'raised' | 'dismissed'
@@ -90,7 +90,7 @@ export function useFluParticipant({
     const committedTurnsRef = useRef(0);
 
     // Merge config with overrides
-    const cfgRef = useRef<ParticipantConfig>({
+    const cfgRef = useRef<ParticipantEvaluationConfig>({
         ...DEFAULT_PARTICIPANT_CONFIG,
         ...configOverrides,
     });

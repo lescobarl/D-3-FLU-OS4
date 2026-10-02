@@ -36,7 +36,7 @@ export interface ParticipantState {
     evalGeneration: number;
 }
 
-export interface ParticipantConfig {
+export interface ParticipantEvaluationConfig {
     enabled: boolean;
     evaluateOnTurnCommit: boolean;
     evaluateOnManualGrant: boolean;
@@ -81,7 +81,7 @@ export interface FloorGrantContext {
 // Defaults
 // -----------------------------------------------------------
 
-export const DEFAULT_PARTICIPANT_CONFIG: ParticipantConfig = {
+export const DEFAULT_PARTICIPANT_CONFIG: ParticipantEvaluationConfig = {
     enabled: true,
     evaluateOnTurnCommit: true,
     evaluateOnManualGrant: true,
@@ -190,13 +190,13 @@ function countInterventionsInHour(timestamps: number[], now: number = Date.now()
 // Evaluation scheduling
 // -----------------------------------------------------------
 
-export function shouldEvaluateParticipantOnTurn(state: ParticipantState, cfg: ParticipantConfig): boolean {
+export function shouldEvaluateParticipantOnTurn(state: ParticipantState, cfg: ParticipantEvaluationConfig): boolean {
     const every = Number(cfg.evaluateEveryNTurns);
     const nextCount = Number(state.turnsSinceLastEval) + 1;
     return nextCount >= every;
 }
 
-export function advanceParticipantTurnCounter(state: ParticipantState, cfg: ParticipantConfig): ParticipantState {
+export function advanceParticipantTurnCounter(state: ParticipantState, cfg: ParticipantEvaluationConfig): ParticipantState {
     const every = Number(cfg.evaluateEveryNTurns);
     const nextCount = Number(state.turnsSinceLastEval) + 1;
 
@@ -208,7 +208,7 @@ export function advanceParticipantTurnCounter(state: ParticipantState, cfg: Part
 
 export function canScheduleParticipantEvaluation(
     state: ParticipantState,
-    cfg: ParticipantConfig,
+    cfg: ParticipantEvaluationConfig,
     {
         conversationActive = false,
         turnCount = 0,
@@ -263,7 +263,7 @@ export function canScheduleParticipantEvaluation(
 // Normalize Gemini evaluation response
 // -----------------------------------------------------------
 
-export function normalizeParticipantEvaluation(input: unknown, cfg: ParticipantConfig): ParticipantEvaluation {
+export function normalizeParticipantEvaluation(input: unknown, cfg: ParticipantEvaluationConfig): ParticipantEvaluation {
     const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
     const minConf = Number(cfg.minConfidence);
     const minChars = Number(cfg.minDraftChars);
@@ -331,7 +331,7 @@ export function dismissRaisedHand(state: ParticipantState, _now: number = Date.n
 
 export function consumeRaisedDraft(
     state: ParticipantState,
-    cfg: ParticipantConfig,
+    cfg: ParticipantEvaluationConfig,
 ): { state: ParticipantState; draft: string } {
     if (state.phase !== 'raised' || !state.draftContribution) {
         return { state, draft: '' };
@@ -370,7 +370,7 @@ export function recordParticipantIntervention(state: ParticipantState, now: numb
 
 export function shouldAutoDismissRaisedHand(
     state: ParticipantState,
-    cfg: ParticipantConfig,
+    cfg: ParticipantEvaluationConfig,
     now: number = Date.now(),
 ): boolean {
     if (state.phase !== 'raised') return false;
@@ -386,7 +386,7 @@ export function shouldAutoDismissRaisedHand(
 export function resolveParticipantUiPresentation(
     state: ParticipantState,
     language: string = 'es',
-    cfg?: ParticipantConfig,
+    cfg?: ParticipantEvaluationConfig,
 ): ParticipantUiPresentation {
     const config = cfg ?? DEFAULT_PARTICIPANT_CONFIG;
 
@@ -427,7 +427,7 @@ export function resolveParticipantUiPresentation(
 // Floor grant checks
 // -----------------------------------------------------------
 
-export function canGrantParticipantFloor(state: ParticipantState, cfg: ParticipantConfig): boolean {
+export function canGrantParticipantFloor(state: ParticipantState, cfg: ParticipantEvaluationConfig): boolean {
     if (cfg.enabled === false) return false;
     return state.phase === 'raised' && Boolean(String(state.draftContribution || '').trim());
 }
@@ -440,7 +440,7 @@ export function shouldIgnoreParticipantFloorGrant(
         delivering = false,
         cfg = DEFAULT_PARTICIPANT_CONFIG,
         now = Date.now(),
-    }: FloorGrantContext & { cfg?: ParticipantConfig } = {},
+    }: FloorGrantContext & { cfg?: ParticipantEvaluationConfig } = {},
 ): boolean {
     if (delivering || speechActive) return true;
     if (state.phase === 'cooldown' && now < state.cooldownUntil) return true;

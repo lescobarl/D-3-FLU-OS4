@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, fluDb, type NoteRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
-import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter } from './notesList';
+import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter, type NewNoteInput } from './notesList';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -41,12 +41,7 @@ export function shoppingItemsTable() {
   return fluDb.shoppingItems;
 }
 
-export interface NewNoteInput {
-  label: string;
-  body?: string;
-  personId?: string;
-  personName?: string;
-}
+export type { NewNoteInput };
 
 export interface NotesDb {
   add(record: NoteRecord): Promise<unknown>;

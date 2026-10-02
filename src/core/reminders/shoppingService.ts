@@ -15,7 +15,7 @@ import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
 import { shoppingItemsTable } from '../notes/notesService';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
-import { filterItems, itemsRemaining, type ShoppingListFilter } from './shoppingList';
+import { filterItems, itemsRemaining, type ShoppingListFilter, type NewShoppingItemInput } from './shoppingList';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -27,11 +27,7 @@ import type { InvalidInput } from '../../lib/resultReasons';
 // (fuente única de verdad — Regla de oro) y se re-exporta aquí.
 export type { ShoppingItemRecord } from '../db/fluDatabase';
 
-export interface NewShoppingItemInput {
-  label: string;
-  personId?: string;
-  personName?: string;
-}
+export type { NewShoppingItemInput };
 
 export interface ShoppingDb {
   add(record: ShoppingItemRecord): Promise<unknown>;

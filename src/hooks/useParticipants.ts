@@ -23,7 +23,7 @@ import {
   type ParticipantInput,
   type ParticipantPatch,
   type ParticipantRegistry,
-  type RegisterResult,
+  type ParticipantRegisterResult,
   type ResolvedTtsVoice,
   type UpsertResult,
 } from '../core/multiuser/participantRegistry';
@@ -51,7 +51,7 @@ export interface ParticipantsState {
 
 export interface ParticipantsActions {
   refresh: () => Promise<void>;
-  register: (input: ParticipantInput) => Promise<RegisterResult>;
+  register: (input: ParticipantInput) => Promise<ParticipantRegisterResult>;
   upsert: (id: string, patch: ParticipantPatch) => Promise<UpsertResult>;
   remove: (id: string) => Promise<boolean>;
   /** Siembra el perfil anónimo por defecto si aún no existe (idempotente). */
@@ -146,7 +146,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
 
   /** Registra un participante y refresca el listado. */
   const register = useCallback(
-    async (input: ParticipantInput): Promise<RegisterResult> => {
+    async (input: ParticipantInput): Promise<ParticipantRegisterResult> => {
       const result = await service.register(input);
       if (result.ok) await refresh();
       return result;

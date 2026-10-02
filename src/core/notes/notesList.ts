@@ -21,6 +21,8 @@ export interface Note {
 
 export interface NewNoteInput {
   label: string;
+  /** Cuerpo de la nota (una linea por item cuando es lista). */
+  body?: string;
   personId?: string;
   personName?: string;
 }

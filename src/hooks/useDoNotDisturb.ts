@@ -7,14 +7,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { STORAGE_KEYS } from '../core/config/appConfig';
-import { describeDndSchedule, isDoNotDisturbActive } from '../core/dnd/dndPolicy';
+import { describeDndSchedule, isDoNotDisturbActive, type DndSchedule } from '../core/dnd/dndPolicy';
 import { logCaughtError } from '../lib/caughtError';
 import { localGet, localSet } from '../core/storage/localStore';
 
-export interface DndSchedule {
-  start: string;
-  end: string;
-}
+export type { DndSchedule };
 
 export interface DoNotDisturbState {
   enabled: boolean;

@@ -17,14 +17,14 @@
 //   - ringing: item que está sonando ahora (para ofrecer "Detener").
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { runAgendaCycle } from '../core/agenda/agendaMotor';
+import { runAgendaCycle, type AgendaFireAction } from '../core/agenda/agendaMotor';
 import type { AgendaService, AgendaCreateInput, AgendaTargetSelector } from '../core/agenda/agendaService';
 import type { AgendaItem, AgendaKind, AgendaStatus } from '../core/agenda/agendaModel';
 import { createWebAudioDriver, type AudioDriver } from '../core/temporal/audioAlert';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { logCaughtError } from '../lib/caughtError';
 
-export type AgendaFireAction = 'sonar' | 'avisar' | 'marcar';
+export type { AgendaFireAction };
 
 /** Item que acaba de vencer y está sonando (para ofrecer "Detener"). */
 export interface AgendaRinging {
