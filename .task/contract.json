@@ -558,7 +558,12 @@
     "src/hooks/useServiceRef.ts",
     "tests/hookServiceRefSingleOwnerGuard.test.tsx",
     "tests/hookServiceRefSingleOwnerGuard.test.ts",
-    "tests/sessionResetCommandSingleOwnerGuard.test.ts"
+    "tests/sessionResetCommandSingleOwnerGuard.test.ts",
+    "src/components/AmbienteEditorForm.tsx",
+    "src/components/PaletaEditorForm.tsx",
+    "src/core/documents/documentsService.ts",
+    "src/voice/lib/voiceCommands.js",
+    "src/voice/workers/whisperAsr.worker.js"
   ],
   "maxFiles": 504,
   "maxLines": 9200,

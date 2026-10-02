@@ -3421,3 +3421,12 @@ createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
     commit toco (verificado con `git show --name-only`). No se toco el contenido CUBIERTO/NO CUBIERTO (0.23).
   - Evidencia: `npm run ledger:check` -> ledger OK (4 pendientes: P8.8, P8.9, P8.10, P8.21);
     tests/taskLedgerGuard.test.ts + ledgerClosureScopeGuard + instrumentIntegrityGuard 34 passed.
+
+[CIERRE] Gate verde del alcance completo (P8.19 + barrera I5 del ledger)
+  - `npm run gate` -> Alcance OK · tamano OK · DoD OK · guard OK.
+  - Invariante: metrica base=9 actual=0 target=0 · guard base=1 (ROJO) actual=0 (VERDE).
+  - DoD completo (3 trozos, ~369 ficheros) en verde; guards base (hardcode/protocolo/estabilidad) en verde.
+  - Enmienda del contrato (allow): faltaban 5 ficheros que el gate marcaba FUERA de alcance y YA
+    estaban declarados en e2eScope: src/components/AmbienteEditorForm.tsx, src/components/PaletaEditorForm.tsx,
+    src/core/documents/documentsService.ts, src/voice/lib/voiceCommands.js, src/voice/workers/whisperAsr.worker.js.
+    Allow 556 -> 561. Los 3 primeros y whisperAsr vienen de P8.16/P8.17/P8.11; voiceCommands.js de P8.19.
