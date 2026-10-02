@@ -3451,3 +3451,26 @@ createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
     puede importar voiceCommands (ciclo) y 4 ficheros tienen trinquete de tamano. Rediseno (AGENTS 7.7.e).
   - P8.8: no hay spec e2e de minutas (`npm run e2e:plan` ROJO). Playwright+chromium SI estan instalados; falta
     escribir el spec (con el LLM stubbeado) y CORRERLO. No se declara un mapeo falso para ponerlo verde.
+
+[P8.21 + P8.9] Vocabulario de ids y esqueleto de worker, a dueno unico
+  - P8.21: src/voice/lib/commandIds.js (modulo hoja) declara el vocabulario UNA vez;
+    10 ficheros lo importan; config y listas derivan. Metrica ~90 -> 0 (gate base>0 actual=0).
+    Guard commandIdsVocabularySingleOwnerGuard (0ea1158 + aac735f).
+  - P8.9: src/voice/lib/workerPendingBridge.js con la orquestacion comun (alta perezosa +
+    despacho por id + fail-all); los 3 clientes inyectan su politica. Metrica 3 -> 0.
+    Guard workerPendingBridgeSingleOwnerGuard (de17ba2 + 0a85466) con Worker FALSO que
+    acciona los 3 clientes REALES. INCIDENCIA: existia ya workerBridge.js (lado worker) y el
+    agente lo SOBRESCRIBIO; recuperado con git checkout y el modulo nuevo renombrado.
+
+[P8.22] HALLAZGO NUEVO (preexistente) y arreglado: la app NO compilaba
+  - Al intentar el e2e de P8.8 el dev server NO montaba (.flu-shell ausente): rolldown
+    abortaba con PARSE_ERROR "Identifier isAutoSpeakerLabel has already been declared".
+  - useFluVoiceAssistant.js lo importaba del barrel voiceIdentity (:57) Y de speakerCore (:159).
+    tsc no lo ve (checkJs off) y vitest/esbuild lo tolera -> lint/DoD pasaban; DEV/BUILD no.
+  - Fix: se conserva la del dueno (speakerCore). La app monta (b0bd3a7).
+
+[P8.8] SIGUE ABIERTO (unico pendiente)
+  - Se escribio un spec que conduce GENERAR_RESUMEN + GUARDAR_MINUTA por el pipeline real con
+    la IA sustituida en la RED; tras arreglar P8.22 los dos comandos corren, pero la fila NO se
+    persiste en `minutes`. Falta averiguar por que el borrador no llega a addMinute y dejar el
+    spec en verde. NO se commiteo (estaba rojo) ni se declaro un mapeo falso.

@@ -42,19 +42,19 @@ SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
   control negativo, un guard verde no prueba nada.
 - La fuente de lo que falta es plans/ledger.json, NO el resumen del chat ni el catalogo.
 
-ESTADO DE HOY (2026-10-02, cierre de la auditoria de codigo): 3 pendientes en el ledger,
-TODOS con clasificacion MEDIDA (el detalle archivo:linea vive en el item).
-  P8.8  el flujo de minutas NO tiene spec e2e (`npm run e2e:plan` esta ROJO a proposito,
-        nombrando los 3 ficheros). Playwright+chromium SI estan instalados; falta escribir
-        el spec (LLM stubbeado) y CORRERLO. No se declara un mapeo falso para ponerlo verde.
-  P8.9  esqueleto de ensureWorker copiado 3 veces (fbx/voiceId/whisper). Extraer el puente es
-        posible, pero validarlo exige el arranque REAL de los 3 workers y no hay test que lo
-        ejercite -> sin app no se puede cerrar (AGENTS 1.1/1.6).
-  P8.21 el VOCABULARIO de ids de comando se reescribe como literal en 8 ficheros. El rewire
-        NO es mecanico: INICIAR_CONVERSACION ya tiene dueno (navigation.sessionResetCommand,
-        P8.19) -> un registro nuevo crearia un SEGUNDO dueno; las claves de ui.commandSpeech
-        no pueden derivar dentro del propio literal; audioMath no puede importar voiceCommands
-        (ciclo); 4 ficheros con trinquete de tamano. Rediseno (AGENTS 7.7.e).
+ESTADO DE HOY (2026-10-02): 1 pendiente en el ledger.
+  P8.8  el flujo de minutas NO tiene spec e2e (`npm run e2e:plan` ROJO a proposito). Se intento:
+        el spec conduce GENERAR_RESUMEN + GUARDAR_MINUTA por el pipeline real con la IA
+        sustituida en la RED; tras arreglar P8.22 la app monta y los comandos corren, pero la
+        fila NO se persiste en `minutes`. Falta ese ultimo tramo. El spec no se commiteo (rojo).
+
+NOTA IMPORTANTE: la app NO compilaba (P8.22, preexistente) - arreglado. Antes de esta sesion,
+DEV y `npm run build`/`npm run e2e` fallaban con PARSE_ERROR por un import duplicado.
+
+CERRADO (P8.21, P8.9, P8.10, P8.22 + los anteriores P8.1-P8.20 salvo refutados):
+  P8.21 vocabulario de ids a commandIds.js; P8.9 esqueleto de worker a workerPendingBridge.js
+  (validado con un Worker falso que acciona los 3 clientes reales); P8.10 speechWords al dueno;
+  P8.22 import duplicado de isAutoSpeakerLabel (la app compila).
 
 CERRADO despues (2026-10-02):
   P8.10 speechWords divergente (audioMath lowercases / conversationStream no): la copia local
