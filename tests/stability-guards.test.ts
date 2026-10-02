@@ -115,9 +115,14 @@ describe('🧪 Guard de estabilidad — Bug B: Maximum update depth (stopAllSyst
 // ============================================================
 describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', () => {
     it('sendJson protege la escritura ante socket cerrado (try/catch + guard writableEnded/destroyed)', () => {
-        const sendStart = PROXY_SRC.indexOf('function sendJson(');
+        const OWNER_SRC = readFileSync('./src/server/httpJson.ts', 'utf-8');
+        // El proxy ya NO tiene copia propia (auditoria 2026-10-02): el escritor
+        // unico vive en httpJson y el proxy lo importa.
+        expect(PROXY_SRC).not.toContain('function sendJson(');
+        expect(PROXY_SRC).toContain("import { sendJson");
+        const sendStart = OWNER_SRC.indexOf('export function sendJson(');
         expect(sendStart, 'Debe existir la función sendJson').toBeGreaterThan(-1);
-        const sendBlock = PROXY_SRC.slice(sendStart, sendStart + 600);
+        const sendBlock = OWNER_SRC.slice(sendStart, sendStart + 700);
 
         expect(sendBlock).toContain('try {');
         expect(sendBlock).toContain('res.writableEnded || res.destroyed');
