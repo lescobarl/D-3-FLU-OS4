@@ -3321,3 +3321,16 @@ trabajo distinto -> NO se toca (7.7: si no producen lo mismo por el mismo motivo
 
 Metodo: leer cuerpo y firma de cada par (no fiarse del nombre), que es lo que separa "duplicado"
 de "colision". Sin ese paso, el numero 14 se lee como 14 defectos y no lo son.
+
+## ZONA CERRADA: los 520 literales repetidos (2026-10-02)
+
+Era el unico hueco que quedaba sin leer. Clasificado y leido por muestras:
+  150 rutas de import | 64 clases CSS | 8 atributos DOM | 3 tokens | 165 identificadores
+  sin espacios (huesos, handlers window.__flu*, claves de config) | 92 mensajes.
+Los 92 mensajes son, en su mayoria, el MISMO texto en fluConfig.js y en el consumidor como
+respaldo: es el patron DECLARADO de este repo (configText(node,key,fallback)); el guard
+uiStringsSingleOwnerGuard cubre otra cosa (ternarios de idioma con dos literales y normalizeLang).
+Unico candidato real: INICIAR_CONVERSACION literal en 7 ficheros -> P8.19.
+
+Conclusion: la senal de literales repetidos NO esconde una familia de defectos nueva; lo que
+exige es lectura, y esa lectura esta hecha y anotada.

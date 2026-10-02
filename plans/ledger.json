@@ -1218,6 +1218,20 @@
       "estado": "todo",
       "evidencia": "src/core/reminders/nlDateParser.ts:112 vs src/core/agenda/agendaCommandParser.ts:86",
       "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.19",
+      "titulo": "INICIAR_CONVERSACION escrito como literal en 7 ficheros (es el valor de fluConfig.sessionResetCommand): vocabulario comparado por literal en vez de importar el valor",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/fluConfig.js:473 (valor) + 7 ficheros que lo comparan (App.tsx:3696, useNavigationCommands.ts:360, voiceCommands.js:16,44, audioMath.js:743, gemini.js:1563, useFluVoiceAssistant.js:2780,3844) — medido con la senal de literales repetidos de scripts/auditoria-codigo.mjs",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.20",
+      "titulo": "ZONA LEIDA: los 520 literales repetidos de src quedan clasificados y sin defecto nuevo (150 rutas de import, 64 clases CSS, 8 atributos DOM, 3 tokens, 165 identificadores sin espacios, 92 mensajes del patron declarado config+fallback o de fixtures/comentarios)",
+      "estado": "done",
+      "evidencia": "Clasificacion medida con las senales de scripts/auditoria-codigo.mjs (repeatedLiterals) + lectura de las dos muestras: los 92 mensajes aparecen en su mayoria como literal de respaldo en el consumidor Y en fluConfig.js (patron DECLARADO: configText(node,key,fallback), AGENTS 4 y tests/uiStringsSingleOwnerGuard.test.ts cubre otra cosa: los ternarios de idioma); los 165 sin espacios son nombres de hueso (Bunny_Ctrl_LeftArm), handlers DOM (__fluHandleNoteText), claves de config y ids de comando. UNICO candidato real: INICIAR_CONVERSACION -> P8.19.",
+      "origen": "auditoria-codigo-2026-10-02"
     }
   ],
   "done": [
@@ -2431,6 +2445,12 @@
       "commit": "5097f42",
       "titulo": "Triaje de los 14 homonimos del informe: 9 colisiones de nombre, 2 confirmados como duplicado/divergencia",
       "evidencia": "Alcance real (0.23): CUBIERTO=los 14 homonimos que reportaba la senal `homonymFunctions` de scripts/auditoria-codigo.mjs, leidos uno a uno (cuerpo y firma) para separar duplicado de colision de nombre. Verdicto por simbolo: (a) NO son defecto = runMainThreadFallback (fbx usa fetchFbxJson, voz calcula el embedding en local), scheduleIdle (uno devuelve void, el otro Promise), pickLabel (selfKnowledge compone {labelEs,labelEn}; textUtils elige por idioma), toUI (proyecta MinuteUIEntry vs VoiceProfileUI), flush (lote de logs vs estado del VAD), resetTurn (dos maquinas de estado del ASR con campos distintos), cleanLabel (uno normaliza fuerte y el otro no: es un SUBCONJUNTO, no la misma regla), sourceLabel (cada grid tiene su tabla de proveedores y su tipo de ui), downsample (solo en src/dev, laboratorio). (b) CONFIRMADOS como duplicado o divergencia: newId -> P8.17 (mismo cuerpo), normalize -> P8.18 (mismo proposito, distinto resultado). (c) Ya registrados del mismo bloque: ensureWorker -> P8.9, speechWords -> P8.10, getAsrConfig -> P8.11. Nada se unifico en este triaje: su DoD era clasificar, no tocar (7.7.e). NO CUBIERTO=(1) los 520 literales repetidos que reporta la misma senal NO se han leido caso a caso: quedan como ruido no triado (muchos son clases CSS, rutas de import y claves de config). (2) el triaje es de los homonimos, no de los ficheros completos. (3) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.20",
+      "commit": "b0f903b",
+      "titulo": "Zona de los 520 literales repetidos: leida y clasificada, sin defecto nuevo",
+      "evidencia": "Alcance real (0.23): CUBIERTO=la clasificacion de los 520 literales repetidos (>=18 chars en >=2 ficheros) que reporta la senal repeatedLiterals de scripts/auditoria-codigo.mjs, y la lectura por muestras de las DOS colas: los 92 mensajes (top completo) y 25 de los 165 identificadores sin espacios. Resultado: 150 rutas de import, 64 clases CSS, 8 atributos DOM, 3 tokens, 165 identificadores (nombres de hueso Bunny_Ctrl_*, handlers window.__fluHandle*, claves de config, ids de comando) y 92 mensajes que son el MISMO texto en fluConfig.js y en el consumidor como respaldo: es el patron DECLARADO del repo (configText(node,key,fallback)) y no lo cubre uiStringsSingleOwnerGuard, cuya regla es otra (ternarios de idioma con dos literales + normalizeLang con dueno unico). Unico candidato real: INICIAR_CONVERSACION -> P8.19. NO CUBIERTO=(1) no se leyeron los 165 identificadores uno a uno: 25 de muestra + el criterio de forma (se ve que son identificadores, no comportamiento). (2) no se reviso si el patron config+fallback genera divergencias REALES hoy (habria que comparar cada respaldo con su valor de config: eso es un trabajo propio, no lo cubre esta clasificacion). (3) suite completa NO ejecutada (exige autorizacion expresa)."
     }
   ]
 }
