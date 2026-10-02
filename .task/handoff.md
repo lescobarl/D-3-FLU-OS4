@@ -42,14 +42,19 @@ SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
   control negativo, un guard verde no prueba nada.
 - La fuente de lo que falta es plans/ledger.json, NO el resumen del chat ni el catalogo.
 
-ESTADO DE HOY (2026-10-02): 1 pendiente en el ledger.
-  P8.8  el flujo de minutas NO tiene spec e2e (`npm run e2e:plan` ROJO a proposito). Se intento:
-        el spec conduce GENERAR_RESUMEN + GUARDAR_MINUTA por el pipeline real con la IA
-        sustituida en la RED; tras arreglar P8.22 la app monta y los comandos corren, pero la
-        fila NO se persiste en `minutes`. Falta ese ultimo tramo. El spec no se commiteo (rojo).
+ESTADO DE HOY (2026-10-02): **0 pendientes** en el ledger (la auditoria de codigo esta
+cerrada: todo hallazgo arreglado con guard o clasificado como medicion).
 
-NOTA IMPORTANTE: la app NO compilaba (P8.22, preexistente) - arreglado. Antes de esta sesion,
-DEV y `npm run build`/`npm run e2e` fallaban con PARSE_ERROR por un import duplicado.
+SI PIDES "UNA AUDITORIA" OTRA VEZ: una sesion nueva reproducira los MISMOS candidatos
+(`node scripts/auditoria-codigo.mjs`) y leera el MISMO ledger. Con 0 pendientes, dira
+"no hay pendientes registrados" PERO seguira listando CANDIDATOS (el auditor no da
+veredictos: hay que leer cada sitio). Ojo: `scripts/auditoria.mjs` (catalogo de 28 puntos)
+NO es la auditoria de codigo.
+
+NO VERIFICADO (no son pendientes, son limites declarados): DoD-producto (tu pantalla);
+suite completa (`npm run test:full`, exige autorizacion); suite e2e COMPLETA (solo se corrio
+el bloque acotado: 8 specs, 34+20+12 pasan; el flake del setup se mitigo subiendo el timeout
+a 90 s, sin confirmar con la suite entera).
 
 CERRADO (P8.21, P8.9, P8.10, P8.22 + los anteriores P8.1-P8.20 salvo refutados):
   P8.21 vocabulario de ids a commandIds.js; P8.9 esqueleto de worker a workerPendingBridge.js

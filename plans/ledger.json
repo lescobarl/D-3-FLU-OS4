@@ -1145,7 +1145,7 @@
     {
       "id": "P8.8",
       "titulo": "El flujo de minutas NO tiene spec e2e: ningun tests/e2e/*.spec.ts menciona minuta, asi que e2e:scope senala los 3 src tocados y no se declara mapeo falso",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "REMEDICION (2026-10-02), sigue ABIERTO. e2e:plan ROJO nombrando src/hooks/useMinuteKnowledge.ts, src/lib/minuteKnowledgeHelpers.ts, src/voice/lib/minuteKnowledge.js (10 specs, 0 mencionan minuta). Playwright 1.61.1 + chromium instalados. PROGRESO MEDIDO: (1) se escribio un spec que conduce GENERAR_RESUMEN y GUARDAR_MINUTA por el pipeline real (window.__fluOnContractResolved) con la IA sustituida en la RED (page.route **/api/gemini/**, no en el producto) y la conversacion sembrada via __fluStore.addConversationEntry; (2) el intento DESTAPO que la app no compilaba (isAutoSpeakerLabel duplicado -> P8.22, arreglado); (3) tras el fix la app monta y los DOS comandos se ejecutan, pero la fila NO se persiste en el store Dexie `minutes` (assert rows.length>0 falla). FALTA: averiguar por que el borrador no llega a addMinute (o si el stub de red no casa con el endpoint real de generateConversationSummary) y dejar el spec en verde corriendo `npx playwright test tests/e2e/minuta-resumen.spec.ts`. El spec NO se commiteo (estaba rojo). No se declara un mapeo falso para poner e2e:plan en verde.",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -1245,6 +1245,20 @@
       "titulo": "La app NO compilaba: `isAutoSpeakerLabel` importado DOS veces en useFluVoiceAssistant.js (barrel voiceIdentity + speakerCore)",
       "estado": "done",
       "evidencia": "src/voice/hooks/useFluVoiceAssistant.js:57 (via ../lib/voiceIdentity) y :159 (../lib/speakerCore.js) declaraban la MISMA binding -> rolldown/Vite 8 aborta el arranque: `[PARSE_ERROR] Identifier isAutoSpeakerLabel has already been declared`. Medido al intentar el e2e de P8.8: la app NUNCA montaba (.flu-shell no aparecia). PREEXISTENTE (esta en la base 494ee76; no lo introdujo esta sesion). tsc no lo ve (checkJs off) y vitest/esbuild lo tolera, por eso lint/DoD pasaban; solo DEV/BUILD fellaban. Fix: se quita la del barrel y se conserva la del dueno (speakerCore.js). Verificado: el dev server compila y .flu-shell monta. Sin guard (no era una unificacion): lo cubre el e2e/build al poder correr.",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.23",
+      "titulo": "LATENTE: 2 especs e2e de nota esperaban el modelo VIEJO (label \"Super: items\"), no el canonico (label \"Super\" + items en el body)",
+      "estado": "done",
+      "evidencia": "tests/e2e/auditoria-acciones-llm.spec.ts:318 esperaba `note.label).toContain(\"Super:\")` y matriz-comandos-productivos.spec.ts:245 buscaba el item en el LABEL; el canonico (AGENTS 10 + src/core/notes/superNoteTarget.ts:21 SUPER_TARGET_LABEL=\"Super\") pone los items en el BODY. Estaba latente porque la app no compilaba (P8.22) y nadie corria el e2e. Fix: ambas buscan una nota cuyo label empiece por \"super\" y cuyo label+body contengan el item. Verificado: 20/20 passed en el bloque de los 3 especs.",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.24",
+      "titulo": "FLAKE: el setup de _helpers.gotoClean podia pasar del timeout de 60s del test (app pesada) y dejaba una prueba en rojo de forma intermitente",
+      "estado": "done",
+      "evidencia": "tests/e2e/_helpers.ts:28-62 (goto 30s + `.flu-shell` 45s + bucle onboarding 45s > 60s) vs playwright.config.ts timeout 60000. Medido: 1 de 46 pruebas fallaba de forma INTERMITENTE por agotar 60 s EN EL SETUP (no en la prueba), en una prueba DISTINTA en cada corrida; al reintentar pizarron-funcionalidades solo, 12/12 passed. Fix: timeout 60000 -> 90000 en playwright.config.ts (no toca la logica de ninguna prueba). NO CUBIERTO: no se corrio la suite e2e completa para confirmar la desaparicion total del flake.",
       "origen": "auditoria-codigo-2026-10-02"
     }
   ],
@@ -2537,6 +2551,24 @@
       "commit": "b0bd3a7",
       "titulo": "La app no compilaba: isAutoSpeakerLabel importado dos veces en useFluVoiceAssistant.js",
       "evidencia": "src/voice/hooks/useFluVoiceAssistant.js: Alcance real (0.23): CUBIERTO=el binding duplicado isAutoSpeakerLabel (barrel voiceIdentity en :57 + speakerCore en :159), que abortaba el bundle (rolldown PARSE_ERROR) y dejaba la app SIN montar en DEV/BUILD. Fix: se quita la del barrel, se conserva la del dueno (speakerCore.js). Evidencia: el dev server compila y .flu-shell monta (el e2e de P8.8 llego a ejecutar los dos comandos). PREEXISTENTE en la base 494ee76 (no lo introdujo esta sesion). NO CUBIERTO=(1) no se anadio guard propio (no era una unificacion): lo cubre el e2e/build. (2) No se comprobo `npm run build` ni se corrio la suite e2e completa. (3) DoD-producto: pendiente del usuario."
+    },
+    {
+      "id": "P8.8",
+      "commit": "d713d1a",
+      "titulo": "El flujo de minutas tiene spec e2e (generar resumen + guardar persiste en `minutes`)",
+      "evidencia": "tests/e2e/minuta-resumen.spec.ts: Alcance real (0.23): CUBIERTO=el flujo de minutas, que no tenia NINGUN spec (10 specs, 0 mencionaban minuta; `npm run e2e:plan` nombraba los 3 src). El spec conduce el pipeline REAL de voz (window.__fluOnContractResolved -> arbitro deterministico -> dispatchFluEvent) para GENERAR_RESUMEN y GUARDAR_MINUTA, con la conversacion sembrada via __fluStore.addConversationEntry y la IA sustituida en la RED, NO en el producto (el motor de texto es OpenAI-compatible y llama directo a `/chat/completions`; se cubre tambien `/api/gemini/**` por si el proveedor activo fuera el nativo). Verifica la fila REAL en el store Dexie `minutes` (titulo no vacio). Evidencia: `npx playwright test tests/e2e/minuta-resumen.spec.ts` -> 1 passed (31.5s); en el bloque acotado 20/20 passed con los otros 2 especs; `npm run e2e:plan` VERDE (los 3 src declarados en e2eScope). INCIDENCIAS: el intento DESTAPO que la app no compilaba (P8.22, arreglado) y que 2 especs de nota estaban obsoletos (P8.23). NO CUBIERTO=(1) el resto de la suite e2e no se corre entera (solo el bloque declarado). (2) DoD-producto (que la minuta se vea bien en tu pantalla): pendiente del usuario."
+    },
+    {
+      "id": "P8.23",
+      "commit": "bbf0700",
+      "titulo": "Los especs e2e de nota se alinean al modelo canonico (items en el body)",
+      "evidencia": "tests/e2e/auditoria-acciones-llm.spec.ts: Alcance real (0.23): CUBIERTO=los 2 especs que asertaban el modelo viejo de la nota del super (label \"Super: {items}\"). Ahora comprueban el canonico: label empieza por \"Super\" y el item vive en label+body. Evidencia: `npx playwright test` de los 2 especs -> 20/20 passed (5.6m). NO CUBIERTO= el resto de la suite e2e."
+    },
+    {
+      "id": "P8.24",
+      "commit": "bbf0700",
+      "titulo": "Sube el timeout del test de e2e por el setup de gotoClean",
+      "evidencia": "playwright.config.ts: Alcance real (0.23): CUBIERTO=el timeout del test (60 s -> 90 s), que el setup de gotoClean podia agotar bajo carga. Evidencia: pizarron-funcionalidades 12/12 passed tras el cambio (y 1 fallo intermitente en el setup antes). NO CUBIERTO= confirmacion con la suite e2e completa."
     }
   ]
 }

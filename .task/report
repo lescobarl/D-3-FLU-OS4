@@ -3474,3 +3474,17 @@ createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
     la IA sustituida en la RED; tras arreglar P8.22 los dos comandos corren, pero la fila NO se
     persiste en `minutes`. Falta averiguar por que el borrador no llega a addMinute y dejar el
     spec en verde. NO se commiteo (estaba rojo) ni se declaro un mapeo falso.
+
+[P8.8 + P8.23 + P8.24] El e2e de minutas, los especs de nota y el flake del setup
+  - P8.8 (d713d1a): tests/e2e/minuta-resumen.spec.ts conduce GENERAR_RESUMEN + GUARDAR_MINUTA
+    por el pipeline real (__fluOnContractResolved) y verifica la fila en Dexie `minutes`.
+    La IA se sustituye en la RED: el motor de texto es OpenAI-compatible y llama DIRECTO a
+    /chat/completions (descubierto midiendo). 1 passed (31.5s). e2e:plan VERDE.
+  - P8.23 (bbf0700): auditoria-acciones-llm y matriz-comandos asertaban el modelo VIEJO de la
+    nota del super (label "Super: items"); el canonico es label "Super" + items en el body
+    (AGENTS 10). Estaba latente porque la app no compilaba. Alineados.
+  - P8.24 (bbf0700): el setup de _helpers.gotoClean podia pasar de los 60 s del test bajo carga
+    (1 de 46 pruebas fallaba de forma intermitente EN EL SETUP, prueba distinta cada vez).
+    timeout 60000 -> 90000 en playwright.config.ts.
+  - Evidencia conjunta: bloque acotado de los 3 especs 20/20 passed (5.6m); pizarron 12/12
+    (3.0m) al reintentar. ledger: 0 pendientes.
