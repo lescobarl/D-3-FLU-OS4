@@ -1194,7 +1194,7 @@
     {
       "id": "P8.15",
       "titulo": "Nota obsoleta en el catalogo de auditoria: V19 dice \"sin config eslint\" y eslint.config.mjs existe",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "scripts/auditoria.mjs:433 vs eslint.config.mjs (existe en la raiz)",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -2481,6 +2481,12 @@
       "commit": "d7afd1d",
       "titulo": "P8.14 refutado con evidencia: la ausencia de import.meta.env en sharedConfig es deliberada y el env se lee en su resolutor",
       "evidencia": "Alcance real (0.23): CUBIERTO=la refutacion. Mi hallazgo decia \"MODEL/IMAGE_MODEL con literal, no env-overridable, a diferencia de appConfig\". Es FALSO: (1) sharedConfig.ts:513 resuelve el modelo del servidor con `readServerEnv(\"VITE_OPENROUTER_MODEL\")` y cae al literal solo si no hay env; (2) appConfig.ts:210 hace lo mismo en el cliente con `import.meta.env.VITE_OPENROUTER_MODEL || OPENROUTER_DEFAULTS.MODEL`; (3) la cabecera de sharedConfig declara la regla a proposito: \"Defaults (Rule #1: NO HARDCODE) -- sin import.meta.env\", porque ese modulo lo importan los middlewares del servidor (searchProxy, geminiProxy, browserProxy), donde import.meta.env no existe. Es el falso positivo que 7.7.f(5) describe: el defecto era mi LECTURA (vi el literal y no el resolutor de la linea siguiente), no el codigo; se corrige el hallazgo, no el codigo. NO CUBIERTO=(1) si en algun consumidor se usa OPENROUTER_DEFAULTS.MODEL saltandose los resolutores (gemini.js lo usa como \"default final\" declarado en su JSDoc; geminiProxy lo usa como respaldo del body) eso es por diseno y esta documentado. (2) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.15",
+      "commit": "0e03f2b",
+      "titulo": "V19 del catalogo: el titulo decia \"sin config eslint\" y el config existe; pasa a medir la AUSENCIA del lint real con predicado propio y probado",
+      "evidencia": "Alcance real (0.23): CUBIERTO=el item V19 de scripts/auditoria.mjs. El detector inline ya devolvia [] (verdad), pero el TITULO (\"npm run lint no es lint real (sin config eslint)\") y la nota mentian al lector del informe, y su predicado no era comprobable. Ahora: el predicado se muda al dueno de detectores (scripts/audit-detectors.mjs:findMissingEslintConfig, junto a V6/V17), el item se titula \"Lint real presente (configuracion de ESLint)\" y su nota declara la medicion (eslint.config.mjs existe; el pre-commit corre lint:guards + lint:eslint). El guard tests/auditVacuityGuard.test.ts gana el caso de los DOS lados: no marca con el config presente, marca su ausencia, y comprueba que el repo REAL tiene eslint.config.mjs (el verde de hoy es por realidad, no por vaciedad). Hashes de scripts/auditoria.mjs y scripts/audit-detectors.mjs re-sellados en .task/frozen.json (endurecimiento de criterio, AGENTS 14). INCIDENCIA DECLARADA: el parche de V19 dejo una llave suelta y rompio scripts/auditoria.mjs; lo detecto la propia ejecucion del catalogo y se reparo en el mismo hito (el hash se re-sello DESPUES de reparar). Evidencia: `node scripts/auditoria.mjs --only V19` muestra el titulo y la nota nuevos; catalogo completo sigue 28/28; metrica 0 -> 3 apariciones de findMissingEslintConfig (target 3); lint 157 ficheros / 1335 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) el resto del catalogo no se re-midio en este hito (solo V19). (2) los medidores de scripts/ no los corre `npm run gate`: la barrera esta en lint:guards, que si lo corre. (3) suite completa NO ejecutada (exige autorizacion expresa)."
     }
   ]
 }
