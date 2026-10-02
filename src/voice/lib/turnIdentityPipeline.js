@@ -12,6 +12,9 @@ import {
 
 const timersByTurn = new Map()
 
+/**
+ * @param {{ voiceIdentity?: { capture?: { identityPipeline?: { snapshotIntervalMs?: number } } } }} [config]
+ */
 export function getIdentitySnapshotIntervalMs(config = FLU_CONFIG) {
   const ms = Number(config.voiceIdentity?.capture?.identityPipeline?.snapshotIntervalMs)
   return Number.isFinite(ms) && ms >= 200 ? ms : 800
