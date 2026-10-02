@@ -89,16 +89,6 @@ export interface GenerationSource {
     ref: string;
 }
 
-/**
- * generationContract — petición de generación.
- * El LLM produce el contenido; la capa de adaptadores lo serializa.
- */
-export interface GenerationContract {
-    formato: GenerationFormato;
-    parametros: GenerationParams;
-    fuentes: GenerationSource[];
-}
-
 /** Estados de un trabajo de generación (para UI/progreso). */
 export type GenerationJobState = 'pendiente' | 'analizando' | 'escribiendo' | 'ensamblando' | 'listo' | 'error';
 
@@ -123,12 +113,4 @@ export interface DocumentAnalysisResult {
     chunks: string[];
     warnings: string[];
 }
-
-/** Resultado de la fase dinámica de análisis de app (DOM/screenshots/consola). */
-export interface AppDynamicSnapshot {
-    pantalla: string;
-    titulo: string;
-    acciones: string[];
-    errores_consola: string[];
-    captura: string;
-}
+

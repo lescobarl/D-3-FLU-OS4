@@ -4,20 +4,6 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 
-export const INGRESS_GUARDS_KEYS = [
-  'forceNewRowShortFinalMaxWords',
-  'novelWordMinCount',
-  'novelWordMinTextLength',
-  'alternateNewRowMinLength',
-]
-
-export const SPEECH_MERGE_KEYS = [
-  'shortFinalKeywords',
-  'minKeywordConfidence',
-  'shortFinalMaxWords',
-  'shortFinalKeywordMinChars',
-]
-
 export function getSpeakerThresholdsCfg() {
   const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
   if (!cfg || typeof cfg !== 'object') {
@@ -64,24 +50,6 @@ export function getFluTimingCfg() {
     throw new Error('fluConfig.timing es obligatorio')
   }
   return cfg
-}
-
-export function listConfiguredIngressGuardsRules() {
-  const cfg = getIngressGuardsCfg()
-  return INGRESS_GUARDS_KEYS.filter((key) => key in cfg).map((key) => ({
-    key,
-    value: cfg[key],
-    source: 'fluConfig.transcript.ingressGuards',
-  }))
-}
-
-export function listConfiguredSpeechMergeRules() {
-  const cfg = getSpeechMergeCfg()
-  return SPEECH_MERGE_KEYS.filter((key) => key in cfg).map((key) => ({
-    key,
-    value: cfg[key],
-    source: 'fluConfig.transcript.speechMerge',
-  }))
 }
 
 /** Set de palabras clave para filas cortas (speechMerge). */

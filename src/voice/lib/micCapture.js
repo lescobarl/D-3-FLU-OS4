@@ -8,39 +8,6 @@ export function getConversationAudioConfig(config = FLU_CONFIG) {
   return config.voiceIdentity?.capture?.conversationAudio || {}
 }
 
-export function isRoomMicCapture(config = FLU_CONFIG, { conversationActive = false, listening = false } = {}) {
-  const capture = config.voiceIdentity?.capture || {}
-  if (capture.maxSensitivity) return true
-  if (listening || conversationActive) return capture.captureRoomAudio !== false
-  return Boolean(conversationActive && capture.captureRoomAudio !== false)
-}
-
-export function getMicMediaConstraints(
-  config = FLU_CONFIG,
-  { conversationActive = false, listening = false } = {},
-) {
-  const audio = getConversationAudioConfig(config)
-  const room = isRoomMicCapture(config, { conversationActive, listening })
-
-  return {
-    echoCancellation: room ? (audio.echoCancellation ?? false) : true,
-    noiseSuppression: room ? (audio.noiseSuppression ?? false) : true,
-    autoGainControl: room ? (audio.autoGainControl ?? false) : true,
-  }
-}
-
-export function getMicCaptureGain(
-  config = FLU_CONFIG,
-  { conversationActive = false, listening = false } = {},
-) {
-  const audio = getConversationAudioConfig(config)
-  const gain = Number(audio.captureGain)
-  if (isRoomMicCapture(config, { conversationActive, listening })) {
-    return gain
-  }
-  return 1
-}
-
 /** RMS lineal desde dBFS (p. ej. -45 → ~0.0056). */
 export function dbToLinearRms(db) {
   return Math.pow(10, Number(db) / 20)

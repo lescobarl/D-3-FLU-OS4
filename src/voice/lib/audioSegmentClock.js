@@ -28,10 +28,6 @@ export function getLastCommitPerfAt() {
   return lastCommitPerfAt
 }
 
-export function resetCommitPerfClock() {
-  lastCommitPerfAt = 0
-}
-
 export function isNewAudioSegment(segmentStartedAtMs, sinceCommitAt = lastCommitPerfAt, config = FLU_CONFIG) {
   const start = Number(segmentStartedAtMs)
   const commit = Number(sinceCommitAt)

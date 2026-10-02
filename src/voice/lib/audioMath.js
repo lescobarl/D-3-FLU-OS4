@@ -54,25 +54,6 @@ export function resolveAppLanguage(mode = 'es', text = '') {
   return 'es'
 }
 
-export function looksLikeEchoResponse(responseText = '', transcriptText = '') {
-  const response = stripDiacritics(normalizeSpaces(responseText))
-  const transcript = stripDiacritics(normalizeSpaces(transcriptText))
-  if (!response || !transcript) return true
-  if (response === transcript) return true
-
-  const responseTokens = response.split(' ').filter(Boolean)
-  const transcriptTokens = new Set(transcript.split(' ').filter(Boolean))
-  if (!responseTokens.length || !transcriptTokens.size) return true
-
-  let overlap = 0
-  responseTokens.forEach((token) => {
-    if (transcriptTokens.has(token)) overlap += 1
-  })
-
-  const overlapRatio = overlap / responseTokens.length
-  return overlapRatio >= 0.55 || responseTokens.length < 3
-}
-
 export function isVisualRequestText(text = '') {
   const normalized = cleanForSpeech(String(text || ''))
   if (!normalized) return false
@@ -425,10 +406,6 @@ export function matchWakeWordPrefix(text = '', wakeWords = []) {
   return value.match(wakeWordPattern)?.[0] || null
 }
 
-export function hasStrictWakeWordPrefix(text = '', wakeWords = []) {
-  return Boolean(matchWakeWordPrefix(text, wakeWords))
-}
-
 export function matchWakeWordInText(text = '', wakeWords = []) {
   const value = normalizeVoiceCommandText(text)
   if (!value || !wakeWords.length) return null
@@ -478,11 +455,6 @@ export function peelWakeQuestionEcho(question = '', echoSources = []) {
     }
   }
   return cleanForSpeech(words.join(' '))
-}
-
-export function hasInlineWakeBoundary(text = '', wakeWords = []) {
-  const split = splitTranscriptAtWakeWord(text, wakeWords)
-  return Boolean(split.wakeWordMatched && cleanForSpeech(split.beforeWake))
 }
 
 /**
@@ -1703,25 +1675,6 @@ export function detectWakeIntroducedName(text = '', wakeWords = []) {
   return detectIntroducedName(introText)
 }
 
-/** «yo Luis» / «soy Luis» sin wake, si el nombre ya está registrado en la sesión. */
-export function detectSelfSpeakerName(text = '', registeredNames = []) {
-  const snapshot = normalizeSpaces(stripDiacritics(text)).toLowerCase()
-  if (!snapshot || !registeredNames?.length) return ''
-
-  for (const rawName of registeredNames) {
-    const name = normalizeSpaces(stripDiacritics(rawName)).toLowerCase()
-    if (!name || name.split(/\s+/).length > 3) continue
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    if (new RegExp(`\\b(?:yo|soy)\\s+${escaped}\\b`).test(snapshot)) {
-      return toTitleCaseName(name)
-    }
-    if (new RegExp(`\\b${escaped}\\b`).test(snapshot) && /\b(?:yo|soy)\b/.test(snapshot)) {
-      return toTitleCaseName(name)
-    }
-  }
-  return ''
-}
-
 export function extractTheme(text = '', role = '', wakeWords = []) {
   const normalizedText = stripDiacritics(removeWakeWord(text, wakeWords))
   const normalizedRole = stripDiacritics(role)
@@ -1748,4 +1701,3 @@ export function formatClock(date = new Date()) {
     second: '2-digit',
   })
 }
-

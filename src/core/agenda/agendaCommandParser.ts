@@ -12,7 +12,6 @@
 // ============================================================
 import {
     parseNlDateTime,
-    describeNlDateTime,
 } from '../reminders/nlDateParser';
 import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
@@ -470,22 +469,4 @@ export function parseAgendaCommand(
         scopeDays,
         reply: '',
     };
-}
-
-export function describeAgendaTrigger(trigger: AgendaTrigger, _now: number): string {
-    switch (trigger.type) {
-        case 'countdown':
-            return `${Math.round(trigger.durationMs / 60000)} min`;
-        case 'daily':
-            return `todos los días a las ${trigger.timeOfDay}`;
-        case 'weekly': {
-            const names = trigger.daysOfWeek
-                .map((d) => WEEKDAY_NAMES.find((w) => w.day === d)?.name ?? '')
-                .filter(Boolean)
-                .join(' y ');
-            return `los ${names} a las ${trigger.timeOfDay}`;
-        }
-        case 'absolute':
-            return describeNlDateTime(trigger.at);
-    }
 }

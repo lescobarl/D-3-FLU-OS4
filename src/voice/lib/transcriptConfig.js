@@ -1,15 +1,3 @@
-import { FLU_CONFIG } from './fluConfig.js'
-
-/**
- * Configuración de transcripción — motor de escucha único (Chrome SR).
- *
- * No existe selector de fuente (`browser`/`stream`/`hybrid`): el transcriptor es
- * uno solo (Chrome SpeechRecognition, Google online) y el resto del pipeline es
- * agnóstico al motor.
- */
-export function getTranscriptConfig(config = FLU_CONFIG) {
-  return config.transcript || {}
-}
 
 /** Etiqueta UI del motor de transcripción. */
 export function formatStreamSttUiStatus(status = '', { listening = false } = {}) {

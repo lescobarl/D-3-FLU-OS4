@@ -29,9 +29,6 @@ export const WEEKDAYS_ES: ReadonlyArray<{ name: string; day: number }> = Object.
     { name: 'sabado', day: 6 },
 ]);
 
-/** Alternancia para regex ("domingo|lunes|…"): misma fuente que `WEEKDAYS_ES`. */
-export const WEEKDAYS_ALT_ES: string = WEEKDAYS_ES.map((w) => w.name).join('|');
-
 /** Nombres de día para MOSTRAR, indexados por `getDay()`. Con acentos. */
 export const WEEKDAY_DISPLAY_ES: readonly string[] = Object.freeze([
     'domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado',

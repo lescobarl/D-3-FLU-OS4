@@ -6,11 +6,9 @@
 import { cleanForSpeech } from './audioMath.js'
 import { phrasesEquivalent, wouldShrinkListenLog } from './activeListen.js'
 import {
-  archiveCommittedTurn,
   processListenPacket,
   readTurnLive,
   resolveLogRowAction,
-  shouldRefreshStream,
 } from './conversationStream.js'
 import { wouldShrinkLog } from './speechMerge.js'
 
@@ -114,23 +112,4 @@ export function isDuplicateTurnCommit(
   const prior = lastEmitted || lastCommitted
   if (!prior) return false
   return phrasesEquivalent(capture, prior)
-}
-
-/** Cierra preview tras commit exitoso. */
-export function finalizeMicPreview(turn) {
-  turn.published = ''
-  turn.preview = ''
-  turn.openPreview = false
-}
-
-/** Archiva turno en sesión interna y devuelve si el texto de fila cambió. */
-export function archiveMicSession(listenState, capture, { maxChars } = {}) {
-  const text = cleanForSpeech(capture)
-  if (!text) return false
-  archiveCommittedTurn(listenState, text, { maxChars })
-  return true
-}
-
-export function shouldEmitMicCommit(lastEmitted, capture) {
-  return shouldRefreshStream(lastEmitted, capture)
 }

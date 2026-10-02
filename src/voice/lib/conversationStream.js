@@ -543,8 +543,6 @@ export function applyInterimPriorStrip(interim = '', priorTexts = [], config = F
   return stripPriorTurnsFromInterim(interim, priorTexts)
 }
 
-export const clipTurnBoundaryInterim = stripPriorTurnsFromInterim
-
 export function readPublishedText(state) {
   const pending = readPending(state)
   const line = readOpenLine(state)

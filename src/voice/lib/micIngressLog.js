@@ -38,7 +38,3 @@ export function logMicProducerRaw({ source = 'browser', kind = 'interim', text =
     console.info(`[Flu][mic-producer] #${producerSeq} [${source}] ${kind}`, phrase)
   }
 }
-
-export function resetMicIngressLogSeq() {
-  producerSeq = 0
-}

@@ -36,12 +36,4 @@ export function encodePcmChunk(float32, sampleRate, targetRate = DEFAULT_TARGET_
   const resampled = resampleLinear(float32, sampleRate, targetRate)
   return float32ToInt16(resampled)
 }
-
-export function pcmRms(float32) {
-  if (!float32?.length) return 0
-  let sum = 0
-  for (let i = 0; i < float32.length; i += 1) {
-    sum += float32[i] * float32[i]
-  }
-  return Math.sqrt(sum / float32.length)
-}
+

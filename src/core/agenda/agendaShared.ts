@@ -30,20 +30,6 @@ export interface HorarioClaseEstructurada {
 // Helpers de tiempo (exportados para tests y render)
 // ------------------------------------------------------------
 
-/**
- * Convierte 'HH:MM' de 24 h a minutos desde medianoche.
- * Devuelve -1 si el valor no es una hora válida.
- */
-export function toMin(time: string): number {
-    if (typeof time !== 'string') return -1;
-    const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-    if (!m) return -1;
-    const h = Number(m[1]);
-    const min = Number(m[2]);
-    if (h < 0 || h > 23 || min < 0 || min > 59) return -1;
-    return h * 60 + min;
-}
-
 /** Convierte minutos desde medianoche a 'HH:MM' (recortado a 0..1439). */
 export function toHHMM(minutes: number): string {
     if (!Number.isFinite(minutes)) return '';
@@ -57,12 +43,6 @@ export function toHHMM(minutes: number): string {
 export function diaDeFecha(at: number): number {
     const d = new Date(at);
     return ((d.getDay() + 6) % 7) + 1;
-}
-
-/** Minutos desde medianoche (hora local) para un timestamp. */
-export function minutosDeFecha(at: number): number {
-    const d = new Date(at);
-    return d.getHours() * 60 + d.getMinutes();
 }
 
 // ------------------------------------------------------------
@@ -119,7 +99,6 @@ const cleanMateria = (value: string): string =>
         .replace(/^[\s\-–—•*·|]+/, '')
         .replace(/\s{2,}/g, ' ')
         .trim();
-
 
 const AULA_RE = /\b(?:aula|sal[oó]n|salon|lab|laboratorio|taller)\s+([\wÁÉÍÓÚáéíóúÑñ.-]+)/i;
 

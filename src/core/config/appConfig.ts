@@ -308,14 +308,6 @@ export const DEFAULT_PERSONALITY = {
 // -----------------------------------------------------------
 
 /**
- * Valores por defecto para la configuración de imagen.
- */
-export const DEFAULT_IMAGE_CONFIG = {
-    capVisible: false,
-    hairVisible: true,
-};
-
-/**
  * Valores por defecto para la configuración de voz.
  */
 export const DEFAULT_VOICE_CONFIG = {
@@ -405,148 +397,6 @@ export const USER_EMOTION_CONFIG = {
     topicChangeOverlapConfidence: 0.5,
 } as const;
 
-/**
- * Emotion pattern keywords for user emotion detection.
- * Each emotion maps to arrays of keyword phrases (Spanish and English).
- * The detector builds regex patterns from these at runtime.
- */
-export const USER_EMOTION_KEYWORDS: Record<string, { keywords: string[]; mood: string; baseConfidence: number }> = {
-    feliz: {
-        keywords: [
-            'feliz', 'contento', 'contenta', 'alegre', 'genial', 'excelente', 'maravilloso', 'buena noticia', 'bueno noticia', 'me encanta',
-            'happy', 'great', 'wonderful', 'excellent', 'amazing', 'love it', 'fantastic',
-            'qué bien', 'que bien', 'alegría', 'felicidad',
-            'me alegra que', 'me alegra mucho', 'me emociona que', 'me emociona mucho',
-        ],
-        mood: 'positive',
-        baseConfidence: 0.7,
-    },
-    triste: {
-        keywords: [
-            'triste', 'deprimido', 'deprimida', 'aburrido', 'aburrida', 'desanimado', 'desanimada', 'mal', 'melancólico', 'melancólica',
-            'sad', 'depressed', 'bored', 'down', 'unhappy', 'melancholic',
-            'qué tristeza', 'que tristeza', 'pena', 'lástima',
-            'me entristece que', 'me entristece mucho', 'me apena que', 'me apena mucho',
-        ],
-        mood: 'negative',
-        baseConfidence: 0.7,
-    },
-    enojado: {
-        keywords: [
-            'enojado', 'enojada', 'enfadado', 'enfadada', 'furioso', 'furiosa', 'molesto', 'molesta', 'harto', 'harto', 'fastidiado', 'fastidiada',
-            'angry', 'mad', 'furious', 'annoyed', 'upset', 'pissed',
-            'no soporto más', 'no soporto esto', 'no aguanto más', 'no aguanto esto', 'no tolero más', 'no tolero esto',
-            'me enoja que', 'me enoja mucho', 'me enoja cuando', 'me molesta que', 'me molesta mucho', 'me molesta cuando',
-            'me fastidia que', 'me fastidia mucho', 'me fastidia cuando',
-        ],
-        mood: 'negative',
-        baseConfidence: 0.8,
-    },
-    agradecido: {
-        keywords: [
-            'agradecido', 'agradecida', 'agradezco', 'gracias', 'muchas gracias', 'mil gracias',
-            'grateful', 'thankful', 'thanks', 'thank you',
-            'te agradezco mucho', 'te agradezco de verdad', 'aprecio mucho', 'aprecio de verdad',
-        ],
-        mood: 'positive',
-        baseConfidence: 0.7,
-    },
-    confundido: {
-        keywords: [
-            'confundido', 'confundida', 'perdido', 'perdida', 'no entiendo', 'no comprendo', 'no entendí',
-            'confused', 'lost', "don't understand", 'not sure',
-            'qué significa', 'que significa', 'quieres decir', 'qué es eso', 'que es eso',
-            'no me queda claro', 'no queda claro',
-        ],
-        mood: 'neutral',
-        baseConfidence: 0.6,
-    },
-    sorprendido: {
-        keywords: [
-            'sorprendido', 'sorprendida', 'asombrado', 'asombrada', 'impactado', 'impactada', 'impresionado', 'impresionada',
-            'surprised', 'amazed', 'shocked', 'impressed', 'wow',
-            'no puedo creer', 'me lo puedo creer', 'es increíble',
-            'qué sorpresa', 'que sorpresa', 'impresionante', 'increíble',
-        ],
-        mood: 'neutral',
-        baseConfidence: 0.6,
-    },
-    frustrado: {
-        keywords: [
-            'frustrado', 'frustrada', 'estresado', 'estresada', 'agobiado', 'agobiada', 'abrumado', 'abrumada', 'desesperado', 'desesperada',
-            'frustrated', 'stressed', 'overwhelmed', 'desperate', 'fed up',
-            'no puedo más', 'no funciona', 'no sirve', 'no me sale',
-            'otra vez no', 'otra vez falló', 'otra vez mal',
-        ],
-        mood: 'negative',
-        baseConfidence: 0.75,
-    },
-    neutral: {
-        keywords: [
-            'ok', 'okay', 'bien', 'de acuerdo', 'sí', 'si', 'no', 'vale', 'claro', 'entiendo', 'comprendo', 'ah', 'mm', 'mmm', 'hmm', 'ahá', 'ajá',
-            'yes', 'no', 'ok', 'okay', 'fine', 'alright', 'sure', 'understood', 'got it', 'i see',
-        ],
-        mood: 'neutral',
-        baseConfidence: 0.4,
-    },
-};
-
-/**
- * Question detection keywords for user emotion detector.
- */
-export const USER_EMOTION_QUESTION_KEYWORDS: string[] = [
-    'qué', 'qué es', 'quién', 'quiénes', 'cómo', 'cuándo', 'dónde', 'por qué', 'para qué', 'cuál', 'cuáles',
-    'what', 'who', 'when', 'where', 'why', 'how', 'which', 'is it', 'are you', 'can you', 'could you',
-    'me puedes decir', 'me puedes explicar', 'me puedes contar', 'me puedes ayudar',
-    'podrías decir', 'podrías explicar', 'podrías contar', 'podrías ayudar',
-    'puede decir', 'puede explicar', 'puede contar', 'puede ayudar',
-    'podría decir', 'podría explicar', 'podría contar', 'podría ayudar',
-];
-
-/**
- * Praise detection keywords for user emotion detector.
- */
-export const USER_PRAISE_KEYWORDS: string[] = [
-    'bien hecho', 'buen trabajo', 'excelente', 'perfecto', 'genial', 'gracias flu',
-    'good job', 'well done', 'excellent', 'perfect', 'great', 'thanks flu',
-    'me gustó tu respuesta', 'me gusta tu respuesta', 'me gustó tu ayuda', 'me gusta tu ayuda', 'me gustó tu forma', 'me gusta tu forma',
-    'eres el mejor', 'eres la mejor', 'eres grande', 'eres increíble', 'eres asombroso', 'eres excelente',
-    'qué bien lo haces', 'que bien lo haces', 'inteligente', 'útil',
-];
-
-/**
- * Criticism detection keywords for user emotion detector.
- */
-export const USER_CRITICISM_KEYWORDS: string[] = [
-    'no sirves', 'no funcionas', 'no entiendes', 'no ayudas', 'no respondes bien',
-    'you suck', 'you are useless', "you don't work", 'you are wrong', 'you are bad',
-    'mal', 'error', 'incorrecto', 'equivocado', 'pésimo', 'horrible',
-    'wrong', 'bad', 'terrible', 'horrible', 'useless', 'stupid',
-    'no me gustó tu respuesta', 'no me gusta tu respuesta', 'no me gustó tu ayuda', 'no me gusta tu ayuda',
-    'no me gustó tu forma', 'no me gusta tu forma', 'no me gustó tu actitud', 'no me gusta tu actitud',
-    'cállate', 'calla', 'shut up', 'stop talking',
-];
-
-/**
- * Topic change indicator keywords for user emotion detector.
- */
-export const TOPIC_CHANGE_KEYWORDS: string[] = [
-    'cambiando de tema', 'cambiando el tema', 'por cierto', 'hablando de otra cosa',
-    'changing the subject', 'by the way', 'speaking of which', 'anyway',
-    'otra cosa', 'otro tema', 'algo diferente', 'diferente tema',
-    'something else', 'another thing', 'different topic',
-];
-
-/**
- * Interruption indicator keywords for user emotion detector.
- */
-export const INTERRUPTION_KEYWORDS: string[] = [
-    'espera', 'esperate', 'para', 'detente', 'alto', 'calma', 'un momento',
-    'wait', 'hold on', 'stop', 'hang on', 'one moment', 'hold it',
-    'no no no', 'no no', 'no por favor', 'no espera',
-    'déjame', 'déjame decir', 'let me', 'let me speak',
-];
-
 // -----------------------------------------------------------
 // Theory of Mind — Config (Rule #1: NO HARDCODE)
 // -----------------------------------------------------------
@@ -566,15 +416,6 @@ export const THEORY_OF_MIND_CONFIG = {
     /** Max questions/expertise topics to track per participant */
     maxQuestionsPerParticipant: 10,
 };
-
-/**
- * Stop words to ignore when extracting topics from participant text.
- */
-export const THEORY_OF_MIND_STOP_WORDS: string[] = [
-    'este', 'esta', 'esto', 'que', 'con', 'para', 'por', 'como',
-    'más', 'pero', 'sino', 'todo', 'bien', 'this', 'that', 'with',
-    'from', 'what', 'when', 'where', 'which',
-];
 
 // -----------------------------------------------------------
 // System Event Log — Config (Rule #1: NO HARDCODE)
@@ -631,19 +472,6 @@ export function buildPollinationsUrl(
 ): string {
     const baseUrl = readStorage(STORAGE_KEYS.IMAGE_API_URL, POLLINATIONS_CONFIG.BASE_URL);
     return buildPollinationsImageUrl(baseUrl, prompt, overrides);
-}
-
-/**
- * Build the DeepSeek API URL for a given endpoint.
- * Uses DEEPSEEK_CONFIG.API_URL as base.
- */
-export function buildDeepSeekApiUrl(endpoint: string): string {
-    const baseUrl = DEEPSEEK_CONFIG.API_URL;
-    // Remove trailing slash from baseUrl if present
-    const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    // Remove leading slash from endpoint if present
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    return `${cleanBase}${cleanEndpoint}`;
 }
 
 /**

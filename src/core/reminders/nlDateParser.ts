@@ -13,7 +13,6 @@
 
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { MONTH_NAMES_ES, WEEKDAYS_ES } from '../temporal/calendarNames';
-import { SPEECH_LOCALES } from '../config/localeConfig';
 import { stripDiacriticsLower } from '../../lib/textUtils';
 
 export interface NlDateTimeResult {
@@ -126,11 +125,6 @@ function applyHourMinute(base: Date, hour: number, minute: number): Date {
   const d = new Date(base);
   d.setHours(hour, minute, 0, 0);
   return d;
-}
-
-function formatLabelDate(at: number): string {
-  const d = new Date(at);
-  return d.toLocaleDateString(SPEECH_LOCALES.es, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /** Siguiente ocurrencia de un día de la semana, estrictamente futura (+7 si hoy). */
@@ -352,17 +346,4 @@ export function parseNlDateTime(
 
   return null;
 }
-
-/**
- * Formatea un timestamp para mensajes de confirmación (es).
- */
-export function describeNlDateTime(at: number): string {
-  const d = new Date(at);
-  const now = new Date();
-  const startToday = startOfDay(now).getTime();
-  const startTomorrow = startToday + DAY_MS;
-  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  if (at >= startToday && at < startTomorrow) return `hoy a las ${time}`;
-  if (at >= startTomorrow && at < startTomorrow + DAY_MS) return `mañana a las ${time}`;
-  return `${formatLabelDate(at)} a las ${time}`;
-}
+

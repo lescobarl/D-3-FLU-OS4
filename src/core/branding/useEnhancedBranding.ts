@@ -136,20 +136,7 @@ export function useEnhancedBranding(): EnhancedBrandingState & EnhancedBrandingA
 // Helper: Obtener mensaje de branding ecológico
 // ============================================================
 
-export function getEcologicalBrandingMessage(language: 'es' | 'en' = 'es'): string {
-    if (language === 'en') {
-        return '🌱 Using DeepSeek: 72% cheaper, 2-3x faster, 60% less CO₂ emissions';
-    }
-    return '🌱 Usando DeepSeek: 72% más barato, 2-3x más rápido, 60% menos emisiones de CO₂';
-}
-
 // ============================================================
 // Helper: Verificar si el pizarrón verde está activo
 // ============================================================
-
-export function isGreenBoardActive(): boolean {
-    // El pizarrón verde siempre está activo en el tab de workspace
-    // Verificamos si el elemento existe en el DOM
-    const workspaceTab = document.querySelector('.flu-tab-panel--workspace');
-    return workspaceTab !== null;
-}
+

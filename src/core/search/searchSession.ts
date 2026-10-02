@@ -133,16 +133,6 @@ export interface ProviderRequest {
     timeoutMs?: number;
 }
 
-/** Respuesta normalizada de búsqueda. */
-export interface SearchResponse {
-    ok: boolean;
-    query: string;
-    lang: ResolvedLanguage;
-    results: SearchResult[];
-    reason?: 'fetch_error' | 'timeout' | 'internal_error';
-    detail?: string;
-}
-
 /**
  * Resuelve la lista de proveedores habilitados para un tipo de búsqueda.
  * Filtra los que están deshabilitados o sin endpoint configurado.

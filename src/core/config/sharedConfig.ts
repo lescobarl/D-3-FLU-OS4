@@ -38,11 +38,6 @@ export function setServerEnv(env: EnvRecord | null | undefined): void {
     serverEnv = env && typeof env === 'object' ? env : null;
 }
 
-/** Devuelve el env inyectado (o un mapa vacío si aún no se inyectó). */
-export function getServerEnv(): EnvRecord {
-    return serverEnv ?? {};
-}
-
 /**
  * Lee una variable de entorno server-side: primero el env inyectado
  * (loadEnv) y luego process.env. Nunca toca import.meta.env.

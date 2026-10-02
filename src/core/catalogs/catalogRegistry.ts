@@ -171,5 +171,4 @@ export function createCatalogRegistry<T>({
 
     return { register, update, get, list, remove };
 }
-
-export type CatalogRegistry<T> = ReturnType<typeof createCatalogRegistry<T>>;
+

@@ -169,12 +169,6 @@ function buildIngressRowContext(ctx, capture) {
 
 export { commitCaptureRespectingWakeBoundary, applyWakeTurnCommit, analyzeWakeTurn }
 
-/** Heartbeat por tiempo en interino sin cambios — inerte (no commit). */
-export function flushStaleInterimThroughIngress(ctx) {
-  if (!ctx?.conversationActive || !ctx.listenState) return { flushed: false }
-  return { flushed: false, reason: 'flush-disabled-production' }
-}
-
 /** Commit openLine cuando Chrome lleva ≥ srGapCommitMs sin onresult (TV / SR mudo). */
 export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } = {}) {
   if (!ctx?.conversationActive || !ctx.listenState) {
@@ -720,4 +714,3 @@ export function processMicConversationIngress({ interimChunks = [], finalChunks 
 
   return { handled: false }
 }
-

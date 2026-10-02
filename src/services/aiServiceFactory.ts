@@ -20,7 +20,6 @@ import type { IAIService } from '../core/ai/IAIService';
 import { STORAGE_KEYS } from '../core/config/appConfig';
 import { logCaughtError } from '../lib/caughtError';
 import {
-    AI_PROVIDER_IDS,
     AI_PROVIDER_ROUTES,
     DEFAULT_AI_PROVIDER,
     isAIProvider,
@@ -141,35 +140,6 @@ function createIntelligentAIService(): IAIService {
                 };
             }
         },
-    };
-}
-
-/**
- * Get statistics about AI providers for comparison.
- */
-export function getAIProviderStats() {
-    return {
-        [AI_PROVIDER_IDS.OPENROUTER]: {
-            name: 'Gemini 2.5 Flash Lite (OpenRouter)',
-            costPerMillionTokens: 0.30,
-            speedTokensPerSec: '40-60',
-            co2Emissions: 'Low',
-            spanishSupport: 'Excellent'
-        },
-        [AI_PROVIDER_IDS.GEMINI]: {
-            name: 'Google Gemini (nativo)',
-            costPerMillionTokens: 0.50,
-            speedTokensPerSec: '15-30',
-            co2Emissions: 'High',
-            spanishSupport: 'Good'
-        },
-        [AI_PROVIDER_IDS.DEEPSEEK]: {
-            name: 'DeepSeek-v3.2 (legacy)',
-            costPerMillionTokens: 0.14,
-            speedTokensPerSec: '40-60',
-            co2Emissions: 'Low (60% less)',
-            spanishSupport: 'Excellent'
-        }
     };
 }
 

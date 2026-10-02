@@ -101,67 +101,6 @@ function toUI(record: MinuteRecord): MinuteUIEntry {
 }
 
 /**
- * Crea un MinuteSummarySnapshot vacío.
- */
-export function createEmptySummarySnapshot(theme = ''): MinuteSummarySnapshot {
-    return {
-        titulo: '',
-        participantes: [],
-        resumen: '',
-        acuerdos: [],
-        pendientes: [],
-        siguientes_pasos: [],
-        tema_sesion: (theme || '').trim(),
-    };
-}
-
-/**
- * Crea un MinuteSummarySnapshot desde un AISummaryResult (o cualquier objeto con esos campos).
- */
-export function createSummarySnapshotFromResult(result: Record<string, unknown>, theme = ''): MinuteSummarySnapshot {
-    return {
-        titulo: String(result?.titulo || '').trim(),
-        participantes: Array.isArray(result?.participantes)
-            ? result.participantes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        resumen: String(result?.resumen || '').trim(),
-        acuerdos: Array.isArray(result?.acuerdos)
-            ? result.acuerdos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        pendientes: Array.isArray(result?.pendientes)
-            ? result.pendientes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        siguientes_pasos: Array.isArray(result?.siguientes_pasos)
-            ? result.siguientes_pasos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        tema_sesion: String(result?.tema_sesion || theme || '').trim(),
-    };
-}
-
-/**
- * Crea un MinuteSummarySnapshot desde un draft de OS2 (createMinuteDraftFromSummary).
- */
-export function createSummarySnapshotFromDraft(draft: Record<string, unknown>, theme = ''): MinuteSummarySnapshot {
-    return {
-        titulo: String(draft?.titulo || '').trim(),
-        participantes: Array.isArray(draft?.participantes)
-            ? draft.participantes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        resumen: String(draft?.resumen || '').trim(),
-        acuerdos: Array.isArray(draft?.acuerdos)
-            ? draft.acuerdos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        pendientes: Array.isArray(draft?.pendientes)
-            ? draft.pendientes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        siguientes_pasos: Array.isArray(draft?.siguientes_pasos)
-            ? draft.siguientes_pasos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        tema_sesion: String(draft?.tema_sesion || theme || '').trim(),
-    };
-}
-
-/**
  * Formatea una etiqueta de historial al estilo OS2 formatMinuteHistoryLabelForUi.
  * Formato: "YYMMDD-NN-Description" o solo "Description" si no hay code.
  */

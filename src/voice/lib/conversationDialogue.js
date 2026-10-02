@@ -22,10 +22,6 @@ export function isFluSpeaker(speaker = '') {
   return String(speaker || '').trim() === FLU_DIALOGUE_SPEAKER
 }
 
-export function resolveDialogueRole(speaker = '') {
-  return isFluSpeaker(speaker) ? 'assistant' : 'user'
-}
-
 export function trimDialogueHistory(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {
   const limit = Number(max)
   if (!Number.isFinite(limit) || limit <= 0) return [...history]
@@ -145,51 +141,6 @@ export function recordConversationTurn(
   )
 }
 
-export function recordConversationExchange(
-  logTexts,
-  logSpeakers,
-  dialogueHistory = [],
-  {
-    user,
-    assistant,
-    phase = 'SESION_ACTIVA',
-    userSource = DIALOGUE_SOURCE.QUERY,
-    assistantSource = DIALOGUE_SOURCE.QUERY,
-  } = {},
-  limits = {},
-) {
-  let nextDialogue = dialogueHistory
-  if (user?.text) {
-    nextDialogue = recordConversationTurn(
-      logTexts,
-      logSpeakers,
-      nextDialogue,
-      {
-        speaker: user.speaker,
-        text: user.text,
-        phase,
-        source: userSource,
-      },
-      { replaceLast: false, ...limits },
-    )
-  }
-  if (assistant?.text) {
-    nextDialogue = recordConversationTurn(
-      logTexts,
-      logSpeakers,
-      nextDialogue,
-      {
-        speaker: FLU_DIALOGUE_SPEAKER,
-        text: assistant.text,
-        phase,
-        source: assistantSource,
-      },
-      { replaceLast: false, ...limits },
-    )
-  }
-  return nextDialogue
-}
-
 /**
  * §9 ÚNICA FUENTE DE VERDAD: deriva el diálogo de Gemini DESDE el store
  * `conversationHistory`. No existe un almacén de diálogo independiente; el motor
@@ -299,16 +250,6 @@ export function selectVisiblePhrase({
 
 export function getDialogueContextSlice(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {
   return trimDialogueHistory(history, max)
-}
-
-export function findLastFluDialogueTurn(history = []) {
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const entry = history[index]
-    if (entry?.role === 'assistant' && isFluSpeaker(entry?.speaker)) {
-      return entry
-    }
-  }
-  return null
 }
 
 /**

@@ -12,7 +12,7 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { detectWakeIntroducedName } from './audioMath.js'
 import { isAutoSpeakerLabel, normalizeSpeakerLabel } from './voiceIdentity.js'
-import { getTranscriptPauseCfg, isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
+import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
 
 export function getRoomCaptureCfg() {
   return FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
@@ -39,10 +39,6 @@ export function resolveSpeakerNameFromUtterance(
 
 export function isSoloRoomSticky() {
   return getRoomCaptureCfg().soloSpeakerSticky !== false
-}
-
-export function isPinRegisteredSpeaker() {
-  return getRoomCaptureCfg().pinRegisteredSpeaker !== false
 }
 
 /** Índice numérico de «Hablante N» (0 si no aplica). */
@@ -107,62 +103,6 @@ export function anchorResolvedToLastLogged(
   return resolved
 }
 
-/** Drift Hablante N→M sin comando ni voz distinta (fantasma ASR/TV). */
-export function isSoloAutoSpeakerDrift(
-  { from, to, allowNewCluster = false, force = false } = {},
-  roomCfg = getRoomCaptureCfg(),
-) {
-  if (roomCfg.soloSpeakerSticky === false) return false
-  if (allowNewCluster || force) return false
-  return (
-    isAutoSpeakerLabel(from) &&
-    isAutoSpeakerLabel(to) &&
-    String(from).trim() &&
-    String(to).trim() &&
-    from !== to
-  )
-}
-
-/** Etiqueta tras diarización en sala solo. */
-export function coalesceSoloDrift(resolved, stickyFallback, opts = {}) {
-  if (
-    isSoloAutoSpeakerDrift({
-      from: stickyFallback,
-      to: resolved,
-      allowNewCluster: opts.allowNewCluster,
-      force: opts.force,
-    })
-  ) {
-    return stickyFallback
-  }
-  return resolved
-}
-
-/**
- * Etiqueta preferida para diarización (no confundir con resultado de timbre).
- * Sala: el turno reciente (lastLogged) manda; sessionPrimary solo ancla TV/inicio.
- */
-export function resolveSpeakerPreference({
-  pinned = '',
-  primary = '',
-  lastLogged = '',
-  lastSpeaker = '',
-  fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
-  requested = '',
-  shortUtterance = false,
-} = {}) {
-  const req = String(requested || '').trim()
-  if (req && !isAutoSpeakerLabel(req)) return req
-  const recent = lastLogged || lastSpeaker
-  if (isSoloRoomSticky()) {
-    return pinned || recent || primary || req || fallback
-  }
-  if (shortUtterance && primary) {
-    return req || pinned || primary || recent || fallback
-  }
-  return req || pinned || recent || primary || fallback
-}
-
 /** Interinos en límite de turno: no diarizar en sala solo (evita H2 fantasma). */
 export function shouldDiarizeInterimAtTurnBoundary({ turnBoundary = false, forceWakeDiarize = false } = {}) {
   if (!turnBoundary) return false
@@ -178,31 +118,6 @@ export function shouldSkipPreviewDiarize({
   if (forceWakeDiarize) return false
   if (conversationActive) return true
   return isSoloRoomSticky()
-}
-
-/** Commit de turno: diarizar por audio salvo registro explícito o «otro hablante». */
-export function shouldRunCommitDiarize({
-  forceWakeDiarize = false,
-  explicitNextSpeaker = false,
-  staleInterimFlush = false,
-} = {}) {
-  if (staleInterimFlush && getTranscriptPauseCfg().skipDiarizeOnStaleFlush) return false
-  return Boolean(forceWakeDiarize || explicitNextSpeaker || !isSoloRoomSticky())
-}
-
-/** Hablantes auto distintos ya usados en sesión (H1, H2, H3… sin tope). */
-export function countSessionAutoSpeakers(labels = []) {
-  const seen = new Set()
-  let count = 0
-  for (const label of labels) {
-    const name = String(label || '').trim()
-    if (!isAutoSpeakerLabel(name)) continue
-    const key = name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    count += 1
-  }
-  return count
 }
 
 export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './fluTranscriptPause.js'

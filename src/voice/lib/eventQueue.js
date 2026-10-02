@@ -74,7 +74,4 @@ export function createEventQueue({ maxSize = 4096 } = {}) {
     },
   })
 }
-
-export function resetEventQueueSeq() {
-  globalSeq = 0
-}
+

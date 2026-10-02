@@ -238,15 +238,6 @@ export function appendSpillText(...parts) {
   return cleaned.reduce((merged, current) => mergeTranscriptText(merged, current), '')
 }
 
-/** Elimina de `pending` cualquier prefijo ya registrado en el log. */
-export function stripLoggedPrefix(loggedCapture = '', pending = '') {
-  const logged = cleanForSpeech(loggedCapture)
-  const remainder = cleanForSpeech(pending)
-  if (!remainder) return ''
-  if (!logged) return remainder
-  return getTranscriptDeltaFromBoundary(logged, remainder)
-}
-
 /** Espera a que el texto de captura deje de cambiar antes de registrar el turno. */
 export async function waitForCaptureSettle(readCapture, timing = FLU_CONFIG.timing) {
   const stepMs = timing.transcriptSettleStepMs

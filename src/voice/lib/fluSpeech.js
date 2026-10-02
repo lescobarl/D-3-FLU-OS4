@@ -1,6 +1,5 @@
 import { cleanForSpeech, detectTranscriptLanguage } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { logCaughtError } from '../../lib/caughtError';
 import { SCRIPT_SPEECH_LOCALES, SPEECH_LOCALES } from '../../core/config/localeConfig'
@@ -394,8 +393,4 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
   })()
 
   return activeSpeechPromise
-}
-
-export function speakInBackground(text, language = 'es') {
-  speakResponse(text, language).catch(fluAsyncErrorHandler('fluSpeech'))
 }

@@ -932,20 +932,6 @@ export class AutoRecoverySystem {
 // Integración con Health Monitor
 // -----------------------------------------------------------
 
-export function createIntegratedAutonomySystem(
-    healthConfig?: Partial<AutoRecoveryConfig>
-): { healthMonitor: HealthMonitor | null; recoverySystem: AutoRecoverySystem } {
-    // En una implementación real, esto integraría ambos sistemas
-    const recoverySystem = AutoRecoverySystem.create(healthConfig);
-    
-    // El Health Monitor se crearía y conectaría aquí
-    // Por ahora retornamos un objeto con ambos sistemas
-    return {
-        healthMonitor: null, // Se establecería después
-        recoverySystem,
-    };
-}
-
 // -----------------------------------------------------------
 // Instancia global (singleton)
 // -----------------------------------------------------------

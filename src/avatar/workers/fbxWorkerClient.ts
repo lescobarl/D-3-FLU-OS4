@@ -131,20 +131,4 @@ export async function loadFbx(url: string): Promise<THREE.Group> {
   group.updateMatrixWorld(true);
   return group;
 }
-
-/** Estadísticas útiles para diagnóstico/verificación. */
-export function getFbxWorkerStats() {
-  return {
-    worker: !!worker,
-    workerDead,
-    pending: pending.size,
-  };
-}
-
-/** Terminación explícita del worker (opcional; vive mientras la app). */
-export function terminateFbxWorker() {
-  if (worker) {
-    worker.terminate();
-    worker = null;
-  }
-}
+

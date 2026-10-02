@@ -19,7 +19,6 @@ const EMBED_TYPES = new Set(['embed', 'embedAndMatch'])
 
 let embedInFlight = false
 let embedPending = null
-let embedDroppedCount = 0
 
 function isWorkerRuntime() {
   return typeof Worker !== 'undefined' && typeof window !== 'undefined'
@@ -126,7 +125,6 @@ function rejectEmbedPending(reason = 'dropped-stale') {
   if (!embedPending) return
   const dropped = embedPending
   embedPending = null
-  embedDroppedCount += 1
   dropped.reject(new Error(reason))
 }
 
@@ -359,23 +357,4 @@ export function preloadVoiceIdWorker() {
 
 export async function embedAudioForDiarization(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   return embedAudioInternal(samples, sampleRate)
-}
-
-export function getVoiceIdWorkerStats() {
-  return {
-    embedInFlight,
-    embedPending: Boolean(embedPending),
-    embedDroppedCount,
-    pendingRequests: pending.size,
-  }
-}
-
-export function terminateVoiceIdWorker() {
-  if (worker) {
-    worker.terminate()
-    worker = null
-  }
-  pending.clear()
-  embedInFlight = false
-  rejectEmbedPending('worker-terminated')
 }

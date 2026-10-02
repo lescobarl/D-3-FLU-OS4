@@ -27,35 +27,6 @@ export interface NewNoteInput {
 
 export type NotesFilter = 'all' | 'pending' | 'done';
 
-/** Agrega una nota al final de la lista. */
-export function addNote(items: readonly Note[], input: NewNoteInput): Note[] {
-  const label = typeof input.label === 'string' ? input.label.trim() : '';
-  if (!label) return items.slice();
-  const now = Date.now();
-  const note: Note = {
-    id: input.personId ? `${input.personId}-${now}` : `note-${now}`,
-    label,
-    done: false,
-    personId: input.personId,
-    personName: input.personName,
-    createdAt: now,
-    updatedAt: now,
-  };
-  return [...items, note];
-}
-
-/** Alterna el estado done de una nota. */
-export function toggleNote(items: readonly Note[], id: string): Note[] {
-  return items.map((note) =>
-    note.id === id ? { ...note, done: !note.done, updatedAt: Date.now() } : note,
-  );
-}
-
-/** Elimina una nota por id. */
-export function removeNote(items: readonly Note[], id: string): Note[] {
-  return items.filter((note) => note.id !== id);
-}
-
 /** Marca todas las notas como pendientes (no hechas). */
 export function uncheckAllNotes(items: readonly Note[]): Note[] {
   const now = Date.now();
@@ -65,13 +36,6 @@ export function uncheckAllNotes(items: readonly Note[]): Note[] {
 /** Elimina todas las notas marcadas como hechas. */
 export function clearDone(items: readonly Note[]): Note[] {
   return items.filter((note) => !note.done);
-}
-
-/** Renombra una nota. */
-export function renameNote(items: readonly Note[], id: string, label: string): Note[] {
-  const clean = typeof label === 'string' ? label.trim() : '';
-  if (!clean) return items.slice();
-  return items.map((note) => (note.id === id ? { ...note, label: clean, updatedAt: Date.now() } : note));
 }
 
 /** Cuenta notas pendientes. */
@@ -92,12 +56,6 @@ export function filterNotes<T extends { done: boolean }>(
     default:
       return items.slice();
   }
-}
-
-/** Notas asociadas a una persona (o todas si personId es undefined). */
-export function notesForPerson(items: readonly Note[], personId?: string): Note[] {
-  if (!personId) return items.slice();
-  return items.filter((note) => note.personId === personId);
 }
 
 /**

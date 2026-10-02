@@ -79,10 +79,6 @@ export function readCommandText(state) {
   return readStreamDisplay(state)
 }
 
-export function storePendingInterim(state, text = '') {
-  integrateMicPacket(state, { interim: text })
-}
-
 /** Un final por onresult: fusiona varios fragmentos acumulativos o secuenciales. */
 export function pickLongestFinal(chunks = []) {
   return mergeMicChunks(chunks)
@@ -265,13 +261,6 @@ export function resolveRecognitionLocale(language = 'es', detected = '') {
   if (detected === 'en') return languages.en
   if (detected === 'es') return languages.es
   return getRecognitionLanguage('both')
-}
-
-export function listBilingualLocales() {
-  const { languages, bilingual } = getActiveListenConfig()
-  const list = bilingual?.locales
-  if (Array.isArray(list) && list.length) return list
-  return [languages.es, languages.en].filter(Boolean)
 }
 
 function normalizePhrase(text = '') {

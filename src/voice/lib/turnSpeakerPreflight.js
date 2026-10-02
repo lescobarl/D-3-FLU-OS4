@@ -117,16 +117,6 @@ export function resetTurnSpeakerPreflights() {
   preflightByTurn.clear()
 }
 
-export function scheduleClusterRefresh(run, onSuccess) {
-  enqueueSpeakerIdentityJob({
-    rowId: `cluster-${Date.now()}`,
-    run,
-    onSuccess: (result) => {
-      if (typeof onSuccess === 'function') onSuccess(result)
-    },
-  })
-}
-
 /** Job de audio → hablante (preflight o refresh de clusters).
  * @param {{ getAudioBuffer?: Function, getSampleRate?: Function, getTurnStartSample?: Function, getSpeakerClusters?: Function, getLastSpeaker?: Function, getLastSignature?: Function, getFallbackSpeaker?: Function, getUtteranceText?: Function, atTurnBoundary?: boolean, allowNewCluster?: boolean, getPreferSpeaker?: Function, getSessionPrimary?: Function, getReservedLabels?: Function, getAudioStartSample?: Function, getAudioStartedAtMs?: Function }} [options]
  */
