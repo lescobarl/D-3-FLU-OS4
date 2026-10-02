@@ -1,7 +1,7 @@
 /**
  * Motor único: mic → turno vivo (openLine) → UI/log. Archivo (session) solo al cerrar turno.
  */
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   collapseRepeatedSpeech,
@@ -95,9 +95,9 @@ export function resolveIngressCaptureText(raw = '', lastCommitted = '', { atFres
   return peeled || current
 }
 
-function speechWords(text = '') {
-  return cleanForSpeech(text).split(/\s+/).filter(Boolean)
-}
+// speechWords: dueno unico en audioMath.js (V18). Antes habia una copia local
+// aqui SIN normalizar a minusculas (P8.10); sus 4 usos solo miran el numero de
+// palabras, asi que la copia era divergente sin motivo. Se importa el dueno.
 
 // Dueño canónico: fluTranscriptPause.js. Se re-exporta para no duplicar.
 export { countSpeechWords } from './fluTranscriptPause.js'

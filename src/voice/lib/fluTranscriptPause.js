@@ -50,6 +50,10 @@ export function listConfiguredTranscriptHardRules() {
 }
 
 export function countSpeechWords(text = '') {
+  // Recuento de "palabras habladas": el tokenizador tiene dueno unico
+  // (audioMath.speechWords, minusculas). Aqui solo se usa el NUMERO, invariante a
+  // la normalizacion, y el guard speechWordsSingleOwnerGuard fija la equivalencia
+  // countSpeechWords(t) === speechWords(t).length (P8.10).
   return cleanForSpeech(text).split(/\s+/).filter(Boolean).length
 }
 
