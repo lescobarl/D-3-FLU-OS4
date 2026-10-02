@@ -11,6 +11,10 @@ import {
   buildMinuteKey,
   formatMinuteHistoryCode,
   formatMinuteKnowledgeEntry,
+  compareMinuteHistoryCodeDesc,
+  compareMinuteHistoryCodeAsc,
+  nextMinuteHistorySequence,
+  formatMinuteHistoryLabel,
 } from '../../lib/minuteKnowledgeHelpers'
 
 // D3: dueño canónico de estos parsers/helpers es src/lib/minuteKnowledgeHelpers.ts.
@@ -25,6 +29,10 @@ export {
   resolveMinuteThemeForSpeech,
   buildMinuteKey,
   formatMinuteHistoryCode,
+  compareMinuteHistoryCodeDesc,
+  compareMinuteHistoryCodeAsc,
+  formatMinuteHistoryLabel,
+  nextMinuteHistorySequence,
 }
 
 export const MINUTE_DESCRIPTION_LIMIT = 10
@@ -102,35 +110,6 @@ export function resolveMinuteThemeForSave({ titulo = '', sessionTheme = '' } = {
   const session = normalizeSpaces(sessionTheme)
   if (!isGenericMinuteSessionTheme(session, FLU_CONFIG.sessionDefaults?.theme || '')) return session
   return title
-}
-
-export function compareMinuteHistoryCodeDesc(left = {}, right = {}) {
-  const leftCode = parseMinuteHistoryCode(left?.historyCode)
-  const rightCode = parseMinuteHistoryCode(right?.historyCode)
-  const dateCompare = rightCode.date.localeCompare(leftCode.date)
-  if (dateCompare !== 0) return dateCompare
-  return rightCode.sequence - leftCode.sequence
-}
-
-export function compareMinuteHistoryCodeAsc(left = {}, right = {}) {
-  return compareMinuteHistoryCodeDesc(right, left)
-}
-
-function getNextUniversalHistorySequence(entries = []) {
-  return entries.reduce((max, entry) => {
-    const { sequence } = parseMinuteHistoryCode(entry?.historyCode)
-    return Math.max(max, sequence)
-  }, 0) + 1
-}
-
-export function formatMinuteHistoryLabel(entry = {}) {
-  const code = normalizeSpaces(entry?.historyCode || '')
-  const description = normalizeSpaces(
-    entry?.description || entry?.summarySnapshot?.titulo || entry?.titulo || ''
-  )
-  if (!code) return description
-  if (!description) return code
-  return `${code}-${description}`
 }
 
 export function truncateMinuteDescription(text = '', limit = MINUTE_DESCRIPTION_LIMIT) {
@@ -244,7 +223,7 @@ export function upsertMinuteHistoryEntry(entries = [], draft = {}, { profileId =
   const minuteKey = buildMinuteKey(summarySnapshot)
   const existingIndex = entries.findIndex((entry) => entry.minuteKey === minuteKey)
   const now = new Date()
-  const nextSequence = getNextUniversalHistorySequence(entries)
+  const nextSequence = nextMinuteHistorySequence(entries)
 
   const nextEntry = normalizeMinuteKnowledgeRecord({
     id: existingIndex >= 0 ? entries[existingIndex].id : draft?.id || '',

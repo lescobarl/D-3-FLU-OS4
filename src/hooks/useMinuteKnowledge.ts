@@ -14,7 +14,12 @@ import { fluDb, newId, type MinuteRecord, type MinuteSummarySnapshot, type Knowl
 import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
 import { logCaughtError } from '../lib/caughtError';
-import { buildMinuteKey, formatMinuteHistoryCode, parseMinuteHistoryCode } from '../lib/minuteKnowledgeHelpers';
+import {
+    buildMinuteKey,
+    formatMinuteHistoryCode,
+    compareMinuteHistoryCodeDesc,
+    nextMinuteHistorySequence,
+} from '../lib/minuteKnowledgeHelpers';
 
 /**
  * Minuta en formato de UI (compatible con OS2 normalizeMinuteKnowledgeRecord).
@@ -38,24 +43,6 @@ export interface MinuteUIEntry {
  * src/lib/minuteKnowledgeHelpers.ts (se importan arriba). NO se reimplementan
  * aqui: la copia local divergia del canonico (auditoria 2026-10-02).
  */
-function compareHistoryCodeDesc(a: string, b: string): number {
-    const left = parseMinuteHistoryCode(a);
-    const right = parseMinuteHistoryCode(b);
-    const dateCompare = right.date.localeCompare(left.date);
-    if (dateCompare !== 0) return dateCompare;
-    return right.sequence - left.sequence;
-}
-
-/**
- * Obtiene la siguiente secuencia universal para historyCode.
- */
-function getNextSequence(entries: MinuteRecord[]): number {
-    return entries.reduce((max, entry) => {
-        const { sequence } = parseMinuteHistoryCode(entry.historyCode);
-        return Math.max(max, sequence);
-    }, 0) + 1;
-}
-
 /**
  * Convierte MinuteRecord a MinuteUIEntry.
  */
@@ -72,18 +59,6 @@ function toUI(record: MinuteRecord): MinuteUIEntry {
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
     };
-}
-
-/**
- * Formatea una etiqueta de historial al estilo OS2 formatMinuteHistoryLabelForUi.
- * Formato: "YYMMDD-NN-Description" o solo "Description" si no hay code.
- */
-export function formatMinuteHistoryLabelForUi(entry: MinuteUIEntry): string {
-    const code = (entry.historyCode || '').trim();
-    const description = (entry.description || entry.summarySnapshot?.titulo || '').trim();
-    if (!code) return description;
-    if (!description) return code;
-    return `${code}-${description}`;
 }
 
 /**
@@ -124,7 +99,7 @@ export function useMinuteKnowledge(participantId?: string) {
                 records
                     // Aislamiento por usuario: solo las minutas de ESTE usuario.
                     .filter((r) => !r.sync.deleted && (r.userId || 'global') === scope)
-                    .sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode))
+                    .sort(compareMinuteHistoryCodeDesc)
                     .map(toUI),
             );
         } catch (err) {
@@ -169,7 +144,7 @@ export function useMinuteKnowledge(participantId?: string) {
                 historyCode:
                     existingIndex >= 0
                         ? records[existingIndex].historyCode
-                        : formatMinuteHistoryCode(now, getNextSequence(records)),
+                        : formatMinuteHistoryCode(now, nextMinuteHistorySequence(records)),
                 description,
                 summarySnapshot: { ...snapshotWithKind },
                 sequence: maxSeq + 1,
@@ -187,7 +162,7 @@ export function useMinuteKnowledge(participantId?: string) {
             const ui = toUI(record);
             setMinutes((prev) => {
                 const filtered = prev.filter((m) => m.id !== record.id);
-                return [ui, ...filtered].sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode));
+                return [ui, ...filtered].sort(compareMinuteHistoryCodeDesc);
             });
             // C10 — Escritura ÚNICA hacia el store: el dueño de la minuta
             // (persistencia) es quien publica en integrationStore; los
@@ -225,7 +200,7 @@ export function useMinuteKnowledge(participantId?: string) {
         setMinutes((prev) =>
             prev
                 .map((m) => (m.id === id ? toUI(updated) : m))
-                .sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode)),
+                .sort(compareMinuteHistoryCodeDesc),
         );
     }, []);
 

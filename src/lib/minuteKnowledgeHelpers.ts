@@ -111,6 +111,71 @@ export function formatMinuteHistoryCode(date: Date = new Date(), sequence = 1): 
     return `${year}${month}${day}-${seq}`;
 }
 
+/** Code admitido por el comparador: el string o una entrada con `historyCode`. */
+export type MinuteHistoryCodeLike = string | { historyCode?: string } | null | undefined;
+
+function historyCodeOf(value: MinuteHistoryCodeLike): string {
+    return typeof value === 'string' ? value : value?.historyCode || '';
+}
+
+/**
+ * Compara dos codigos de historial DESCENDENTE (mas reciente primero).
+ *
+ * DUENO UNICO (auditoria 2026-10-02): el hook pasaba strings y la capa de voz
+ * entradas; eran DOS copias de la misma regla (compareHistoryCodeDesc vs
+ * compareMinuteHistoryCodeDesc). Acepta las dos formas para que ambos caminos
+ * llamen a ESTA funcion.
+ */
+export function compareMinuteHistoryCodeDesc(
+    left: MinuteHistoryCodeLike = '',
+    right: MinuteHistoryCodeLike = '',
+): number {
+    const a = parseMinuteHistoryCode(historyCodeOf(left));
+    const b = parseMinuteHistoryCode(historyCodeOf(right));
+    const dateCompare = b.date.localeCompare(a.date);
+    if (dateCompare !== 0) return dateCompare;
+    return b.sequence - a.sequence;
+}
+
+/** Inverso exacto del comparador descendente. */
+export function compareMinuteHistoryCodeAsc(
+    left: MinuteHistoryCodeLike = '',
+    right: MinuteHistoryCodeLike = '',
+): number {
+    return compareMinuteHistoryCodeDesc(right, left);
+}
+
+/**
+ * Siguiente secuencia universal de historyCode (1-based).
+ *
+ * DUENO UNICO: era getNextUniversalHistorySequence (voz) y getNextSequence
+ * (hook), dos copias identicas.
+ */
+export function nextMinuteHistorySequence(entries: Array<{ historyCode?: string }> = []): number {
+    return (
+        entries.reduce((max, entry) => {
+            const { sequence } = parseMinuteHistoryCode(entry?.historyCode || '');
+            return Math.max(max, sequence);
+        }, 0) + 1
+    );
+}
+
+/**
+ * Etiqueta de historial `CODE-Descripcion` (o solo lo que haya).
+ *
+ * DUENO UNICO: formatMinuteHistoryLabel (voz) y formatMinuteHistoryLabelForUi
+ * (hook) eran la misma funcion con dos nombres.
+ */
+export function formatMinuteHistoryLabel(entry: MinuteRecordLike = {}): string {
+    const code = normalizeSpaces(entry?.historyCode || '');
+    const description = normalizeSpaces(
+        entry?.description || entry?.summarySnapshot?.titulo || entry?.titulo || '',
+    );
+    if (!code) return description;
+    if (!description) return code;
+    return `${code}-${description}`;
+}
+
 // ------------------------------------------------------------
 // Minuta: "minuta uno" / "minute 4" → número de secuencia
 // ------------------------------------------------------------
