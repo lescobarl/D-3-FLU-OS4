@@ -5,7 +5,8 @@
 // notificationService y resuelve la entrega: toast (stack) y/o
 // voz (speak). Config-driven (FLU_CONFIG.notifications).
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { logCaughtError } from '../lib/caughtError';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import {
@@ -86,14 +87,7 @@ export function useNotificationCenter({
   // estado referencia `service`, y una referencia en la zona muerta
   // temporal (TDZ) rompería el arranque con "Cannot access 'service'
   // before initialization".
-  const serviceRef = useRef<NotificationService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createNotificationService({
-      config: notificationConfig,
-      dnd: dnd || { isActive: false, allowUrgent: false },
-    });
-  }
-  const service = serviceRef.current;
+  const service = useServiceRef<NotificationService>(() => createNotificationService({ config: notificationConfig, dnd: dnd || { isActive: false, allowUrgent: false }, }));
 
   const [toasts, setToasts] = useState<NotificationToast[]>([]);
   const [history, setHistory] = useState<NotificationCenterItem[]>([]);

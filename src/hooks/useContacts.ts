@@ -11,7 +11,8 @@
 //   - Módulo I: agenda con cumpleaños y vínculo a participantes
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ContactRecord } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
@@ -69,15 +70,7 @@ export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<ContactService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createContactService({
-      db: { contacts: fluDb.contacts },
-      config: { maxContacts, birthdayWindowDays },
-      now: now || (() => Date.now()),
-    });
-  }
-  const service = serviceRef.current;
+  const service = useServiceRef<ContactService>(() => createContactService({ db: { contacts: fluDb.contacts }, config: { maxContacts, birthdayWindowDays }, now: now || (() => Date.now()), }));
 
   const [contacts, setContacts] = useState<ContactRecord[]>([]);
   const [birthdayNear, setBirthdayNear] = useState<BirthdayContact[]>([]);

@@ -4,7 +4,8 @@
 // Expone la lista del usuario activo y agrega/elimina registros. Toda fila se
 // sella con `personId` del alcance, de modo que un usuario no vea lo de otro.
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { fluDb, type DocumentRecord } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
 import {
@@ -28,11 +29,7 @@ export interface UseDocumentsResult {
 }
 
 export function useDocuments({ participantId }: UseDocumentsOptions = {}): UseDocumentsResult {
-  const serviceRef = useRef<DocumentsService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createDocumentsService({ db: fluDb.documents, now: () => Date.now() });
-  }
-  const service = serviceRef.current;
+  const service = useServiceRef<DocumentsService>(() => createDocumentsService({ db: fluDb.documents, now: () => Date.now() }));
   const scope = participantId || 'global';
 
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);

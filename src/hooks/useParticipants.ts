@@ -14,7 +14,8 @@
 //   - B9: cumpleaños próximos (participantsWithBirthdayNear)
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
 import {
@@ -95,15 +96,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<ParticipantRegistry | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createParticipantRegistry({
-      db: fluDb.participants,
-      config: { roles, defaultVoice, birthdayAdvanceDays, anonymous },
-      now: now || (() => Date.now()),
-    });
-  }
-  const service = serviceRef.current;
+  const service = useServiceRef<ParticipantRegistry>(() => createParticipantRegistry({ db: fluDb.participants, config: { roles, defaultVoice, birthdayAdvanceDays, anonymous }, now: now || (() => Date.now()), }));
 
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [loading, setLoading] = useState(true);

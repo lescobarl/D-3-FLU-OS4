@@ -15,7 +15,8 @@
 //     sesión del Pizarrón-navegador curado
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type BrowserProfileRecord } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
@@ -75,9 +76,8 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<BrowserProfileService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createBrowserProfileService({
+  const service = useServiceRef<BrowserProfileService>(() =>
+    createBrowserProfileService({
       // Adaptador de la tabla Dexie a BrowserProfilesDb: la clave física
       // y lógica es participantId (el id del registro ES el participante).
       db: {
@@ -88,9 +88,8 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
       },
       config,
       now: now || (() => Date.now()),
-    });
-  }
-  const service = serviceRef.current;
+    }),
+  );
 
   const [profiles, setProfiles] = useState<BrowserProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);

@@ -11,7 +11,8 @@
 //   - Módulo J: diario de notas/voz con fechas
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type DiaryEntryRecord } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
@@ -66,15 +67,7 @@ export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<DiaryService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createDiaryService({
-      db: { diaryEntries: fluDb.diaryEntries },
-      config: { maxEntriesPerDay },
-      now: now || (() => Date.now()),
-    });
-  }
-  const service = serviceRef.current;
+  const service = useServiceRef<DiaryService>(() => createDiaryService({ db: { diaryEntries: fluDb.diaryEntries }, config: { maxEntriesPerDay }, now: now || (() => Date.now()), }));
 
   const [entries, setEntries] = useState<DiaryEntryRecord[]>([]);
   const [loading, setLoading] = useState(true);

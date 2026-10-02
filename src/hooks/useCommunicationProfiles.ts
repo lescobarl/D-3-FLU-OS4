@@ -13,7 +13,8 @@
 //   - FASE P: manual > auto > default en cada turno
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type CommunicationProfileRecord } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
@@ -79,9 +80,8 @@ export function useCommunicationProfiles({
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<CommunicationProfileService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createCommunicationProfileService({
+  const service = useServiceRef<CommunicationProfileService>(() =>
+    createCommunicationProfileService({
       // Adaptador de la tabla Dexie a CommunicationProfilesDb: la clave
       // lógica es participantId (el id físico es un UUIDv4).
       db: {
@@ -93,9 +93,8 @@ export function useCommunicationProfiles({
       },
       config,
       now: now || (() => Date.now()),
-    });
-  }
-  const service = serviceRef.current;
+    }),
+  );
 
   const [profiles, setProfiles] = useState<CommunicationProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);

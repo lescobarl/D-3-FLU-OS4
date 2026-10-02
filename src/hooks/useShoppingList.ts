@@ -14,7 +14,8 @@
 //     shoppingService)
 //   - DI: `now` inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useServiceRef } from './useServiceRef';
 import { type ShoppingItemRecord } from '../core/db/fluDatabase';
 import {
   createShoppingService,
@@ -67,13 +68,7 @@ export function useShoppingList({
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const serviceRef = useRef<ShoppingService | null>(null);
-  if (!serviceRef.current) {
-    serviceRef.current = createShoppingService({
-      now: now || (() => Date.now()),
-    });
-  }
-  const service = serviceRef.current;
+  const service = useServiceRef<ShoppingService>(() => createShoppingService({ now: now || (() => Date.now()), }));
 
   const [items, setItems] = useState<ShoppingItemRecord[]>([]);
   const [remainingCount, setRemainingCount] = useState(0);
