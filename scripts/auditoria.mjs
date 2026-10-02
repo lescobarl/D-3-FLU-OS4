@@ -15,6 +15,8 @@
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
+// Detectores reales de V6/V17 (dueno unico compartido con su guard de barrera).
+import { findBrokenImports, findLibraryMonkeyPatches } from './audit-detectors.mjs'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -336,9 +338,10 @@ const FINDINGS = [
     note: 'Debe venir de config (src/core/config). Config y comentarios no cuentan.',
   },
   {
-    id: 'V6', sev: 'media', title: 'Monkey-patch global (THREE.PropertyBinding)',
-    target: 0, detect: () => grep(srcFiles, /PropertyBinding\.create\s*=|masterBinding/),
-    note: 'src/avatar/lib/masterBinding.ts parchea Three.js.',
+    id: 'V6', sev: 'media', title: 'Monkey-patch de libreria (prototipo ajeno / THREE)',
+    target: 0,
+    detect: () => findLibraryMonkeyPatches(srcFiles.map((f) => ({ file: rel(f), source: readFileSync(f, 'utf8') }))),
+    note: 'Detector real (scripts/audit-detectors.mjs): antes miraba src/avatar/lib/masterBinding.ts, que NO existe => verde por ausencia (7.7.f(2)).',
   },
   {
     id: 'V7', sev: 'baja', title: 'Tests deshabilitados (.skip/.todo)',
@@ -412,10 +415,10 @@ const FINDINGS = [
     note: 'Fuera de la capa db: debe salir de buildSyncTuple (evita evade el guard de sync).',
   },
   {
-    id: 'V17', sev: 'baja', title: 'Archivo .mjs muerto/duplicado con import roto',
+    id: 'V17', sev: 'baja', title: 'Modulo muerto con import relativo que no resuelve',
     target: 0,
-    detect: () => srcFiles.map(rel).filter((p) => p === 'src/server/handlers/workspaceImageHandler.mjs'),
-    note: 'Implementacion real en src/voice/lib/imageGeneration.js; el .mjs importa ruta inexistente.',
+    detect: () => findBrokenImports(srcFiles, (f) => readFileSync(f, 'utf8')),
+    note: 'Detector real (scripts/audit-detectors.mjs): antes filtraba una ruta fija inexistente => verde por ausencia (7.7.f(2)).',
   },
   {
     id: 'V18', sev: 'media', title: 'Mismo cuerpo con DISTINTO nombre (duplicados renombrados)',

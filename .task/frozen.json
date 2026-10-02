@@ -1,7 +1,8 @@
 {
   "scripts/task-gate-invariant.mjs": "f58e25bfaa7ceddccac15712fed92e6b716a447802d6fcad3d454ce31f488184",
   "scripts/hito.mjs": "b616834298d471ff271104c2fe236643f0022c5af4a2731daa4db8f1931c3890",
-  "scripts/auditoria.mjs": "4c50a1277e9249bbdfd3927d2ec5b2b082c39bb49773663f4887e5e4dd0b2c80",
+  "scripts/auditoria.mjs": "4aa1a1a1d5abe9f52bf357243b59e9570b205fdbff89eda60e23fb7771011942",
   "scripts/corregir.mjs": "fda60aca735e1b611d84116562dacfa08d532bd49075b2606f5f0862b48c5df5",
-  "scripts/audit-metric.mjs": "c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f"
+  "scripts/audit-metric.mjs": "c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f",
+  "scripts/audit-detectors.mjs": "584941740d74158756d26133dfd65c8b3170bc4158f2f150cf02dc44a4fcfbca"
 }
