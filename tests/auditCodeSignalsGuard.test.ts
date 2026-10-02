@@ -60,7 +60,9 @@ describe('auditCodeSignalsGuard — la auditoria de codigo mide de verdad', () =
         expect(nombres).not.toContain('buildMinuteKey');
         expect(nombres).not.toContain('getAsrConfig');
         expect(nombres).not.toContain('newId');
-        // Y los que siguen abiertos y registrados (P8.9) SI aparecen: la senal ve el arbol.
-        expect(nombres).toContain('ensureWorker');
+        // P8.9 CERRADO: `ensureWorker` paso a dueno unico (workerPendingBridge), asi que
+        // el homonimo desaparece. El control positivo de que la senal VE el arbol esta en
+        // el caso sintetico de arriba (homonimo `clamp`): el detector discrimina.
+        expect(nombres).not.toContain('ensureWorker');
     });
 });
