@@ -3,6 +3,7 @@ import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../..
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
+import { COMMAND_IDS } from './commandIds.js'
 
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
 const IS_DEV = import.meta.env.DEV
@@ -470,7 +471,7 @@ export const FLU_CONFIG = {
     restartAfterNetworkMs: 0,
   },
   navigation: {
-    sessionResetCommand: 'INICIAR_CONVERSACION',
+    sessionResetCommand: COMMAND_IDS.INICIAR_CONVERSACION,
   },
   knowledgeBase: {
     general: 'KB general',
@@ -1843,28 +1844,28 @@ export const FLU_CONFIG = {
       saveMinute: 'Guardar minuta',
     },
     commandSpeech: {
-      GENERAR_RESUMEN: { es: 'Generando minuta.', en: 'Generating summary.' },
-      INICIAR_CONVERSACION: { es: 'Iniciando conversacion.', en: 'Starting conversation.' },
-      ABRIR_ESCUCHA: { es: 'Abriendo escucha.', en: 'Opening listening.' },
-      CERRAR_ESCUCHA: { es: 'Cerrando escucha.', en: 'Closing listening.' },
-      FLU_WAKE: { es: 'Te escucho.', en: "I'm listening." },
-      REGISTRAR_PARTICIPANTE: {
+      [COMMAND_IDS.GENERAR_RESUMEN]: { es: 'Generando minuta.', en: 'Generating summary.' },
+      [COMMAND_IDS.INICIAR_CONVERSACION]: { es: 'Iniciando conversacion.', en: 'Starting conversation.' },
+      [COMMAND_IDS.ABRIR_ESCUCHA]: { es: 'Abriendo escucha.', en: 'Opening listening.' },
+      [COMMAND_IDS.CERRAR_ESCUCHA]: { es: 'Cerrando escucha.', en: 'Closing listening.' },
+      [COMMAND_IDS.FLU_WAKE]: { es: 'Te escucho.', en: "I'm listening." },
+      [COMMAND_IDS.REGISTRAR_PARTICIPANTE]: {
         es: 'Registrado {name}.',
         en: 'Registered {name}.',
       },
-      FLU_ADELANTE: { es: 'De acuerdo.', en: 'Go ahead.' },
-      FLU_ADELANTE_EMPTY: {
+      [COMMAND_IDS.FLU_ADELANTE]: { es: 'De acuerdo.', en: 'Go ahead.' },
+      [COMMAND_IDS.FLU_ADELANTE_EMPTY]: {
         es: 'No tengo nada pendiente por ahora.',
         en: 'I have nothing pending right now.',
       },
-      FLU_ESPERA: { es: 'Entendido, espero.', en: 'Understood, I will wait.' },
-      GUARDAR_MINUTA: { es: 'Minuta guardada.', en: 'Minute saved.' },
-      ANALIZAR_DOCUMENTO: { es: 'Analizando el documento.', en: 'Analyzing the document.' },
-      ANALIZAR_APP: { es: 'Analizando la app.', en: 'Analyzing the app.' },
-      GENERAR_DOCUMENTO: { es: 'Generando el documento.', en: 'Generating the document.' },
-      GENERAR_VIDEO: { es: 'Preparando el video.', en: 'Preparing the video.' },
-      NAVEGAR: { es: '', en: '' },
-      BUSCAR: { es: '', en: '' },
+      [COMMAND_IDS.FLU_ESPERA]: { es: 'Entendido, espero.', en: 'Understood, I will wait.' },
+      [COMMAND_IDS.GUARDAR_MINUTA]: { es: 'Minuta guardada.', en: 'Minute saved.' },
+      [COMMAND_IDS.ANALIZAR_DOCUMENTO]: { es: 'Analizando el documento.', en: 'Analyzing the document.' },
+      [COMMAND_IDS.ANALIZAR_APP]: { es: 'Analizando la app.', en: 'Analyzing the app.' },
+      [COMMAND_IDS.GENERAR_DOCUMENTO]: { es: 'Generando el documento.', en: 'Generating the document.' },
+      [COMMAND_IDS.GENERAR_VIDEO]: { es: 'Preparando el video.', en: 'Preparing the video.' },
+      [COMMAND_IDS.NAVEGAR]: { es: '', en: '' },
+      [COMMAND_IDS.BUSCAR]: { es: '', en: '' },
     },
     panel: {
       maximize: 'Maximizar',

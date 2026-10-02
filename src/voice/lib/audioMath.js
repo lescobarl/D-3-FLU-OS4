@@ -7,6 +7,7 @@ import { buildWakeWordPattern } from './wakeWord.js'
 import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils'
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { COMMAND_IDS } from './commandIds.js'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -651,11 +652,11 @@ export function resolveCommandConversationLogText(phrase = '', _split = {}, pass
 
 export function detectListeningControl(text = '', commands = {}) {
   if (matchesCommandPhrase(text, commands.openListening || [])) {
-    return 'ABRIR_ESCUCHA'
+    return COMMAND_IDS.ABRIR_ESCUCHA
   }
 
   if (matchesCommandPhrase(text, commands.closeListening || [])) {
-    return 'CERRAR_ESCUCHA'
+    return COMMAND_IDS.CERRAR_ESCUCHA
   }
 
   return null
@@ -744,7 +745,7 @@ export function detectUiVoiceCommand(text = '', commands = {}) {
   }
 
   if (isMinuteSaveRequest(text) || matchesCommandPhrase(text, commands.saveMinute || [])) {
-    return 'GUARDAR_MINUTA'
+    return COMMAND_IDS.GUARDAR_MINUTA
   }
 
   if (
@@ -752,47 +753,47 @@ export function detectUiVoiceCommand(text = '', commands = {}) {
     matchesCommandPhrase(text, commands.generateMinute || []) ||
     matchesCommandPhrase(text, commands.generateSummary || [])
   ) {
-    return 'GENERAR_RESUMEN'
+    return COMMAND_IDS.GENERAR_RESUMEN
   }
 
   // F1 — análisis de documentos
   if (matchesCommandPhrase(text, commands.analyzeDocument || [])) {
-    return 'ANALIZAR_DOCUMENTO'
+    return COMMAND_IDS.ANALIZAR_DOCUMENTO
   }
 
   // F2 — análisis de funcionalidad de apps
   if (matchesCommandPhrase(text, commands.analyzeApp || [])) {
-    return 'ANALIZAR_APP'
+    return COMMAND_IDS.ANALIZAR_APP
   }
 
   // F3 — generación de documentos
   if (matchesCommandPhrase(text, commands.generateDocument || [])) {
-    return 'GENERAR_DOCUMENTO'
+    return COMMAND_IDS.GENERAR_DOCUMENTO
   }
 
   // F4 — generación de video
   if (matchesCommandPhrase(text, commands.generateVideo || [])) {
-    return 'GENERAR_VIDEO'
+    return COMMAND_IDS.GENERAR_VIDEO
   }
 
   // Navegación curada por voz → resultado en el Pizarrón
   // (modo tolerante: acepta frases conversacionales como "navegar a wikipedia")
   if (matchesCommandPhrase(text, commands.navigate || [], { tolerant: true })) {
-    return 'NAVEGAR'
+    return COMMAND_IDS.NAVEGAR
   }
 
   // F3 — búsqueda web por voz ("buscá capital de Francia") → resultados en el
   // Pizarrón. Se evalúa DESPUÉS de NAVEGAR para que "navega en wikipedia"
   // gane sobre "buscar en wikipedia" (orden por especificidad).
   if (matchesCommandPhrase(text, commands.buscar || [], { tolerant: true })) {
-    return 'BUSCAR'
+    return COMMAND_IDS.BUSCAR
   }
 
   // P1-C (§1.3.3) — autoconocimiento (CONOCER_FLU): fast-path local sin IA.
   // Se evalúa después de NAVEGAR/BUSCAR; responde enumerando las capacidades
   // reales de FLU compiladas desde la configuración (nunca hardcode).
   if (matchesCommandPhrase(text, commands.conocerFlu || [], { tolerant: true })) {
-    return 'CONOCER_FLU'
+    return COMMAND_IDS.CONOCER_FLU
   }
 
   return null
@@ -818,7 +819,7 @@ export function detectSessionVoiceCommand(text = '', voiceCommands = {}) {
 
   if (split.wakeWordMatched && matchWakeWordPrefix(normalizeVoiceCommandText(snapshot), wakeWords)) {
     if (shouldAckFluWake(afterWake, voiceCommands)) {
-      return 'FLU_WAKE'
+      return COMMAND_IDS.FLU_WAKE
     }
     return null
   }
@@ -878,7 +879,7 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
     // truncar el contenido. El contenido llega en una frase posterior o en la
     // misma frase con descripción (esa NO es gatillo pelado → va a la IA).
     if (
-      (command === 'GENERAR_VIDEO' || command === 'GENERAR_DOCUMENTO') &&
+      (command === COMMAND_IDS.GENERAR_VIDEO || command === COMMAND_IDS.GENERAR_DOCUMENTO) &&
       isBareContentGenerationTrigger(text, voiceCommands)
     ) {
       return { kind: 'wait' }
@@ -897,16 +898,16 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
 
   if (!split.wakeWordMatched) return { kind: 'log' }
 
-  if (!afterWake) return { kind: 'command', command: 'FLU_WAKE' }
+  if (!afterWake) return { kind: 'command', command: COMMAND_IDS.FLU_WAKE }
   if (shouldAckFluWake(afterWake, voiceCommands)) {
-    return { kind: 'command', command: 'FLU_WAKE' }
+    return { kind: 'command', command: COMMAND_IDS.FLU_WAKE }
   }
 
   const introducedName = detectWakeIntroducedName(snapshot, wakeWords)
   if (introducedName) {
     return {
       kind: 'command',
-      command: 'REGISTRAR_PARTICIPANTE',
+      command: COMMAND_IDS.REGISTRAR_PARTICIPANTE,
       introducedName,
       beforeWake,
     }
@@ -991,20 +992,20 @@ export function shouldDispatchCommandInterim(
   voiceCommands = {},
   fullPhrase = '',
 ) {
-  if (command === 'FLU_WAKE') return false
+  if (command === COMMAND_IDS.FLU_WAKE) return false
 
-  if (command === 'FLU_ADELANTE' || command === 'FLU_ESPERA') return false
+  if (command === COMMAND_IDS.FLU_ADELANTE || command === COMMAND_IDS.FLU_ESPERA) return false
 
   const norm = cleanForSpeech(text)
   if (!norm) return false
 
-  if (command === 'REGISTRAR_PARTICIPANTE') {
+  if (command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) {
     const wakeWords = voiceCommands.wakeWords || []
     const snapshot = cleanForSpeech(fullPhrase) || norm
     return Boolean(detectWakeIntroducedName(snapshot, wakeWords))
   }
 
-  if (command === 'GENERAR_RESUMEN') {
+  if (command === COMMAND_IDS.GENERAR_RESUMEN) {
     if (isMinuteKnowledgeRequest(norm)) return false
     if (/\b(genera\w*|generar|resume\w*|resumir)\b.*\bresumen\b.*\bde\s+la\b/i.test(norm)) return false
     if (/\b(generate|summarize|summary)\b.*\b(of\s+the\s+)?minute\b/i.test(norm)) return false
@@ -1079,13 +1080,13 @@ export function planConversationDispatch(
 
   const signature =
     action.kind === 'command'
-      ? action.command === 'FLU_ADELANTE'
+      ? action.command === COMMAND_IDS.FLU_ADELANTE
         ? 'cmd:FLU_ADELANTE'
         : `cmd:${action.command}:${normalizeVoiceCommandText(phrase)}`
       : `flu:${normalizeVoiceCommandText(action.question || phrase)}`
 
   const effectiveDedupMs =
-    action.kind === 'command' && action.command === 'FLU_ADELANTE'
+    action.kind === 'command' && action.command === COMMAND_IDS.FLU_ADELANTE
       ? Math.max(dedupMs, Number(FLU_CONFIG.fluParticipant?.floorGrantDedupMs) || 12000)
       : dedupMs
 

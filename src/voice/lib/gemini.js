@@ -53,6 +53,7 @@ export {
   selectConversationSummaryWindow,
   shouldGenerateWorkspaceImage,
 } from './workspaceContract.js'
+import { COMMAND_IDS } from './commandIds.js'
 
 // NOTA (OS4): Toda la generación de texto (voz, contrato, resumen, evaluación,
 // visión/OCR) se enruta por el motor único OpenAI-compatible (defaults/lógica en
@@ -786,8 +787,8 @@ export function buildUserPrompt({
       ? 'Infer all navigation from the conversation context. Do not rely on fixed keywords.'
       : 'Infiere toda la navegacion desde el contexto de la conversacion. No dependas de palabras fijas.',
     isEnglish
-      ? `Valid navegacion.comando values: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Use "NAVEGAR" when the user asks to open, navigate to or search a curated site (e.g. "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") and fill navegacion.parametros.sitio with the site name.`
-      : `Valores válidos de navegacion.comando: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Usa "NAVEGAR" cuando el usuario pida abrir, navegar o buscar un sitio curado (ej: "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") y llena navegacion.parametros.sitio con el nombre del sitio.`,
+      ? `Valid navegacion.comando values: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Use COMMAND_IDS.NAVEGAR when the user asks to open, navigate to or search a curated site (e.g. "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") and fill navegacion.parametros.sitio with the site name.`
+      : `Valores válidos de navegacion.comando: ${GEMINI_INFERABLE_COMMAND_IDS.map((id) => `"${id}"`).join(' | ')} | null. Usa COMMAND_IDS.NAVEGAR cuando el usuario pida abrir, navegar o buscar un sitio curado (ej: "navegar a wikipedia", "abre wikipedia", "busca en wikipedia") y llena navegacion.parametros.sitio con el nombre del sitio.`,
     isEnglish
       ? `Curated browser allowlist: ${browserAllowlist.join(', ') || '(empty)'}. If the user asks which sites they have access to, enumerate these sites.`
       : `Sitios permitidos del navegador curado (allowlist): ${browserAllowlist.join(', ') || '(vacía)'}. Si el usuario pregunta a qué sitios tiene acceso, enumera estos sitios.`,
@@ -1558,11 +1559,11 @@ export async function generateFluContract({
   const comando =
     navegacion.comando === 'CAMBIAR_PANTALLA' ||
       navegacion.comando === 'ACTUALIZAR_MODELO_3D' ||
-      navegacion.comando === 'ABRIR_ESCUCHA' ||
-      navegacion.comando === 'CERRAR_ESCUCHA' ||
+      navegacion.comando === COMMAND_IDS.ABRIR_ESCUCHA ||
+      navegacion.comando === COMMAND_IDS.CERRAR_ESCUCHA ||
       navegacion.comando === FLU_CONFIG.navigation.sessionResetCommand ||
-      navegacion.comando === 'GENERAR_RESUMEN' ||
-      navegacion.comando === 'NAVEGAR'
+      navegacion.comando === COMMAND_IDS.GENERAR_RESUMEN ||
+      navegacion.comando === COMMAND_IDS.NAVEGAR
       ? navegacion.comando
       : null
   const destino = typeof navegacion.destino === 'string' ? navegacion.destino : null

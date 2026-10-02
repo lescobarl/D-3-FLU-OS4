@@ -157,6 +157,7 @@ import {
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
 import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
+import { COMMAND_IDS } from '../lib/commandIds.js'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
@@ -2281,7 +2282,7 @@ export function useFluVoiceAssistant({
           requireWake,
           wakeWords: resolvedWakeWords,
         })
-        if (uiCommand === 'CERRAR_ESCUCHA') {
+        if (uiCommand === COMMAND_IDS.CERRAR_ESCUCHA) {
           scheduleAutoProcess(0)
           return
         }
@@ -2808,12 +2809,12 @@ export function useFluVoiceAssistant({
         releaseTurnAfterLog('')
       }
 
-      if (command === 'FLU_ESPERA') {
+      if (command === COMMAND_IDS.FLU_ESPERA) {
         fluParticipantRef.current?.dismissRaisedHand?.()
         await commitAndResolveTurn({
           capture: cleaned,
           contract: {
-            respuesta_voz: getCommandSpeech('FLU_ESPERA', language),
+            respuesta_voz: getCommandSpeech(COMMAND_IDS.FLU_ESPERA, language),
             navegacion: { comando: null, destino: null, parametros: {} },
           },
           diagnostics: null,
@@ -2828,7 +2829,7 @@ export function useFluVoiceAssistant({
         return
       }
 
-      if (command === 'FLU_ADELANTE') {
+      if (command === COMMAND_IDS.FLU_ADELANTE) {
         const commandSpeaker =
           lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         const participant = fluParticipantRef.current
@@ -2877,13 +2878,13 @@ export function useFluVoiceAssistant({
               speaking: isSpeechSynthesisSpeaking(),
             })
           }
-          await respondParticipantFloor(getCommandSpeech('FLU_ADELANTE_EMPTY', language))
+          await respondParticipantFloor(getCommandSpeech(COMMAND_IDS.FLU_ADELANTE_EMPTY, language))
           return
         }
 
         const draft = participant?.consumeRaisedDraft?.() || ''
         if (!draft) {
-          await respondParticipantFloor(getCommandSpeech('FLU_ADELANTE_EMPTY', language))
+          await respondParticipantFloor(getCommandSpeech(COMMAND_IDS.FLU_ADELANTE_EMPTY, language))
           return
         }
 
@@ -3000,7 +3001,7 @@ export function useFluVoiceAssistant({
     const wakeWord = String(resolvedWakeWords[0] || '').trim()
     const grantWord = String(FLU_CONFIG.voiceCommands?.grantFloor?.[0] || '').trim()
     const phrase = [wakeWord, grantWord].filter(Boolean).join(' ')
-    await emitActiveConversationCommand('FLU_ADELANTE', phrase)
+    await emitActiveConversationCommand(COMMAND_IDS.FLU_ADELANTE, phrase)
   }, [emitActiveConversationCommand, resolvedWakeWords])
 
   // ============================================================
@@ -3847,7 +3848,7 @@ export function useFluVoiceAssistant({
         }
 
         // "cerrar escucha" debe cerrar de verdad: no reabrir la captura pasiva.
-        if (directCommand === 'CERRAR_ESCUCHA') {
+        if (directCommand === COMMAND_IDS.CERRAR_ESCUCHA) {
           reopenListeningAfterCapture = false
         }
 

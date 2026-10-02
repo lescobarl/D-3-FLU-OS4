@@ -11,25 +11,26 @@ import {
   isMinuteSaveRequest,
   planConversationDispatch,
 } from './audioMath.js'
+import { COMMAND_IDS } from './commandIds.js'
 
 export const NAVIGATION_COMMAND_IDS = Object.freeze([
   FLU_CONFIG.navigation.sessionResetCommand,
-  'GENERAR_RESUMEN',
-  'GUARDAR_MINUTA',
-  'ABRIR_ESCUCHA',
-  'CERRAR_ESCUCHA',
-  'REGISTRAR_PARTICIPANTE',
-  'FLU_WAKE',
-  'FLU_ADELANTE',
-  'FLU_ESPERA',
-  'ANALIZAR_DOCUMENTO',
-  'ANALIZAR_APP',
-  'GENERAR_DOCUMENTO',
-  'GENERAR_VIDEO',
-  'NAVEGAR',
-  'BUSCAR',
+  COMMAND_IDS.GENERAR_RESUMEN,
+  COMMAND_IDS.GUARDAR_MINUTA,
+  COMMAND_IDS.ABRIR_ESCUCHA,
+  COMMAND_IDS.CERRAR_ESCUCHA,
+  COMMAND_IDS.REGISTRAR_PARTICIPANTE,
+  COMMAND_IDS.FLU_WAKE,
+  COMMAND_IDS.FLU_ADELANTE,
+  COMMAND_IDS.FLU_ESPERA,
+  COMMAND_IDS.ANALIZAR_DOCUMENTO,
+  COMMAND_IDS.ANALIZAR_APP,
+  COMMAND_IDS.GENERAR_DOCUMENTO,
+  COMMAND_IDS.GENERAR_VIDEO,
+  COMMAND_IDS.NAVEGAR,
+  COMMAND_IDS.BUSCAR,
   // P1-C (§1.3.1) — autoconocimiento por voz (fast-path local sin IA).
-  'CONOCER_FLU',
+  COMMAND_IDS.CONOCER_FLU,
 ])
 
 /**
@@ -40,11 +41,11 @@ export const NAVIGATION_COMMAND_IDS = Object.freeze([
  * de modo que añadir/eliminar un comando inferible se sincroniza automáticamente.
  */
 export const GEMINI_INFERABLE_COMMAND_IDS = Object.freeze([
-  'FLU_WAKE',
+  COMMAND_IDS.FLU_WAKE,
   FLU_CONFIG.navigation.sessionResetCommand,
-  'CERRAR_ESCUCHA',
-  'ABRIR_ESCUCHA',
-  'NAVEGAR',
+  COMMAND_IDS.CERRAR_ESCUCHA,
+  COMMAND_IDS.ABRIR_ESCUCHA,
+  COMMAND_IDS.NAVEGAR,
 ])
 
 export function getVoiceCommands(config = FLU_CONFIG) {
@@ -69,8 +70,8 @@ export function userRequestedNavigationCommand(
   if (!cmd) return false
   const text = cleanForSpeech(transcript)
   if (!text) return false
-  if (cmd === 'GENERAR_RESUMEN') return isMinuteGenerationRequest(text)
-  if (cmd === 'GUARDAR_MINUTA') return isMinuteSaveRequest(text)
+  if (cmd === COMMAND_IDS.GENERAR_RESUMEN) return isMinuteGenerationRequest(text)
+  if (cmd === COMMAND_IDS.GUARDAR_MINUTA) return isMinuteSaveRequest(text)
   return detectSessionVoiceCommand(text, voiceCommands) === cmd
 }
 

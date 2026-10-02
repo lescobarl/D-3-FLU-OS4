@@ -33,6 +33,7 @@ import { logCaughtError } from '../lib/caughtError';
 
 import { normalizeLang } from '../core/config/localeConfig';
 import { pickText } from '../lib/uiStrings';
+import { COMMAND_IDS } from '../voice/lib/commandIds';
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
     volume?: number;
@@ -244,20 +245,20 @@ export function useNavigationCommands(
         const userRequested = userRequestedNavigationCommand(transcript, navegacion.comando);
 
         switch (navegacion.comando) {
-            case 'GENERAR_RESUMEN':
+            case COMMAND_IDS.GENERAR_RESUMEN:
                 dispatchFluEvent(FLU_EVENTS.GENERATE_SUMMARY);
                 break;
-            case 'GUARDAR_MINUTA':
+            case COMMAND_IDS.GUARDAR_MINUTA:
                 dispatchFluEvent(FLU_EVENTS.SAVE_MINUTE);
                 break;
-            case 'ANALIZAR_DOCUMENTO': {
+            case COMMAND_IDS.ANALIZAR_DOCUMENTO: {
                 dispatchFluEvent(FLU_EVENTS.ANALYZE_DOCUMENT);
                 if (transcript) {
                     auditLog.logEvent('command:analizar_documento', 'navigation', uuidv4(), {
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
-                        comando: 'ANALIZAR_DOCUMENTO',
+                        comando: COMMAND_IDS.ANALIZAR_DOCUMENTO,
                         phase,
                     }, 'ANALIZAR_DOCUMENTO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -271,14 +272,14 @@ export function useNavigationCommands(
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
-            case 'ANALIZAR_APP': {
+            case COMMAND_IDS.ANALIZAR_APP: {
                 dispatchFluEvent(FLU_EVENTS.ANALYZE_APP);
                 if (transcript) {
                     auditLog.logEvent('command:analizar_app', 'navigation', uuidv4(), {
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
-                        comando: 'ANALIZAR_APP',
+                        comando: COMMAND_IDS.ANALIZAR_APP,
                         phase,
                     }, 'ANALIZAR_APP command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -292,7 +293,7 @@ export function useNavigationCommands(
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
-            case 'GENERAR_DOCUMENTO': {
+            case COMMAND_IDS.GENERAR_DOCUMENTO: {
                 // RUTA ÚNICA: la puerta idempotente que provee App.
                 requestMedia?.('doc', transcript);
                 if (transcript) {
@@ -300,7 +301,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
-                        comando: 'GENERAR_DOCUMENTO',
+                        comando: COMMAND_IDS.GENERAR_DOCUMENTO,
                         phase,
                     }, 'GENERAR_DOCUMENTO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -314,7 +315,7 @@ export function useNavigationCommands(
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
-            case 'GENERAR_VIDEO': {
+            case COMMAND_IDS.GENERAR_VIDEO: {
                 // RUTA ÚNICA: la puerta idempotente que provee App.
                 requestMedia?.('video', transcript);
                 if (transcript) {
@@ -322,7 +323,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
-                        comando: 'GENERAR_VIDEO',
+                        comando: COMMAND_IDS.GENERAR_VIDEO,
                         phase,
                     }, 'GENERAR_VIDEO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -336,7 +337,7 @@ export function useNavigationCommands(
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
-            case 'FLU_WAKE': {
+            case COMMAND_IDS.FLU_WAKE: {
                 showListeningAck?.();
                 if (commandSpeech) {
                     try {
@@ -350,7 +351,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: commandSpeech || '',
-                        comando: 'FLU_WAKE',
+                        comando: COMMAND_IDS.FLU_WAKE,
                         phase,
                     }, 'FLU_WAKE command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -388,7 +389,7 @@ export function useNavigationCommands(
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
-            case 'CERRAR_ESCUCHA': {
+            case COMMAND_IDS.CERRAR_ESCUCHA: {
                 // Guardián de voz: solo se ejecuta si el usuario lo pidió
                 // explícitamente ("cerrar escucha"). Evita que la IA cierre la
                 // escucha por error tras una respuesta conversacional.
@@ -406,7 +407,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
-                        comando: 'CERRAR_ESCUCHA',
+                        comando: COMMAND_IDS.CERRAR_ESCUCHA,
                         phase,
                     }, 'CERRAR_ESCUCHA command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -414,7 +415,7 @@ export function useNavigationCommands(
                 os2ResetVoiceDisplay?.();
                 break;
             }
-            case 'ABRIR_ESCUCHA': {
+            case COMMAND_IDS.ABRIR_ESCUCHA: {
                 // Guardián de voz: solo se ejecuta si el usuario lo pidió
                 // explícitamente ("abrir escucha"). Evita que la IA abra la
                 // escucha por error tras una respuesta conversacional.
@@ -428,7 +429,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
-                        comando: 'ABRIR_ESCUCHA',
+                        comando: COMMAND_IDS.ABRIR_ESCUCHA,
                         phase,
                     }, 'ABRIR_ESCUCHA command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
@@ -436,7 +437,7 @@ export function useNavigationCommands(
                 os2ResetVoiceDisplay?.();
                 break;
             }
-            case 'NAVEGAR': {
+            case COMMAND_IDS.NAVEGAR: {
                 // Guardián de voz: NAVEGAR solo se ejecuta si el usuario lo pidió
                 // explícitamente ("navega a wikipedia"). Una pregunta conversacional
                 // ("platicame de los aviones") que la IA clasifique por error como
@@ -502,7 +503,7 @@ export function useNavigationCommands(
                             speaker: speakerName || undefined,
                             transcript,
                             response: searchQuery,
-                            comando: 'NAVEGAR',
+                            comando: COMMAND_IDS.NAVEGAR,
                             phase,
                             url: result.url,
                             host: result.host,
@@ -516,7 +517,7 @@ export function useNavigationCommands(
                 });
                 break;
             }
-            case 'BUSCAR': {
+            case COMMAND_IDS.BUSCAR: {
                 // Guardián de voz: BUSCAR solo se ejecuta si el usuario lo pidió
                 // explícitamente ("buscá capital de Francia"). Una pregunta
                 // conversacional que la IA clasifique por error como BUSCAR NO
@@ -583,7 +584,7 @@ export function useNavigationCommands(
                             speaker: speakerName || undefined,
                             transcript,
                             response: query,
-                            comando: 'BUSCAR',
+                            comando: COMMAND_IDS.BUSCAR,
                             phase,
                             query,
                             lang: requestLang,
@@ -599,7 +600,7 @@ export function useNavigationCommands(
             // P1-C (§1.3.4) — autoconocimiento (CONOCER_FLU): fast-path local sin
             // Gemini. FLU responde enumerando sus capacidades reales compiladas
             // desde la configuración (buildSelfManifesto, nunca hardcode).
-            case 'CONOCER_FLU': {
+            case COMMAND_IDS.CONOCER_FLU: {
                 const manifestoLang: 'es' | 'en' = normalizeLang(resolvedLanguage);
                 const manifesto = buildSelfManifesto(manifestoLang);
                 if (manifesto) {
@@ -617,7 +618,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: manifesto,
-                        comando: 'CONOCER_FLU',
+                        comando: COMMAND_IDS.CONOCER_FLU,
                         phase,
                     },
                     'CONOCER_FLU command executed',

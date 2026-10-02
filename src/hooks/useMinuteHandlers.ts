@@ -20,6 +20,7 @@ import type { MinuteUIEntry } from './useMinuteKnowledge';
 import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
 import { resolveConfiguredTemperature } from '../services/aiTemperature';
+import { COMMAND_IDS } from '../voice/lib/commandIds';
 
 /**
  * Una escritura de auditoria que falla es un sintoma secundario: se registra con
@@ -122,7 +123,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 // minuta (useMinuteKnowledge.addMinute); aquí NO se espeja.
                 const persisted = await minuteKnowledge.addMinute(snapshot);
                 // OS2 parity: speak the minute title after generation
-                const speechText = getCommandSpeech('GUARDAR_MINUTA', language);
+                const speechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);
                 if (speechText) {
                     try {
                         await speakResponse(`${speechText} ${snapshot.titulo || ''}`, language);
@@ -159,7 +160,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
         if (announce) {
             try {
-                const speechText = getCommandSpeech('GENERAR_RESUMEN', language);
+                const speechText = getCommandSpeech(COMMAND_IDS.GENERAR_RESUMEN, language);
                 if (speechText) {
                     await speakResponse(speechText, language);
                 }
@@ -290,7 +291,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
 
             // OS2 parity: command speech for GUARDAR_MINUTA (Gap 26)
             const savedTitle = String(persisted.summarySnapshot.titulo || '').trim();
-            const commandSpeechText = getCommandSpeech('GUARDAR_MINUTA', language);
+            const commandSpeechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);
             const speechText = savedTitle
                 ? `${commandSpeechText} ${savedTitle}`
                 : commandSpeechText;
@@ -341,7 +342,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             const persisted = await minuteKnowledge.addMinute(snapshot, { kind: 'conversacion' });
 
             if (announce) {
-                const speechText = getCommandSpeech('GUARDAR_MINUTA', language);
+                const speechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);
                 const savedTitle = String(persisted.summarySnapshot.titulo || '').trim();
                 if (speechText) {
                     try {

@@ -13,6 +13,7 @@
 // pinta desde `latestResponse`), así que no reemplaza a ningún otro tipo.
 // ============================================================
 import { isVisualWorkspaceTipo } from '../core/config/sharedConfig';
+import { COMMAND_IDS } from '../voice/lib/commandIds';
 
 export type TurnArtifactKind = 'video' | 'doc' | 'image' | 'text';
 
@@ -25,8 +26,8 @@ export function resolveTurnArtifactKind(
 ): TurnArtifactKind {
     const tipo = String(workspaceTipo || '').trim().toLowerCase();
     const comando = String(navComando || '').toUpperCase();
-    if (tipo === 'video' || comando === 'GENERAR_VIDEO') return 'video';
-    if (tipo === 'doc' || comando === 'GENERAR_DOCUMENTO') return 'doc';
+    if (tipo === 'video' || comando === COMMAND_IDS.GENERAR_VIDEO) return 'video';
+    if (tipo === 'doc' || comando === COMMAND_IDS.GENERAR_DOCUMENTO) return 'doc';
     if (isVisualWorkspaceTipo(tipo)) return 'image';
     return 'text';
 }

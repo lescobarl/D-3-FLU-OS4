@@ -207,6 +207,7 @@ import {
 } from './core/notes/superNoteTarget';
 import { superNoteIncoming, writeSuperNoteList } from './app/superNoteActions';
 import { runNoteRemovalIntent } from './app/noteRemovalActions';
+import { COMMAND_IDS } from './voice/lib/commandIds';
 
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
@@ -1769,7 +1770,7 @@ function App() {
             // Limpiar aquí borraba los resultados recién pintados cuando el ASR
             // emitía más revisiones del mismo comando (barra con query, grilla vacía).
             const comandoNavegacion = String((navegacion)?.comando || '').toUpperCase();
-            const isSearchFillTurn = comandoNavegacion === 'BUSCAR' || comandoNavegacion === 'NAVEGAR';
+            const isSearchFillTurn = comandoNavegacion === COMMAND_IDS.BUSCAR || comandoNavegacion === COMMAND_IDS.NAVEGAR;
             if (!isSearchFillTurn) dispatchFluResetSearch();
             // Foco del turno: el feed del Pizarrón salta al tipo del resultado.
             // `text` (respuesta conversacional) → vuelve a "Todo". El tipo sale
@@ -2860,7 +2861,7 @@ function App() {
                 {
                     transcript: clean,
                     response: manifesto,
-                    comando: 'CONOCER_FLU',
+                    comando: COMMAND_IDS.CONOCER_FLU,
                     phase: 'local-fast-path',
                 },
                 'CONOCER_FLU command executed (local)',
@@ -3651,7 +3652,7 @@ const {
                 await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
             }
             
-            const commandSpeech = getCommandSpeech('CERRAR_ESCUCHA', language);
+            const commandSpeech = getCommandSpeech(COMMAND_IDS.CERRAR_ESCUCHA, language);
             if (commandSpeech) {
                 try {
                     await speakResponse(commandSpeech, language);
@@ -3671,7 +3672,7 @@ const {
             await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
         }
         
-        const commandSpeech = getCommandSpeech('ABRIR_ESCUCHA', language);
+        const commandSpeech = getCommandSpeech(COMMAND_IDS.ABRIR_ESCUCHA, language);
         if (commandSpeech) {
             try {
                 await speakResponse(commandSpeech, language);
@@ -3693,7 +3694,7 @@ const {
                 cancelSpeech();
                 await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
             }
-            const commandSpeech = getCommandSpeech('INICIAR_CONVERSACION', language);
+            const commandSpeech = getCommandSpeech(COMMAND_IDS.INICIAR_CONVERSACION, language);
             if (commandSpeech) {
                 try {
                     await speakResponse(commandSpeech, language);

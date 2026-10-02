@@ -20,6 +20,7 @@ import {
   setFluParticipantEnabled,
   setFluParticipantOverrides,
 } from './fluParticipantConfig.js'
+import { COMMAND_IDS } from './commandIds.js'
 
 export {
   FLU_PARTICIPANT_CONFIG_KEYS,
@@ -45,13 +46,13 @@ export function detectParticipantFloorCommand(afterWake = '', voiceCommands = FL
   for (const phrase of grant) {
     const key = String(phrase || '').trim().toLowerCase()
     if (key && (norm === key || norm.startsWith(`${key} `) || norm.endsWith(` ${key}`))) {
-      return 'FLU_ADELANTE'
+      return COMMAND_IDS.FLU_ADELANTE
     }
   }
   for (const phrase of dismiss) {
     const key = String(phrase || '').trim().toLowerCase()
     if (key && (norm === key || norm.includes(key))) {
-      return 'FLU_ESPERA'
+      return COMMAND_IDS.FLU_ESPERA
     }
   }
   return null
