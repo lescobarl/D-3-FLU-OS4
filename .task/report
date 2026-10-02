@@ -3216,3 +3216,26 @@ No validado: DoD-producto. e2e declarado por area (matriz de comandos de juego).
 
 Alcance real: CUBIERTO = los 10 accesores + el esqueleto del prompt. NO CUBIERTO = e2e por motor,
 P8.4/P8.7/P8.8 y la verificacion visual.
+
+## HITO instrumento-1 (2026-10-02) — V6 y V17 dejan de estar verdes por ausencia
+
+Cambios aplicados: los dos detectores vacios del catalogo bajan a `scripts/audit-detectors.mjs`
+(dueno unico que consumen `auditoria.mjs` y el guard nuevo) y miden el patron real: monkey-patch
+de libreria (prototipo ajeno / THREE, sin contar el shim de DOM) e import relativo que no resuelve
+(saltando comentarios y aceptando `.d.ts`). `auditoria.mjs` V6/V17 rewireados; hash re-sellado.
+
+Validado contra:
+  - `node scripts/auditoria.mjs --only V6,V17`: ANTES note "src/avatar/lib/masterBinding.ts parchea
+    Three.js" (fichero inexistente) y "el .mjs importa ruta inexistente" (ruta inexistente);
+    DESPUES note del detector real. Los dos objetivos NO existian: comprobado.
+  - guard tests/auditVacuityGuard.test.ts: 0 en el arbol + dispara con el defecto sintetico
+    (2 de 3 marcados; el comentado NO) + no marca el legitimo (shim de DOM, `.d.ts`, ruta en comentario).
+  - METRICA (lineas `detect:` con los objetivos viejos): 2 -> 0 (target 0).
+  - FALSO POSITIVO MEDIDO antes de arreglar (7.7.f(5)): la 1a version marcaba 2 casos legitimos
+    (`from '../types/fluWindow'` de un `.d.ts` y `from '...'` en un comentario) => se arreglo el
+    DETECTOR, no el codigo señalado.
+  - lint 153 ficheros / 1316 tests; baseline [] = 0 fallos nuevos.
+
+No validado: el resto del catalogo de auditoria; e2e; suite completa.
+
+Alcance real: CUBIERTO = V6/V17 reales + la barrera. NO CUBIERTO = el resto del catalogo, P8.4/P8.8.
