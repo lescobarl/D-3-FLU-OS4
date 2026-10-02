@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, turnResult } from './gameUtils';
+import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, normalizeForMatch, turnResult } from './gameUtils';
 
 export interface CuentoItem {
     inicio: string;
@@ -179,9 +179,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || HINT_FRAMES.some((frame) => hasAnyToken(normalized, [frame]))
-                || SKIP_FRAMES.some((frame) => hasAnyToken(normalized, [frame]));
+            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

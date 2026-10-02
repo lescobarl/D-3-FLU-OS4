@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -250,9 +250,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

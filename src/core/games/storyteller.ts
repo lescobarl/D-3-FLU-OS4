@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameNarrativeScene, GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
+import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
 
@@ -301,9 +301,7 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

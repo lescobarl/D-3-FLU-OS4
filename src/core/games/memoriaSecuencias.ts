@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, turnResult } from './gameUtils';
+import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, turnResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -192,9 +192,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

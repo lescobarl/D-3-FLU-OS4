@@ -430,4 +430,20 @@ export const STOPWORDS_ES: ReadonlySet<string> = new Set([
  */
 export function isLastRound(state: { cursor: number; maxRounds: number; order: readonly unknown[] }): boolean {
     return state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length;
+}
+
+/**
+ * Superficie de comandos de un motor de juego: fin de partida + pista + salto.
+ * Dueno unico de la composicion (antes copiada identica en 17 motores, con dos
+ * variantes equivalentes hasToken/hasAnyToken). Los frames son por motor.
+ */
+export function isGameCommandSurface(
+    normalized: string,
+    frames: { end: readonly string[]; hint: readonly string[]; skip: readonly string[] },
+): boolean {
+    return (
+        matchesEndGameFrames(normalized, frames.end) ||
+        hasAnyToken(normalized, frames.hint) ||
+        hasAnyToken(normalized, frames.skip)
+    );
 }

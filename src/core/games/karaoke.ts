@@ -18,7 +18,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, matchesEndGameFrames, normalizeForMatch, turnResult } from './gameUtils';
+import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, turnResult } from './gameUtils';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)
@@ -224,9 +224,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || HINT_FRAMES.some((frame) => hasAnyToken(normalized, [frame]))
-                || SKIP_FRAMES.some((frame) => hasAnyToken(normalized, [frame]));
+            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }
