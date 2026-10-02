@@ -5,7 +5,6 @@
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
-import { buildSyncTuple } from '../../core/db/syncTuple'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
 export const SPEAKER_ID_FLU = 'flu'
@@ -78,52 +77,8 @@ export function normalizeRowSignature(signature = null) {
   return signature.slice(0, 512).map((value) => Number(value) || 0)
 }
 
-export function createConversationRow({
-  text = '',
-  speakerId = SPEAKER_ID_CALCULATING,
-  speakerName = '',
-  timestamp = Date.now(),
-  isFinal = true,
-  id = '',
-  signature = null,
-} = {}) {
-  const cleanText = cleanForSpeech(text)
-  const sid = String(speakerId || '').trim() || SPEAKER_ID_CALCULATING
-  const sname = cleanForSpeech(speakerName) || resolveSpeakerNameFromId(sid)
-  assertConversationRowFields({ speakerId: sid, speakerName: sname })
-  const final = Boolean(isFinal)
-  const row = {
-    id: String(id || '').trim() || crypto.randomUUID(),
-    text: cleanText,
-    speakerId: sid,
-    speakerName: sname,
-    timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
-    isFinal: final,
-    ...buildSyncTuple(undefined, Date.now()),
-    ...(final ? { speakerLocked: true } : {}),
-  }
-  const normalizedSignature = normalizeRowSignature(signature)
-  if (normalizedSignature?.length) {
-    row.signature = normalizedSignature
-  }
-  return row
-}
 
-export function assertConversationRowFields({ speakerId = '', speakerName = '' } = {}) {
-  for (const value of [speakerId, speakerName]) {
-    if (Array.isArray(value)) {
-      throw new Error('conversationRow: vector/array forbidden in speaker fields')
-    }
-    const text = String(value || '')
-    if (text.startsWith('[') && text.includes(',')) {
-      throw new Error('conversationRow: serialized vector forbidden in speaker fields')
-    }
-  }
-}
 
-export function isSpeakerImmutable(row = {}) {
-  return row.isFinal !== false
-}
 
 export function formatRowClock(row = {}) {
   const ts = Number(row.timestamp)

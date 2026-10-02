@@ -10,14 +10,12 @@ import { integrateMicPacket, mergeMicChunks, readStreamDisplay, resolveCommitCap
 
 export {
   advancePublishedDisplay,
-  advancePublishedDisplay as applyDisplayTranscript,
   assessStreamParity,
   checkStreamParity,
   integrateMicPacket,
   mergeSpeechText,
   processListenPacket,
   readStreamDisplay,
-  readStreamDisplay as readLastPhrasePreview,
   readSession,
   readPublishedText,
   resolveLogParagraphBreak,
@@ -42,7 +40,6 @@ export {
   normalizeMicText,
   hasSpeechAnchor,
   shouldRefreshStream,
-  shouldRefreshStream as shouldEmitConversationLog,
   utterancesRelate,
 } from './conversationStream.js'
 

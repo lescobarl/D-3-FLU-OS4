@@ -14,7 +14,6 @@ import {
 
 export {
   buildVisualGenerationPrompt,
-  buildVisualGenerationPrompt as buildWorkspaceImagePrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,

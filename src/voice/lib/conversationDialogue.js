@@ -3,8 +3,6 @@
  * Flu usa el mismo mecanismo que los hablantes automáticos (sin canal paralelo).
  */
 import { cleanForSpeech } from './audioMath.js'
-import { phrasesEquivalent } from './activeListen.js'
-import { utterancesRelate } from './conversationStream.js'
 import { FLU_CONFIG } from './fluConfig.js'
 
 const FALLBACK_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
@@ -28,14 +26,6 @@ export function trimDialogueHistory(history = [], max = FLU_CONFIG.limits.contex
   return history.length <= limit ? [...history] : history.slice(-limit)
 }
 
-function trimLogRows(texts = [], speakers = [], maxRows = FLU_CONFIG.limits.priorRowsMax) {
-  const limit = Number(maxRows)
-  if (!Number.isFinite(limit) || limit <= 0) return
-  while (texts.length > limit) {
-    texts.shift()
-    speakers.shift()
-  }
-}
 
 export function appendDialogueEntry(history = [], entry = {}, max = FLU_CONFIG.limits.contextHistoryMax) {
   // OS4: incluye respuesta_voz — las respuestas de Gemini llegan bajo ese campo
@@ -58,88 +48,7 @@ export function appendDialogueEntry(history = [], entry = {}, max = FLU_CONFIG.l
   return trimDialogueHistory([...history, normalized], max)
 }
 
-function appendDialogueTurn(
-  history = [],
-  { speaker, text, phase = 'SESION_ACTIVA', source = DIALOGUE_SOURCE.LOG } = {},
-  max = FLU_CONFIG.limits.contextHistoryMax,
-  { replaceLast = false } = {},
-) {
-  const cleaned = cleanForSpeech(text)
-  if (!cleaned) return [...history]
 
-  if (isFluSpeaker(speaker)) {
-    return appendDialogueEntry(
-      history,
-      { role: 'assistant', speaker: FLU_DIALOGUE_SPEAKER, text: cleaned, phase, source },
-      max,
-    )
-  }
-
-  const speakerLabel = String(speaker || '').trim() || FALLBACK_SPEAKER
-  const last = history[history.length - 1]
-
-  if (replaceLast && last?.role === 'user' && last.speaker === speakerLabel) {
-    return trimDialogueHistory(
-      [...history.slice(0, -1), { ...last, text: cleaned, phase, source }],
-      max,
-    )
-  }
-
-  if (last?.role === 'user' && last.speaker === speakerLabel) {
-    if (phrasesEquivalent(last.text, cleaned)) return [...history]
-    if (utterancesRelate(last.text, cleaned)) {
-      return trimDialogueHistory(
-        [...history.slice(0, -1), { ...last, text: cleaned, phase, source }],
-        max,
-      )
-    }
-  }
-
-  return appendDialogueEntry(
-    history,
-    { role: 'user', speaker: speakerLabel, text: cleaned, phase, source },
-    max,
-  )
-}
-
-/**
- * Registra un turno en log de sesión (texts/speakers) y en contexto Gemini (dialogue).
- * Mutates logTexts/logSpeakers in place; returns new dialogue array.
- */
-export function recordConversationTurn(
-  logTexts,
-  logSpeakers,
-  dialogueHistory = [],
-  { speaker, text, phase = 'SESION_ACTIVA', source = DIALOGUE_SOURCE.LOG } = {},
-  {
-    replaceLast = false,
-    maxLogRows = FLU_CONFIG.limits.priorRowsMax,
-    maxDialogue = FLU_CONFIG.limits.contextHistoryMax,
-  } = {},
-) {
-  const cleaned = cleanForSpeech(text)
-  if (!cleaned) return dialogueHistory
-
-  const speakerLabel = String(speaker || '').trim() || FALLBACK_SPEAKER
-  const lastText = logTexts[logTexts.length - 1] || ''
-
-  if (replaceLast && logTexts.length && utterancesRelate(lastText, cleaned)) {
-    logTexts[logTexts.length - 1] = cleaned
-    logSpeakers[logSpeakers.length - 1] = speakerLabel
-  } else if (!lastText || !phrasesEquivalent(lastText, cleaned)) {
-    logTexts.push(cleaned)
-    logSpeakers.push(speakerLabel)
-  }
-
-  trimLogRows(logTexts, logSpeakers, maxLogRows)
-
-  return appendDialogueTurn(
-    dialogueHistory,
-    { speaker: speakerLabel, text: cleaned, phase, source },
-    maxDialogue,
-    { replaceLast },
-  )
-}
 
 /**
  * §9 ÚNICA FUENTE DE VERDAD: deriva el diálogo de Gemini DESDE el store
