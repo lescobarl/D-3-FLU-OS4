@@ -83,6 +83,34 @@ export function parseMinuteHistoryCode(code: string = ''): { date: string; seque
     };
 }
 
+/**
+ * Clave de deduplicacion de una minuta: `titulo|tema` normalizado.
+ *
+ * DUENO UNICO (auditoria de codigo 2026-10-02): el hook de persistencia
+ * (useMinuteKnowledge) y la capa de voz (voice/lib/minuteKnowledge) usan ESTA
+ * misma funcion. Antes cada uno tenia su formula y YA divergian: con un titulo
+ * con guion o espacios dobles la clave no coincidia y el upsert por `minuteKey`
+ * duplicaba la minuta (AGENTS.md 7.7.c: un dominio, un almacen).
+ */
+export function buildMinuteKey(summary: MinuteSnapshotLike = {}): string {
+    const title = normalizeSpaces(summary?.titulo || '');
+    const sessionTheme = normalizeSpaces(summary?.tema_sesion || '');
+    return cleanForSpeech(`${title}|${sessionTheme}`).toLowerCase();
+}
+
+/**
+ * Codigo de historial de minuta: YYMMDD-NN (dueno unico, misma razon que
+ * buildMinuteKey). `sequence` va con ceros a la izquierda para que el orden
+ * lexicografico del codigo sea el orden cronologico.
+ */
+export function formatMinuteHistoryCode(date: Date = new Date(), sequence = 1): string {
+    const year = String(date.getFullYear()).slice(-2);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const seq = String(sequence).padStart(2, '0');
+    return `${year}${month}${day}-${seq}`;
+}
+
 // ------------------------------------------------------------
 // Minuta: "minuta uno" / "minute 4" → número de secuencia
 // ------------------------------------------------------------
@@ -245,7 +273,10 @@ function resolveKindLabel(kind: string = ''): string {
     }
 }
 
-function formatMinuteKnowledgeEntry(record: MinuteRecordLike = {}, { fallbackIndex = 0 }: { fallbackIndex?: number } = {}): string {
+export function formatMinuteKnowledgeEntry(
+    record: MinuteRecordLike = {},
+    { fallbackIndex = 0, defaultTheme }: { fallbackIndex?: number; defaultTheme?: string } = {},
+): string {
     const snapshot = record?.summarySnapshot || record;
     const kind = String(snapshot?.kind || record?.kind || 'minuta');
     const kindLabel = resolveKindLabel(kind);
@@ -271,7 +302,7 @@ function formatMinuteKnowledgeEntry(record: MinuteRecordLike = {}, { fallbackInd
         return `${header}${mood}\n${body}`.trim();
     }
 
-    const speechTheme = resolveMinuteThemeForSpeech(snapshot, record);
+    const speechTheme = resolveMinuteThemeForSpeech(snapshot, record, { defaultTheme });
     const body = [
         snapshot?.titulo ? `Titulo: ${snapshot.titulo}` : '',
         speechTheme ? `Tema: ${speechTheme}` : '',

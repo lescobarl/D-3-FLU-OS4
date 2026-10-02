@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-22",
+  "updated": "2026-10-02",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1092,6 +1092,62 @@
       "estado": "done",
       "titulo": "El dueno ratifica las ediciones de contrato que exigieron los guards",
       "evidencia": "VEREDICTO: las ediciones de contrato de esta sesion quedan legitimadas por necesidad mecanica, no por decision del agente. (1) allow 317 -> 322: domainScopedIntent.ts, documentChunker.ts, fluParticipantConfig.js (los 3 los tenia que tocar la migracion; sin ellos el gate los marca fuera de alcance) y uiStrings.test.ts, documentInsumo.test.ts (tests nuevos/afectados). (2) DoD 121 -> 125 tests: documentChunker, domainScopedIntent (exigidos por el guard P7.88: el cierre no puede cerrar sin que el gate vea los tests que cubren el src tocado), uiStrings, documentInsumo (el nuevo comportamiento con marcadores y el sitio migrado). (3) maxFiles 300 -> 328 ya lo ratifico el dueno el 2026-09-22 (dd8edc7). Nada de esto se puede revertir sin deshacer la migracion de B8. PENDIENTE DEL DUENO: refrendar allow 322 y el DoD de 125 tests con su propia linea, igual que se hizo con maxFiles."
+    },
+    {
+      "id": "P8.1",
+      "titulo": "Bloque de minutas: compareMinuteHistoryCodeDesc (objeto) y compareHistoryCodeDesc (string) son la MISMA regla escrita dos veces con firmas distintas",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/minuteKnowledge.js:107 vs src/hooks/useMinuteKnowledge.ts:41",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.2",
+      "titulo": "Bloque de minutas: getNextUniversalHistorySequence y getNextSequence implementan la misma secuencia universal",
+      "estado": "todo",
+      "evidencia": "src/voice/lib/minuteKnowledge.js:119 vs src/hooks/useMinuteKnowledge.ts:52",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.3",
+      "titulo": "sendJson duplicado: geminiProxy.ts reimplementa el escritor de respuesta de httpJson.ts y ademas escribe writeHead sin charset en 7 sitios",
+      "estado": "todo",
+      "evidencia": "src/server/geminiProxy.ts:214 vs src/server/httpJson.ts:38",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.4",
+      "titulo": "Orquestacion de worker triplicada: isWorkerRuntime/ensureWorker/runMainThreadFallback copiados en los clientes de worker (con semantica ya divergente)",
+      "estado": "todo",
+      "evidencia": "src/avatar/workers/fbxWorkerClient.ts:34,38,100 vs src/voice/lib/voiceIdWorkerClient.js:23,71,163 (+ src/voice/lib/asr/whisperWasmTranscriber.js:25)",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.5",
+      "titulo": "Accesor repetido en motores de juego: itemAt (6 copias) y currentPrompt (4 copias) difieren solo en el banco/tipo",
+      "estado": "todo",
+      "evidencia": "src/core/games/*.ts (10 definiciones; p.ej. abecedario.ts:78 y repiteTraduce.ts:63)",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.6",
+      "titulo": "Contratos de tipo duplicados o colisionados: AgendaFireAction, DndSchedule, NewShoppingItemInput (identicos), NewNoteInput (divergente: la lista no acepta body) y ParticipantConfig/RegisterResult (mismo nombre, cosas distintas)",
+      "estado": "todo",
+      "evidencia": "src/core/agenda/agendaMotor.ts:13 vs src/hooks/useAgenda.ts:26; src/core/dnd/dndPolicy.ts:7 vs src/hooks/useDoNotDisturb.ts:12; src/core/reminders/shoppingList.ts:19 vs shoppingService.ts:28; src/core/notes/notesList.ts:20 vs notesService.ts:42; src/core/multiuser/participantRegistry.ts:66 vs src/lib/fluParticipant.ts:37",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.7",
+      "titulo": "Detectores vacios en scripts/auditoria.mjs: V6 mide src/avatar/lib/masterBinding.ts (fichero inexistente) y V17 mide src/server/handlers/workspaceImageHandler.mjs (ruta inexistente) => verdes por ausencia (AGENTS.md 7.7.f(2))",
+      "estado": "todo",
+      "evidencia": "scripts/auditoria.mjs:339-341 y 415-417",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.8",
+      "titulo": "El flujo de minutas NO tiene spec e2e: ningun tests/e2e/*.spec.ts menciona minuta, asi que e2e:scope senala los 3 src tocados y no se declara mapeo falso",
+      "estado": "todo",
+      "evidencia": "tests/e2e/ (10 specs, 0 coincidencias de \"minuta\"); .task/contract.json -> e2eScope",
+      "origen": "auditoria-codigo-2026-10-02"
     }
   ],
   "done": [

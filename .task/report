@@ -3075,3 +3075,35 @@ PENDIENTE DECLARADO (NO CUBIERTO): P7.81 citaba tambien el bloque de
   ahi un constructor unico seria un parche de tipos. Queda MEDIDO y
   abierto, no olvidado.
 EOL: .task/contract.json en LF (i/lf w/lf); sin marcas U+FFFD.
+
+## HITO minutas (2026-10-02) — un dueno por simbolo del bloque de minutas
+
+Cambios aplicados: I1+I2 del informe de auditoria de codigo. Dueno unico en
+src/lib/minuteKnowledgeHelpers.ts de buildMinuteKey, formatMinuteHistoryCode y
+formatMinuteKnowledgeEntry; src/voice/lib/minuteKnowledge.js los importa/re-exporta
+y borra sus 3 copias; src/hooks/useMinuteKnowledge.ts importa los 3 y borra
+buildMinuteKey/formatHistoryCode/parseHistoryCode locales; el upsert RECALCULA la
+clave al buscar para no duplicar filas escritas con la formula vieja (7.7.c).
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/minuteSingleOwnerGuard.test.ts
+    ANTES (rojo) listaba: src/lib/minuteKnowledgeHelpers.ts:formatMinuteKnowledgeEntry:248,
+    src/voice/lib/minuteKnowledge.js:formatMinuteKnowledgeEntry:103,
+    src/voice/lib/minuteKnowledge.js:buildMinuteKey:89,
+    src/hooks/useMinuteKnowledge.ts:buildMinuteKey:38 (4 sitios, 2 simbolos dobles)
+  - METRICA: rg -o "function (buildMinuteKey|formatMinuteKnowledgeEntry|formatMinuteHistoryCode|parseMinuteHistoryCode|formatHistoryCode|parseHistoryCode)" | find /c /v ""
+    8 -> 4 (target 4); el gate la recomputa en el worktree base.
+  - npm run test:file (4 ficheros de minuta) = 83 passed
+  - npm run typecheck = verde
+  - npm run lint (lint:guards 149 ficheros / 1293 tests + eslint) = verde
+  - baseline .task/baseline.json = [] => 0 fallos nuevos
+
+No validado: el DoD-producto (pantalla). El guard cubre clave/formato; el par
+compare/getNext del mismo bloque queda registrado como P8.1/P8.2 (misma regla, otra
+firma) para no ampliar el invariante de este hito.
+
+Alcance real: CUBIERTO = los 4 simbolos del invariante + comportamiento de la KB de
+voz (rama diario). NO CUBIERTO = e2e del flujo de minutas (P8.8), el resto del
+informe de auditoria (P8.3-P8.7) y la verificacion visual.
+
+EOL: 3 ficheros con EOL mixto/CRLF editados preservando su clase (eolGuard verde).

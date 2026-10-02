@@ -8,6 +8,9 @@ import {
   createMinuteDraftFromSummary,
   isGenericMinuteSessionTheme,
   resolveMinuteThemeForSpeech,
+  buildMinuteKey,
+  formatMinuteHistoryCode,
+  formatMinuteKnowledgeEntry,
 } from '../../lib/minuteKnowledgeHelpers'
 
 // D3: dueño canónico de estos parsers/helpers es src/lib/minuteKnowledgeHelpers.ts.
@@ -20,6 +23,8 @@ export {
   createMinuteDraftFromSummary,
   isGenericMinuteSessionTheme,
   resolveMinuteThemeForSpeech,
+  buildMinuteKey,
+  formatMinuteHistoryCode,
 }
 
 export const MINUTE_DESCRIPTION_LIMIT = 10
@@ -86,45 +91,10 @@ export function parseMinuteDraftText(text = '', baseDraft = {}) {
   return draft
 }
 
-export function buildMinuteKey(summary = {}) {
-  const title = normalizeSpaces(summary?.titulo || '')
-  const sessionTheme = normalizeSpaces(summary?.tema_sesion || '')
-  return cleanForSpeech(`${title}|${sessionTheme}`).toLowerCase()
-}
-
-export function formatMinuteHistoryCode(date = new Date(), sequence = 1) {
-  const year = String(date.getFullYear()).slice(-2)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const seq = String(sequence).padStart(2, '0')
-  return `${year}${month}${day}-${seq}`
-}
-
-function formatMinuteKnowledgeEntry(record = {}, { fallbackIndex = 0 } = {}) {
-  const snapshot = record?.summarySnapshot || record
-  const code = normalizeSpaces(record?.historyCode || '')
-  const { sequence } = parseMinuteHistoryCode(code)
-  const seqLabel = sequence > 0 ? String(sequence) : String(fallbackIndex + 1)
-  const header = code
-    ? `[Minuta ${seqLabel} · ${code}] ${record?.description || snapshot?.titulo || ''}`.trim()
-    : `[Minuta ${seqLabel}] ${record?.description || snapshot?.titulo || ''}`.trim()
-  const speechTheme = resolveMinuteThemeForSpeech(snapshot, record, {
-    defaultTheme: FLU_CONFIG.sessionDefaults?.theme || '',
-  })
-  const body = [
-    snapshot?.titulo ? `Titulo: ${snapshot.titulo}` : '',
-    speechTheme ? `Tema: ${speechTheme}` : '',
-    snapshot?.resumen ? `Resumen: ${snapshot.resumen}` : '',
-    snapshot?.participantes?.length ? `Participantes: ${snapshot.participantes.join(', ')}` : '',
-    snapshot?.acuerdos?.length ? `Acuerdos: ${snapshot.acuerdos.join(' | ')}` : '',
-    snapshot?.pendientes?.length ? `Pendientes: ${snapshot.pendientes.join(' | ')}` : '',
-    snapshot?.siguientes_pasos?.length ? `Siguientes pasos: ${snapshot.siguientes_pasos.join(' | ')}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-  return `${header}\n${body}`.trim()
-}
+// buildMinuteKey / formatMinuteHistoryCode / formatMinuteKnowledgeEntry: dueno unico
+// en src/lib/minuteKnowledgeHelpers.ts (se importan arriba y los publicos se
+// re-exportan). NO se reimplementan aqui: la copia local forzaba la etiqueta
+// "Minuta" sin rama diario y su clave divergia (auditoria 2026-10-02).
 
 /** Al guardar minuta: tema real (titulo) si la sesion sigue en placeholder generico. */
 export function resolveMinuteThemeForSave({ titulo = '', sessionTheme = '' } = {}) {
@@ -253,7 +223,12 @@ export function buildVoiceMinuteKnowledgeBase(records = []) {
   const windowRecords = windowSize > 0 ? records.slice(0, windowSize) : records
 
   return windowRecords
-    .map((record, index) => formatMinuteKnowledgeEntry(record, { fallbackIndex: index }))
+    .map((record, index) =>
+      formatMinuteKnowledgeEntry(record, {
+        fallbackIndex: index,
+        defaultTheme: FLU_CONFIG.sessionDefaults?.theme || '',
+      }),
+    )
     .filter(Boolean)
     .join('\n\n')
 }

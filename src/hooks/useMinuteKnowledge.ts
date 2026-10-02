@@ -14,6 +14,7 @@ import { fluDb, newId, type MinuteRecord, type MinuteSummarySnapshot, type Knowl
 import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
 import { logCaughtError } from '../lib/caughtError';
+import { buildMinuteKey, formatMinuteHistoryCode, parseMinuteHistoryCode } from '../lib/minuteKnowledgeHelpers';
 
 /**
  * Minuta en formato de UI (compatible con OS2 normalizeMinuteKnowledgeRecord).
@@ -33,40 +34,13 @@ export interface MinuteUIEntry {
 }
 
 /**
- * Construye minuteKey al estilo OS2: titulo|tema_sesion normalizado.
- */
-function buildMinuteKey(snapshot: MinuteSummarySnapshot): string {
-    const title = (snapshot.titulo || '').trim().toLowerCase();
-    const theme = (snapshot.tema_sesion || '').trim().toLowerCase();
-    return `${title}|${theme}`;
-}
-
-/**
- * Formatea historyCode al estilo OS2: YYMMDD-NN
- */
-function formatHistoryCode(now: Date, sequence: number): string {
-    const year = String(now.getFullYear()).slice(-2);
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const seq = String(sequence).padStart(2, '0');
-    return `${year}${month}${day}-${seq}`;
-}
-
-/**
- * Parsea historyCode: { date: string, sequence: number }
- */
-function parseHistoryCode(code: string): { date: string; sequence: number } {
-    const match = (code || '').trim().match(/^(\d{6})-(\d+)$/);
-    if (!match) return { date: code || '', sequence: 0 };
-    return { date: match[1], sequence: Number.parseInt(match[2], 10) || 0 };
-}
-
-/**
- * Compara dos historyCodes descendente (más reciente primero).
+ * Clave/formato/parseo del historyCode: dueno unico en
+ * src/lib/minuteKnowledgeHelpers.ts (se importan arriba). NO se reimplementan
+ * aqui: la copia local divergia del canonico (auditoria 2026-10-02).
  */
 function compareHistoryCodeDesc(a: string, b: string): number {
-    const left = parseHistoryCode(a);
-    const right = parseHistoryCode(b);
+    const left = parseMinuteHistoryCode(a);
+    const right = parseMinuteHistoryCode(b);
     const dateCompare = right.date.localeCompare(left.date);
     if (dateCompare !== 0) return dateCompare;
     return right.sequence - left.sequence;
@@ -77,7 +51,7 @@ function compareHistoryCodeDesc(a: string, b: string): number {
  */
 function getNextSequence(entries: MinuteRecord[]): number {
     return entries.reduce((max, entry) => {
-        const { sequence } = parseHistoryCode(entry.historyCode);
+        const { sequence } = parseMinuteHistoryCode(entry.historyCode);
         return Math.max(max, sequence);
     }, 0) + 1;
 }
@@ -179,7 +153,13 @@ export function useMinuteKnowledge(participantId?: string) {
             const description = (snapshotWithKind.titulo || '').trim();
 
             // Buscar si ya existe una minuta con el mismo minuteKey (upsert)
-            const existingIndex = records.findIndex((r) => r.minuteKey === minuteKey && !r.sync.deleted);
+            // El dueno de la clave es buildMinuteKey (canonico). Las filas escritas
+            // ANTES de la unificacion pueden llevar la clave vieja, asi que la clave
+            // se RECALCULA al buscar: de lo contrario el upsert crearia una fila
+            // duplicada de la misma minuta (AGENTS.md 7.7.c).
+            const existingIndex = records.findIndex(
+                (r) => !r.sync.deleted && buildMinuteKey(r.summarySnapshot) === minuteKey,
+            );
 
             const record: MinuteRecord = {
                 id: existingIndex >= 0 ? records[existingIndex].id : newId(),
@@ -189,7 +169,7 @@ export function useMinuteKnowledge(participantId?: string) {
                 historyCode:
                     existingIndex >= 0
                         ? records[existingIndex].historyCode
-                        : formatHistoryCode(now, getNextSequence(records)),
+                        : formatMinuteHistoryCode(now, getNextSequence(records)),
                 description,
                 summarySnapshot: { ...snapshotWithKind },
                 sequence: maxSeq + 1,
