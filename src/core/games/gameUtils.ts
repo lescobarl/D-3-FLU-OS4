@@ -5,6 +5,8 @@
 // riddles, adivinaNumero, calculoMental, veoVeo, quienSoy y
 // palabrasEncadenadas — extraídos aquí para no duplicar lógica en
 // los 14 motores nuevos. Módulo puro, sin I/O, sin imports .js.
+// Los frames de comando son DATO por motor y se exportan con nombre CALIFICADO
+// (un HINT_FRAMES por modulo chocaria); la superficie se compone en isGameCommandSurface.
 // ============================================================
 
 export type RandomSource = () => number;

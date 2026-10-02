@@ -228,6 +228,4 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
         },
     };
 }
-// Superficie de comandos PUBLICADA como dato, con nombre CALIFICADO por motor:
-// los simbolos exportados deben ser unicos (un `HINT_FRAMES` por modulo choca).
-export const KARAOKE_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })
+export const KARAOKE_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })
