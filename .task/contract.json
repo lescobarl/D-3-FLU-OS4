@@ -570,7 +570,8 @@
     "tests/commandIdsVocabularySingleOwnerGuard.test.ts",
     "src/voice/lib/participantFloor.js",
     "src/voice/lib/workerPendingBridge.js",
-    "tests/workerPendingBridgeSingleOwnerGuard.test.ts"
+    "tests/workerPendingBridgeSingleOwnerGuard.test.ts",
+    "src/voice/lib/asr/whisperWasmTranscriber.js"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
