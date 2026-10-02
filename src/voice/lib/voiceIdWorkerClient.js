@@ -10,10 +10,9 @@ import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { createWorkerPendingBridge } from './workerPendingBridge.js'
 
-let worker = null
 let seq = 0
-const pending = new Map()
 const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
 const EMBED_TYPES = new Set(['embed', 'embedAndMatch'])
 
@@ -24,6 +23,22 @@ import { isWorkerRuntime } from '../../lib/workerRuntime'
 
 // El dueno de la pregunta es src/lib/workerRuntime.ts (antes habia una copia aqui
 // con la guarda extra de `window`, que solo cambia fuera del hilo principal).
+
+// Esqueleto comun (P8.9): creacion perezosa + despacho por id + fail-all.
+// voiceId NO termina el worker al fallar (solo limpia su estado de embedding),
+// por eso su onFatal no llama a terminate: el puente deja esa politica al cliente.
+const bridge = createWorkerPendingBridge({
+  createWorker: () =>
+    new Worker(new URL('../workers/voiceId.worker.js', import.meta.url), { type: 'module' }),
+  canRun: isWorkerRuntime,
+  label: 'voiceId',
+  valueKey: 'result',
+  failMessage: 'voiceId worker failed',
+  onFatal: () => {
+    embedInFlight = false
+    embedPending = null
+  },
+})
 
 /** Búfer transferible: propiedad pasa al worker (zero-copy). */
 export function prepareTransferableAudio(samples) {
@@ -69,39 +84,8 @@ function trimClustersForWorker(clusters = [], max = 6) {
   }))
 }
 
-function ensureWorker() {
-  if (!isWorkerRuntime()) return null
-  if (worker) return worker
-
-  worker = new Worker(new URL('../workers/voiceId.worker.js', import.meta.url), {
-    type: 'module',
-  })
-
-  worker.onmessage = (event) => {
-    const { id, ok, result, error } = event.data || {}
-    const entry = pending.get(id)
-    if (!entry) return
-    if (entry.timer) clearTimeout(entry.timer)
-    pending.delete(id)
-    if (ok) entry.resolve(result)
-    else entry.reject(new Error(error || 'voiceId worker failed'))
-  }
-
-  worker.onerror = (event) => {
-    for (const [, entry] of pending) {
-      if (entry.timer) clearTimeout(entry.timer)
-      entry.reject(new Error(event?.message || 'voiceId worker error'))
-    }
-    pending.clear()
-    embedInFlight = false
-    embedPending = null
-  }
-
-  return worker
-}
-
 function postImmediate(type, payload = {}, transfer = []) {
-  const w = ensureWorker()
+  const w = bridge.ensure()
   if (!w) {
     if (typeof window !== 'undefined') {
       return Promise.reject(new Error('voiceId worker unavailable'))
@@ -111,10 +95,10 @@ function postImmediate(type, payload = {}, transfer = []) {
   const id = `vid-${Date.now()}-${(seq += 1)}`
   return new Promise((resolve, reject) => {
     const entry = { resolve, reject, type }
-    pending.set(id, entry)
+    bridge.pending.set(id, entry)
     const timer = setTimeout(() => {
-      if (!pending.has(id)) return
-      pending.delete(id)
+      if (!bridge.pending.has(id)) return
+      bridge.pending.delete(id)
       reject(new Error(`voiceId worker timeout (${type})`))
     }, workerRequestMs)
     entry.timer = timer

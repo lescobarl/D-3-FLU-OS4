@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig';
 import { isWorkerRuntime } from '../../lib/workerRuntime';
+import { createWorkerPendingBridge } from '../../voice/lib/workerPendingBridge.js';
 
 /**
  * Cliente del Web Worker de parseo FBX (espejo de voiceIdWorkerClient.js).
@@ -23,66 +24,40 @@ const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS;
 interface PendingEntry {
   resolve: (json: unknown) => void;
   reject: (reason: Error) => void;
-  url: string;
   timer?: ReturnType<typeof setTimeout>;
 }
 
-let worker: Worker | null = null;
 let workerDead = false;
 let seq = 0;
-const pending = new Map<string, PendingEntry>();
 
-
-
-function ensureWorker(): Worker | null {
-  if (!isWorkerRuntime()) return null;
-  if (workerDead) return null;
-  if (worker) return worker;
-
-  worker = new Worker(new URL('./fbxLoader.worker.js', import.meta.url), {
-    type: 'module',
-  });
-
-  worker.onmessage = (event: MessageEvent) => {
-    const { id, ok, json, error } = event.data || {};
-    const entry = pending.get(id);
-    if (!entry) return;
-    if (entry.timer) clearTimeout(entry.timer);
-    pending.delete(id);
-    if (ok) entry.resolve(json);
-    else entry.reject(new Error(error || 'fbx worker failed'));
-  };
-
-  worker.onerror = (event: ErrorEvent) => {
-    // Fallo fatal del worker (p.ej. falló el bundle en prod): marcar como
+// Esqueleto comun (P8.9): creacion perezosa + despacho por id + fail-all.
+const bridge = createWorkerPendingBridge({
+  createWorker: () =>
+    new Worker(new URL('./fbxLoader.worker.js', import.meta.url), { type: 'module' }),
+  // Sin runtime de worker, o si el worker ya murio, no se recrea.
+  canRun: () => isWorkerRuntime() && !workerDead,
+  label: 'fbx',
+  valueKey: 'json',
+  failMessage: 'fbx worker failed',
+  onFatal: (_reason, api) => {
+    // Fallo fatal del worker (p.ej. fallo el bundle en prod): marcarlo como
     // muerto para no recrearlo en cada request y fallar al fallback.
     workerDead = true;
-    const reason = new Error(event?.message || 'fbx worker error');
-    for (const [, entry] of pending) {
-      if (entry.timer) clearTimeout(entry.timer);
-      entry.reject(reason);
-    }
-    pending.clear();
-    if (worker) {
-      worker.terminate();
-      worker = null;
-    }
-  };
-
-  return worker;
-}
+    api.terminate();
+  },
+});
 
 function postLoad(url: string): Promise<unknown> {
-  const w = ensureWorker();
+  const w = bridge.ensure();
   if (!w) return runMainThreadFallback(url);
 
   const id = `fbx-${Date.now()}-${(seq += 1)}`;
   return new Promise((resolve, reject) => {
-    const entry: PendingEntry = { resolve, reject, url };
-    pending.set(id, entry);
+    const entry: PendingEntry = { resolve, reject };
+    bridge.pending.set(id, entry);
     const timer = setTimeout(() => {
-      if (!pending.has(id)) return;
-      pending.delete(id);
+      if (!bridge.pending.has(id)) return;
+      bridge.pending.delete(id);
       reject(new Error(`fbx worker timeout (${url})`));
     }, workerRequestMs);
     entry.timer = timer;

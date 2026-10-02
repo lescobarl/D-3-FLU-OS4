@@ -4,7 +4,7 @@
  * Modelo y opciones desde `FLU_CONFIG.transcript.asr` (sin hardcode).
  */
 import { getAsrConfig } from './voiceActivitySegmenter.js'
-import { logCaughtError } from '../../../lib/caughtError';
+import { createWorkerPendingBridge } from '../workerPendingBridge.js'
 
 /**
  * @param {{ workerFactory?: () => Worker, modelId?: string, dtype?: string }} [options]
@@ -12,9 +12,6 @@ import { logCaughtError } from '../../../lib/caughtError';
  *   de modelo/dtype (para usar `tiny` en interim y `base` en final).
  */
 export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } = {}) {
-  let worker = null
-  let seq = 0
-  const pending = new Map()
   const baseConfig = getAsrConfig()
   const config = {
     ...baseConfig,
@@ -22,38 +19,23 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
     ...(dtype ? { dtype } : {}),
   }
 
-  function ensureWorker() {
-    if (worker) return worker
-    worker =
+  // Esqueleto comun (P8.9): creacion perezosa + despacho por id + fail-all.
+  const bridge = createWorkerPendingBridge({
+    createWorker: () =>
       typeof workerFactory === 'function'
         ? workerFactory()
-        : new Worker(new URL('../../workers/whisperAsr.worker.js', import.meta.url), { type: 'module' })
-    worker.onmessage = (event) => {
-      const { id, ok, result, error } = event.data || {}
-      const entry = pending.get(id)
-      if (!entry) return
-      pending.delete(id)
-      if (ok) entry.resolve(result)
-      else entry.reject(new Error(error || 'whisper worker error'))
-    }
-    worker.onerror = (event) => {
-      const error = new Error(String(event?.message || 'whisper worker error'))
-      for (const entry of pending.values()) entry.reject(error)
-      pending.clear()
-      // Reintento: se destruye el worker roto; la próxima petición lo recrea.
-      try {
-        worker.terminate()
-      } catch (e) {
-        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js', e);
-        // ignore
-      }
-      worker = null
-    }
-    return worker
-  }
+        : new Worker(new URL('../../workers/whisperAsr.worker.js', import.meta.url), { type: 'module' }),
+    label: 'whisper',
+    valueKey: 'result',
+    failMessage: 'whisper worker error',
+    // Al morir el worker: lo pendiente lo rechaza el puente; aqui se destruye el roto.
+    onFatal: (_reason, api) => api.terminate(),
+  })
+  const pending = bridge.pending
+  let seq = 0
 
   function request(type, payload = {}) {
-    const active = ensureWorker()
+    const active = bridge.ensure()
     seq += 1
     const id = seq
     return new Promise((resolve, reject) => {
@@ -85,18 +67,7 @@ export function createWhisperWasmTranscriber({ workerFactory, modelId, dtype } =
     dispose() {
       // No dejar promesas colgadas: al destruir, rechazar lo pendiente para que
       // la cola de transcripción avance y `busy` se libere.
-      const disposedError = new Error('whisper worker disposed')
-      for (const entry of pending.values()) entry.reject(disposedError)
-      pending.clear()
-      if (worker) {
-        try {
-          worker.terminate()
-        } catch (e) {
-        logCaughtError('[catch] src/voice/lib/asr/whisperWasmTranscriber.js', e);
-          // ignore
-        }
-        worker = null
-      }
+      bridge.dispose(new Error('whisper worker disposed'))
     },
   })
 }
