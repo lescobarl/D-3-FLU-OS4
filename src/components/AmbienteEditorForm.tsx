@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { useEditableFields } from '../hooks/useEditableFields';
 import {
     ENVIRONMENT_CSS_VAR_KEYS,
     ENVIRONMENT_DECORATIONS,
@@ -52,17 +53,13 @@ export function AmbienteEditorForm({
 }: AmbienteEditorFormProps) {
     const ui = FLU_CONFIG.ui?.ambientes ?? {};
 
-    const [fields, setFields] = useState<EditableAmbienteFields>(() => ({
-        ...seed,
-        vars: { ...seed.vars },
-        tabs: [...seed.tabs],
+    const { fields, setFields, setField } = useEditableFields<EditableAmbienteFields>(seed, (s) => ({
+        ...s,
+        vars: { ...s.vars },
+        tabs: [...s.tabs],
     }));
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    const setField = (patch: Partial<EditableAmbienteFields>) => {
-        setFields((prev) => ({ ...prev, ...patch }));
-    };
 
     const setVar = (key: string, value: string) => {
         setFields((prev) => ({ ...prev, vars: { ...prev.vars, [key]: value } }));

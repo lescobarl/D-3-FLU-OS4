@@ -7,7 +7,11 @@
  *
  * Config: `FLU_CONFIG.transcript.asr.vad` (sin valores quemados en el motor).
  */
-import { FLU_CONFIG } from '../fluConfig.js'
+import { getAsrConfig } from './asrConfig.js'
+
+// El dueno de la lectura de la config del ASR es asrConfig.js; se re-exporta para no
+// cambiar la API del segmentador (lo consumen el worker y los tests).
+export { getAsrConfig }
 import { DEFAULT_TARGET_SAMPLE_RATE } from '../audioConstants.js'
 
 /**
@@ -17,9 +21,7 @@ import { DEFAULT_TARGET_SAMPLE_RATE } from '../audioConstants.js'
  * @typedef {{ push(samples: Float32Array): VoiceSegmentEvent[], flush(): VoiceSegmentEvent[], reset(): void }} VoiceSegmenter
  */
 
-export function getAsrConfig() {
-  return FLU_CONFIG.transcript?.asr || {}
-}
+
 
 export function getVadConfig() {
   return getAsrConfig().vad || {}

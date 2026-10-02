@@ -4,7 +4,7 @@
  * Modelo y opciones vienen de `FLU_CONFIG.transcript.asr` (sin hardcode).
  */
 import { pipeline, env } from '@huggingface/transformers'
-import { FLU_CONFIG } from '../lib/fluConfig.js'
+import { getAsrConfig } from '../lib/asr/asrConfig.js'
 import { samplesFromTransfer, createWorkerReply } from '../lib/workerBridge.js'
 import { logCaughtError } from '../../lib/caughtError';
 
@@ -14,9 +14,7 @@ env.useBrowserCache = true
 
 let asrPromise = null
 
-function getAsrConfig() {
-  return FLU_CONFIG.transcript?.asr || {}
-}
+
 
 async function ensurePipeline(payload = {}) {
   if (!asrPromise) {

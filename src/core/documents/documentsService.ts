@@ -5,8 +5,7 @@
 // por usuario. Aislamiento: cada fila lleva `personId`; `list` filtra por el
 // alcance del usuario activo (`personId || 'global'`).
 // ============================================================
-import { v4 as uuidv4 } from 'uuid';
-import { type DocumentRecord } from '../db/fluDatabase';
+import { newId, type DocumentRecord } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
 
 export interface NewDocumentInput {
@@ -33,10 +32,6 @@ export interface DocumentsService {
   add(input: NewDocumentInput): Promise<DocumentRecord | null>;
   list(participantId?: string): Promise<DocumentRecord[]>;
   remove(id: string): Promise<boolean>;
-}
-
-function newId(): string {
-  return uuidv4();
 }
 
 export function createDocumentsService({
