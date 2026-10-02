@@ -1096,14 +1096,14 @@
     {
       "id": "P8.1",
       "titulo": "Bloque de minutas: compareMinuteHistoryCodeDesc (objeto) y compareHistoryCodeDesc (string) son la MISMA regla escrita dos veces con firmas distintas",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/minuteKnowledge.js:107 vs src/hooks/useMinuteKnowledge.ts:41",
       "origen": "auditoria-codigo-2026-10-02"
     },
     {
       "id": "P8.2",
       "titulo": "Bloque de minutas: getNextUniversalHistorySequence y getNextSequence implementan la misma secuencia universal",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/minuteKnowledge.js:119 vs src/hooks/useMinuteKnowledge.ts:52",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -2307,6 +2307,18 @@
       "commit": "3cef939",
       "titulo": "B8: el catalogo resuelve tambien las plantillas con marcador (21 sitios)",
       "evidencia": "Alcance real (0.23): CUBIERTO=las 21 plantillas de idioma con marcadores que quedaban en src (medidas, no estimadas: App.tsx 13, dailyAgenda.ts 3, superNoteActions.ts 2, diaryIntentParser.ts 1, documentInsumo.ts 1, geminiDiagnostics.js 1). El catalogo pasa de 79 a 99 claves (20 nuevas, 16 con marcador) y pickText acepta un tercer argumento params: pickText(lang, clave, { item }) sustituye {item}. NO CUBIERTO=(1) 4 sitios se DEJAN a proposito, con trinquete propio: App.tsx:844 (plantilla ANIDADA dentro de ${}), App.tsx:2806 (parametro ambiguo: labels.join(', ')), FluSettingsPanel.tsx:541 (cada rama interpola una expresion DISTINTA, webSave.error || '...'), useWorkspaceSearch.ts:179 (la rama es tiene un marcador de mas, ${title}); migrarlos exige decidir caso a caso, no los cubre la regla. (2) suite completa NO ejecutada (exige autorizacion expresa): lo que corre es el gate, 1278 tests. (3) se anaden 2 tests al DoD (uiStrings, documentInsumo) por exigencia de P7.88 y allow sube 320 -> 322: edicion de contrato puesta a la vista del dueno (ver C80.2)."
+    },
+    {
+      "id": "P8.1",
+      "commit": "ded093d",
+      "titulo": "Minutas: comparador, secuencia universal y etiqueta del historyCode a dueno unico (familia de simbolos)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=las 3 familias que quedaban con el duplicado bajo OTRO nombre en el bloque de minutas (comparador desc: src/voice/lib/minuteKnowledge.js:107 vs src/hooks/useMinuteKnowledge.ts:41; secuencia universal: minuteKnowledge.js:119 vs useMinuteKnowledge.ts:52; etiqueta de historial: minuteKnowledge.js:126 vs useMinuteKnowledge.ts:81). El canonico unico es src/lib/minuteKnowledgeHelpers.ts: compareMinuteHistoryCodeDesc acepta el code como string (hook) O como entrada con historyCode (voz) para que los dos caminos llamen a la MISMA funcion; nextMinuteHistorySequence y formatMinuteHistoryLabel nacen alli y la capa de voz los importa y re-exporta (import + export, AGENTS.md 4). Evidencia: guard por FAMILIA (tests/minuteSingleOwnerGuard.test.ts) ROJO antes con las 3 familias nombradas archivo:simbolo:linea y VERDE despues; metrica por familia de la puerta 3 (antes) -> 0 (target), base 494ee76 = 7; identidad de funcion comprobada (expect(compareFromVoice).toBe(compareFromHelpers), nextMinute, label); tests de minuta 106 passed; tsc limpio; lint:guards 149 ficheros / 1296 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) el flujo de minutas sigue SIN spec e2e (P8.8). (2) suite completa NO ejecutada (exige autorizacion expresa del dueno; el cierre es `npm run gate`). (3) El contador de la metrica se corrigio DOS veces y se declara: primero el glob de rg necesitaba la ruta explicita (daba 0 en base y en actual) y despues el sentinel de `find /c /v` era la letra \"x\", que excluia las lineas con esa letra (\"Next\" la contiene) y por eso la primera metrica del hito 1 midio 4 simbolos sin 'x' correctamente y esta segunda no; ahora la metrica es una sola invocacion de node con tabla de FAMILIAS, sin depender de comillas internas ni de `find`."
+    },
+    {
+      "id": "P8.2",
+      "commit": "ded093d",
+      "titulo": "Minutas: comparador, secuencia universal y etiqueta del historyCode a dueno unico (familia de simbolos)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=las 3 familias que quedaban con el duplicado bajo OTRO nombre en el bloque de minutas (comparador desc: src/voice/lib/minuteKnowledge.js:107 vs src/hooks/useMinuteKnowledge.ts:41; secuencia universal: minuteKnowledge.js:119 vs useMinuteKnowledge.ts:52; etiqueta de historial: minuteKnowledge.js:126 vs useMinuteKnowledge.ts:81). El canonico unico es src/lib/minuteKnowledgeHelpers.ts: compareMinuteHistoryCodeDesc acepta el code como string (hook) O como entrada con historyCode (voz) para que los dos caminos llamen a la MISMA funcion; nextMinuteHistorySequence y formatMinuteHistoryLabel nacen alli y la capa de voz los importa y re-exporta (import + export, AGENTS.md 4). Evidencia: guard por FAMILIA (tests/minuteSingleOwnerGuard.test.ts) ROJO antes con las 3 familias nombradas archivo:simbolo:linea y VERDE despues; metrica por familia de la puerta 3 (antes) -> 0 (target), base 494ee76 = 7; identidad de funcion comprobada (expect(compareFromVoice).toBe(compareFromHelpers), nextMinute, label); tests de minuta 106 passed; tsc limpio; lint:guards 149 ficheros / 1296 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) el flujo de minutas sigue SIN spec e2e (P8.8). (2) suite completa NO ejecutada (exige autorizacion expresa del dueno; el cierre es `npm run gate`). (3) El contador de la metrica se corrigio DOS veces y se declara: primero el glob de rg necesitaba la ruta explicita (daba 0 en base y en actual) y despues el sentinel de `find /c /v` era la letra \"x\", que excluia las lineas con esa letra (\"Next\" la contiene) y por eso la primera metrica del hito 1 midio 4 simbolos sin 'x' correctamente y esta segunda no; ahora la metrica es una sola invocacion de node con tabla de FAMILIAS, sin depender de comillas internas ni de `find`."
     }
   ]
 }

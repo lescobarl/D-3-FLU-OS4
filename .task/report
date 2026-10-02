@@ -3107,3 +3107,35 @@ voz (rama diario). NO CUBIERTO = e2e del flujo de minutas (P8.8), el resto del
 informe de auditoria (P8.3-P8.7) y la verificacion visual.
 
 EOL: 3 ficheros con EOL mixto/CRLF editados preservando su clase (eolGuard verde).
+
+## HITO minutas-2 (2026-10-02) — comparador, secuencia y etiqueta del historyCode a dueno unico
+
+Cambios aplicados: el duplicado que NO se veia por nombre. `compareMinuteHistoryCodeDesc`
+(voz) vs `compareHistoryCodeDesc` (hook), `getNextUniversalHistorySequence` (voz) vs
+`getNextSequence` (hook) y `formatMinuteHistoryLabel` (voz) vs `formatMinuteHistoryLabelForUi`
+(hook, export muerto) eran la MISMA regla con nombres distintos. Ahora viven una sola vez en
+src/lib/minuteKnowledgeHelpers.ts; la capa de voz importa y re-exporta; el hook importa y borra
+sus 3 copias (el comparador acepta string o entrada, para que los dos caminos usen la misma
+funcion). Guard reescrito a FAMILIA de nombres sinonimos: contar por nombre es teatro (§7.7.d).
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/minuteSingleOwnerGuard.test.ts
+    ANTES (rojo) nombraba:
+      compareMinuteHistoryCodeDesc (2 defs): src/voice/lib/minuteKnowledge.js:compareMinuteHistoryCodeDesc:107, src/hooks/useMinuteKnowledge.ts:compareHistoryCodeDesc:41
+      nextMinuteHistorySequence (2 defs): src/voice/lib/minuteKnowledge.js:getNextUniversalHistorySequence:119, src/hooks/useMinuteKnowledge.ts:getNextSequence:52
+      formatMinuteHistoryLabel (2 defs): src/voice/lib/minuteKnowledge.js:formatMinuteHistoryLabel:126, src/hooks/useMinuteKnowledge.ts:formatMinuteHistoryLabelForUi:81
+  - METRICA (familias con !=1 definicion): 3 -> 0 (target 0). Se corrigio el contador:
+    `find /c /v "x"` excluia las lineas con la letra x ("Next" la lleva) => subconteo silencioso.
+    Ahora es UNA invocacion de node con la tabla de familias, sin comillas internas.
+  - identidad de funcion: compareFromVoice === compareFromHelpers, nextMinute === nextFromHelpers,
+    labelFromVoice === labelFromHelpers (el re-export que solo re-exporta y no importa rompe en runtime).
+  - tests de minuta (guard + minuteKnowledge + helpers + FluMinutesTabView + MinuteHistoryPanel +
+    minuteHandlersDayRollover) = 106 passed
+  - npm run typecheck = verde
+  - npm run lint (lint:guards 149 / 1296 + eslint) = verde
+  - baseline .task/baseline.json = [] => 0 fallos nuevos
+
+No validado: DoD-producto (pantalla). e2e del flujo de minutas sigue SIN spec (P8.8).
+
+Alcance real: CUBIERTO = las 3 familias + identidad + comportamiento de la KB de voz.
+NO CUBIERTO = e2e de minutas, el resto del informe (P8.3-P8.7) y la verificacion visual.
