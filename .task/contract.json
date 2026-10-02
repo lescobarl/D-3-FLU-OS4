@@ -572,7 +572,10 @@
     "src/voice/lib/workerPendingBridge.js",
     "tests/workerPendingBridgeSingleOwnerGuard.test.ts",
     "src/voice/lib/asr/whisperWasmTranscriber.js",
-    "tests/e2e/minuta-resumen.spec.ts"
+    "tests/e2e/minuta-resumen.spec.ts",
+    "playwright.config.ts",
+    "tests/e2e/auditoria-acciones-llm.spec.ts",
+    "tests/e2e/matriz-comandos-productivos.spec.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
