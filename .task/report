@@ -3239,3 +3239,51 @@ Validado contra:
 No validado: el resto del catalogo de auditoria; e2e; suite completa.
 
 Alcance real: CUBIERTO = V6/V17 reales + la barrera. NO CUBIERTO = el resto del catalogo, P8.4/P8.8.
+
+## HITO workers-1 (2026-10-02) — isWorkerRuntime a dueno unico (y el resto del hallazgo, re-medido)
+
+Cambios aplicados: `isWorkerRuntime` pasa a `src/lib/workerRuntime.ts`; el avatar y la capa de
+voz importan el dueno. El resto del hallazgo P8.4 NO era duplicado (medido par a par):
+`runMainThreadFallback` hace trabajos distintos por cliente y `scheduleIdle` tiene dos semanticas
+(void vs Promise). Sobrevive el esqueleto de `ensureWorker` (3 copias con politica distinta):
+queda como P8.9 con su evidencia, no como entrega a medias.
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/workerRuntimeSingleOwnerGuard.test.ts
+    ANTES (rojo): "Definiciones de isWorkerRuntime: src/avatar/workers/fbxWorkerClient.ts:34,
+    src/lib/workerRuntime.ts:16, src/voice/lib/voiceIdWorkerClient.js:23"
+  - METRICA (definiciones de isWorkerRuntime en src): 2 -> 1 (target 1).
+  - COMPORTAMIENTO: isWorkerRuntime responde a la presencia real del global `Worker`
+    (false sin el, true con el) — medido borrando e inyectando el global.
+  - 48 tests de worker/embeddings/fbx en verde; typecheck limpio; baseline [] = 0 fallos nuevos.
+  - El hallazgo del informe se RECLASIFICA con evidencia: 2 de sus 4 pares no eran ruta doble
+    (mismo nombre, distinto trabajo); se dice, no se maquilla.
+
+No validado: DoD-producto. La politica de reintento del worker no se puede medir sin la app.
+
+Alcance real: CUBIERTO = isWorkerRuntime + la reclasificacion medida. NO CUBIERTO = P8.9
+(esqueleto de ensureWorker), e2e por cliente, suite completa.
+
+## HITO workers-1 (2026-10-02) — isWorkerRuntime a dueno unico (y el resto del hallazgo, re-medido)
+
+Cambios aplicados: `isWorkerRuntime` pasa a `src/lib/workerRuntime.ts`; el avatar y la capa de
+voz importan el dueno. El resto del hallazgo P8.4 NO era duplicado (medido par a par):
+`runMainThreadFallback` hace trabajos distintos por cliente y `scheduleIdle` tiene dos semanticas
+(void vs Promise). Sobrevive el esqueleto de `ensureWorker` (3 copias con politica distinta):
+queda como P8.9 con su evidencia, no como entrega a medias.
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/workerRuntimeSingleOwnerGuard.test.ts
+    ANTES (rojo): "Definiciones de isWorkerRuntime: src/avatar/workers/fbxWorkerClient.ts:34,
+    src/lib/workerRuntime.ts:16, src/voice/lib/voiceIdWorkerClient.js:23"
+  - METRICA (definiciones de isWorkerRuntime en src): 2 -> 1 (target 1).
+  - COMPORTAMIENTO: isWorkerRuntime responde a la presencia real del global `Worker`
+    (false sin el, true con el) — medido borrando e inyectando el global.
+  - 48 tests de worker/embeddings/fbx en verde; typecheck limpio; baseline [] = 0 fallos nuevos.
+  - El hallazgo del informe se RECLASIFICA con evidencia: 2 de sus 4 pares no eran ruta doble
+    (mismo nombre, distinto trabajo); se dice, no se maquilla.
+
+No validado: DoD-producto. La politica de reintento del worker no se puede medir sin la app.
+
+Alcance real: CUBIERTO = isWorkerRuntime + la reclasificacion medida. NO CUBIERTO = P8.9
+(esqueleto de ensureWorker), e2e por cliente, suite completa.

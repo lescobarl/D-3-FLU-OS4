@@ -1117,7 +1117,7 @@
     {
       "id": "P8.4",
       "titulo": "Orquestacion de worker triplicada: isWorkerRuntime/ensureWorker/runMainThreadFallback copiados en los clientes de worker (con semantica ya divergente)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/avatar/workers/fbxWorkerClient.ts:34,38,100 vs src/voice/lib/voiceIdWorkerClient.js:23,71,163 (+ src/voice/lib/asr/whisperWasmTranscriber.js:25)",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -1147,6 +1147,13 @@
       "titulo": "El flujo de minutas NO tiene spec e2e: ningun tests/e2e/*.spec.ts menciona minuta, asi que e2e:scope senala los 3 src tocados y no se declara mapeo falso",
       "estado": "todo",
       "evidencia": "tests/e2e/ (10 specs, 0 coincidencias de \"minuta\"); .task/contract.json -> e2eScope",
+      "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.9",
+      "titulo": "Esqueleto de ensureWorker copiado 3 veces (crear perezoso + pendientes por id + rechazar todos en onerror) con politica y timeout distintos en fbxWorkerClient / voiceIdWorkerClient / whisperWasmTranscriber",
+      "estado": "todo",
+      "evidencia": "src/avatar/workers/fbxWorkerClient.ts:38, src/voice/lib/voiceIdWorkerClient.js:71, src/voice/lib/asr/whisperWasmTranscriber.js:25 (medido: el resto del hallazgo P8.4 no era duplicado)",
       "origen": "auditoria-codigo-2026-10-02"
     }
   ],
@@ -2343,6 +2350,18 @@
       "commit": "6060d70",
       "titulo": "Instrumento: V6 y V17 dejan de estar verdes por ausencia (detectores vacios del catalogo)",
       "evidencia": "Alcance real (0.23): CUBIERTO=el instrumento de auditoria (los dos hallazgos que mentian). V6 y V17 estaban verdes por VACUIDAD: sus detectores apuntaban a `src/avatar/lib/masterBinding.ts` y a `src/server/handlers/workspaceImageHandler.mjs`, y NINGUNO de los dos ficheros existe en el repo (comprobado con rg sobre el arbol entero), asi que el informe podia decir \"28/28 en META\" sin haber medido ni un monkey-patch ni un import roto. Ahora los dos detectores viven en `scripts/audit-detectors.mjs` (dueno unico que consumen a la vez `scripts/auditoria.mjs` y su guard) y miden el patron real: (1) monkey-patch de libreria = asignar a un prototipo ajeno (`X.prototype.y =`) o redefinir una propiedad de THREE (`Object.defineProperty(THREE, ...)`), sin contar el shim de DOM legitimo de fbxDomShim.ts; (2) import relativo que no resuelve a ningun fichero, saltando comentarios y aceptando imports de tipos `.d.ts`. Evidencia: `node scripts/auditoria.mjs --only V6,V17` ANTES mostraba las notas viejas (\"masterBinding.ts parchea Three.js\") y DESPUES las notas nuevas con el detector real; guard tests/auditVacuityGuard.test.ts (barrera) prueba los DOS lados: 0 hallazgos en el arbol real + dispara con el defecto sintetico (2 de 3 casos marcados, el comentado NO) + no marca el legitimo; metrica 2 -> 0 (target 0) sobre las lineas `detect:`; hash de scripts/auditoria.mjs re-sellado en .task/frozen.json y scripts/audit-detectors.mjs sellado (endurecimiento de criterio, AGENTS.md 14); lint 153 ficheros / 1316 tests; baseline [] = 0 fallos nuevos. FALSO POSITIVO MEDIDO Y CORREGIDO (7.7.f(5)): la primera version del detector de imports marcaba 2 casos que eran legitimOS (un `import type` de `.d.ts` y una ruta nombrada dentro de un comentario); se corrigio el DETECTOR, no el codigo señalado. NO CUBIERTO=(1) el catalogo completo de auditoria sigue teniendo otros hallazgos que no se han re-medido en esta sesion (solo V6/V17). (2) los medidores de scripts/ NO los corre `npm run gate`: la barrera nueva esta en lint:guards, que si lo corre. (3) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.4",
+      "commit": "d7302cd",
+      "titulo": "Workers: isWorkerRuntime a dueno unico (el resto del hallazgo, re-medido y reclasificado)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=la parte del hallazgo P8.4 que resiste la medicion. Se midio cada par uno a uno (cuerpo, firma y semantica) en vez de aceptar el agrupamiento del informe: (1) `isWorkerRuntime` SI era la misma pregunta copiada en dos sitios (src/avatar/workers/fbxWorkerClient.ts:34 y src/voice/lib/voiceIdWorkerClient.js:23, esta con una guarda extra `&& typeof window !== 'undefined'` que solo cambia fuera del hilo principal, donde ese cliente no corre) -> dueno unico en src/lib/workerRuntime.ts, con guard + comportamiento (responde a la existencia real de Worker, medido borrando e inyectando el global); metrica 2 -> 1 (target 1). (2) `runMainThreadFallback` (2 copias) NO es duplicado: cada cliente tiene SU respaldo (fbx: fetchFbxJson; voz: computo local del embedding); mismo nombre, trabajo distinto -> no se toca. (3) `scheduleIdle` (2 copias) NO es duplicado: voiceIdentityQueue devuelve void (fire-and-forget) y voiceIdWorkerClient devuelve Promise; misma firma aparente, semantica distinta -> no se toca. Evidencia: guard ROJO antes nombrando las 3 definiciones; typecheck limpio; 48 tests de worker/embeddings/fbx en verde; lint en el cierre. NO CUBIERTO=(1) el UNICO duplicado real que sobrevive dentro del hallazgo: el esqueleto de `ensureWorker` (crear perezoso + pendientes por id + rechazar todos en onerror), copiado 3 veces con politica distinta (fbx marca muerto y no recrea / voz rechaza / whisper termina y recrea) y timeouts distintos; extraerlo es un puente con la politica inyectada y se registra como P8.9 (con su evidencia medida) en vez de entregarlo a medias o sin verificar: los tests de worker cubren el protocolo, no la politica de reintento end-to-end, y esa parte no se puede validar sin la app delante. (2) e2e declarado por arranque de app, no verificado por cliente. (3) suite completa NO ejecutada."
+    },
+    {
+      "id": "P8.4",
+      "commit": "fefefbb",
+      "titulo": "Workers: isWorkerRuntime a dueno unico (el resto del hallazgo, re-medido y reclasificado)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=la parte del hallazgo P8.4 que resiste la medicion. Se midio cada par uno a uno (cuerpo, firma y semantica) en vez de aceptar el agrupamiento del informe: (1) `isWorkerRuntime` SI era la misma pregunta copiada en dos sitios (src/avatar/workers/fbxWorkerClient.ts:34 y src/voice/lib/voiceIdWorkerClient.js:23, esta con una guarda extra `&& typeof window !== 'undefined'` que solo cambia fuera del hilo principal, donde ese cliente no corre) -> dueno unico en src/lib/workerRuntime.ts, con guard + comportamiento (responde a la existencia real de Worker, medido borrando e inyectando el global); metrica 2 -> 1 (target 1). (2) `runMainThreadFallback` (2 copias) NO es duplicado: cada cliente tiene SU respaldo (fbx: fetchFbxJson; voz: computo local del embedding); mismo nombre, trabajo distinto -> no se toca. (3) `scheduleIdle` (2 copias) NO es duplicado: voiceIdentityQueue devuelve void (fire-and-forget) y voiceIdWorkerClient devuelve Promise; misma firma aparente, semantica distinta -> no se toca. Evidencia: guard ROJO antes nombrando las 3 definiciones; typecheck limpio; 48 tests de worker/embeddings/fbx en verde; lint en el cierre. NO CUBIERTO=(1) el UNICO duplicado real que sobrevive dentro del hallazgo: el esqueleto de `ensureWorker` (crear perezoso + pendientes por id + rechazar todos en onerror), copiado 3 veces con politica distinta (fbx marca muerto y no recrea / voz rechaza / whisper termina y recrea) y timeouts distintos; extraerlo es un puente con la politica inyectada y se registra como P8.9 (con su evidencia medida) en vez de entregarlo a medias o sin verificar: los tests de worker cubren el protocolo, no la politica de reintento end-to-end, y esa parte no se puede validar sin la app delante. (2) e2e declarado por arranque de app, no verificado por cliente. (3) suite completa NO ejecutada."
     }
   ]
 }
