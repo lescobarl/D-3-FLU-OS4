@@ -30,7 +30,7 @@ REGLAS DURAS DE ESTA SESION:
 
 SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
 - `node scripts/auditoria.mjs` dice "28/28 hallazgos en META" y NO es una auditoria del
-  codigo: es un CATALOGO de 28 puntos, y los 8 pendientes de abajo NO estan en ese
+  codigo: es un CATALOGO de 28 puntos, y los pendientes de abajo NO estan en ese
   catalogo. Una sesion que solo corra ese script concluira "esto esta limpio" y se
   equivocara. Ya paso: el 2026-10-02 el catalogo decia 28/28 mientras una auditoria
   propia (detectores en node + rg sobre todo src) encontraba duplicados de dato, un
@@ -42,26 +42,41 @@ SI TE PIDO "UNA AUDITORIA", OJO CON ESTO (medido el 2026-10-02):
   control negativo, un guard verde no prueba nada.
 - La fuente de lo que falta es plans/ledger.json, NO el resumen del chat ni el catalogo.
 
-ESTADO DE HOY (2026-10-02, cierre de la auditoria de codigo): 8 pendientes en el ledger.
+ESTADO DE HOY (2026-10-02, cierre de la auditoria de codigo): 4 pendientes en el ledger.
   P8.8  el flujo de minutas NO tiene spec e2e (`npm run e2e:plan` esta ROJO a proposito,
         nombrando los 3 ficheros; no se declaro un mapeo falso)
   P8.9  esqueleto de ensureWorker copiado 3 veces (fbx / voiceId / whisper) con politica y
         timeout distintos: extraer un puente con la politica inyectada (no se puede medir
         sin la app delante)
   P8.10 speechWords DIVERGENTE: audioMath.js:432 pasa a minusculas, conversationStream.js:98 no
-  P8.11 getAsrConfig duplicado: voiceActivitySegmenter.js:20 vs whisperAsr.worker.js:17
-  P8.12 8 homonimos por verificar par a par (sourceLabel, cleanLabel, normalize, pickLabel,
-        newId, toUI, resetTurn, downsample) - evidencia archivo:linea en el item
-  P8.13 boilerplate serviceRef + TDZ replicado en 12 hooks de src/hooks
-  P8.14 MODEL/IMAGE_MODEL con literal sin import.meta.env (sharedConfig.ts:120,125)
-  P8.15 nota obsoleta V19 de auditoria.mjs (eslint.config.mjs existe)
+        (unificar puede cambiar el corte del turno de voz: no se toca sin dueno)
+  P8.21 el VOCABULARIO de ids de comando (ABRIR_ESCUCHA, CERRAR_ESCUCHA, GENERAR_RESUMEN,
+        GUARDAR_MINUTA, FLU_WAKE) no tiene dueno unico: literales en arbitro, filtro, listas
+        de comandos, rutas, getCommandSpeech y claves de FLU_CONFIG.ui.commandSpeech. Es un
+        REGISTRO de ids (rediseno), no algo mecanico (AGENTS 7.7.e). archivo:linea en el item.
 
-CERRADO en esa auditoria (P8.1-P8.7, con guard nacido ROJO y verificacion por conducta):
+CERRADO en esa auditoria (P8.1-P8.20, con guard nacido ROJO y verificacion por conducta):
   minutas (clave/formato/comparador/secuencia/etiqueta a dueno unico), sendJson unico en
   los proxies (+ charset y writeHead a mano fuera), itemAt/currentPrompt unicos en los 10
   motores, vocabulario de tipos con dueno unico (NewNoteInput se ANCHO con body), V6/V17
-  del catalogo con detectores reales, isWorkerRuntime con dueno unico.
-  Gate de cierre VERDE (23 commits). Los guards nuevos estan en lint:guards.
+  del catalogo con detectores reales, isWorkerRuntime con dueno unico, getAsrConfig / newId /
+  setField con dueno unico, normalizacion de los parsers (agenda/fechas) a textUtils,
+  useServiceRef en 10 hooks, y el id de arranque (INICIAR_CONVERSACION) leido de
+  FLU_CONFIG.navigation.sessionResetCommand en sus 5 consumidores.
+  P8.14 REFUTADO (falso positivo: sharedConfig usa readServerEnv). P8.12 triaje: 5 defectos
+  reales de 14 homonimos. Gate de cierre VERDE: invariante base=9 actual=0.
+  Los guards nuevos estan en lint:guards.
+
+BARRERA (hueco medido y tapado, 2026-10-02): tests/taskLedgerGuard.test.ts llamaba a
+validateLedger SIN subjects/files, y validateLedger hace `if (!subject) continue`: I5 (el
+cierre justificado por su commit) se aprobaba por VACIO en el pre-commit, mientras
+`npm run ledger:check` (que SI los pasa) lo evaluaba. El guard ahora pasa readGitEvidence(),
+con prueba de detector de los dos lados. Los 17 cierres que tenian la evidencia en prosa
+recibieron la ruta real que su commit toco (I5). `npm run ledger:check` -> OK.
+
+AUDITOR DE CODIGO (persistido): `node scripts/auditoria-codigo.mjs` (+ `--self-test`) mide
+las 6 senales con control negativo; barrera en tests/auditCodeSignalsGuard.test.ts. No es el
+catalogo de 28 puntos: devuelve CANDIDATOS (archivo:linea); el veredicto exige leer el sitio.
 
 PENDIENTE DE PRODUCTO (sigue siendo tuyo, AGENTS.md A.1): jugar una loteria pidiendo
 cartas seguidas (6 cartas distintas sin repetir y sin perder turnos), jugar un quien soy
