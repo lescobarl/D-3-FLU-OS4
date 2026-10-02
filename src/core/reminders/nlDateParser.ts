@@ -13,7 +13,7 @@
 
 import { pickTimeOfDay } from '../temporal/timeOfDay';
 import { MONTH_NAMES_ES, WEEKDAYS_ES } from '../temporal/calendarNames';
-import { stripDiacriticsLower } from '../../lib/textUtils';
+import { normalizeForMatch } from '../../lib/textUtils';
 
 export interface NlDateTimeResult {
   /** Cómo se interpretó la expresión (para trazas/mensajes). */
@@ -109,11 +109,6 @@ const PART_OF_DAY: ReadonlyArray<{ pattern: RegExp; hour: number; label: string 
 // ------------------------------------------------------------
 
 /** Quita acentos y normaliza a minúsculas con espacios simples. */
-function normalize(text: string): string {
-  return stripDiacriticsLower(text)
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -183,7 +178,7 @@ export function parseNlDateTime(
   if (typeof input !== 'string') return null;
   const raw = input.trim();
   if (!raw) return null;
-  let text = normalize(raw);
+  let text = normalizeForMatch(raw);
   // El ASR (Chrome) transcribe "a las 2 con 13 minutos p.m" con conector
   // verbal; se normaliza ANTES de la rama OFFSET para que "13 minutos" no
   // se lea como desplazamiento relativo ("en 13 minutos").

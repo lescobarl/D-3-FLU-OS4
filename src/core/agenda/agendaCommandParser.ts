@@ -18,7 +18,11 @@ import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
 import { WEEKDAYS_ES } from '../temporal/calendarNames';
 import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
 import type { AgendaKind, AgendaTrigger } from './agendaModel';
-import { stripDiacriticsLower } from '../../lib/textUtils';
+import { normalizeForMatchExact } from '../../lib/textUtils';
+
+// La normalizacion tiene dueno en src/lib/textUtils.ts: aqui se usa la variante que NO
+// colapsa espacios internos (contrato exacto), que es el comportamiento que este parser
+// tenia con su copia local.
 
 export type AgendaCommandAction =
     | 'agenda.create'
@@ -83,9 +87,6 @@ const DAILY_RE = /\b(?:todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)
 const CLASE_ALL_DAYS_RE = /\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
 const COUNTDOWN_RE = /\b(?:en|de|in)\s+(\d+)\s+(segundos?|minutos?|horas?|seconds?|minutes?|hours?)\b/i;
 
-function normalize(text: string): string {
-    return stripDiacriticsLower(text).trim();
-}
 
 /** Colapsa tartamudeo de cuantificador: "todo toda" → "toda", "todo todo" → "todo". */
 function collapseQuantifierStutter(text: string): string {
@@ -98,7 +99,7 @@ function collapseRepeatedPhrase(text: string): string {
 }
 
 function detectKind(text: string): AgendaKind | null {
-    const t = normalize(text);
+    const t = normalizeForMatchExact(text);
     for (const entry of KIND_NOUNS) {
         if (entry.nouns.some((noun) => new RegExp(`\\b${noun}\\b`).test(t))) return entry.kind;
     }
@@ -107,14 +108,14 @@ function detectKind(text: string): AgendaKind | null {
 
 /** Día nombrado u "horario": acota la serie por día (cancelar/editar). */
 function hasNamedDay(text: string): boolean {
-    const t = normalize(text);
+    const t = normalizeForMatchExact(text);
     return /\bhorario\b/.test(t) || WEEKDAY_NAMES.some((w) => new RegExp(`\\b${w.name}\\b`).test(t));
 }
 
 /** Recurrencia explícita ("toda la semana", "todos los días"): también es CLASE. */
 function hasExplicitRecurrence(text: string): boolean {
     return /(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)/i.test(
-        normalize(text),
+        normalizeForMatchExact(text),
     );
 }
 
@@ -139,7 +140,7 @@ function resolveImplicitKind(text: string, action: AgendaCommandAction | null): 
 
 /** Vista de la consulta "qué hay/tengo <hoy|mañana|esta semana|este mes>". */
 function detectQueryView(text: string): AgendaCommand['when'] {
-    const t = normalize(text); // sin acentos: "mañana" → "manana"
+    const t = normalizeForMatchExact(text); // sin acentos: "mañana" → "manana"
     if (/\bmanana\b/.test(t)) return 'mañana';
     if (/\b(?:esta\s+semana|semana)\b/.test(t)) return 'semana';
     if (/\b(?:este\s+mes|mes)\b/.test(t)) return 'mes';
@@ -147,7 +148,7 @@ function detectQueryView(text: string): AgendaCommand['when'] {
 }
 
 function detectAction(text: string): AgendaCommandAction | null {
-    const t = normalize(text);
+    const t = normalizeForMatchExact(text);
     // Consulta ANCLADA: exige un término de AGENDA o un marcador temporal; el
     // solo "qué … tienes/hay" NO alcanza (antes "qué otro juego tienes" devolvía
     // la agenda en vez de ir a la IA / al menú de juegos).
@@ -199,7 +200,7 @@ const WEEKLY_LEAD_RE = /\b(?:los|cada|todos\s+los|todas\s+las)\s+/i;
 
 /** Cualquier día de semana mencionado (con o sin "los"), para CLASES. */
 function detectAnyWeekdays(text: string): number[] {
-    const t = normalize(text);
+    const t = normalizeForMatchExact(text);
     const named = WEEKDAY_NAMES.filter((w) => new RegExp(`\\b${w.name}\\b`).test(t)).map((w) => w.day);
     return withDayRange(t, named);
 }
@@ -237,7 +238,7 @@ function withDayRange(t: string, named: number[]): number[] {
 
 /** Días de semana SOLO con recurrencia explícita ("los lunes"), no "el jueves". */
 function detectWeekdays(text: string): number[] {
-    const t = normalize(text);
+    const t = normalizeForMatchExact(text);
     const lead = WEEKLY_LEAD_RE.exec(t);
     // Un rango ("de lunes a viernes") ya es recurrencia explícita: no exige "los".
     const range = expandDayRange(t);
@@ -262,12 +263,12 @@ function resolveRecurrence(
     kind: AgendaKind,
     timeHint?: string | null,
 ): AgendaTrigger | null {
-    const t = normalize(text);
+    const t = normalizeForMatchExact(text);
 
     const countdown = COUNTDOWN_RE.exec(t);
     if (countdown) {
         const amount = Number(countdown[1]);
-        const unit = normalize(countdown[2]);
+        const unit = normalizeForMatchExact(countdown[2]);
         const ms =
             unit.startsWith('seg') || unit.startsWith('sec')
                 ? 1000
@@ -373,7 +374,7 @@ function resolveLabel(text: string): string {
     // Sin contenido: etiqueta = sustantivo CANÓNICO del tipo ("alarma",
     // "recordatorio", "cita"), no el verbo crudo. La detección se hace sobre el
     // texto normalizado para que el acento no impida encontrar el tipo.
-    const baseNorm = normalize(base);
+    const baseNorm = normalizeForMatchExact(base);
     const kindEntry = KIND_NOUNS.find((entry) => entry.nouns.some((noun) => wordRe(noun).test(baseNorm)));
     return kindEntry ? kindEntry.nouns[0] : base;
 }
