@@ -54,7 +54,6 @@ import {
 import {
   flattenChunksTail,
   flattenChunksWindow,
-  isAutoSpeakerLabel,
   isProperSpeakerName,
   nextAvailableSpeakerLabel,
   normalizeSpeakerLabel,
