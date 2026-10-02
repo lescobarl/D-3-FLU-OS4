@@ -3195,3 +3195,24 @@ No validado: DoD-producto. e2e declarado por area, no verificado por tipo.
 
 Alcance real: CUBIERTO = las 8 familias + el ancho de NewNoteInput. NO CUBIERTO = e2e por tipo,
 P8.4/P8.5/P8.7 y la verificacion visual.
+
+## HITO juegos-1 (2026-10-02) — accesor del banco y prompt del turno, un solo cuerpo
+
+Cambios aplicados: `bankItemAt(state, banco)` y `gamePrompt(state, pick, render, empty)` bajan a
+`gameUtils`; los 6 `itemAt` y los 4 `currentPrompt` pasan a ser enlaces de una linea. Los textos
+de cada juego siguen viviendo en su motor (son argumentos), asi que ninguna locucion cambia.
+
+Validado contra:
+  - guard ROJO -> VERDE: tests/gameAccessorSingleOwnerGuard.test.ts
+    ANTES (rojo) listaba los 10 sitios: abecedario.ts:itemAt:79, ordenaSecuencia.ts:itemAt:109,
+    quienSoy.ts:itemAt:375, repiteTraduce.ts:itemAt:59 y currentPrompt:64, riddles.ts:currentPrompt:118,
+    trabalenguas.ts:itemAt:58 y currentPrompt:63, trivia.ts:currentPrompt:88, veoVeo.ts:itemAt:116
+  - METRICA (definiciones locales de itemAt/currentPrompt en src/core/games): 10 -> 0 (target 0).
+  - 260 tests de juegos en verde, incluidos gamePlaythrough (partida completa del catalogo) y
+    systemMatrix (matriz derivada de los registros).
+  - typecheck limpio; lint 151 ficheros / 1313 tests; baseline [] = 0 fallos nuevos.
+
+No validado: DoD-producto. e2e declarado por area (matriz de comandos de juego).
+
+Alcance real: CUBIERTO = los 10 accesores + el esqueleto del prompt. NO CUBIERTO = e2e por motor,
+P8.4/P8.7/P8.8 y la verificacion visual.
