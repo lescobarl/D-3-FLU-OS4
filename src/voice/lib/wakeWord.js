@@ -5,9 +5,10 @@
  * Toda limpieza de wake pasa por aquí.
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { escapeRegExp } from '../../lib/textUtils';
 
 function escapeRe(text = '') {
-    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return escapeRegExp(String(text))
 }
 
 /** Vocabulario de activación vigente (fuente: FLU_CONFIG). */

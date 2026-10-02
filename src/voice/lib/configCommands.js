@@ -16,7 +16,7 @@
 import { getFusedPalettes } from '../../core/branding/seasonalPalettes'
 import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
 import { isGameId } from '../../core/games/gameCatalog'
-import { normalizeForMatch } from '../../lib/textUtils'
+import { escapeRegExp, normalizeForMatch } from '../../lib/textUtils'
 import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_SYNONYMS } from '../../core/config/sharedConfig'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -39,7 +39,7 @@ export { normalizeForMatch }
 function findVoiceTokenIndex(normalized = '', phrase = '') {
   const clean = normalizeForMatch(phrase)
   if (!clean || !normalized) return null
-  const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escaped = escapeRegExp(clean)
   const match = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`, 'i').exec(normalized)
   return match ? match.index : null
 }

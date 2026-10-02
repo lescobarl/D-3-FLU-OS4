@@ -10,6 +10,14 @@ import { normalizeLang } from '../core/config/localeConfig';
 // ============================================================
 
 /**
+ * Escapa metacaracteres de regex para interpolar un texto LITERAL (fuente unica:
+ * antes copiado en gameUtils, searchLanguage, configCommands y wakeWord).
+ */
+export function escapeRegExp(s: string): string {
+    return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Normalizar espacios en blanco (OS2 audioMath.js parity).
  * Coerción defensiva: null/undefined/0 → ''.
  */

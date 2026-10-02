@@ -102,7 +102,7 @@ export function clamp(value: number, min: number, max: number): number {
 
 // Normalización de texto: fuente única en src/lib/textUtils.ts.
 // Se importa Y se re-exporta: el binding se usa en este modulo (isExplicitOrderFor).
-import { normalizeForMatch } from '../../lib/textUtils';
+import { escapeRegExp, normalizeForMatch } from '../../lib/textUtils';
 export { stripDiacritics, normalizeForMatch } from '../../lib/textUtils';
 
 /**
@@ -112,7 +112,7 @@ export { stripDiacritics, normalizeForMatch } from '../../lib/textUtils';
  */
 export function findTokenIndex(normalized = '', phrase = ''): number | null {
     if (!phrase) return null;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = escapeRegExp(phrase);
     const pattern = new RegExp(`(^|\\s|[.,;!?¡¿])${escaped}($|\\s|[.,;!?¡¿])`);
     const match = pattern.exec(normalized);
     return match ? (match.index ?? 0) + match[1].length : null;

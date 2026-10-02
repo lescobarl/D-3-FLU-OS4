@@ -12,7 +12,7 @@
 // y FLU_CONFIG.browser.languageHosts (config-driven).
 // ============================================================
 import { normalizeHost } from '../browser/browserSession';
-import { stripDiacritics } from '../../lib/textUtils';
+import { escapeRegExp, stripDiacritics } from '../../lib/textUtils';
 
 import { normalizeLang } from '../config/localeConfig';
 export type ResolvedLanguage = 'es' | 'en';
@@ -25,10 +25,6 @@ export interface LanguageWordGroup {
 
 /** Mapeo idioma→subdominio por host: config-driven (browser.languageHosts). */
 export type LanguageHostMap = Record<string, Record<string, string>>;
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function hasMarker(text: string, markers: string[]): boolean {
     const haystack = ` ${stripDiacritics(text.trim().toLowerCase())} `;

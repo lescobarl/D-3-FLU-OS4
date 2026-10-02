@@ -527,7 +527,8 @@
     "src/core/multiuser/participantRegistry.ts",
     "src/core/notes/notesService.ts",
     "src/core/reminders/shoppingService.ts",
-    "src/core/personalization/communicationProfileService.ts"
+    "src/core/personalization/communicationProfileService.ts",
+    "src/voice/lib/wakeWord.js"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
