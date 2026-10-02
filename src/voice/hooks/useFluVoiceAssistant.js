@@ -3954,9 +3954,9 @@ export function useFluVoiceAssistant({
             phase: 'CONFIGURACION',
           })
         } catch (error) {
-          console.error('processCapture CONFIGURACION error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
+          logCaughtError('src/voice/hooks/useFluVoiceAssistant.js', error, { code: error?.code, status: error?.status, apiKeySource: error?.apiKeySource })
           const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-          console.error('processCapture CONFIGURACION error message:', errorMessage)
+          logCaughtError('src/voice/hooks/useFluVoiceAssistant.js', errorMessage)
           // La diarización (en paralelo) ya terminó en el caso común; se reconcilia el
           // orador real para el commit y la voz de error (mismo patrón conversacional).
           const { resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
@@ -4115,9 +4115,9 @@ export function useFluVoiceAssistant({
           phase: 'SESION_ACTIVA',
         })
       } catch (error) {
-        console.error('processCapture SESION_ACTIVA error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
+        logCaughtError('src/voice/hooks/useFluVoiceAssistant.js', error, { code: error?.code, status: error?.status, apiKeySource: error?.apiKeySource })
         const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-        console.error('processCapture SESION_ACTIVA error message:', errorMessage)
+        logCaughtError('src/voice/hooks/useFluVoiceAssistant.js', errorMessage)
         // Reconciliar el orador diarizado (resuelto en paralelo) para commit y voz de error.
         const { resolvedSpeakerName, speakerAlias, signatureVector } = await resolveTurnSpeaker()
         setError(errorMessage)

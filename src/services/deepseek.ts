@@ -204,7 +204,7 @@ class DeepSeekService extends BaseAIService {
             }
             return parsed as Record<string, unknown>;
         } catch (error) {
-            console.error('Text engine generateMinute error:', error);
+            logCaughtError('src/services/deepseek.ts', error);
             throw error;
         }
     }
@@ -277,7 +277,7 @@ class DeepSeekService extends BaseAIService {
             const data = await response.json();
             return data.choices[0]?.message?.content || '';
         } catch (error) {
-            console.error('Text engine generateResponse error:', error);
+            logCaughtError('src/services/deepseek.ts', error);
             throw error;
         }
     }
@@ -367,7 +367,7 @@ Formato de respuesta (JSON):
                 confianza: Math.max(0, Math.min(1, Number(parsed.confianza) || 0.5)),
             };
         } catch (error) {
-            console.error('Text engine generateParticipantEvaluation error:', error);
+            logCaughtError('src/services/deepseek.ts', error);
             throw error;
         }
     }
@@ -496,7 +496,7 @@ Formato de respuesta (JSON):
                 texto_extraido: String(parsed.texto_extraido || ''),
             };
         } catch (error) {
-            console.error('Text engine generateVisionAnalysis error:', error);
+            logCaughtError('src/services/deepseek.ts', error);
             throw error;
         }
     }

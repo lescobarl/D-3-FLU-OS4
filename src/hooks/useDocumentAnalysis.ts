@@ -90,7 +90,7 @@ export function useDocumentAnalysis(language: string): DocumentAnalysisState {
             return contract;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.warn('[useDocumentAnalysis] Análisis de documento falló:', err);
+            logCaughtError('src/hooks/useDocumentAnalysis.ts', err);
             setError(msg);
             return null;
         } finally {

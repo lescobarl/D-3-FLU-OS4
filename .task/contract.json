@@ -514,7 +514,10 @@
     "scripts/task-gate.mjs",
     "tests/whisperAsr.worker.test.ts",
     "tests/useFluVoiceAssistant.behavior.test.tsx",
-    "tests/App.shell.test.tsx"
+    "tests/App.shell.test.tsx",
+    "src/hooks/useAppAnalysis.ts",
+    "src/hooks/useDocumentAnalysis.ts",
+    "src/hooks/useDocumentGeneration.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,

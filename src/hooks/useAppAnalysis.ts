@@ -13,6 +13,7 @@ import { aiService } from '../services/aiServiceFactory';
 import { analyzeAppStructure } from '../lib/appAnalyzer';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { AppAnalysisContract } from '../types/documentContracts';
+import { logCaughtError } from '../lib/caughtError';
 
 export interface AppAnalysisState {
     isAnalyzing: boolean;
@@ -52,7 +53,7 @@ export function useAppAnalysis(language: string): AppAnalysisState {
                 return contract;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                console.warn('[useAppAnalysis] Análisis de app falló:', err);
+                logCaughtError('src/hooks/useAppAnalysis.ts', err);
                 setError(msg);
                 return null;
             } finally {

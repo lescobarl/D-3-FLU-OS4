@@ -15,6 +15,7 @@ import { useIntegrationStore } from '../store/integrationStore';
 import { assembleVideo, type VideoAssemblyResult } from '../services/videoAssembler';
 import { fetchFalVideo } from '../voice/lib/imageGeneration';
 import { resolveFalApiKey, resolveFalVideoModel } from '../core/config/appConfig';
+import { logCaughtError } from '../lib/caughtError';
 import type {
     GenerationFormato,
     GenerationParams,
@@ -226,7 +227,7 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                 return namedResult;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                console.warn('[useDocumentGeneration] Generación falló:', err);
+                logCaughtError('src/hooks/useDocumentGeneration.ts', err);
                 setError(msg);
                 setJob('error', formato, { error: msg });
                 return null;
