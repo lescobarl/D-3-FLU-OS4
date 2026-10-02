@@ -40,7 +40,9 @@ Auditoria INDEPENDIENTE (2026-10-02) y su cierre (heuristicas propias sobre los 
   console.* dentro de catch, con prueba de detector y allowlist al logger (7c4157c).
 - Hardcode de politica en src/core/autonomy -> fuente unica autonomyPolicy.ts (~165 numeros; c9d92ca).
 - Literal 'invalid-input' (40 sitios, 10 ficheros) -> src/lib/resultReasons.ts (cefe45b).
-- Predicado de ultima ronda copiado 18x en 9 motores -> gameUtils.isLastRound (644ba16).
+- Esqueleto de motores de juego a duenos unicos en gameUtils: isLastRound (18 sitios, 644ba16),
+  isGameCommandSurface (17 motores, 0c67f4f), finishRoundsIfLast + roundsOverMessage (mensaje de fin;
+  c7bd867/6ef1d66). Duplicacion de bloques de 4 lineas: 12 -> 5 (los 5 son patrones de LLAMADA compartidos).
 Limpio (medido): 0 var/eval/catch-vacio/as-any/claves API/storage directo/TODO real; los 34 '==' son '== null'.
 Los ultimos cierres de tickets son:
 - Lotería (cada 2 turnos no cambiaba carta / perdia ejecucion): cerrado, commit 033cc69.
