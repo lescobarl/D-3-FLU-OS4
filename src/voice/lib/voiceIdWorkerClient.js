@@ -20,9 +20,10 @@ const EMBED_TYPES = new Set(['embed', 'embedAndMatch'])
 let embedInFlight = false
 let embedPending = null
 
-function isWorkerRuntime() {
-  return typeof Worker !== 'undefined' && typeof window !== 'undefined'
-}
+import { isWorkerRuntime } from '../../lib/workerRuntime'
+
+// El dueno de la pregunta es src/lib/workerRuntime.ts (antes habia una copia aqui
+// con la guarda extra de `window`, que solo cambia fuera del hilo principal).
 
 /** Búfer transferible: propiedad pasa al worker (zero-copy). */
 export function prepareTransferableAudio(samples) {

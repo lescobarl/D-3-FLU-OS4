@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig';
+import { isWorkerRuntime } from '../../lib/workerRuntime';
 
 /**
  * Cliente del Web Worker de parseo FBX (espejo de voiceIdWorkerClient.js).
@@ -31,9 +32,7 @@ let workerDead = false;
 let seq = 0;
 const pending = new Map<string, PendingEntry>();
 
-function isWorkerRuntime(): boolean {
-  return typeof Worker !== 'undefined';
-}
+
 
 function ensureWorker(): Worker | null {
   if (!isWorkerRuntime()) return null;
