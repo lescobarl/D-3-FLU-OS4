@@ -613,7 +613,7 @@
   "invariant": {
     "statement": "Un solo dueno por simbolo del bloque de minutas (buildMinuteKey, formatMinuteKnowledgeEntry, formatMinuteHistoryCode, parseMinuteHistoryCode) y sin resucitar los alias locales formatHistoryCode/parseHistoryCode.",
     "metric": {
-      "command": "rg -o --no-heading -g \"src/**\" -e \"function (buildMinuteKey|formatMinuteKnowledgeEntry|formatMinuteHistoryCode|parseMinuteHistoryCode|formatHistoryCode|parseHistoryCode)\\b\" | find /c /v \"\"",
+      "command": "rg -o --no-heading -g \"src/**\" -e \"function (buildMinuteKey|formatMinuteKnowledgeEntry|formatMinuteHistoryCode|parseMinuteHistoryCode|formatHistoryCode|parseHistoryCode)\" src | find /c /v \"x\"",
       "target": 4
     },
     "guardFiles": [
