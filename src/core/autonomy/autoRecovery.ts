@@ -23,10 +23,15 @@
 import { getPreferredAIProvider, setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 import { DEFAULT_AI_FALLBACK_ORDER } from '../../core/config/sharedConfig';
 import { emitAutonomyEvent } from './autonomyEvents';
+import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { v4 as uuidv4 } from 'uuid';
 import type { ComponentHealth, HealthMonitor } from './healthMonitor';
 import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
+
+/** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
+const RC = AUTONOMY_POLICY.recovery;
+const UNITS = AUTONOMY_POLICY.units;
 
 // -----------------------------------------------------------
 // Tipos
@@ -169,17 +174,17 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         condition: {
             component: 'ai-service',
             healthStatus: 'critical',
-            minDurationMs: 10000, // 10 segundos
-            minConsecutiveFailures: 2,
+            minDurationMs: RC.rules.aiServiceCriticalMinDurationMs, // 10 segundos
+            minConsecutiveFailures: RC.rules.aiServiceCriticalMinFailures,
         },
         action: 'switch_ai_provider',
         params: {
             fallbackOrder: [...DEFAULT_AI_FALLBACK_ORDER],
-            maxSwitchAttempts: 3,
+            maxSwitchAttempts: RC.rules.switchMaxAttempts,
         },
-        priority: 10,
-        maxExecutions: 3,
-        cooldownMs: 30000, // 30 segundos
+        priority: RC.rules.switchPriority,
+        maxExecutions: RC.rules.switchMaxExecutions,
+        cooldownMs: RC.rules.switchCooldownMs, // 30 segundos
     },
     
     // Regla 2: Servicio de IA degradado → Reintentar con backoff
@@ -187,17 +192,17 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         condition: {
             component: 'ai-service',
             healthStatus: 'unhealthy',
-            minDurationMs: 5000, // 5 segundos
+            minDurationMs: RC.rules.aiServiceDegradedMinDurationMs, // 5 segundos
         },
         action: 'retry_with_backoff',
         params: {
-            initialDelay: 1000,
-            maxDelay: 10000,
-            multiplier: 2,
+            initialDelay: RC.rules.retryInitialDelayMs,
+            maxDelay: RC.rules.retryMaxDelayMs,
+            multiplier: RC.rules.retryMultiplier,
         },
-        priority: 5,
-        maxExecutions: 5,
-        cooldownMs: 60000, // 60 segundos
+        priority: RC.rules.retryPriority,
+        maxExecutions: RC.rules.retryMaxExecutions,
+        cooldownMs: RC.rules.retryCooldownMs, // 60 segundos
     },
     
     // Regla 3: IndexedDB crítico → Restaurar desde backup
@@ -205,15 +210,15 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         condition: {
             component: 'indexed-db',
             healthStatus: 'critical',
-            minDurationMs: 20000, // 20 segundos
-            minConsecutiveFailures: 3,
+            minDurationMs: RC.rules.indexedDbCriticalMinDurationMs, // 20 segundos
+            minConsecutiveFailures: RC.rules.indexedDbCriticalMinFailures,
         },
         action: 'restore_from_backup',
         params: {
             backupSource: 'localStorage',
-            maxAgeHours: 24,
+            maxAgeHours: RC.rules.restoreMaxAgeHours,
         },
-        priority: 9,
+        priority: RC.rules.restorePriority,
         maxExecutions: 1,
         cooldownMs: 0,
     },
@@ -223,9 +228,9 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         condition: {
             component: 'react-components',
             healthStatus: 'critical',
-            minDurationMs: 30000, // 30 segundos
+            minDurationMs: RC.rules.reactComponentsCriticalMinDurationMs, // 30 segundos
             metricConditions: [
-                { metric: 'componentErrorRate', operator: '>', value: 0.5 },
+                { metric: 'componentErrorRate', operator: '>', value: RC.rules.componentErrorRateThreshold },
             ],
         },
         action: 'restart_component',
@@ -233,7 +238,7 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
             component: 'application',
             force: true,
         },
-        priority: 15,
+        priority: RC.rules.restartPriority,
         maxExecutions: 1,
         cooldownMs: 0,
     },
@@ -243,15 +248,15 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         condition: {
             component: 'network',
             healthStatus: 'critical',
-            minDurationMs: 60000, // 1 minuto
-            minConsecutiveFailures: 5,
+            minDurationMs: RC.rules.networkCriticalMinDurationMs, // 1 minuto
+            minConsecutiveFailures: RC.rules.networkCriticalMinFailures,
         },
         action: 'escalate_to_admin',
         params: {
             channels: ['console', 'localStorage'],
             message: 'Problema de red persistente detectado',
         },
-        priority: 12,
+        priority: RC.rules.escalatePriority,
         maxExecutions: 1,
         cooldownMs: 0,
     },
@@ -265,9 +270,9 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
         condition: {
             component: 'react-components',
             healthStatus: 'critical',
-            minDurationMs: 30000, // 30 segundos
+            minDurationMs: RC.rules.reactComponentsCriticalMinDurationMs, // 30 segundos
             metricConditions: [
-                { metric: 'recentConsoleErrors', operator: '>', value: 20 },
+                { metric: 'recentConsoleErrors', operator: '>', value: RC.rules.recentConsoleErrorsThreshold },
             ],
         },
         action: 'restart_component',
@@ -275,7 +280,7 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
             component: 'application',
             method: 'soft-restart',
         },
-        priority: 15,
+        priority: RC.rules.restartPriority,
         maxExecutions: 1,
         cooldownMs: 0,
     },
@@ -284,9 +289,9 @@ export const DEFAULT_RECOVERY_RULES: RecoveryRule[] = [
 
 export const DEFAULT_RECOVERY_CONFIG: AutoRecoveryConfig = {
     enabled: true,
-    criticalThreshold: 0.3,
-    maxRecoveryTimeMs: 300000, // 5 minutos
-    maxRetriesPerIncident: 10,
+    criticalThreshold: RC.config.criticalThreshold,
+    maxRecoveryTimeMs: RC.config.maxRecoveryTimeMs, // 5 minutos
+    maxRetriesPerIncident: RC.config.maxRetriesPerIncident,
     rules: DEFAULT_RECOVERY_RULES,
     verboseLogging: true,
     userNotificationMode: 'toast',
@@ -296,15 +301,15 @@ export const DEFAULT_RECOVERY_CONFIG: AutoRecoveryConfig = {
 // Implementación de acciones de recuperación
 // -----------------------------------------------------------
 
-/** Duracion simulada de un reintento (el ejecutor real ejecutaria la operacion fallida). */
-const SIMULATED_RETRY_MS = 100;
+/** Duración simulada de un reintento (fuente: autonomyPolicy.ts). */
+const SIMULATED_RETRY_MS = RC.simulatedRetryMs;
 
 class RecoveryActionExecutor {
     private executionHistory: Map<string, { count: number; lastExecution: number }> = new Map();
     
     async executeRetryWithBackoff(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
         const startTime = Date.now();
-        const { initialDelay = 1000, maxDelay = 10000, multiplier = 2 } = params;
+        const { initialDelay = RC.retryDefaults.initialDelayMs, maxDelay = RC.retryDefaults.maxDelayMs, multiplier = RC.retryDefaults.multiplier } = params;
         
         // Calcular delay basado en número de intentos
         const attemptCount = this.getExecutionCount(incident.id, 'retry_with_backoff');
@@ -846,8 +851,8 @@ export class AutoRecoverySystem {
         this.incidentHistory.push(incident);
         
         // Limitar historial
-        if (this.incidentHistory.length > 100) {
-            this.incidentHistory = this.incidentHistory.slice(-100);
+        if (this.incidentHistory.length > RC.incidentHistoryLimit) {
+            this.incidentHistory = this.incidentHistory.slice(-RC.incidentHistoryLimit);
         }
         
         return incident;
@@ -876,7 +881,7 @@ export class AutoRecoverySystem {
         if (incidentAge > this.config.maxRecoveryTimeMs && incident.status === 'active') {
             incident.status = 'escalated';
             this.executeRecoveryAction('escalate_to_admin', {
-                message: `Incidente ${incidentId} no resuelto después de ${Math.round(incidentAge / 1000)} segundos`,
+                message: `Incidente ${incidentId} no resuelto después de ${Math.round(incidentAge / UNITS.msPerSecond)} segundos`,
             }, componentHealth, incidentId);
         }
     }
@@ -895,7 +900,7 @@ export class AutoRecoverySystem {
         if (!incident) return false;
         
         const lastActionTime = incident.actionsTaken.length > 0 
-            ? incident.detectedAt + (incident.actionsTaken.length * 1000) // Simplificado
+            ? incident.detectedAt + (incident.actionsTaken.length * RC.assumedMsPerAction) // Simplificado
             : 0;
         
         return Date.now() - lastActionTime < rule.cooldownMs;

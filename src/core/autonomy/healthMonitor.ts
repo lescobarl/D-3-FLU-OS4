@@ -23,9 +23,14 @@
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
 import { fetchTextEngine } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
+import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { isSpeechSupported, getSpeechVoices } from '../../voice/lib/fluSpeech';
 import { logCaughtError } from '../../lib/caughtError';
 import { probeIndexedDb } from '../db/fluDatabase';
+
+/** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
+const HP = AUTONOMY_POLICY.health;
+const UNITS = AUTONOMY_POLICY.units;
 
 // -----------------------------------------------------------
 // Tipos
@@ -115,7 +120,7 @@ export const DEFAULT_MONITORED_COMPONENTS: readonly string[] = Object.freeze([
 ]);
 
 export const DEFAULT_HEALTH_CONFIG: HealthMonitorConfig = {
-    monitoringInterval: 30000, // 30 segundos
+    monitoringInterval: HP.config.monitoringIntervalMs, // 30 segundos
     degradedThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.degraded,   // 85% de salud
     criticalThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.critical,   // 60% de salud
     autoRecoveryEnabled: false, // Deshabilitado por defecto - se habilita solo para componentes específicos
@@ -129,46 +134,46 @@ export const DEFAULT_HEALTH_CONFIG: HealthMonitorConfig = {
 
 const COMPONENT_THRESHOLDS: Record<string, ComponentThresholds> = {
     'ai-service': {
-        responseTimeMax: 10000,    // 10 segundos máximo
-        errorRateMax: 0.2,         // 20% máximo de errores
+        responseTimeMax: HP.thresholds.aiService.responseTimeMaxMs,    // 10 segundos máximo
+        errorRateMax: HP.thresholds.aiService.errorRateMax,         // 20% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.aiAvailabilityMin,     // 95% mínimo de disponibilidad
-        checkInterval: 15000,      // Verificar cada 15 segundos
+        checkInterval: HP.thresholds.aiService.checkIntervalMs,      // Verificar cada 15 segundos
     },
     'speech-recognition': {
-        responseTimeMax: 5000,     // 5 segundos máximo
-        errorRateMax: 0.3,         // 30% máximo de errores
+        responseTimeMax: HP.thresholds.speechRecognition.responseTimeMaxMs,     // 5 segundos máximo
+        errorRateMax: HP.thresholds.speechRecognition.errorRateMax,         // 30% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.speechRecognitionAvailabilityMin,     // 90% mínimo de disponibilidad
-        checkInterval: 10000,      // Verificar cada 10 segundos
+        checkInterval: HP.thresholds.speechRecognition.checkIntervalMs,      // Verificar cada 10 segundos
     },
     'speech-synthesis': {
-        responseTimeMax: 3000,     // 3 segundos máximo
+        responseTimeMax: HP.thresholds.speechSynthesis.responseTimeMaxMs,     // 3 segundos máximo
         errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.ttsErrorRateMax,        // 15% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.ttsAvailabilityMin,     // 98% mínimo de disponibilidad
-        checkInterval: 10000,      // Verificar cada 10 segundos
+        checkInterval: HP.thresholds.speechSynthesis.checkIntervalMs,      // Verificar cada 10 segundos
     },
     'indexed-db': {
-        responseTimeMax: 2000,     // 2 segundos máximo
-        errorRateMax: 0.1,         // 10% máximo de errores
+        responseTimeMax: HP.thresholds.indexedDb.responseTimeMaxMs,     // 2 segundos máximo
+        errorRateMax: HP.thresholds.indexedDb.errorRateMax,         // 10% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.indexedDbAvailabilityMin,     // 99% mínimo de disponibilidad
-        checkInterval: 20000,      // Verificar cada 20 segundos
+        checkInterval: HP.thresholds.indexedDb.checkIntervalMs,      // Verificar cada 20 segundos
     },
     'network': {
-        responseTimeMax: 3000,     // 3 segundos máximo
+        responseTimeMax: HP.thresholds.network.responseTimeMaxMs,     // 3 segundos máximo
         errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.networkErrorRateMax,        // 25% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.networkAvailabilityMin,     // 85% mínimo de disponibilidad
-        checkInterval: 5000,       // Verificar cada 5 segundos
+        checkInterval: HP.thresholds.network.checkIntervalMs,       // Verificar cada 5 segundos
     },
     'memory': {
-        responseTimeMax: 1000,     // 1 segundo máximo
+        responseTimeMax: HP.thresholds.memory.responseTimeMaxMs,     // 1 segundo máximo
         errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.memoryErrorRateMax,        // 5% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.memoryAvailabilityMin,     // 95% mínimo de disponibilidad
-        checkInterval: 30000,      // Verificar cada 30 segundos
+        checkInterval: HP.thresholds.memory.checkIntervalMs,      // Verificar cada 30 segundos
     },
     'react-components': {
-        responseTimeMax: 1000,     // 1 segundo máximo
-        errorRateMax: 0.1,         // 10% máximo de errores
+        responseTimeMax: HP.thresholds.reactComponents.responseTimeMaxMs,     // 1 segundo máximo
+        errorRateMax: HP.thresholds.reactComponents.errorRateMax,         // 10% máximo de errores
         availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.reactComponentsAvailabilityMin,     // 98% mínimo de disponibilidad
-        checkInterval: 30000,      // Verificar cada 30 segundos
+        checkInterval: HP.thresholds.reactComponents.checkIntervalMs,      // Verificar cada 30 segundos
     },
 };
 
@@ -185,7 +190,7 @@ interface MetricHistory {
 
 class HealthMetricTracker {
     private history: Map<string, MetricHistory> = new Map();
-    private readonly maxHistorySize = 100;
+    private readonly maxHistorySize = HP.metricHistoryLimit;
 
     recordMetric(component: string, responseTime: number, hasError: boolean): void {
         let hist = this.history.get(component);
@@ -587,7 +592,7 @@ async function checkMemory(): Promise<ComponentHealth> {
             const usageRatio = perfMemory.usedJSHeapSize / perfMemory.jsHeapSizeLimit;
             metrics.usageRatio = usageRatio;
             
-            if (usageRatio > 0.9) {
+            if (usageRatio > HP.criticalLoadRatio) {
                 hasError = true;
                 message = 'Uso de memoria crítico (>90%)';
             } else if (usageRatio > AUTONOMY_THRESHOLD_DEFAULTS.health.loadWarnRatio) {
@@ -641,7 +646,7 @@ async function checkReactComponents(): Promise<ComponentHealth> {
         const consoleErrors = window.__FLU_CONSOLE_ERRORS || [];
         metrics.recentConsoleErrors = consoleErrors.length;
         
-        if (consoleErrors.length > 10) {
+        if (consoleErrors.length > HP.consoleErrorMax) {
             hasError = true;
             message = 'Demasiados errores en consola';
         }
@@ -682,7 +687,7 @@ export function determineComponentStatus(
         return 'critical';
     }
     
-    if (responseTime > thresholds.responseTimeMax * 1.5) {
+    if (responseTime > thresholds.responseTimeMax * HP.criticalResponseTimeFactor) {
         return 'critical';
     }
     
@@ -697,10 +702,10 @@ export function calculateOverallStatus(components: ComponentHealth[]): HealthSta
     if (components.length === 0) return 'healthy';
     
     const statusWeights: Record<HealthStatus, number> = {
-        'critical': 0,
-        'unhealthy': 0.3,
-        'degraded': 0.7,
-        'healthy': 1,
+        'critical': HP.statusWeights.critical,
+        'unhealthy': HP.statusWeights.unhealthy,
+        'degraded': HP.statusWeights.degraded,
+        'healthy': HP.statusWeights.healthy,
     };
     
     const totalWeight = components.reduce((sum, comp) => {
@@ -709,8 +714,8 @@ export function calculateOverallStatus(components: ComponentHealth[]): HealthSta
     
     const averageWeight = totalWeight / components.length;
     
-    if (averageWeight < 0.3) return 'critical';
-    if (averageWeight < 0.6) return 'unhealthy';
+    if (averageWeight < HP.overall.criticalBelow) return 'critical';
+    if (averageWeight < HP.overall.unhealthyBelow) return 'unhealthy';
     if (averageWeight < AUTONOMY_THRESHOLD_DEFAULTS.health.weightDegraded) return 'degraded';
     return 'healthy';
 }
@@ -847,10 +852,10 @@ export class HealthMonitor {
                     metrics: { error: error instanceof Error ? error.message : 'Error desconocido' },
                     message: `Error durante verificación: ${error instanceof Error ? error.message : 'Error desconocido'}`,
                     thresholds: COMPONENT_THRESHOLDS[componentName] || {
-                        responseTimeMax: 5000,
-                        errorRateMax: 0.5,
-                        availabilityMin: 0.5,
-                        checkInterval: 30000,
+                        responseTimeMax: HP.fallbackThresholds.responseTimeMaxMs,
+                        errorRateMax: HP.fallbackThresholds.errorRateMax,
+                        availabilityMin: HP.fallbackThresholds.availabilityMin,
+                        checkInterval: HP.fallbackThresholds.checkIntervalMs,
                     },
                 };
                 
@@ -879,7 +884,7 @@ export class HealthMonitor {
             errorRate: componentMetrics.length > 0
                 ? componentMetrics.reduce((sum, m) => sum + m.errorRate, 0) / componentMetrics.length
                 : 0,
-            uptime: performance.now() / 1000, // segundos desde carga de página
+            uptime: performance.now() / UNITS.msPerSecond, // segundos desde carga de página
         };
 
         // Determinar estado general

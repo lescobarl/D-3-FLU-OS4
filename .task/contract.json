@@ -517,7 +517,8 @@
     "tests/App.shell.test.tsx",
     "src/hooks/useAppAnalysis.ts",
     "src/hooks/useDocumentAnalysis.ts",
-    "src/hooks/useDocumentGeneration.ts"
+    "src/hooks/useDocumentGeneration.ts",
+    "src/core/autonomy/autonomyPolicy.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
