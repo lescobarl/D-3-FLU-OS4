@@ -1166,7 +1166,7 @@
     {
       "id": "P8.11",
       "titulo": "getAsrConfig duplicado: mismo nombre y misma pregunta de configuracion en dos sitios",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/voice/lib/asr/voiceActivitySegmenter.js:20 vs src/voice/workers/whisperAsr.worker.js:17",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -1201,14 +1201,14 @@
     {
       "id": "P8.16",
       "titulo": "CONFIRMADO: setField copiado en los dos formularios de editor (mismo cuerpo; solo cambia el tipo del patch)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/components/AmbienteEditorForm.tsx:63 vs src/components/PaletaEditorForm.tsx:58 (node scripts/auditoria-codigo.mjs)",
       "origen": "auditoria-codigo-2026-10-02"
     },
     {
       "id": "P8.17",
       "titulo": "CONFIRMADO en el triaje: newId() copiado (fluDatabase.ts exporta el generador uuid y documentsService.ts tiene su propia copia del mismo cuerpo)",
-      "estado": "todo",
+      "estado": "done",
       "evidencia": "src/core/db/fluDatabase.ts:669 vs src/core/documents/documentsService.ts:38 (ambos: return uuidv4())",
       "origen": "auditoria-codigo-2026-10-02"
     },
@@ -2451,6 +2451,24 @@
       "commit": "b0f903b",
       "titulo": "Zona de los 520 literales repetidos: leida y clasificada, sin defecto nuevo",
       "evidencia": "Alcance real (0.23): CUBIERTO=la clasificacion de los 520 literales repetidos (>=18 chars en >=2 ficheros) que reporta la senal repeatedLiterals de scripts/auditoria-codigo.mjs, y la lectura por muestras de las DOS colas: los 92 mensajes (top completo) y 25 de los 165 identificadores sin espacios. Resultado: 150 rutas de import, 64 clases CSS, 8 atributos DOM, 3 tokens, 165 identificadores (nombres de hueso Bunny_Ctrl_*, handlers window.__fluHandle*, claves de config, ids de comando) y 92 mensajes que son el MISMO texto en fluConfig.js y en el consumidor como respaldo: es el patron DECLARADO del repo (configText(node,key,fallback)) y no lo cubre uiStringsSingleOwnerGuard, cuya regla es otra (ternarios de idioma con dos literales + normalizeLang con dueno unico). Unico candidato real: INICIAR_CONVERSACION -> P8.19. NO CUBIERTO=(1) no se leyeron los 165 identificadores uno a uno: 25 de muestra + el criterio de forma (se ve que son identificadores, no comportamiento). (2) no se reviso si el patron config+fallback genera divergencias REALES hoy (habria que comparar cada respaldo con su valor de config: eso es un trabajo propio, no lo cubre esta clasificacion). (3) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.11",
+      "commit": "44c0114",
+      "titulo": "getAsrConfig: dueno unico en src/voice/lib/asr/asrConfig.js; el segmentador lo re-exporta (import + export) y el worker de Whisper lo importa en vez de copiarlo",
+      "evidencia": "Alcance real (0.23): CUBIERTO=los 3 duplicados que el triaje confirmo leyendo el cuerpo (no el nombre), unificados con guard nacido ROJO y verificacion por conducta: (1) getAsrConfig estaba en src/voice/lib/asr/voiceActivitySegmenter.js:20 y src/voice/workers/whisperAsr.worker.js:17 con el mismo cuerpo; el dueno vive en asrConfig.js y el segmentador lo re-exporta (import + export, AGENTS 4) para no cambiar su API: los tests de voz (voiceSegmenter, asrTurnSegmentation, whisperAsr.worker, asrTurnSegmentation) siguen verdes; (2) newId estaba en src/core/db/fluDatabase.ts:669 (exportado) y src/core/documents/documentsService.ts:38 (return uuidv4()): el consumidor importa el dueno y el guard comprueba que devuelve uuid v4 (3.6); (3) setField estaba copiado en src/components/AmbienteEditorForm.tsx:63 y src/components/PaletaEditorForm.tsx:58 (mismo cuerpo, solo cambiaba el tipo del patch, que en runtime no existe): el dueno es src/hooks/useEditableFields.ts y los dos formularios siguen ejercitados por tests/ambienteEditorForm.test.tsx y tests/paletaEditorForm.test.tsx. Evidencia: senal de cuerpos duplicados y de homonimos del auditor persistido ANTES (setField x2, getAsrConfig x2, newId x2) y DESPUES (las tres familias fuera; el canario de tests/auditCodeSignalsGuard.test.ts lo vigila: si vuelven, cae); metrica 6 -> 3 definiciones (target 3); guard pequeno ROJO -> VERDE; 73 tests de los ficheros tocados; typecheck limpio; lint 156 ficheros / 1329 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) la POLITICA de reintento del worker sigue sin poder medirse sin la app (eso es P8.9, no este hito). (2) e2e declarado por area (flu-settings-panel para los formularios, auditoria-acciones-llm para el ASR, documento-insumo para documentos), no verificado dentro del spec. (3) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.16",
+      "commit": "44c0114",
+      "titulo": "setField: dueno unico en src/hooks/useEditableFields.ts; los dos formularios de editor lo consumen (solo cambia el clonado del estado inicial)",
+      "evidencia": "Alcance real (0.23): CUBIERTO=los 3 duplicados que el triaje confirmo leyendo el cuerpo (no el nombre), unificados con guard nacido ROJO y verificacion por conducta: (1) getAsrConfig estaba en src/voice/lib/asr/voiceActivitySegmenter.js:20 y src/voice/workers/whisperAsr.worker.js:17 con el mismo cuerpo; el dueno vive en asrConfig.js y el segmentador lo re-exporta (import + export, AGENTS 4) para no cambiar su API: los tests de voz (voiceSegmenter, asrTurnSegmentation, whisperAsr.worker, asrTurnSegmentation) siguen verdes; (2) newId estaba en src/core/db/fluDatabase.ts:669 (exportado) y src/core/documents/documentsService.ts:38 (return uuidv4()): el consumidor importa el dueno y el guard comprueba que devuelve uuid v4 (3.6); (3) setField estaba copiado en src/components/AmbienteEditorForm.tsx:63 y src/components/PaletaEditorForm.tsx:58 (mismo cuerpo, solo cambiaba el tipo del patch, que en runtime no existe): el dueno es src/hooks/useEditableFields.ts y los dos formularios siguen ejercitados por tests/ambienteEditorForm.test.tsx y tests/paletaEditorForm.test.tsx. Evidencia: senal de cuerpos duplicados y de homonimos del auditor persistido ANTES (setField x2, getAsrConfig x2, newId x2) y DESPUES (las tres familias fuera; el canario de tests/auditCodeSignalsGuard.test.ts lo vigila: si vuelven, cae); metrica 6 -> 3 definiciones (target 3); guard pequeno ROJO -> VERDE; 73 tests de los ficheros tocados; typecheck limpio; lint 156 ficheros / 1329 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) la POLITICA de reintento del worker sigue sin poder medirse sin la app (eso es P8.9, no este hito). (2) e2e declarado por area (flu-settings-panel para los formularios, auditoria-acciones-llm para el ASR, documento-insumo para documentos), no verificado dentro del spec. (3) suite completa NO ejecutada (exige autorizacion expresa)."
+    },
+    {
+      "id": "P8.17",
+      "commit": "44c0114",
+      "titulo": "newId: documentsService importa el generador de src/core/db/fluDatabase.ts y borra su copia de uuidv4",
+      "evidencia": "Alcance real (0.23): CUBIERTO=los 3 duplicados que el triaje confirmo leyendo el cuerpo (no el nombre), unificados con guard nacido ROJO y verificacion por conducta: (1) getAsrConfig estaba en src/voice/lib/asr/voiceActivitySegmenter.js:20 y src/voice/workers/whisperAsr.worker.js:17 con el mismo cuerpo; el dueno vive en asrConfig.js y el segmentador lo re-exporta (import + export, AGENTS 4) para no cambiar su API: los tests de voz (voiceSegmenter, asrTurnSegmentation, whisperAsr.worker, asrTurnSegmentation) siguen verdes; (2) newId estaba en src/core/db/fluDatabase.ts:669 (exportado) y src/core/documents/documentsService.ts:38 (return uuidv4()): el consumidor importa el dueno y el guard comprueba que devuelve uuid v4 (3.6); (3) setField estaba copiado en src/components/AmbienteEditorForm.tsx:63 y src/components/PaletaEditorForm.tsx:58 (mismo cuerpo, solo cambiaba el tipo del patch, que en runtime no existe): el dueno es src/hooks/useEditableFields.ts y los dos formularios siguen ejercitados por tests/ambienteEditorForm.test.tsx y tests/paletaEditorForm.test.tsx. Evidencia: senal de cuerpos duplicados y de homonimos del auditor persistido ANTES (setField x2, getAsrConfig x2, newId x2) y DESPUES (las tres familias fuera; el canario de tests/auditCodeSignalsGuard.test.ts lo vigila: si vuelven, cae); metrica 6 -> 3 definiciones (target 3); guard pequeno ROJO -> VERDE; 73 tests de los ficheros tocados; typecheck limpio; lint 156 ficheros / 1329 tests; baseline [] = 0 fallos nuevos. NO CUBIERTO=(1) la POLITICA de reintento del worker sigue sin poder medirse sin la app (eso es P8.9, no este hito). (2) e2e declarado por area (flu-settings-panel para los formularios, auditoria-acciones-llm para el ASR, documento-insumo para documentos), no verificado dentro del spec. (3) suite completa NO ejecutada (exige autorizacion expresa)."
     }
   ]
 }

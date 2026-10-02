@@ -3334,3 +3334,20 @@ Unico candidato real: INICIAR_CONVERSACION literal en 7 ficheros -> P8.19.
 
 Conclusion: la senal de literales repetidos NO esconde una familia de defectos nueva; lo que
 exige es lectura, y esa lectura esta hecha y anotada.
+
+## HITO duplicados-pequenos (2026-10-02) — getAsrConfig, newId y setField a dueno unico
+
+Cambios aplicados: src/voice/lib/asr/asrConfig.js (nuevo, dueno de getAsrConfig; el segmentador lo
+re-exporta y el worker lo importa), documentsService importa newId de fluDatabase, y
+src/hooks/useEditableFields.ts (nuevo, dueno del setter parcial que estaba copiado en los dos
+formularios de editor).
+
+Validado contra:
+  - Senales del auditor ANTES: cuerpos duplicados 2 grupos (setField, getAsrConfig) + homonimos
+    newId x2, getAsrConfig x2. DESPUES: las tres familias fuera; el canario del guard del auditor
+    (que fija que lo cerrado no vuelve) queda verde y SI ve los que siguen abiertos (ensureWorker).
+  - Metrica de la puerta: 6 -> 3 definiciones (target 3).
+  - Guard nuevo ROJO (no existia asrConfig.js) -> VERDE; 73 tests de los ficheros tocados.
+  - typecheck limpio; lint 156 ficheros / 1329 tests; baseline [] = 0 fallos nuevos.
+
+No validado: politica de reintento del worker (P8.9), e2e por spec, suite completa.
