@@ -242,7 +242,11 @@ test.describe('Matriz de comandos — escenarios productivos reales', () => {
         // clearStore de este test. Tomar el ultimo registro a ciegas hacia que el
         // veredicto dependiera del calendario (rojo o verde segun quien llegara
         // antes). Mismo criterio que los casos 5 y 8 de esta matriz.
-        const note = records.find((n: any) => String(n.label).toLowerCase().includes('conejos'));
+        const note = records.find(
+            (n: any) =>
+                String(n.label || '').toLowerCase().startsWith('super') &&
+                `${String(n.label || '')} ${String(n.body || '')}`.toLowerCase().includes('conejos'),
+        );
         expect(note, 'debe persistir la nota de la lista super').toBeTruthy();
         await captureScreenshot(page, SHOTS_DIR, '7-nota.png');
     });

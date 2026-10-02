@@ -53,6 +53,12 @@ test.describe('Minuta — generar el resumen y guardarla persiste en `minutes`',
                 body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(MINUTE) } }] }),
             });
         });
+        // Si el proveedor activo fuera el nativo (Gemini), el resumen va por el
+        // proxy: se cubre la misma respuesta en formato OS2.
+        await page.route('**/api/gemini/**', (route) => {
+            hits.push(route.request().url());
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MINUTE) });
+        });
 
         await gotoClean(page);
         await clearStore(page, 'minutes');

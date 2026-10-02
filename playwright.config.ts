@@ -20,7 +20,10 @@ export default defineConfig({
     // El arranque en frio de Vite se paga aqui, antes de los specs (ver el fichero).
     globalSetup: './tests/e2e/_globalSetup.ts',
   testDir: './tests/e2e',
-  timeout: 60000,
+  // 90 s: el setup de gotoClean (goto + `.flu-shell` + bucle de onboarding) puede
+  // pasar de 60 s bajo carga en una app pesada (avatar/three/WASM); medido: 1 test
+  // de 46 fallaba de forma intermitente por agotar 60 s EN EL SETUP, no en la prueba.
+  timeout: 90000,
   fullyParallel: true,
   workers: WORKERS,
   retries: CI ? 1 : 0,

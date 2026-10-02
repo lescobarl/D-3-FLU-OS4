@@ -314,9 +314,12 @@ test.describe('🔍 AUDITORÍA REAL de la RUTA CONVERSACIONAL (contract.acciones
 
         const records = await readStore(page, 'notes');
         expect(records.length).toBeGreaterThan(0);
-        const note = records[records.length - 1];
-        expect(note.label).toContain('Super:');
-        expect(String(note.label).toLowerCase()).toContain('computadora');
+        const note = records.find(
+            (n: any) =>
+                String(n.label || '').toLowerCase().startsWith('super') &&
+                `${String(n.label || '')} ${String(n.body || '')}`.toLowerCase().includes('computadora'),
+        );
+        expect(note, 'la nota del super debe contener "computadora" (items en el body: AGENTS 10)').toBeTruthy();
         await captureScreenshot(page, SHOTS_DIR, '9-note-super.png');
     });
 });
