@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -212,7 +212,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
             if (answered && answered.id === song.id) {
                 session.score += 1;
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `¡Correcto, era "${song.titulo}"! Adivinaste ${session.score} canciones con ${session.score} puntos. ¡Gran oído musical!`,
@@ -232,7 +232,7 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
             // ¿Salta a la siguiente?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,

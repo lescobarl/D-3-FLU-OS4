@@ -421,4 +421,13 @@ export const STOPWORDS_ES: ReadonlySet<string> = new Set([
     'es', 'en', 'se', 'si', 'te', 'tu', 'tus', 'me', 'mi', 'mis', 'su', 'sus',
     'no', 'ni', 'por', 'para', 'que', 'con', 'de', 'y', 'o', 'le', 'les',
     'muy', 'ya', 'hay', 'son', 'mas', 'tan', 'sin',
-]);
+]);
+
+/**
+ * ¿Es esta la ultima ronda? `cursor` es 0-based: la ronda termina cuando el cursor
+ * es el ultimo (se agotan maxRounds u order). Unico dueno del criterio (antes copiado
+ * literal en 9 motores).
+ */
+export function isLastRound(state: { cursor: number; maxRounds: number; order: readonly unknown[] }): boolean {
+    return state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length;
+}

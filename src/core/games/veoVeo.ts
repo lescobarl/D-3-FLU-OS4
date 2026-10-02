@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -199,7 +199,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
             if (hasAnyToken(normalized, item.keywords)) {
                 session.score += 1;
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `¡Correcto, es ${item.nombre}! Completaste ${state.maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
@@ -215,7 +215,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
             // ¿Salta al siguiente objeto?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,

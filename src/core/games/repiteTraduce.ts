@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -136,7 +136,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
             if (acierto) {
                 session.score += 1;
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `¡Muy bien! "${item.es}" es "${item.en}" en inglés. Completaste ${state.maxRounds} palabras con ${session.score} puntos. ¡Eres muy listo!`,
@@ -151,7 +151,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,

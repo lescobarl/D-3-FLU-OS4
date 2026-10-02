@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -503,7 +503,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
             if (hasAnyToken(normalized, answerKeywords)) {
                 session.score += 1;
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `¡Correcto, era ${item.nombre}! Completaste ${state.maxRounds} animales con ${session.score} puntos. ¡Eres un gran detective!`,
@@ -525,7 +525,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
              */
             const cerrarAnimal = (apertura: string): GameTurnResult => {
                 session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
+                if (isLastRound(state)) {
                     state.phase = 'done';
                     return gameOverResult(
                             `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
