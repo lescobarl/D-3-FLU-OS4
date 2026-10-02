@@ -131,7 +131,6 @@ export function PaletasPanel({
         const error = await saveCatalogEntry({
             editor,
             payload,
-            invalidError: ui.invalidError || 'No se puede guardar sin contexto.',
             register: onRegister,
             update: onUpdate,
             mapReason,

@@ -3,6 +3,10 @@
 // ============================================================
 import type { RegisterResult, UpdateResult } from './catalogRegistry';
 
+/** Texto unico de "no hay contexto de edicion" (antes copiado en 3 paneles y
+ * enmascarado por `invalidError` del config). */
+export const NO_CONTEXT_ERROR = 'No se puede guardar sin contexto.';
+
 /** Motivo de fallo comun a alta y edicion en cualquier registro de catalogo. */
 export type CatalogSaveFailure<T> =
     | Extract<RegisterResult<T>, { ok: false }>['reason']
@@ -16,8 +20,8 @@ export type CatalogEditorRef =
 export interface CatalogSaveArgs<TPayload> {
     editor: CatalogEditorRef | null;
     payload: TPayload;
-    /** Texto para "no hay contexto de edicion"; cada panel pone el suyo. */
-    invalidError: string;
+    /** Texto para "no hay contexto de edicion" (por defecto, el comun). */
+    invalidError?: string;
     register: (payload: TPayload) => Promise<RegisterResult<TPayload>>;
     update: (id: string, payload: TPayload) => Promise<UpdateResult<TPayload>>;
     mapReason: (reason: CatalogSaveFailure<TPayload>) => string;
@@ -36,7 +40,7 @@ export async function saveCatalogEntry<TPayload>(
     args: CatalogSaveArgs<TPayload>,
 ): Promise<string | null> {
     const { editor } = args;
-    if (!editor) return args.invalidError;
+    if (!editor) return args.invalidError ?? NO_CONTEXT_ERROR;
 
     if (editor.mode === 'create') {
         const result = await args.register(args.payload);

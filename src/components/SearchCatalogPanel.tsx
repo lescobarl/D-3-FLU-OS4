@@ -351,7 +351,6 @@ export function SearchCatalogPanel({
     const error = await saveCatalogEntry({
       editor,
       payload,
-      invalidError: labels.invalidError || 'No se puede guardar sin contexto.',
       register: onRegister,
       update: onUpdate,
       mapReason,
