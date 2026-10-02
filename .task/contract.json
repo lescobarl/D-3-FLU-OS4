@@ -565,7 +565,10 @@
     "src/voice/lib/voiceCommands.js",
     "src/voice/workers/whisperAsr.worker.js",
     "src/voice/lib/fluTranscriptPause.js",
-    "tests/speechWordsSingleOwnerGuard.test.ts"
+    "tests/speechWordsSingleOwnerGuard.test.ts",
+    "src/voice/lib/commandIds.js",
+    "tests/commandIdsVocabularySingleOwnerGuard.test.ts",
+    "src/voice/lib/participantFloor.js"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
@@ -574,7 +577,7 @@
     "npx vitest run --reporter=dot tests/localStoreMemory.test.ts tests/localTts.test.ts tests/logCaughtErrorRelayGuard.test.ts tests/loteria.test.ts tests/loteriaAdvance.test.ts tests/materiaGrisPanel.test.tsx tests/materiaGrisService.test.ts tests/mediaRequestGate.test.ts tests/memoriaSecuencias.test.ts tests/micCaptureBridge.test.ts tests/minuteHandlersDayRollover.test.ts tests/minuteKnowledge.test.ts tests/minuteKnowledgeHelpers.test.ts tests/misrouteGuards.test.ts tests/modulosMuertosGuard.test.ts tests/musicActions.test.ts tests/musicCapabilities.test.ts tests/musicCatalog.test.ts tests/musicSearch.test.ts tests/navSettleFlag.test.ts tests/normalizeCommandForDeterministic.test.ts tests/noteItemRemovalLiteral.test.ts tests/noteParserBindings.test.ts tests/noteRemovalActions.test.ts tests/noteRemoveIntent.test.ts tests/noteSuperDestFirst.test.ts tests/notesClearEndToEnd.test.ts tests/notesScope.test.ts tests/notesService.test.ts tests/notesUserScope.test.ts tests/notificationCenterBell.test.tsx tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/onboardingModal.test.tsx tests/onboardingService.test.ts tests/ordenaSecuencia.test.ts tests/palabrasEncadenadas.test.ts tests/paletaEditorForm.test.tsx tests/panelScenarios.test.ts tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/quienSoy.test.ts tests/quienSoyMention.test.ts tests/quienSoySiNo.test.ts tests/recognitionBufferFlush.test.ts tests/recordCopy.test.ts tests/remindersAgenda.test.ts tests/repiteTraduce.test.ts tests/reportedScenariosRootFix.test.ts tests/resolveVoiceCommand.test.ts tests/resolvedActionIdentity.test.ts tests/respiracion.test.ts tests/responseGate.test.ts tests/responseGateWindow.test.ts tests/resultFeed.test.tsx tests/riddles.test.ts tests/rulesSimulator.test.ts tests/scheduleAdapter.test.ts tests/scheduleEngine.test.ts tests/searchCatalog.test.ts tests/searchCatalogPanel.test.tsx tests/searchConfigOverrides.test.ts tests/searchControlCenter.test.tsx tests/searchLanguage.test.ts tests/searchOverridesStorage.test.ts tests/searchProxy.test.ts tests/searchSession.test.ts tests/searchWebFallback.test.ts tests/seasonalCalendar.test.ts tests/seasonalDecoration.test.tsx tests/seasonalEffects.test.ts tests/selfKnowledge.test.ts tests/settingsSaveContext.test.tsx tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/shoppingPanel.test.tsx tests/shoppingService.test.ts tests/simonDice.test.ts tests/simpleRequestDetection.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerEmbedding.test.ts tests/speakerEmbeddingCore.test.ts tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerPrimarySeed.test.ts tests/speakerSoloCoalesce.test.ts tests/speechEchoGuard.test.ts tests/speechMerge.test.ts tests/spokenUtteranceRevision.test.ts tests/stackDocGuard.test.ts tests/stateOwnershipGuard.test.ts tests/storyteller.test.ts tests/superNoteTarget.test.ts tests/surfaceMatrix.test.ts tests/systemEventLog.test.ts tests/systemMatrix.test.ts tests/tabRoutes.test.ts tests/textUtils.test.ts tests/thinkingIndicator.test.tsx tests/timeOfDay.test.ts tests/tokenHelperContract.test.ts tests/trabalenguas.test.ts tests/transcriptConfig.test.ts tests/transcriptEventConsumer.test.ts tests/transcriptionDedupLoss.test.ts tests/translationIntegration.test.ts tests/trivia.test.ts tests/turnCommitGarbageGate.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/uiStrings.test.ts tests/uiStringsSingleOwnerGuard.test.ts tests/unifiedAgendaDesign.test.ts tests/useAgendaScope.test.ts tests/useAppAnalysis.test.tsx tests/useAuditLog.test.tsx tests/useAutonomyIntegration.test.tsx tests/useBrowserProfiles.test.tsx tests/useCatalogsSettings.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useDoNotDisturb.test.tsx tests/useDocumentAnalysis.test.tsx tests/useDocuments.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useOnboardingVoiceCapture.test.tsx tests/useParticipants.test.tsx tests/useSearchSites.test.tsx tests/useShoppingList.test.tsx tests/useTurnInfrastructure.test.tsx tests/useWorkspaceImageClear.test.ts tests/useWorkspaceSearchClearOnStart.test.ts tests/useWorkspaceSearchPersonReset.test.ts tests/validateIntegralCtx.test.ts tests/veoVeo.test.ts tests/videoAssembler.test.ts tests/videoSubjectSeed.test.ts tests/voiceAsrEventShape.test.ts tests/voiceAssistantBarWrapper.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceCommandAnalysis.test.ts tests/voiceCommandPhrases.test.ts tests/voiceConfigCatalog.test.ts tests/voiceIdentityQueue.test.ts tests/voiceIdentityResolve.test.ts tests/voiceMicSingleton.test.ts tests/voiceOfflineFallbackBehavior.test.ts tests/voiceQueryParity.test.ts tests/voiceSegmenter.test.ts tests/voiceSingleSourceGuard.test.ts tests/voiceTurnRefireDedup.test.ts tests/voiceTurnStabilization.test.ts tests/voiceWakePerTurn.test.ts tests/wakeWordDisplay.test.ts tests/whisperAsr.worker.test.ts tests/workerBridge.test.ts tests/workspaceArtifactPersonIsolation.test.ts tests/workspaceContractHorario.test.ts tests/workspaceContractTipo.test.ts tests/workspaceDocumentNormalize.test.ts tests/workspaceHubRestoreMedia.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/workspaceLastObjectPerType.test.tsx tests/workspaceMediaResetOnRequest.test.tsx tests/workspacePersonIsolation.test.ts tests/workspaceVisualQualifier.test.ts",
     "npx vitest run --reporter=dot tests/minuteSingleOwnerGuard.test.ts tests/minuteKnowledge.test.ts tests/minuteKnowledgeHelpers.test.ts tests/minuteOnboardingGate.test.ts"
   ],
-  "guard": "npx vitest run --reporter=dot tests/speechWordsSingleOwnerGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/commandIdsVocabularySingleOwnerGuard.test.ts",
   "guardExpect": "green",
   "ignore": [
     ".task/**",
@@ -782,16 +785,31 @@
     ],
     "src/voice/lib/fluTranscriptPause.js": [
       "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/voice/lib/commandIds.js": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/hooks/useMinuteHandlers.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/lib/turnArtifactKind.ts": [
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/voice/lib/fluConfig.js": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/voice/lib/participantFloor.js": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
     ]
   },
   "invariant": {
-    "statement": "La tokenizacion de voz (speechWords) tiene un solo dueno en src/voice (0 copias fuera de src/voice/lib/audioMath.js).",
+    "statement": "El vocabulario de ids de comando se declara una sola vez: 0 ids entrecomillados fuera de src/voice/lib/commandIds.js.",
     "metric": {
-      "command": "rg -n --no-heading \"function speechWords\" src/voice | findstr /V \"audioMath.js\" | find /c /v \"@@@\"",
+      "command": "rg -o --no-heading -e \"'(INICIAR_CONVERSACION|GENERAR_RESUMEN|GUARDAR_MINUTA|ABRIR_ESCUCHA|CERRAR_ESCUCHA|REGISTRAR_PARTICIPANTE|FLU_WAKE|FLU_ADELANTE|FLU_ADELANTE_EMPTY|FLU_ESPERA|ANALIZAR_DOCUMENTO|ANALIZAR_APP|GENERAR_DOCUMENTO|GENERAR_VIDEO|NAVEGAR|BUSCAR|CONOCER_FLU)'\" src -g \"!src/voice/lib/commandIds.js\" | find /c /v \"@@@\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/speechWordsSingleOwnerGuard.test.ts"
+      "tests/commandIdsVocabularySingleOwnerGuard.test.ts"
     ]
   }
 }
