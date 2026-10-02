@@ -3379,3 +3379,19 @@ P8.14 REFUTADO: el modelo SI es env-overridable. sharedConfig.ts:513 lo resuelve
 y appConfig.ts:210 con import.meta.env; la cabecera de sharedConfig declara "sin import.meta.env"
 a proposito porque lo importan los middlewares del servidor. El defecto era mi lectura, no el
 codigo (7.7.f(5)): se cierra el hallazgo, no se toca el codigo.
+
+## HITO hooks-servicio (2026-10-02) — el patron servicio-en-ref a dueno unico
+
+Cambios aplicados: src/hooks/useServiceRef.ts (nuevo) y los 10 hooks que repetian el bloque lo
+consumen. Se conservan la variante de useOnboarding (servicio opcional: usa serviceRef.current?.x)
+y la mencion de useSearchSites (era un comentario, no una copia): por eso el hallazgo baja de 12 a 10.
+
+Validado contra:
+  - guard ROJO -> VERDE (tests/hookServiceRefSingleOwnerGuard.test.ts) con las declaraciones
+    archivo:linea; metrica 11 -> 1 (target 1)
+  - CONDUCTA con React real: la fabrica se invoca UNA vez entre renders (1:2)
+  - 94 tests de los 11 hooks/guard; typecheck; lint 158 / 1340; baseline [] = 0 nuevos
+
+Incidencias declaradas: el transformador aplano 2 fabricas con comentarios dentro (las caza tsc, se
+rehacen a mano); el guard no puede ser .test.tsx en lint:guards (reescrito en .test.ts con
+createElement); 3 ficheros con EOL mixto normalizados con fix:eol.
