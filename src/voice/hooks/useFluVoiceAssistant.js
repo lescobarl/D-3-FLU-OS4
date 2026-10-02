@@ -2777,7 +2777,7 @@ export function useFluVoiceAssistant({
         return false
       }
 
-      if (command === 'INICIAR_CONVERSACION') {
+      if (command === FLU_CONFIG.navigation.sessionResetCommand) {
         resetActiveListenState(listenStateRef.current)
         lastEmittedTranscriptRef.current = ''
         openPreviewTurnRef.current = false
@@ -3841,8 +3841,8 @@ export function useFluVoiceAssistant({
         // orador real y la firma; si ésta fallara, se degrada al orador rápido.
         const { signatureVector, resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
 
-        if (directCommand === 'INICIAR_CONVERSACION' && conversationActiveRef?.current) {
-          await emitActiveConversationCommand('INICIAR_CONVERSACION', capturedTranscript)
+        if (directCommand === FLU_CONFIG.navigation.sessionResetCommand && conversationActiveRef?.current) {
+          await emitActiveConversationCommand(FLU_CONFIG.navigation.sessionResetCommand, capturedTranscript)
           return
         }
 

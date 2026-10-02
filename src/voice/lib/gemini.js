@@ -1560,7 +1560,7 @@ export async function generateFluContract({
       navegacion.comando === 'ACTUALIZAR_MODELO_3D' ||
       navegacion.comando === 'ABRIR_ESCUCHA' ||
       navegacion.comando === 'CERRAR_ESCUCHA' ||
-      navegacion.comando === 'INICIAR_CONVERSACION' ||
+      navegacion.comando === FLU_CONFIG.navigation.sessionResetCommand ||
       navegacion.comando === 'GENERAR_RESUMEN' ||
       navegacion.comando === 'NAVEGAR'
       ? navegacion.comando

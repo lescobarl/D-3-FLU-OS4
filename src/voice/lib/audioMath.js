@@ -740,7 +740,7 @@ export function isSessionStartRequest(text = '', commands = {}) {
 
 export function detectUiVoiceCommand(text = '', commands = {}) {
   if (isSessionStartRequest(text, commands)) {
-    return 'INICIAR_CONVERSACION'
+    return FLU_CONFIG.navigation.sessionResetCommand
   }
 
   if (isMinuteSaveRequest(text) || matchesCommandPhrase(text, commands.saveMinute || [])) {

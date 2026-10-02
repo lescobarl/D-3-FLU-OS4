@@ -13,7 +13,7 @@ import {
 } from './audioMath.js'
 
 export const NAVIGATION_COMMAND_IDS = Object.freeze([
-  'INICIAR_CONVERSACION',
+  FLU_CONFIG.navigation.sessionResetCommand,
   'GENERAR_RESUMEN',
   'GUARDAR_MINUTA',
   'ABRIR_ESCUCHA',
@@ -41,7 +41,7 @@ export const NAVIGATION_COMMAND_IDS = Object.freeze([
  */
 export const GEMINI_INFERABLE_COMMAND_IDS = Object.freeze([
   'FLU_WAKE',
-  'INICIAR_CONVERSACION',
+  FLU_CONFIG.navigation.sessionResetCommand,
   'CERRAR_ESCUCHA',
   'ABRIR_ESCUCHA',
   'NAVEGAR',

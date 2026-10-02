@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // useNavigationCommands — Hook para comandos de navegación
 // ============================================================
 // Extraído de App.tsx para reducir la carga del componente principal.
@@ -357,7 +357,7 @@ export function useNavigationCommands(
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
-            case 'INICIAR_CONVERSACION': {
+            case FLU_CONFIG.navigation.sessionResetCommand: {
                 // Guardián de voz: INICIAR_CONVERSACION solo se ejecuta si el
                 // usuario lo pidió explícitamente ("iniciar conversación").
                 // Una pregunta conversacional ("platícame de los autos") que la
@@ -378,7 +378,7 @@ export function useNavigationCommands(
                         speaker: speakerName || undefined,
                         transcript,
                         response: commandSpeech || '',
-                        comando: 'INICIAR_CONVERSACION',
+                        comando: FLU_CONFIG.navigation.sessionResetCommand,
                         phase,
                     }, 'INICIAR_CONVERSACION command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
