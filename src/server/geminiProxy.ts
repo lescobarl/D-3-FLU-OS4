@@ -311,6 +311,24 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
         body = resolveServerApiKey(body);
         const mode = body?.mode || 'contract';
 
+        // PUERTA DEL TRANSCRIPT (dueno unico: el proxy). Sin transcript NO hay
+        // pregunta y el modelo NO debe generar: contestaba un SALUDO que el turno
+        // hablaba como respuesta a la pregunta real del usuario. Defecto medido
+        // (2026-10-02, bug del dueno "Okay Flow Platicame de los aviones" -> "Soy
+        // FLU, tu asistente de voz. En que puedo ayudarte hoy?"): con el cuerpo
+        // perdido (body ausente/vacio/null, o transcript en blanco) el proxy
+        // respondia 200 y el saludo se commiteaba como respuesta del turno. Su
+        // hermano /api/gemini/text ya rechaza el campo ausente con 400
+        // missing_prompt; aqui faltaba la misma puerta. Se rechaza ANTES de la
+        // cache y del modelo.
+        const requiresTranscript = mode === 'contract' || mode === 'response';
+        if (requiresTranscript && !String(body?.transcript ?? '').trim()) {
+            return sendJson(res, 400, {
+                error: 'missing_transcript',
+                detail: 'El campo "transcript" es obligatorio.',
+            });
+        }
+
         // ── Cache check (contract + response) ──────────────────
         // Fase 6: caché por (transcript_hash, history_hash, language, mode,
         // knowledgeMode, config fingerprint) con TTL 30s (conversación dinámica).
