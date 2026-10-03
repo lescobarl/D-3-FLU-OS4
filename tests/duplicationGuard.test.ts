@@ -54,6 +54,13 @@ export function requestUrlOffenders(src: string, fileName: string): string[] {
   const copiaParseo = /new URL\(rawUrl,/.test(src);
   return redeclaraBase || copiaParseo ? [fileName] : [];
 }
+/** Dueno unico del remuestreo de audio (box low-pass). */
+export const DOWNSAMPLE_OWNER = 'src/voice/lib/asr/resample.js';
+/** Reimplementaciones de downsample fuera del dueno (definicion, no import). */
+export function downsampleOffenders(src: string, fileName: string): string[] {
+  if (fileName === DOWNSAMPLE_OWNER) return [];
+  return /\b(function|const)\s+downsample\b/.test(src) ? [fileName] : [];
+}
 describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () => {
   it('el plegado NFD existe solo en su dueno', () => {
     const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => nfdOffenders(readFileSync(f, 'utf8'), rel(f)));
@@ -96,6 +103,13 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
   it('los sinonimos de proveedor cubren exactamente el catalogo', () => {
     expect(Object.keys(AI_PROVIDER_SYNONYMS).sort()).toEqual([...AI_PROVIDERS].sort());
   });
+  it('el remuestreo de audio (downsample) existe solo en su dueno (P8.26)', () => {
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
+      .flatMap((f) => downsampleOffenders(readFileSync(f, 'utf8'), rel(f)));
+    expect(offenders, 'downsample redefinido fuera de ' + DOWNSAMPLE_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
+    expect(readFileSync(join(ROOT, 'src/voice/lib/asr/whisperRecognitionEngine.js'), 'utf8')).toContain("from './resample.js'");
+    expect(readFileSync(join(ROOT, 'src/dev/asrLab/AsrLab.tsx'), 'utf8')).toContain("from '../../voice/lib/asr/resample.js'");
+  });
 });
 describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo', () => {
   it('marca el NFD reimplementado y no marca al dueno', () => {
@@ -122,6 +136,12 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo',
     // El dueno puede declararlos; importar el helper no cuenta como reimplementar.
     expect(requestUrlOffenders("const PARSE_BASE_URL = 'http://localhost'", REQUEST_URL_OWNER)).toEqual([]);
     expect(requestUrlOffenders("import { parseRequestUrl } from './requestUrl'", 'src/server/otroProxy.ts')).toEqual([]);
+  });
+  it('marca downsample reimplementado y no marca al dueno', () => {
+    expect(downsampleOffenders('function downsample(s, a, b) {}', 'src/voice/lib/asr/otro.js')).toHaveLength(1);
+    expect(downsampleOffenders('const downsample = (s, a, b) => s', 'src/dev/asrLab/otro.ts')).toHaveLength(1);
+    expect(downsampleOffenders('function downsample(s, a, b) {}', DOWNSAMPLE_OWNER)).toEqual([]);
+    expect(downsampleOffenders("import { downsample } from './resample.js'", 'src/voice/lib/asr/otro.js')).toEqual([]);
   });
 });
 describe('P7.20 duplicacion - isAIProvider con un solo dueno', () => {
