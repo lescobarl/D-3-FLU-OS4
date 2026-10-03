@@ -1270,9 +1270,9 @@
     },
     {
       "id": "P8.26",
-      "titulo": "downsample duplicado: el dev-tool src/dev/asrLab/AsrLab.tsx copia el remuestreo box low-pass de src/voice/lib/asr/whisperRecognitionEngine.js",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-10-02 (auditoria de codigo + lectura de los 2 sitios). AsrLab.tsx:48-61 y whisperRecognitionEngine.js:24-41 implementan el MISMO algoritmo (if fromRate<=toRate return; ratio=fromRate/toRate; length=max(1,floor(len/ratio)); media box por tramos con start/end). Difieren solo en nombres de variable, la coercion (Float32Array vs samples) y comentarios -> la senal de cuerpos duplicados (hash) da 0 porque no son identicos textualmente. Los otros 8 homonimos (runMainThreadFallback, sourceLabel, cleanLabel, pickLabel, toUI, flush, resetTurn, scheduleIdle) y los 3 hardcodes del informe quedaron TRIADOS como benignos al leerlos (colisiones de nombre con cuerpos distintos; requestUrl PARSE_BASE_URL es base de parseo, no endpoint; svg xmlns; modelo dev env-overridable). ARREGLO PROPUESTO: extraer downsample a un modulo HOJA (src/voice/lib/asr/resample.js) e importarlo desde ambos; su guard de dueno unico (duplicationGuard/smallDuplicatesSingleOwnerGuard). SEVERIDAD BAJA: AsrLab es un laboratorio DEV.",
+      "titulo": "downsample a un dueno unico: el dev-tool AsrLab ya no copia el remuestreo del motor de Whisper",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-02 (commits 92d4e97 src + 9000201 guard). downsample vivia copiado en 2 sitios (whisperRecognitionEngine.js y el dev-tool AsrLab.tsx) con el MISMO algoritmo (media box low-pass por tramos); el hash de cuerpos duplicados no lo veia porque difieren nombres de variable, coercion y comentarios. Fix: dueno unico src/voice/lib/asr/resample.js; ambos consumidores lo importan. Guard (patron de duplicationGuard): predicado downsampleOffenders + prueba de detector; exige 1 sola definicion en src y que los 2 consumidores importen del dueno. Alcance real (obligatorio, 0.23): CUBIERTO=el dueno unico de downsample, medido con npm run typecheck + duplicationGuard (con prueba de detector) + guardMutationGuard + instrumentIntegrityGuard verdes; NO CUBIERTO=la percepcion del usuario y la suite completa.",
       "origen": "auditoria-codigo-2026-10-02"
     }
   ],
@@ -2589,6 +2589,12 @@
       "commit": "0c79870",
       "titulo": "Con partida activa, una peticion de musica no la consume el motor (isClaimedByOtherDomain)",
       "evidencia": "CERRADO 2026-10-02 (commits 0c79870 src + a0a0663 guard). Defecto medido con una simulacion de ESCRITORIO propia (motores reales, fuera de la suite): con la loteria activa, resolveGameCommandFromText(\"ok flu pon musica\") devolvia {gameId:\"loteria\",action:\"turn\"} e isClaimedByOtherDomain(\"ok flu pon musica\") = false, porque la musica NO estaba entre los dominios que protege la regla 19 (agenda/notas/config/navegacion+generacion/visual/ambiente/compras/diario). El usuario pedia musica y el juego se la comia. Fix: predicado isMusicRequestText en su DUENO src/core/media/musicActions.ts (marcos EXPLICITOS pon/pausa/para/reproduce...), consultado por isClaimedByOtherDomain en src/voice/lib/gameCommands.js; acotado para no pisar los comandos propios de los juegos musicales (adivina_cancion, karaoke). Guard de comportamiento: 4 casos de musica en tests/gameDoesNotHijackCommands.test.ts; nacio ROJO (4 fallos) y quedo verde (60 passed). Commits separados por 0.22 (src y el guard que lo mide no viajan juntos). Alcance real (obligatorio, 0.23): CUBIERTO=la peticion de musica durante una partida activa, medido con el guard + 18 ficheros/567 tests de juegos+voz (systemMatrix, gamePlaythrough, adivinaCancion, karaoke, music*) + 9 barreras de cobertura + typecheck; NO CUBIERTO=la percepcion audible/visual del usuario, la suite e2e completa y el resto de dominios no musicales."
+    },
+    {
+      "id": "P8.26",
+      "commit": "92d4e97",
+      "titulo": "downsample a un dueno unico (resample.js); AsrLab y Whisper lo importan",
+      "evidencia": "CERRADO 2026-10-02 (commits 92d4e97 src + 9000201 guard). downsample vivia copiado en 2 sitios (whisperRecognitionEngine.js y el dev-tool AsrLab.tsx) con el MISMO algoritmo (media box low-pass por tramos); el hash de cuerpos duplicados no lo veia porque difieren nombres de variable, coercion y comentarios. Fix: dueno unico src/voice/lib/asr/resample.js; ambos consumidores lo importan. Guard (patron de duplicationGuard): predicado downsampleOffenders + prueba de detector; exige 1 sola definicion en src y que los 2 consumidores importen del dueno. Alcance real (obligatorio, 0.23): CUBIERTO=el dueno unico de downsample, medido con npm run typecheck + duplicationGuard (con prueba de detector) + guardMutationGuard + instrumentIntegrityGuard verdes; NO CUBIERTO=la percepcion del usuario y la suite completa."
     }
   ]
 }
