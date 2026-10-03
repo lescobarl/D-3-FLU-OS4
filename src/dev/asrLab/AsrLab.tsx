@@ -16,6 +16,7 @@ import { acquireSpeechRecognition } from '../../voice/lib/speechRecognitionLocal
 import { logCaughtError } from '../../lib/caughtError';
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
+import { downsample } from '../../voice/lib/asr/resample.js'
 
 const RATE = 16000
 
@@ -41,21 +42,6 @@ function concat(chunks: Float32Array[]): Float32Array {
   for (const c of chunks) {
     out.set(c, offset)
     offset += c.length
-  }
-  return out
-}
-
-function downsample(input: Float32Array, fromRate: number, toRate: number): Float32Array {
-  if (!input.length || fromRate <= toRate) return input
-  const ratio = fromRate / toRate
-  const length = Math.max(1, Math.floor(input.length / ratio))
-  const out = new Float32Array(length)
-  for (let i = 0; i < length; i += 1) {
-    const start = Math.floor(i * ratio)
-    const end = Math.min(input.length, Math.floor((i + 1) * ratio))
-    let sum = 0
-    for (let c = start; c < end; c += 1) sum += input[c]
-    out[i] = sum / Math.max(1, end - start)
   }
   return out
 }

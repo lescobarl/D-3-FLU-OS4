@@ -20,25 +20,7 @@ import { createWhisperWasmTranscriber } from './whisperWasmTranscriber.js'
 import { isSpeechSynthesisSpeaking } from '../fluSpeech.js'
 import { logCaughtError } from '../../../lib/caughtError';
 import { DEFAULT_SAMPLE_RATE } from '../audioConstants.js'
-
-function downsample(samples, fromRate, toRate) {
-  const input = samples instanceof Float32Array ? samples : new Float32Array(samples || [])
-  if (!input.length || fromRate <= toRate) return input
-  const ratio = fromRate / toRate
-  const length = Math.max(1, Math.floor(input.length / ratio))
-  const out = new Float32Array(length)
-  // Remuestreo con promedio (box low-pass) para evitar aliasing: tomar una de
-  // cada `ratio` muestras distorsiona la voz y hace que Whisper alucine.
-  for (let index = 0; index < length; index += 1) {
-    const start = Math.floor(index * ratio)
-    const end = Math.min(input.length, Math.floor((index + 1) * ratio))
-    let sum = 0
-    const count = Math.max(1, end - start)
-    for (let cursor = start; cursor < end; cursor += 1) sum += input[cursor]
-    out[index] = sum / count
-  }
-  return out
-}
+import { downsample } from './resample.js'
 
 function concatChunks(chunks) {
   const total = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
