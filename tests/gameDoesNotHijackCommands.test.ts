@@ -87,6 +87,25 @@ describe('el juego sigue funcionando (no se rompio lo validado)', () => {
     });
 });
 
+// MUSICA: es una interaccion con la IA/otro dominio, no una jugada. La musica
+// NO tiene parser determinista (va por el campo musica del contrato del LLM),
+// asi que el predicado vive en su dueno (src/core/media/musicActions.ts) y lo
+// consulta isClaimedByOtherDomain. Defecto medido 2026-10-02 (simulacion de
+// escritorio): con loteria activa, "ok flu pon musica" se resolvia como turn.
+describe('con partida activa, un comando de MUSICA no es jugada', () => {
+    const MUSIC_COMMANDS = [
+        'ok flu pon música',
+        'Okay Flow ponme una canción',
+        'FLU para la música',
+        'pausa la música',
+    ];
+    for (const frase of MUSIC_COMMANDS) {
+        it(frase + ' no es jugada', () => {
+            expect(resolveGameCommandFromText(frase)).toBeNull();
+        });
+    }
+});
+
 // ------------------------------------------------------------
 // EL TURNO AJENO, TAMBIEN POR LA RUTA DE LA IA (log del dueño, 16:20 y 16:24)
 // ------------------------------------------------------------
