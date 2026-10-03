@@ -22,6 +22,7 @@ import { isNoteCommand } from './noteIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
+import { isMusicRequestText } from '../../core/media/musicActions'
 import {
   matchGameIntent,
   matchGameAliasOnly,
@@ -189,6 +190,9 @@ export function isClaimedByOtherDomain(text = '', options = {}) {
     || run(() => owned(parseShoppingIntent(text)))
     // Diario.
     || run(() => owned(parseDiaryIntent(text, { language })))
+    // Musica (pon/pausa/para...): la peticion la atiende el carril del LLM
+    // (contrato 'musica'); el juego no la responde por encima.
+    || run(() => isMusicRequestText(text))
   )
 }
 
