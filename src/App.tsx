@@ -56,7 +56,7 @@ import type { ConversationState, FluContract, FluProfile } from './types/bridge'
 import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
-import { playSong, pauseMusic, stopMusic } from './services/musicPlayer';
+import { playSong, pauseMusic, stopMusic, isMusicPlaying } from './services/musicPlayer';
 import { getPreferredAIProvider, setPreferredAIProvider } from './services/aiServiceFactory';
 import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
@@ -2018,6 +2018,19 @@ function App() {
                         // Acción física → forzar animacion y limpiar emocion
                         geminiAnimacion = detectedAnim;
                         geminiEmocion = undefined;
+                        // "BAILA" también SUENA: si el usuario pide bailar y no hay
+                        // canción en curso, arranca la pista de baile del catálogo
+                        // (config: MUSIC_CATALOG, id "baila"). El caso inverso
+                        // (música -> Dance) ya se cubre arriba con musica.accion.
+                        if (
+                            detectedAnim === 'Dance' &&
+                            musica?.accion !== 'play_music' &&
+                            !isMusicPlaying()
+                        ) {
+                            playSong('baila').catch((err: unknown) =>
+                                logCaughtError('[App] baile sin musica', err),
+                            );
+                        }
                         if (integrationStore.config.debug) {
                         }
                     }
