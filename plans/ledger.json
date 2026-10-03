@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-02",
+  "updated": "2026-10-03",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1288,9 +1288,42 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-02 (commit 7f3a9a7). Defecto reportado por el dueno: 'Okay Flow Platicame de los aviones' -> FLU 'Soy FLU, tu asistente de voz. En que puedo ayudarte hoy?'. HECHO MEDIDO con el proxy real (servidor HTTP, no mock): POST sin body / null / {} / transcript en blanco DEVOLVIA 200 y el modelo generaba un SALUDO (3 de 5 cuerpos: saludo; 1: 'No tengo informacion sobre ese tema'), mientras su hermano /api/gemini/text ya rechazaba el campo ausente con 400 missing_prompt. HECHO MEDIDO con simulacion de escritorio sobre la app real (Playwright + runFluPhrase + captura de la peticion): el cliente SI envia transcript='Platicame de los aviones' y el modelo responde bien cuando lo recibe -> la perdida estaba en el borde servidor, donde parseBody -> resolveServerApiKey -> handleContractMode no tenia puerta. Fix: 400 missing_transcript ANTES de la cache y del modelo. Guard de CONDUCTA tests/contractMissingTranscriptGuard.test.ts: ROJO antes (5/5 cuerpos con 200 + respuesta) y verde despues, con anti-vacuidad y prueba de detector; entra en lint:guards y en el dod. Alcance real (obligatorio, 0.23): CUBIERTO=el borde servidor del contrato (rechazo con 400 del turno sin transcript) medido con el guard de conducta sobre el proxy real + lint:guards (1371 casos) + eslint + typecheck verdes; NO CUBIERTO=la pantalla/voz del usuario y la suite completa (no autorizada).",
       "origen": "bug-dueno-2026-10-02"
+    },
+    {
+      "id": "P8.29",
+      "titulo": "El borde del contrato no pierde las entradas del turno: 10 de los 22 campos no llegaban al prompt",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-03 (commits 4b98ce3 src + b965c7f guard). HECHO MEDIDO con POST reales al dev server vivo: handleContractMode reenviaba 13 de los 22 campos del turno; se perdian knowledgeBase, knowledgeBase2, recentMemory, startupPrompt, agendaText, selfKnowledgeText, diaryContext, notesContext, horarioContext y resultadosContext. Conducta medida: con agendaText de dos pendientes reales el modelo respondia que no tenia ningun recordatorio programado; tras el fix responde con los dos pendientes. Fix: mapper unico proxyBodyToGenerateParams con lista explicita + las 10 entradas declaradas en ProxyBody + sonda de P8.28 en la puerta del transcript. Guard tests/contractBoundaryGuard.test.ts (ROJO antes en las dos invariantes, verde despues; con anti-vacuidad, anti-deriva y pruebas de detector) en lint:guards y en el dod. Alcance real (obligatorio, 0.23): CUBIERTO=el borde del contrato medido con el guard de conducta sobre el middleware real + POST al runtime vivo + lint:guards (1380 casos) + eslint + typecheck verdes; NO CUBIERTO=la percepcion del usuario, la suite completa (no autorizada) y el impacto por turno en producto (cuantos turnos dependian de agenda/minutas).",
+      "origen": "auditoria-2026-10-03"
+    },
+    {
+      "id": "P8.30",
+      "titulo": "La cache del contrato no responde con la voz de otro contexto (rol/fase/agenda)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-03 (commits 4b98ce3 src + b965c7f guard). HECHO MEDIDO con POST reales: el mismo transcript con rol Medico de cabecera y despues con rol Chef de cocina devolvia respuestas byte-identicas (la segunda se servia de cache); la clave cubria transcript+historia+idioma+mode+knowledgeMode+personality+creativity y no cubria role, theme, phase ni los 10 campos de P8.29. Fix: la clave se deriva del cuerpo COMPLETO menos apiKey, asi que cualquier entrada que module la respuesta la invalida. Guard: caso de conducta que exige que el segundo turno llegue al modelo (0 llamadas = colision) mas anti-vacuidad que prueba que la cache SIGUE cacheando la peticion identica. Alcance real (obligatorio, 0.23): CUBIERTO=aislamiento de la cache del contrato medido con el guard de conducta + POST al runtime vivo (COLISION paso de True a False) + lint:guards + eslint + typecheck; NO CUBIERTO=frases repetidas dentro de la ventana de 30s en producto real (no medido) ni la suite completa.",
+      "origen": "auditoria-2026-10-03"
+    },
+    {
+      "id": "P8.31",
+      "titulo": "src/core/media/musicActions.ts sin spec en e2eScope (hueco declarado, no maquillado)",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-03 (mismo hallazgo de auditoria). El planificador (npm run e2e:plan) lo senalo en P8.25 como src cambiado sin spec declarado; hoy no aparece porque el bloque calculado es el de P8.27/P8.29. Ningun spec e2e ejercita musica durante una partida: el caso real vive en el guard de vitest gameDoesNotHijackCommands. Cerrarlo pide un spec que recorra ese flujo (o dejarlo declarado como hueco): declarar un mapeo no medido seria taparlo.",
+      "origen": "auditoria-2026-10-03"
     }
   ],
   "done": [
+    {
+      "id": "P8.29",
+      "commit": "49cb0d3",
+      "titulo": "Borde del contrato: las 22 entradas del turno llegan al prompt (10 volvian sin llegar)",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=el borde del contrato medido con guard de conducta sobre el middleware real + POST al runtime vivo + lint:guards + eslint + typecheck; NO CUBIERTO=la pantalla/voz del usuario, la suite completa y el impacto agregado en producto."
+    },
+    {
+      "id": "P8.30",
+      "commit": "49cb0d3",
+      "titulo": "Cache del contrato: clave derivada del cuerpo completo (deja de servir la voz de otro contexto)",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=aislamiento de la cache medido con guard de conducta y con la colision medida antes/despues en el runtime vivo; NO CUBIERTO=frases repetidas dentro de la ventana de 30s en uso real ni la suite completa."
+    },
     {
       "id": "P8.27",
       "commit": "7f3a9a7",

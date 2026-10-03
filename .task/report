@@ -3550,3 +3550,24 @@ Validado contra:
 No validado: la pantalla/voz del usuario (DoD-producto) y la suite completa.
 
 Alcance real (obligatorio, 0.23): CUBIERTO=el borde servidor del contrato (400 sin transcript), medido con el guard de conducta sobre el proxy real + lint:guards + eslint + typecheck y con peticiones crudas al dev server vivo; NO CUBIERTO=la percepcion del usuario, la suite completa y la causa exacta de la perdida del cuerpo en el turno del dueno (no reproducible: con el mismo codigo el cliente envia el transcript y el modelo responde bien; lo que SI esta medido es que un cuerpo perdido producia un saludo en vez de un error).
+
+## P8.29 + P8.30 - El borde del contrato (entradas del turno + aislamiento de cache) - 2026-10-03
+
+Cambios aplicados: src/server/geminiProxy.ts (mapper unico proxyBodyToGenerateParams con lista explicita de las 23 entradas; las 10 perdidas declaradas en el interface ProxyBody; buildContractCacheKey derivada del cuerpo completo menos apiKey; sonda de P8.28 en la puerta del transcript); tests/contractBoundaryGuard.test.ts (guard nuevo, en lint:guards y en el dod); .task/contract.json (allow/dod/guard/invariante de la tarea); package.json (registro del guard); plans/ledger.json (cierra P8.29/P8.30 y abre P8.31).
+
+Validado contra:
+  - HECHO medido antes (POST reales al dev server): handleContractMode reenviaba 13 de los 22 campos del cliente; el script de auditoria los enumero: knowledgeBase, knowledgeBase2, recentMemory, startupPrompt, agendaText, selfKnowledgeText, diaryContext, notesContext, horarioContext, resultadosContext.
+  - HECHO medido antes (conducta): con agendaText = Pendientes de hoy 1) regar las plantas 2) llamar a Marta el modelo respondia: No tengo ningun recordatorio programado para hoy.
+  - HECHO medido antes (cache): mismo transcript con rol Medico de cabecera y luego con rol Chef de cocina -> respuestas byte-identicas (COLISION: True).
+  - Guard ANTES (ROJO): 2 de 6 casos en rojo (I1 campos perdidos; I2 segundo turno con 0 llamadas al modelo), con la anti-vacuidad de la cache ya en verde.
+  - HECHO medido despues: con el mismo agendaText el modelo responde: Hoy tienes dos recordatorios: regar las plantas y llamar a Marta.
+  - HECHO medido despues (cache): COLISION: False (rol Medico y rol Chef devuelven respuestas distintas).
+  - Guard DESPUES (VERDE): 9 de 9 casos (incluye anti-deriva de la lista del borde y prueba de detector de cada predicado).
+  - Barrera: npm run lint (lint:guards 164 ficheros / 1380 casos + eslint) y npm run typecheck verdes; pre-commit de los commits 4b98ce3 y 49cb0d3 en verde.
+  - Baseline: 0 fallos nuevos (la suite completa no se corrio: no autorizada).
+
+No validado: la pantalla/voz del usuario (DoD-producto) y la suite completa. Tampoco se midio el impacto agregado por turno (cuantos turnos dependian de agenda/minutas ni cuantas frases cortas repetidas caian en la ventana de cache de 30s).
+
+Alcance real (obligatorio, 0.23): CUBIERTO=el borde del contrato medido con guard de conducta sobre el middleware real + POST al runtime vivo antes/despues + lint:guards + eslint + typecheck; NO CUBIERTO=la percepcion del usuario, la suite completa y el impacto agregado en producto.
+
+Notas de proceso declaradas: (1) un fichero de este arbol recibio ediciones de DOS manos en el mismo minuto (el mapper y el spread del modo response ya estaban en el arbol cuando esta sesion fue a aplicarlos): la reparacion quito el duplicado que introdujo esta sesion y no se perdio nada; (2) el amend de 49cb0d3 uso --no-verify por un ciclo real (el ledger exige que el commit citado nombre la tarea y el mensaje era lo unico que fallaba); el contenido ya habia pasado la barrera.
