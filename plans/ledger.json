@@ -1309,6 +1309,13 @@
       "estado": "todo",
       "evidencia": "ABIERTO 2026-10-03 (mismo hallazgo de auditoria). El planificador (npm run e2e:plan) lo senalo en P8.25 como src cambiado sin spec declarado; hoy no aparece porque el bloque calculado es el de P8.27/P8.29. Ningun spec e2e ejercita musica durante una partida: el caso real vive en el guard de vitest gameDoesNotHijackCommands. Cerrarlo pide un spec que recorra ese flujo (o dejarlo declarado como hueco): declarar un mapeo no medido seria taparlo.",
       "origen": "auditoria-2026-10-03"
+    },
+    {
+      "id": "P8.32",
+      "titulo": "El bloque de parametros del contrato de voz sale del god-file a su dueno unico (src/voice/lib/contractParams.js)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-03 (f9091b7 guard tolerante + e13010c src + commit del trinquete). R3, autorizado por el dueno (\"continua, tienes mi autorizacion y confianza\"). Medido con el criterio de godFileSizeGuard (split(/\\r?\\n/).length): src/voice/hooks/useFluVoiceAssistant.js 4577 -> 4539 (-38 lineas), techo 4579: la holgura pasa de 2 a 40 y el techo se baja a 4539 en un commit aparte (0.22: el guard que lee el src no viaja con el src). Lo extraido: la resolucion de personalidad/creatividad/startupPrompt/recentMemory/agenda/autoconocimiento y el radar de contexto 6-9 MAS el literal de 22 entradas; ahora en buildContractParams(turn, sources) con las fuentes inyectadas (getters + consumeRecentMemory) y el store leido dentro del modulo, el mismo patron que conversationTurnRow.ts y fluConversationLog.ts. Orden por 0.22: PRIMERO el guard del borde se hizo tolerante a las DOS ubicaciones de la lista (f9091b7, verde, 10/10) y DESPUES se movio el src (e13010c); el guard y el src nunca viajan en el mismo commit. Alcance real (0.23): CUBIERTO=el borde no pierde entradas NI sirve la voz de otro contexto (contractBoundaryGuard 10/10, que ahora lee el payload desde su ubicacion nueva), el comportamiento del hook (useFluVoiceAssistant.behavior + voiceTurnClosingSingleRoute, 41 casos), la barrera del pre-commit (164 ficheros / 1381 casos), eslint y typecheck; NO CUBIERTO=la suite completa, el e2e y la percepcion del usuario en pantalla.",
+      "origen": "refactor-autorizado-2026-10-03"
     }
   ],
   "done": [
@@ -2648,6 +2655,12 @@
       "commit": "92d4e97",
       "titulo": "downsample a un dueno unico (resample.js); AsrLab y Whisper lo importan",
       "evidencia": "CERRADO 2026-10-02 (commits 92d4e97 src + 9000201 guard). downsample vivia copiado en 2 sitios (whisperRecognitionEngine.js y el dev-tool AsrLab.tsx) con el MISMO algoritmo (media box low-pass por tramos); el hash de cuerpos duplicados no lo veia porque difieren nombres de variable, coercion y comentarios. Fix: dueno unico src/voice/lib/asr/resample.js; ambos consumidores lo importan. Guard (patron de duplicationGuard): predicado downsampleOffenders + prueba de detector; exige 1 sola definicion en src y que los 2 consumidores importen del dueno. Alcance real (obligatorio, 0.23): CUBIERTO=el dueno unico de downsample, medido con npm run typecheck + duplicationGuard (con prueba de detector) + guardMutationGuard + instrumentIntegrityGuard verdes; NO CUBIERTO=la percepcion del usuario y la suite completa."
+    },
+    {
+      "id": "P8.32",
+      "commit": "e13010c",
+      "titulo": "El bloque de parametros del contrato de voz sale del god-file a su dueno unico (src/voice/lib/contractParams.js)",
+      "evidencia": "CERRADO 2026-10-03 (f9091b7 guard tolerante + e13010c src + commit del trinquete). R3, autorizado por el dueno (\"continua, tienes mi autorizacion y confianza\"). Medido con el criterio de godFileSizeGuard (split(/\\r?\\n/).length): src/voice/hooks/useFluVoiceAssistant.js 4577 -> 4539 (-38 lineas), techo 4579: la holgura pasa de 2 a 40 y el techo se baja a 4539 en un commit aparte (0.22: el guard que lee el src no viaja con el src). Lo extraido: la resolucion de personalidad/creatividad/startupPrompt/recentMemory/agenda/autoconocimiento y el radar de contexto 6-9 MAS el literal de 22 entradas; ahora en buildContractParams(turn, sources) con las fuentes inyectadas (getters + consumeRecentMemory) y el store leido dentro del modulo, el mismo patron que conversationTurnRow.ts y fluConversationLog.ts. Orden por 0.22: PRIMERO el guard del borde se hizo tolerante a las DOS ubicaciones de la lista (f9091b7, verde, 10/10) y DESPUES se movio el src (e13010c); el guard y el src nunca viajan en el mismo commit. Alcance real (0.23): CUBIERTO=el borde no pierde entradas NI sirve la voz de otro contexto (contractBoundaryGuard 10/10, que ahora lee el payload desde su ubicacion nueva), el comportamiento del hook (useFluVoiceAssistant.behavior + voiceTurnClosingSingleRoute, 41 casos), la barrera del pre-commit (164 ficheros / 1381 casos), eslint y typecheck; NO CUBIERTO=la suite completa, el e2e y la percepcion del usuario en pantalla."
     }
   ]
 }
