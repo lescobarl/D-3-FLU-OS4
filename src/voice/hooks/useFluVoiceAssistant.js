@@ -26,6 +26,7 @@ import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
 import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js'
 import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
+import { buildContractParams } from '../lib/contractParams'
 import {
   isCommandAuthorized,
   resolveDeterministicCommand,
@@ -38,7 +39,6 @@ import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
-import { isSelfKnowledgeRequest } from '../../core/selfKnowledge/selfKnowledge'
 import {
   FLU_CONFIG,
   getActiveListenConfig,
@@ -1123,50 +1123,35 @@ export function useFluVoiceAssistant({
         }
       }
 
-      // Read personality + creativity from FLU Configurator (integrationStore)
-      const integrationState = useIntegrationStore.getState?.()
-      const personality = integrationState?.config?.personality
-        ? {
-          traits: integrationState.config.personality.traits || [],
-          tone: integrationState.config.personality.tone || 'friendly',
-          customInstructions: integrationState.config.personality.customInstructions || '',
-        }
-        : null
-      const creativity = integrationState?.advancedConfig?.creativity ?? null
-
-      // Read startupPrompt from the active profile definition
-      const currentProfile = integrationState?.availableProfiles?.find(
-        (p) => p.id === integrationState?.profile
+      const contractParams = buildContractParams(
+        {
+          apiKey,
+          transcript,
+          intent,
+          speaker,
+          theme,
+          role,
+          phase: contractPhase,
+          language,
+          knowledgeMode,
+          history: getConversationContext(),
+          knowledgeBase: knowledgeBaseRef.current,
+          knowledgeBase2: knowledgeMode === 'minutes' ? getMinuteKnowledgeBaseRef.current() : '',
+        },
+        {
+          consumeRecentMemory: () => {
+            const value = recentMemoryRef.current || ''
+            recentMemoryRef.current = ''
+            return value
+          },
+          getAgenda: getDailyAgendaRef.current,
+          getSelfManifesto: getSelfManifestoRef.current,
+          getDiaryContext: getDiaryContextRef.current,
+          getNotesContext: getNotesContextRef.current,
+          getHorarioContext: getHorarioContextRef.current,
+          getResultadosContext: getResultadosContextRef.current,
+        },
       )
-      const startupPrompt = currentProfile?.startupPrompt || ''
-
-      // Read recentMemory from ref (set by OS3's onEmotion callback via setRecentMemory)
-      // Clear it immediately after reading so it only fires once (avoids repeating the
-      // same emotion across multiple subsequent contract requests).
-      const recentMemory = recentMemoryRef.current || ''
-      recentMemoryRef.current = ''
-
-      // Build daily agenda from minutes (pending items from previous sessions)
-      const agendaText = getDailyAgendaRef.current()
-        ? getDailyAgendaRef.current()
-        : ''
-
-      // Autoconocimiento (§1.4): solo se inyecta en el user prompt cuando el
-      // turno es una petición de autoconocimiento (isSelfKnowledgeRequest).
-      // La ruta local CONOCER_FLU (§1.3) corta antes de Gemini; este texto es
-      // la red de seguridad si una variante ambigua sí llega a la IA.
-      const selfKnowledgeText = isSelfKnowledgeRequest(transcript, language)
-        ? (getSelfManifestoRef.current() || '')
-        : ''
-
-      // Radar de contexto (Pizarrón un solo objeto — Paso 5): bloques 6-9.
-      // Cada bloque es dinámico desde su fuente (Dexie) y '' si no hay datos
-      // (Rule #1). Los getters los provee App.tsx desde los hooks de diario,
-      // notas, horario y resultados del feed.
-      const diaryContext = getDiaryContextRef.current() || ''
-      const notesContext = getNotesContextRef.current() || ''
-      const horarioContext = getHorarioContextRef.current() || ''
-      const resultadosContext = getResultadosContextRef.current() || ''
 
       // FLU "thinking" (Pensando / Idle_1) mientras la IA procesa la petición:
       // gobierna la EXPRESIÓN del avatar (no el overlay, que lo lleva el turno).
@@ -1179,30 +1164,7 @@ export function useFluVoiceAssistant({
       // mientras FLU seguía haciendo cosas.
       const iaStartMs = Date.now()
       try {
-        const iaResult = await requestFluContract({
-          apiKey,
-          transcript,
-          intent,
-          speaker,
-          theme,
-          role,
-          phase: contractPhase,
-          language,
-          history: getConversationContext(),
-          knowledgeBase: knowledgeBaseRef.current,
-          knowledgeBase2: knowledgeMode === 'minutes' ? getMinuteKnowledgeBaseRef.current() : '',
-          knowledgeMode,
-          personality,
-          creativity,
-          recentMemory,
-          startupPrompt,
-          agendaText,
-          selfKnowledgeText,
-          diaryContext,
-          notesContext,
-          horarioContext,
-          resultadosContext,
-        })
+        const iaResult = await requestFluContract(contractParams)
         // Instrumentación de latencia (diagnóstico): permite medir el tiempo real
         // de la intervención con IA sin adivinar.
         relayLog(
