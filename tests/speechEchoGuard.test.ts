@@ -70,6 +70,17 @@ function installStuckSynth(): SynthStub {
     return synth;
 }
 
+/**
+ * Marca vigilada: la supresion de eco se quedo PEGADA (la locucion ya termino y
+ * el flag sigue marcando habla: el bug del onboarding). Exportada para poder
+ * falsificarla (guardMutationGuard: sin prueba de detector es teatro).
+ * @param hablandoDurante isFluSpeaking() mientras la locucion estaba en vuelo.
+ * @param hablandoDespues isFluSpeaking() despues de resolverse.
+ */
+export function ecoPegado(hablandoDurante: boolean, hablandoDespues: boolean): boolean {
+    return hablandoDurante === true && hablandoDespues === true;
+}
+
 describe('TTS — la supresión de eco se libera sola (no se queda pegada)', () => {
     const originalWatchdog = FLU_CONFIG.speech?.watchdogMs;
 
@@ -100,5 +111,19 @@ describe('TTS — la supresión de eco se libera sola (no se queda pegada)', () 
         expect(isFluSpeaking()).toBe(true);
         await promise;
         expect(isFluSpeaking()).toBe(false);
+    });
+
+    it('PRUEBA DE DETECTOR: el detector marca el eco pegado y no marca la liberacion', async () => {
+        // Entradas sinteticas: pegado = defecto; liberado = conducta correcta.
+        expect(ecoPegado(true, true)).toBe(true);
+        expect(ecoPegado(true, false)).toBe(false);
+        expect(ecoPegado(false, false)).toBe(false);
+        // Y sobre la senal REAL: con el sintetizador atascado, no queda pegado.
+        installStuckSynth();
+        const promise = speakResponse('detector de eco', 'es');
+        const durante = isFluSpeaking();
+        await promise;
+        expect(durante).toBe(true);
+        expect(ecoPegado(durante, isFluSpeaking())).toBe(false);
     });
 });

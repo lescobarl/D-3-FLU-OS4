@@ -45,6 +45,15 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
+/**
+ * Marca vigilada: el fallo del relay se RE-REPORTO (el bucle sin fin del hallazgo).
+ * Exportada para poder falsificarla (guardMutationGuard: sin prueba de detector es teatro).
+ * @param llamadas Numero de llamadas que recibio el relay.
+ */
+export function huboReReporte(llamadas: number): boolean {
+    return llamadas > 1;
+}
+
 describe('logCaughtError - el relay que falla no se re-reporta', () => {
     it('un relay que rechaza NO provoca un segundo reporte', async () => {
         logCaughtError('origen', new Error('boom'));
@@ -83,5 +92,15 @@ describe('logCaughtError - el relay que falla no se re-reporta', () => {
             expect(relay.llamadas).toBe(2);
         });
         expect(console.error).toHaveBeenCalledTimes(2);
+    });
+
+    it('PRUEBA DE DETECTOR: el detector marca el re-reporte y no marca el reporte unico', async () => {
+        // Entradas sinteticas: dos llamadas SON el bucle medido; una no.
+        expect(huboReReporte(2)).toBe(true);
+        expect(huboReReporte(0)).toBe(false);
+        // Y sobre la senal REAL: un relay que falla no puede re-reportarse.
+        logCaughtError('origen-detector', new Error('boom'));
+        await reposar();
+        expect(huboReReporte(relay.llamadas)).toBe(false);
     });
 });

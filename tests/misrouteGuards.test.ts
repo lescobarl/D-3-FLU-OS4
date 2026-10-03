@@ -68,3 +68,23 @@ describe('lotería — el ganador nunca es un id crudo', () => {
         expect(r.prompt).toContain('Luis');
     });
 });
+
+/**
+ * Marca vigilada: la frase es consulta de AGENDA. Exportada para poder
+ * falsificarla (guardMutationGuard: sin prueba de detector es teatro).
+ * @param texto Frase del usuario.
+ */
+export function agendaMarcada(texto: string): boolean {
+    const r = parseAgendaCommand(texto, { now: Date.now() });
+    return r.handled === true && r.action === 'agenda.list';
+}
+
+describe('PRUEBA DE DETECTOR - la marca de agenda discrimina', () => {
+    it('PRUEBA DE DETECTOR: el detector marca la consulta con marcador y no marca la pregunta de juego', () => {
+        // Entrada infractora sintetica (el bug medido): pregunta de juego con "tienes".
+        expect(agendaMarcada('qué otro juego tienes')).toBe(false);
+        expect(agendaMarcada('qué juegos tienes')).toBe(false);
+        // Y no puede ser vacua: una consulta con marcador temporal SI se marca.
+        expect(agendaMarcada('qué hay hoy')).toBe(true);
+    });
+});

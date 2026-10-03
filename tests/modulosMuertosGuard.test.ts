@@ -25,12 +25,28 @@ const DEAD = [
   'src/voice/lib/localTranslate.js',
 ]
 
+/**
+ * Detector: de una lista de rutas, las que SIGUEN existiendo.
+ * Exportado para poder falsificarlo (guardMutationGuard: sin prueba de detector es teatro).
+ * @param paths Rutas relativas a la raiz del repo.
+ * @param existe Comprobador inyectado (en el caso real, existsSync).
+ */
+export function existentes(paths: string[], existe: (p: string) => boolean): string[] {
+  return paths.filter((p) => existe(p))
+}
+
 describe('C16 modulosMuertos — sin módulos muertos', () => {
   it('los módulos sin importador de producción están eliminados', () => {
-    const remaining = DEAD.filter((p) => existsSync(join(ROOT, p)))
+    const remaining = existentes(DEAD, (p) => existsSync(join(ROOT, p)))
     expect(
       remaining,
       `Módulos muertos que siguen existiendo (N=${remaining.length}):\n  ${remaining.join('\n  ')}`,
     ).toEqual([])
+  })
+
+  it('PRUEBA DE DETECTOR: el detector marca el modulo muerto presente y no marca el ausente', () => {
+    const existe = (p: string) => existsSync(join(ROOT, p))
+    expect(existentes(['package.json', 'no-existe-xyz.ts'], existe)).toEqual(['package.json'])
+    expect(existentes(DEAD, existe)).toEqual([])
   })
 })
