@@ -3571,3 +3571,22 @@ No validado: la pantalla/voz del usuario (DoD-producto) y la suite completa. Tam
 Alcance real (obligatorio, 0.23): CUBIERTO=el borde del contrato medido con guard de conducta sobre el middleware real + POST al runtime vivo antes/despues + lint:guards + eslint + typecheck; NO CUBIERTO=la percepcion del usuario, la suite completa y el impacto agregado en producto.
 
 Notas de proceso declaradas: (1) un fichero de este arbol recibio ediciones de DOS manos en el mismo minuto (el mapper y el spread del modo response ya estaban en el arbol cuando esta sesion fue a aplicarlos): la reparacion quito el duplicado que introdujo esta sesion y no se perdio nada; (2) el amend de 49cb0d3 uso --no-verify por un ciclo real (el ledger exige que el commit citado nombre la tarea y el mensaje era lo unico que fallaba); el contenido ya habia pasado la barrera.
+
+## P8.33 - Los 10 guards del dod entran en la barrera por commit - 2026-10-03
+
+Cambios aplicados: package.json (lint:guards 164 -> 174 ficheros), los 10 guards con prueba de detector,
+.task/contract.json (allow, enmienda declarada) y plans/ledger.json (cierre).
+
+Validado contra:
+  - Guard ANTES (hueco medido): el dod declaraba 22 ficheros *Guard* y lint:guards corria 12: 10 guards
+    podian romperse entre cierres sin que la barrera por commit lo dijera (AGENTS 7.7.f).
+  - Guard DESPUES (VERDE): 174 ficheros / 1436 casos (antes 164 / 1381); pre-commit de los 3 commits en verde.
+  - Control negativo MEDIDO por tanda (romper el detector y verlo caer): stackDoc `return []` -> rojo;
+    modulosMuertos `return []` -> rojo; renombrar el borde real shouldForceNewLogRowOnCommit -> ingress rojo.
+  - guardMutationGuard verde SIN tocar su baseline (shrink-only).
+  - Baseline: 0 fallos nuevos (la suite completa no se corrio: no autorizada).
+
+No validado: la suite completa, el e2e y el DoD-producto.
+
+Alcance real (obligatorio, 0.23): CUBIERTO=la barrera por commit para los 10 guards, medido con conteo
+antes/despues y 3 controles negativos; NO CUBIERTO=la suite completa, el e2e y la percepcion del usuario.
