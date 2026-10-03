@@ -1316,6 +1316,20 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-03 (f9091b7 guard tolerante + e13010c src + commit del trinquete). R3, autorizado por el dueno (\"continua, tienes mi autorizacion y confianza\"). Medido con el criterio de godFileSizeGuard (split(/\\r?\\n/).length): src/voice/hooks/useFluVoiceAssistant.js 4577 -> 4539 (-38 lineas), techo 4579: la holgura pasa de 2 a 40 y el techo se baja a 4539 en un commit aparte (0.22: el guard que lee el src no viaja con el src). Lo extraido: la resolucion de personalidad/creatividad/startupPrompt/recentMemory/agenda/autoconocimiento y el radar de contexto 6-9 MAS el literal de 22 entradas; ahora en buildContractParams(turn, sources) con las fuentes inyectadas (getters + consumeRecentMemory) y el store leido dentro del modulo, el mismo patron que conversationTurnRow.ts y fluConversationLog.ts. Orden por 0.22: PRIMERO el guard del borde se hizo tolerante a las DOS ubicaciones de la lista (f9091b7, verde, 10/10) y DESPUES se movio el src (e13010c); el guard y el src nunca viajan en el mismo commit. Alcance real (0.23): CUBIERTO=el borde no pierde entradas NI sirve la voz de otro contexto (contractBoundaryGuard 10/10, que ahora lee el payload desde su ubicacion nueva), el comportamiento del hook (useFluVoiceAssistant.behavior + voiceTurnClosingSingleRoute, 41 casos), la barrera del pre-commit (164 ficheros / 1381 casos), eslint y typecheck; NO CUBIERTO=la suite completa, el e2e y la percepcion del usuario en pantalla.",
       "origen": "refactor-autorizado-2026-10-03"
+    },
+    {
+      "id": "P8.33",
+      "titulo": "10 guards del dod NO corren en lint:guards (pueden pudrirse entre cierres)",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-03 (revision medida, AGENTS 7.7.f). El dod del contrato declara 22 ficheros *Guard* y lint:guards corre 12: los 10 que solo viven en el dod pueden romperse sin que la barrera por commit lo diga (solo se ven en el cierre). Lista medida: appTypeGuards, fallbackResponsesGuard, gameRulesGuards, huerfanosGuard, ingressGuards, logCaughtErrorRelayGuard, misrouteGuards, modulosMuertosGuard, speechEchoGuard, stackDocGuard. Comando reproducible: comparar tests del .task/contract.json -> dod con los de package.json -> lint:guards. Cerrarlo pide meterlos en lint:guards (o declarar por que no) y, si alguno no tiene prueba de detector, darsela (guardMutationGuard no admite ampliar el teatro).",
+      "origen": "revision-2026-10-03"
+    },
+    {
+      "id": "P8.34",
+      "titulo": "Triaje de homonimos: cleanLabel y pickLabel definidos en 2 ficheros cada uno",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-03 (revision medida con node scripts/auditoria-codigo.mjs; --self-test OK). El auditor lista 8 homonimos; dos huelen a ruta doble de normalizacion de etiquetas: cleanLabel en src/core/deviceActions/deviceActionIntentParser.ts:113 y src/core/reminders/shoppingIntentParser.ts:44, y pickLabel en src/core/selfKnowledge/selfKnowledge.ts:128 y src/lib/textUtils.ts:93. Los otros 6 (flush, resetTurn, toUI, scheduleIdle, sourceLabel, runMainThreadFallback) son nombres genericos en dominios distintos. Triaje: leer los 4 sitios y, si la intencion coincide, dejar dueno unico (mismo criterio que la unificacion de parsers de agenda/fechas a textUtils).",
+      "origen": "revision-2026-10-03"
     }
   ],
   "done": [
