@@ -62,18 +62,54 @@ export function generalModeFields(): string[] {
     return PROMPT_INPUT_FIELDS.filter((field) => !MINUTES_ONLY_FIELDS.includes(field));
 }
 
-/** Claves del literal `await requestFluContract({ ... })` del motor de voz. */
-export function clientPromptKeys(source: string): string[] {
-    const call = source.indexOf('await requestFluContract({');
-    if (call < 0) return [];
-    const block = source.slice(call, source.indexOf('})', call));
-    return [
-        ...new Set(
-            [...block.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,:]/gm)]
-                .map((match) => match[1])
-                .filter((key) => key !== 'await' && key !== 'return'),
-        ),
-    ];
+/** Fuentes donde puede vivir la lista de entradas del turno (dueno actual del borde). */
+export const CLIENT_PROMPT_SOURCES: readonly string[] = Object.freeze([
+    'src/voice/lib/contractParams.js',
+    'src/voice/hooks/useFluVoiceAssistant.js',
+]);
+
+/**
+ * Claves del turno que el motor envia al contrato, leidas de su dueno.
+ * Tolera las DOS ubicaciones conocidas (modulo `buildContractParams` o el literal
+ * `await requestFluContract({...})` del hook) para que mover la lista de sitio no
+ * obligue a tocar el guard y el codigo en el mismo commit (AGENTS 0.22).
+ * @param sources Fuentes candidatas, en orden de prioridad.
+ */
+export function clientPromptKeys(sources: readonly string[]): string[] {
+    for (const source of sources) {
+        const moduleStart = source.indexOf('export function buildContractParams');
+        if (moduleStart >= 0) {
+            const block = source.slice(source.indexOf('return {', moduleStart), source.indexOf('\n}', moduleStart));
+            const keys = [
+                ...new Set([...block.matchAll(/^\s+([A-Za-z_][A-Za-z0-9_]*),$/gm)].map((m) => m[1])),
+            ];
+            if (keys.length) return keys;
+        }
+        const call = source.indexOf('await requestFluContract({');
+        if (call >= 0) {
+            const block = source.slice(call, source.indexOf('})', call));
+            const keys = [
+                ...new Set(
+                    [...block.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,:]/gm)]
+                        .map((match) => match[1])
+                        .filter((key) => key !== 'await' && key !== 'return'),
+                ),
+            ];
+            if (keys.length) return keys;
+        }
+    }
+    return [];
+}
+
+/** Lee las fuentes del borde del turno (vacio si el fichero no existe). */
+export function readPromptSources(): string[] {
+    return CLIENT_PROMPT_SOURCES.map((rel) => {
+        try {
+            return readFileSync(join(process.cwd(), rel), 'utf8');
+        } catch {
+            return '';
+        }
+    });
 }
 
 /**
@@ -211,18 +247,31 @@ describe('contractBoundaryGuard I1 ??" el contrato no pierde las entradas del tu
     });
 
     it('el motor de voz sigue enviando los campos medidos (anti-vacuidad del origen)', () => {
-        const hook = readFileSync(join(process.cwd(), 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8');
-        const keys = clientPromptKeys(hook);
-        expect(keys.length, 'no se pudo leer la llamada del motor de voz').toBeGreaterThan(15);
+        const keys = clientPromptKeys(readPromptSources());
+        expect(keys.length, 'no se pudo leer la lista de entradas del motor de voz').toBeGreaterThan(15);
         for (const field of PROMPT_INPUT_FIELDS) {
             expect(keys, `el motor dejo de enviar ${field}`).toContain(field);
         }
     });
 
+    it('PRUEBA DE DETECTOR: el lector entiende las DOS ubicaciones de la lista', () => {
+        const desdeModulo = [
+            'export function buildContractParams({ apiKey, transcript } = {}) {',
+            '    return {',
+            '        apiKey,',
+            '        transcript,',
+            '    };',
+            '}',
+        ].join('\n');
+        expect(clientPromptKeys([desdeModulo])).toEqual(['apiKey', 'transcript']);
+        const desdeHook = 'const r = await requestFluContract({\n            apiKey,\n            transcript,\n        })';
+        expect(clientPromptKeys([desdeHook])).toEqual(['apiKey', 'transcript']);
+        expect(clientPromptKeys(['', 'nada que leer'])).toEqual([]);
+    });
+
     it('ANTI-DERIVA: el borde declara TODAS las entradas que el motor envia', () => {
-        const hook = readFileSync(join(process.cwd(), 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8');
         const proxy = readFileSync(join(process.cwd(), 'src/server/geminiProxy.ts'), 'utf8');
-        const client = clientPromptKeys(hook);
+        const client = clientPromptKeys(readPromptSources());
         const boundary = mapperKeys(proxy);
         // Anti-vacuidad: si el parser no lee las dos listas, no hay veredicto valido.
         expect(client.length, 'no se leyo la llamada del motor de voz').toBeGreaterThan(15);
