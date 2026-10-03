@@ -5,6 +5,13 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P8.28",
+      "titulo": "Mecanismo NO reproducido de la perdida del cuerpo en un turno de contrato (P8.27 cerro el sintoma: el proxy ya no genera sin transcript)",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-02 por pregunta del dueno ('lo arreglaste con parche?'). P8.27 dejo medido que un cuerpo perdido (body ausente/null/vacio o transcript en blanco) producia un SALUDO con 200, y que con el mismo codigo el cliente SI envia el transcript y el modelo responde bien (simulacion de escritorio Playwright sobre la app real: runFluPhrase + captura de la peticion = transcript='Platicame de los aviones' + respuesta correcta, tambien con el historial del onboarding). Lo que NO se reprodujo: por que el cuerpo llego perdido en el turno del dueno (log 21:25:42-21:25:49: el cliente registraba question no vacio y el proxy devolvio un saludo). Sonda necesaria para cerrarlo, si vuelve a ocurrir: dump temporal de body/req en handleContract (no esta en el arbol: el diagnostico de 1 linea que se uso en requestFluContractForTranscript se revirtio) o el metadata.transcript del contrato, que hoy no se registra en ningun log. Sin reaparicion no se puede cerrar: no se inventa una causa.",
+      "origen": "bug-dueno-2026-10-02"
+    },
+    {
       "id": "P0.1",
       "titulo": "Ledger de pendientes en el repo (esta propia tarea)",
       "estado": "done",
