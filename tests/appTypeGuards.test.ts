@@ -33,4 +33,12 @@ describe('appTypeGuards — predicados', () => {
     for (const p of AI_PROVIDERS) expect(isAIProvider(p)).toBe(true)
     expect(isAIProvider('proveedor-inventado')).toBe(false)
   })
+
+  it('PRUEBA DE DETECTOR: el detector marca el valor inventado y no marca los legitimos', () => {
+    const inventados = ['Bunny_inventado', '', 'proveedor-inventado']
+    const marcas = inventados.filter((v) => isBunnyComponent(v) || isAIProvider(v))
+    expect(marcas).toEqual([])
+    expect(MIEMBROS_BUNNY.every((c) => isBunnyComponent(c))).toBe(true)
+    expect(AI_PROVIDERS.every((p) => isAIProvider(p))).toBe(true)
+  })
 })
