@@ -205,3 +205,14 @@ describe('ingressGuards - shouldForceNewLogRowOnCommit (heuristica de pausa)', (
     ).toBe(true);
   });
 });
+
+describe("PRUEBA DE DETECTOR - la marca de fila nueva discrimina", () => {
+  it("PRUEBA DE DETECTOR: el detector marca la pausa suficiente y no marca el turno sin pausa", () => {
+    // Entrada infractora sintetica: sin pausa ni novedad, no puede forzar fila nueva.
+    const sinPausa = shouldForceNewLogRowOnCommit("nueva", "viejo", "", { msSinceLastCommit: 0 });
+    expect(sinPausa).toBe(false);
+    // Y no puede ser vacua: con pausa suficiente SI fuerza fila nueva.
+    const conPausa = shouldForceNewLogRowOnCommit("nueva", "viejo", "", { msSinceLastCommit: 1200 });
+    expect(conPausa).toBe(true);
+  });
+});

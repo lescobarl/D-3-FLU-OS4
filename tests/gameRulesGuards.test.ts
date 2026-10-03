@@ -114,3 +114,23 @@ describe('sesión de juego — serializable', () => {
         expect(JSON.parse(JSON.stringify(session))).toEqual(session);
     });
 });
+
+describe(
+    "PRUEBA DE DETECTOR - la marca de acreditacion discrimina (reglas de juego)",
+    () => {
+        test("PRUEBA DE DETECTOR: el detector marca la traduccion y no marca la repeticion", () => {
+            const fresh = () => {
+                const engine = createRepiteTraduceEngine({ random: () => 0.9999 });
+                const session = engine.createSession({ rounds: 3 });
+                engine.start(session, { rounds: 3 });
+                return { engine, session };
+            };
+            // Entrada infractora sintetica: repetir en espanol NO puede acreditar.
+            const malo = fresh();
+            expect(malo.engine.turn(malo.session, "perro").valid).toBe(false);
+            // Y no puede ser vacua: la traduccion al ingles SI acredita.
+            const bueno = fresh();
+            expect(bueno.engine.turn(bueno.session, "dog").valid).toBe(true);
+        });
+    },
+);
