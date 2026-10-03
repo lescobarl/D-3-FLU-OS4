@@ -31,7 +31,9 @@ export const TECHOS: Record<string, number> = {
   // -43 al sacar la lista de componentes monitoreados a su dueno
   // (DEFAULT_MONITORED_COMPONENTS): App dejo de recopiarla.
   'src/App.tsx': 4643, // 5391 antes de P6.6
-  'src/voice/hooks/useFluVoiceAssistant.js': 4579,
+  // -40 en P8.32: el bloque de parametros del turno salio a src/voice/lib/contractParams.js
+  // (buildContractParams), dueno unico de la lista de entradas del contrato de voz.
+  'src/voice/hooks/useFluVoiceAssistant.js': 4539,
   'src/voice/lib/fluConfig.js': 2772,
   'src/voice/lib/gemini.js': 1848,
 }
