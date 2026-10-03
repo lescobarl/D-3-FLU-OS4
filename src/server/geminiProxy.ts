@@ -78,6 +78,18 @@ interface ProxyBody {
     profile?: string;
     workspace?: unknown;
     count?: number;
+    // Entradas del turno que el motor de voz SI envia y que antes no estaban
+    // declaradas aqui (por eso el borde las perdia sin que nada lo dijera).
+    knowledgeBase?: string;
+    knowledgeBase2?: string;
+    recentMemory?: string;
+    startupPrompt?: string;
+    agendaText?: string;
+    selfKnowledgeText?: string;
+    diaryContext?: string;
+    notesContext?: string;
+    horarioContext?: string;
+    resultadosContext?: string;
     delta?: boolean;
     level?: string;
     tag?: string;
@@ -148,22 +160,17 @@ function simpleHash(input: string): string {
  *    la configuración del asistente (Fase 6, punto 3).
  */
 function buildContractCacheKey(body: ProxyBody | null): string {
-    const transcript = body?.transcript || '';
-    const history = body?.history || [];
-    const language = body?.language || 'es';
+    // La clave se deriva del CUERPO COMPLETO (menos la apiKey, que no cambia el
+    // prompt): asi cualquier entrada que module la respuesta -phase, role, theme,
+    // startupPrompt, agendaText, recentMemory, KB, contextos del radar- invalida
+    // la entrada de cache. Antes la clave solo cubria transcript+history+idioma+
+    // mode+knowledgeMode+personality+creativity, y dos turnos con el MISMO
+    // transcript y distinto rol/fase recibian la respuesta del otro (medido
+    // 2026-10-03: rol Medico y rol Chef -> respuestas byte-identicas).
+    const payload: Record<string, unknown> = { ...(body ?? {}) };
+    delete payload.apiKey;
     const mode = body?.mode || 'contract';
-    const knowledgeMode = body?.knowledgeMode || 'general';
-    const normalized = (transcript || '').trim().toLowerCase().slice(0, 100);
-    // Fase 6 — huellas completas de contenido (no sólo longitudes truncadas).
-    const transcriptHash = simpleHash(transcript);
-    const historyHash = simpleHash(
-        history
-            .map((h: Record<string, unknown>) => `${h?.role || h?.speaker || ''}:${h?.text ?? h?.respuesta_voz ?? ''}`)
-            .join('\n'),
-    );
-    // Fase 6 — invalidación por cambio de configuración (personality / creativity).
-    const configFingerprint = simpleHash(`${JSON.stringify(body?.personality || null)}|${String(body?.creativity ?? '')}`);
-    return `${normalized}|${(history || []).length}|${language}|${mode}|${knowledgeMode}|${transcriptHash}|${historyHash}|${configFingerprint}`;
+    return `${mode}|${simpleHash(JSON.stringify(payload))}`;
 }
 
 /**
@@ -240,8 +247,39 @@ function resolveServerApiKey(body: ProxyBody | null): ProxyBody | null {
  * Genera el contrato FLU completo (modo por defecto, paridad OS2).
  * @param body — Cuerpo de la petición con transcript, history, config, etc.
  */
-async function handleContractMode(body: ProxyBody | null): Promise<unknown> {
-    return generateFluContract({
+/**
+ * Traduce el cuerpo HTTP al contrato de `generateFluContract` (DUENO UNICO de
+ * "que entradas del turno viajan al prompt").
+ *
+ * El cuerpo se reenvia COMPLETO: el generador ya declara que campos acepta, asi
+ * que el proxy no mantiene aqui una lista blanca que pueda divergir. Defecto
+ * medido (auditoria 2026-10-03): la lista blanca filtraba 10 de los 22 campos
+ * del turno (knowledgeBase, knowledgeBase2, recentMemory, startupPrompt,
+ * agendaText, selfKnowledgeText, diaryContext, notesContext, horarioContext,
+ * resultadosContext), dejando mudos en el carril de voz el radar de contexto
+ * (bloques 6-9), la personalidad del perfil, el bloque de emocion, el
+ * autoconocimiento y la KB/minutas. Guard: tests/contractBoundaryGuard.test.ts
+ * @param body Cuerpo de la peticion (se reenvia integro).
+ */
+/**
+ * Traduce el cuerpo HTTP al contrato de `generateFluContract`.
+ *
+ * DUENO UNICO de "que entradas del turno viajan al prompt". La lista se
+ * declara aqui y NO puede divergir en silencio: `tests/contractBoundaryGuard`
+ * cuenta estas claves contra las que envia el motor de voz y mide, campo a
+ * campo, que cada una llega al prompt (mas los campos condicionales de su modo).
+ * Mantener la lista corta provoco el defecto medido del 2026-10-03: 10 de 22
+ * campos perdidos (agenda, diario, notas, horario, resultados, KB general, KB
+ * de minutas, autoconocimiento, emocion y personalidad del perfil) -> el radar
+ * de contexto (bloques 6-9), la personalidad del perfil y la KB quedaron mudos
+ * en el carril de voz. Las claves del generador NO se pueden derivar por tipo
+ * (`Parameters<typeof generateFluContract>[0]` resuelve a `never` porque el
+ * modulo es JS sin tipos), asi que la lista es la declaracion del contrato.
+ *
+ * @param body Cuerpo ya resuelto por `resolveServerApiKey`.
+ */
+function proxyBodyToGenerateParams(body: ProxyBody | null) {
+    return {
         apiKey: body?.apiKey,
         transcript: body?.transcript,
         intent: body?.intent,
@@ -255,7 +293,21 @@ async function handleContractMode(body: ProxyBody | null): Promise<unknown> {
         knowledgeMode: body?.knowledgeMode,
         personality: body?.personality,
         creativity: body?.creativity,
-    });
+        knowledgeBase: body?.knowledgeBase,
+        knowledgeBase2: body?.knowledgeBase2,
+        recentMemory: body?.recentMemory,
+        startupPrompt: body?.startupPrompt,
+        agendaText: body?.agendaText,
+        selfKnowledgeText: body?.selfKnowledgeText,
+        diaryContext: body?.diaryContext,
+        notesContext: body?.notesContext,
+        horarioContext: body?.horarioContext,
+        resultadosContext: body?.resultadosContext,
+    };
+}
+
+async function handleContractMode(body: ProxyBody | null): Promise<unknown> {
+    return generateFluContract(proxyBodyToGenerateParams(body));
 }
 
 /**
@@ -264,8 +316,10 @@ async function handleContractMode(body: ProxyBody | null): Promise<unknown> {
  * @param body — Cuerpo de la petición con transcript, language, role, theme, history, etc.
  */
 async function handleResponseMode(body: ProxyBody | null): Promise<{ respuesta_voz: string; text: string }> {
+    // Los defaults del modo `response` se aplican SOBRE el reenvio completo
+    // (nunca en lugar de el): la lista de campos que viajan tiene un solo dueno.
     const fullResult = await generateFluContract({
-        apiKey: body?.apiKey,
+        ...proxyBodyToGenerateParams(body),
         transcript: body?.transcript || '',
         language: body?.language || 'es',
         role: body?.role || '',
@@ -323,6 +377,13 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
         // cache y del modelo.
         const requiresTranscript = mode === 'contract' || mode === 'response';
         if (requiresTranscript && !String(body?.transcript ?? '').trim()) {
+            // Sonda P8.28 (mecanismo no reproducido de la perdida del cuerpo):
+            // si reaparece, el log dice QUE llego (claves del cuerpo) y no hay que
+            // adivinar. Encendida por defecto: solo escribe cuando la puerta salta.
+            console.info(
+                '[geminiProxy] contrato SIN transcript: se rechaza sin llamar al modelo',
+                { mode, hasBody: body !== null, keys: Object.keys(body ?? {}).slice(0, 24) },
+            );
             return sendJson(res, 400, {
                 error: 'missing_transcript',
                 detail: 'El campo "transcript" es obligatorio.',
