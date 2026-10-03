@@ -1274,9 +1274,22 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-02 (commits 92d4e97 src + 9000201 guard). downsample vivia copiado en 2 sitios (whisperRecognitionEngine.js y el dev-tool AsrLab.tsx) con el MISMO algoritmo (media box low-pass por tramos); el hash de cuerpos duplicados no lo veia porque difieren nombres de variable, coercion y comentarios. Fix: dueno unico src/voice/lib/asr/resample.js; ambos consumidores lo importan. Guard (patron de duplicationGuard): predicado downsampleOffenders + prueba de detector; exige 1 sola definicion en src y que los 2 consumidores importen del dueno. Alcance real (obligatorio, 0.23): CUBIERTO=el dueno unico de downsample, medido con npm run typecheck + duplicationGuard (con prueba de detector) + guardMutationGuard + instrumentIntegrityGuard verdes; NO CUBIERTO=la percepcion del usuario y la suite completa.",
       "origen": "auditoria-codigo-2026-10-02"
+    },
+    {
+      "id": "P8.27",
+      "titulo": "Una pregunta real no puede recibir un saludo: el proxy /api/gemini/contract rechaza (400 missing_transcript) el turno sin transcript",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-02 (commit 7f3a9a7). Defecto reportado por el dueno: 'Okay Flow Platicame de los aviones' -> FLU 'Soy FLU, tu asistente de voz. En que puedo ayudarte hoy?'. HECHO MEDIDO con el proxy real (servidor HTTP, no mock): POST sin body / null / {} / transcript en blanco DEVOLVIA 200 y el modelo generaba un SALUDO (3 de 5 cuerpos: saludo; 1: 'No tengo informacion sobre ese tema'), mientras su hermano /api/gemini/text ya rechazaba el campo ausente con 400 missing_prompt. HECHO MEDIDO con simulacion de escritorio sobre la app real (Playwright + runFluPhrase + captura de la peticion): el cliente SI envia transcript='Platicame de los aviones' y el modelo responde bien cuando lo recibe -> la perdida estaba en el borde servidor, donde parseBody -> resolveServerApiKey -> handleContractMode no tenia puerta. Fix: 400 missing_transcript ANTES de la cache y del modelo. Guard de CONDUCTA tests/contractMissingTranscriptGuard.test.ts: ROJO antes (5/5 cuerpos con 200 + respuesta) y verde despues, con anti-vacuidad y prueba de detector; entra en lint:guards y en el dod. Alcance real (obligatorio, 0.23): CUBIERTO=el borde servidor del contrato (rechazo con 400 del turno sin transcript) medido con el guard de conducta sobre el proxy real + lint:guards (1371 casos) + eslint + typecheck verdes; NO CUBIERTO=la pantalla/voz del usuario y la suite completa (no autorizada).",
+      "origen": "bug-dueno-2026-10-02"
     }
   ],
   "done": [
+    {
+      "id": "P8.27",
+      "commit": "7f3a9a7",
+      "titulo": "Puerta del transcript en /api/gemini/contract: 400 missing_transcript en vez de generar un saludo sin pregunta",
+      "evidencia": "Alcance real (obligatorio, 0.23): CUBIERTO=el borde servidor del contrato (rechazo con 400 del turno sin transcript), medido con el guard de conducta sobre el proxy real + lint:guards + eslint + typecheck + peticiones crudas al dev server vivo; NO CUBIERTO=la pantalla/voz del usuario, la suite completa (no autorizada) y la causa exacta de la perdida del cuerpo en el turno del dueno (no reproducible)."
+    },
     {
       "id": "P7.48",
       "commit": "cc6e182",

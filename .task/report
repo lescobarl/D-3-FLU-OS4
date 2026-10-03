@@ -3533,3 +3533,20 @@ No validado (pendiente del usuario / declarado):
 - Observacion medida sin pendiente: el runner node acumula ~2-3 GB durante el bloque; no
   reprodujo el fallo una vez corregido el click, asi que no se abre pendiente.
 Alcance real (obligatorio, 0.23): CUBIERTO=el cierre del click de skip del onboarding en los 3 ficheros e2e y la asercion del test 6, medido con el bloque e2e completo (41 tests) 2x y con lint (162 guards) + typecheck; NO CUBIERTO=la suite e2e COMPLETA, la suite completa (test:full) y el DoD-producto (pantalla del usuario).
+
+## P8.27 - Una pregunta real no puede recibir un saludo (2026-10-02, commit 7f3a9a7)
+
+Cambios aplicados: puerta del transcript en src/server/geminiProxy.ts (handleContract: 400 missing_transcript ANTES de la cache y del modelo, espejo de /api/gemini/text -> missing_prompt); guard de CONDUCTA tests/contractMissingTranscriptGuard.test.ts (proxy real por HTTP, anti-vacuidad, prueba de detector); guard registrado en lint:guards y en el dod del contrato.
+
+Validado contra:
+  - DoD/guard ANTES (ROJO): npx vitest run tests/contractMissingTranscriptGuard.test.ts -> 1 failed | 2 passed; el proxy devolvia 200 con saludo en los 5 cuerpos sin transcript (body vacio, null, {}, {intent,...}, {transcript: blanco}).
+  - Ground truth ANTES: POST /api/gemini/contract sin body -> 200 con {"contract":{"respuesta_voz":"Hola, en que puedo ayudarte hoy?"...}}.
+  - Ground truth DESPUES: POST /api/gemini/contract sin body -> 400 {"error":"missing_transcript","detail":"El campo transcript es obligatorio."}
+  - Guard DESPUES (VERDE): 3 passed.
+  - Vecinos: serverResponseSingleOwnerGuard + stability-guards -> 19 passed.
+  - Pre-commit (lint:guards + eslint + typecheck): 163 ficheros / 1371 casos verdes, eslint limpio, tsc limpio.
+  - Baseline: 0 fallos nuevos (no se corrio la suite completa: no autorizada).
+
+No validado: la pantalla/voz del usuario (DoD-producto) y la suite completa.
+
+Alcance real (obligatorio, 0.23): CUBIERTO=el borde servidor del contrato (400 sin transcript), medido con el guard de conducta sobre el proxy real + lint:guards + eslint + typecheck y con peticiones crudas al dev server vivo; NO CUBIERTO=la percepcion del usuario, la suite completa y la causa exacta de la perdida del cuerpo en el turno del dueno (no reproducible: con el mismo codigo el cliente envia el transcript y el modelo responde bien; lo que SI esta medido es que un cuerpo perdido producia un saludo en vez de un error).
