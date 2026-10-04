@@ -33,6 +33,7 @@ import {
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel, resolveRegisteredSpeakerName } from './voiceIdentity.js'
+import { isSameEmissionWithinWindow } from './captureDedup.js'
 
 /**
  * @typedef {Object} ConversationStreamCommitPayload
@@ -138,6 +139,7 @@ export function handleConversationStreamSync(
     commitTurnToSessionRows,
     fluParticipantRef,
     participantSpeakerRef,
+    isTurnLive,
   } = deps
 
   if (!conversationActiveRef?.current) return
@@ -168,9 +170,18 @@ export function handleConversationStreamSync(
   // lo lee al escribir) abriria una SEGUNDA fila con la misma frase.
   const wakeRequired = FLU_CONFIG.voiceCommands?.requireWakeAlways !== false
   const esTurno = (text) => isTurnCapture(text, { wakeRequired })
-  const ensureTurnId = (isTurn) => {
+  // UN ID POR LOCUCION (modelo, no comparadores): el id se acuna al ABRIR una
+  // locucion. Una entrega que llega con el turno VIVO y dice LO MISMO es la MISMA
+  // locucion -> mismo id: la fila se reutiliza y no se abre otra. La frontera es el
+  // turno vivo, no un reloj.
+  const turnLiveNow = () => (typeof isTurnLive === 'function' ? Boolean(isTurnLive()) : false)
+  const sameLiveEmission = (prevText, nextText) =>
+    turnLiveNow() &&
+    isSameEmissionWithinWindow(prevText, nextText, { windowMs: Number.POSITIVE_INFINITY })
+  const ensureTurnId = (isTurn, sameLive) => {
     if (!isTurn) return
     if (openPreviewTurnRef.current) return
+    if (sameLive) return
     openPreviewTurnRef.current = true
     activeTurnIdRef.current += 1
   }
@@ -184,7 +195,7 @@ export function handleConversationStreamSync(
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
-    ensureTurnId(esTurno(capture))
+    ensureTurnId(esTurno(capture), sameLiveEmission(lastEmittedTranscriptRef?.current || '', capture))
     if (turnBoundary || atTurnBoundary) {
       const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
       const phrase = cleanForSpeech(utterance) || capture
@@ -227,13 +238,15 @@ export function handleConversationStreamSync(
   // MIXTA ("... ok flu <orden>") si abre su fila pasiva: su wake la marca como
   // turno, y el veredicto sale del MISMO analisis del turno (antes del recorte
   // de la cola flu), no de un segundo criterio.
-  const ambientRowBlocked = !capturaEsTurno
+  // MISMA locucion viva (mismo id): no se abre id nuevo NI fila nueva.
+  const mismaLocucionViva = sameLiveEmission(lastEmittedTranscriptRef?.current || '', capture)
+  const ambientRowBlocked = !capturaEsTurno || mismaLocucionViva
 
   // El id del turno se acuña SOLO para un turno de verdad: el ruido de fondo no
   // mueve el id del turno vivo (P8.36). Un commit directo (sin preview) tambien
   // abre turno, asi que el id existe antes de que nada de este turno escriba
   // (fila, log crudo, resolucion).
-  ensureTurnId(capturaEsTurno)
+  ensureTurnId(capturaEsTurno, mismaLocucionViva)
 
   // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
   // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión

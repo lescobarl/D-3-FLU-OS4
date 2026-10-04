@@ -394,21 +394,16 @@ export function useFluVoiceAssistant({
   const commitAndResolveTurn = useCallback(
     async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
       const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
+      // UNA PETICION, UNA FILA: la fila obedece el veredicto del despacho.
+      if (['dedup', 'skip'].includes(lastTurnRequestVerdictRef.current)) return canonicalPhrase
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
       if (!canonicalPhrase) return ''
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
       // la IA). La resolución posterior re-commitea el MISMO valor (idempotente)
       // y deduplica la fila, así no hay doble fuente.
       if (commitOnly) {
-        // Una peticion, una fila (el ASR reentrega): no se re-escribe la fila.
         if (!earlyCommitDedupeRef.current.isRepeat(canonicalPhrase)) {
-          await onContractResolved?.({
-            contract: null,
-            userCommitOnly: true,
-            transcript: canonicalPhrase,
-            speakerName: payload.speakerName,
-            phase: payload.phase, turnId: activeTurnIdRef.current,
-          })
+          await onContractResolved?.({ contract: null, userCommitOnly: true, transcript: canonicalPhrase, speakerName: payload.speakerName, phase: payload.phase, turnId: activeTurnIdRef.current })
         }
         return canonicalPhrase
       }
@@ -463,9 +458,9 @@ export function useFluVoiceAssistant({
   const recentMemoryRef = useRef('')
   const isProcessingRef = useRef(false)
   // Última captura procesada (dedup anti-repetición): evita que la MISMA frase
-  // se procese dos veces (p. ej. cierre + auto-proceso) y cree la acción doble.
-  const lastProcessedCaptureRef = useRef({ text: '', at: 0 })
-  const earlyCommitDedupeRef = useRef(null) // idempotencia por PETICION (memoria en captureDedup)
+  const lastProcessedCaptureRef = useRef({ text: '', at: 0 }) // dedup anti-repeticion de la captura
+  const earlyCommitDedupeRef = useRef(null) // idempotencia por PETICION (captureDedup)
+  const lastTurnRequestVerdictRef = useRef(null) // veredicto del despacho que obedece la fila
   if (!earlyCommitDedupeRef.current) earlyCommitDedupeRef.current = createEmissionDeduper()
   const autoProcessTimerRef = useRef(null)
   const recognitionRetryTimerRef = useRef(null)
@@ -1826,6 +1821,7 @@ export function useFluVoiceAssistant({
           participantSpeakerRef: {
             current: { registeredLabel: activeParticipantSpeakerLabel, registeredName: activeParticipantName },
           },
+          isTurnLive: () => ['THINKING', 'SPEAKING'].includes(useIntegrationStore.getState().conversationState),
         },
         payload,
       ),
@@ -3511,6 +3507,7 @@ export function useFluVoiceAssistant({
         })
       }
 
+      lastTurnRequestVerdictRef.current = plan.plan
       if (plan.plan === 'skip') return false
       if (plan.plan === 'dedup') return true
 
@@ -3570,7 +3567,7 @@ export function useFluVoiceAssistant({
   const processCapture = useCallback(async ({ closing = false } = {}) => {
     const snapshot = readCommandSnapshot(turnRef.current, pendingSpillRef.current)
     relayLog('LOG', 'useFluVoiceAssistant', `processCapture ENTER: snapshot="${(snapshot || '').slice(0, 60)}", closing=${closing}, conversationActiveRef.current=${conversationActiveRef?.current}`)
-    // Dedup de la captura: criterio unico (captureDedup) con la ventana del despacho.
+    // Dedup de captura: criterio unico (captureDedup) con la ventana del despacho.
     const snapshotKeyDedup = cleanForSpeech(snapshot || '')
     if (snapshotKeyDedup) {
       const nowMsDedup = Date.now()

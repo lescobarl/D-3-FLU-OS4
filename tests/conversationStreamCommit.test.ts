@@ -74,6 +74,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
     lastTurnSignatureRef: { current: null as number[] | null },
     lastLogLineTextRef: { current: '' },
     commitTurnToSessionRows: vi.fn<(capture: string, speakerName: string, options?: object) => void>(),
+    isTurnLive: () => false,
     fluParticipantRef: { current: { onTurnCommitted: vi.fn<() => void>() } },
   };
   // Overrides del caso: Object.assign mantiene el tipo del arnes (no infiere un objeto nuevo).
@@ -400,5 +401,45 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.activeTurnIdRef.current).toBe(1);
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
         expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
+    });
+});
+
+// P8.42 - UN ID POR LOCUCION: mientras el turno vive y la emision es la MISMA, la
+// entrega pertenece a la misma locucion (mismo id, misma fila). Sin relojes.
+describe('P8.42 - un id por locucion (la reentrega no abre locucion nueva)', () => {
+    it('misma emision con el turno VIVO: no acuna id nuevo ni abre fila', () => {
+        const deps = makeDeps({
+            isTurnLive: () => true,
+            lastEmittedTranscriptRef: { current: 'okay flow dame una imagen' },
+        });
+
+        handleConversationStreamSync(deps, { capture: 'okay flow dame una imagen', turnCommit: true });
+
+        expect(deps.activeTurnIdRef.current).toBe(0);
+        expect(deps.emitConversationLog).not.toHaveBeenCalled();
+        expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
+    });
+
+    it('emision DISTINTA con el turno vivo: si es una locucion nueva (id y fila)', () => {
+        const deps = makeDeps({
+            isTurnLive: () => true,
+            lastEmittedTranscriptRef: { current: 'okay flow dame una imagen' },
+        });
+
+        handleConversationStreamSync(deps, { capture: 'okay flow pon musica', turnCommit: true });
+
+        expect(deps.activeTurnIdRef.current).toBe(1);
+        expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
+    });
+
+    it('misma emision con el turno YA terminado: es locucion nueva (el usuario repite)', () => {
+        const deps = makeDeps({
+            isTurnLive: () => false,
+            lastEmittedTranscriptRef: { current: 'okay flow dame una imagen' },
+        });
+
+        handleConversationStreamSync(deps, { capture: 'okay flow dame una imagen', turnCommit: true });
+
+        expect(deps.activeTurnIdRef.current).toBe(1);
     });
 });

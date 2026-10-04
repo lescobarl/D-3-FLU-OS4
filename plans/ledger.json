@@ -1351,6 +1351,13 @@
       "estado": "todo",
       "evidencia": "ABIERTO 2026-10-03. La prueba de escritorio que reprodujo el duplicado sustituye SpeechRecognition por una clase falsa ANTES de cargar la app, de modo que el pipeline REAL (onresult/onend/dispatch) corre igual que con Chrome; vive en %TEMP%\\flu-repro\\sim-mic-real.cjs. Es exactamente el fixture que el repo NO tiene: 0 de 11 specs e2e conducen la entrada de voz (P8.31 lo declaro como bloqueo para el spec de musica). Sin el, la barrera solo mide el texto simulado y por eso este defecto paso verde durante dos sesiones. PLAN: moverlo a tests/e2e/_helpers.ts (stub de SpeechRecognition + helpers emitir/interino/endTurn), escribir el spec de la coordenacion (una locucion = una fila = una ejecucion; reentrega dentro de la ventana; repeticion fuera) y declarar el mapeo en e2eScope para src/voice/lib/captureDedup.js y src/voice/hooks/useFluVoiceAssistant.js. Criterio: npm run e2e:plan deja de nombrarlos Y el spec pasa en e2e:scoped.",
       "origen": "instrumento-2026-10-03"
+    },
+    {
+      "id": "P8.42",
+      "titulo": "Un id por locucion: la fila obedece el veredicto del despacho (1 peticion = 1 fila = 1 ejecucion)",
+      "estado": "in_progress",
+      "evidencia": "INSTRUMENTO: prueba de escritorio con micro falso (mismo camino que Chrome) + reentrega 500 ms despues con el turno VIVO (estado SPEAKING): 2 filas / 1 contrato = la forma exacta del log del dueno (22:44:12/22:44:13). MODELO (no comparadores): el id del turno se acuna por LOCUCION -una entrega con el turno vivo y la MISMA emision (comparador del motor, sin reloj) pertenece a la misma locucion: mismo id, misma fila- y la FILA obedece el veredicto del despacho (dedup/skip -> no abre fila). MEDIDO despues: 1 fila / 1 contrato en los tres escenarios del instrumento, y la loteria conserva 2 cartas = 2 peticiones (sin regresion del avance del juego).",
+      "origen": "rediseno-2026-10-03"
     }
   ],
   "done": [
