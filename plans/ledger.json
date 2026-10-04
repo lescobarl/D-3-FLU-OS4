@@ -1379,6 +1379,13 @@
       "estado": "in_progress",
       "evidencia": "ABIERTO 2026-10-04. Cierra los candidatos que las tandas P8.44/P8.45 dejaron declarados: (1) language/sessionRole se persistian en localStorage Y dentro del registro de sesion de Dexie sin lector (ruta doble de dato); (2) la revision del ASR se decidia en el hook con la ventana como literal 1600 y ademas en el planificador; (3) el dance AbortController+timeout estaba en 2 modulos de cliente. Ademas se CLASIFICA (sin unificar) el grupo de 4 predicados de \"re-emision de la linea cerrada\": NO son la misma pregunta (reloj del ASR / preview abierto / eco de interino / linea de log) y su modulo lo declara; el escape que los hace no daninos (replaceLastRawLog) queda vigilado. Cierre y hashes en el commit de cierre.",
       "origen": "peticion-dueno-2026-10-04 (puedes eliminar esas rutas dobles?)"
+    },
+    {
+      "id": "P8.47",
+      "titulo": "La autonomia (decisionEngine, backupSystem) no tiene ningun spec e2e que la ejercite: el planificador la nombra",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-04 (lo destapo la propia puerta e2e al cerrar P8.45: los dos src de src/core/autonomy entraron al bloque y `npm run e2e:plan` los nombra). MEDIDO: los 15 specs de tests/e2e NO ejercitan la autonomia — la unica coincidencia de \"autonom\"/\"backup\"/\"respaldo\" es un comentario en matriz-comandos-productivos.spec.ts:100; ningun spec cambia de proveedor de IA ni restaura un respaldo. Por eso NO se declara un mapeo (declarar un spec que no mide el flujo seria tapar el hueco, mismo criterio que P8.31 antes de tener el arnes de voz). CERRARLO PIDE: (a) un spec que recorra el cambio de proveedor por umbral de rendimiento (decisionEngine) y el respaldo/restauracion (backupSystem) con la DB real; (b) declarar entonces el mapeo src/core/autonomy/*.ts -> ese spec. Criterio de cierre: `npm run e2e:plan` deja de nombrarlos Y el spec pasa. Mientras tanto queda A LA VISTA (rojo en e2e:plan), no silenciado.",
+      "origen": "e2e:plan-2026-10-04"
     }
   ],
   "done": [

@@ -923,6 +923,10 @@
     ],
     "src/voice/lib/imageGeneration.js": [
       "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/voice/lib/idleSchedule.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts",
+      "tests/e2e/tts-flag-pegado.spec.ts"
     ]
   }
 }
