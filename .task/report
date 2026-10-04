@@ -3612,3 +3612,27 @@ No validado: la suite completa, el e2e acotado del bloque (npm run e2e:scoped) y
 Alcance real (obligatorio, 0.23): CUBIERTO=la extraccion del dueno unico de las entradas del turno, medida por
 conteo de lineas ANTES/DESPUES + el guard del borde + el test de comportamiento del hook; NO CUBIERTO=la suite
 completa, el e2e y la percepcion del usuario.
+
+## P8.28 - La pregunta respondida con un saludo / con el retrato del perfil - 2026-10-03
+
+Cambios aplicados: src/voice/lib/gemini.js (buildConversationMessages: la conversacion abre por el usuario;
+el prefijo de presentacion no viaja al modelo), src/server/geminiProxy.ts (sonda env-gated de diagnostico,
+apagada por defecto), tests/conversationOpenerGuard.test.ts (guard nuevo, en lint:guards),
+tests/validateIntegralCtx.test.ts (alineado a la regla), package.json y .task/contract.json.
+
+Validado contra:
+  - Reconstruccion del turno REAL con la sonda FLU_CONTRACT_TRACE=1 (la app no lo exponia): transcript
+    correcto, role/tema/fase reales, startupPrompt de perfil (296) y personality ON, historial de 3 entradas
+    que EMPEZABA por los dos turnos de FLU del onboarding.
+  - ANTES (reproducido): con ese prefijo, "Soy FLU, tu asistente administrativo..."; sin startupPrompt,
+    el saludo generico "Soy FLU, tu asistente de voz...", el mismo sintoma que reporto el dueno.
+  - DESPUES (medido por el MISMO proxy con el cuerpo real): los 7 casos que fallaban responden a la pregunta.
+  - Guard ANTES (ROJO): roles=assistant,assistant,user. DESPUES (VERDE): 4 casos, con prueba de detector.
+  - Barrera: 175 ficheros / 1440 casos; tsc y eslint limpios. Un rojo legitimo en el camino: modeloDefaultGuard
+    (el comentario del arreglo citaba el literal del modelo) se corrigio en el comentario, no en el guard.
+  - Baseline: 0 fallos nuevos (la suite completa no se corrio: no autorizada).
+
+No validado: la pantalla/voz del usuario (hay que repetir la frase tras recargar), la suite completa y el e2e.
+
+Alcance real (obligatorio, 0.23): CUBIERTO=la asamblea de mensajes que recibe el modelo y su conducta medida
+con el cuerpo real por el proxy; NO CUBIERTO=el DoD-producto, la suite completa y el e2e.
