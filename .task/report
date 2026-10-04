@@ -3742,3 +3742,35 @@ condicion de cluster unico pondria el nombre del dueno a los ninos).
 Alcance real (obligatorio, 0.23): CUBIERTO=la causa medida del duplicado reportado y el conflicto que impide el
 fix por texto+tiempo; NO CUBIERTO=el arreglo (P8.39), la diarizacion (P8.40), el DoD-producto y la suite/e2e.
 
+
+## P8.39 - Una peticion, una fila (el ASR reentrega la misma locucion) - 2026-10-03
+
+Cambios aplicados: src/voice/lib/captureDedup.js (NUEVO: criterio unico shouldSkipCapture +
+isSameEmissionWithinWindow + createEmissionDeduper), src/voice/lib/audioMath.js (sameRequestWindowMs: la ventana
+de "misma peticion" es un solo valor y el dedup por firma del despacho lee el mismo),
+src/voice/lib/fluConfig.js (transcript.fluQuery.requestDedupMs), src/voice/hooks/useFluVoiceAssistant.js
+(processCapture pregunta al criterio; commit temprano idempotente por PETICION; el bloque inline viejo sale),
+tests/captureDedupGuard.test.ts (nuevo, en lint:guards), tests/turnRowNoDuplicate.test.ts (guard de la ruta real),
+package.json, .task/contract.json (dod con los 60 tests que importan el src tocado).
+
+Validado contra:
+  - INSTRUMENTO FIEL (nuevo): prueba de escritorio que sustituye SpeechRecognition por un micro falso antes de
+    cargar la app, asi el pipeline REAL (onresult/onend/dispatch) corre igual que con Chrome, sin tocar src.
+  - ANTES (mismo instrumento): locucion + reentrega 500 ms despues con el turno en curso -> 3 filas / 2
+    contratos; reentrega como interino+final -> 2 filas / 1 contrato (la forma del log del dueno).
+  - CAUSA: el dedup por captura identica de processCapture se desactivaba ENTERO con un turno en curso
+    (correctionInFlight), justo cuando llega la reentrega; y el commit temprano escribia la fila por turnId, no
+    por peticion.
+  - DESPUES: filas y ejecuciones CUADRAN en los tres escenarios (1/1 dentro de la ventana; 1/1 en interino+final,
+    antes 2/1; 2/2 fuera de la ventana = peticion nueva).
+  - Guard: tests/captureDedupGuard.test.ts (9 casos, prueba de detector) + turnRowNoDuplicate ampliado (el hook
+    no puede volver al bypass inline; la ventana es un solo valor). Barrera 177 ficheros / 1457 casos; tsc y
+    eslint limpios; DoD de 60 tests VERDE; npm run gate VERDE.
+
+No validado: el DoD-producto (su pantalla), la suite completa y el e2e.
+HUECO DECLARADO: el arnes vive fuera del repo (P8.41 abierto: moverlo a fixture e2e); la diarizacion sigue
+abierta (P8.40) con su solucion medida y declarada.
+
+Alcance real (0.23): CUBIERTO=la coordinacion fila/ejecucion y la reentrega identica con instrumento fiel y
+guard de conducta; NO CUBIERTO=el DoD-producto, la diarizacion y el arnes dentro del repo.
+

@@ -262,3 +262,24 @@ los ninos).
 
 ABIERTO (4): P8.31, P8.35, P8.39, P8.40.
 
+
+---
+
+## CERRADO 2026-10-03 (noche) - P8.39: una peticion, una fila (reentrega identica del ASR)
+
+CERRADO P8.39 (commit 3d7543e). INSTRUMENTO FIEL (nuevo y clave): %TEMP%\flu-repro\sim-mic-real.cjs sustituye
+SpeechRecognition por un micro falso ANTES de cargar la app, asi el pipeline REAL (onresult/onend/dispatch) corre
+igual que con Chrome, sin tocar src. Con el se reprodujo el defecto del dueno (2 filas / 1 respuesta) y se midio
+la causa: el dedup por captura identica de processCapture se desactivaba ENTERO con un turno en curso, y el
+commit temprano escribia la fila por turnId en vez de por PETICION. FIX: src/voice/lib/captureDedup.js (criterio
+unico) + audioMath.sameRequestWindowMs() (la ventana es un solo valor, la comparten despacho y fila) + el hook
+preguntando al criterio. DESPUES: filas y ejecuciones cuadran (1/1, 1/1, 2/2 fuera de la ventana). Barrera 177
+ficheros / 1457 casos; gate VERDE; DoD con los 60 tests que importan el src tocado.
+REGLAS DE LA CASA (aprendidas hoy): (1) el simulador viejo (__fluDev.simulateRecognition) entra por el ingress y
+NO toca processCapture, por eso ocultaba este defecto: para voz, usar el micro falso; (2) el hook esta en su
+techo de tamano (4538/4539): el criterio nuevo vive en modulo, no en el god-file.
+
+ABIERTO: P8.31 (musicActions sin spec e2e), P8.35 (fluTrace en el lote del dod), P8.40 (diarizacion: solucion
+medida y declarada, pendiente de aprobar el comportamiento), P8.41 (mover el arnes de voz al repo como fixture
+e2e: 0 de 11 specs conducen la entrada de voz hoy).
+
