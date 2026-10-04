@@ -2306,6 +2306,7 @@ export const FLU_CONFIG = {
       dispatchOnInterim: false,
       /** No re-despachar si la frase crece («platícame de los aero» → «…aeropuertos»). */
       prefixExtensionDedupMs: 12000,
+      /** Ventana unica de "misma peticion" (la comparten el despacho y el dedup de la captura reentregada). */ requestDedupMs: 4500,
     },
     interimOpenLineFlushCheckMs: 0,
     /** Tras este intervalo sin commit: no shrink/redundant agresivo en ingress. */

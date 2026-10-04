@@ -1048,6 +1048,16 @@ export function shouldDispatchConversationAction(
   return false
 }
 
+/**
+ * Ventana UNICA de "misma peticion": la comparten el despacho (dedup por firma en
+ * `planConversationDispatch`) y el dedup de la captura reentregada
+ * (`captureDedup.shouldSkipCapture`). Un valor, un dueno, dos consumidores: la
+ * fila y la ejecucion no pueden discrepar sobre si algo es el mismo turno.
+ */
+export function sameRequestWindowMs() {
+  return Number(FLU_CONFIG.transcript?.fluQuery?.requestDedupMs) || 4500
+}
+
 /** Plan de dispatch (origen único): hook, simulaciones e invariantes. */
 export function planConversationDispatch(
   text = '',
@@ -1056,7 +1066,7 @@ export function planConversationDispatch(
     interim = false,
     lastSignature = '',
     lastAt = 0,
-    dedupMs = 4500,
+    dedupMs = sameRequestWindowMs(),
     now = Date.now(),
     lastCommitted = '',
   } = {},

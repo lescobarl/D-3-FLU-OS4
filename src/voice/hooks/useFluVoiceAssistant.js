@@ -157,6 +157,7 @@ import {
 } from '../lib/conversationDialogue.js'
 import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
 import { COMMAND_IDS } from '../lib/commandIds.js'
+import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
@@ -398,13 +399,18 @@ export function useFluVoiceAssistant({
       // la IA). La resolución posterior re-commitea el MISMO valor (idempotente)
       // y deduplica la fila, así no hay doble fuente.
       if (commitOnly) {
-        await onContractResolved?.({
-          contract: null,
-          userCommitOnly: true,
-          transcript: canonicalPhrase,
-          speakerName: payload.speakerName,
-          phase: payload.phase, turnId: activeTurnIdRef.current,
-        })
+        // Una peticion, una fila: si esta emision ya tuvo commit temprano dentro de
+        // la ventana de "misma peticion" (el ASR reentrega la locucion), no se
+        // re-escribe la fila. La ejecucion deduplica con el MISMO criterio.
+        if (!earlyCommitDedupeRef.current.isRepeat(canonicalPhrase)) {
+          await onContractResolved?.({
+            contract: null,
+            userCommitOnly: true,
+            transcript: canonicalPhrase,
+            speakerName: payload.speakerName,
+            phase: payload.phase, turnId: activeTurnIdRef.current,
+          })
+        }
         return canonicalPhrase
       }
       const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase, turnId: activeTurnIdRef.current })
@@ -460,6 +466,9 @@ export function useFluVoiceAssistant({
   // Última captura procesada (dedup anti-repetición): evita que la MISMA frase
   // se procese dos veces (p. ej. cierre + auto-proceso) y cree la acción doble.
   const lastProcessedCaptureRef = useRef({ text: '', at: 0 })
+  // Idempotencia por PETICION del commit temprano (criterio y memoria en captureDedup).
+  const earlyCommitDedupeRef = useRef(null)
+  if (!earlyCommitDedupeRef.current) earlyCommitDedupeRef.current = createEmissionDeduper()
   const autoProcessTimerRef = useRef(null)
   const recognitionRetryTimerRef = useRef(null)
   const recognitionRetryCountRef = useRef(0)
@@ -3556,40 +3565,31 @@ export function useFluVoiceAssistant({
   const processCapture = useCallback(async ({ closing = false } = {}) => {
     const snapshot = readCommandSnapshot(turnRef.current, pendingSpillRef.current)
     relayLog('LOG', 'useFluVoiceAssistant', `processCapture ENTER: snapshot="${(snapshot || '').slice(0, 60)}", closing=${closing}, conversationActiveRef.current=${conversationActiveRef?.current}`)
-    // Dedup: la MISMA captura no se procesa dos veces seguidas (evita doble
-    // acción cuando el cierre y el auto-proceso coinciden, como en el ciclo de
-    // alarmas repetidas). Ventana corta: solo bloquea repeticiones inmediatas.
+    // Dedup de la captura: criterio UNICO en `shouldSkipCapture` (la MISMA
+    // emision reentregada = mismo turno, aunque haya un turno en curso; una
+    // correccion viva NO se descarta). Ventana compartida con el despacho
+    // (`sameRequestWindowMs`): una sola nocion de "misma peticion" para la fila
+    // y para la ejecucion.
     const snapshotKeyDedup = cleanForSpeech(snapshot || '')
     if (snapshotKeyDedup) {
       const nowMsDedup = Date.now()
       const prevCap = lastProcessedCaptureRef.current
-      // CORRECCIÓN EN VUELO: si hay un settle de navegación pendiente
-      // (parcial→completo) o un turno procesándose, la captura entrante puede ser
-      // la versión COMPLETA de la misma locución. NO se descarta: `scheduleNavSettle`
-      // reemplaza el parcial. El dedup por superconjunto solo aplica a turnos ya
-      // cerrados (re-emisión), nunca a una corrección viva.
-      const correctionInFlight = isNavSettlePending() || isProcessingRef.current
-      if (!correctionInFlight) {
-        const sameCapture =
-          prevCap.text && snapshotKeyDedup === prevCap.text && nowMsDedup - prevCap.at < 10000
-        // Acumulación (turno ya cerrado): la nueva captura EMPIEZA con la anterior
-        // (misma locución + audio pegado) → no se reprocesa. Exige previa larga
-        // para no bloquear el wake corto ("okay") seguido del comando real.
-        const supersetCapture =
-          prevCap.text.length >= 20 &&
-          snapshotKeyDedup.length > prevCap.text.length &&
-          snapshotKeyDedup.startsWith(prevCap.text) &&
-          nowMsDedup - prevCap.at < 25000
-        if (sameCapture || supersetCapture) {
-          relayLog(
-            'WARN',
-            'useFluVoiceAssistant',
-            `processCapture SKIP: captura ${sameCapture ? 'duplicada' : 'acumulada'} (${nowMsDedup - prevCap.at}ms)`,
-          )
-          return
-        }
-        lastProcessedCaptureRef.current = { text: snapshotKeyDedup, at: nowMsDedup }
+      const skipReason = shouldSkipCapture({
+        prevText: prevCap.text,
+        prevAt: prevCap.at,
+        nextText: snapshotKeyDedup,
+        nowMs: nowMsDedup,
+        correctionInFlight: isNavSettlePending() || isProcessingRef.current,
+      })
+      if (skipReason) {
+        relayLog(
+          'WARN',
+          'useFluVoiceAssistant',
+          `processCapture SKIP: captura ${skipReason} (${nowMsDedup - prevCap.at}ms)`,
+        )
+        return
       }
+      lastProcessedCaptureRef.current = { text: snapshotKeyDedup, at: nowMsDedup }
     }
     if (!snapshot && !closing) return
 
