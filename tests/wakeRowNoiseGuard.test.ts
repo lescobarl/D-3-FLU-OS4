@@ -168,6 +168,22 @@ describe('P8.36 - el ruido de fondo no acuna id de turno (si lo moviera, la reso
   });
 });
 
+// P8.49 - DECISION DE PRODUCTO fijada en el DEFAULT (no en una copia): la voz del
+// usuario NUNCA se descarta en silencio. Este caso lee la config de fabrica; si
+// alguien vuelve a exigir la wake por defecto, cae aqui (el sintoma que reporto el
+// dueno: "la transcripcion aparece en la ultima frase y NO se ve en la conversacion").
+describe('P8.49 - por defecto la captura SIN wake SI se refleja en la conversacion', () => {
+  it('con la config de fabrica, una captura sin wake en conversacion activa abre su fila', () => {
+    FLU_CONFIG.voiceCommands.requireWakeAlways = requireWakeAlwaysBefore; // el default real del repo
+    const deps = makeDeps();
+
+    handleConversationStreamSync(deps, { capture: RUIDO, turnCommit: true });
+
+    expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
+    expect(deps.emitConversationLog.mock.calls[0][0]).toBe(RUIDO);
+  });
+});
+
 // P2.4 - prueba de detector: el MISMO texto, con y sin wake, discrimina.
 describe('P8.38 - el detector no es decorativo', () => {
   it('la marca distingue la captura sin wake de la misma con wake', () => {
