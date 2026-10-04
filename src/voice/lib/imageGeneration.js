@@ -12,6 +12,7 @@ import {
   shouldUseLocalSvgOnError,
 } from './fluVisualPipeline.js'
 import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace';
+import { fetchWithDeadline } from '../../lib/fetchWithDeadline'
 
 export {
   buildVisualGenerationPrompt,
@@ -30,18 +31,18 @@ const workspaceImageSourceCache = new Map()
  * error cambiaria esa etiqueta.
  */
 async function postJsonToProxy(url, body, timeoutMs) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, {
+  // P8.46: el deadline lo pone el primitivo unico; aqui solo el POST JSON. El
+  // AbortError se conserva crudo porque las trazas del proxy visual lo etiquetan
+  // (`workspace_image_timeout` / `openrouter_image_timeout` / `fal_video_timeout`).
+  return fetchWithDeadline(
+    url,
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
       body: JSON.stringify(body),
-    })
-  } finally {
-    clearTimeout(timer)
-  }
+    },
+    timeoutMs,
+  )
 }
 
 function escapeXml(value = '') {

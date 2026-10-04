@@ -15,6 +15,7 @@
 // ============================================================
 
 import { REQUEST_TIMEOUT_DEFAULTS } from '../config/sharedConfig'
+import { fetchWithDeadline, type DeadlineExceeded } from '../../lib/fetchWithDeadline'
 
 export const AI_REQUEST_DEADLINE_MS = REQUEST_TIMEOUT_DEFAULTS.AI_TEXT_MS
 
@@ -81,17 +82,17 @@ export async function fetchTextEngine(
   init: RequestInit = {},
   timeoutMs: number = AI_REQUEST_DEADLINE_MS,
 ): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  // P8.46: la orquestacion del deadline vive UNA vez (fetchWithDeadline). Aqui
+  // queda solo el CONTRATO de este transporte (normalizar el timeout).
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    return await fetchWithDeadline(url, init, timeoutMs)
   } catch (err) {
-    if (controller.signal.aborted) {
+    // Solo el corte de NUESTRO deadline se normaliza; un abort del llamante se
+    // propaga crudo (antes lo distinguia `controller.signal.aborted`).
+    if ((err as DeadlineExceeded | undefined)?.deadlineExceeded) {
       throw buildTimeoutError(timeoutMs, url)
     }
     throw err
-  } finally {
-    clearTimeout(timer)
   }
 }
 

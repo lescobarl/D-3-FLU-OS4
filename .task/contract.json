@@ -618,7 +618,11 @@
     "tests/e2e/tts-flag-pegado.spec.ts",
     "tests/e2e/documento-insumo.spec.ts",
     "tests/localAi.test.ts",
-    "src/core/autonomy/backupSystem.ts"
+    "src/core/autonomy/backupSystem.ts",
+    "src/core/ai/httpClient.ts",
+    "src/hooks/useSessionPersistence.ts",
+    "src/lib/fetchWithDeadline.ts",
+    "tests/e2e/sesion-un-solo-almacen.spec.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
@@ -630,7 +634,8 @@
     "npx vitest run --reporter=dot tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceSingleSourceGuard.test.ts tests/voiceTurnStabilization.test.ts tests/wakeRowNoiseGuard.test.ts",
     "npx vitest run --reporter=dot tests/wakeWordDisplay.test.ts tests/workspaceContractTipo.test.ts",
     "npx vitest run --reporter=dot tests/deepseekPrompts.test.ts tests/fluParticipantHook.test.ts tests/localAi.test.ts tests/noteItemRemovalLiteral.test.ts tests/noteParserBindings.test.ts tests/noteRemoveIntent.test.ts tests/noteSuperDestFirst.test.ts tests/surfaceMatrix.test.ts tests/voiceIdentityQueue.test.ts",
-    "npx vitest run --reporter=dot tests/actionDomainContract.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/environmentPrompt.test.ts tests/fluSpeech-japanese.test.ts tests/geminiContractPayload.test.ts tests/geminiExtractJson.test.ts tests/simpleRequestDetection.test.ts tests/translationIntegration.test.ts tests/useAutonomyIntegration.test.tsx tests/validateIntegralCtx.test.ts"
+    "npx vitest run --reporter=dot tests/actionDomainContract.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/environmentPrompt.test.ts tests/fluSpeech-japanese.test.ts tests/geminiContractPayload.test.ts tests/geminiExtractJson.test.ts tests/simpleRequestDetection.test.ts tests/translationIntegration.test.ts tests/useAutonomyIntegration.test.tsx tests/validateIntegralCtx.test.ts",
+    "npx vitest run --reporter=dot tests/httpClient.test.ts tests/imageGeneration.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/captureDedupGuard.test.ts",
   "guardExpect": "green",
@@ -905,6 +910,19 @@
     "src/voice/lib/voiceIdentityQueue.js": [
       "tests/e2e/voz-locucion-unica.spec.ts",
       "tests/e2e/tts-flag-pegado.spec.ts"
+    ],
+    "src/core/ai/httpClient.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/hooks/useSessionPersistence.ts": [
+      "tests/e2e/sesion-un-solo-almacen.spec.ts"
+    ],
+    "src/lib/fetchWithDeadline.ts": [
+      "tests/e2e/auditoria-acciones-llm.spec.ts",
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/voice/lib/imageGeneration.js": [
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
     ]
   }
 }

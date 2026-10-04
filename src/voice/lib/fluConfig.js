@@ -2304,9 +2304,9 @@ export const FLU_CONFIG = {
     /** Consultas Flu → Gemini: solo final salvo consulta de minuta en interino. */
     fluQuery: {
       dispatchOnInterim: false,
-      /** No re-despachar si la frase crece («platícame de los aero» → «…aeropuertos»). */
-      prefixExtensionDedupMs: 12000,
+      /** No re-despachar si la frase crece («platícame de los aero» → «…aeropuertos»). */ prefixExtensionDedupMs: 12000,
       /** Ventana unica de "misma peticion" (la comparten el despacho y el dedup de la captura reentregada). */ requestDedupMs: 4500,
+      /** Revision del ASR que CRECE ("Como" -> "Como sal"): decide el planificador, no el hook. */ asrRevisionWindowMs: 1600,
     },
     interimOpenLineFlushCheckMs: 0,
     /** Tras este intervalo sin commit: no shrink/redundant agresivo en ingress. */

@@ -3499,8 +3499,6 @@ function App() {
     // ---- Auto-save session state on changes ----
     useSessionPersistence({
         activeTab,
-        language,
-        sessionRole,
         expandedFrameId,
         selectedMinuteId,
         participantPhase: fluParticipantPresentation.phase,

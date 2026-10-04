@@ -3471,29 +3471,15 @@ export function useFluVoiceAssistant({
         return false
       }
 
-      // Dedupe unificada de revisiones ASR (turno canónico): Chrome entrega la
-      // misma frase en finales que CRECEN ("…Cómo" → "…Cómo sal" → "…cómo saltan").
-      // Solo la última (la más larga tras pausa) debe despacharse como comando.
-      const prevText = String(lastConversationActionRef.current.text || '').toLowerCase().trim()
-      const prevAt = Number(lastConversationActionRef.current.at || 0)
-      const curText = phrase.toLowerCase().trim()
-      const isAsrRevision =
-        prevText &&
-        curText &&
-        prevText !== curText &&
-        Date.now() - prevAt < 1600 &&
-        (curText.startsWith(prevText) || prevText.startsWith(curText))
-      if (isAsrRevision) {
-        if (import.meta.env.DEV && debugHotPath) {
-          fluDebugHot('conversation-dispatch', { source, plan: 'dedup', kind: 'asr-revision', phrase, prev: prevText })
-        }
-        return true
-      }
-
       const plan = planVoiceCommandDispatch(text, {
         interim,
         lastSignature: lastConversationActionRef.current.signature,
         lastAt: lastConversationActionRef.current.at,
+        // La REVISION DEL ASR la decide el planificador (dueno unico de la
+        // decision): aqui solo se le pasa la memoria de la ultima peticion
+        // aceptada (texto + instante). Antes esta regla vivia en el hook con
+        // la ventana como literal (1600) y el planificador con su propia dedupe.
+        lastPhrase: lastConversationActionRef.current.text,
         lastCommitted,
       })
 

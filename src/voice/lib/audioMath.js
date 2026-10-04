@@ -1066,6 +1066,7 @@ export function planConversationDispatch(
     interim = false,
     lastSignature = '',
     lastAt = 0,
+    lastPhrase = '',
     dedupMs = sameRequestWindowMs(),
     now = Date.now(),
     lastCommitted = '',
@@ -1101,6 +1102,25 @@ export function planConversationDispatch(
       : dedupMs
 
   const prefixDedupMs = Number(FLU_CONFIG.transcript?.fluQuery?.prefixExtensionDedupMs)
+
+  // REVISION DEL ASR (dueno UNICO de la decision): Chrome entrega la MISMA frase en
+  // finales que CRECEN ("Como" -> "Como sal" -> "Como saltan"). Solo la ultima (la
+  // mas larga, tras pausa) debe despacharse. Antes esta regla vivia en el hook con
+  // la ventana como literal (1600) y el planificador tenia su propia dedupe: dos
+  // decisiones para el mismo hecho. Ahora la decide aqui, con la ventana en config.
+  const asrRevisionWindowMs =
+    Number(FLU_CONFIG.transcript?.fluQuery?.asrRevisionWindowMs) || 1600
+  const prevPhrase = String(lastPhrase || '').toLowerCase().trim()
+  const curPhrase = phrase.toLowerCase().trim()
+  const isAsrRevision =
+    Boolean(prevPhrase) &&
+    Boolean(curPhrase) &&
+    prevPhrase !== curPhrase &&
+    now - lastAt < asrRevisionWindowMs &&
+    (curPhrase.startsWith(prevPhrase) || prevPhrase.startsWith(curPhrase))
+  if (isAsrRevision) {
+    return { plan: 'dedup', reason: 'asr-revision', action, signature, phrase }
+  }
 
   if (lastSignature === signature && now - lastAt < effectiveDedupMs) {
     return { plan: 'dedup', action, signature, phrase }
