@@ -611,7 +611,8 @@
     "tests/speakerPrimarySeed.test.ts",
     "tests/registeredSpeakerNameGuard.test.ts",
     "src/voice/lib/voiceIdentity.js",
-    "tests/e2e/voz-locucion-unica.spec.ts"
+    "tests/e2e/voz-locucion-unica.spec.ts",
+    "tests/e2e/musica-en-partida.spec.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
@@ -631,6 +632,9 @@
     "kilo.json"
   ],
   "e2eScope": {
+    "src/core/media/musicActions.ts": [
+      "tests/e2e/musica-en-partida.spec.ts"
+    ],
     "src/App.tsx": [
       "tests/e2e/auditoria-acciones-llm.spec.ts"
     ],
