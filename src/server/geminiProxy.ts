@@ -226,6 +226,17 @@ function readRawBody(req: IncomingMessage): Promise<string> {
 // aquí y la usa como respaldo cuando el cliente no envía apiKey.
 let serverEnvApiKey = '';
 
+/**
+ * Sonda de diagnostico del turno (P8.28), APAGADA por defecto: con
+ * FLU_CONTRACT_TRACE=1 el proxy registra QUE le llega en cada turno de contrato
+ * (transcript, rol, tema, fase, KB y cola del historial). Existe porque el sintoma
+ * del dueno (una pregunta real respondida con la personalidad del perfil) no se
+ * reproduce con el cuerpo minimo: hay que ver el cuerpo REAL. No cambia conducta.
+ */
+function isContractTraceOn(): boolean {
+    return process.env.FLU_CONTRACT_TRACE === '1' || process.env.FLU_CONTRACT_TRACE === 'true';
+}
+
 // Prioridad server-side SIN estado: env (.env) > apiKey del cliente
 // (panel/localStorage, BYOK). El operador configura la key en .env = fuente de
 // verdad; la key del navegador solo se usa cuando el servidor no tiene ninguna.
@@ -375,6 +386,27 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
         // hermano /api/gemini/text ya rechaza el campo ausente con 400
         // missing_prompt; aqui faltaba la misma puerta. Se rechaza ANTES de la
         // cache y del modelo.
+        if (isContractTraceOn()) {
+            const hist = body?.history;
+            console.info('[geminiProxy][trace] contrato IN', {
+                mode,
+                transcript: String(body?.transcript ?? '').slice(0, 140),
+                role: body?.role,
+                theme: body?.theme,
+                phase: body?.phase,
+                knowledgeMode: body?.knowledgeMode,
+                kbLen: String(body?.knowledgeBase ?? '').length,
+                kb2Len: String(body?.knowledgeBase2 ?? '').length,
+                startupLen: String(body?.startupPrompt ?? '').length,
+                startupHead: String(body?.startupPrompt ?? '').slice(0, 90),
+                selfKnowledgeLen: String(body?.selfKnowledgeText ?? '').length,
+                personalityOn: Boolean(body?.personality),
+                historyType: Array.isArray(hist) ? 'array' : typeof hist,
+                historyLen: Array.isArray(hist) ? hist.length : String(hist ?? '').length,
+                historyTail: JSON.stringify(Array.isArray(hist) ? hist.slice(-3) : hist).slice(0, 400),
+            });
+        }
+
         const requiresTranscript = mode === 'contract' || mode === 'response';
         if (requiresTranscript && !String(body?.transcript ?? '').trim()) {
             // Sonda P8.28 (mecanismo no reproducido de la perdida del cuerpo):

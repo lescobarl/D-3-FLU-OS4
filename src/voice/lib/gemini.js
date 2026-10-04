@@ -896,7 +896,21 @@ export function buildConversationMessages({
   const maxHistory = FLU_CONFIG.limits.contextHistoryMax || 12
   const recentHistory = history.slice(-maxHistory)
 
-  for (const entry of recentHistory) {
+  // Una conversacion empieza cuando habla el USUARIO (defecto medido 2026-10-03, P8.28).
+  // Si el historial encabeza con turnos de FLU (saludo/onboarding: "¿Como te llamas?" ->
+  // "¡Listo, luis! Ya estas configurado. Hablame cuando quieras."), el modelo lo lee como una
+  // invitacion a presentarse y contesta con un saludo o con el retrato del perfil en vez de
+  // responder a la pregunta (medido con el cuerpo REAL: con ese prefijo el modelo lite que usa el motor
+  // responde "Soy FLU, tu asistente administrativo..."; sin el prefijo, responde a la pregunta).
+  // Ese prefijo es PRESENTACION de la app, no hilo de conversacion: se descarta.
+  const esTurnoDeUsuario = (e) => !(e?.role === 'assistant' || e?.role === 'flu')
+  let primerTurnoDeUsuario = 0
+  while (primerTurnoDeUsuario < recentHistory.length && !esTurnoDeUsuario(recentHistory[primerTurnoDeUsuario])) {
+    primerTurnoDeUsuario += 1
+  }
+  const conversacion = recentHistory.slice(primerTurnoDeUsuario)
+
+  for (const entry of conversacion) {
     // OS4: la historia puede llegar con role 'flu' (integrationStore) en lugar de
     // 'assistant' (diálogo de voz). Ambos representan la respuesta de FLU.
     const entryRole = entry?.role === 'assistant' || entry?.role === 'flu' ? 'assistant' : 'user'

@@ -48,6 +48,12 @@ describe('VALIDACIÓN INTEGRAL — memoria de contexto determinista', () => {
   })
 
   // ── B) buildConversationMessages — corrección de gemini.js ──
+  // NOTA P8.28 (2026-10-03): una conversacion empieza cuando habla el USUARIO.
+  // El prefijo de presentacion (turnos de FLU antes del primer turno de usuario:
+  // saludo/onboarding) NO viaja al modelo, porque el modelo lo lee como una
+  // invitacion a presentarse y contesta con un saludo o con el retrato del perfil
+  // en vez de responder (defecto medido). El historial se conserva DESDE el
+  // primer turno de usuario; de ahi en adelante nada se vacia.
   describe('B) buildConversationMessages — role flu, respuesta_voz e historial completo', () => {
     const base = {
       transcript: 'hola', intent: '', speaker: '', theme: '', role: '', phase: '', language: 'es',
@@ -64,12 +70,15 @@ describe('VALIDACIÓN INTEGRAL — memoria de contexto determinista', () => {
     })
 
     it('respuesta_voz se usa como contenido cuando no hay text/response', () => {
+      // P8.28: la conversacion abre por el usuario; el prefijo de presentacion
+      // (turnos de FLU antes del primer turno de usuario) no viaja al modelo.
       const msgs = buildConversationMessages({
         ...base,
-        history: [{ role: 'assistant', respuesta_voz: ZH_RESP }],
+        history: [{ role: 'user', text: 'habla en chino' }, { role: 'assistant', respuesta_voz: ZH_RESP }],
       } as any)
-      expect(msgs[0].role).toBe('assistant')
-      expect(String(msgs[0].content)).toBe(ZH_RESP)
+      const msg = msgs.find((m) => String(m.content).includes(ZH_RESP))
+      expect(msg?.role).toBe('assistant')
+      expect(String(msg?.content)).toBe(ZH_RESP)
     })
 
     it('el último mensaje es el user final', () => {
