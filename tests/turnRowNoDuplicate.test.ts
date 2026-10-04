@@ -158,3 +158,43 @@ describe('fila del turno - el detector no es decorativo', () => {
         expect(effectOnlyMarks('const a = 1')).toBe(0);
     });
 });
+// P8.39 - la reentrega identica no vuelve a colarse: el criterio vive en un modulo
+// (captureDedup) con la ventana del despacho, y el hook no puede volver al bypass
+// inline que se saltaba el dedup ENTERO mientras habia un turno en curso.
+export function dedupPorCapturaInline(src: string): boolean {
+    return /const correctionInFlight = isNavSettlePending\(\) \|\| isProcessingRef\.current/.test(src);
+}
+
+describe('fila del turno - la reentrega identica no vuelve a colarse (P8.39)', () => {
+    it('el hook pregunta al criterio unico y no tiene el bypass inline', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const hook = fs.readFileSync(
+            path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
+            'utf8',
+        );
+        expect(hook).toContain('shouldSkipCapture(');
+        expect(hook).toContain('createEmissionDeduper(');
+        expect(dedupPorCapturaInline(hook)).toBe(false);
+    });
+
+    it('la ventana de "misma peticion" es UN solo valor (despacho y fila)', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const audio = fs.readFileSync(path.join(process.cwd(), 'src', 'voice', 'lib', 'audioMath.js'), 'utf8');
+        const dedup = fs.readFileSync(path.join(process.cwd(), 'src', 'voice', 'lib', 'captureDedup.js'), 'utf8');
+        expect(audio).toContain('sameRequestWindowMs()');
+        expect(dedup).toContain('sameRequestWindowMs');
+        expect(audio).not.toContain('dedupMs = 4500');
+    });
+});
+
+// P2.4 - prueba de detector del criterio nuevo.
+describe('reentrega identica - el detector no es decorativo', () => {
+    it('marca el bypass inline viejo y no la version con modulo', () => {
+        expect(
+            dedupPorCapturaInline('const correctionInFlight = isNavSettlePending() || isProcessingRef.current'),
+        ).toBe(true);
+        expect(dedupPorCapturaInline('const skipReason = shouldSkipCapture({ prevText })')).toBe(false);
+    });
+});
