@@ -216,3 +216,26 @@ deberia aparecer) y, si quiere, decidir si el dictado/minuta (fila de sesion) ta
 REGLAS DE LA SESION: no correr la suite completa sin peticion expresa; validar con el fichero tocado + lint +
 typecheck; el gate es de cierre y se corre UNA vez; ASCII en ficheros del repo.
 
+
+---
+
+## CIERRE 2026-10-04 (P8.36 cerrado: el ruido movia el id del turno y duplicaba la fila)
+
+CERRADO: P8.36 (commit 11aea07). CAUSA MEDIDA: el turno del usuario se escribe dos veces (commit temprano +
+resolucion) y ambos leen la identidad del turno del ESTADO GLOBAL (activeTurnIdRef.current,
+useFluVoiceAssistant.js:406 y :410). El ingress incrementaba ese id con CUALQUIER evento ASR (ensureTurnId),
+ruido de fondo incluido, asi que la resolucion escribia con OTRO id y el escritor unico (commitUserTurnRow,
+reutiliza solo si currentTurn.id === turnId) AGREGABA una segunda fila. REPRODUCIDO y medido:
+%TEMP%\flu-repro\sim-dup-turnid.cjs (frase con wake + un interim de ruido -> 2 filas; sin ruido -> 1). FIX:
+predicado unico isTurnCapture (wakeTurnCommit.js) y el ingress solo acuna id para un turno de verdad: el ruido
+no abre fila (P8.38) NI mueve el id. Banco: 2 -> 1 fila; aula/casa sigue 0 de 3. Guard
+tests/wakeRowNoiseGuard.test.ts con los casos del mecanismo (8 casos), RED medido contra el src de 358b812.
+Gate VERDE; barrera 176 ficheros / 1448 casos. HUECOS DECLARADOS: dos turnos REALES solapados, y el modo
+requireWakeAlways=false (el ruido no es distinguible).
+
+ABIERTO (2): P8.31 (musicActions sin spec en e2eScope), P8.35 (fluTrace pasa aislado y falla en el lote del dod).
+
+PENDIENTE DEL DUENO (DoD-producto): repetir la loteria (una locucion -> una fila) y el escenario aula/casa en su
+pantalla. Si vuelve a duplicar, el banco sim-dup-turnid.cjs y la traza de los dos escritores del store son el
+instrumento para capturarlo.
+

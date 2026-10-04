@@ -3673,3 +3673,38 @@ Alcance real (obligatorio, 0.23): CUBIERTO=la emision de la fila de conversacion
 conversacion activa, medido en la app real y con guard de conducta en el gate; NO CUBIERTO=el DoD-producto, la
 fila de sesion/dictado del ruido (declarada), el eco sin conversacion activa, y la suite completa/e2e.
 
+
+## P8.36 - El turno del usuario se duplicaba (el ruido movia el id del turno vivo) - 2026-10-03/04
+
+Cambios aplicados: src/voice/lib/wakeTurnCommit.js (predicado UNICO isTurnCapture: "esta captura es un turno
+de verdad" - misma compuerta de wake y mismo splitter unico), src/voice/lib/conversationStreamCommit.js (el
+ingress solo acuna id de turno para un turno: el ruido de fondo no abre fila NI mueve el id, ni en el preview
+ni en el commit), tests/wakeRowNoiseGuard.test.ts (casos nuevos del mecanismo), .task/contract.json (re-basado).
+
+Validado contra:
+  - CAUSA MEDIDA con el banco sobre la app viva y traza de los DOS escritores del store
+    (%TEMP%\flu-repro\sim-dup-turnid.cjs): la frase con wake + UN interim de ruido 1,5 s despues producia DOS
+    filas de usuario (la segunda, mismo texto, escrita por el camino de la RESOLUCION -pila
+    commitAndResolveTurn no-commitOnly <- processConversationFluQuery- justo con la respuesta de FLU: misma
+    forma que el log del dueno 20:23:24/20:23:34 y 20:24:01/20:24:07); sin el ruido, 1 fila.
+  - MECANISMO (codigo): commit temprano y resolucion leen la identidad del turno por separado del ESTADO
+    GLOBAL (activeTurnIdRef.current, useFluVoiceAssistant.js:406 y :410); el ingress incrementaba ese id con
+    CUALQUIER evento ASR (ensureTurnId), ruido incluido; commitUserTurnRow reutiliza la fila solo si
+    currentTurn.id === turnId y si no AGREGABA una fila nueva.
+  - DESPUES (mismo banco): con ruido 2 -> 1 fila. Escenario aula/casa sin regresion: 0 de 3 filas de ambiente
+    y 1 solo contrato (el legitimo).
+  - Guard RED medido contra el src de 358b812 (git checkout del src anterior, run, restore verificado): 2 rojos
+    ("expected 1 to be +0", "expected 2 to be 1") de 8; VERDE ahora. Casos: el ruido no acuna id en FINAL ni en
+    PREVIEW, la orden con wake si (1 -> 2), y el modo requireWakeAlways=false conserva el comportamiento.
+  - Barrera: 176 ficheros / 1448 casos VERDE; tsc y eslint limpios; npm run gate VERDE (DoD + guard + guards
+    base); npm run e2e:plan verde. Baseline: 0 fallos nuevos.
+
+No validado: el DoD-producto (repetir la loteria en tu pantalla) y la suite completa/e2e.
+HUECOS DECLARADOS (no maquillados): (1) dos turnos REALES solapados (la segunda frase antes de resolver la
+primera) seguirian pudiendo duplicar por texto -no medido-; (2) con requireWakeAlways=false el ruido no es
+distinguible del habla dirigida, asi que el mecanismo sigue vivo en ese modo.
+
+Alcance real (obligatorio, 0.23): CUBIERTO=el mecanismo medido de la duplicacion (una locucion -> una fila) con
+guard de conducta y banco sobre la app real; NO CUBIERTO=el DoD-producto, los dos huecos declarados, la suite
+completa y el e2e.
+
