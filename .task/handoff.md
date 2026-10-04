@@ -302,3 +302,23 @@ ABIERTO: P8.31 (spec de musica; depende del arnes), P8.40 (medicion en pantalla)
 a tests/e2e como fixture: 0 de 11 specs conducen la voz - es la barrera que habria cazado P8.39).
 TECHO DE TAMANO: hook 4539/4539 y App 4643/4643: cualquier linea nueva obliga a compensar.
 
+
+---
+
+## CERRADO 2026-10-03 (noche) - P8.42: un id por locucion (1 peticion = 1 fila = 1 ejecucion)
+
+CERRADO P8.42 (commit 6576b00). Reproducido con el instrumento fiel: reentrega de la MISMA locucion con el turno
+VIVO -> 2 filas / 1 contrato (el log del dueno). FIX: el id del turno se acuna por LOCUCION (una entrega con el
+turno vivo y la misma emision = mismo id) y la FILA obedece el veredicto del despacho (dispatch|dedup|skip).
+MEDIDO: 1 fila / 1 contrato en los tres escenarios; loteria 2 cartas / 2 peticiones (sin regresion). Guard de 3
+casos en conversationStreamCommit.test.ts.
+
+CLAVES PARA LA SIGUIENTE SESION:
+  - Probar con el MICRO FALSO (%TEMP%\flu-repro\sim-mic-real.cjs), NO con __fluDev.simulateRecognition: ese
+    entra por el ingress y no toca processCapture (por eso oculto este defecto dos sesiones).
+  - La decisión del turno tiene ya un dueno: id por locucion + veredicto del despacho que la fila obedece.
+  - Techos: hook 4536/4539, App 4643/4643 (compensar lineas).
+
+ABIERTO: P8.31 (spec de musica, depende del arnes), P8.40 (diarizacion implementada: falta la medida en
+pantalla), P8.41 (mover el micro falso al repo como fixture e2e: 0 de 11 specs conducen la voz).
+

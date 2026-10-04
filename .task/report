@@ -3803,3 +3803,24 @@ No validado: el DoD-producto de P8.40 (su pantalla), P8.41/P8.31 (arnes de voz e
 Alcance real (0.23): CUBIERTO=el criterio de la diarizacion por vinculo registrado (unidad + guard) y la
 asercion robusta de fluTrace; NO CUBIERTO=la cadena App->fila medida, el arnes en el repo y el e2e.
 
+
+## P8.42 - Un id por locucion (la fila obedece el veredicto del despacho) - 2026-10-03
+
+Cambios aplicados: src/voice/lib/conversationStreamCommit.js (ensureTurnId(isTurn, sameLive): id por LOCUCION;
+una entrega con el turno vivo y la misma emision = mismo id y sin fila),
+src/voice/hooks/useFluVoiceAssistant.js (isTurnLive desde conversationState; el despachador anota su veredicto
+dispatch|dedup|skip y la fila lo obedece; god-file 4536/4539), tests/conversationStreamCommit.test.ts (3 casos).
+
+Validado contra:
+  - REPRODUCIDO (instrumento fiel, micro falso por el mismo camino que Chrome): reentrega 500 ms despues con el
+    turno VIVO (SPEAKING) -> 2 filas / 1 contrato = el log del dueno (22:44:12/22:44:13).
+  - DESPUES (mismo instrumento): 1 fila / 1 contrato en los tres escenarios (1,1 s, interino+final, turno vivo).
+  - SIN REGRESION: loteria = 2 cartas / 2 peticiones (el avance del juego se conserva).
+  - Guard: 3 casos nuevos; barrera 178 ficheros / 1465 casos; tsc y eslint limpios.
+
+No validado: su pantalla (DoD-producto), la suite completa y el e2e. HUECO DECLARADO: el arnes vive fuera del
+repo (P8.41) y la diarizacion sigue en progreso (P8.40, implementada y con guard, falta la medida en pantalla).
+
+Alcance real (0.23): CUBIERTO=identidad por locucion + fila obediente al despacho (medido con instrumento fiel);
+NO CUBIERTO=el DoD-producto, el arnes en el repo, la suite/e2e.
+
