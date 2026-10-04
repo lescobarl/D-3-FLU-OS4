@@ -616,7 +616,8 @@
     "tests/decisionSingleOwnerGuard.test.ts",
     "src/voice/lib/idleSchedule.js",
     "tests/e2e/tts-flag-pegado.spec.ts",
-    "tests/e2e/documento-insumo.spec.ts"
+    "tests/e2e/documento-insumo.spec.ts",
+    "tests/localAi.test.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
