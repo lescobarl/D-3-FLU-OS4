@@ -239,3 +239,131 @@ describe('D5 - una sola resolucion de la key de texto', () => {
         expect(findTextKeyOwnerOffenders(`const k = resolveTextApiKey()`)).toHaveLength(0);
     });
 });
+
+// ---------------------------------------------------------------- D8
+/** Campos del payload de sesion (Dexie) que DUPLICAN un ajuste con registro en localStorage. */
+export function findSessionPayloadDuplicates(content: string, file: string): string[] {
+    const duplicados = ['language', 'sessionRole'];
+    const out: string[] = [];
+    const m = content.match(/interface SessionState \{([\s\S]*?)\}/);
+    if (!m) {
+        out.push(file + ':sin-interface-SessionState');
+        return out;
+    }
+    for (const linea of m[1].split(/\r?\n/)) {
+        const campo = linea.trim().split(/[?:\s]/)[0];
+        if (duplicados.includes(campo)) out.push(file + ':SessionState.' + campo);
+    }
+    return out;
+}
+
+describe('D8 - un valor, un almacen (idioma y rol no viajan en la sesion Dexie)', () => {
+    it('el payload de sesion no repite ajustes cuyo registro es localStorage', () => {
+        const offenders = findSessionPayloadDuplicates(
+            read('src/hooks/useSessionPersistence.ts'),
+            'src/hooks/useSessionPersistence.ts',
+        );
+        expect(
+            offenders,
+            'Valores con DOS almacenes (N=' + offenders.length + '); language/sessionRole tienen su ' +
+                'registro en localStorage:\n  ' + offenders.join('\n  '),
+        ).toEqual([]);
+    });
+    it('la llamada de App tampoco los pasa al almacen de sesion', () => {
+        const app = read('src/App.tsx');
+        const i = app.indexOf('useSessionPersistence({');
+        const region = app.slice(i, app.indexOf('});', i));
+        expect(/^\s*language,\s*$/m.test(region), 'App pasa language al almacen de sesion').toBe(false);
+        expect(/^\s*sessionRole,\s*$/m.test(region), 'App pasa sessionRole al almacen de sesion').toBe(false);
+    });
+    it('el detector no es decorativo: marca el payload con el campo duplicado y perdona el saneado', () => {
+        expect(
+            findSessionPayloadDuplicates('export interface SessionState {\n    language: string;\n}', 'x.ts'),
+        ).toHaveLength(1);
+        expect(
+            findSessionPayloadDuplicates('export interface SessionState {\n    activeTab: string;\n}', 'x.ts'),
+        ).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------- D9
+describe('D9 - la revision del ASR la decide el planificador (un solo dueno)', () => {
+    it('el hook no decide revisiones del ASR por su cuenta', () => {
+        const hook = read('src/voice/hooks/useFluVoiceAssistant.js');
+        expect(hook.includes('isAsrRevision'), 'el hook volvio a decidir la revision del ASR').toBe(false);
+        expect(hook).toContain('lastPhrase: lastConversationActionRef.current.text');
+    });
+    it('el planificador la decide con la ventana de config (conducta)', async () => {
+        const { planConversationDispatch } = await import('../src/voice/lib/audioMath.js');
+        const { FLU_CONFIG } = await import('../src/voice/lib/fluConfig.js');
+        const crece = 'Okay Flow platicame de los volcanes de islandia';
+        const previa = 'Okay Flow platicame de los volcanes de islan';
+        const base = { lastSignature: '', lastAt: Date.now(), lastPhrase: previa };
+        expect(
+            planConversationDispatch(crece, FLU_CONFIG.voiceCommands, base).plan,
+            'la revision que CRECE dentro de la ventana debe deduplicarse',
+        ).toBe('dedup');
+        expect(
+            planConversationDispatch(crece, FLU_CONFIG.voiceCommands, { ...base, lastPhrase: 'Okay Flow pon musica' }).plan,
+            'una frase DISTINTA no es una revision',
+        ).not.toBe('dedup');
+        expect(
+            planConversationDispatch(crece, FLU_CONFIG.voiceCommands, {
+                ...base,
+                lastAt: Date.now() - 60000,
+            }).plan,
+            'la misma revision FUERA de la ventana es una peticion nueva',
+        ).not.toBe('dedup');
+    });
+    it('el detector no es decorativo: la ventana vive en config, no en el hook', async () => {
+        const { FLU_CONFIG } = await import('../src/voice/lib/fluConfig.js');
+        expect(Number(FLU_CONFIG.transcript.fluQuery.asrRevisionWindowMs)).toBeGreaterThan(0);
+        expect(read('src/voice/lib/fluConfig.js')).toContain('asrRevisionWindowMs');
+    });
+});
+
+// ---------------------------------------------------------------- D11
+/** El escape que hace NO danino el par "log dedup" / "duplicate turn commit".
+ *
+ * CLASIFICACION MEDIDA (censo 2026-10-04): los CUATRO predicados de "¿esta emision es
+ * una re-emision de la linea cerrada?" NO son la misma pregunta:
+ *   - turnStream.isDuplicateTurnCommit  -> reloj del ASR (determinista, sin ventana)
+ *   - activeListen.isRedundantFinal    -> estado del PREVIEW abierto + ventana de eco
+ *   - conversationStream.isCommittedInterimEcho -> eco de commit en el INTERINO
+ *     (su doc declara que NO duplica el comparador de revision de audioMath)
+ *   - conversationSession.isDuplicateLogPhrase  -> la linea de LOG ya emitida
+ * Cada uno decide en un punto distinto del pipeline y su modulo declara por que no es el
+ * otro (AGENTS anexo B.14 + transcriptionDedupLoss.test.ts registran que colapsarlos rompio
+ * turnos legitimos). Lo que SI es carga estructural: la repeticion tras una PAUSA tiene que
+ * escapar del dedup del log, o el usuario repite la frase y su fila desaparece del historial.
+ */
+export function logDedupRespectsPause(src: string): boolean {
+    return /!replaceLastRawLog\s*&&[\s\S]{0,120}isDuplicateLogPhrase\(/.test(src);
+}
+
+describe('D11 - la repeticion tras pausa escapa del dedup del log (clasificacion, no unificacion)', () => {
+    it('el dedup del log conserva su escape (replaceLastRawLog)', () => {
+        const hook = read('src/voice/hooks/useFluVoiceAssistant.js');
+        expect(
+            logDedupRespectsPause(hook),
+            'al dedup del log le falta el escape: una repeticion tras pausa perderia su fila',
+        ).toBe(true);
+    });
+    it('los cuatro predicados siguen existiendo en su modulo (no se colapsaron en uno)', () => {
+        const dueños = [
+            ['src/voice/lib/turnStream.js', 'isDuplicateTurnCommit'],
+            ['src/voice/lib/activeListen.js', 'isRedundantFinal'],
+            ['src/voice/lib/conversationStream.js', 'isCommittedInterimEcho'],
+            ['src/voice/lib/conversationSession.js', 'isDuplicateLogPhrase'],
+        ] as const;
+        for (const [fichero, fn] of dueños) {
+            expect(read(fichero), fichero + ' perdio ' + fn).toContain('export function ' + fn);
+        }
+    });
+    it('el detector no es decorativo: marca el dedup sin escape y perdona el que lo tiene', () => {
+        expect(logDedupRespectsPause('if (isDuplicateLogPhrase(capture, prev)) return false')).toBe(false);
+        expect(
+            logDedupRespectsPause('if (!replaceLastRawLog && isDuplicateLogPhrase(capture, prev)) return false'),
+        ).toBe(true);
+    });
+});

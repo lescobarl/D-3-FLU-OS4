@@ -146,3 +146,39 @@ describe('P4.1/P4.6/P4.7 transporte - el detector no es decorativo', () => {
     ).toEqual([])
   });
 });
+
+/** P8.46 — el dance AbortController+setTimeout+clearTimeout del CLIENTE tiene un dueno. */
+export const DEADLINE_OWNER = 'src/lib/fetchWithDeadline.ts'
+/** Ficheros de cliente que crean su propio AbortController (los proxies de servidor son otra familia). */
+export function deadlineOwners(pares: Array<{ rel: string; src: string }>): string[] {
+  return pares
+    .filter((f) => !f.rel.startsWith('src/server/'))
+    .filter((f) => f.rel !== DEADLINE_OWNER)
+    .filter((f) => /new AbortController/.test(f.src))
+    .map((f) => f.rel + ':new AbortController')
+}
+
+describe('P8.46 - el deadline del cliente tiene un solo dueno', () => {
+  it('solo el primitivo crea AbortController en el cliente', () => {
+    const pares = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).map((f) => ({
+      rel: rel(f),
+      src: readFileSync(f, 'utf8'),
+    }));
+    const offenders = deadlineOwners(pares);
+    expect(
+      offenders,
+      'Orquestacion de deadline duplicada (N=' + offenders.length + '); usa fetchWithDeadline:\n  ' +
+        offenders.join('\n  '),
+    ).toEqual([]);
+    expect(read(DEADLINE_OWNER)).toContain('export async function fetchWithDeadline');
+  });
+  it('los dos consumidores delegan en el primitivo', () => {
+    expect(read('src/core/ai/httpClient.ts')).toContain('fetchWithDeadline(');
+    expect(read('src/voice/lib/imageGeneration.js')).toContain('fetchWithDeadline(');
+  });
+  it('el detector no es decorativo: marca al que crea su propio controller y perdona al dueno', () => {
+    expect(deadlineOwners([{ rel: 'src/x.ts', src: 'new AbortController()' }])).toHaveLength(1);
+    expect(deadlineOwners([{ rel: DEADLINE_OWNER, src: 'new AbortController()' }])).toEqual([]);
+    expect(deadlineOwners([{ rel: 'src/server/p.ts', src: 'new AbortController()' }])).toEqual([]);
+  });
+});
