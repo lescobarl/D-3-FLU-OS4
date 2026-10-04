@@ -3708,3 +3708,37 @@ Alcance real (obligatorio, 0.23): CUBIERTO=el mecanismo medido de la duplicacion
 guard de conducta y banco sobre la app real; NO CUBIERTO=el DoD-producto, los dos huecos declarados, la suite
 completa y el e2e.
 
+
+## P8.39 - La misma frase reentregada (sigue duplicando): medicion, intento revertido y conflicto real - 2026-10-03
+
+Cambios aplicados: NINGUNO en src (el intento de fix se REVIRTIO). Solo diagnostico + registro: plans/ledger.json
+(P8.39 y P8.40 abiertos) y .task/contract.json (correccion de la ampliacion).
+
+Validado contra:
+  - MEDIDO en 30 s SIN esperar a que FLU hable: banco %TEMP%\flu-repro\sim-acento.cjs (dos finales que solo
+    difieren en un acento) -> 2 filas de usuario, la segunda escrita por el commit del ingress (emitTurnRow).
+  - El primer fix probado (reutilizar la fila abierta cuando la emision es la misma segun
+    spokenUtteranceRevision) daba 1 fila en el banco, PERO rompio un requisito MEDIDO y protegido:
+    tests/turnRowNoDuplicate.test.ts "DEFECTO 3: dos ordenes REALES (turnos distintos) son DOS filas aunque FLU
+    no hable" (antes el dedup posicional fusionaba las dos y la segunda desaparecia de la conversacion). Misma
+    entrada, resultados OPUESTOS: en el escritor de la fila "reentrega del ASR" y "repeticion real" son
+    INDISTINGUIBLES por texto+tiempo. Se revirtio src y su caso de guard: arbol limpio, barrera 176 ficheros /
+    1448 casos VERDE.
+
+No validado: sigue abierto (P8.39). El criterio que lo cierra necesita una senal NUEVA que hoy no viaja al
+write: la identidad del EVENTO ASR (revision del mismo resultado o segmento de audio: isNewAudioSegment y
+turnAudioStartSampleRef ya existen en el pipeline). Para cerrarlo con evidencia hace falta UNA captura real con
+la traza de eventos de escucha (__fluDev.enableListenTrace / getListenLog) del duplicado.
+
+DIAGNOSTICO DE DIARIZACION (P8.40, por lectura, sin cambio de codigo): el nombre de la fila lo decide
+resolveTurnSpeakerAtCommit y el PREFLIGHT DE AUDIO gana (turnSpeakerCommit.js:112 y :146, source
+"preflight-audio"); ese label de cluster es AUTOMATICO ("Hablante N") porque el cluster no adopta el nombre del
+perfil. El nombre del participante conocido (sessionPrimary) solo gana por wake-intro ("ok flu, soy Luis", :88) o
+en frases cortas (speakerPolicy:133), y el fallback es pegajoso (lastLogged || sessionPrimary). Opciones (a)
+etiquetar con el participante activo cuando el name resuelto es automatico Y hay UN solo cluster de voz, o (b)
+que el cluster adopte el nombre del perfil cuando la huella coincide: decision de producto (en aula, (a) sin la
+condicion de cluster unico pondria el nombre del dueno a los ninos).
+
+Alcance real (obligatorio, 0.23): CUBIERTO=la causa medida del duplicado reportado y el conflicto que impide el
+fix por texto+tiempo; NO CUBIERTO=el arreglo (P8.39), la diarizacion (P8.40), el DoD-producto y la suite/e2e.
+

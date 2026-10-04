@@ -239,3 +239,26 @@ PENDIENTE DEL DUENO (DoD-producto): repetir la loteria (una locucion -> una fila
 pantalla. Si vuelve a duplicar, el banco sim-dup-turnid.cjs y la traza de los dos escritores del store son el
 instrumento para capturarlo.
 
+
+---
+
+## 2026-10-03 (noche) - El duplicado que sigue: P8.39 (reentrega vs repeticion) y P8.40 (diarizacion)
+
+El dueno reporta que SIGUE duplicando (21:01:40/21:01:41) y que la diarizacion lo etiqueta "Hablante 1"
+sabiendo quien es. MEDIDO en 30 s sin esperar a que FLU hable (banco %TEMP%\flu-repro\sim-acento.cjs): dos
+finales que solo difieren en un acento -> 2 filas. El fix obvio (reutilizar la fila abierta si la emision es la
+misma, spokenUtteranceRevision) SE PROBO Y SE REVIRTIO: rompe `tests/turnRowNoDuplicate.test.ts` DEFECTO 3 (dos
+ordenes reales sin respuesta en medio = 2 filas, requisito medido porque antes se perdia la segunda). Es la
+MISMA entrada con salidas opuestas: el escritor de la fila no puede distinguir reentrega del ASR de repeticion
+real con texto+tiempo. Cierre = llevar al write la identidad del EVENTO ASR (revision del mismo resultado o
+segmento de audio; isNewAudioSegment/turnAudioStartSampleRef ya existen) + UNA captura real con la traza de
+eventos (__fluDev.enableListenTrace / getListenLog).
+
+Diarizacion (P8.40): el preflight de AUDIO gana el nombre (turnSpeakerCommit.js:112/:146, source
+"preflight-audio") y su label es automatico ("Hablante N"); el nombre del participante solo gana por wake-intro
+o frase corta, y el fallback es pegajoso (lastLogged || sessionPrimary). Opciones declaradas en el ledger;
+necesita la aprobacion del dueno (en aula, etiquetar con su nombre sin exigir cluster unico pondria su nombre a
+los ninos).
+
+ABIERTO (4): P8.31, P8.35, P8.39, P8.40.
+
