@@ -367,3 +367,51 @@ describe('D11 - la repeticion tras pausa escapa del dedup del log (clasificacion
         ).toBe(true);
     });
 });
+
+// ---------------------------------------------------------------- D12
+/** D12 (P8.47) — El RESPALDO no puede declarar lo que no hizo.
+ *
+ * HALLAZGO medido por el spec e2e de P8.47 (tests/e2e/autonomia-respaldo.spec.ts), que
+ * existe porque la autonomia era un hueco declarado: createEmergencyBackup ->
+ * createManualBackup(['all']) -> createBackup guardaba 'all' SIN EXPANDIR, asi que el bucle
+ * de extraccion recorria 'all' (extractComponent('all') del caso individual no extrae nada)
+ * y la metadata declaraba ['all']; y restoreBackup filtraba metadata.components.filter(c =>
+ * c !== 'all') -> lista VACIA -> 0 restaurados y `success: true`. Medido en el navegador:
+ * success=true con restoredComponents=[] y el valor cambiado NO volvia (7.7.c).
+ */
+export function findFakeBackupSuccess(src: string): string[] {
+    const out: string[] = [];
+    if (!/failedComponents\.length === 0 && restoredComponents\.length > 0/.test(src)) {
+        out.push('backupSystem:success-sin-restaurar-nada');
+    }
+    return out;
+}
+export function findUnexpandedAll(src: string): string[] {
+    const out: string[] = [];
+    if (!/resolveBackupComponents\(components\)/.test(src)) out.push('backupSystem:extractor-sin-expandir');
+    if (!/components: capturados/.test(src)) out.push('backupSystem:metadata-con-la-lista-pedida');
+    if (!/NOT_RESTORABLE_COMPONENTS/.test(src)) out.push('backupSystem:no-declara-lo-no-restaurable');
+    return out;
+}
+
+describe('D12 - el respaldo declara lo que TIENE y no declara exito sin restaurar', () => {
+    it('la copia expande "all", declara lo capturado y no miente con el exito', () => {
+        const src = read('src/core/autonomy/backupSystem.ts');
+        const offenders = [...findUnexpandedAll(src), ...findFakeBackupSuccess(src)];
+        expect(offenders, 'Defectos de respaldo (N=' + offenders.length + '):\\n  ' + offenders.join('\\n  ')).toEqual([]);
+    });
+    it('el detector no es decorativo: marca el exito vacio y la metadata sin expandir', () => {
+        expect(findFakeBackupSuccess('const success = failedComponents.length === 0;')).toHaveLength(1);
+        expect(
+            findFakeBackupSuccess(
+                'const success = failedComponents.length === 0 && restoredComponents.length > 0;',
+            ),
+        ).toEqual([]);
+        expect(findUnexpandedAll('for (const c of components) {}')).toHaveLength(3);
+        expect(
+            findUnexpandedAll(
+                'resolveBackupComponents(components) components: capturados NOT_RESTORABLE_COMPONENTS',
+            ),
+        ).toEqual([]);
+    });
+});
