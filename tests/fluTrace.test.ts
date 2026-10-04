@@ -342,7 +342,10 @@ describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
         await vi.advanceTimersByTimeAsync(AGENTE_MS);
 
         expect(fetchFalso.mock.calls.length).toBeGreaterThanOrEqual(2);
-        expect(cuerpos()[1].events).toEqual([]);
+        // P8.35: por INDICE fijo era fragil (bajo carga aparecen cuerpos de mas por
+        // temporizadores residuales de otros casos del fichero, y el indice apuntaba
+        // al relleno). El hallazgo se mide en el ULTIMO envio, que es el delta
+        // posterior al relleno: sale VACIO.
         expect(cuerpos().at(-1)!.events).toEqual([]);
     });
 
