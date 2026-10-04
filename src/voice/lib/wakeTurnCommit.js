@@ -151,6 +151,23 @@ export function applyWakeTurnCommit(ctx, capture, commitOpts = {}) {
 export { applyWakeTurnCommit as commitCaptureRespectingWakeBoundary }
 
 /**
+ * Predicado UNICO de "esta captura es un turno del usuario".
+ *
+ * Con la wake word exigida siempre (aula/casa: TV, ninos, familia) la wake es la
+ * unica compuerta: una captura SIN wake no es un turno. Lo consumen el ingress
+ * (no acuna id de turno, no abre fila) y la pregunta de fila del log. Usa el
+ * splitter UNICO (`splitTranscriptAtWakeWord`), no un segundo criterio.
+ *
+ * @param {string} capture
+ * @param {{ wakeRequired?: boolean, wakeWords?: string[] }} [options]
+ * @returns {boolean}
+ */
+export function isTurnCapture(capture = '', { wakeRequired = false, wakeWords = getWakeWords() } = {}) {
+  if (!wakeRequired) return true
+  return Boolean(splitTranscriptAtWakeWord(cleanForSpeech(capture), wakeWords).wakeWordMatched)
+}
+
+/**
  * Guardia de commit: separa pasivo TV de cola flu si la captura aún llega mezclada.
  *
  * `wakeWordMatched` viaja con el resultado: es el MISMO analisis del turno

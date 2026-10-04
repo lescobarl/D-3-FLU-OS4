@@ -3,7 +3,7 @@
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
 import { cleanForSpeech, detectWakeIntroducedName, formatClock } from './audioMath.js'
-import { resolveInlineWakeAtCommit } from './wakeTurnCommit.js'
+import { resolveInlineWakeAtCommit, isTurnCapture } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
@@ -161,7 +161,14 @@ export function handleConversationStreamSync(
   // comparten SIEMPRE el mismo id. Antes la resolucion acuñaba el id tarde (y
   // solo con diarizacion activa), asi que la fila del usuario tenia que
   // deduplicarse por POSICION: dos criterios para la misma decision.
-  const ensureTurnId = () => {
+  //
+  // P8.36 - y nace SOLO para un turno DE VERDAD. El ruido de fondo (aula/casa) no
+  // es un turno: si acunara id, moveria el id del turno VIVO y la resolucion (que
+  // lo lee al escribir) abriria una SEGUNDA fila con la misma frase.
+  const wakeRequired = FLU_CONFIG.voiceCommands?.requireWakeAlways !== false
+  const esTurno = (text) => isTurnCapture(text, { wakeRequired })
+  const ensureTurnId = (isTurn) => {
+    if (!isTurn) return
     if (openPreviewTurnRef.current) return
     openPreviewTurnRef.current = true
     activeTurnIdRef.current += 1
@@ -176,7 +183,7 @@ export function handleConversationStreamSync(
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
-    ensureTurnId()
+    ensureTurnId(esTurno(capture))
     if (turnBoundary || atTurnBoundary) {
       const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
       const phrase = cleanForSpeech(utterance) || capture
@@ -195,10 +202,6 @@ export function handleConversationStreamSync(
   }
 
   flushPendingStreamLog()
-  // Un commit directo (sin preview) tambien abre turno: el id debe existir antes
-  // de que nada de este turno escriba (fila, log crudo, resolucion).
-  ensureTurnId()
-
   // El preview ya protegia el recorte por ruido ASR, pero aqui se commiteaba el
   // texto recortado: la fila quedaba mas corta que lo mostrado y se perdia la cola.
   capture = reconcileCommitText(capture, publishedLiveRef.current)
@@ -210,6 +213,9 @@ export function handleConversationStreamSync(
   if (inlineWake.fluTail) {
     fluTailAfterCommit = inlineWake.fluTail
   }
+  // El veredicto se toma sobre la captura ANTES de recortarle la cola flu: una
+  // captura mixta ("... ok flu <orden>") SI lleva wake y es un turno.
+  const capturaEsTurno = esTurno(capture)
   capture = inlineWake.capture
 
   // Ruido de fondo (aula/casa: TV, ninos, familia). Con la wake word exigida
@@ -220,8 +226,13 @@ export function handleConversationStreamSync(
   // MIXTA ("... ok flu <orden>") si abre su fila pasiva: su wake la marca como
   // turno, y el veredicto sale del MISMO analisis del turno (antes del recorte
   // de la cola flu), no de un segundo criterio.
-  const ambientRowBlocked =
-    FLU_CONFIG.voiceCommands?.requireWakeAlways !== false && !inlineWake.wakeWordMatched
+  const ambientRowBlocked = !capturaEsTurno
+
+  // El id del turno se acuña SOLO para un turno de verdad: el ruido de fondo no
+  // mueve el id del turno vivo (P8.36). Un commit directo (sin preview) tambien
+  // abre turno, asi que el id existe antes de que nada de este turno escriba
+  // (fila, log crudo, resolucion).
+  ensureTurnId(capturaEsTurno)
 
   // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
   // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión

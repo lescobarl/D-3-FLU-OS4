@@ -138,6 +138,37 @@ describe('P8.38 - el ruido de fondo no abre fila de conversacion', () => {
 });
 
 // P2.4 - prueba de detector: el MISMO texto, con y sin wake, discrimina.
+describe('P8.36 - el ruido de fondo no acuna id de turno (si lo moviera, la resolucion duplicaria)', () => {
+  it('un FINAL de ruido no acuna id; una orden con wake si', () => {
+    const ruido = makeDeps();
+    handleConversationStreamSync(ruido, { capture: RUIDO, turnCommit: true });
+    expect(ruido.activeTurnIdRef.current).toBe(0);
+
+    const orden = makeDeps();
+    handleConversationStreamSync(orden, { capture: ORDEN, turnCommit: true });
+    expect(orden.activeTurnIdRef.current).toBe(1);
+  });
+
+  it('un PREVIEW de ruido no mueve el id del turno VIVO (antes lo movia: 1 -> 2)', () => {
+    const deps = makeDeps();
+
+    handleConversationStreamSync(deps, { capture: ORDEN, turnCommit: true });
+    expect(deps.activeTurnIdRef.current).toBe(1);
+
+    // El ruido de fondo entre el commit y la RESOLUCION: la resolucion escribe la
+    // fila con `activeTurnIdRef.current`, asi que si el ruido acunara id (2) la
+    // fila se AGREGARIA en vez de reutilizarse -> dos filas de la misma frase.
+    handleConversationStreamSync(deps, { capture: RUIDO });
+    expect(deps.activeTurnIdRef.current).toBe(1);
+    expect(deps.openPreviewTurnRef.current).toBe(false);
+
+    // El mismo preview SIN ruido (una orden real) si abre turno nuevo.
+    handleConversationStreamSync(deps, { capture: `okay flow ${ORDEN}` });
+    expect(deps.activeTurnIdRef.current).toBe(2);
+  });
+});
+
+// P2.4 - prueba de detector: el MISMO texto, con y sin wake, discrimina.
 describe('P8.38 - el detector no es decorativo', () => {
   it('la marca distingue la captura sin wake de la misma con wake', () => {
     const conRuido = makeDeps();
