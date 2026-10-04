@@ -49,6 +49,52 @@ export type BackupComponent =
     | 'system_settings'
     | 'all';
 
+/** Componentes individuales que una copia puede contener (el tipo sin 'all'). */
+export const BACKUP_COMPONENT_KEYS: BackupComponent[] = [
+    'conversation_state',
+    'ai_configuration',
+    'user_preferences',
+    'minute_history',
+    'workspace_data',
+    'voice_profiles',
+    'system_settings',
+];
+
+/**
+ * DUENO UNICO de "que componentes incluye esta copia": expande 'all' a la lista real.
+ *
+ * DEFECTO MEDIDO 2026-10-04 (lo destapo el spec e2e de P8.47 con el flujo real):
+ * `createEmergencyBackup()` -> `createManualBackup(['all'])` -> `createBackup` guardaba
+ * 'all' SIN expandir en la metadata y el bucle de extraccion recorria 'all', que no
+ * extrae NADA (extractComponent('all') === null): la copia de emergencia salvaba VACIO.
+ * Peor: `restoreBackup` filtraba `metadata.components.filter(c => c !== 'all')` -> lista
+ * vacia -> 0 componentes restaurados y `success: true`. Medido en el navegador:
+ * createEmergencyBackup + restoreFromLatestBackup devolvia success=true con
+ * restoredComponents=[] y el valor cambiado NO volvia (7.7.c: mentira de respaldo).
+ */
+/**
+ * Componentes que NO se restauran A PROPOSITO (C31): su fuente unica es Dexie y el
+ * respaldo no duplica esa ruta. Se CAPTURAN para trazabilidad, pero que su
+ * restauracion no devuelva nada NO es un fallo: es el contrato.
+ *
+ * Sin declararlo, un rescate correcto se reportaba como "restauracion parcial" y,
+ * antes de expandir 'all', un rescate VACIO se reportaba como exito.
+ */
+export const NOT_RESTORABLE_COMPONENTS: BackupComponent[] = ['minute_history', 'voice_profiles'];
+
+export function resolveBackupComponents(components: BackupComponent[] = []): BackupComponent[] {
+    const pedidos: BackupComponent[] = components.length ? components : ['all'];
+    const out: BackupComponent[] = [];
+    for (const c of pedidos) {
+        if (c === 'all') {
+            for (const k of BACKUP_COMPONENT_KEYS) if (!out.includes(k)) out.push(k);
+            continue;
+        }
+        if (BACKUP_COMPONENT_KEYS.includes(c) && !out.includes(c)) out.push(c);
+    }
+    return out;
+}
+
 export interface BackupMetadata {
     /** ID único del backup */
     id: string;
@@ -619,7 +665,10 @@ class BackupManager implements IBackupManager {
             const extractedData: Partial<BackupComponentsData> = {};
             let totalSize = 0;
             
-            for (const component of components) {
+            // Dueno unico de la lista: "all" se expande ANTES de extraer y de declarar
+            // (recorrer "all" no extraia nada: la copia de emergencia salvaba vacio).
+            const listaComponentes = resolveBackupComponents(components);
+            for (const component of listaComponentes) {
                 const data = this.dataExtractor.extractComponent(component);
                 if (data !== null) {
                     Object.assign(extractedData, { [component]: data });
@@ -630,12 +679,19 @@ class BackupManager implements IBackupManager {
                 }
             }
             
+            // La METADATA describe lo que la copia TIENE de verdad: solo los componentes
+            // que aportaron datos. Si declara un componente vacio, la restauracion lo
+            // cuenta como fallido y el rescate deja de ser "exitoso" por un motivo falso.
+            const capturados = listaComponentes.filter(
+                (c) => (extractedData as Record<string, unknown>)[c] !== undefined,
+            );
+
             // Crear metadatos
             const metadata: BackupMetadata = {
                 id: backupId,
                 timestamp: Date.now(),
                 strategy,
-                components,
+                components: capturados,
                 size: totalSize,
                 checksum: this.calculateChecksum(extractedData),
                 appVersion: this.getAppVersion(),
@@ -649,7 +705,7 @@ class BackupManager implements IBackupManager {
             };
             
             // Guardar backup
-            this.saveBackup(backup);
+            if (!this.saveBackup(backup)) return null;
             
             // Actualizar lista de backups
             this.backups.push(metadata);
@@ -684,31 +740,34 @@ class BackupManager implements IBackupManager {
                 };
             }
             
-            // Determinar componentes a restaurar
-            const components = componentsToRestore || backup.metadata.components;
+            // Que se restaura: la copia manda. "all" (o nada) = todo lo que ESTA copia
+            // contiene; una lista explicita se cruza con lo disponible para no declarar
+            // fallos de componentes que nunca se guardaron.
+            const disponibles = resolveBackupComponents(backup.metadata.components);
+            const components =
+                componentsToRestore && componentsToRestore.length
+                    ? resolveBackupComponents(componentsToRestore).filter((c) =>
+                          disponibles.includes(c),
+                      )
+                    : disponibles;
             
             // Restaurar cada componente
-            for (const component of components) {
-                if (component === 'all') {
-                    // Restaurar todos los componentes individualmente
-                    const individualComponents = backup.metadata.components.filter(c => c !== 'all');
-                    for (const individualComponent of individualComponents) {
-                        if (this.dataRestorer.restoreComponent(individualComponent, backup.components)) {
-                            restoredComponents.push(individualComponent);
-                        } else {
-                            failedComponents.push(individualComponent);
-                        }
-                    }
+            // Los componentes declarados NO restaurables (C31) se saltan: contarlos como
+            // fallidos marcaba de por vida "restauracion parcial" a un rescate correcto.
+            const restaurables = components.filter(
+                (c) => !NOT_RESTORABLE_COMPONENTS.includes(c),
+            );
+            for (const component of restaurables) {
+                if (this.dataRestorer.restoreComponent(component, backup.components)) {
+                    restoredComponents.push(component);
                 } else {
-                    if (this.dataRestorer.restoreComponent(component, backup.components)) {
-                        restoredComponents.push(component);
-                    } else {
-                        failedComponents.push(component);
-                    }
+                    failedComponents.push(component);
                 }
             }
             
-            const success = failedComponents.length === 0;
+            // EXITO exige haber restaurado ALGO: declarar exito con 0 componentes
+            // era la mentira que el spec midio (restauracion vacia reportada como buena).
+            const success = failedComponents.length === 0 && restoredComponents.length > 0;
             
             return {
                 success,
@@ -841,13 +900,13 @@ class BackupManager implements IBackupManager {
         }
     }
 
-    private saveBackup(backup: BackupData): void {
+    private saveBackup(backup: BackupData): boolean {
         const key = `${STORAGE_KEYS.BACKUP_PREFIX}${backup.metadata.id}`;
         const payload = DEFAULT_BACKUP_CONFIG.compressionEnabled
             ? this.compressBackup(backup)
             : JSON.stringify(backup);
 
-        if (this.writeBackupRaw(key, payload)) return;
+        if (this.writeBackupRaw(key, payload)) return true;
 
         // Cuota llena: podar los más antiguos hasta que entre el nuevo.
         console.warn(
@@ -856,13 +915,14 @@ class BackupManager implements IBackupManager {
         const oldestFirst = [...this.backups].sort((a, b) => a.timestamp - b.timestamp);
         for (const old of oldestFirst) {
             this.deleteBackup(old.id);
-            if (this.writeBackupRaw(key, payload)) return;
+            if (this.writeBackupRaw(key, payload)) return true;
         }
 
         console.error(
             '[backupSystem] No se pudo guardar el backup: almacenamiento lleno.',
             backup.metadata.id,
         );
+        return false;
     }
     
     private loadBackup(backupId: string): BackupData | null {

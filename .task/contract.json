@@ -622,7 +622,8 @@
     "src/core/ai/httpClient.ts",
     "src/hooks/useSessionPersistence.ts",
     "src/lib/fetchWithDeadline.ts",
-    "tests/e2e/sesion-un-solo-almacen.spec.ts"
+    "tests/e2e/sesion-un-solo-almacen.spec.ts",
+    "tests/e2e/autonomia-respaldo.spec.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
@@ -927,6 +928,12 @@
     "src/voice/lib/idleSchedule.js": [
       "tests/e2e/voz-locucion-unica.spec.ts",
       "tests/e2e/tts-flag-pegado.spec.ts"
+    ],
+    "src/core/autonomy/decisionEngine.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/core/autonomy/backupSystem.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
     ]
   }
 }
