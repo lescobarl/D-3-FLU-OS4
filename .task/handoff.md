@@ -115,3 +115,46 @@ Tickets cerrados antes: loteria (cartas seguidas), quien_soy (pistas), Pizarron 
 objeto por tipo), planificador E2E (e2eScope) y rojo intermitente de la suite, juego (una
 orden = una carta, eco de la orden de arranque), voz (eco de la cola del TTS), fila de
 conversacion (una locucion = una fila), ack de escucha ("Te escucho").
+
+---
+
+## ESTADO 2026-10-03 (lo mas reciente: leer ESTO antes que lo de arriba)
+
+Rama feature/auditoria-codigo-unificaciones-01. Briefing: `npm run brief`.
+
+CERRADO hoy (todos con pre-commit verde):
+  P8.32/R3  el bloque de parametros del contrato sale del god-file a src/voice/lib/contractParams.js
+            (useFluVoiceAssistant.js 4577 -> 4539; techo del trinquete bajado a 4539 en commit aparte).
+            Commits e13010c + 62554df + a0fa4e0. Guard: contractBoundaryGuard (10/10).
+  P8.33     los 10 guards que solo vivian en el dod entran en lint:guards con prueba de detector REAL.
+            lint:guards 164 ficheros / 1381 casos -> 174 / 1436. 3 controles negativos medidos.
+            Commits 2c9aded + ea861be + 1cb42d9 + ea4060d.
+  P8.34     triaje de homonimos cleanLabel/pickLabel: VEREDICTO = mismo nombre, regla distinta,
+            0 rutas dobles, 0 cambios en src. Commit 2313050.
+
+ABIERTO (3 pendientes en plans/ledger.json):
+  P8.28  mecanismo no reproducido de la perdida del cuerpo. INSTRUMENTADO en la puerta del transcript
+         (src/server/geminiProxy.ts, registra las claves del cuerpo cuando salta). No se cierra sin
+         reaparicion: no se inventa la causa.
+  P8.31  src/core/media/musicActions.ts sin spec en e2eScope. BLOQUEO MEDIDO: ningun spec e2e menciona
+         musica (0) ni conduce la entrada de voz (0 SpeechRecognition) -> no hay mapeo que declarar y
+         declararlo seria taparlo. PLAN: stub de SpeechRecognition en tests/e2e/_helpers.ts +
+         tests/e2e/musica-en-partida.spec.ts + mapeo en e2eScope. Criterio: e2e:plan deja de nombrarlo
+         Y el spec pasa en e2e:scoped. Commit b5fa77b.
+  P8.35  tests/fluTrace.test.ts pasa 25/25 en AISLADO y falla dentro del lote del dod
+         (linea 345: el caso asume exactamente 2 cuerpos y bajo carga hay >=3; recibio el relleno de
+         ~800 eventos). NO es de esta sesion (ese test no importa el hook ni contractParams). PLAN:
+         reproducir con el comando dod del contrato, quitar la dependencia del INDICE del cuerpo
+         (mockClear entre fases / assertar cuerpos().at(-1)) sin debilitar el hallazgo, y cerrar con
+         el lote + `npm run gate` EN VERDE. Commit 4b440a0.
+
+BARRERAS corridas hoy:
+  lint:guards + eslint + typecheck en cada commit: VERDE (174 ficheros / 1436 casos).
+  npm run e2e:scoped (bloque -> auditoria-acciones-llm): 10/10 PASS en 4,3 min sobre la app real.
+  npm run gate: ROJO, y el rojo es P8.35 (arriba), no la tarea. No se maquilla.
+
+PENDIENTE DEL DUENO (DoD-producto): portal vivo en 5173 (PID 5040) -> agenda, notas y diario llegando
+al prompt, y una frase corta repetida en dos contextos (antes devolvia la respuesta cacheada del otro).
+
+REGLAS DE LA SESION: no correr la suite completa sin peticion expresa; validar con el fichero tocado +
+lint + typecheck; el gate es de cierre y se corre UNA vez; ASCII en ficheros del repo (guard de mojibake).
