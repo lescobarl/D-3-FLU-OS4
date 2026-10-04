@@ -3590,3 +3590,25 @@ No validado: la suite completa, el e2e y el DoD-producto.
 
 Alcance real (obligatorio, 0.23): CUBIERTO=la barrera por commit para los 10 guards, medido con conteo
 antes/despues y 3 controles negativos; NO CUBIERTO=la suite completa, el e2e y la percepcion del usuario.
+
+## P8.32 (R3) - El bloque de parametros del contrato sale del god-file - 2026-10-03
+
+Cambios aplicados: src/voice/lib/contractParams.js (nuevo, buildContractParams con las fuentes inyectadas),
+src/voice/hooks/useFluVoiceAssistant.js (el bloque de resolucion + el literal de 22 entradas pasan a una llamada),
+tests/godFileSizeGuard.test.ts (techo 4579 -> 4539, en commit aparte por 0.22), package.json y .task/contract.json.
+
+Validado contra:
+  - God-file ANTES: 4577 lineas medidas con el criterio del guard (techo 4579 = 2 de holgura).
+  - God-file DESPUES: 4539 (holgura 40) y el techo bajado a 4539 en un commit APARTE (0.22: el guard que lee
+    el src no viaja con el src).
+  - Guard del borde: contractBoundaryGuard 10/10 leyendo el payload desde su ubicacion nueva (la lista de
+    entradas tiene un solo dueno en src/voice/lib/contractParams.js).
+  - Comportamiento: useFluVoiceAssistant.behavior + voiceTurnClosingSingleRoute, 41 casos verdes.
+  - Barrera: pre-commit (164 ficheros / 1381 casos), eslint y typecheck verdes.
+  - Baseline: 0 fallos nuevos (la suite completa no se corrio: no autorizada).
+
+No validado: la suite completa, el e2e acotado del bloque (npm run e2e:scoped) y el DoD-producto.
+
+Alcance real (obligatorio, 0.23): CUBIERTO=la extraccion del dueno unico de las entradas del turno, medida por
+conteo de lineas ANTES/DESPUES + el guard del borde + el test de comportamiento del hook; NO CUBIERTO=la suite
+completa, el e2e y la percepcion del usuario.
