@@ -122,3 +122,25 @@ export function formatSpeakerLabel(label = '', confidence = 'medium', config = g
   if (!normalized) return getFallbackSpeaker(config)
   return suffix ? `${normalized} ${suffix}` : normalized
 }
+
+/**
+ * P8.40 - Etiqueta de diarizacion -> NOMBRE de la persona. El panel de participantes
+ * ya guarda ese vinculo (A3, speakerLabel): si el hablante resuelto es una etiqueta
+ * AUTOMATICA ("Hablante N") y coincide con la etiqueta registrada del participante
+ * activo, la fila lleva su NOMBRE. Un nombre propio ya resuelto nunca se pisa y una
+ * etiqueta no registrada (los ninos del aula) queda como esta: no hace falta
+ * heuristica de cluster.
+ *
+ * @param {string} label Etiqueta resuelta por la diarizacion.
+ * @param {{ registeredLabel?: string, registeredName?: string }} [registered]
+ * @returns {string} Nombre de la persona, o '' si no hay vinculo.
+ */
+export function resolveRegisteredSpeakerName(label = '', { registeredLabel = '', registeredName = '' } = {}) {
+  const text = normalizeSpeakerLabel(label)
+  const name = normalizeSpeakerLabel(registeredName)
+  if (!text || !name) return ''
+  if (!isAutoSpeakerLabel(text)) return ''
+  const registered = normalizeSpeakerLabel(registeredLabel)
+  if (!registered || foldSpeakerKey(registered) !== foldSpeakerKey(text)) return ''
+  return name
+}

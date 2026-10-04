@@ -32,7 +32,7 @@ import {
 } from './speakerPolicy.js'
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
-import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
+import { normalizeSpeakerLabel, isAutoSpeakerLabel, resolveRegisteredSpeakerName } from './voiceIdentity.js'
 
 /**
  * @typedef {Object} ConversationStreamCommitPayload
@@ -137,6 +137,7 @@ export function handleConversationStreamSync(
     lastLogLineTextRef,
     commitTurnToSessionRows,
     fluParticipantRef,
+    participantSpeakerRef,
   } = deps
 
   if (!conversationActiveRef?.current) return
@@ -381,12 +382,16 @@ export function handleConversationStreamSync(
     }
   }
 
+  const speakerResuelto = sameRevisionReplace
+    ? logRowSpeakersRef.current.at(-1) ||
+      lastLoggedSpeakerRef.current ||
+      fallbackSpeaker
+    : resolved.speakerName || fallbackSpeaker
+  // P8.40: si la etiqueta resuelta es una automatica REGISTRADA en participantes, la
+  // fila lleva el NOMBRE de la persona (mismo dueno del vinculo: el panel).
   const speakerName = normalizeSpeakerLabel(
-    sameRevisionReplace
-      ? logRowSpeakersRef.current.at(-1) ||
-          lastLoggedSpeakerRef.current ||
-          fallbackSpeaker
-      : resolved.speakerName || fallbackSpeaker,
+    resolveRegisteredSpeakerName(speakerResuelto, participantSpeakerRef?.current || {}) ||
+      speakerResuelto,
   )
 
   let segmentPlan =

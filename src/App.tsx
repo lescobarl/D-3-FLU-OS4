@@ -122,6 +122,7 @@ import {
 } from './core/onboarding/onboardingService';
 // ---- Fase 3 — Multi-usuario: participantes, materia gris y paneles ----
 import { useParticipants } from './hooks/useParticipants';
+import { resolveRegisteredSpeakerName } from './voice/lib/speakerLabels';
 import { resolveKindRole } from './core/multiuser/participantRegistry';
 import { useMateriaGris } from './hooks/useMateriaGris';
 // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
@@ -1150,6 +1151,18 @@ function App() {
         if (profile.name.trim().toLowerCase() === anonymousName) return undefined;
         return profile.name;
     }, [activeParticipantId, participants.participants]);
+    // P8.40: etiqueta de diarizacion registrada del participante activo (A3). El
+    // motor de voz la usa para estampar su NOMBRE cuando la diarizacion resuelve
+    // esa etiqueta automatica ("Hablante N"), en vez de inventar una identidad.
+    const activeParticipantSpeakerLabelForVoice = useMemo(() => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return "";
+        const profile = participants.participants.find((p) => p.id === activeParticipantId);
+        return String(profile?.speakerLabel || "").trim();
+    }, [activeParticipantId, participants.participants]);
+    const participantSpeakerForRow = useMemo(() => ({
+        registeredLabel: activeParticipantSpeakerLabelForVoice || "",
+        registeredName: activeParticipantNameForVoice || "",
+    }), [activeParticipantSpeakerLabelForVoice, activeParticipantNameForVoice]);
     const {
         status: voiceStatus,
         error: voiceError,
@@ -1307,9 +1320,12 @@ function App() {
             // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
+                // P8.40: la etiqueta automatica de la diarizacion puede pertenecer a un
+                // participante registrado (speakerLabel del panel): la fila lleva su NOMBRE.
+                const speakerRegistrado = resolveRegisteredSpeakerName(speakerName, participantSpeakerForRow);
                 commitUserTurnRow({
                     text: transcript,
-                    speakerName,
+                    speakerName: speakerRegistrado || speakerName,
                     replaceLast: resolved?.replaceLastRawLog === true,
                     turnId: resolved?.turnId ?? null,
                 });
@@ -2383,6 +2399,7 @@ function App() {
         // Fase E: nombre del participante activo (Juan/Luis) para sembrar
         // sessionPrimary en la diarización (config-gated en el hook).
         activeParticipantName: activeParticipantNameForVoice,
+        activeParticipantSpeakerLabel: activeParticipantSpeakerLabelForVoice,
     });
 
     // Keep the ref in sync so onEmotion (captured by useFluParticipant before

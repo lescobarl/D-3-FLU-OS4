@@ -350,6 +350,7 @@ export function useFluVoiceAssistant({
   resolveMinuteLookup = () => ({ mode: 'gemini' }),
   participantRef,
   activeParticipantName = '',
+  activeParticipantSpeakerLabel = '',
   wakeWords = '',
 }) {
   const [status, setStatus] = useState('idle')
@@ -399,9 +400,7 @@ export function useFluVoiceAssistant({
       // la IA). La resolución posterior re-commitea el MISMO valor (idempotente)
       // y deduplica la fila, así no hay doble fuente.
       if (commitOnly) {
-        // Una peticion, una fila: si esta emision ya tuvo commit temprano dentro de
-        // la ventana de "misma peticion" (el ASR reentrega la locucion), no se
-        // re-escribe la fila. La ejecucion deduplica con el MISMO criterio.
+        // Una peticion, una fila (el ASR reentrega): no se re-escribe la fila.
         if (!earlyCommitDedupeRef.current.isRepeat(canonicalPhrase)) {
           await onContractResolved?.({
             contract: null,
@@ -466,8 +465,7 @@ export function useFluVoiceAssistant({
   // Última captura procesada (dedup anti-repetición): evita que la MISMA frase
   // se procese dos veces (p. ej. cierre + auto-proceso) y cree la acción doble.
   const lastProcessedCaptureRef = useRef({ text: '', at: 0 })
-  // Idempotencia por PETICION del commit temprano (criterio y memoria en captureDedup).
-  const earlyCommitDedupeRef = useRef(null)
+  const earlyCommitDedupeRef = useRef(null) // idempotencia por PETICION (memoria en captureDedup)
   if (!earlyCommitDedupeRef.current) earlyCommitDedupeRef.current = createEmissionDeduper()
   const autoProcessTimerRef = useRef(null)
   const recognitionRetryTimerRef = useRef(null)
@@ -1798,7 +1796,9 @@ export function useFluVoiceAssistant({
           openPreviewTurnRef,
           setLiveTranscript,
           scheduleLiveTranscriptUpdate,
-          applyConversationSpeaker,
+          activeParticipantName,
+      activeParticipantSpeakerLabel,
+      applyConversationSpeaker,
           flushPendingStreamLog,
           logRowsTextRef: userRowsTextView,
           activeTurnIdRef,
@@ -1823,10 +1823,15 @@ export function useFluVoiceAssistant({
           lastLogLineTextRef,
           commitTurnToSessionRows,
           fluParticipantRef,
+          participantSpeakerRef: {
+            current: { registeredLabel: activeParticipantSpeakerLabel, registeredName: activeParticipantName },
+          },
         },
         payload,
       ),
     [
+      activeParticipantName,
+      activeParticipantSpeakerLabel,
       applyConversationSpeaker,
       commitTurnToSessionRows,
       conversationActiveRef,
@@ -3565,11 +3570,7 @@ export function useFluVoiceAssistant({
   const processCapture = useCallback(async ({ closing = false } = {}) => {
     const snapshot = readCommandSnapshot(turnRef.current, pendingSpillRef.current)
     relayLog('LOG', 'useFluVoiceAssistant', `processCapture ENTER: snapshot="${(snapshot || '').slice(0, 60)}", closing=${closing}, conversationActiveRef.current=${conversationActiveRef?.current}`)
-    // Dedup de la captura: criterio UNICO en `shouldSkipCapture` (la MISMA
-    // emision reentregada = mismo turno, aunque haya un turno en curso; una
-    // correccion viva NO se descarta). Ventana compartida con el despacho
-    // (`sameRequestWindowMs`): una sola nocion de "misma peticion" para la fila
-    // y para la ejecucion.
+    // Dedup de la captura: criterio unico (captureDedup) con la ventana del despacho.
     const snapshotKeyDedup = cleanForSpeech(snapshot || '')
     if (snapshotKeyDedup) {
       const nowMsDedup = Date.now()

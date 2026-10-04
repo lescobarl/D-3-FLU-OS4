@@ -24,6 +24,7 @@ export {
   parseSpeakerIndex,
   isAutoSpeakerLabel,
   isRegisteredSpeakerLabel,
+  resolveRegisteredSpeakerName,
   isProperSpeakerName,
   normalizeSpeakerLabel,
   expandSessionSpeakerNames,
