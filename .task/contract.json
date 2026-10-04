@@ -609,7 +609,8 @@
     "tests/voiceTurnStabilization.test.ts",
     "tests/workspaceContractTipo.test.ts",
     "tests/speakerPrimarySeed.test.ts",
-    "tests/registeredSpeakerNameGuard.test.ts"
+    "tests/registeredSpeakerNameGuard.test.ts",
+    "src/voice/lib/voiceIdentity.js"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
