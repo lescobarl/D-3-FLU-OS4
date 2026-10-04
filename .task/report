@@ -3774,3 +3774,32 @@ abierta (P8.40) con su solucion medida y declarada.
 Alcance real (0.23): CUBIERTO=la coordinacion fila/ejecucion y la reentrega identica con instrumento fiel y
 guard de conducta; NO CUBIERTO=el DoD-producto, la diarizacion y el arnes dentro del repo.
 
+
+## P8.40 (implementado, falta pantalla) y P8.35 (cerrado) - 2026-10-03
+
+Cambios aplicados: src/voice/lib/speakerLabels.js (resolveRegisteredSpeakerName: criterio unico
+etiqueta-registrada -> nombre), src/voice/lib/voiceIdentity.js (re-export),
+src/voice/lib/conversationStreamCommit.js (hablante de la fila por el vinculo),
+src/voice/hooks/useFluVoiceAssistant.js (prop activeParticipantSpeakerLabel + deps), src/App.tsx (memo del
+vinculo + la PUERTA UNICA de la fila aplica el vinculo), tests/registeredSpeakerNameGuard.test.ts (nuevo, en
+lint:guards), tests/fluTrace.test.ts (asercion robusta del hallazgo del delta), package.json,
+.task/contract.json (dod 62 tests).
+
+Validado contra:
+  - P8.40 MEDIDO: el vinculo existe en la base (participante "Luis" + speakerLabel "Hablante 1" +
+    flu-active-user, sembrado con micro falso) y la unidad discrimina (sin registro ""; con registro "Luis";
+    nombre propio no se pisa; etiqueta no registrada queda igual). 5 casos con prueba de detector.
+  - P8.40 NO MEDIDO: la cadena App -> fila extremo a extremo: en la prueba de escritorio headless la lista de
+    participantes del panel no se carga en el arranque automatizado, asi que la fila seguia saliendo
+    "Hablante 1" con el dato presente. Se cierra en su pantalla o con un test de App con Dexie sembrada.
+  - P8.35 MEDIDO: fluTrace 25/25 aislado y el lote pesado de voz 6 ficheros / 208 casos VERDE; se elimino la
+    asercion por indice fijo (la causa descrita por el ledger). El fallo original no se reprodujo en un
+    intento (declarado).
+  - Barrera: 178 ficheros / 1465 casos VERDE; tsc y eslint limpios; godFileSizeGuard en el techo exacto
+    (hook 4539/4539, App 4643/4643) tras compensar lineas.
+
+No validado: el DoD-producto de P8.40 (su pantalla), P8.41/P8.31 (arnes de voz en el repo) y la suite/e2e.
+
+Alcance real (0.23): CUBIERTO=el criterio de la diarizacion por vinculo registrado (unidad + guard) y la
+asercion robusta de fluTrace; NO CUBIERTO=la cadena App->fila medida, el arnes en el repo y el e2e.
+

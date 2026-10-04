@@ -283,3 +283,22 @@ ABIERTO: P8.31 (musicActions sin spec e2e), P8.35 (fluTrace en el lote del dod),
 medida y declarada, pendiente de aprobar el comportamiento), P8.41 (mover el arnes de voz al repo como fixture
 e2e: 0 de 11 specs conducen la entrada de voz hoy).
 
+
+---
+
+## 2026-10-03 (noche) - P8.40 implementado (falta pantalla), P8.35 cerrado
+
+P8.40 (commit b296ab3): la etiqueta de diarizacion REGISTRADA estampa el nombre. Criterio unico
+resolveRegisteredSpeakerName (solo etiquetas automaticas que coinciden con la registrada; un nombre propio
+nunca se pisa; etiquetas de otros hablantes -aula- quedan igual) aplicado en conversationStreamCommit y en la
+PUERTA UNICA de la fila de App (memo con la etiqueta del participante activo). Guard
+tests/registeredSpeakerNameGuard.test.ts. FALTA MEDIR la cadena App->fila: en headless la lista de
+participantes no se carga en el arranque automatizado (la fila seguia diciendo "Hablante 1" con el dato en la
+base) -> se cierra en su pantalla o con un test de App con Dexie sembrada.
+P8.35 (commit 273f292): la asercion del hallazgo de fluTrace se mide en el ULTIMO envio, no por indice fijo
+(bajo carga el indice apuntaba al relleno). 25/25 aislado + lote pesado 6 ficheros/208 casos VERDE.
+
+ABIERTO: P8.31 (spec de musica; depende del arnes), P8.40 (medicion en pantalla), P8.41 (mover el micro falso
+a tests/e2e como fixture: 0 de 11 specs conducen la voz - es la barrera que habria cazado P8.39).
+TECHO DE TAMANO: hook 4539/4539 y App 4643/4643: cualquier linea nueva obliga a compensar.
+
