@@ -2119,7 +2119,7 @@ export function useFluVoiceAssistant({
 
   const wireRecognitionEvents = useCallback(
     (Recognition) => {
-      const requireWake = !conversationActiveRef?.current
+      const requireWake = FLU_CONFIG.voiceCommands.requireWakeAlways !== false || !conversationActiveRef?.current
 
       Recognition.onstart = () => {
         recognitionActiveRef.current = true
@@ -3593,7 +3593,7 @@ export function useFluVoiceAssistant({
     }
     if (!snapshot && !closing) return
 
-    const requireWake = !conversationActiveRef?.current
+    const requireWake = FLU_CONFIG.voiceCommands.requireWakeAlways !== false || !conversationActiveRef?.current
     const wakeWords = resolvedWakeWords
     // Captura pasiva: recordar si el micrófono estaba abierto para reabrirlo al
     // final del turno, salvo que sea un cierre explícito (p. ej. CERRAR_ESCUCHA)
@@ -3720,10 +3720,9 @@ export function useFluVoiceAssistant({
           return
         }
 
-        const toLog = cleanForSpeech(capturedTranscript)
-        if (toLog) {
-          await emitConversationLog(toLog, logContext)
-        }
+        // Un rechazo de la puerta de la wake word NO es un turno: no abre fila.
+        // Aula/casa (TV, ninos): el texto sigue en la transcripcion viva, pero no
+        // ensucia el historial ni parece una frase dirigida a FLU.
         finishTurn()
         await cleanupAudio()
         setStatus('idle')

@@ -2319,6 +2319,10 @@ export const FLU_CONFIG = {
  /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
   *  Fuente única: FLU_WAKE_WORDS (§9.4). Configurable en Ajustes. */
  wakeWords: [...FLU_WAKE_WORDS],
+ /** Aula/casa (TV + ninos): la wake word se exige SIEMPRE, tambien con la
+  *  conversacion activa. Sin esto, cualquier voz de fondo abre turno.
+  *  Ponlo en false para la continuidad sin wake (entorno privado). */
+ requireWakeAlways: true,
  resetAvatarColors: RESET_AVATAR_COLOR_PHRASES,
     openListening: [
       'abrir escucha',
