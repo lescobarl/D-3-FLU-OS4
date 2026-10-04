@@ -19,6 +19,7 @@
 // ============================================================
 
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
+import { setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 import { DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { resolveConfiguredTemperature } from '../../services/aiTemperature';
@@ -384,7 +385,7 @@ class DataRestorer {
         try {
             if (!data) return false;
             
-            localSet(STORAGE_KEYS.AI_PROVIDER, data.provider || DEFAULT_AI_PROVIDER);
+            setPreferredAIProvider((data.provider || DEFAULT_AI_PROVIDER) as AIProvider);
             
             if (data.apiKeys) {
                 if (data.apiKeys.gemini) {

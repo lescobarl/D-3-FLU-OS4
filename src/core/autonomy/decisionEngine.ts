@@ -21,6 +21,7 @@
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
+import { setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
 
@@ -744,7 +745,7 @@ export class DecisionEngine {
         const { newProvider, oldProvider } = params;
         
         // Actualizar configuración
-        localSet(STORAGE_KEYS.AI_PROVIDER, newProvider);
+        setPreferredAIProvider(newProvider as AIProvider);
         
         // Registrar cambio
         const changeHistory: ProviderChangeRecord[] = JSON.parse(localGet('flu-provider-changes') || '[]');

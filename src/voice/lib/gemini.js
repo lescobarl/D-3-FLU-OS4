@@ -18,7 +18,7 @@ import {
   resolveServerTextApiUrl,
   resolveServerTextModel,
 } from '../../core/config/sharedConfig'
-import { STORAGE_KEYS } from '../../core/config/appConfig'
+import { STORAGE_KEYS, resolveTextApiKey } from '../../core/config/appConfig'
 
 import {
   buildBareVisualFallbackWorkspace,
@@ -1198,7 +1198,7 @@ export async function requestParticipantEvaluation(params) {
     savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+    savedApiKey = resolveTextApiKey()
   } catch (e) {
         logCaughtError('src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
@@ -1229,7 +1229,7 @@ export async function requestFluContract(params) {
     savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
     // Lectura fresca de la key en el momento de la llamada: defiende contra
     // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+    savedApiKey = resolveTextApiKey()
   } catch (e) {
         logCaughtError('src/voice/lib/gemini.js', e);
     // Sin acceso a localStorage
@@ -1251,7 +1251,7 @@ export async function requestConversationSummary(params) {
   let savedApiKey = ''
   try {
     savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
-    savedApiKey = String(localGet(STORAGE_KEYS.TEXT_API_KEY) ?? '').trim()
+    savedApiKey = resolveTextApiKey()
   } catch (err) { logCaughtError('src/voice/lib/gemini.js', err) }
   const body = {
     ...(params ?? {}),
