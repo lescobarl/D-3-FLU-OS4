@@ -82,21 +82,69 @@ export function findAccentFoldOffenders(files: Array<{ rel: string; content: str
 }
 
 // ---------------------------------------------------------------- D5
-/** Resoluciones propias de la key de texto (must be 0: se usa el resolver central). */
+/** Lecturas propias de la key de texto en el cliente de voz (must be 0: resolver central). */
 export function findTextKeyOwnerOffenders(content: string, file = 'src/sintetico.ts'): string[] {
     const out: string[] = [];
     content.split(/\r?\n/).forEach((line, i) => {
         if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
-        if (/STORAGE_KEYS\.TEXT_API_KEY/.test(line)) out.push(`${file}:${i + 1}:${line.trim().slice(0, 110)}`);
+        if (/localGet\(\s*STORAGE_KEYS\.TEXT_API_KEY/.test(line)) {
+            out.push(`${file}:${i + 1}:${line.trim().slice(0, 110)}`);
+        }
     });
     return out;
 }
+
+// ---------------------------------------------------------------- D6
+/** Escritores del provider de IA fuera de su dueno (must be 0). */
+export function findProviderWriterOffenders(files: Array<{ rel: string; content: string }>): string[] {
+    const owner = 'src/services/aiServiceFactory.ts';
+    const out: string[] = [];
+    for (const f of files) {
+        if (f.rel === owner) continue;
+        f.content.split(/\r?\n/).forEach((line, i) => {
+            if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+            if (/localSet\(\s*(STORAGE_KEYS\.AI_PROVIDER|AI_PROVIDER_KEY)/.test(line)) {
+                out.push(`${f.rel}:${i + 1}:${line.trim().slice(0, 110)}`);
+            }
+        });
+    }
+    return out;
+}
+
+describe('D6 - un solo escritor del provider de IA', () => {
+    it('la clave del provider solo la escribe su dueno (aiServiceFactory)', () => {
+        const offenders = findProviderWriterOffenders(srcFiles());
+        expect(
+            offenders,
+            `Escritores del provider fuera de su dueno (N=${offenders.length}); usa ` +
+                `setPreferredAIProvider():\n  ${offenders.join('\n  ')}`,
+        ).toEqual([]);
+    });
+    it('el detector no es decorativo: marca la escritura directa y perdona la delegacion', () => {
+        expect(
+            findProviderWriterOffenders([
+                { rel: 'src/core/autonomy/decisionEngine.ts', content: 'localSet(STORAGE_KEYS.AI_PROVIDER, p)' },
+            ]),
+        ).toHaveLength(1);
+        expect(
+            findProviderWriterOffenders([
+                { rel: 'src/core/autonomy/decisionEngine.ts', content: 'setPreferredAIProvider(p)' },
+                { rel: 'src/services/aiServiceFactory.ts', content: 'localSet(AI_PROVIDER_KEY, p)' },
+            ]),
+        ).toEqual([]);
+    });
+});
 
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 const voiceLibFiles = (): Array<{ rel: string; content: string }> =>
     readdirSync(join(ROOT, 'src', 'voice', 'lib'))
         .filter((f) => /\.(js|ts)$/.test(f) && !f.endsWith('.d.ts'))
         .map((f) => ({ rel: `src/voice/lib/${f}`, content: read(`src/voice/lib/${f}`) }));
+const srcFiles = (): Array<{ rel: string; content: string }> =>
+    walkFiles(join(ROOT, 'src'), /\.(ts|tsx|js|jsx|mjs)$/).map((f) => ({
+        rel: rel(f),
+        content: readFileSync(f, 'utf8'),
+    }));
 
 describe('D1 - las puertas de VOZ preguntan "¿habla FLU?" con UN solo criterio', () => {
     it('el hook no usa el flag global (isSpeechBusy) en sus puertas de voz', () => {
