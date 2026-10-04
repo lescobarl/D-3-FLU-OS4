@@ -140,7 +140,6 @@ export function handleConversationStreamSync(
     commitTurnToSessionRows,
     fluParticipantRef,
     participantSpeakerRef,
-    isTurnLive,
     lastRequestRef,
   } = deps
 
@@ -184,10 +183,6 @@ export function handleConversationStreamSync(
       windowMs: sameRequestWindowMs(),
     })
   }
-  const turnLiveNow = () => (typeof isTurnLive === 'function' ? Boolean(isTurnLive()) : false)
-  const sameLiveEmission = (prevText, nextText) =>
-    turnLiveNow() &&
-    isSameEmissionWithinWindow(prevText, nextText, { windowMs: Number.POSITIVE_INFINITY })
   const ensureTurnId = (isTurn, sameLive) => {
     if (!isTurn) return
     if (openPreviewTurnRef.current) return
@@ -248,8 +243,10 @@ export function handleConversationStreamSync(
   // MIXTA ("... ok flu <orden>") si abre su fila pasiva: su wake la marca como
   // turno, y el veredicto sale del MISMO analisis del turno (antes del recorte
   // de la cola flu), no de un segundo criterio.
-  // MISMA locucion viva (mismo id): no se abre id nuevo NI fila nueva.
-  const mismaLocucionViva = sameLiveEmission(lastEmittedTranscriptRef?.current || '', capture)
+  // MISMA locucion viva: la decide el MISMO criterio que el id (la memoria del
+  // despacho + la ventana compartida). Antes habia un SEGUNDO criterio aqui
+  // (estado de la UI: "el turno esta vivo") — dos regimenes para la misma pregunta.
+  const mismaLocucionViva = sameRequestAsLastDispatch(capture)
   const ambientRowBlocked = !capturaEsTurno || mismaLocucionViva
 
   // El id del turno se acuña SOLO para un turno de verdad: el ruido de fondo no

@@ -16,8 +16,7 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { DEEPSEEK_CONFIG, OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
-import { POLLINATIONS_DEFAULTS } from '../core/config/sharedConfig';
+import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage, resolveTextApiKey } from '../core/config/appConfig';import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { logCaughtError } from '../lib/caughtError';
 import type {
@@ -33,7 +32,6 @@ import {
     type MinuteRequest,
     type TextCompletionRequest,
 } from '../core/ai/aiServiceBase';
-import { localGet } from '../core/storage/localStore';
 import { resolveConfiguredTemperature } from './aiTemperature';
 
 import { pickText } from '../lib/uiStrings';
@@ -43,28 +41,15 @@ import { GENERATION_FAILED_SOURCE } from '../lib/generationTrace';
 // -----------------------------------------------------------
 
 /**
- * Resolve the text engine API key from direct param, text-specific localStorage key, or env.
- * (Backward-compatible with VITE_DEEPSEEK_API_KEY via OPENROUTER_CONFIG.API_KEY fallback.)
+ * Resolve the text engine API key. DELEGA en el resolver central (mismo par que
+ * usa `services/gemini.ts`): `resolveApiKey` fija el orden (directa > central) y
+ * `resolveTextApiKey` es la unica fuente de la clave (localStorage > env). Antes
+ * esta funcion re-implementaba esa resolucion aqui — con su propio orden y sus
+ * propias lecturas de localStorage — asi que un cambio en la prioridad dejaba a
+ * este motor con otro criterio (ruta doble de secreto).
  */
 function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
-    if (apiKey && apiKey.trim()) {
-        return { apiKey: apiKey.trim(), apiKeySource: 'param' };
-    }
-
-    const stored = (() => {
-        try { return localGet(STORAGE_KEYS.TEXT_API_KEY); } catch (e) {
-        logCaughtError('src/services/deepseek.ts', e); return null; }
-    })();
-    if (stored && stored.trim()) {
-        return { apiKey: stored.trim(), apiKeySource: 'localStorage' };
-    }
-
-    const envKey = OPENROUTER_CONFIG.API_KEY || DEEPSEEK_CONFIG.API_KEY;
-    if (envKey && envKey.trim()) {
-        return { apiKey: envKey.trim(), apiKeySource: 'env' };
-    }
-
-    return { apiKey: '', apiKeySource: 'none' };
+    return resolveApiKey(apiKey, resolveTextApiKey);
 }
 
 /**

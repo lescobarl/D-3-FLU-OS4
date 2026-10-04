@@ -140,7 +140,7 @@ import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPau
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
 // App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
-import { isSpeechSynthesisSpeaking, isSpeechBusy, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
+import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { logCaughtError } from '../../lib/caughtError';
 import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
@@ -2830,7 +2830,7 @@ export function useFluVoiceAssistant({
         // Si el participante tiene la mano alzada y el TTS está ocupado, ESPERAR a que
         // termine el habla actual y revalidar la concesión en lugar de tragar el turno.
         const handRaised = participant?.hasRaisedHand?.() === true
-        if (handRaised && isSpeechBusy()) {
+        if (handRaised && isFluSpeaking()) {
           if (import.meta.env.DEV && debugHotPath) {
             fluDebugHot('participant-floor-queued-wait', {
               speaking: isSpeechSynthesisSpeaking(),
@@ -3461,7 +3461,13 @@ export function useFluVoiceAssistant({
       if (!conversationActiveRef?.current) return false
       const phrase = cleanForSpeech(text)
       const lastCommitted = userRowsTextView.current.at(-1) || ''
-      if (isSpeechBusy()) {
+      // UN solo criterio de "¿habla FLU?": la promesa propia (`isFluSpeaking`), la
+      // misma que usa la supresion de eco de `onresult`. Antes aqui se preguntaba
+      // con `isSpeechBusy()`, que incluye el flag GLOBAL `speechSynthesis.speaking`
+      // —del que este mismo fichero documenta que "quedaba pegado y silenciaba la
+      // escucha"—: con el flag pegado el eco se filtraba bien pero el despacho
+      // devolvia false y el turno se perdia en silencio.
+      if (isFluSpeaking()) {
         return false
       }
 

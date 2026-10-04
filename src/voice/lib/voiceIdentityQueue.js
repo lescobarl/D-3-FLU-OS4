@@ -1,17 +1,11 @@
 /**
  * Cola de identidad en tiempo real: 1 in-flight, pending reemplazable (drop stale).
  */
+import { scheduleIdle } from './idleSchedule.js'
+
 let inFlight = false
 let pending = null
 let droppedCount = 0
-
-function scheduleIdle(fn, timeoutMs = 2500) {
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(fn, { timeout: timeoutMs })
-    return
-  }
-  setTimeout(fn, 0)
-}
 
 function dropPendingJob(reason = 'dropped-stale') {
   if (!pending) return

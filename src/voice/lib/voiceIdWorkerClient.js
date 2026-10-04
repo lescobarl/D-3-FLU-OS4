@@ -11,6 +11,7 @@ import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
+import { scheduleIdle } from './idleSchedule.js'
 
 let seq = 0
 const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
@@ -59,20 +60,15 @@ export function prepareTransferableAudio(samples) {
   }
 }
 
-function scheduleIdle(fn, timeoutMs = 2500) {
+function scheduleIdleAsync(fn, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const run = () => {
+    scheduleIdle(() => {
       try {
         resolve(fn())
       } catch (error) {
         reject(error)
       }
-    }
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: timeoutMs })
-    } else {
-      setTimeout(run, 0)
-    }
+    }, timeoutMs)
   })
 }
 
@@ -202,7 +198,7 @@ async function embedAudioInternal(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
 }
 
 function resolveIdentityIdle(vector, matchPayload, sampleRate, sourceLength) {
-  return scheduleIdle(
+  return scheduleIdleAsync(
     () =>
       resolveSpeakerIdentityFromVector(vector, {
         speakerClusters: matchPayload.speakerClusters || [],

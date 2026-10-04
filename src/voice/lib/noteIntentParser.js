@@ -11,6 +11,7 @@
 
 
 import { normalizeSpokenCommand } from './audioMath.js'
+import { stripDiacriticsLower } from '../../lib/textUtils'
 import { SUPER_TARGET_LABEL } from '../../core/notes/superNoteTarget'
 
 const NOTE_CREATION_PREFIX =
@@ -22,7 +23,8 @@ const NOTE_PARA_SUPER =
 // los otros: "adiciona en la nota del súper focos" no lo entendía NINGUNO y la
 // orden se perdía en silencio (solo entraba el ítem cuyo verbo sí estaba en la
 // tabla). Un verbo nuevo se añade AQUÍ y lo ven los tres.
-// Los regexes corren sobre texto ya sin acentos (stripAccentsEs), así que la
+// Los regexes corren sobre texto ya sin acentos (stripDiacriticsLower del dueno
+// compartido, src/lib/textUtils: antes habia aqui un plegado propio por tablas), asi que la
 // forma viva es "anade"; "añade" se conserva por claridad de la tabla.
 const NOTE_ADD_VERBS =
   'apunta|anota|anade|añade|agrega|agregar|adiciona|adicionar|incluye|incluir|inclu[ií]|suma|sumar|pon|poner'
@@ -112,20 +114,9 @@ const NOTE_ITEM_DEST_FIRST = new RegExp(
 
 /** Normaliza el destino: los destinos de compras se llaman 'Super' en las notas. */
 function normalizeRemoveTarget(raw = '') {
-  const norm = stripAccentsEs(raw).trim()
+  const norm = stripDiacriticsLower(raw).trim()
   if (/^(?:super|supermercado|compras|mercado)\b/.test(norm)) return SUPER_TARGET_LABEL
   return String(raw || '').trim()
-}
-
-function stripAccentsEs(text = '') {
-  return String(text || '')
-    .toLowerCase()
-    .replace(/[áàäâ]/g, 'a')
-    .replace(/[éèëê]/g, 'e')
-    .replace(/[íìïî]/g, 'i')
-    .replace(/[óòöô]/g, 'o')
-    .replace(/[úùüû]/g, 'u')
-    .replace(/[ñ]/g, 'n')
 }
 
 // Verbos/conectores de relleno que pueden preceder al ítem cuando se enuncia
@@ -179,7 +170,7 @@ export function parseNoteIntentText(rawText = '') {
     const rest = creationMatch[1] ? creationMatch[1].trim() : ''
     normalized = rest ? `nota ${rest}` : 'nota'
   }
-  const norm = stripAccentsEs(normalized)
+  const norm = stripDiacriticsLower(normalized)
 
   // 1) "nota para el super/supermercado/compras/mercado" → nombre "Super" +
   //    contenido (body) separado del título (lista de compras, no un chorizo).
@@ -334,7 +325,7 @@ export function parseNoteItemRemoveIntentText(rawText = '') {
   let clean = normalizeSpokenCommand(rawText)
   clean = clean.replace(/^(?:una|un|la|el|mi)\s+(?=notas?\b)/i, '').trim()
   if (!clean) return null
-  const norm = stripAccentsEs(clean)
+  const norm = stripDiacriticsLower(clean)
   const destFirst = NOTE_ITEM_DEST_FIRST.exec(norm)
   const match = destFirst || NOTE_ITEM_FIRST.exec(norm)
   if (!match) return null
