@@ -153,9 +153,13 @@ export { applyWakeTurnCommit as commitCaptureRespectingWakeBoundary }
 /**
  * Guardia de commit: separa pasivo TV de cola flu si la captura aún llega mezclada.
  *
+ * `wakeWordMatched` viaja con el resultado: es el MISMO analisis del turno
+ * (no un segundo criterio) el que decide si la captura lleva la wake word, que es
+ * lo que separa un turno de usuario del ruido de fondo en conversacion activa.
+ *
  * @param {string} capture
  * @param {string} [lastCommitted]
- * @returns {{ capture: string, fluTail: { fullCapture: string, action: object } | null }}
+ * @returns {{ capture: string, fluTail: { fullCapture: string, action: object } | null, wakeWordMatched: boolean }}
  */
 export function resolveInlineWakeAtCommit(capture = '', lastCommitted = '') {
   const wakeAnalysis = analyzeWakeTurn(capture, { lastCommitted })
@@ -164,7 +168,15 @@ export function resolveInlineWakeAtCommit(capture = '', lastCommitted = '') {
     wakeAnalysis.passiveOnly &&
     wakeAnalysis.passiveOnly.length < wakeAnalysis.cleaned.length
   ) {
-    return { capture: wakeAnalysis.passiveOnly, fluTail: wakeAnalysis.fluTail }
+    return {
+      capture: wakeAnalysis.passiveOnly,
+      fluTail: wakeAnalysis.fluTail,
+      wakeWordMatched: wakeAnalysis.wakeWordMatched,
+    }
   }
-  return { capture: cleanForSpeech(capture), fluTail: null }
+  return {
+    capture: cleanForSpeech(capture),
+    fluTail: null,
+    wakeWordMatched: wakeAnalysis.wakeWordMatched,
+  }
 }

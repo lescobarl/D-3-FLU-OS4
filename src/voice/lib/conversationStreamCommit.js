@@ -212,6 +212,17 @@ export function handleConversationStreamSync(
   }
   capture = inlineWake.capture
 
+  // Ruido de fondo (aula/casa: TV, ninos, familia). Con la wake word exigida
+  // SIEMPRE, una captura SIN wake no es un turno del usuario y NO abre fila en
+  // el historial (la que ve el usuario y la que lee la IA); su texto sigue en la
+  // transcripcion viva. La fila de SESION se sigue escribiendo
+  // (`commitTurnToSessionRows`), que es la via del dictado/minuta. La captura
+  // MIXTA ("... ok flu <orden>") si abre su fila pasiva: su wake la marca como
+  // turno, y el veredicto sale del MISMO analisis del turno (antes del recorte
+  // de la cola flu), no de un segundo criterio.
+  const ambientRowBlocked =
+    FLU_CONFIG.voiceCommands?.requireWakeAlways !== false && !inlineWake.wakeWordMatched
+
   // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
   // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión
   // del mismo turno, no una fila nueva.
@@ -256,6 +267,12 @@ export function handleConversationStreamSync(
     finalizeTurnCommit()
     fluParticipantRef.current?.onTurnCommitted?.()
   }
+
+  // UNICA puerta de emision de la fila de conversacion de un turno: el ruido de
+  // fondo no la cruza (`ambientRowBlocked`). Los dos commits que emiten (ramas
+  // segmentada y simple) pasan por aqui, asi que la regla vive en un solo sitio.
+  const emitTurnRow = (text, options) =>
+    ambientRowBlocked ? false : emitConversationLog(text, options)
 
   const {
     replaceLast,
@@ -408,7 +425,7 @@ export function handleConversationStreamSync(
 
       const segmentReplace = replaceNext
       if (refreshNeeded) {
-        const delivered = emitConversationLog(segmentText, {
+        const delivered = emitTurnRow(segmentText, {
           speakerName: segmentSpeaker,
           fallbackSpeaker: segmentSpeaker,
           currentClock: formatClock(),
@@ -460,7 +477,7 @@ export function handleConversationStreamSync(
 
   let delivered = false
   if (refreshNeeded) {
-    delivered = emitConversationLog(capture, {
+    delivered = emitTurnRow(capture, {
       speakerName,
       fallbackSpeaker: speakerName,
       currentClock: formatClock(),

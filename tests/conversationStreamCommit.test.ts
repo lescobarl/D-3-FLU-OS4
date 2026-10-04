@@ -13,13 +13,26 @@
  * La RAMA SEGMENTADA se cubre con snapshots de identidad REALES (cola de
  * identidad incluida): un prior embebido se omite y solo la voz nueva abre fila.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleConversationStreamSync } from '../src/voice/lib/conversationStreamCommit.js';
 import { createActiveListenState } from '../src/voice/lib/activeListen.js';
 import {
     resetTurnSpeakerPreflights,
     scheduleTurnSpeakerPreflight,
 } from '../src/voice/lib/turnSpeakerPreflight.js';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
+
+// Este fichero mide la SEMANTICA del stream (preview -> commit -> fila -> cierre)
+// con capturas sin wake; la politica "el ruido de fondo no abre fila" (P8.38) se
+// vigila en tests/wakeRowNoiseGuard.test.ts. Aqui se fija la continuidad sin wake
+// para que los dos criterios no se mezclen en el mismo oraculo.
+const requireWakeAlwaysBefore = FLU_CONFIG.voiceCommands.requireWakeAlways;
+beforeEach(() => {
+    FLU_CONFIG.voiceCommands.requireWakeAlways = false;
+});
+afterEach(() => {
+    FLU_CONFIG.voiceCommands.requireWakeAlways = requireWakeAlwaysBefore;
+});
 
 /** Opciones del log, tal como las lee el test (el typedef las declara `object`). */
 type EmitOptions = { speakerName?: string; turnCommit?: boolean; replaceLastRawLog?: boolean };
