@@ -2,7 +2,7 @@
  * Preview y commit del stream de conversación (mic → UI/log).
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
-import { cleanForSpeech, detectWakeIntroducedName, formatClock } from './audioMath.js'
+import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs } from './audioMath.js'
 import { resolveInlineWakeAtCommit, isTurnCapture } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -83,6 +83,7 @@ import { isSameEmissionWithinWindow } from './captureDedup.js'
  * @property {import('react').MutableRefObject<string>} lastLogLineTextRef
  * @property {(capture: string, speakerName: string, options?: object) => void} commitTurnToSessionRows
  * @property {import('react').MutableRefObject<{ onTurnCommitted?: () => void }|null>} fluParticipantRef
+ * @property {import('react').MutableRefObject<{ text?: string, at?: number }>} [lastRequestRef]
  */
 
 /**
@@ -140,6 +141,7 @@ export function handleConversationStreamSync(
     fluParticipantRef,
     participantSpeakerRef,
     isTurnLive,
+    lastRequestRef,
   } = deps
 
   if (!conversationActiveRef?.current) return
@@ -170,10 +172,18 @@ export function handleConversationStreamSync(
   // lo lee al escribir) abriria una SEGUNDA fila con la misma frase.
   const wakeRequired = FLU_CONFIG.voiceCommands?.requireWakeAlways !== false
   const esTurno = (text) => isTurnCapture(text, { wakeRequired })
-  // UN ID POR LOCUCION (modelo, no comparadores): el id se acuna al ABRIR una
-  // locucion. Una entrega que llega con el turno VIVO y dice LO MISMO es la MISMA
-  // locucion -> mismo id: la fila se reutiliza y no se abre otra. La frontera es el
-  // turno vivo, no un reloj.
+  // UN ID POR PETICION (no por reloj ni por estado de la UI): la identidad del
+  // turno la dicta la MISMA memoria del despacho —la ultima peticion ACEPTADA
+  // (texto + instante)— con la ventana compartida (`sameRequestWindowMs`). Una
+  // reentrega del ASR de la MISMA peticion no acuna id: la fila se reutiliza. Un
+  // solo criterio (comparador del motor + una ventana) para la ejecucion y la fila.
+  const sameRequestAsLastDispatch = (text) => {
+    const req = lastRequestRef?.current || { text: '', at: 0 }
+    return isSameEmissionWithinWindow(String(req.text || ''), text, {
+      sinceMs: Date.now() - Number(req.at || 0),
+      windowMs: sameRequestWindowMs(),
+    })
+  }
   const turnLiveNow = () => (typeof isTurnLive === 'function' ? Boolean(isTurnLive()) : false)
   const sameLiveEmission = (prevText, nextText) =>
     turnLiveNow() &&
@@ -195,7 +205,7 @@ export function handleConversationStreamSync(
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
-    ensureTurnId(esTurno(capture), sameLiveEmission(lastEmittedTranscriptRef?.current || '', capture))
+    ensureTurnId(esTurno(capture), sameRequestAsLastDispatch(capture))
     if (turnBoundary || atTurnBoundary) {
       const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
       const phrase = cleanForSpeech(utterance) || capture

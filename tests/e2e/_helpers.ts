@@ -261,9 +261,13 @@ export async function captureScreenshot(
  * Debe llamarse DESPUES de gotoClean: la app ya creo el esquema Dexie y el
  * picker existe. Devuelve el id del usuario activado.
  */
-export async function seedActiveUser(page: Page, name = 'Usuario E2E'): Promise<string> {
+export async function seedActiveUser(
+    page: Page,
+    name = 'Usuario E2E',
+    options: { speakerLabel?: string } = {},
+): Promise<string> {
   const id = await page.evaluate(
-    async ({ db, n }) => {
+    async ({ db, n, speakerLabel }) => {
       const now = Date.now();
       const uid = (crypto as { randomUUID: () => string }).randomUUID();
       const sync = { revision: 1, updated_at: new Date(now).toISOString(), deleted: false };
@@ -275,6 +279,7 @@ export async function seedActiveUser(page: Page, name = 'Usuario E2E'): Promise<
           const tx = database.transaction(['participants', 'onboardingStates'], 'readwrite');
           tx.objectStore('participants').put({
             id: uid, name: n, role: 'adulto', createdAt: now, updatedAt: now, sync,
+            ...(speakerLabel ? { speakerLabel } : {}),
           });
           tx.objectStore('onboardingStates').put({
             id: uid, stepIndex: 99, completed: true, captured: { name: n }, startedAt: now, updatedAt: now,
@@ -285,7 +290,7 @@ export async function seedActiveUser(page: Page, name = 'Usuario E2E'): Promise<
       });
       return uid;
     },
-    { db: DB_NAME, n: name },
+    { db: DB_NAME, n: name, speakerLabel: options.speakerLabel || '' },
   );
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('.flu-shell', { timeout: 45000 });
@@ -296,4 +301,147 @@ export async function seedActiveUser(page: Page, name = 'Usuario E2E'): Promise<
     timeout: 15000,
   });
   return id;
+}
+
+/**
+ * P8.41 - Micro falso: sustituye SpeechRecognition ANTES de cargar la app, de modo
+ * que el pipeline REAL (onresult -> onend -> ingress -> dispatch) corre igual que
+ * con Chrome y la prueba puede "hablar" de forma determinista. Sin esto, la suite
+ * solo podia inyectar contratos ya resueltos y NO miraba el camino de la voz: por
+ * eso el duplicado de fila paso verde dos sesiones.
+ */
+export function stubSpeechRecognition(page: Page) {
+    return page.addInitScript(() => {
+        class FakeRecognition {
+            lang = '';
+            interimResults = true;
+            continuous = true;
+            maxAlternatives = 1;
+            onstart: any = null;
+            onresult: any = null;
+            onerror: any = null;
+            onend: any = null;
+            onspeechstart: any = null;
+            onaudiostart: any = null;
+            onspeechend: any = null;
+            onaudioend: any = null;
+            constructor() {
+                (window as any).__fluFakeMic = this;
+            }
+            start() {
+                setTimeout(() => {
+                    if (typeof this.onstart === 'function') this.onstart();
+                }, 0);
+            }
+            stop() {
+                setTimeout(() => {
+                    if (typeof this.onend === 'function') this.onend();
+                }, 0);
+            }
+            abort() {
+                this.stop();
+            }
+            emit(transcript: string, isFinal: boolean) {
+                const results = [{ isFinal: Boolean(isFinal), length: 1, 0: { transcript, confidence: 0.93 } }];
+                if (typeof this.onresult === 'function') {
+                    this.onresult({ resultIndex: 0, results, type: 'result' });
+                }
+            }
+            endTurn() {
+                if (typeof this.onend === 'function') this.onend();
+            }
+        }
+        (window as any).SpeechRecognition = FakeRecognition;
+        (window as any).webkitSpeechRecognition = FakeRecognition;
+    });
+}
+
+/** "Habla" por el micro falso (una entrega de Chrome: interino o final). */
+export async function speakViaMic(
+    page: Page,
+    text: string,
+    { final = true, endTurn = false }: { final?: boolean; endTurn?: boolean } = {},
+): Promise<void> {
+    await page.evaluate(
+        ({ t, f, e }) => {
+            const mic = (window as any).__fluFakeMic;
+            if (!mic) throw new Error('stubSpeechRecognition no instalado');
+            mic.emit(t, f);
+            if (e) setTimeout(() => mic.endTurn(), 250);
+        },
+        { t: text, f: final, e: endTurn },
+    );
+}
+
+/** Arranca la conversacion (boton de saludo) como en la app real. */
+export async function startConversation(page: Page): Promise<void> {
+    await page.waitForSelector('.flu-shell', { timeout: 45000 });
+    const clicked = await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll('button,[role="button"]'));
+        const btn = nodes.find((node) => /iniciar/i.test(String(node.getAttribute('aria-label') || node.textContent || '')));
+        if (!btn) return false;
+        (btn as HTMLElement).click();
+        return true;
+    });
+    if (!clicked) throw new Error('startConversation: no se encontro el boton de iniciar');
+    // El micro (falso) existe cuando la app creo el reconocimiento: la escucha esta viva.
+    await page.waitForFunction(() => Boolean((window as any).__fluFakeMic), null, { timeout: 30000 });
+}
+
+/** Filas del historial de conversacion (usuario y FLU) con su hablante. */
+export async function readHistoryRows(
+    page: Page,
+): Promise<Array<{ role: string; speaker: string; text: string }>> {
+    return page.evaluate(() => {
+        const state = (window as any).__fluStore?.getState?.() || {};
+        const rows = state.conversationHistory || [];
+        return rows.map((row: any) => ({
+            role: String(row.role || ''),
+            speaker: String(row.speakerName || row.speaker || ''),
+            text: String(row.text || ''),
+        }));
+    });
+}
+
+/** Filas de usuario visibles en el historial (store de la app). */
+export async function countUserRows(page: Page): Promise<number> {
+    return page.evaluate(
+        () =>
+            ((window as any).__fluStore?.getState?.().conversationHistory || []).filter(
+                (row: any) => row.role === 'user',
+            ).length,
+    );
+}
+
+/**
+ * "Habla" hasta que el historial alcance el numero de filas de usuario esperado.
+ * La app ignora lo que oye mientras habla (supresion de eco) o mientras arranca, asi
+ * que un unico emit puede perderse: se reintenta con la MISMA locucion, que el modelo
+ * de id por locucion trata como la misma (no abre fila nova).
+ */
+export async function speakUntilHeard(
+    page: Page,
+    text: string,
+    { expectedUserRows = 1, timeoutMs = 60000 }: { expectedUserRows?: number; timeoutMs?: number } = {},
+): Promise<number> {
+    const deadline = Date.now() + timeoutMs;
+    let intentos = 0;
+    while (Date.now() < deadline) {
+        intentos += 1;
+        await speakViaMic(page, text);
+        const oida = await page
+            .waitForFunction(
+                (n) =>
+                    ((window as any).__fluStore?.getState?.().conversationHistory || []).filter(
+                        (row: any) => row.role === 'user',
+                    ).length >= n,
+                expectedUserRows,
+                { timeout: 10000 },
+            )
+            .then(() => true)
+            .catch(() => false);
+        if (oida) return intentos;
+        await page.waitForTimeout(500);
+    }
+    throw new Error('speakUntilHeard: la locucion no fue oida tras ' + intentos + ' intentos');
 }

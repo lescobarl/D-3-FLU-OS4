@@ -75,6 +75,9 @@ function makeDeps(over: Record<string, unknown> = {}) {
     lastLogLineTextRef: { current: '' },
     commitTurnToSessionRows: vi.fn<(capture: string, speakerName: string, options?: object) => void>(),
     isTurnLive: () => false,
+    // Memoria del despacho (ultima peticion ACEPTADA): es la que dicta la
+    // identidad del turno (ver la cabecera de conversationStreamCommit).
+    lastRequestRef: { current: { text: '', at: 0 } },
     fluParticipantRef: { current: { onTurnCommitted: vi.fn<() => void>() } },
   };
   // Overrides del caso: Object.assign mantiene el tipo del arnes (no infiere un objeto nuevo).
@@ -404,42 +407,52 @@ describe('conversationStreamCommit — commit de turno', () => {
     });
 });
 
-// P8.42 - UN ID POR LOCUCION: mientras el turno vive y la emision es la MISMA, la
-// entrega pertenece a la misma locucion (mismo id, misma fila). Sin relojes.
-describe('P8.42 - un id por locucion (la reentrega no abre locucion nueva)', () => {
-    it('misma emision con el turno VIVO: no acuna id nuevo ni abre fila', () => {
+// P8.43 - UN ID POR PETICION: la identidad del turno la dicta la MISMA memoria del
+// despacho (la ultima peticion ACEPTADA: texto + instante) con la ventana compartida
+// (`sameRequestWindowMs`). La fila y la ejecucion usan el mismo criterio, asi no pueden
+// discrepar. (Sustituye al criterio por "turno vivo", que acuñaba id nuevo cuando
+// `processConversationFluQuery` ya habia cerrado el preview y el estado aun no era
+// THINKING: la reentrega de 284 ms abria una SEGUNDA fila y el gate del commit, al
+// suprimirla, mataba tambien la respuesta del primer turno.)
+describe('P8.43 - un id por peticion (la reentrega no abre locucion nueva)', () => {
+    const IMAGEN = 'okay flow dame una imagen';
+
+    it('misma emision que la ultima peticion ACEPTADA (dentro de la ventana): no acuña id', () => {
         const deps = makeDeps({
             isTurnLive: () => true,
-            lastEmittedTranscriptRef: { current: 'okay flow dame una imagen' },
+            lastEmittedTranscriptRef: { current: IMAGEN },
+            lastRequestRef: { current: { text: IMAGEN, at: Date.now() } },
         });
 
-        handleConversationStreamSync(deps, { capture: 'okay flow dame una imagen', turnCommit: true });
+        handleConversationStreamSync(deps, { capture: IMAGEN, turnCommit: true });
 
         expect(deps.activeTurnIdRef.current).toBe(0);
         expect(deps.emitConversationLog).not.toHaveBeenCalled();
         expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
     });
 
-    it('emision DISTINTA con el turno vivo: si es una locucion nueva (id y fila)', () => {
+    it('misma emision FUERA de la ventana: es una peticion nueva (id y fila)', () => {
+        const deps = makeDeps({
+            isTurnLive: () => false,
+            lastEmittedTranscriptRef: { current: IMAGEN },
+            lastRequestRef: { current: { text: IMAGEN, at: Date.now() - 60000 } },
+        });
+
+        handleConversationStreamSync(deps, { capture: IMAGEN, turnCommit: true });
+
+        expect(deps.activeTurnIdRef.current).toBe(1);
+    });
+
+    it('emision DISTINTA de la ultima peticion: es una locucion nueva (id y fila)', () => {
         const deps = makeDeps({
             isTurnLive: () => true,
-            lastEmittedTranscriptRef: { current: 'okay flow dame una imagen' },
+            lastEmittedTranscriptRef: { current: IMAGEN },
+            lastRequestRef: { current: { text: IMAGEN, at: Date.now() } },
         });
 
         handleConversationStreamSync(deps, { capture: 'okay flow pon musica', turnCommit: true });
 
         expect(deps.activeTurnIdRef.current).toBe(1);
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
-    });
-
-    it('misma emision con el turno YA terminado: es locucion nueva (el usuario repite)', () => {
-        const deps = makeDeps({
-            isTurnLive: () => false,
-            lastEmittedTranscriptRef: { current: 'okay flow dame una imagen' },
-        });
-
-        handleConversationStreamSync(deps, { capture: 'okay flow dame una imagen', turnCommit: true });
-
-        expect(deps.activeTurnIdRef.current).toBe(1);
     });
 });

@@ -1151,9 +1151,7 @@ function App() {
         if (profile.name.trim().toLowerCase() === anonymousName) return undefined;
         return profile.name;
     }, [activeParticipantId, participants.participants]);
-    // P8.40: etiqueta de diarizacion registrada del participante activo (A3). El
-    // motor de voz la usa para estampar su NOMBRE cuando la diarizacion resuelve
-    // esa etiqueta automatica ("Hablante N"), en vez de inventar una identidad.
+    // P8.40: etiqueta de diarizacion registrada del participante activo (A3).
     const activeParticipantSpeakerLabelForVoice = useMemo(() => {
         if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return "";
         const profile = participants.participants.find((p) => p.id === activeParticipantId);
@@ -1163,6 +1161,8 @@ function App() {
         registeredLabel: activeParticipantSpeakerLabelForVoice || "",
         registeredName: activeParticipantNameForVoice || "",
     }), [activeParticipantSpeakerLabelForVoice, activeParticipantNameForVoice]);
+    const participantSpeakerRef = useRef(participantSpeakerForRow) // closure fresca (deps [] del callback)
+    participantSpeakerRef.current = participantSpeakerForRow;
     const {
         status: voiceStatus,
         error: voiceError,
@@ -1322,7 +1322,7 @@ function App() {
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
                 // P8.40: la etiqueta automatica de la diarizacion puede pertenecer a un
                 // participante registrado (speakerLabel del panel): la fila lleva su NOMBRE.
-                const speakerRegistrado = resolveRegisteredSpeakerName(speakerName, participantSpeakerForRow);
+                const speakerRegistrado = resolveRegisteredSpeakerName(speakerName, participantSpeakerRef.current);
                 commitUserTurnRow({
                     text: transcript,
                     speakerName: speakerRegistrado || speakerName,

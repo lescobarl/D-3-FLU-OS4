@@ -610,7 +610,8 @@
     "tests/workspaceContractTipo.test.ts",
     "tests/speakerPrimarySeed.test.ts",
     "tests/registeredSpeakerNameGuard.test.ts",
-    "src/voice/lib/voiceIdentity.js"
+    "src/voice/lib/voiceIdentity.js",
+    "tests/e2e/voz-locucion-unica.spec.ts"
   ],
   "maxFiles": 504,
   "maxLines": 9200,
@@ -661,7 +662,7 @@
       "tests/e2e/matriz-comandos-productivos.spec.ts"
     ],
     "src/voice/hooks/useFluVoiceAssistant.js": [
-      "tests/e2e/auditoria-acciones-llm.spec.ts"
+      "tests/e2e/voz-locucion-unica.spec.ts"
     ],
     "src/voice/lib/conversationStream.js": [
       "tests/e2e/auditoria-acciones-llm.spec.ts"
@@ -863,6 +864,21 @@
     ],
     "src/voice/lib/contractParams.js": [
       "tests/e2e/auditoria-acciones-llm.spec.ts"
+    ],
+    "src/voice/lib/captureDedup.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/conversationStreamCommit.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/speakerLabels.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/voiceIdentity.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/wakeTurnCommit.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
     ]
   }
 }

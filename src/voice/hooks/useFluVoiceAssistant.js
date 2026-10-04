@@ -394,8 +394,6 @@ export function useFluVoiceAssistant({
   const commitAndResolveTurn = useCallback(
     async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
       const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
-      // UNA PETICION, UNA FILA: la fila obedece el veredicto del despacho.
-      if (['dedup', 'skip'].includes(lastTurnRequestVerdictRef.current)) return canonicalPhrase
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
       if (!canonicalPhrase) return ''
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
@@ -460,7 +458,6 @@ export function useFluVoiceAssistant({
   // Última captura procesada (dedup anti-repetición): evita que la MISMA frase
   const lastProcessedCaptureRef = useRef({ text: '', at: 0 }) // dedup anti-repeticion de la captura
   const earlyCommitDedupeRef = useRef(null) // idempotencia por PETICION (captureDedup)
-  const lastTurnRequestVerdictRef = useRef(null) // veredicto del despacho que obedece la fila
   if (!earlyCommitDedupeRef.current) earlyCommitDedupeRef.current = createEmissionDeduper()
   const autoProcessTimerRef = useRef(null)
   const recognitionRetryTimerRef = useRef(null)
@@ -1821,7 +1818,7 @@ export function useFluVoiceAssistant({
           participantSpeakerRef: {
             current: { registeredLabel: activeParticipantSpeakerLabel, registeredName: activeParticipantName },
           },
-          isTurnLive: () => ['THINKING', 'SPEAKING'].includes(useIntegrationStore.getState().conversationState),
+          lastRequestRef: lastConversationActionRef,
         },
         payload,
       ),
@@ -3507,7 +3504,6 @@ export function useFluVoiceAssistant({
         })
       }
 
-      lastTurnRequestVerdictRef.current = plan.plan
       if (plan.plan === 'skip') return false
       if (plan.plan === 'dedup') return true
 
