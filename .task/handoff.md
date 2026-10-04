@@ -158,3 +158,29 @@ al prompt, y una frase corta repetida en dos contextos (antes devolvia la respue
 
 REGLAS DE LA SESION: no correr la suite completa sin peticion expresa; validar con el fichero tocado +
 lint + typecheck; el gate es de cierre y se corre UNA vez; ASCII en ficheros del repo (guard de mojibake).
+
+---
+
+## AMPLIACION 2026-10-03 (tarde): escenario aula/casa y arreglos del dia
+
+ESCENARIO DECLARADO POR EL DUENO: salon de clases con muchos ninos, casa con familia y TV. El ruido de fondo
+es el escenario NORMAL, no un caso raro.
+
+CERRADO hoy (ademas de P8.32/P8.33/P8.34 de la manana):
+  P8.28  el saludo/retrato en vez de respuesta. Causa: el historial empezaba por los turnos de FLU del
+         onboarding y el modelo lite se presentaba. Fix en buildConversationMessages (la conversacion abre
+         por el usuario). Commit f7b552a. Verificado con SIMULACION DE ESCRITORIO antes/despues.
+  P8.37  la wake word se exige SIEMPRE (config voiceCommands.requireWakeAlways). Commit 67d8ad9.
+         Verificado con simulacion: 3 frases de ambiente sin wake -> 1 solo contrato (el legitimo).
+
+ABIERTO:
+  P8.38  el ruido sigue abriendo FILA por el camino de stream/preview (3 de 3). Siguiente paso: instrumentar
+         el escritor del stream y cortar ahi.
+  P8.36  el turno del usuario se duplica en conversacion activa (1 turno -> 2 filas). Medido; falta capturar
+         una frase con la escritura de la fila instrumentada para elegir el arreglo (turnId/replaceLastRawLog).
+  P8.35  tests/fluTrace.test.ts pasa aislado y falla en el lote del dod -> `npm run gate` en ROJO por ahi.
+  P8.31  src/core/media/musicActions.ts sin spec en e2eScope.
+
+BANCO DE SIMULACION (fuera del repo, en %TEMP%\flu-repro): sim-desktop.cjs, sim-ingress3.cjs (reconoce el
+reparto de filas), sim-aula.cjs (ESCENARIO aula/casa: conversacion activa + frases de ambiente).
+Sonda del proxy: FLU_CONTRACT_TRACE=1 (apagada por defecto) escribe el cuerpo REAL de cada turno en el log.
