@@ -594,7 +594,7 @@
   "maxFiles": 504,
   "maxLines": 9200,
   "dod": [
-    "npx vitest run --reporter=dot tests/wakeRowNoiseGuard.test.ts tests/conversationStreamCommit.test.ts tests/ingressSimulation.test.ts tests/ingressScenarios.test.ts tests/speechMerge.test.ts tests/transcriptEventConsumer.test.ts"
+    "npx vitest run --reporter=dot tests/wakeRowNoiseGuard.test.ts tests/conversationStreamCommit.test.ts tests/voiceCanonicalPhrase.test.ts tests/ingressSimulation.test.ts tests/ingressScenarios.test.ts tests/speechMerge.test.ts tests/transcriptEventConsumer.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/wakeRowNoiseGuard.test.ts",
   "guardExpect": "green",

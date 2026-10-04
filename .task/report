@@ -3636,3 +3636,40 @@ No validado: la pantalla/voz del usuario (hay que repetir la frase tras recargar
 
 Alcance real (obligatorio, 0.23): CUBIERTO=la asamblea de mensajes que recibe el modelo y su conducta medida
 con el cuerpo real por el proxy; NO CUBIERTO=el DoD-producto, la suite completa y el e2e.
+
+## P8.38 - El ruido de fondo abria fila de conversacion (aula/casa) - 2026-10-03/04
+
+Cambios aplicados: src/voice/lib/conversationStreamCommit.js (el veredicto de wake del mismo analisis del
+turno cierra la UNICA puerta de emision de la fila: emitTurnRow; el ruido sin wake no emite fila, la captura
+mixta conserva su fila pasiva), src/voice/lib/wakeTurnCommit.js (resolveInlineWakeAtCommit devuelve
+wakeWordMatched: un solo analisis, no un segundo criterio), tests/wakeRowNoiseGuard.test.ts (guard nuevo, en
+lint:guards y en el dod), tests/conversationStreamCommit.test.ts (fija requireWakeAlways=false: mide la
+semantica del stream, no la politica), package.json, .task/contract.json.
+
+Validado contra:
+  - MEDIDO (traza de los DOS escritores del store, Playwright sobre la app viva,
+    %TEMP%\flu-repro\sim-aula-trace.cjs: envuelve addConversationEntry/batchLoadHistory y captura la pila),
+    ANTES: las 3 frases de ambiente (sin wake) entraban como filas de usuario (3 de 3, "Hablante 1") por el
+    COMMIT del stream (handleConversationStreamSync -> emitConversationLog(turnCommit, rawOnly) ->
+    commitUserTurnRow); el preview (turnCommit:false) NO emite log y el camino de RECHAZO del hook no la
+    escribe (cuando llega ahi, la fila ya existe: por eso la "segunda mitad" de P8.37 no cambio el resultado).
+  - DESPUES (mismo banco, comando reproducible): filas nacidas del AMBIENTE 0 de 3; contratos a la IA 1 (sin
+    cambio, el legitimo); filas totales 6 -> 2.
+  - Guard RED medido sobre el src de base (git checkout 4f30771 -- los 2 src, run, restore): 3 casos rojos
+    ("expected spy to not be called at all, but actually been called 1 times") de 6; VERDE en el arbol actual.
+    Prueba de detector: la MISMA captura con y sin wake discrimina (0 vs 1), y con requireWakeAlways=false la
+    misma captura si emite (la config no es un cambio silencioso).
+  - Barrera: 176 ficheros / 1446 casos VERDE; tsc y eslint limpios; npm run gate VERDE (DoD + guard +
+    guards base). Baseline de fallos: .task/baseline.json vacio -> 0 fallos nuevos.
+  - npm run e2e:plan: verde ("sin specs que correr"; ningun spec e2e conduce la entrada de voz, asi que no se
+    declara mapeo - no se maquilla).
+
+No validado: el DoD-producto (la pantalla/voz del dueno), la suite completa (no autorizada) y el e2e completo.
+HUECO DECLARADO: la fila de SESION (dictado/minuta) del ruido sigue recibiendolo: se dejo INTACTA a proposito
+(es la via del dictado; el defecto reportado es la fila de conversacion). El eco de ambientes sin conversacion
+activa (escucha pasiva) tambien se deja igual (requireWakeAlways=false / sin conversacion activa).
+
+Alcance real (obligatorio, 0.23): CUBIERTO=la emision de la fila de conversacion del ruido de fondo en
+conversacion activa, medido en la app real y con guard de conducta en el gate; NO CUBIERTO=el DoD-producto, la
+fila de sesion/dictado del ruido (declarada), el eco sin conversacion activa, y la suite completa/e2e.
+

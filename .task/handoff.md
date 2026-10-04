@@ -184,3 +184,35 @@ ABIERTO:
 BANCO DE SIMULACION (fuera del repo, en %TEMP%\flu-repro): sim-desktop.cjs, sim-ingress3.cjs (reconoce el
 reparto de filas), sim-aula.cjs (ESCENARIO aula/casa: conversacion activa + frases de ambiente).
 Sonda del proxy: FLU_CONTRACT_TRACE=1 (apagada por defecto) escribe el cuerpo REAL de cada turno en el log.
+
+---
+
+## CIERRE 2026-10-04 (P8.38 cerrado; P8.36 con medicion nueva)
+
+Rama feature/auditoria-codigo-unificaciones-01. Briefing: `npm run brief`.
+
+CERRADO: P8.38 (commit ea76fa0) - con la wake exigida siempre, el ruido de fondo ya NO abre fila de
+conversacion. Medido con la traza de los DOS escritores del store (banco
+%TEMP%\flu-repro\sim-aula-trace.cjs): la fila la escribia el COMMIT del stream
+(handleConversationStreamSync -> emitConversationLog -> commitUserTurnRow), no el preview ni el camino de
+rechazo. Fix: emitTurnRow (unica puerta de emision) se cierra cuando requireWakeAlways y la captura no lleva
+wake, con el veredicto del MISMO analisis del turno (resolveInlineWakeAtCommit.wakeWordMatched). Banco: filas
+del AMBIENTE 3 de 3 -> 0 de 3; filas totales 6 -> 2. Guard tests/wakeRowNoiseGuard.test.ts (lint:guards + dod),
+RED medido contra el src de base y VERDE ahora. Gate VERDE. Contrato SIN `invariant` (declarado: la propiedad
+es un 0 de conducta, no hay N->1 en src que medir; AGENTS 7.7.e(3)) con base 4f30771.
+
+MEDICION NUEVA sobre P8.36 (duplicacion del turno del usuario): en el banco, la frase legitima llegaba DOS
+veces (hablante vacio + "Hablante 1") por el camino de emision del stream; con el fix de P8.38 la duplicacion
+DESAPARECIO del banco (6 -> 2 filas). Falta decidir si el defecto que reporto el dueno por voz (19:06-19:26)
+es este mismo o tiene otro disparador: el metodo es la instrumentacion puntual de los dos escritores
+(addConversationEntry / batchLoadHistory) ya escrita en el banco.
+
+ABIERTO (3): P8.31 (musicActions sin spec en e2eScope), P8.35 (fluTrace pasa aislado y falla en el lote del
+dod), P8.36 (ver arriba).
+
+PENDIENTE DEL DUENO (DoD-producto): repetir el escenario aula/casa en su pantalla (la fila de ruido ya no
+deberia aparecer) y, si quiere, decidir si el dictado/minuta (fila de sesion) tambien debe filtrar el ruido.
+
+REGLAS DE LA SESION: no correr la suite completa sin peticion expresa; validar con el fichero tocado + lint +
+typecheck; el gate es de cierre y se corre UNA vez; ASCII en ficheros del repo.
+
