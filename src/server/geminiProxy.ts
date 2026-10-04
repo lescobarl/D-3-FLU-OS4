@@ -16,6 +16,24 @@
 // ============================================================
 
 import type { IncomingMessage, ServerResponse } from 'http';
+import { appendFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+/**
+ * Imprime la entrada del relay y la ANEXA a `debug.log` (fichero LIMPIABLE: se trunca
+ * al arrancar el server). Es diagnostico: si la escritura falla, se registra y no
+ * tumba el relay.
+ */
+function writeClientLogLine(file: string | null, line: string, data: unknown): void {
+    if (data !== undefined) console.info(line, data);
+    else console.info(line);
+    if (!file) return;
+    try {
+        appendFileSync(file, line + '\n');
+    } catch (err: unknown) {
+        logCaughtError('[geminiProxy] client log: fallo al escribir debug.log', errorField(err, 'message') || err);
+    }
+}
 import { sendJson, type MiddlewareHost } from './httpJson';
 import { logCaughtError } from '../lib/caughtError';
 import {
@@ -827,6 +845,14 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
             });
             // POST /__flu_client_log — Frontend log relay (BunnyViewer, avatar, etc.)
             // Roo (assistant) reads these from the server terminal to debug without browser access.
+            let clientLogFile: string | null = null;
+            try {
+                clientLogFile = resolve(process.cwd(), 'debug.log');
+                writeFileSync(clientLogFile, '');
+            } catch (err: unknown) {
+                clientLogFile = null;
+                logCaughtError('[geminiProxy] client log: no se pudo abrir debug.log', errorField(err, 'message') || err);
+            }
             server.middlewares.use('/__flu_client_log', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {
@@ -841,9 +867,9 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                         const ts = new Date().toISOString().slice(11, 23);
                         const safeMessage = message ?? '';
                         if (data !== undefined) {
-                            console.info(`[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`, data);
+                        writeClientLogLine(clientLogFile, `[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`, data);
                         } else {
-                            console.info(`[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`);
+                            writeClientLogLine(clientLogFile, `[flu-client ${ts}] ${level ?? 'info'} ${tag ?? ''} ${safeMessage}`, undefined);
                         }
                     }
                 } catch (err: unknown) {
