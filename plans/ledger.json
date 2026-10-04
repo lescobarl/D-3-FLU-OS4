@@ -1330,6 +1330,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-03 como MEDICION (AGENTS 7.7.e): no habia reduccion posible, habia que clasificar. VEREDICTO: los dos pares son HOMONIMOS LEGITIMOS (mismo nombre, REGLA DISTINTA), no ruta doble; 0 cambios en src. Tabla por simbolo (leidos los 4 cuerpos con su firma): 1) cleanLabel (src/core/deviceActions/deviceActionIntentParser.ts:113) = normaliza el label de un CONTACTO:    colapsa espacios, quita cortesia final (\"por favor\"/\"please\") y la puntuacion final; PRIVADA (no exportada). 2) cleanLabel (src/core/reminders/shoppingIntentParser.ts:44) = colapsa espacios y recorta el item de la LISTA    DE COMPRAS; PRIVADA. Es un subconjunto estricto del anterior y NO comparte el regex de cortesia:    son dos reglas de limpieza distintas para dominios distintos. 3) pickLabel (src/core/selfKnowledge/selfKnowledge.ts:128) = elige es/en NO VACIOS con fallback y devuelve    {labelEs,labelEn}; PRIVADA. 4) pickLabel (src/lib/textUtils.ts:93) = resuelve un rotulo bilingue segun el IDIOMA ACTIVO (dueno unico ya    declarado: \"antes existian 4 copias locales\"); EXPORTADA. Comando reproducible: node scripts/auditoria-codigo.mjs (senal \"homonimos\") + leer los 4 sitios. Los otros 6 homonimos del informe (flush, resetTurn, toUI, scheduleIdle, sourceLabel, runMainThreadFallback) son nombres genericos en dominios distintos. Sin barrera nueva: no hay regla que unificar.",
       "origen": "revision-2026-10-03"
+    },
+    {
+      "id": "P8.35",
+      "titulo": "tests/fluTrace.test.ts pasa en aislado y falla dentro del lote del dod (interferencia entre tests)",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-03 (hallazgo de la barrera de CIERRE, npm run gate). El comando DoD del contrato FALLO en tests/fluTrace.test.ts:345 (`expect(cuerpos()[1].events).toEqual([])`) con una rafaga de ~800 eventos en el mismo ms, mientras la MISMA prueba en aislado da 25/25 verdes (medido: npx vitest run tests/fluTrace.test.ts -> 1 passed). NO es de esta sesion: ese test importa SOLO src/voice/lib/fluTrace.js y src/core/storage/localStore.js (ni el hook ni contractParams.js), asi que el cambio de R3 no puede tocarlo; la firma es interferencia entre tests cuando el lote del dod corre junto (estado global del relay / temporizador que sobrevive entre ficheros). Cerrarlo pide reproducir el orden que lo dispara (correr el dod en el mismo worker) y aislar el estado global; hasta entonces es DEUDA declarada, no se maquilla ni se usa como excusa.",
+      "origen": "gate-2026-10-03"
     }
   ],
   "done": [
