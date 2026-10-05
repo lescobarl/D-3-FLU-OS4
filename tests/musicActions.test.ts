@@ -8,7 +8,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest'
 
-import { MUSIC_ACTIONS, asMusicAction, resolveMusicControl } from '../src/core/media/musicActions'
+import { MUSIC_ACTIONS, asMusicAction, resolveMusicIntent } from '../src/core/media/musicActions'
 
 describe('MUSIC_ACTIONS - conjunto admitido de acciones de musica', () => {
   it('contiene exactamente reproducir, pausar y detener', () => {
@@ -69,26 +69,32 @@ describe('asMusicAction - normaliza el valor crudo del contrato', () => {
   })
 })
 
-describe('resolveMusicControl - CONDUCTA de la tabla de control (P8.53 + P8.54)', () => {
+describe('resolveMusicIntent - CONDUCTA del vocabulario de musica (P8.53/P8.54/P8.56)', () => {
   it('el marco por SUBCADENA lleva su objeto: "para/deten/apaga la musica" detiene', () => {
     for (const frase of ['para la musica', 'deten la musica', 'apaga la musica', 'quita la musica']) {
-      expect(resolveMusicControl(frase), frase).toBe('stop_music')
+      expect(resolveMusicIntent(frase), frase).toEqual({ accion: 'stop_music' })
     }
-    expect(resolveMusicControl('pausa la musica')).toBe('pause_music')
+    expect(resolveMusicIntent('pausa la musica')).toEqual({ accion: 'pause_music' })
   })
 
   it('la palabra SUELTA "alto"/"stop" detiene solo si el mandato ENTERO es la palabra', () => {
     for (const frase of ['alto', 'Alto', 'stop', 'stop.']) {
-      expect(resolveMusicControl(frase), frase).toBe('stop_music')
+      expect(resolveMusicIntent(frase), frase).toEqual({ accion: 'stop_music' })
     }
     for (const frase of ['habla mas alto', 'el arbol es alto', 'salto', 'un salto alto']) {
-      expect(resolveMusicControl(frase), frase).toBeNull()
+      expect(resolveMusicIntent(frase), frase).toBeNull()
     }
   })
 
-  it('una PETICION de reproduccion no es un control', () => {
-    for (const frase of ['pon musica', 'ponme una cancion', 'reproduce la cancion']) {
-      expect(resolveMusicControl(frase), frase).toBeNull()
+  it('la REPRODUCCION nombra la cancion cuando el mandato la trae', () => {
+    expect(resolveMusicIntent('canta la cancion de las mananitas')).toEqual({ accion: 'play_music', cancion: 'las mananitas' })
+    expect(resolveMusicIntent('pon musica relajante')).toEqual({ accion: 'play_music', cancion: 'relajante' })
+    expect(resolveMusicIntent('reproduce la cancion')).toEqual({ accion: 'play_music' })
+  })
+
+  it('sin OBJETO de musica no hay peticion (ni "pon la mesa" ni la LOTERIA "canta otra")', () => {
+    for (const frase of ['pon la mesa', 'dame agua', 'toca la guitarra', 'canta otra']) {
+      expect(resolveMusicIntent(frase), frase).toBeNull()
     }
   })
 })

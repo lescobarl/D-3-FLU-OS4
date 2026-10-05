@@ -94,7 +94,7 @@ import {
   sealPendingInterim,
   syncSpeakerIndexFromLabel,
 } from '../lib/activeListen.js'
-import { buildResolvedContract } from '../lib/resolvedContract.js'
+import { buildResolvedContract, estadoFastPathIdempotente } from '../lib/resolvedContract.js'
 import {
   acquireSpeechRecognition,
   startSpeechRecognition,
@@ -3065,17 +3065,17 @@ export function useFluVoiceAssistant({
       intent,
       { speakerName = null, speakerAlias = null, phase = 'SESION_ACTIVA', session = null, language = null, transcript = '', timestamp = '' } = {},
     ) => {
-      const isMusicControl = Boolean(intent?.accion) && !intent?.tipo
-      if (!intent?.tipo && !isMusicControl) return null
+      const isMusicAction = Boolean(intent?.accion) && !intent?.tipo
+      if (!intent?.tipo && !isMusicAction) return null
       await onContractResolved?.({
         contract: {
           respuesta_voz: '',
           navegacion: { comando: null, destino: null, parametros: {} },
           workspace: null,
-          musica: isMusicControl ? { accion: intent.accion } : null,
+          musica: isMusicAction ? { accion: intent.accion, ...(intent.cancion ? { cancion: intent.cancion } : {}) } : null,
           configuracion: null,
           juego: null,
-          ambiente: isMusicControl ? null : intent,
+          ambiente: isMusicAction ? null : intent,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
         diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
@@ -3088,7 +3088,7 @@ export function useFluVoiceAssistant({
         timestamp,
         signature: null,
         language,
-        fastPathEnvironment: !isMusicControl,
+        fastPathEnvironment: !isMusicAction,
       })
       return intent
     },
@@ -3978,27 +3978,12 @@ export function useFluVoiceAssistant({
         // Reconciliar el orador diarizado (ya resuelto en paralelo) antes de persistir.
         const { resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
 
+        // Idempotencia fast-path (configuracion/juego/ambiente/musica): su regla tiene UN
+        // dueno (resolvedContract.estadoFastPathIdempotente); NO se copia aqui.
         const finalContract = {
           ...contract.contract,
           respuesta_voz: contract.contract.respuesta_voz,
-          // Idempotencia fast-path: si el fast-path ya aplicó la configuración,
-          // se anula la del contrato tardío para NO duplicar el efecto.
-          configuracion:
-            fastPathConfig?.accion
-              ? null
-              : lateStateful.config?.accion
-                ? lateStateful.config
-                : contract?.contract?.configuracion,
-          // Idempotencia de juego: si el fast-path de juego ya despachó (start),
-          // se anula el `juego` del contrato tardío para NO duplicar el arranque.
-          juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
-          // Idempotencia de ambiente: si el fast-path ya aplicó el rebranding, se
-          // anula el `ambiente` del contrato tardío para NO duplicar el efecto.
-          ambiente: fastEnv?.tipo
-            ? null
-            : lateStateful.env?.tipo
-              ? lateStateful.env
-              : contract?.contract?.ambiente ?? null,
+          ...estadoFastPathIdempotente({ fastPathConfig, fastGame, fastEnv, lateStateful, contract }),
         }
 
         setLastContract(finalContract)
@@ -4149,24 +4134,7 @@ export function useFluVoiceAssistant({
           },
         },
         respuesta_voz: contract.contract.respuesta_voz,
-        // Idempotencia fast-path: si el fast-path ya aplicó la configuración,
-        // se anula la del contrato tardío para NO duplicar el efecto.
-        configuracion:
-          fastPathConfig?.accion
-            ? null
-            : lateStateful.config?.accion
-              ? lateStateful.config
-              : contract?.contract?.configuracion,
-        // Idempotencia de juego: si el fast-path de juego ya despachó (turn/end),
-        // se anula el `juego` del contrato tardío para NO duplicar el efecto.
-        juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
-        // Idempotencia de ambiente: si el fast-path ya aplicó el rebranding, se anula
-        // el `ambiente` del contrato tardío para NO duplicar el efecto.
-        ambiente: fastEnv?.tipo
-          ? null
-          : lateStateful.env?.tipo
-            ? lateStateful.env
-            : contract?.contract?.ambiente ?? null,
+        ...estadoFastPathIdempotente({ fastPathConfig, fastGame, fastEnv, lateStateful, contract }),
       }
 
       setLastContract(resolvedContract)

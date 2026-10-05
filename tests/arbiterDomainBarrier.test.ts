@@ -22,6 +22,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDeterministicCommand, resolveStatefulDomains } from '../src/voice/lib/deterministicArbiter'
 import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands'
+import { buildResolvedContract } from '../src/voice/lib/resolvedContract'
 import { resolveAgendaDomainIntent } from '../src/core/agenda/domainScopedIntent'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
@@ -194,7 +195,7 @@ describe('arbiterDomainBarrier — crear exige hora explícita (no se inventa)',
 })
 
 // P8.53 - CONTROL DE MUSICA: la accion la ejecuta su dueno (no el LLM).
-describe('P8.53 - "para/deten/pausa la musica" resuelve la ACCION de musica', () => {
+describe('P8.53 - "para/deten/pausa la musica" resuelve la ACCION (dueno determinista)', () => {
   const controles: Array<[string, string]> = [
     ['para la música', 'stop_music'],
     ['detén la música', 'stop_music'],
@@ -209,32 +210,32 @@ describe('P8.53 - "para/deten/pausa la musica" resuelve la ACCION de musica', ()
     }
   })
 
-  it('una PETICION de reproduccion NO es un control (sigue por el carril del LLM)', () => {
+  it('una PETICION de reproduccion NO se resuelve como parada (son acciones distintas)', () => {
     for (const frase of ['pon música', 'ponme una canción', 'reproduce la canción']) {
-      expect(resolveStatefulDomains(frase).music, frase).toBeNull()
+      expect(resolveStatefulDomains(frase).music?.accion, frase).toBe('play_music')
     }
   })
 
   it('el detector no es decorativo: distingue el control de la reproduccion', () => {
     expect(resolveStatefulDomains('detén la música').music).toEqual({ accion: 'stop_music' })
     expect(resolveStatefulDomains('pausa la música').music).toEqual({ accion: 'pause_music' })
-    expect(resolveStatefulDomains('reproduce la canción').music).toBeNull()
+    expect(resolveStatefulDomains('reproduce la canción').music?.accion).toBe('play_music')
   })
 })
 
 // P8.54 — PALABRA SUELTA DE PARADA: el mandato ENTERO es "alto"/"stop".
 // Defecto del dueño (log 19:32): "okay flow alto" → el LLM respondió "Alto." y la
 // música SIGUIÓ. "alto" es AMBIGUA ("habla más alto"), así que solo cuenta cuando el
-// mandato entero es la palabra; dentro de otra frase NO detiene nada.
+// mandato entero es la palabra (opcionalmente con el objeto de la música).
 describe('P8.54 - "alto"/"stop" a secas DETIENEN la musica (mandato entero, no subcadena)', () => {
-  it('el fast-path devuelve stop_music para la palabra suelta', () => {
-    for (const frase of ['alto', 'Alto', '¡Alto!', 'alto.', 'stop', 'STOP!']) {
+  it('el fast-path devuelve stop_music para la palabra suelta (con o sin objeto)', () => {
+    for (const frase of ['alto', 'Alto', '¡Alto!', 'alto.', 'stop', 'STOP!', 'alto a la música', '¡alto la música!']) {
       expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion: 'stop_music' })
     }
   })
 
   it('la palabra DENTRO de otra frase NO detiene nada (ambiguedad conservada)', () => {
-    for (const frase of ['habla mas alto', 'el arbol es alto', 'salto', 'un salto alto', 'pon musica alta', 'alto al juego']) {
+    for (const frase of ['habla mas alto', 'el arbol es alto', 'salto', 'un salto alto', 'alto al juego']) {
       expect(resolveStatefulDomains(frase).music, frase).toBeNull()
     }
   })
@@ -248,5 +249,57 @@ describe('P8.54 - "alto"/"stop" a secas DETIENEN la musica (mandato entero, no s
     conLoteriaActiva(() => {
       expect(resolveGameCommandFromText('alto', {})?.action).toBe('end')
     })
+  })
+})
+
+// P8.56 — REPRODUCCION con dueno determinista. Defecto medido (log del dueño 19:33):
+// "canta la cancion de Las mananitas" con música sonando → FLU contestó "Claro,
+// poniendo Las Mananitas" y NO emitió el campo 'musica' (ninguna linea [Musica]
+// play_music en el relay). Aqui la accion la resuelve su dueno, no el modelo.
+describe('P8.56 - reproducir una cancion lo resuelve su dueno (no depende del LLM)', () => {
+  it('"canta la cancion de X" / "pon una cancion de X" traen el NOMBRE', () => {
+    expect(resolveStatefulDomains('canta la canción de Las mañanitas').music).toEqual({ accion: 'play_music', cancion: 'las mananitas' })
+    expect(resolveStatefulDomains('ponme una canción de cuna').music).toEqual({ accion: 'play_music', cancion: 'cuna' })
+    expect(resolveStatefulDomains('pon música relajante').music).toEqual({ accion: 'play_music', cancion: 'relajante' })
+  })
+
+  it('sin cancion concreta la pista la elige el catalogo (accion sin nombre)', () => {
+    for (const frase of ['pon música', 'reproduce la canción', 'quiero escuchar música']) {
+      expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion: 'play_music' })
+    }
+  })
+
+  it('no se lleva por delante lo que NO es musica, ni la orden de la LOTERIA ("canta otra")', () => {
+    for (const frase of ['pon la mesa', 'dame agua', 'toca la guitarra', 'canta otra']) {
+      expect(resolveStatefulDomains(frase).music, frase).toBeNull()
+    }
+    conLoteriaActiva(() => {
+      expect(resolveGameCommandFromText('canta otra', {})?.action, 'la loteria conserva su orden').toBe('turn')
+    })
+  })
+
+  it('UN SOLO DUENO del turno: el contrato resuelto anula la musica del modelo si el determinista ya la resolvio', () => {
+    const delModelo = { contract: { respuesta_voz: 'ok', musica: { accion: 'play_music', cancion: 'otra' } } }
+    const resuelto = buildResolvedContract({
+      contract: delModelo,
+      lateStateful: resolveStatefulDomains('alto', { language: 'es' }),
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(resuelto.musica).toBeNull()
+    const sinDeterminista = buildResolvedContract({
+      contract: delModelo,
+      lateStateful: { config: null, game: null, env: null, music: null },
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(sinDeterminista.musica).toEqual({ accion: 'play_music', cancion: 'otra' })
+  })
+
+  it('el detector no es decorativo: el dueno resuelve la accion y su nombre', () => {
+    expect(resolveStatefulDomains('canta la canción de Las mañanitas').music?.cancion).toBe('las mananitas')
+    expect(resolveStatefulDomains('alto').music).toEqual({ accion: 'stop_music' })
   })
 })
