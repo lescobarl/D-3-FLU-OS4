@@ -191,3 +191,32 @@ describe('arbiterDomainBarrier — crear exige hora explícita (no se inventa)',
     expect((conHora?.action as { trigger?: unknown })?.trigger).toBeTruthy()
   })
 })
+
+// P8.53 - CONTROL DE MUSICA: la accion la ejecuta su dueno (no el LLM).
+describe('P8.53 - "para/deten/pausa la musica" resuelve la ACCION de musica', () => {
+  const controles: Array<[string, string]> = [
+    ['para la música', 'stop_music'],
+    ['detén la música', 'stop_music'],
+    ['apaga la música', 'stop_music'],
+    ['quita la música', 'stop_music'],
+    ['pausa la música', 'pause_music'],
+  ]
+
+  it('el fast-path devuelve la accion concreta (misma forma que los otros dominios)', () => {
+    for (const [frase, accion] of controles) {
+      expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion })
+    }
+  })
+
+  it('una PETICION de reproduccion NO es un control (sigue por el carril del LLM)', () => {
+    for (const frase of ['pon música', 'ponme una canción', 'reproduce la canción']) {
+      expect(resolveStatefulDomains(frase).music, frase).toBeNull()
+    }
+  })
+
+  it('el detector no es decorativo: distingue el control de la reproduccion', () => {
+    expect(resolveStatefulDomains('detén la música').music).toEqual({ accion: 'stop_music' })
+    expect(resolveStatefulDomains('pausa la música').music).toEqual({ accion: 'pause_music' })
+    expect(resolveStatefulDomains('reproduce la canción').music).toBeNull()
+  })
+})
