@@ -3906,3 +3906,21 @@ No validado: su pantalla (DoD-producto), mastery real por destreza, repaso, pron
 
 Alcance real (0.23): CUBIERTO=el nivel por bandas aprobadas en voz y documento; NO CUBIERTO=mastery real,
 repaso/pronunciacion, el DoD-producto y la suite completa.
+
+## P8.62 - Cierre del hueco E2E declarado (fluDatabase.ts + capabilities.ts) - 2026-10-05
+
+Cambios aplicados: e2eScope del contrato (2 ficheros) con la cobertura MEDIDA; ledger.
+
+Medicion: fluDatabase.ts -> sesion-un-solo-almacen + tutoria-avance (tiendas reales Dexie);
+capabilities.ts -> voz-locucion-unica + tts-flag-pegado (turnos de voz REALES que llegan al
+proxy y construyen el prompt con buildCapabilitiesPrompt antes de la compuerta de apiKey).
+
+Validado contra:
+  - npm run e2e:plan VERDE (0 ficheros sin declarar).
+  - Barrera npm run lint 180 ficheros / 1534 casos VERDE; tsc -b limpio; npm run gate VERDE.
+
+No validado: una asercion del TEXTO del prompt en el modelo (los specs stubean/inyectan),
+su pantalla (DoD-producto) y la suite completa.
+
+Alcance real (0.23): CUBIERTO=la declaracion e2e medida de los dos ficheros; NO CUBIERTO=la
+asercion del texto del prompt, el DoD-producto y la suite completa.
