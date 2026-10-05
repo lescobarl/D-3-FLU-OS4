@@ -8,7 +8,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest'
 
-import { MUSIC_ACTIONS, asMusicAction } from '../src/core/media/musicActions'
+import { MUSIC_ACTIONS, asMusicAction, resolveMusicControl } from '../src/core/media/musicActions'
 
 describe('MUSIC_ACTIONS - conjunto admitido de acciones de musica', () => {
   it('contiene exactamente reproducir, pausar y detener', () => {
@@ -65,6 +65,30 @@ describe('asMusicAction - normaliza el valor crudo del contrato', () => {
   it('lo aceptado siempre pertenece a MUSIC_ACTIONS (coherencia tipo/valor)', () => {
     for (const accion of MUSIC_ACTIONS) {
       expect(MUSIC_ACTIONS as readonly string[]).toContain(asMusicAction(accion))
+    }
+  })
+})
+
+describe('resolveMusicControl - CONDUCTA de la tabla de control (P8.53 + P8.54)', () => {
+  it('el marco por SUBCADENA lleva su objeto: "para/deten/apaga la musica" detiene', () => {
+    for (const frase of ['para la musica', 'deten la musica', 'apaga la musica', 'quita la musica']) {
+      expect(resolveMusicControl(frase), frase).toBe('stop_music')
+    }
+    expect(resolveMusicControl('pausa la musica')).toBe('pause_music')
+  })
+
+  it('la palabra SUELTA "alto"/"stop" detiene solo si el mandato ENTERO es la palabra', () => {
+    for (const frase of ['alto', 'Alto', 'stop', 'stop.']) {
+      expect(resolveMusicControl(frase), frase).toBe('stop_music')
+    }
+    for (const frase of ['habla mas alto', 'el arbol es alto', 'salto', 'un salto alto']) {
+      expect(resolveMusicControl(frase), frase).toBeNull()
+    }
+  })
+
+  it('una PETICION de reproduccion no es un control', () => {
+    for (const frase of ['pon musica', 'ponme una cancion', 'reproduce la cancion']) {
+      expect(resolveMusicControl(frase), frase).toBeNull()
     }
   })
 })

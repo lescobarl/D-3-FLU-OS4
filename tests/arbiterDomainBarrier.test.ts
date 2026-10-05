@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { resolveDeterministicCommand, resolveStatefulDomains } from '../src/voice/lib/deterministicArbiter'
+import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands'
 import { resolveAgendaDomainIntent } from '../src/core/agenda/domainScopedIntent'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
@@ -218,5 +219,34 @@ describe('P8.53 - "para/deten/pausa la musica" resuelve la ACCION de musica', ()
     expect(resolveStatefulDomains('detén la música').music).toEqual({ accion: 'stop_music' })
     expect(resolveStatefulDomains('pausa la música').music).toEqual({ accion: 'pause_music' })
     expect(resolveStatefulDomains('reproduce la canción').music).toBeNull()
+  })
+})
+
+// P8.54 — PALABRA SUELTA DE PARADA: el mandato ENTERO es "alto"/"stop".
+// Defecto del dueño (log 19:32): "okay flow alto" → el LLM respondió "Alto." y la
+// música SIGUIÓ. "alto" es AMBIGUA ("habla más alto"), así que solo cuenta cuando el
+// mandato entero es la palabra; dentro de otra frase NO detiene nada.
+describe('P8.54 - "alto"/"stop" a secas DETIENEN la musica (mandato entero, no subcadena)', () => {
+  it('el fast-path devuelve stop_music para la palabra suelta', () => {
+    for (const frase of ['alto', 'Alto', '¡Alto!', 'alto.', 'stop', 'STOP!']) {
+      expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion: 'stop_music' })
+    }
+  })
+
+  it('la palabra DENTRO de otra frase NO detiene nada (ambiguedad conservada)', () => {
+    for (const frase of ['habla mas alto', 'el arbol es alto', 'salto', 'un salto alto', 'pon musica alta', 'alto al juego']) {
+      expect(resolveStatefulDomains(frase).music, frase).toBeNull()
+    }
+  })
+
+  it('el detector no es decorativo: la palabra suelta dispara y dentro de frase no', () => {
+    expect(resolveStatefulDomains('alto').music).toEqual({ accion: 'stop_music' })
+    expect(resolveStatefulDomains('y un salto alto').music).toBeNull()
+  })
+
+  it('NO le roba la salida de partida a su dueno: con partida activa "alto" cierra la partida', () => {
+    conLoteriaActiva(() => {
+      expect(resolveGameCommandFromText('alto', {})?.action).toBe('end')
+    })
   })
 })
