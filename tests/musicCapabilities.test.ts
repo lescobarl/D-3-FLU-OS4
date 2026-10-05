@@ -298,13 +298,14 @@ describe('musicPlayer — playSong (catálogo → en línea → not_found honest
 });
 
 describe('capabilities — catálogo honesto', () => {
-    test('FLU_CAPABILITIES expone 8 capacidades y CAPABILITY_IDS coincide', () => {
-        expect(FLU_CAPABILITIES).toHaveLength(9);
+    test('FLU_CAPABILITIES expone 10 capacidades y CAPABILITY_IDS coincide', () => {
+        expect(FLU_CAPABILITIES).toHaveLength(10);
         expect(CAPABILITY_IDS).toEqual(FLU_CAPABILITIES.map((c) => c.id));
         expect(CAPABILITY_IDS).toContain('play_music');
         expect(CAPABILITY_IDS).toContain('buscar_cancion');
         expect(CAPABILITY_IDS).toContain('acciones');
         expect(CAPABILITY_IDS).toContain('juego');
+        expect(CAPABILITY_IDS).toContain('tutoria');
     });
 
     test('buildCapabilitiesPrompt(es) lista play_music, todo el playlist y la guardia de honestidad', () => {
