@@ -3960,3 +3960,24 @@ No validado: el repaso espaciado, la evaluacion de pronunciacion, su pantalla (D
 
 Alcance real (0.23): CUBIERTO=la vista global en local con guard y simulacion real; NO CUBIERTO=repaso,
 pronunciacion, DoD-producto y suite completa.
+
+## P8.65 - Juego de pronunciacion (repite una palabra y se acredita) - 2026-10-05
+
+Decision del agente: juego nuevo del catalogo (la via del repo), sin tocar el god-file.
+El motor enuncia una palabra y acredita la repeticion comparando la transcripcion del ASR
+con el objetivo (exacto por token o Levenshtein <= 1), determinista y tolerante.
+
+Cambios aplicados: src/core/games/pronunciacion.ts (motor + banco + COMMAND_FRAMES);
+types.ts/GAME_IDS/GAME_CATALOG registran el id; tests/pronunciacion.test.ts (+7 casos, guard);
+tests/selfKnowledge.test.ts sube el trinquete 21 -> 22 juegos.
+
+Validado contra:
+  - Guard: tests/pronunciacion.test.ts NACE ROJO (modulo inexistente) y queda 7/7.
+  - Guards de juegos auto-derivados: 14 ficheros / 422 casos VERDE (matriz G1-G7, playthrough, etc.).
+  - Barrera npm run lint 180 ficheros / 1545 casos VERDE; tsc -b limpio; npm run gate VERDE; e2e:plan VERDE.
+
+No validado: que el ASR real transcriba bien en su pantalla (DoD-producto), un banco configurable
+por idioma/nivel (hoy fijo) y la suite completa.
+
+Alcance real (0.23): CUBIERTO=el juego de pronunciacion con guard propio y con los guards del catalogo;
+NO CUBIERTO=la transcripcion real del ASR en pantalla, banco configurable y suite completa.
