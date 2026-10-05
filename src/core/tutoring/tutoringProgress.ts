@@ -36,14 +36,20 @@ export interface TutoringProgress {
     sesiones: number;
     /** Lo trabajado en cada sesion (resumen), sin repetir. */
     practicado: string[];
-    /** Lo que quedo pendiente o para la siguiente sesion, sin repetir. */
+    /** Lo que quedo pendiente o para la siguiente sesion, sin repetir (union). */
     pendientes: string[];
     /** Fecha/etiqueta de la sesion mas reciente (tal como la trae la minuta). */
     ultimaFecha: string;
+    /** Fecha/etiqueta de la sesion mas ANTIGUA (da el rango del avance). */
+    primeraFecha: string;
+    /** Pendientes de la sesion MAS RECIENTE (lo que esta en curso ahora). */
+    enCurso: string[];
+    /** Pendientes de sesiones previas que YA NO figuran en la mas reciente. */
+    anteriores: string[];
 }
 
 function emptyProgress(area: TutoringArea): TutoringProgress {
-    return { area, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '' };
+    return { area, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [] };
 }
 
 function snapshotOf(record: TutoringMinuteLike = {}): TutoringMinuteLike {
@@ -79,6 +85,19 @@ function pushUnique(target: string[], value: string, max = 5): void {
     if (target.length < max) target.push(clean);
 }
 
+/** Pendientes de UNA sesion (pendientes + siguientes pasos), sin repetir. */
+function pendingOf(snapshot: TutoringMinuteLike = {}): string[] {
+    const out: string[] = [];
+    for (const item of snapshot.pendientes || []) pushUnique(out, item);
+    for (const item of snapshot.siguientes_pasos || []) pushUnique(out, item);
+    return out;
+}
+
+/** Fecha/etiqueta de una minuta (tal como la trae; la presenta la capa de voz). */
+function dateOf(snapshot: TutoringMinuteLike = {}): string {
+    return normalizeSpaces(String(snapshot.date || snapshot.historyCode || ''));
+}
+
 /**
  * Avance del area agregando las minutas que la mencionan, EN EL ORDEN RECIBIDO
  * (la mas reciente primero, decision de quien tiene el comparador).
@@ -88,15 +107,28 @@ export function buildTutoringProgress(
     area: TutoringArea,
 ): TutoringProgress {
     const progress = emptyProgress(area);
+    const pendingBySession: string[][] = [];
     for (const record of Array.isArray(records) ? records : []) {
         if (!record || !minuteCoversTutoringArea(record, area)) continue;
         const snapshot = snapshotOf(record);
         progress.sesiones += 1;
         pushUnique(progress.practicado, String(snapshot.resumen || snapshot.titulo || ''));
-        for (const item of snapshot.pendientes || []) pushUnique(progress.pendientes, item);
-        for (const item of snapshot.siguientes_pasos || []) pushUnique(progress.pendientes, item);
-        if (!progress.ultimaFecha) {
-            progress.ultimaFecha = normalizeSpaces(String(snapshot.date || snapshot.historyCode || ''));
+        const sessionPending = pendingOf(snapshot);
+        for (const item of sessionPending) pushUnique(progress.pendientes, item);
+        pendingBySession.push(sessionPending);
+        const fecha = dateOf(snapshot);
+        if (!progress.ultimaFecha) progress.ultimaFecha = fecha;
+        // El orden es mas-reciente-primero: la ultima fecha asignada es la mas antigua.
+        if (fecha) progress.primeraFecha = fecha;
+    }
+    // Avance DERIVADO, sin umbrales inventados: lo pendiente de la sesion MAS
+    // RECIENTE esta EN CURSO; lo que estaba pendiente antes y ya NO figura en la
+    // ultima sesion es lo ANTERIOR (dejo de estar pendiente).
+    progress.enCurso = pendingBySession.length ? [...pendingBySession[0]] : [];
+    const enCursoKey = new Set(progress.enCurso.map((item) => cleanForSpeech(item).toLowerCase()));
+    for (const session of pendingBySession.slice(1)) {
+        for (const item of session) {
+            if (!enCursoKey.has(cleanForSpeech(item).toLowerCase())) pushUnique(progress.anteriores, item);
         }
     }
     return progress;

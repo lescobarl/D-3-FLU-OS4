@@ -683,7 +683,7 @@ export function buildTutoringProgressSpeech(
     { language = 'es' }: { language?: string } = {},
 ): string {
     const isEnglish = language === 'en';
-    const { area, sesiones, practicado, pendientes, ultimaFecha } = progress;
+    const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha } = progress;
     if (!sesiones) {
         return cleanForSpeech(
             isEnglish
@@ -692,20 +692,25 @@ export function buildTutoringProgressSpeech(
         );
     }
     const parts: string[] = [];
+    const rangoDesde = (desde: string): string =>
+        (isEnglish ? ' since ' : ' desde el ') + tutoringDateLabel(desde, isEnglish ? 'en' : 'es');
+    const rangoSuffix = primeraFecha && primeraFecha !== ultimaFecha ? rangoDesde(primeraFecha) : '';
     if (isEnglish) {
         parts.push(
-            `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${ultimaFecha ? `, the latest on ${tutoringDateLabel(ultimaFecha, 'en')}` : ''}.`,
+            `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${rangoSuffix}${ultimaFecha ? `, the latest on ${tutoringDateLabel(ultimaFecha, 'en')}` : ''}.`,
         );
         if (practicado.length) parts.push(`Worked on: ${joinSpeechItems(practicado)}.`);
-        if (pendientes.length) parts.push(`Next: ${joinSpeechItems(pendientes)}.`);
+        if (enCurso.length) parts.push(`In progress: ${joinSpeechItems(enCurso)}.`);
         else parts.push('Nothing pending: let us move to the next step.');
+        if (anteriores.length) parts.push(`No longer pending: ${joinSpeechItems(anteriores)}.`);
     } else {
         parts.push(
-            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${ultimaFecha ? `, la última el ${tutoringDateLabel(ultimaFecha, 'es')}` : ''}.`,
+            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${rangoSuffix}${ultimaFecha ? `, la última el ${tutoringDateLabel(ultimaFecha, 'es')}` : ''}.`,
         );
         if (practicado.length) parts.push(`Trabajado: ${joinSpeechItems(practicado)}.`);
-        if (pendientes.length) parts.push(`Pendiente: ${joinSpeechItems(pendientes)}.`);
+        if (enCurso.length) parts.push(`En curso: ${joinSpeechItems(enCurso)}.`);
         else parts.push('Sin pendientes: pasemos al siguiente paso.');
+        if (anteriores.length) parts.push(`Ya no figura como pendiente: ${joinSpeechItems(anteriores)}.`);
     }
     return cleanForSpeech(parts.join(' '));
 }
@@ -716,15 +721,17 @@ export function buildTutoringProgressContract(
     { language = 'es' }: { language?: string } = {},
 ): MinuteLookupContract {
     const isEnglish = language === 'en';
-    const { area, sesiones, practicado, pendientes, ultimaFecha } = progress;
+    const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha } = progress;
     const labels = isEnglish
-        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next' }
-        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente' };
+        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next', since: 'Since', done: 'No longer pending' }
+        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente', since: 'Desde', done: 'Ya no pendiente' };
     const bullets = [
         `${labels.sessions}: ${sesiones}`,
+        primeraFecha && primeraFecha !== ultimaFecha ? `${labels.since}: ${tutoringDateLabel(primeraFecha, isEnglish ? 'en' : 'es')}` : '',
         ultimaFecha ? `${labels.last}: ${tutoringDateLabel(ultimaFecha, isEnglish ? 'en' : 'es')}` : '',
         practicado.length ? `${labels.worked}:\n${practicado.map((item) => `- ${item}`).join('\n')}` : '',
-        pendientes.length ? `${labels.next}:\n${pendientes.map((item) => `- ${item}`).join('\n')}` : '',
+        enCurso.length ? `${labels.next}:\n${enCurso.map((item) => `- ${item}`).join('\n')}` : '',
+        anteriores.length ? `${labels.done}:\n${anteriores.map((item) => `- ${item}`).join('\n')}` : '',
     ].filter(Boolean);
     return {
         respuesta_voz: buildTutoringProgressSpeech(progress, { language }),
@@ -734,7 +741,7 @@ export function buildTutoringProgressContract(
             titulo: labels.title,
             contenido: bullets.join('\n\n'),
             prompt_visual: '',
-            puntos_clave: pendientes.slice(0, 5),
+            puntos_clave: enCurso.slice(0, 5),
         },
     };
 }

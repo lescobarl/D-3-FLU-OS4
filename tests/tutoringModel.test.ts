@@ -106,9 +106,19 @@ describe('3. el avance se DERIVA de las minutas (almacen unico, sin tabla nueva)
     expect(avance.ultimaFecha).toBe('2026-07-02')
   })
 
+  it('separa el avance DERIVADO: rango de sesiones + pendientes en curso vs anteriores', () => {
+    // Sin umbrales inventados: "en curso" es lo pendiente de la ULTIMA sesion y
+    // "anteriores" lo que estaba pendiente antes y ya no figura en la ultima.
+    const avance = buildTutoringProgress(MINUTAS, INGLES)
+    expect(avance.ultimaFecha).toBe('2026-07-02')
+    expect(avance.primeraFecha).toBe('2026-06-30')
+    expect(avance.enCurso).toEqual(['Practicar 10 verbos irregulares'])
+    expect(avance.anteriores).toEqual(['Repasar preposiciones'])
+  })
+
   it('sin minutas del area el avance es 0 (no se inventa nada)', () => {
     const avance = buildTutoringProgress(MINUTAS, { id: 'origami', label: 'origami' })
-    expect(avance).toEqual({ area: { id: 'origami', label: 'origami' }, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '' })
+    expect(avance).toEqual({ area: { id: 'origami', label: 'origami' }, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [] })
   })
 })
 

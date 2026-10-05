@@ -159,6 +159,9 @@ test.describe('Tutoria — el avance por area sale de las MINUTAS reales (local)
         expect(respuesta, 'el area').toContain('Inglés');
         expect(respuesta, 'cuenta la minuta etiquetada (2 sesiones)').toMatch(/2 sesiones/);
         expect(respuesta, 'concordancia con el numero').toContain('2 sesiones registradas');
+        expect(respuesta, 'rango de sesiones (primera -> ultima)').toContain('desde el 3 de octubre de 2026');
+        expect(respuesta, 'pendiente en curso = el de la ultima sesion').toContain('En curso: Practicar 10 verbos irregulares');
+        expect(respuesta, 'lo que ya no figura como pendiente').toContain('Ya no figura como pendiente: Write 5 sentences in the past');
         expect(aiContractCalls.length, 'lo resuelve en local, no la IA').toBe(0);
         await page.screenshot({ path: path.join(SHOTS_DIR, 'avance-ingles.png'), animations: 'disabled' });
     });
