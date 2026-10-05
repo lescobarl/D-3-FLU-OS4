@@ -13,13 +13,14 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTutoringRule,
   findKnownTutoringArea,
+  isTutoringGlobalProgressQuery,
   isTutoringProgressQuery,
   parseTutoringProgressQuery,
   resolveMinuteTutoringArea,
   resolveTutoringArea,
   resolveTutoringLevel,
 } from '../src/core/tutoring/tutoringModel'
-import { buildTutoringProgress, minuteCoversTutoringArea } from '../src/core/tutoring/tutoringProgress'
+import { buildTutoringProgress, listTutoringAreas, minuteCoversTutoringArea } from '../src/core/tutoring/tutoringProgress'
 import { resolveMinuteQuery } from '../src/lib/minuteKnowledgeHelpers'
 import { isMinuteKnowledgeRequest } from '../src/voice/lib/audioMath.js'
 import { buildCapabilitiesPrompt } from '../src/services/capabilities'
@@ -204,6 +205,36 @@ describe('5. la regla de pedagogia que recibe el modelo tiene un solo dueno', ()
   it('llega al prompt de capacidades (es y en)', () => {
     expect(buildCapabilitiesPrompt('es')).toContain('REGLA DE TUTORÍA')
     expect(buildCapabilitiesPrompt('en')).toContain('TUTORING RULE')
+  })
+})
+
+describe('6b. avance GLOBAL (todas las areas) sin nombrar ninguna (P8.64)', () => {
+  it('reconoce la consulta global y NO secuestra una frase que solo empieza igual', () => {
+    for (const q of ['¿cómo voy?', 'mi avance', 'que tal voy', 'como voy en general', 'how am I doing', 'my progress']) {
+      expect(isTutoringGlobalProgressQuery(q), q).toBe(true)
+    }
+    for (const q of ['¿cómo voy a hacer esto?', 'hablemos en inglés', 'cuéntame un chiste', 'pon música']) {
+      expect(isTutoringGlobalProgressQuery(q), q).toBe(false)
+    }
+  })
+
+  it('lista las areas presentes en las minutas, sin repetir y en orden', () => {
+    expect(listTutoringAreas(MINUTAS).map((a) => a.id)).toEqual(['ingles', 'matematicas'])
+  })
+
+  it('la resuelve EN LOCAL con las areas reales y su nivel', () => {
+    const result = resolveMinuteQuery('¿cómo voy?', MINUTAS, { language: 'es' })
+    expect(result.mode).toBe('local')
+    expect(result.diagnostics?.route).toBe('tutoring-progress')
+    expect(result.contract?.respuesta_voz).toContain('Inglés')
+    expect(result.contract?.respuesta_voz).toContain('Matemáticas')
+  })
+
+  it('sin minutas lo dice honestamente (no inventa areas)', () => {
+    const result = resolveMinuteQuery('¿cómo voy?', [], { language: 'es' })
+    expect(result.mode).toBe('local')
+    expect(result.diagnostics?.route).toBe('tutoring-progress-empty')
+    expect(result.contract?.respuesta_voz.toLowerCase()).toContain('todavia no')
   })
 })
 

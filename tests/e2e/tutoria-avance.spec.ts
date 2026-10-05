@@ -166,6 +166,21 @@ test.describe('Tutoria — el avance por area sale de las MINUTAS reales (local)
         expect(respuesta, 'nivel por area (bandas aprobadas)').toContain('Nivel: inicial');
         expect(respuesta, 'dominio por destreza (aciertos/errores del tutor)').toContain('Dominio: 9 aciertos y 1 error (90% de acierto)');
         expect(aiContractCalls.length, 'lo resuelve en local, no la IA').toBe(0);
+        // Vista GLOBAL: "¿como voy?" SIN area -> todas las areas de las minutas.
+        await speakUntilHeard(page, 'ok flu como voy', { expectedUserRows: 2 });
+        const global = await page
+            .waitForFunction(() => {
+                const rows = ((window as any).__fluStore?.getState?.().conversationHistory || []).filter((r: any) => r.role === 'flu');
+                const t = rows.length ? rows[rows.length - 1].text : '';
+                return /areas de tutor/i.test(t) ? t : '';
+            }, null, { timeout: 30000 })
+            .then((h) => h.jsonValue() as Promise<string>)
+            .catch(() => '');
+        // eslint-disable-next-line no-console
+        console.log('[SIMULACION] respuesta GLOBAL:', JSON.stringify(global));
+        expect(global, 'lista el area de ingles').toContain('Inglés');
+        expect(global, 'lista el area de matematicas').toContain('Matemáticas');
+
         await page.screenshot({ path: path.join(SHOTS_DIR, 'avance-ingles.png'), animations: 'disabled' });
     });
 

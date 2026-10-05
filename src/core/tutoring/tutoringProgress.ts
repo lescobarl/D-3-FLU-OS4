@@ -9,7 +9,7 @@
 // quien tiene el comparador de codigos de minuta, para no reimplementarlo.
 // ============================================================
 import { cleanForSpeech, normalizeSpaces } from '../../lib/textUtils';
-import { mentionsTutoringArea, resolveTutoringArea, type TutoringArea } from './tutoringModel';
+import { findKnownTutoringArea, mentionsTutoringArea, resolveTutoringArea, type TutoringArea } from './tutoringModel';
 
 /** Minuta tal como la ven los helpers (campos opcionales, snapshot anidado o plano). */
 export interface TutoringMinuteLike {
@@ -80,6 +80,28 @@ export function minuteCoversTutoringArea(record: TutoringMinuteLike = {}, area: 
         if (resolved && resolved.id === area.id) return true;
     }
     return mentionsTutoringArea(minuteSearchText(record), area);
+}
+
+/** Area de la minuta (P8.64): la etiqueta explicita manda; si no, se reconoce por el texto. */
+export function minuteTutoringArea(record: TutoringMinuteLike = {}): TutoringArea | null {
+    const snapshot = snapshotOf(record);
+    const tagged = snapshot.tutoring_area;
+    if (tagged) {
+        const resolved = resolveTutoringArea(String(tagged));
+        if (resolved) return resolved;
+    }
+    return findKnownTutoringArea(minuteSearchText(record));
+}
+
+/** Areas de tutoria presentes en las minutas, sin repetir, en el orden recibido. */
+export function listTutoringAreas(records: TutoringMinuteLike[] = []): TutoringArea[] {
+    const seen = new Map<string, TutoringArea>();
+    for (const record of Array.isArray(records) ? records : []) {
+        if (!record) continue;
+        const area = minuteTutoringArea(record);
+        if (area && !seen.has(area.id)) seen.set(area.id, area);
+    }
+    return [...seen.values()];
 }
 
 function pushUnique(target: string[], value: string, max = 5): void {

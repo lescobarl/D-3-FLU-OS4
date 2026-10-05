@@ -8,7 +8,7 @@ import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritic
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { COMMAND_IDS } from './commandIds.js'
-import { isTutoringProgressQuery } from '../../core/tutoring/tutoringModel'
+import { isTutoringGlobalProgressQuery, isTutoringProgressQuery } from '../../core/tutoring/tutoringModel'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -717,7 +717,7 @@ export function isMinuteKnowledgeRequest(text = '') {
 
   const normalized = normalizeVoiceCommandText(text)
   if (!normalized) return false
-  if (isTutoringProgressQuery(normalized)) return true
+  if (isTutoringProgressQuery(normalized) || isTutoringGlobalProgressQuery(normalized)) return true
 
   return [
     /\b(historial\s+de\s+minutas?)\b/i,

@@ -1491,6 +1491,13 @@
       "estado": "done",
       "evidencia": "Encargo: \"puedes decidirlo tu con la mejor propuesta?\". Decision del agente (autorizada al delegar): mastery por destreza con (1) califica el TUTOR al resumir la minuta, (2) escala = aciertos/errores + % de acierto (sin umbrales inventados), (3) acompana al nivel por sesiones. Cambios: practica en MinuteSummarySnapshot (fluDatabase) + AIMinuteResult/AISummaryResult (IAIService) + normalizePractica (aiServiceBase) + buildMinuteSystemPrompt (prompts.ts) + practicaOf (useMinuteHandlers) + dominio (tutoringProgress) + voz/documento (minuteKnowledgeHelpers). GUARD tests/tutoringModel.test.ts NACE ROJO (4 failed / 23) y queda 27/27; simulacion real \"Dominio: 9 aciertos y 1 error (90% de acierto)\". Alcance real (0.23): CUBIERTO=el dominio derivado con guard y simulacion real y su plomeria; NO CUBIERTO=que el modelo emita practica siempre (se degrada a 0/0), repaso/pronunciacion, DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.64",
+      "titulo": "El avance de tutoria solo se podia consultar POR area: no habia vista global (\"¿como voy?\" sin area)",
+      "estado": "in_progress",
+      "evidencia": "Encargo: \"que mas falta por implementar, puedes decidirlo?\". DECISION: vista GLOBAL del avance (\"¿como voy?\", \"mi avance\" sin area) que lista todas las areas de las minutas con nivel y dominio, EN LOCAL. Cambios: tutoringModel.isTutoringGlobalProgressQuery (patrones anclados al mandato entero; toleran ¿¡), tutoringProgress.minuteTutoringArea + listTutoringAreas, minuteKnowledgeHelpers.buildTutoringGlobalSpeech/Contract + rama global, audioMath.js encamina por minutas. GUARD NACE ROJO (4 failed / 27) y queda 31/31; simulacion real \"Tus areas de tutoria: Inglés (inicial, 90% de acierto); Matemáticas (inicial).\" Alcance real (0.23): CUBIERTO=la vista global en local con guard y simulacion real; NO CUBIERTO=repaso, pronunciacion, DoD-producto y suite completa.",
+      "origen": "encargo-dueno-2026-10-05"
     }
   ],
   "done": [

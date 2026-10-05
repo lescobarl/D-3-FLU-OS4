@@ -24,8 +24,8 @@
 // ============================================================
 
 import { normalizeSpaces, cleanForSpeech } from './textUtils';
-import { parseTutoringProgressQuery, resolveTutoringLevel, type TutoringArea } from '../core/tutoring/tutoringModel';
-import { buildTutoringProgress, type TutoringMinuteLike, type TutoringProgress } from '../core/tutoring/tutoringProgress';
+import { isTutoringGlobalProgressQuery, parseTutoringProgressQuery, resolveTutoringLevel, type TutoringArea } from '../core/tutoring/tutoringModel';
+import { buildTutoringProgress, listTutoringAreas, type TutoringMinuteLike, type TutoringProgress } from '../core/tutoring/tutoringProgress';
 import { MONTH_DISPLAY_ES } from '../core/temporal/calendarNames';
 
 /** Snapshot de minuta (campos opcionales) admitido por los helpers. */
@@ -767,6 +767,61 @@ export function buildTutoringProgressContract(
  * Consulta numerada → lectura local determinista; historial general → Gemini.
  * Consulta de AVANCE por area → avance local derivado de las minutas.
  */
+/** Una fila del avance GLOBAL: un area con su progreso derivado. */
+export interface TutoringAreaProgress {
+    area: TutoringArea;
+    progress: TutoringProgress;
+}
+
+/** Respuesta hablada de la vista GLOBAL (todas las areas) (P8.64). */
+export function buildTutoringGlobalSpeech(
+    items: TutoringAreaProgress[] = [],
+    { language = 'es' }: { language?: string } = {},
+): string {
+    const isEnglish = language === 'en';
+    if (!items.length) {
+        return cleanForSpeech(isEnglish
+            ? 'You have no tutoring areas saved yet. Tell me what you want to learn and we start today.'
+            : 'Todavia no tienes areas de tutoria en tus minutas. Dime que quieres aprender y empezamos hoy.');
+    }
+    const parts = items.map((item) => {
+        const nivel = resolveTutoringLevel(item.progress.sesiones, isEnglish ? 'en' : 'es');
+        const total = item.progress.dominio.aciertos + item.progress.dominio.errores;
+        const dom = total > 0
+            ? (isEnglish ? `, ${item.progress.dominio.precision}% accuracy` : `, ${item.progress.dominio.precision}% de acierto`)
+            : '';
+        return `${item.area.label} (${nivel.label}${dom})`;
+    });
+    return cleanForSpeech((isEnglish ? 'Your tutoring areas: ' : 'Tus areas de tutoria: ') + parts.join('; ') + '.');
+}
+
+/** Contrato local de la vista GLOBAL (voz + documento en el Pizarron) (P8.64). */
+export function buildTutoringGlobalContract(
+    items: TutoringAreaProgress[] = [],
+    { language = 'es' }: { language?: string } = {},
+): MinuteLookupContract {
+    const isEnglish = language === 'en';
+    const contenido = items
+        .map((item) => {
+            const nivel = resolveTutoringLevel(item.progress.sesiones, isEnglish ? 'en' : 'es');
+            const total = item.progress.dominio.aciertos + item.progress.dominio.errores;
+            const dom = total > 0 ? ` (${item.progress.dominio.precision}%)` : '';
+            return `- ${item.area.label}: ${nivel.label}${dom}`;
+        })
+        .join('\n');
+    return {
+        respuesta_voz: buildTutoringGlobalSpeech(items, { language }),
+        navegacion: { comando: null, destino: null, parametros: {} },
+        workspace: {
+            tipo: 'text',
+            titulo: isEnglish ? 'Tutoring progress' : 'Avance de tutoria',
+            contenido,
+            prompt_visual: '',
+            puntos_clave: [],
+        },
+    };
+}
+
 export function resolveMinuteQuery(
     query: string = '',
     records: MinuteRecordLike[] = [],
@@ -784,6 +839,24 @@ export function resolveMinuteQuery(
             diagnostics: {
                 provider: 'minute-store',
                 route: progress.sesiones ? 'tutoring-progress' : 'tutoring-progress-empty',
+                sequence: null,
+                historyCode: null,
+            },
+        };
+    }
+    if (isTutoringGlobalProgressQuery(query)) {
+        const ordered = [...(Array.isArray(records) ? records : [])].sort(compareMinuteHistoryCodeDesc);
+        const areas = listTutoringAreas(ordered as TutoringMinuteLike[]);
+        const items: TutoringAreaProgress[] = areas.map((area) => ({
+            area,
+            progress: buildTutoringProgress(ordered as TutoringMinuteLike[], area),
+        }));
+        return {
+            mode: 'local',
+            contract: buildTutoringGlobalContract(items, { language }),
+            diagnostics: {
+                provider: 'minute-store',
+                route: items.length ? 'tutoring-progress' : 'tutoring-progress-empty',
                 sequence: null,
                 historyCode: null,
             },

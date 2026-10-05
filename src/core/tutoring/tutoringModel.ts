@@ -168,6 +168,24 @@ export function isTutoringProgressQuery(text: string = ''): boolean {
 }
 
 /**
+ * Consulta de avance GLOBAL (sin area): "¿como voy?", "mi avance", "¿que tal voy?",
+ * "how am I doing". El mandato ENTERO debe ser la consulta (con coletilla corta opcional),
+ * para NO secuestrar "¿como voy a hacer esto?" (que no es una consulta de avance).
+ */
+const GLOBAL_PROGRESS_PATTERNS: readonly RegExp[] = Object.freeze([
+    /^[¿¡]?\s*(?:como\s+(?:voy|vamos)|que\s+tal\s+voy|mi\s+(?:avance|progreso)|el\s+(?:avance|progreso))(?:\s+(?:hoy|en\s+general|general|en\s+total|hasta\s+ahora))?[?.!]*$/,
+    /^how\s+(?:am\s+i|are\s+we)\s+doing(?:\s+(?:today|in\s+general|overall|so\s+far))?[?.!]*$/,
+    /^(?:my|the)\s+progress(?:\s+(?:today|overall|so\s+far))?[?.!]*$/,
+]);
+
+/** ¿El texto es una consulta de avance GLOBAL (todas las areas)? (dueño unico). */
+export function isTutoringGlobalProgressQuery(text: string = ''): boolean {
+    const normalized = norm(text);
+    if (!normalized) return false;
+    return GLOBAL_PROGRESS_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+/**
  * Regla de PEDAGOGIA para el prompt (una sola fuente; la consume el catalogo de
  * capacidades). No promete una accion de contrato: ensenar es conversar, con
  * un metodo fijo, y el avance se deduce de las minutas de la sesion.
