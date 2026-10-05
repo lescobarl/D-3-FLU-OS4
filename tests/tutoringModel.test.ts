@@ -15,6 +15,7 @@ import {
   findKnownTutoringArea,
   isTutoringGlobalProgressQuery,
   isTutoringProgressQuery,
+  isTutoringReviewQuery,
   parseTutoringProgressQuery,
   resolveMinuteTutoringArea,
   resolveTutoringArea,
@@ -157,7 +158,7 @@ describe('3. el avance se DERIVA de las minutas (almacen unico, sin tabla nueva)
 
   it('sin minutas del area el avance es 0 (no se inventa nada)', () => {
     const avance = buildTutoringProgress(MINUTAS, { id: 'origami', label: 'origami' })
-    expect(avance).toEqual({ area: { id: 'origami', label: 'origami' }, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [], dominio: { aciertos: 0, errores: 0, precision: 0 } })
+    expect(avance).toEqual({ area: { id: 'origami', label: 'origami' }, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', ultimaFechaISO: '', primeraFechaISO: '', enCurso: [], anteriores: [], dominio: { aciertos: 0, errores: 0, precision: 0 } })
   })
 })
 
@@ -235,6 +236,41 @@ describe('6b. avance GLOBAL (todas las areas) sin nombrar ninguna (P8.64)', () =
     expect(result.mode).toBe('local')
     expect(result.diagnostics?.route).toBe('tutoring-progress-empty')
     expect(result.contract?.respuesta_voz.toLowerCase()).toContain('todavia no')
+  })
+})
+
+describe('6c. repaso espaciado: que toca repasar (P8.66)', () => {
+  const conPendiente = (code: string, pendiente: string) => ({
+    historyCode: code,
+    description: 'Clase',
+    summarySnapshot: { titulo: 'Clase', tema_sesion: 'Practica de ingles', resumen: 'Past simple.', pendientes: [pendiente] },
+  })
+
+  it('reconoce la consulta de repaso y NO secuestra una peticion de practicar', () => {
+    for (const q of ['¿qué tengo que repasar?', 'que debo repasar', 'que repaso hoy', 'what should I review']) {
+      expect(isTutoringReviewQuery(q), q).toBe(true)
+    }
+    for (const q of ['quiero repasar inglés', 'hablemos en inglés', 'cuéntame un chiste']) {
+      expect(isTutoringReviewQuery(q), q).toBe(false)
+    }
+  })
+
+  it('marca lo pendiente de una sesion anterior con sus DIAS y su banda de intervalo', () => {
+    const now = Date.parse('2026-07-05T12:00:00Z')
+    const m = conPendiente('260702-01', 'Practicar 10 verbos irregulares')
+    const result = resolveMinuteQuery('¿qué tengo que repasar?', [m], { language: 'es', now })
+    expect(result.mode).toBe('local')
+    expect(result.diagnostics?.route).toBe('tutoring-review')
+    expect(result.contract?.respuesta_voz).toContain('Practicar 10 verbos irregulares')
+    expect(result.contract?.respuesta_voz).toContain('3')
+  })
+
+  it('sin nada vencido lo dice honestamente (no inventa repasos)', () => {
+    const now = Date.parse('2026-07-02T12:00:00Z')
+    const m = conPendiente('260702-01', 'Practicar 10 verbos irregulares')
+    const result = resolveMinuteQuery('¿qué tengo que repasar?', [m], { language: 'es', now })
+    expect(result.mode).toBe('local')
+    expect(result.diagnostics?.route).toBe('tutoring-review-empty')
   })
 })
 

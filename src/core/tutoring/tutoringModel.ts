@@ -186,6 +186,27 @@ export function isTutoringGlobalProgressQuery(text: string = ''): boolean {
 }
 
 /**
+ * Consulta de REPASO (P8.66): "¿que tengo que repasar?", "que debo repasar", "what
+ * should I review". Exige un marco de pregunta (que/tengo que/debo + repasar) para NO
+ * secuestrar una peticion de practicar ("quiero repasar ingles").
+ */
+const REVIEW_QUERY_PATTERNS: readonly RegExp[] = Object.freeze([
+    /\b(?:que|qué)\s+(?:tengo|hay)\s+que\s+repasar\b/,
+    /\b(?:que|qué)\s+debo\s+repasar\b/,
+    /\bque\s+(?:me\s+)?toca\s+repasar\b/,
+    /\bque\s+repaso\b/,
+    /\bwhat\s+(?:should|do)\s+i\s+(?:have\s+to\s+)?(?:review|practise|practice|study)\b/,
+    /\bwhat\s+to\s+review\b/,
+]);
+
+/** ¿El texto es una consulta de REPASO? (dueño unico). */
+export function isTutoringReviewQuery(text: string = ''): boolean {
+    const normalized = norm(text);
+    if (!normalized) return false;
+    return REVIEW_QUERY_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+/**
  * Regla de PEDAGOGIA para el prompt (una sola fuente; la consume el catalogo de
  * capacidades). No promete una accion de contrato: ensenar es conversar, con
  * un metodo fijo, y el avance se deduce de las minutas de la sesion.

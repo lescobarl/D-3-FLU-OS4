@@ -231,4 +231,41 @@ test.describe('Tutoria — el avance por area sale de las MINUTAS reales (local)
         const snapshot = rows[rows.length - 1].summarySnapshot || {};
         expect(snapshot.tutoring_area, 'la via real etiqueta el area').toBe('Inglés');
     });
+
+    test('¿que tengo que repasar? lista lo pendiente de una sesion anterior en local', async ({ page }) => {
+        stubLocalSpeech(page);
+        stubSpeechRecognition(page);
+        const aiCalls: string[] = [];
+        await page.route('**/api/gemini/**', (route) => {
+            aiCalls.push(route.request().url());
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ respuesta_voz: 'IA', contrato: {} }) });
+        });
+        await gotoClean(page);
+        await clearStore(page, 'minutes');
+        const uid = await seedActiveUser(page, 'Alumno E2E');
+        await seedMinutes(page, [
+            minuteRecord(uid, 1, '260702-01', {
+                titulo: 'Practica de ingles',
+                tema_sesion: 'Practica de ingles',
+                resumen: 'Past simple.',
+                pendientes: ['Practicar 10 verbos irregulares'],
+            }),
+        ]);
+        await page.reload({ waitUntil: 'load' });
+        await page.waitForSelector('.flu-shell', { timeout: 45000 });
+        await startConversation(page);
+        await speakUntilHeard(page, 'ok flu que tengo que repasar');
+        const repaso = await page
+            .waitForFunction(() => {
+                const rows = ((window as any).__fluStore?.getState?.().conversationHistory || []).filter((r: any) => r.role === 'flu');
+                const t = rows.length ? rows[rows.length - 1].text : '';
+                return /para repasar/i.test(t) ? t : '';
+            }, null, { timeout: 30000 })
+            .then((h) => h.jsonValue() as Promise<string>)
+            .catch(() => '');
+        // eslint-disable-next-line no-console
+        console.log('[SIMULACION] respuesta REPASO:', JSON.stringify(repaso));
+        expect(repaso, 'lista el pendiente').toContain('Practicar 10 verbos irregulares');
+        expect(aiCalls.length, 'lo resuelve en local, no la IA').toBe(0);
+    });
 });

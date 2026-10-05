@@ -74,4 +74,13 @@ describe('pronunciacion: el tutor dice una palabra y acredita la repeticion', ()
         expect(engine.isGameCommand('salir del juego')).toBe(true)
         expect(engine.isGameCommand('hola que tal')).toBe(false)
     })
+
+    it('el BANCO es configurable por nivel (P8.67)', () => {
+        const basico = engine.createSession({ nivel: 'basico' })
+        const full = engine.createSession({})
+        const basicoBank = (basico.state as { bank: unknown[] }).bank
+        const fullBank = (full.state as { bank: unknown[] }).bank
+        expect(basicoBank.length).toBeGreaterThan(0)
+        expect(basicoBank.length).toBeLessThan(fullBank.length)
+    })
 })

@@ -1505,6 +1505,20 @@
       "estado": "done",
       "evidencia": "Encargo: \"adelante\" sobre la recomendacion de evaluar la pronunciacion. DECISION: juego nuevo del catalogo (\"pronunciacion\"), la via del repo (como repiteTraduce), sin tocar el god-file. src/core/games/pronunciacion.ts: enuncia una palabra y acredita la repeticion comparando la transcripcion del ASR con la palabra objetivo (exacto por token o Levenshtein <= 1) — determinista y tolerante; controles pista/otra/salir; victoria al completar rounds. Registrado en types.ts/GAME_IDS/GAME_CATALOG + PRONUNCIACION_COMMAND_FRAMES. GUARD tests/pronunciacion.test.ts NACE ROJO y queda 7/7; guards de juegos auto-derivados 14 ficheros / 422 casos VERDE. Alcance real (0.23): CUBIERTO=el juego (acredita la repeticion determinista/tolerante, victoria) con guard; NO CUBIERTO=la transcripcion real del ASR en su pantalla, un banco configurable por idioma, repaso, DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.66",
+      "titulo": "Faltaba el REPASO espaciado: FLU no decia que toca repasar de las sesiones anteriores",
+      "estado": "in_progress",
+      "evidencia": "Encargo: \"todo, ejecuta!\". Consulta local \"¿que tengo que repasar?\" (y variantes es/en) que lista, por area, lo PENDIENTE de la sesion mas reciente si tiene al menos el primer intervalo de antiguedad. Intervalos declarados (tutoringReview.REVIEW_INTERVALS_DAYS = [1,3,7,21]); las minutas son el unico almacen (se deriva). El progreso gana ultimaFechaISO/primeraFechaISO (isoDateOf). GUARD tests/tutoringModel.test.ts NACE ROJO (3 failed / 31) y queda 34/34; simulacion real \"Para repasar: Inglés (hace 95 dias): Practicar 10 verbos irregulares. Revisiones a los 1, 3, 7, 21 dias.\" (3 passed, 0 IA). Alcance real (0.23): CUBIERTO=el repaso derivado con guard y simulacion real; NO CUBIERTO=un log de repasos (marcar como hecho), ASR del juego en pantalla, DoD-producto y suite completa.",
+      "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.67",
+      "titulo": "El banco del juego de pronunciacion era fijo (10 palabras en el motor): faltaba un banco configurable por nivel",
+      "estado": "in_progress",
+      "evidencia": "Encargo: \"todo, ejecuta!\". El banco sale a un catalogo declarado (src/core/config/pronunciacionBank.ts, estilo musicCatalog) con 15 palabras y NIVEL (basico/intermedio/avanzado); el motor lo consume y elige por options.nivel (sin nivel = completo). GUARD: caso nuevo en tests/pronunciacion.test.ts (el banco por nivel es menor que el completo). Alcance real (0.23): CUBIERTO=el banco configurable por nivel con guard; NO CUBIERTO=elegir el nivel por voz en el arranque del juego (hoy por opcion), DoD-producto y suite completa.",
+      "origen": "encargo-dueno-2026-10-05"
     }
   ],
   "done": [

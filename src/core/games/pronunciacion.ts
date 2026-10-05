@@ -9,6 +9,10 @@
 // misma palabra que el motor acaba de decir ES la tarea (a diferencia de
 // `repiteTraduce`, aqui NO se pregunta "como se dice", se pide IMITAR).
 //
+// El BANCO es configurable (P8.67): vive en core/config/pronunciacionBank y se
+// elige por nivel con `options.nivel` (basico/intermedio/avanzado; sin nivel =
+// banco completo).
+//
 // Controles:
 //   "pista" / "ayuda"      -> como suena la palabra
 //   "otra" / "siguiente"   -> salta a la siguiente
@@ -34,25 +38,15 @@ import {
     SKIP_CORE_FRAMES,
     turnResult,
 } from './gameUtils';
+import {
+    PRONUNCIACION_BANK,
+    pronunciacionWordsByLevel,
+    type PronunciacionWord,
+} from '../config/pronunciacionBank';
 
-/** Palabra a pronunciar + una ayuda de "como suena". */
-export interface PronunciacionItem {
-    word: string;
-    pista: string;
-}
-
-export const PRONUNCIACION_BANK: readonly PronunciacionItem[] = Object.freeze([
-    { word: 'water', pista: 'Suena como "uoter": agua.' },
-    { word: 'house', pista: 'Suena como "jaus": casa.' },
-    { word: 'three', pista: 'Suena como "zri": el numero tres.' },
-    { word: 'world', pista: 'Suena como "uorld": mundo.' },
-    { word: 'yellow', pista: 'Suena como "yelou": amarillo.' },
-    { word: 'juice', pista: 'Suena como "yus": jugo.' },
-    { word: 'chocolate', pista: 'Suena como "chocolat": chocolate.' },
-    { word: 'think', pista: 'Suena como "zink": pensar.' },
-    { word: 'girl', pista: 'Suena como "guerl": nina.' },
-    { word: 'comfortable', pista: 'Suena como "comf-tabl": comodo.' },
-]);
+// Reexportado para no romper la superficie publica del motor.
+export { PRONUNCIACION_BANK };
+export type { PronunciacionWord };
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = PRONUNCIACION_BANK.length;
@@ -73,9 +67,11 @@ interface PronunciacionState {
     cursor: number;
     maxRounds: number;
     phase: 'announce' | 'done';
+    /** Banco EFECTIVO de la partida (filtrado por nivel). */
+    bank: PronunciacionWord[];
 }
 
-const itemAt = (state: PronunciacionState) => bankItemAt(state, PRONUNCIACION_BANK);
+const itemAt = (state: PronunciacionState) => bankItemAt(state, state.bank);
 
 const currentPrompt = (state: PronunciacionState) =>
     gamePrompt(
@@ -120,10 +116,12 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
     let rng: RandomSource = options?.random ?? Math.random;
     const buildState = (cfg: Record<string, unknown> | undefined): PronunciacionState => {
         rng = adoptRandom(rng, cfg);
+        const bank = pronunciacionWordsByLevel(cfg?.nivel as string | undefined);
         return {
-            order: shuffleOrder(rng, PRONUNCIACION_BANK.length),
+            bank,
+            order: shuffleOrder(rng, bank.length),
             cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, Math.min(MAX_ROUNDS, bank.length)),
             phase: 'announce',
         };
     };

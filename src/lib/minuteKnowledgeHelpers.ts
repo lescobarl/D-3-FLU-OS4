@@ -24,8 +24,9 @@
 // ============================================================
 
 import { normalizeSpaces, cleanForSpeech } from './textUtils';
-import { isTutoringGlobalProgressQuery, parseTutoringProgressQuery, resolveTutoringLevel, type TutoringArea } from '../core/tutoring/tutoringModel';
+import { isTutoringGlobalProgressQuery, isTutoringReviewQuery, parseTutoringProgressQuery, resolveTutoringLevel, type TutoringArea } from '../core/tutoring/tutoringModel';
 import { buildTutoringProgress, listTutoringAreas, type TutoringMinuteLike, type TutoringProgress } from '../core/tutoring/tutoringProgress';
+import { buildTutoringReview, type TutoringReview } from '../core/tutoring/tutoringReview';
 import { MONTH_DISPLAY_ES } from '../core/temporal/calendarNames';
 
 /** Snapshot de minuta (campos opcionales) admitido por los helpers. */
@@ -822,10 +823,55 @@ export function buildTutoringGlobalContract(
     };
 }
 
+/** Respuesta hablada del REPASO (P8.66): lo pendiente de sesiones anteriores, con su antiguedad. */
+export function buildTutoringReviewSpeech(
+    review: TutoringReview,
+    { language = 'es' }: { language?: string } = {},
+): string {
+    const isEnglish = language === 'en';
+    if (!review.due.length) {
+        return cleanForSpeech(isEnglish
+            ? 'Nothing to review yet. Keep practising and I will remind you.'
+            : 'Todavia no hay nada que repasar. Sigue practicando y te aviso.');
+    }
+    const parts = review.due.map((item) => {
+        const cuando = isEnglish ? `${item.dias} days ago` : `hace ${item.dias} dias`;
+        return `${item.area.label} (${cuando}): ${joinSpeechItems(item.temas)}.`;
+    });
+    const intervalos = review.intervalos.join(', ');
+    const cola = isEnglish ? ` Reviews at ${intervalos} days.` : ` Revisiones a los ${intervalos} dias.`;
+    return cleanForSpeech((isEnglish ? 'To review: ' : 'Para repasar: ') + parts.join(' ') + cola);
+}
+
+/** Contrato local del REPASO (voz + documento en el Pizarron) (P8.66). */
+export function buildTutoringReviewContract(
+    review: TutoringReview,
+    { language = 'es' }: { language?: string } = {},
+): MinuteLookupContract {
+    const isEnglish = language === 'en';
+    const contenido = review.due
+        .map((item) => {
+            const cuando = isEnglish ? `${item.dias} days` : `hace ${item.dias} dias`;
+            return `- ${item.area.label} (${cuando}):\n${item.temas.map((tema) => `  - ${tema}`).join('\n')}`;
+        })
+        .join('\n\n');
+    return {
+        respuesta_voz: buildTutoringReviewSpeech(review, { language }),
+        navegacion: { comando: null, destino: null, parametros: {} },
+        workspace: {
+            tipo: 'text',
+            titulo: isEnglish ? 'To review' : 'Para repasar',
+            contenido,
+            prompt_visual: '',
+            puntos_clave: review.due.flatMap((item) => item.temas).slice(0, 5),
+        },
+    };
+}
+
 export function resolveMinuteQuery(
     query: string = '',
     records: MinuteRecordLike[] = [],
-    { language = 'es' }: { language?: string } = {},
+    { language = 'es', now }: { language?: string; now?: number } = {},
 ): MinuteLookupResult {
     const area: TutoringArea | null = parseTutoringProgressQuery(query);
     if (area) {
@@ -857,6 +903,26 @@ export function resolveMinuteQuery(
             diagnostics: {
                 provider: 'minute-store',
                 route: items.length ? 'tutoring-progress' : 'tutoring-progress-empty',
+                sequence: null,
+                historyCode: null,
+            },
+        };
+    }
+    if (isTutoringReviewQuery(query)) {
+        const ordered = [...(Array.isArray(records) ? records : [])].sort(compareMinuteHistoryCodeDesc);
+        const areas = listTutoringAreas(ordered as TutoringMinuteLike[]);
+        const items = areas.map((area) => ({
+            area,
+            progress: buildTutoringProgress(ordered as TutoringMinuteLike[], area),
+        }));
+        const ahora = Number.isFinite(now) ? Number(now) : Date.now();
+        const review = buildTutoringReview(items, ahora);
+        return {
+            mode: 'local',
+            contract: buildTutoringReviewContract(review, { language }),
+            diagnostics: {
+                provider: 'minute-store',
+                route: review.due.length ? 'tutoring-review' : 'tutoring-review-empty',
                 sequence: null,
                 historyCode: null,
             },

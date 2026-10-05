@@ -9,6 +9,7 @@
 // quien tiene el comparador de codigos de minuta, para no reimplementarlo.
 // ============================================================
 import { cleanForSpeech, normalizeSpaces } from '../../lib/textUtils';
+import { isDayKey } from '../../lib/dateKey';
 import { findKnownTutoringArea, mentionsTutoringArea, resolveTutoringArea, type TutoringArea } from './tutoringModel';
 
 /** Minuta tal como la ven los helpers (campos opcionales, snapshot anidado o plano). */
@@ -44,6 +45,10 @@ export interface TutoringProgress {
     ultimaFecha: string;
     /** Fecha/etiqueta de la sesion mas ANTIGUA (da el rango del avance). */
     primeraFecha: string;
+    /** Fecha de la ultima sesion normalizada a YYYY-MM-DD (para calcular dias). */
+    ultimaFechaISO: string;
+    /** Fecha de la primera sesion normalizada a YYYY-MM-DD. */
+    primeraFechaISO: string;
     /** Pendientes de la sesion MAS RECIENTE (lo que esta en curso ahora). */
     enCurso: string[];
     /** Pendientes de sesiones previas que YA NO figuran en la mas reciente. */
@@ -53,7 +58,7 @@ export interface TutoringProgress {
 }
 
 function emptyProgress(area: TutoringArea): TutoringProgress {
-    return { area, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [], dominio: { aciertos: 0, errores: 0, precision: 0 } };
+    return { area, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', ultimaFechaISO: '', primeraFechaISO: '', enCurso: [], anteriores: [], dominio: { aciertos: 0, errores: 0, precision: 0 } };
 }
 
 function snapshotOf(record: TutoringMinuteLike = {}): TutoringMinuteLike {
@@ -124,6 +129,15 @@ function dateOf(snapshot: TutoringMinuteLike = {}): string {
     return normalizeSpaces(String(snapshot.date || snapshot.historyCode || ''));
 }
 
+/** Fecha normalizada a YYYY-MM-DD desde una fecha ISO o un historyCode YYMMDD(-NN). */
+function isoDateOf(raw: string = ''): string {
+    const value = normalizeSpaces(raw);
+    if (isDayKey(value)) return value;
+    const code = value.match(/^(\d{2})(\d{2})(\d{2})(?:-\d+)?$/);
+    if (code) return `20${code[1]}-${code[2]}-${code[3]}`;
+    return '';
+}
+
 /**
  * Avance del area agregando las minutas que la mencionan, EN EL ORDEN RECIBIDO
  * (la mas reciente primero, decision de quien tiene el comparador).
@@ -145,7 +159,10 @@ export function buildTutoringProgress(
         for (const item of sessionPending) pushUnique(progress.pendientes, item);
         pendingBySession.push(sessionPending);
         const fecha = dateOf(snapshot);
+        const fechaISO = isoDateOf(fecha);
         if (!progress.ultimaFecha) progress.ultimaFecha = fecha;
+        if (!progress.ultimaFechaISO) progress.ultimaFechaISO = fechaISO;
+        if (fechaISO) progress.primeraFechaISO = fechaISO;
         // El orden es mas-reciente-primero: la ultima fecha asignada es la mas antigua.
         if (fecha) progress.primeraFecha = fecha;
         const practica = snapshot.practica;
