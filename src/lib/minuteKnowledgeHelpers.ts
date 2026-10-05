@@ -41,6 +41,8 @@ export interface MinuteSnapshotLike {
     siguientes_pasos?: string[];
     /** Area de tutoria de la sesion (P8.58), cuando la sesion la declaro. */
     tutoring_area?: string;
+    /** Practica de la sesion (P8.63): aciertos/errores que conto el tutor. */
+    practica?: { aciertos: number; errores: number };
     date?: string;
     mood?: unknown;
     content?: string;
@@ -672,6 +674,11 @@ function tutoringDateLabel(raw: string = '', language = 'es'): string {
     return `${day} de ${MONTH_DISPLAY_ES[month - 1]} de ${year}`;
 }
 
+/** "9 aciertos" / "1 error": singular o plural segun el numero (P8.63). */
+function plural(n: number, singular: string, pluralForm: string): string {
+    return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
 /** Une items quitando su punto final (evita ".." al cerrar la frase). */
 function joinSpeechItems(items: string[] = []): string {
     return items.map((item) => String(item).replace(/\.+$/, '').trim()).filter(Boolean).join('. ');
@@ -683,7 +690,7 @@ export function buildTutoringProgressSpeech(
     { language = 'es' }: { language?: string } = {},
 ): string {
     const isEnglish = language === 'en';
-    const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha } = progress;
+    const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha, dominio } = progress;
     if (!sesiones) {
         return cleanForSpeech(
             isEnglish
@@ -697,11 +704,13 @@ export function buildTutoringProgressSpeech(
     const rangoSuffix = primeraFecha && primeraFecha !== ultimaFecha ? rangoDesde(primeraFecha) : '';
     const nivel = resolveTutoringLevel(sesiones, isEnglish ? 'en' : 'es');
     const nivelPrefijo = isEnglish ? 'Level' : 'Nivel';
+    const hayDominio = dominio.aciertos + dominio.errores > 0;
     if (isEnglish) {
         parts.push(
             `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${rangoSuffix}${ultimaFecha ? `, the latest on ${tutoringDateLabel(ultimaFecha, 'en')}` : ''}.`,
         );
         parts.push(`${nivelPrefijo}: ${nivel.label}.`);
+        if (hayDominio) parts.push(`Mastery: ${dominio.aciertos} correct and ${dominio.errores} wrong (${dominio.precision}% accuracy).`);
         if (practicado.length) parts.push(`Worked on: ${joinSpeechItems(practicado)}.`);
         if (enCurso.length) parts.push(`In progress: ${joinSpeechItems(enCurso)}.`);
         else parts.push('Nothing pending: let us move to the next step.');
@@ -711,6 +720,7 @@ export function buildTutoringProgressSpeech(
             `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${rangoSuffix}${ultimaFecha ? `, la última el ${tutoringDateLabel(ultimaFecha, 'es')}` : ''}.`,
         );
         parts.push(`${nivelPrefijo}: ${nivel.label}.`);
+        if (hayDominio) parts.push(`Dominio: ${plural(dominio.aciertos, 'acierto', 'aciertos')} y ${plural(dominio.errores, 'error', 'errores')} (${dominio.precision}% de acierto).`);
         if (practicado.length) parts.push(`Trabajado: ${joinSpeechItems(practicado)}.`);
         if (enCurso.length) parts.push(`En curso: ${joinSpeechItems(enCurso)}.`);
         else parts.push('Sin pendientes: pasemos al siguiente paso.');
@@ -725,14 +735,15 @@ export function buildTutoringProgressContract(
     { language = 'es' }: { language?: string } = {},
 ): MinuteLookupContract {
     const isEnglish = language === 'en';
-    const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha } = progress;
+    const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha, dominio } = progress;
     const labels = isEnglish
-        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next', since: 'Since', done: 'No longer pending', level: 'Level' }
-        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente', since: 'Desde', done: 'Ya no pendiente', level: 'Nivel' };
+        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next', since: 'Since', done: 'No longer pending', level: 'Level', mastery: 'Mastery' }
+        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente', since: 'Desde', done: 'Ya no pendiente', level: 'Nivel', mastery: 'Dominio' };
     const nivel = resolveTutoringLevel(sesiones, isEnglish ? 'en' : 'es');
     const bullets = [
         `${labels.sessions}: ${sesiones}`,
         `${labels.level}: ${nivel.label}`,
+        dominio.aciertos + dominio.errores > 0 ? `${labels.mastery}: ${dominio.aciertos} / ${dominio.errores} (${dominio.precision}%)` : '',
         primeraFecha && primeraFecha !== ultimaFecha ? `${labels.since}: ${tutoringDateLabel(primeraFecha, isEnglish ? 'en' : 'es')}` : '',
         ultimaFecha ? `${labels.last}: ${tutoringDateLabel(ultimaFecha, isEnglish ? 'en' : 'es')}` : '',
         practicado.length ? `${labels.worked}:\n${practicado.map((item) => `- ${item}`).join('\n')}` : '',

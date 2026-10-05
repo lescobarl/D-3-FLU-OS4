@@ -133,6 +133,7 @@ test.describe('Tutoria — el avance por area sale de las MINUTAS reales (local)
                 resumen: 'We practised irregular verbs and the -ed pronunciation.',
                 pendientes: ['Write 5 sentences in the past'],
                 tutoring_area: 'Inglés',
+                practica: { aciertos: 9, errores: 1 },
             }),
         ]);
 
@@ -163,6 +164,7 @@ test.describe('Tutoria — el avance por area sale de las MINUTAS reales (local)
         expect(respuesta, 'pendiente en curso = el de la ultima sesion').toContain('En curso: Practicar 10 verbos irregulares');
         expect(respuesta, 'lo que ya no figura como pendiente').toContain('Ya no figura como pendiente: Write 5 sentences in the past');
         expect(respuesta, 'nivel por area (bandas aprobadas)').toContain('Nivel: inicial');
+        expect(respuesta, 'dominio por destreza (aciertos/errores del tutor)').toContain('Dominio: 9 aciertos y 1 error (90% de acierto)');
         expect(aiContractCalls.length, 'lo resuelve en local, no la IA').toBe(0);
         await page.screenshot({ path: path.join(SHOTS_DIR, 'avance-ingles.png'), animations: 'disabled' });
     });

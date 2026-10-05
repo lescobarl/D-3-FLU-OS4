@@ -124,6 +124,26 @@ describe('3. el avance se DERIVA de las minutas (almacen unico, sin tabla nueva)
     expect(result.contract?.workspace?.contenido || '').toContain('Nivel: inicial')
   })
 
+  it('el dominio SUMA aciertos/errores que conto el tutor (P8.63) y da el % de acierto', () => {
+    const m1 = { historyCode: '260702-01', summarySnapshot: { titulo: 'Clase', tema_sesion: 'Practica de ingles', resumen: 'Past simple.', practica: { aciertos: 8, errores: 2 } } }
+    const m2 = { historyCode: '260701-01', summarySnapshot: { titulo: 'Clase', tema_sesion: 'Practica de ingles', resumen: 'Verbos.', practica: { aciertos: 4, errores: 2 } } }
+    const avance = buildTutoringProgress([m1, m2], INGLES)
+    expect(avance.dominio).toEqual({ aciertos: 12, errores: 4, precision: 75 })
+  })
+
+  it('sin datos de practica el dominio es 0/0 y NO se inventa en la voz', () => {
+    const avance = buildTutoringProgress(MINUTAS, INGLES)
+    expect(avance.dominio).toEqual({ aciertos: 0, errores: 0, precision: 0 })
+    const result = resolveMinuteQuery('¿cómo voy en inglés?', MINUTAS, { language: 'es' })
+    expect(result.contract?.respuesta_voz).not.toContain('Dominio')
+  })
+
+  it('la voz dice el dominio cuando el tutor lo conto (singular correcto)', () => {
+    const m = { historyCode: '260702-01', summarySnapshot: { titulo: 'Clase', tema_sesion: 'Practica de ingles', resumen: 'Past simple.', practica: { aciertos: 9, errores: 1 } } }
+    const result = resolveMinuteQuery('¿cómo voy en inglés?', [m], { language: 'es' })
+    expect(result.contract?.respuesta_voz).toContain('Dominio: 9 aciertos y 1 error (90% de acierto)')
+  })
+
   it('separa el avance DERIVADO: rango de sesiones + pendientes en curso vs anteriores', () => {
     // Sin umbrales inventados: "en curso" es lo pendiente de la ULTIMA sesion y
     // "anteriores" lo que estaba pendiente antes y ya no figura en la ultima.
@@ -136,7 +156,7 @@ describe('3. el avance se DERIVA de las minutas (almacen unico, sin tabla nueva)
 
   it('sin minutas del area el avance es 0 (no se inventa nada)', () => {
     const avance = buildTutoringProgress(MINUTAS, { id: 'origami', label: 'origami' })
-    expect(avance).toEqual({ area: { id: 'origami', label: 'origami' }, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [] })
+    expect(avance).toEqual({ area: { id: 'origami', label: 'origami' }, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [], dominio: { aciertos: 0, errores: 0, precision: 0 } })
   })
 })
 

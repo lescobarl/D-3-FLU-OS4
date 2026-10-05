@@ -29,6 +29,7 @@ Generate a structured minute with:
 4. AGREEMENTS: List of agreements reached
 5. PENDING: List of pending items
 6. NEXT_STEPS: List of next steps
+7. PRACTICE: If the session was a lesson/practice, count the student turns you judged correct vs wrong
 
 Response format (JSON):
 {
@@ -37,8 +38,10 @@ Response format (JSON):
   "resumen": "string",
   "acuerdos": ["string"],
   "pendientes": ["string"],
-  "siguientes_pasos": ["string"]
-}`
+  "siguientes_pasos": ["string"],
+  "practica": { "aciertos": 0, "errores": 0 }
+}
+If there was no practice, omit "practica".`
         : `Eres FLU, un asistente conversacional que genera minutas profesionales en español.
 Genera una minuta estructurada con:
 1. TÍTULO: Un título descriptivo corto
@@ -47,6 +50,7 @@ Genera una minuta estructurada con:
 4. ACUERDOS: Lista de acuerdos alcanzados
 5. PENDIENTES: Lista de temas pendientes
 6. SIGUIENTES_PASOS: Lista de próximos pasos
+7. PRACTICA: Si la sesion fue una clase o practica, cuenta los turnos del alumno que juzgaste correctos y erroneos
 
 Formato de respuesta (JSON):
 {
@@ -55,6 +59,8 @@ Formato de respuesta (JSON):
   "resumen": "string",
   "acuerdos": ["string"],
   "pendientes": ["string"],
-  "siguientes_pasos": ["string"]
-}`;
+  "siguientes_pasos": ["string"],
+  "practica": { "aciertos": 0, "errores": 0 }
+}
+Si no hubo practica, omite "practica".`;
 }

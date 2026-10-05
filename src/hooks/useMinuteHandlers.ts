@@ -57,6 +57,11 @@ function conversationTextOf(history: Array<{ text?: string }> = []): string {
  * esparce en el snapshot; `{}` si la sesion no declaro un area conocida. Un solo
  * dueno de la resolucion (core/tutoring/tutoringModel).
  */
+/** Practica de la sesion (P8.63): la aporta el tutor; se esparce solo si vino. */
+function practicaOf(result: { practica?: { aciertos: number; errores: number } } = {}): { practica?: { aciertos: number; errores: number } } {
+    return result?.practica ? { practica: result.practica } : {};
+}
+
 function withTutoringArea(
     snapshot: { titulo?: string; resumen?: string; tema_sesion?: string; acuerdos?: string[]; pendientes?: string[]; siguientes_pasos?: string[] },
     history: Array<{ text?: string }> = [],
@@ -154,7 +159,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 // Add to IndexedDB via minuteKnowledge (expects MinuteSummarySnapshot)
                 // C10: la publicación en integrationStore la hace el dueño de la
                 // minuta (useMinuteKnowledge.addMinute); aquí NO se espeja.
-                const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) });
+                const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history), ...practicaOf(result) });
                 // OS2 parity: speak the minute title after generation
                 const speechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);
                 if (speechText) {
@@ -236,7 +241,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                         siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
                         tema_sesion: String(sessionRole || '').trim(),
                     };
-                    const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) });
+                    const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history), ...practicaOf(result) });
                     setSelectedMinuteId(persisted.id);
                     saved = true;
                 }
@@ -373,7 +378,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
                 tema_sesion: String(sessionRole || '').trim(),
             };
-            const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) }, { kind: 'conversacion' });
+            const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history), ...practicaOf(result) }, { kind: 'conversacion' });
 
             if (announce) {
                 const speechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);

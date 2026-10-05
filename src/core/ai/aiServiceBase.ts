@@ -75,6 +75,22 @@ export function buildConversationLog(history: AIHistoryEntry[], isEnglish: boole
  * @param isEnglish Idioma del título por defecto.
  * @param conversationLog Respaldo de `resumen` cuando el LLM no lo devuelve.
  */
+/**
+ * Practica de una sesion (P8.63): aciertos/errores del tutor, saneados a enteros
+ * >= 0. `undefined` si el modelo no lo emitio o no es numerico (degradacion honesta).
+ */
+function normalizePractica(raw: unknown): { aciertos: number; errores: number } | undefined {
+    if (!raw || typeof raw !== 'object') return undefined;
+    const r = raw as Record<string, unknown>;
+    const a = Number(r.aciertos);
+    const e = Number(r.errores);
+    if (!Number.isFinite(a) && !Number.isFinite(e)) return undefined;
+    return {
+        aciertos: Math.max(0, Math.floor(Number.isFinite(a) ? a : 0)),
+        errores: Math.max(0, Math.floor(Number.isFinite(e) ? e : 0)),
+    };
+}
+
 export function normalizeMinute(
     raw: Record<string, unknown>,
     isEnglish: boolean,
@@ -89,6 +105,7 @@ export function normalizeMinute(
         acuerdos: Array.isArray(raw.acuerdos) ? raw.acuerdos as string[] : [],
         pendientes: Array.isArray(raw.pendientes) ? raw.pendientes as string[] : [],
         siguientes_pasos: Array.isArray(raw.siguientes_pasos) ? raw.siguientes_pasos as string[] : [],
+        practica: normalizePractica(raw.practica),
     };
 }
 

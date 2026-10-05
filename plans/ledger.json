@@ -1484,6 +1484,13 @@
       "estado": "done",
       "evidencia": "MEDIDO, no declarado a ojo. (1) fluDatabase.ts -> sesion-un-solo-almacen.spec.ts (lee la tienda real sessionState) + tutoria-avance.spec.ts (escribe/relee la tienda real minutes por la via REAL, el store que P8.58 toco). (2) capabilities.ts -> voz-locucion-unica.spec.ts + tts-flag-pegado.spec.ts: specs que conducen TURNO DE VOZ REAL sin stubbear /api/gemini ni inyectar contrato, asi que la peticion llega al dev-server -> geminiProxy -> generateFluContract (voice/lib/gemini.js) -> buildCapabilitiesPrompt (capabilities.ts) antes de la compuerta de apiKey. Prueba de clasificacion: auditoria-acciones-llm/matriz-comandos INYECTAN el contrato y pizarron/minuta stubean /api/gemini -> no construyen el prompt del servidor. Se retiro una sonda exploratoria del spec de tutoria. npm run e2e:plan VERDE. Alcance real (0.23): CUBIERTO=la declaracion e2e medida de los dos ficheros; NO CUBIERTO=que la sonda pruebe el texto del prompt en el modelo, DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.63",
+      "titulo": "La tutoria no media la DESTREZA (solo contaba sesiones): mastery real por area exigia definir quien califica y con que escala",
+      "estado": "in_progress",
+      "evidencia": "Encargo: \"puedes decidirlo tu con la mejor propuesta?\". Decision del agente (autorizada al delegar): mastery por destreza con (1) califica el TUTOR al resumir la minuta, (2) escala = aciertos/errores + % de acierto (sin umbrales inventados), (3) acompana al nivel por sesiones. Cambios: practica en MinuteSummarySnapshot (fluDatabase) + AIMinuteResult/AISummaryResult (IAIService) + normalizePractica (aiServiceBase) + buildMinuteSystemPrompt (prompts.ts) + practicaOf (useMinuteHandlers) + dominio (tutoringProgress) + voz/documento (minuteKnowledgeHelpers). GUARD tests/tutoringModel.test.ts NACE ROJO (4 failed / 23) y queda 27/27; simulacion real \"Dominio: 9 aciertos y 1 error (90% de acierto)\". Alcance real (0.23): CUBIERTO=el dominio derivado con guard y simulacion real y su plomeria; NO CUBIERTO=que el modelo emita practica siempre (se degrada a 0/0), repaso/pronunciacion, DoD-producto y suite completa.",
+      "origen": "encargo-dueno-2026-10-05"
     }
   ],
   "done": [

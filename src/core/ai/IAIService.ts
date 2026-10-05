@@ -61,6 +61,11 @@ export interface AIMinuteResult {
     pendientes: string[];
     siguientes_pasos: string[];
     tema_sesion?: string;
+    /**
+     * Aciertos/errores de la practica de la sesion (P8.63), cuando el tutor los
+     * cuenta al resumir. Es la fuente del DOMINIO por destreza (opcional).
+     */
+    practica?: { aciertos: number; errores: number };
 }
 
 /**
@@ -74,6 +79,8 @@ export interface AISummaryResult {
     acuerdos: string[];
     pendientes: string[];
     siguientes_pasos: string[];
+    /** Aciertos/errores de la practica de la sesion (P8.63). */
+    practica?: { aciertos: number; errores: number };
 }
 
 /**

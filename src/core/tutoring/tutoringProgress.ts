@@ -26,6 +26,8 @@ export interface TutoringMinuteLike {
     siguientes_pasos?: string[];
     /** Area de tutoria etiquetada EXPLICITAMENTE en la minuta (P8.58). */
     tutoring_area?: string;
+    /** Practica de la sesion (P8.63): aciertos/errores que conto el tutor. */
+    practica?: { aciertos: number; errores: number };
     summarySnapshot?: Omit<TutoringMinuteLike, 'summarySnapshot'>;
 }
 
@@ -46,10 +48,12 @@ export interface TutoringProgress {
     enCurso: string[];
     /** Pendientes de sesiones previas que YA NO figuran en la mas reciente. */
     anteriores: string[];
+    /** Dominio por destreza (P8.63): aciertos/errores y % de acierto (0 si no hay). */
+    dominio: { aciertos: number; errores: number; precision: number };
 }
 
 function emptyProgress(area: TutoringArea): TutoringProgress {
-    return { area, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [] };
+    return { area, sesiones: 0, practicado: [], pendientes: [], ultimaFecha: '', primeraFecha: '', enCurso: [], anteriores: [], dominio: { aciertos: 0, errores: 0, precision: 0 } };
 }
 
 function snapshotOf(record: TutoringMinuteLike = {}): TutoringMinuteLike {
@@ -108,6 +112,8 @@ export function buildTutoringProgress(
 ): TutoringProgress {
     const progress = emptyProgress(area);
     const pendingBySession: string[][] = [];
+    let dominioAciertos = 0;
+    let dominioErrores = 0;
     for (const record of Array.isArray(records) ? records : []) {
         if (!record || !minuteCoversTutoringArea(record, area)) continue;
         const snapshot = snapshotOf(record);
@@ -120,6 +126,11 @@ export function buildTutoringProgress(
         if (!progress.ultimaFecha) progress.ultimaFecha = fecha;
         // El orden es mas-reciente-primero: la ultima fecha asignada es la mas antigua.
         if (fecha) progress.primeraFecha = fecha;
+        const practica = snapshot.practica;
+        if (practica) {
+            dominioAciertos += Math.max(0, Math.floor(Number(practica.aciertos) || 0));
+            dominioErrores += Math.max(0, Math.floor(Number(practica.errores) || 0));
+        }
     }
     // Avance DERIVADO, sin umbrales inventados: lo pendiente de la sesion MAS
     // RECIENTE esta EN CURSO; lo que estaba pendiente antes y ya NO figura en la
@@ -131,5 +142,11 @@ export function buildTutoringProgress(
             if (!enCursoKey.has(cleanForSpeech(item).toLowerCase())) pushUnique(progress.anteriores, item);
         }
     }
+    const totalDominio = dominioAciertos + dominioErrores;
+    progress.dominio = {
+        aciertos: dominioAciertos,
+        errores: dominioErrores,
+        precision: totalDominio > 0 ? Math.round((dominioAciertos / totalDominio) * 100) : 0,
+    };
     return progress;
 }

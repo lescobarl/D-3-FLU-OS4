@@ -114,6 +114,8 @@ export interface MinuteSummarySnapshot {
      * `kind` se tratan como 'minuta'.
      */
     kind?: KnowledgeKind;
+    /** Practica de la sesion (P8.63): aciertos/errores que conto el tutor. */
+    practica?: { aciertos: number; errores: number };
 }
 
 /**
