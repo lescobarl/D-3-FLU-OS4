@@ -24,6 +24,8 @@
 // ============================================================
 
 import { normalizeSpaces, cleanForSpeech } from './textUtils';
+import { parseTutoringProgressQuery, type TutoringArea } from '../core/tutoring/tutoringModel';
+import { buildTutoringProgress, type TutoringMinuteLike, type TutoringProgress } from '../core/tutoring/tutoringProgress';
 
 /** Snapshot de minuta (campos opcionales) admitido por los helpers. */
 export interface MinuteSnapshotLike {
@@ -628,11 +630,104 @@ export interface MinuteLookupResult {
 /**
  * Consulta numerada → lectura local determinista; historial general → Gemini.
  */
+// ------------------------------------------------------------
+// TUTORIA: avance por AREA, derivado de las minutas (P8.57)
+// ------------------------------------------------------------
+// La consulta "¿como voy en ingles?" no la contestaba nadie: caia al LLM, que
+// solo puede inventarse el avance. Las minutas son el UNICO almacen del avance,
+// asi que aqui se DERIVA (no hay tabla nueva, AGENTS 7.7.c) y la respuesta sale
+// en local, sin IA. El vocabulario de areas y la deteccion de la consulta viven
+// en su dueno (core/tutoring/tutoringModel).
+
+
+/** Respuesta hablada del avance: honesta (0 sesiones se dice, no se inventa). */
+export function buildTutoringProgressSpeech(
+    progress: TutoringProgress,
+    { language = 'es' }: { language?: string } = {},
+): string {
+    const isEnglish = language === 'en';
+    const { area, sesiones, practicado, pendientes, ultimaFecha } = progress;
+    if (!sesiones) {
+        return cleanForSpeech(
+            isEnglish
+                ? `You have no ${area.label} sessions saved yet. Tell me your level and we start practising today.`
+                : `Todavía no hay sesiones de ${area.label} en tus minutas. Dime tu nivel y practicamos hoy mismo.`,
+        );
+    }
+    const parts: string[] = [];
+    if (isEnglish) {
+        parts.push(
+            `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${ultimaFecha ? `, the latest on ${ultimaFecha}` : ''}.`,
+        );
+        if (practicado.length) parts.push(`Worked on: ${practicado.join('. ')}.`);
+        if (pendientes.length) parts.push(`Next: ${pendientes.join('. ')}.`);
+        else parts.push('Nothing pending: let us move to the next step.');
+    } else {
+        parts.push(
+            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión' : 'sesiones'} registradas${ultimaFecha ? `, la última el ${ultimaFecha}` : ''}.`,
+        );
+        if (practicado.length) parts.push(`Trabajado: ${practicado.join('. ')}.`);
+        if (pendientes.length) parts.push(`Pendiente: ${pendientes.join('. ')}.`);
+        else parts.push('Sin pendientes: pasemos al siguiente paso.');
+    }
+    return cleanForSpeech(parts.join(' '));
+}
+
+/** Contrato local de la consulta de avance (voz + documento en el Pizarron). */
+export function buildTutoringProgressContract(
+    progress: TutoringProgress,
+    { language = 'es' }: { language?: string } = {},
+): MinuteLookupContract {
+    const isEnglish = language === 'en';
+    const { area, sesiones, practicado, pendientes, ultimaFecha } = progress;
+    const labels = isEnglish
+        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next' }
+        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente' };
+    const bullets = [
+        `${labels.sessions}: ${sesiones}`,
+        ultimaFecha ? `${labels.last}: ${ultimaFecha}` : '',
+        practicado.length ? `${labels.worked}:\n${practicado.map((item) => `- ${item}`).join('\n')}` : '',
+        pendientes.length ? `${labels.next}:\n${pendientes.map((item) => `- ${item}`).join('\n')}` : '',
+    ].filter(Boolean);
+    return {
+        respuesta_voz: buildTutoringProgressSpeech(progress, { language }),
+        navegacion: { comando: null, destino: null, parametros: {} },
+        workspace: {
+            tipo: 'text',
+            titulo: labels.title,
+            contenido: bullets.join('\n\n'),
+            prompt_visual: '',
+            puntos_clave: pendientes.slice(0, 5),
+        },
+    };
+}
+
+/**
+ * Consulta numerada → lectura local determinista; historial general → Gemini.
+ * Consulta de AVANCE por area → avance local derivado de las minutas.
+ */
 export function resolveMinuteQuery(
     query: string = '',
     records: MinuteRecordLike[] = [],
     { language = 'es' }: { language?: string } = {},
 ): MinuteLookupResult {
+    const area: TutoringArea | null = parseTutoringProgressQuery(query);
+    if (area) {
+        // El orden (mas reciente primero) lo fija el comparador de codigos de esta
+        // casa; la derivacion NO reimplementa el orden.
+        const ordered = [...(Array.isArray(records) ? records : [])].sort(compareMinuteHistoryCodeDesc);
+        const progress = buildTutoringProgress(ordered as TutoringMinuteLike[], area);
+        return {
+            mode: 'local',
+            contract: buildTutoringProgressContract(progress, { language }),
+            diagnostics: {
+                provider: 'minute-store',
+                route: progress.sesiones ? 'tutoring-progress' : 'tutoring-progress-empty',
+                sequence: null,
+                historyCode: null,
+            },
+        };
+    }
     const sequence = parseMinuteSequenceFromQuery(query);
     if (!sequence) {
         return { mode: 'gemini' };

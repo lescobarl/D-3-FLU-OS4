@@ -7,6 +7,7 @@
 import { FLU_PLAYLIST } from './musicPlayer'
 import { GAME_CATALOG, gameDisplayName } from '../core/games/gameCatalog'
 import { CONTRACT_ACTION_DOMAINS } from '../core/agenda/domainScopedIntent'
+import { buildTutoringRule } from '../core/tutoring/tutoringModel'
 
 export interface CapabilityDef {
   id: string
@@ -86,6 +87,14 @@ export const FLU_CAPABILITIES: CapabilityDef[] = [
     descriptionEn:
       'Starts or continues a game from the catalog with the "juego" contract field: {gameId, action}. While a game is active, the player answer is emitted as action="turn" with playerText.',
   },
+  {
+    id: 'tutoria',
+    label: 'Enseñar y practicar cualquier área (tutoría)',
+    descriptionEs:
+      'Enseña y practica CUALQUIER área de forma conversacional (inglés conversacional, matemáticas, historia...): diagnostica el nivel, explica, pide práctica, corrige y cierra con un siguiente paso. El avance por área se guarda en las minutas y se consulta preguntando "¿cómo voy en inglés?".',
+    descriptionEn:
+      'Teaches and practises ANY area conversationally (conversational English, math, history...): it checks the level, explains, asks for practice, corrects and closes with one next step. Progress per area is kept in the minutes and asked for with "how am I doing in English?".',
+  },
 ]
 
 /** Nombre (id) de las capacidades, útil para validación y tests. */
@@ -125,8 +134,9 @@ export function buildCapabilitiesPrompt(language: 'es' | 'en' = 'es'): string {
   const juegoRule = isEnglish
     ? 'MANDATORY GAME RULE: when the user asks to play or start a game (e.g. "play the lottery", "put on the lottery", "I want to play riddles"), you MUST emit the "juego" contract field with { "gameId": "<catalog id>", "action": "start" }. gameId MUST be one of: ' + gameMenuList + '. Answering with text only is NOT enough. WHILE A GAME IS ACTIVE the player answer is NOT conversation: you MUST emit "juego" with { "gameId": "<active game>", "action": "turn", "playerText": "<what the player said>" } so the local engine evaluates it. Use "action": "end" to stop the game and "action": "menu" to ask for the game menu.'
     : 'REGLA DE JUEGOS OBLIGATORIA: cuando el usuario te pida jugar o empezar un juego (ej. "juguemos a la loteria", "pon la loteria", "quiero jugar a las adivinanzas"), DEBES emitir el campo "juego" del contrato con { "gameId": "<id del catalogo>", "action": "start" }. gameId DEBE ser uno de: ' + gameMenuList + '. Responder solo con texto NO es suficiente. MIENTRAS HAYA UNA PARTIDA ACTIVA la respuesta del jugador NO es conversacion: DEBES emitir "juego" con { "gameId": "<el juego activo>", "action": "turn", "playerText": "<lo que dijo el jugador>" } para que el motor local la evalue. Usa "action": "end" para terminar la partida y "action": "menu" para pedir el menu de juegos.'
+  const tutoriaRule = buildTutoringRule(isEnglish ? 'en' : 'es')
   const honest = isEnglish
     ? 'IMPORTANT: you cannot browse the web, call external APIs, or create files on your own; everything you do is expressed through the "contrato" JSON fields below. Music exception: FLU performs the online song search (Deezer) when you emit "musica.cancion" — you do not browse, you only name the song. For music use "musica.cancion": if it is in the playlist it plays instantly; otherwise FLU searches it online (Deezer).'
     : 'IMPORTANTE: no puedes navegar por internet, llamar APIs externas ni crear archivos por tu cuenta; todo lo que haces se expresa con los campos JSON del "contrato" de abajo. Excepción música: FLU realiza la búsqueda en línea (Deezer) cuando emites "musica.cancion" — tú no navegas, solo indicas la canción. Para música usa "musica.cancion": si es del playlist suena al instante; si no, FLU la busca en línea (Deezer).'
-  return [head, ...lines, '', music, '', musicRule, '', accionesRule, '', juegoRule, '', honest].join('\n')
+  return [head, ...lines, '', music, '', musicRule, '', accionesRule, '', juegoRule, '', tutoriaRule, '', honest].join('\n')
 }
