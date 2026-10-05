@@ -1432,7 +1432,7 @@
     {
       "id": "P8.55",
       "titulo": "La VOZ del turno de un control de musica la sigue hablando el LLM (puede contestar \"Alto.\" a \"okay flow alto\" aunque la musica SI se detenga)",
-      "estado": "in_progress",
+      "estado": "done",
       "evidencia": "CERRADO 2026-10-05 (FIX MEDIDO). Defecto abierto al cerrar P8.54 (log del dueno): el turno de un control de musica lo hablaba el LLM aunque la accion la resolviera el dueno determinista; el fast-path era MUDO (respuesta_voz: '') y resolvedContract.fastPathOwnsSpeech solo cubria juego/ambiente, asi que la frase del modelo sobrevivia y podia contestar \"Alto.\" a \"alto\". FIX: musicActions publica la frase del turno (musicActionSpeech, es/en, una sola fuente) y el fast-path la despacha; fastPathOwnsSpeech incluye la musica resuelta por el dueno, asi que el modelo ya no habla ese turno. MEDIDO en la app real (Playwright sobre el portal vivo, arnes de voz): \"Okay Flow para la musica\" -> la conversacion queda con UNA sola fila de FLU: \"Música detenida.\" (determinista; el modelo no improvisa). Guard: caso P8.55 en tests/arbiterDomainBarrier.test.ts (la voz del modelo se anula con musica resuelta, se conserva sin ella; detector no decorativo) 65/65 verde en los tres ficheros de musica.",
       "origen": "hallazgo-de-P8.54-2026-10-04"
     },
@@ -2938,6 +2938,12 @@
       "commit": "922fef2",
       "titulo": "La tutoria no existia en el codigo: sin areas, sin regla de pedagogia y sin forma de saber el avance (la consulta por area caia al LLM, que solo puede inventarla)",
       "evidencia": "CERRADO 2026-10-04 (commit 922fef2 = src + tests + contrato; el test del catalogo se alineo a 10 capacidades en el commit de cierre). ENCARGO: ensenar ingles y cualquier area de forma conversacional y saber el avance por area con las minutas. MODELO ENTREGADO: dueno unico del vocabulario de areas ABIERTAS + regla de pedagogia (diagnostica -> explica -> pide practicar -> corrige -> un siguiente paso, en el idioma que se practica) en src/core/tutoring/tutoringModel.ts; derivacion PURA del avance por area desde las MINUTAS (unico almacen, sin tabla nueva) en tutoringProgress.ts; la consulta \"¿como voy en X?\" la resuelve resolveMinuteQuery en LOCAL (voz + documento), isMinuteKnowledgeRequest delega en su dueno y capabilities.ts publica la capacidad tutoria y mete la regla en el prompt. MEDIDO en la app real (Playwright sobre el portal vivo, arnes de voz, relay interceptado, spec temporal borrado): \"Okay Flow como voy en ingles\" -> FLU responde \"Todavia no hay sesiones de Ingles en tus minutas. Dime tu nivel y practicamos hoy mismo.\" con NINGUNA linea de latencia de IA (lo resolvio FLU en local, no el modelo). GUARD tests/tutoringModel.test.ts: NACE ROJO medido (8 de 15 casos fallando antes del cableado: \"expected gemini to be local\") y queda 15/15. LA PUERTA CAZO UN EFECTO REAL: el catalogo honesto de capacidades crecio a 10 y tests/musicCapabilities.test.ts lo fijaba en 9 (alineado en el mismo cierre). Barrera 180 ficheros / 1522 casos VERDE; eslint 0; tsc -b limpio. Alcance real (0.23): CUBIERTO=el modelo de tutoria (areas + regla), la consulta de avance por area resuelta en local desde las minutas y su llegada al prompt, con guard y simulacion real; NO CUBIERTO=la calidad de la clase (DoD-producto), el nivel/dominio por area (mastery), el repaso espaciado, la evaluacion de pronunciacion, una etiqueta de minuta propia de tutoria (hoy el area se reconoce por el texto del tema/titulo/resumen) y la suite completa."
+    },
+    {
+      "id": "P8.55",
+      "commit": "981e41b",
+      "titulo": "La VOZ del turno de un control de musica la sigue hablando el LLM (puede contestar \"Alto.\" a \"okay flow alto\" aunque la musica SI se detenga)",
+      "evidencia": "CERRADO 2026-10-05 (commit 981e41b). La voz del turno de un control de musica la dice su dueno determinista (musicActionSpeech en core/media/musicActions) y fastPathOwnsSpeech la incluye, asi que el modelo no habla ese turno. MEDIDO en la app real: \"Okay Flow para la musica\" -> UNA sola fila de FLU: \"Música detenida.\" Guard P8.55 en la barrera (65/65 en los tres ficheros de musica). Alcance real (0.23): CUBIERTO=la voz del turno de musica, con guard y simulacion; NO CUBIERTO=el DoD-producto y la suite completa."
     }
   ]
 }
