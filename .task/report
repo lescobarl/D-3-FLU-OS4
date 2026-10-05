@@ -3849,3 +3849,20 @@ evaluacion de pronunciacion y la suite completa.
 Alcance real (0.23): CUBIERTO=la etiqueta explicita de area en la minuta, su derivacion con respaldo por texto,
 el cableado de la via real de guardado, la concordancia de la voz, con guard ROJO->VERDE y simulacion real;
 NO CUBIERTO=el DoD-producto, mastery/repaso/pronunciacion, src/core/db/fluDatabase.ts en e2eScope y la suite completa.
+
+## P8.59 - La ultima sesion se presenta como fecha legible - 2026-10-05
+
+Cambios aplicados: src/lib/minuteKnowledgeHelpers.ts (tutoringDateLabel: el historyCode YYMMDD o
+una fecha ISO se presenta como "5 de octubre de 2026" / "2026-10-05", con los meses de calendarNames),
+tests/tutoringModel.test.ts (+1 caso, guard).
+
+Validado contra:
+  - MEDIDO (simulacion real): ANTES la voz decia "la ultima el 261005 01" (la minuta guarda historyCode).
+  - DESPUES (misma simulacion): "De Ingles llevas 2 sesiones registradas, la ultima el 5 de octubre de 2026".
+  - Guard: caso nuevo NACE ROJO (1 failed / 20 passed) y queda 21/21.
+  - Barrera: npm run lint 180 ficheros / 1531 casos VERDE; tsc -b limpio; npm run gate VERDE.
+
+No validado: su pantalla (DoD-producto), mastery/repaso/pronunciacion y la suite completa.
+
+Alcance real (0.23): CUBIERTO=la fecha legible de la ultima sesion en la voz y el documento;
+NO CUBIERTO=el DoD-producto, mastery/repaso/pronunciacion y la suite completa.
