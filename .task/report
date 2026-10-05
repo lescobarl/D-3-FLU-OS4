@@ -3888,3 +3888,21 @@ pronunciacion y la suite completa.
 
 Alcance real (0.23): CUBIERTO=el avance derivado (rango + en curso vs anteriores) en voz y documento;
 NO CUBIERTO=el nivel con bandas (requiere tu aprobacion), mastery real, repaso/pronunciacion y la suite completa.
+
+## P8.61 - El avance dice su nivel (bandas aprobadas por el dueno) - 2026-10-05
+
+Cambios aplicados: src/core/tutoring/tutoringModel.ts (LEVEL_BANDS + resolveTutoringLevel, bandas
+APROBADAS 0 / 1-2 / 3-5 / 6+), src/lib/minuteKnowledgeHelpers.ts (nivel en voz y documento),
+tests/tutoringModel.test.ts (+2 casos, guard).
+
+Autorizacion: el dueno aprobo la tabla de bandas con "adelante" (AGENTS 0.13: umbrales aprobados).
+
+Validado contra:
+  - Guard: casos nuevos NACE ROJO (2 failed / 22 passed) y queda 24/24.
+  - Simulacion real: "...la ultima el 5 de octubre de 2026. Nivel: inicial. ..." (2 passed, 0 IA).
+  - Barrera: npm run lint 180 ficheros / 1534 casos VERDE; tsc -b limpio; npm run gate VERDE.
+
+No validado: su pantalla (DoD-producto), mastery real por destreza, repaso, pronunciacion y la suite completa.
+
+Alcance real (0.23): CUBIERTO=el nivel por bandas aprobadas en voz y documento; NO CUBIERTO=mastery real,
+repaso/pronunciacion, el DoD-producto y la suite completa.

@@ -1474,7 +1474,7 @@
     {
       "id": "P8.61",
       "titulo": "El avance de tutoria no decia un NIVEL por area (un nivel con umbrales exige bandas aprobadas por el dueno, que ahora existen)",
-      "estado": "in_progress",
+      "estado": "done",
       "evidencia": "AUTORIZADO por el dueno con \"adelante\" sobre la tabla propuesta: bandas 0 sin empezar / 1-2 inicial / 3-5 en progreso / 6+ avanzado (AGENTS 0.13: umbrales aprobados por el dueno). DECLARADAS en src/core/tutoring/tutoringModel.LEVEL_BANDS y resueltas por resolveTutoringLevel(sesiones, idioma). Voz y documento dicen el nivel junto al rango y los pendientes (src/lib/minuteKnowledgeHelpers.ts). GUARD tests/tutoringModel.test.ts NACE ROJO (2 failed / 22 passed) y queda 24/24; simulacion real 2 passed con \"Nivel: inicial\". Alcance real (0.23): CUBIERTO=el nivel por bandas aprobadas en voz y documento; NO CUBIERTO=mastery real por destreza, repaso/pronunciacion, DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
     }
@@ -2992,6 +2992,13 @@
       "commit": "0d016e7",
       "titulo": "El avance de tutoria no mostraba el rango de sesiones ni separaba los pendientes en curso de los ya cerrados (un \"nivel\" necesitaria bandas aprobadas por el dueno)",
       "evidencia": "CERRADO 2026-10-05 (commit 0d016e7 = src + tests + spec + contrato + ledger). ENCARGO: \"adelante\" sobre mastery/nivel por area. DECISION DECLARADA: NO se inventa un nivel con umbrales (AGENTS 9.3 los prohibe y 0.13 exige aprobacion del dueno); se entrega el avance DERIVADO real: (1) RANGO (primera -> ultima sesion); (2) pendientes EN CURSO = los de la sesion mas reciente; (3) ANTERIORES = los que estaban pendientes antes y ya NO figuran en la ultima. Cambios: src/core/tutoring/tutoringProgress.ts (primeraFecha/enCurso/anteriores), src/lib/minuteKnowledgeHelpers.ts (voz y documento; puntos_clave pasa a enCurso; el sufijo del rango se arma sin `=== 'en' ?` para no engordar el trinquete de textos de UI). GUARD tests/tutoringModel.test.ts: NACE ROJO (2 failed / 20 passed: enCurso/anteriores undefined y toEqual sin los campos) y queda 22/22. SIMULACION REAL: la voz devuelve \"...2 sesiones registradas desde el 3 de octubre de 2026, la ultima el 5 de octubre de 2026 ... En curso: Practicar 10 verbos irregulares. Ya no figura como pendiente: Write 5 sentences in the past.\" (2 passed, 0 llamadas a la IA). Barrera npm run lint 180 ficheros / 1532 casos VERDE; tsc -b limpio; npm run gate VERDE. Alcance real (0.23): CUBIERTO=el avance derivado (rango + en curso vs anteriores) en la voz y el documento, con guard ROJO->VERDE y simulacion real; NO CUBIERTO=la etiqueta de nivel con bandas (requiere bandas aprobadas por el dueno), el mastery real, el repaso espaciado, la evaluacion de pronunciacion, el DoD-producto y la suite completa.",
+      "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.61",
+      "commit": "344cd39",
+      "titulo": "El avance de tutoria no decia un NIVEL por area (un nivel con umbrales exige bandas aprobadas por el dueno, que ahora existen)",
+      "evidencia": "CERRADO 2026-10-05 (commit 344cd39 = src + tests + spec + contrato + ledger). AUTORIZADO por el dueno con \"adelante\" sobre la tabla propuesta: bandas 0 sin empezar / 1-2 inicial / 3-5 en progreso / 6+ avanzado (AGENTS 0.13: los umbrales los aprueba el dueno). DECLARADAS en src/core/tutoring/tutoringModel.LEVEL_BANDS (sin numeros magicos dispersos) y resueltas por resolveTutoringLevel(sesiones, idioma) con etiquetas es/en. Voz y documento del avance dicen el nivel junto al rango y los pendientes (src/lib/minuteKnowledgeHelpers.ts). GUARD tests/tutoringModel.test.ts: NACE ROJO (2 failed / 22 passed: resolveTutoringLevel sin definir) y queda 24/24. SIMULACION REAL: \"...desde el 3 de octubre de 2026, la ultima el 5 de octubre de 2026. Nivel: inicial. ...\" (2 passed, 0 llamadas a la IA). Barrera npm run lint 180 ficheros / 1534 casos VERDE; tsc -b limpio; npm run gate VERDE. Alcance real (0.23): CUBIERTO=el nivel por bandas aprobadas en la voz y el documento, con guard ROJO->VERDE y simulacion real; NO CUBIERTO=el mastery real por destreza (el nivel solo cuenta sesiones), el repaso espaciado, la evaluacion de pronunciacion, el DoD-producto y la suite completa.",
       "origen": "encargo-dueno-2026-10-05"
     }
   ]
