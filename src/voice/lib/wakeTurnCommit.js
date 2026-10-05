@@ -168,6 +168,20 @@ export function isTurnCapture(capture = '', { wakeRequired = false, wakeWords = 
 }
 
 /**
+ * ¿Hay que EXIGIR la wake word en este punto de la escucha? DUENO UNICO de la
+ * decision: antes estaba reimplementada en TRES sitios (dos identicos en el hook y
+ * uno reducido en el commit del stream), que podian divergir. `conversationActive`
+ * es el contexto de escucha; con la conversacion INACTIVA siempre se exige.
+ *
+ * @param {boolean} conversationActive
+ * @param {import('./fluConfig.js').typeof FLU_CONFIG} [config]
+ * @returns {boolean}
+ */
+export function requiresWakeWord(conversationActive = false, config = FLU_CONFIG) {
+  return config.voiceCommands?.requireWakeAlways !== false || !conversationActive
+}
+
+/**
  * Guardia de commit: separa pasivo TV de cola flu si la captura aún llega mezclada.
  *
  * `wakeWordMatched` viaja con el resultado: es el MISMO analisis del turno

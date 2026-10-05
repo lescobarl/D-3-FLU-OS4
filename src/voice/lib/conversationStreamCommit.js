@@ -3,7 +3,7 @@
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
 import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs } from './audioMath.js'
-import { resolveInlineWakeAtCommit, isTurnCapture } from './wakeTurnCommit.js'
+import { resolveInlineWakeAtCommit, isTurnCapture, requiresWakeWord } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
@@ -169,7 +169,7 @@ export function handleConversationStreamSync(
   // P8.36 - y nace SOLO para un turno DE VERDAD. El ruido de fondo (aula/casa) no
   // es un turno: si acunara id, moveria el id del turno VIVO y la resolucion (que
   // lo lee al escribir) abriria una SEGUNDA fila con la misma frase.
-  const wakeRequired = FLU_CONFIG.voiceCommands?.requireWakeAlways !== false
+  const wakeRequired = requiresWakeWord(conversationActiveRef?.current)
   const esTurno = (text) => isTurnCapture(text, { wakeRequired })
   // UN ID POR PETICION (no por reloj ni por estado de la UI): la identidad del
   // turno la dicta la MISMA memoria del despacho —la ultima peticion ACEPTADA

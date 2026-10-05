@@ -22,7 +22,7 @@ import {
 } from '../lib/audioMath'
 import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
-import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
+import { analyzeWakeTurn, requiresWakeWord } from '../lib/wakeTurnCommit.js'
 import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js'
 import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
@@ -2126,7 +2126,7 @@ export function useFluVoiceAssistant({
 
   const wireRecognitionEvents = useCallback(
     (Recognition) => {
-      const requireWake = FLU_CONFIG.voiceCommands.requireWakeAlways !== false || !conversationActiveRef?.current
+      const requireWake = requiresWakeWord(conversationActiveRef?.current)
 
       Recognition.onstart = () => {
         recognitionActiveRef.current = true
@@ -3579,7 +3579,7 @@ export function useFluVoiceAssistant({
     }
     if (!snapshot && !closing) return
 
-    const requireWake = FLU_CONFIG.voiceCommands.requireWakeAlways !== false || !conversationActiveRef?.current
+    const requireWake = requiresWakeWord(conversationActiveRef?.current)
     const wakeWords = resolvedWakeWords
     // Captura pasiva: recordar si el micrófono estaba abierto para reabrirlo al
     // final del turno, salvo que sea un cierre explícito (p. ej. CERRAR_ESCUCHA)
