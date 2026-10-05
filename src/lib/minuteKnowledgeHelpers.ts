@@ -24,7 +24,7 @@
 // ============================================================
 
 import { normalizeSpaces, cleanForSpeech } from './textUtils';
-import { parseTutoringProgressQuery, type TutoringArea } from '../core/tutoring/tutoringModel';
+import { parseTutoringProgressQuery, resolveTutoringLevel, type TutoringArea } from '../core/tutoring/tutoringModel';
 import { buildTutoringProgress, type TutoringMinuteLike, type TutoringProgress } from '../core/tutoring/tutoringProgress';
 import { MONTH_DISPLAY_ES } from '../core/temporal/calendarNames';
 
@@ -695,10 +695,13 @@ export function buildTutoringProgressSpeech(
     const rangoDesde = (desde: string): string =>
         (isEnglish ? ' since ' : ' desde el ') + tutoringDateLabel(desde, isEnglish ? 'en' : 'es');
     const rangoSuffix = primeraFecha && primeraFecha !== ultimaFecha ? rangoDesde(primeraFecha) : '';
+    const nivel = resolveTutoringLevel(sesiones, isEnglish ? 'en' : 'es');
+    const nivelPrefijo = isEnglish ? 'Level' : 'Nivel';
     if (isEnglish) {
         parts.push(
             `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${rangoSuffix}${ultimaFecha ? `, the latest on ${tutoringDateLabel(ultimaFecha, 'en')}` : ''}.`,
         );
+        parts.push(`${nivelPrefijo}: ${nivel.label}.`);
         if (practicado.length) parts.push(`Worked on: ${joinSpeechItems(practicado)}.`);
         if (enCurso.length) parts.push(`In progress: ${joinSpeechItems(enCurso)}.`);
         else parts.push('Nothing pending: let us move to the next step.');
@@ -707,6 +710,7 @@ export function buildTutoringProgressSpeech(
         parts.push(
             `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${rangoSuffix}${ultimaFecha ? `, la última el ${tutoringDateLabel(ultimaFecha, 'es')}` : ''}.`,
         );
+        parts.push(`${nivelPrefijo}: ${nivel.label}.`);
         if (practicado.length) parts.push(`Trabajado: ${joinSpeechItems(practicado)}.`);
         if (enCurso.length) parts.push(`En curso: ${joinSpeechItems(enCurso)}.`);
         else parts.push('Sin pendientes: pasemos al siguiente paso.');
@@ -723,10 +727,12 @@ export function buildTutoringProgressContract(
     const isEnglish = language === 'en';
     const { area, sesiones, practicado, enCurso, anteriores, ultimaFecha, primeraFecha } = progress;
     const labels = isEnglish
-        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next', since: 'Since', done: 'No longer pending' }
-        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente', since: 'Desde', done: 'Ya no pendiente' };
+        ? { title: `${area.label} progress`, sessions: 'Sessions', last: 'Last', worked: 'Worked on', next: 'Next', since: 'Since', done: 'No longer pending', level: 'Level' }
+        : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente', since: 'Desde', done: 'Ya no pendiente', level: 'Nivel' };
+    const nivel = resolveTutoringLevel(sesiones, isEnglish ? 'en' : 'es');
     const bullets = [
         `${labels.sessions}: ${sesiones}`,
+        `${labels.level}: ${nivel.label}`,
         primeraFecha && primeraFecha !== ultimaFecha ? `${labels.since}: ${tutoringDateLabel(primeraFecha, isEnglish ? 'en' : 'es')}` : '',
         ultimaFecha ? `${labels.last}: ${tutoringDateLabel(ultimaFecha, isEnglish ? 'en' : 'es')}` : '',
         practicado.length ? `${labels.worked}:\n${practicado.map((item) => `- ${item}`).join('\n')}` : '',

@@ -74,6 +74,41 @@ export function resolveTutoringArea(label: string = ''): TutoringArea | null {
 }
 
 /**
+ * Bandas de NIVEL de un area (P8.61). APROBADAS por el dueno el 2026-10-05
+ * (tabla propuesta y aceptada: 0 "sin empezar" / 1-2 "inicial" / 3-5 "en
+ * progreso" / 6+ "avanzado"). Son datos DECLARADOS y aprobados, no umbrales
+ * inventados por el agente (AGENTS 0.13/9.3); una etiqueta, un sitio: ajustar
+ * una banda es tocar AQUI.
+ */
+const LEVEL_BANDS: ReadonlyArray<{ minSesiones: number; id: string; labelEs: string; labelEn: string }> = Object.freeze([
+    { minSesiones: 0, id: 'sin-empezar', labelEs: 'sin empezar', labelEn: 'not started' },
+    { minSesiones: 1, id: 'inicial', labelEs: 'inicial', labelEn: 'beginner' },
+    { minSesiones: 3, id: 'en-progreso', labelEs: 'en progreso', labelEn: 'in progress' },
+    { minSesiones: 6, id: 'avanzado', labelEs: 'avanzado', labelEn: 'advanced' },
+]);
+
+/** Nivel de un area: id canonico (independiente del idioma) + etiqueta legible. */
+export interface TutoringLevel {
+    id: string;
+    label: string;
+}
+
+/**
+ * Nivel de un area por su numero de sesiones: la banda MAS ALTA alcanzada.
+ * Sin numeros magicos dispersos: las bandas viven en LEVEL_BANDS.
+ */
+export function resolveTutoringLevel(sesiones: number, language: 'es' | 'en' = 'es'): TutoringLevel {
+    const n = Number.isFinite(sesiones) ? Math.max(0, Math.floor(sesiones)) : 0;
+    let band = LEVEL_BANDS[0];
+    for (const candidate of LEVEL_BANDS) {
+        if (n >= candidate.minSesiones) band = candidate;
+    }
+    let label = band.labelEs;
+    if (language === 'en') label = band.labelEn;
+    return { id: band.id, label };
+}
+
+/**
  * ¿El texto MENCIONA el area? Compara por palabra completa (no confunde "arte"
  * dentro de "apartamento") usando los sinonimos conocidos del area y, para un
  * area libre, su etiqueta y su id.

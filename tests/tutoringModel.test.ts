@@ -17,6 +17,7 @@ import {
   parseTutoringProgressQuery,
   resolveMinuteTutoringArea,
   resolveTutoringArea,
+  resolveTutoringLevel,
 } from '../src/core/tutoring/tutoringModel'
 import { buildTutoringProgress, minuteCoversTutoringArea } from '../src/core/tutoring/tutoringProgress'
 import { resolveMinuteQuery } from '../src/lib/minuteKnowledgeHelpers'
@@ -104,6 +105,23 @@ describe('3. el avance se DERIVA de las minutas (almacen unico, sin tabla nueva)
     expect(avance.practicado).toEqual(['Repasamos el past simple.', 'Vocabulario de la casa.'])
     expect(avance.pendientes).toEqual(['Practicar 10 verbos irregulares', 'Repasar preposiciones'])
     expect(avance.ultimaFecha).toBe('2026-07-02')
+  })
+
+  it('el NIVEL sale de bandas aprobadas (0/1-2/3-5/6+), no de un umbral suelto', () => {
+    expect(resolveTutoringLevel(0)).toEqual({ id: 'sin-empezar', label: 'sin empezar' })
+    expect(resolveTutoringLevel(1).id).toBe('inicial')
+    expect(resolveTutoringLevel(2).id).toBe('inicial')
+    expect(resolveTutoringLevel(3).id).toBe('en-progreso')
+    expect(resolveTutoringLevel(5).id).toBe('en-progreso')
+    expect(resolveTutoringLevel(6).id).toBe('avanzado')
+    expect(resolveTutoringLevel(99).id).toBe('avanzado')
+    expect(resolveTutoringLevel(2, 'en').label).toBe('beginner')
+  })
+
+  it('la voz del avance dice el nivel (2 sesiones de ingles -> inicial)', () => {
+    const result = resolveMinuteQuery('¿cómo voy en inglés?', MINUTAS, { language: 'es' })
+    expect(result.contract?.respuesta_voz).toContain('Nivel: inicial')
+    expect(result.contract?.workspace?.contenido || '').toContain('Nivel: inicial')
   })
 
   it('separa el avance DERIVADO: rango de sesiones + pendientes en curso vs anteriores', () => {
