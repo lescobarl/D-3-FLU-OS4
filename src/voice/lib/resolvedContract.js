@@ -42,9 +42,11 @@ export function buildResolvedContract({ contract, lateStateful, fastPathConfig, 
     // "cada 2 turnos de nueva carta no hace nada". Mismo criterio que
     // `resolveDeterministicCourtesySpeech`, que ya devuelve '' para juego/ambiente.
     // Configuracion NO entra aqui: su accion no habla sola, asi que conserva la
-    // respuesta del modelo como confirmacion verbal.
+    // respuesta del modelo como confirmacion verbal. MUSICA SI entra (P8.55): su
+    // dueno determinista ya dice la frase del turno (musicActionSpeech) y el
+    // modelo, sin saber que la orden era un control, respondia "Alto." a "alto".
     const fastPathOwnsSpeech = Boolean(
-        fastGame?.gameId || isCatalogLevelGameAction(fastGame) || fastEnv?.tipo,
+        fastGame?.gameId || isCatalogLevelGameAction(fastGame) || fastEnv?.tipo || lateStateful?.music?.accion,
     )
     return {
         ...contract.contract,

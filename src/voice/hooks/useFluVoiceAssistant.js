@@ -32,6 +32,7 @@ import {
   resolveDeterministicCommand,
   resolveDeterministicSkipGeminiContract,
   resolveStatefulDomains,
+  musicActionSpeech,
   resolveVoiceCommand,
 } from '../lib/deterministicArbiter'
 import { noteGameTurn } from '../../core/games/gameSessionStore'
@@ -3069,7 +3070,7 @@ export function useFluVoiceAssistant({
       if (!intent?.tipo && !isMusicAction) return null
       await onContractResolved?.({
         contract: {
-          respuesta_voz: '',
+          respuesta_voz: isMusicAction ? musicActionSpeech(intent.accion, language || 'es') : '',
           navegacion: { comando: null, destino: null, parametros: {} },
           workspace: null,
           musica: isMusicAction ? { accion: intent.accion, ...(intent.cancion ? { cancion: intent.cancion } : {}) } : null,

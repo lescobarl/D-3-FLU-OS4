@@ -23,7 +23,8 @@ import { resolveGameCommandFromText, isClaimedByOtherDomain, isCatalogLevelGameA
 import { resolveNoteVoiceIntent } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
-import { resolveMusicIntent } from '../../core/media/musicActions'
+import { musicActionSpeech, resolveMusicIntent } from '../../core/media/musicActions'
+export { musicActionSpeech }
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'

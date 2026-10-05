@@ -186,3 +186,16 @@ export function isMusicRequestText(text: unknown): boolean {
     if (esParada(norm)) return true;
     return MUSIC_REQUEST_MARKERS.some((marker) => norm.includes(marker));
 }
+
+/**
+ * Frase del TURNO de musica (una sola fuente, es/en). La dice el dueno
+ * determinista: antes el fast-path era MUDO y el turno hablado quedaba en manos
+ * del LLM, que contestaba "Alto." a "alto" aunque la musica SI se detuviera
+ * (defecto medido en el log del dueno, P8.55).
+ */
+export function musicActionSpeech(accion: MusicAction, language: string = 'es'): string {
+    const isEnglish = language === 'en';
+    if (accion === 'stop_music') return isEnglish ? 'Music stopped.' : 'Música detenida.';
+    if (accion === 'pause_music') return isEnglish ? 'Music paused.' : 'Música en pausa.';
+    return isEnglish ? 'Playing music.' : 'Pongo la música.';
+}

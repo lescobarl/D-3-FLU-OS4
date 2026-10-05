@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveDeterministicCommand, resolveStatefulDomains } from '../src/voice/lib/deterministicArbiter'
 import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands'
 import { buildResolvedContract } from '../src/voice/lib/resolvedContract'
+import { musicActionSpeech } from '../src/core/media/musicActions'
 import { resolveAgendaDomainIntent } from '../src/core/agenda/domainScopedIntent'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
@@ -301,5 +302,40 @@ describe('P8.56 - reproducir una cancion lo resuelve su dueno (no depende del LL
   it('el detector no es decorativo: el dueno resuelve la accion y su nombre', () => {
     expect(resolveStatefulDomains('canta la canción de Las mañanitas').music?.cancion).toBe('las mananitas')
     expect(resolveStatefulDomains('alto').music).toEqual({ accion: 'stop_music' })
+  })
+})
+
+// P8.55 — LA VOZ DEL TURNO DE MUSICA la dice su dueno (no el LLM).
+// Defecto medido (log del dueno): a "okay flow alto" el modelo contesto "Alto."
+// aunque la musica SI se detuviera. El fast-path era mudo y la respuesta_voz del
+// modelo sobrevivia; ahora el dueño dice la frase y la del modelo se anula.
+describe('P8.55 - el turno de musica tiene UN dueño de la voz', () => {
+  it('con la musica resuelta por su dueno, el contrato resuelto anula la voz del modelo', () => {
+    const resuelto = buildResolvedContract({
+      contract: { contract: { respuesta_voz: 'Alto.', musica: { accion: 'stop_music' } } },
+      lateStateful: resolveStatefulDomains('alto', { language: 'es' }),
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(resuelto.respuesta_voz).toBe('')
+    expect(resuelto.musica).toBeNull()
+  })
+
+  it('sin musica resuelta, la voz del modelo se conserva (no se muda el turno)', () => {
+    const resuelto = buildResolvedContract({
+      contract: { contract: { respuesta_voz: 'Claro, aqui tienes una idea.' } },
+      lateStateful: { config: null, game: null, env: null, music: null },
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(resuelto.respuesta_voz).toBe('Claro, aqui tienes una idea.')
+  })
+
+  it('el detector no es decorativo: distingue el turno de musica del conversacional', () => {
+    expect(resolveStatefulDomains('para la música').music?.accion).toBe('stop_music')
+    expect(musicActionSpeech('stop_music', 'es')).toBe('Música detenida.')
+    expect(musicActionSpeech('stop_music', 'en')).toBe('Music stopped.')
   })
 })
