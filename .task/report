@@ -3944,3 +3944,19 @@ espaciado, la pronunciacion, su pantalla (DoD-producto) y la suite completa.
 
 Alcance real (0.23): CUBIERTO=el dominio derivado y su plomeria, con guard y simulacion real;
 NO CUBIERTO=la obediencia del modelo al emitir practica, repaso/pronunciacion, DoD-producto y suite completa.
+
+## P8.64 - Vista global del avance de tutoria ("¿como voy?" sin area) - 2026-10-05
+
+Cambios aplicados: tutoringModel.isTutoringGlobalProgressQuery; tutoringProgress.minuteTutoringArea
++ listTutoringAreas; minuteKnowledgeHelpers.buildTutoringGlobalSpeech/Contract + rama global;
+audioMath.js encamina la consulta global por minutas; tests/tutoringModel.test.ts (+4 casos, guard).
+
+Validado contra:
+  - Guard: 4 casos nuevos NACE ROJO (4 failed / 27 passed) y queda 31/31.
+  - Simulacion real: "Tus areas de tutoria: Inglés (inicial, 90% de acierto); Matemáticas (inicial)." (2 passed, 0 IA).
+  - Barrera npm run lint 180 ficheros / 1541 casos VERDE; tsc -b limpio; npm run gate VERDE; e2e:plan VERDE.
+
+No validado: el repaso espaciado, la evaluacion de pronunciacion, su pantalla (DoD-producto) y la suite completa.
+
+Alcance real (0.23): CUBIERTO=la vista global en local con guard y simulacion real; NO CUBIERTO=repaso,
+pronunciacion, DoD-producto y suite completa.
