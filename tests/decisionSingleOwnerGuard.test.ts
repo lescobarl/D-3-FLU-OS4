@@ -415,3 +415,49 @@ describe('D12 - el respaldo declara lo que TIENE y no declara exito sin restaura
         ).toEqual([]);
     });
 });
+
+// ---------------------------------------------------------------- D13
+/** Marcas de una reimplementacion de "hace falta wake word?" fuera de su dueno. */
+export function countWakeRequirementDefs(
+    files: Array<{ rel: string; content: string }>,
+    owner = 'src/voice/lib/wakeTurnCommit.js',
+): string[] {
+    return files
+        .filter((f) => f.rel !== owner && /requireWakeAlways\s*!==\s*false/.test(f.content))
+        .map((f) => `${f.rel}:requireWakeAlways !== false`);
+}
+
+describe('D13 - un solo dueno de "hace falta wake word?" (requireWakeAlways)', () => {
+    it('la decision solo la implementa wakeTurnCommit; los consumidores la llaman', () => {
+        const files = srcFiles();
+        // Anti-vacuidad: el dueno EXISTE y contiene de verdad la decision.
+        const owner = files.find((f) => f.rel === 'src/voice/lib/wakeTurnCommit.js');
+        expect(owner, 'el dueno no aparece en el escaneo').toBeTruthy();
+        expect(/requireWakeAlways\s*!==\s*false/.test(owner?.content || '')).toBe(true);
+        // N>1 = ruta doble: antes estaba en 3 sitios (2 en el hook + 1 en el commit).
+        expect(countWakeRequirementDefs(files)).toEqual([]);
+    });
+
+    it('el detector no es decorativo: marca la reimplementacion y perdona la llamada al dueno', () => {
+        expect(
+            countWakeRequirementDefs([
+                {
+                    rel: 'src/voice/hooks/x.js',
+                    content: `const r = FLU_CONFIG.voiceCommands.requireWakeAlways !== false || !active`,
+                },
+            ]),
+        ).toHaveLength(1);
+        expect(
+            countWakeRequirementDefs([{ rel: 'src/voice/hooks/x.js', content: `const r = requiresWakeWord(active)` }]),
+        ).toEqual([]);
+        // El dueno no se marca a si mismo.
+        expect(
+            countWakeRequirementDefs([
+                {
+                    rel: 'src/voice/lib/wakeTurnCommit.js',
+                    content: `return config.voiceCommands?.requireWakeAlways !== false || !conversationActive`,
+                },
+            ]),
+        ).toEqual([]);
+    });
+});
