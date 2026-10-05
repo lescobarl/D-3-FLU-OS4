@@ -3824,3 +3824,28 @@ repo (P8.41) y la diarizacion sigue en progreso (P8.40, implementada y con guard
 Alcance real (0.23): CUBIERTO=identidad por locucion + fila obediente al despacho (medido con instrumento fiel);
 NO CUBIERTO=el DoD-producto, el arnes en el repo, la suite/e2e.
 
+
+## P8.58 - El avance de tutoria no depende del texto: la minuta guarda su area - 2026-10-05
+
+Cambios aplicados: src/core/db/fluDatabase.ts (campo explicito tutoring_area en MinuteSummarySnapshot),
+src/core/tutoring/tutoringModel.ts (resolveMinuteTutoringArea: resuelve el area de la union minuta+conversacion),
+src/core/tutoring/tutoringProgress.ts (minuteCoversTutoringArea usa la etiqueta y cae al texto como respaldo),
+src/hooks/useMinuteHandlers.ts (withTutoringArea en las 4 rutas de guardado, un solo sitio),
+src/lib/minuteKnowledgeHelpers.ts (tutoring_area en el tipo + concordancia de la voz + joinSpeechItems),
+tests/tutoringModel.test.ts (+5 casos, guard), tests/e2e/tutoria-avance.spec.ts (nuevo, 2 simulaciones reales).
+
+Validado contra:
+  - MEDIDO (arnes de voz del repo sobre la app viva, micro falso + pipeline real): ANTES "como voy en ingles"
+    contaba 1 de 2 clases de ingles; la titulada "Past simple" (sin la palabra ingles) se PERDIA.
+  - DESPUES (misma simulacion): "De Ingles llevas 2 sesiones registradas..." con 0 llamadas al contrato de IA
+    (local) y la via REAL de guardado persiste summarySnapshot.tutoring_area = "Inglés". 2 passed.
+  - Guard: tests/tutoringModel.test.ts NACE ROJO (2 failed / 18 passed) y queda 20/20.
+  - Barrera: npm run lint 180 ficheros / 1530 casos VERDE; tsc -b limpio; npm run gate VERDE
+    (alcance / tamano / DoD / guard).
+
+No validado: su pantalla (DoD-producto), la calidad de la clase, mastery por area, repaso espaciado,
+evaluacion de pronunciacion y la suite completa.
+
+Alcance real (0.23): CUBIERTO=la etiqueta explicita de area en la minuta, su derivacion con respaldo por texto,
+el cableado de la via real de guardado, la concordancia de la voz, con guard ROJO->VERDE y simulacion real;
+NO CUBIERTO=el DoD-producto, mastery/repaso/pronunciacion, src/core/db/fluDatabase.ts en e2eScope y la suite completa.
