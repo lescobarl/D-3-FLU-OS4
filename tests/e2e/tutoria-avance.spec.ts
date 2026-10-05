@@ -206,7 +206,7 @@ test.describe('Tutoria — el avance por area sale de las MINUTAS reales (local)
         const rows = await readStore(page, 'minutes');
         // eslint-disable-next-line no-console
         console.log('[SIMULACION] minutas persistidas:', rows.length, 'area:', rows[rows.length - 1]?.summarySnapshot?.tutoring_area);
-        expect(rows.length, 'debde persistir la minuta').toBeGreaterThan(0);
+        expect(rows.length, 'debe persistir la minuta').toBeGreaterThan(0);
         const snapshot = rows[rows.length - 1].summarySnapshot || {};
         expect(snapshot.tutoring_area, 'la via real etiqueta el area').toBe('Inglés');
     });
