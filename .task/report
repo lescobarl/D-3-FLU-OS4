@@ -3924,3 +3924,23 @@ su pantalla (DoD-producto) y la suite completa.
 
 Alcance real (0.23): CUBIERTO=la declaracion e2e medida de los dos ficheros; NO CUBIERTO=la
 asercion del texto del prompt, el DoD-producto y la suite completa.
+
+## P8.63 - Dominio por destreza por area (aciertos/errores del tutor) - 2026-10-05
+
+Decision del agente (delegada por el dueno): (1) califica el TUTOR al resumir la minuta;
+(2) escala = aciertos/errores + % de acierto (sin umbrales inventados); (3) acompana al nivel.
+
+Cambios aplicados: practica en MinuteSummarySnapshot (fluDatabase) + AIMinuteResult/AISummaryResult
+(IAIService) + normalizePractica (aiServiceBase) + buildMinuteSystemPrompt (prompts.ts) + practicaOf
+(useMinuteHandlers) + dominio (tutoringProgress) + voz/documento (minuteKnowledgeHelpers).
+
+Validado contra:
+  - Guard: casos nuevos NACE ROJO (4 failed / 23 passed) y queda 27/27.
+  - Simulacion real: "...Nivel: inicial. Dominio: 9 aciertos y 1 error (90% de acierto)." (2 passed, 0 IA).
+  - Barrera npm run lint 180 ficheros / 1537 casos VERDE; tsc -b limpio; npm run gate VERDE; e2e:plan VERDE.
+
+No validado: que el modelo emita `practica` siempre (sin datos degrada a 0/0 y lo dice), el repaso
+espaciado, la pronunciacion, su pantalla (DoD-producto) y la suite completa.
+
+Alcance real (0.23): CUBIERTO=el dominio derivado y su plomeria, con guard y simulacion real;
+NO CUBIERTO=la obediencia del modelo al emitir practica, repaso/pronunciacion, DoD-producto y suite completa.
