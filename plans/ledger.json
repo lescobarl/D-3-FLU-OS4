@@ -1414,6 +1414,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-04 (commit a583e2e src + este commit de guard). CENSO MEDIDO con findstr requireWakeAlways en src: la MISMA decision (\"A?hace falta exigir la wake word?\") estaba implementada TRES veces - src/voice/hooks/useFluVoiceAssistant.js:2129 y :3582 (identicas) y src/voice/lib/conversationStreamCommit.js:172 (reducida) - una ruta doble que podia divergir (de hecho el default de P8.49 se leia desde 3 sitios). DUENO UNICO: requiresWakeWord(conversationActive, config) en src/voice/lib/wakeTurnCommit.js, el modulo que ya decidia isTurnCapture; los 3 sitios ahora la consumen. METRICA: implementaciones 3 -> 1 (requireWakeAlways en src = 2 lineas: la definicion de config y el dueno). GUARD: tests/decisionSingleOwnerGuard.test.ts D13 (countWakeRequirementDefs, con anti-vacuidad \"el dueno EXISTE y contiene la decision\" y prueba de detector). ROJO MEDIDO sobre el codigo ANTERIOR (git show HEAD~1 ... | findstr requireWakeAlways = 3 lineas en el hook+commit) y VERDE despues (0). MEDIDO: barrera 179 ficheros / 1494 casos en el commit del guard; tsc -b limpio; eslint limpio; guard D13 25/25. Alcance real (0.23): CUBIERTO=la duplicacion medida y eliminada, con su barrera; NO CUBIERTO=el DoD-producto y la suite completa.",
       "origen": "recordatorio-dueno-2026-10-04"
+    },
+    {
+      "id": "P8.53",
+      "titulo": "Detener/pausar la musica no tenia dueno: los marcos de control solo servian de guardia de reclamo y la accion quedaba a merced del LLM",
+      "estado": "in_progress",
+      "evidencia": "ABIERTO 2026-10-04 por reporte del dueno (log 19:32): \"okay flow alto\" -> FLU respondio \"Alto.\" y la musica SIGUIO sonando; \"okay flow deten la musica\" no detuvo nada. CAUSA MEDIDA: los marcos de control (\"deten la musica\",\"para la musica\",\"apaga la musica\",\"quita la musica\",\"pausa la musica\") estaban declarados en core/media/musicActions.ts (MUSIC_REQUEST_FRAMES) pero SOLO alimentaban la guardia de reclamo (isMusicRequestText -> isClaimedByOtherDomain en gameCommands.js), cuya unica funcion es que un juego activo no se coma el turno; NINGUNA ruta EJECUTABA la accion: quedaba a merced del LLM, que respondio \"Alto.\" a \"alto\" (palabra que ni siquiera esta declarada).",
+      "origen": "reporte-dueno-2026-10-04"
     }
   ],
   "done": [

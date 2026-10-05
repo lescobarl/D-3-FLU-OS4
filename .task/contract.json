@@ -636,7 +636,8 @@
     "npx vitest run --reporter=dot tests/wakeWordDisplay.test.ts tests/workspaceContractTipo.test.ts",
     "npx vitest run --reporter=dot tests/deepseekPrompts.test.ts tests/fluParticipantHook.test.ts tests/localAi.test.ts tests/noteItemRemovalLiteral.test.ts tests/noteParserBindings.test.ts tests/noteRemoveIntent.test.ts tests/noteSuperDestFirst.test.ts tests/surfaceMatrix.test.ts tests/voiceIdentityQueue.test.ts",
     "npx vitest run --reporter=dot tests/actionDomainContract.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/environmentPrompt.test.ts tests/fluSpeech-japanese.test.ts tests/geminiContractPayload.test.ts tests/geminiExtractJson.test.ts tests/simpleRequestDetection.test.ts tests/translationIntegration.test.ts tests/useAutonomyIntegration.test.tsx tests/validateIntegralCtx.test.ts",
-    "npx vitest run --reporter=dot tests/httpClient.test.ts tests/imageGeneration.test.ts"
+    "npx vitest run --reporter=dot tests/httpClient.test.ts tests/imageGeneration.test.ts",
+    "npx vitest run --reporter=dot tests/deterministicArbiter.test.ts tests/gameTurnSingleOwnerSpeech.test.ts tests/injectedValues.test.ts tests/musicActions.test.ts tests/panelScenarios.test.ts tests/reportedScenariosRootFix.test.ts tests/resolveVoiceCommand.test.ts tests/voiceWakePerTurn.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/captureDedupGuard.test.ts",
   "guardExpect": "green",

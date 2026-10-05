@@ -3054,25 +3054,28 @@ export function useFluVoiceAssistant({
     [onContractResolved],
   )
 
-  // Fast-path determinista de AMBIENTE (espejo de dispatchFastGameCommand): despacha un
-  // contrato `ambiente` ya resuelto a la ÚNICA ruta (onContractResolved →
-  // applyEnvironment/resetEnvironment). El catálogo (src/core/environments/*) es la
-  // fuente de verdad. Como los otros servicios, NO escribe la conversacion (`effectOnly`).
+  // Fast-path determinista de AMBIENTE y de CONTROL DE MUSICA (modalidad del
+  // dispatcher de estado: un `tipo` de ambiente o una `accion` de musica). Despacha el
+  // contrato ya resuelto a la AsNICA ruta (onContractResolved -> applyEnvironment /
+  // play-stop music). El catalogo (src/core/environments/*) y la tabla de marcos
+  // (src/core/media/musicActions) son la fuente de verdad. Como los otros servicios,
+  // NO escribe la conversacion (`effectOnly`).
   const dispatchFastEnvironmentCommand = useCallback(
     async (
       intent,
       { speakerName = null, speakerAlias = null, phase = 'SESION_ACTIVA', session = null, language = null, transcript = '', timestamp = '' } = {},
     ) => {
-      if (!intent?.tipo) return null
+      const isMusicControl = Boolean(intent?.accion) && !intent?.tipo
+      if (!intent?.tipo && !isMusicControl) return null
       await onContractResolved?.({
         contract: {
           respuesta_voz: '',
           navegacion: { comando: null, destino: null, parametros: {} },
           workspace: null,
-          musica: null,
+          musica: isMusicControl ? { accion: intent.accion } : null,
           configuracion: null,
           juego: null,
-          ambiente: intent,
+          ambiente: isMusicControl ? null : intent,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
         diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
@@ -3085,7 +3088,7 @@ export function useFluVoiceAssistant({
         timestamp,
         signature: null,
         language,
-        fastPathEnvironment: true,
+        fastPathEnvironment: !isMusicControl,
       })
       return intent
     },
@@ -3119,7 +3122,7 @@ export function useFluVoiceAssistant({
       // §1A: la resolución de los dominios con efecto de estado (config/juego/
       // ambiente) se delega al árbitro puro (src/voice/lib/deterministicArbiter.js).
       // El hook conserva SOLO la orquestación del despacho (onContractResolved).
-      const { config, game, env } = resolveStatefulDomains(text, { language })
+      const { config, game, env, music } = resolveStatefulDomains(text, { language })
       if (transcript) noteGameTurn(consumesGameTurn(game))
       const dispatch = Promise.allSettled([
         config?.accion
@@ -3155,8 +3158,19 @@ export function useFluVoiceAssistant({
               transcript: utteranceTranscript,
             })
           : Promise.resolve(null),
+        music
+          ? dispatchFastEnvironmentCommand(music, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript: utteranceTranscript,
+            })
+          : Promise.resolve(null),
       ])
-      return { config, game, env, dispatch }
+      return { config, game, env, music, dispatch }
     },
     [dispatchFastConfigCommand, dispatchFastGameCommand, dispatchFastEnvironmentCommand],
   )

@@ -23,6 +23,7 @@ import { resolveGameCommandFromText, isClaimedByOtherDomain, isCatalogLevelGameA
 import { resolveNoteVoiceIntent } from './noteIntentParser.js'
 import { parseDiaryIntent } from '../../core/diary/diaryIntentParser'
 import { resolveEnvironmentIntent } from '../../core/environments/environmentIntents'
+import { resolveMusicControl } from '../../core/media/musicActions'
 import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
@@ -254,12 +255,15 @@ export function resolveDeterministicCommand(text = '', options = {}) {
  *
  * @param {string} text
  * @param {object} [options]
- * @returns {{ config: object|null, game: object|null, env: object|null }}
+ * @returns {{ config: object|null, game: object|null, env: object|null, music: object|null }}
  */
 export function resolveStatefulDomains(text = '', options = {}) {
   const { language = 'es', now } = options || {}
   const transcript = String(text || '').trim()
   const game = transcript ? resolveGameCommandFromText(transcript, { language, now }) : null
+  // CONTROL de musica (detener/pausar), resuelto por su dueno (core/media/musicActions):
+  // se expone con la MISMA forma que los otros dominios de estado (`{ accion }`).
+  const musicAction = transcript ? resolveMusicControl(transcript) : null
   return {
     config: transcript ? resolveConfigCommandFromText(transcript) : null,
     // La respuesta ABIERTA de la partida no se ofrece si el texto lo reclama otro
@@ -271,6 +275,10 @@ export function resolveStatefulDomains(text = '', options = {}) {
       ? null
       : game,
     env: transcript ? resolveEnvironmentIntent(transcript, language) : null,
+    // CONTROL de musica (detener/pausar): accion concreta, resuelta por su dueno
+    // (core/media/musicActions). Antes SOLO alimentaba la guardia de reclamo y la
+    // accion quedaba a merced del LLM, que no la emitia.
+    music: musicAction ? { accion: musicAction } : null,
   }
 }
 

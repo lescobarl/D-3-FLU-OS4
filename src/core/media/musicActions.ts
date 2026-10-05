@@ -21,16 +21,18 @@ export function asMusicAction(raw: unknown): MusicAction | undefined {
     return (MUSIC_ACTIONS as readonly string[]).includes(v) ? (v as MusicAction) : undefined;
 }
 // ------------------------------------------------------------------
-// Peticion de MUSICA por TEXTO (no es una jugada).
+// Peticion y CONTROL de MUSICA por TEXTO.
 //
-// La musica se reproduce por el campo 'musica' del contrato del LLM (no hay
-// parser determinista de texto). Para que, con una PARTIDA ACTIVA, el motor no
-// se coma una peticion de musica (regla 19 de AGENTS.md), aqui vive el UNICO
-// predicado. Acotado a MARCOS EXPLICITOS de peticion/control: la letra o un
-// titulo suelto NO son una peticion, asi que no pisa a los juegos musicales.
-// Consumidor: isClaimedByOtherDomain (src/voice/lib/gameCommands.js).
+// La musica se reproduce por el campo 'musica' del contrato. Aqui vive la UNICA
+// tabla de marcos de texto y las DOS preguntas que se derivan de ella:
+//   - isMusicRequestText: "¿es una peticion o control de musica?" (para que un
+//     juego activo no se coma el turno: regla 19 de AGENTS.md).
+//   - resolveMusicControl: "¿pide DETENER o PAUSAR la musica?" (accion concreta).
+// Antes los marcos de control existian SOLO como guardia de reclamo: la accion
+// no la ejecutaba nadie y quedaba a merced del LLM, que respondia "Alto." a
+// "okay flow alto" y no detenia nada.
 // ------------------------------------------------------------------
-const MUSIC_REQUEST_FRAMES = [
+const MUSIC_PLAY_FRAMES: readonly string[] = Object.freeze([
     'pon musica',
     'ponme musica',
     'pon algo de musica',
@@ -42,16 +44,39 @@ const MUSIC_REQUEST_FRAMES = [
     'pon esta cancion',
     'reproduce una cancion',
     'reproduce la cancion',
-    'pausa la musica',
-    'para la musica',
-    'quita la musica',
-    'deten la musica',
-    'apaga la musica',
-];
+]);
+
+/** Marcos de CONTROL → accion de musica. Orden: el primero que casa gana. */
+const MUSIC_CONTROL_FRAMES: ReadonlyArray<{ accion: MusicAction; frames: readonly string[] }> = Object.freeze([
+    {
+        accion: 'stop_music',
+        frames: ['deten la musica', 'detente la musica', 'para la musica', 'apaga la musica', 'quita la musica', 'corta la musica'],
+    },
+    { accion: 'pause_music', frames: ['pausa la musica', 'pausa musica'] },
+]);
+
+/** Todos los marcos de musica (una sola fuente para las dos preguntas). */
+const MUSIC_REQUEST_FRAMES: readonly string[] = Object.freeze([
+    ...MUSIC_PLAY_FRAMES,
+    ...MUSIC_CONTROL_FRAMES.flatMap((c) => c.frames),
+]);
 
 /** true si el texto es una PETICION o CONTROL de musica (por tanto, no una jugada). */
 export function isMusicRequestText(text: unknown): boolean {
     const norm = normalizeForMatch(String(text ?? ''));
     if (!norm) return false;
     return MUSIC_REQUEST_FRAMES.some((frame) => norm.includes(frame));
+}
+
+/**
+ * Accion de CONTROL de musica pedida por el texto (`stop_music` | `pause_music`),
+ * o `null` si no pide control. DUENO UNICO de la decision (la tabla de arriba).
+ */
+export function resolveMusicControl(text: unknown): MusicAction | null {
+    const norm = normalizeForMatch(String(text ?? ''));
+    if (!norm) return null;
+    for (const control of MUSIC_CONTROL_FRAMES) {
+        if (control.frames.some((frame) => norm.includes(frame))) return control.accion;
+    }
+    return null;
 }
