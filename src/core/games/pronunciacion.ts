@@ -1,0 +1,213 @@
+// ============================================================
+// pronunciacion.ts - Practica de PRONUNCIACION (P8.65).
+// Motor puro sin I/O, hermano de `repiteTraduce`.
+//
+// FLU ENUNCIA una palabra (normalmente en ingles) y el alumno la REPITE. El
+// motor acredita la repeticion comparando lo que TRANSCRIBIO el ASR con la
+// palabra objetivo. La comparacion es DETERMINISTA y TOLERANTE: el ASR no es
+// exacto, asi que se acepta un token con distancia de edicion <= 1. Repetir la
+// misma palabra que el motor acaba de decir ES la tarea (a diferencia de
+// `repiteTraduce`, aqui NO se pregunta "como se dice", se pide IMITAR).
+//
+// Controles:
+//   "pista" / "ayuda"      -> como suena la palabra
+//   "otra" / "siguiente"   -> salta a la siguiente
+// Fin al completar `rounds` palabras.
+// ============================================================
+import type { GameEngine } from './gameEngine';
+import type { GameSession, GameTurnResult } from './types';
+import {
+    adoptRandom,
+    bankItemAt,
+    END_GAME_FRAMES,
+    finishRoundsIfLast,
+    gameOverResult,
+    gamePrompt,
+    hasAnyToken,
+    hasToken,
+    HELP_CORE_FRAMES,
+    isGameCommandSurface,
+    isLastRound,
+    normalizeForMatch,
+    readRounds,
+    shuffleOrder,
+    SKIP_CORE_FRAMES,
+    turnResult,
+} from './gameUtils';
+
+/** Palabra a pronunciar + una ayuda de "como suena". */
+export interface PronunciacionItem {
+    word: string;
+    pista: string;
+}
+
+export const PRONUNCIACION_BANK: readonly PronunciacionItem[] = Object.freeze([
+    { word: 'water', pista: 'Suena como "uoter": agua.' },
+    { word: 'house', pista: 'Suena como "jaus": casa.' },
+    { word: 'three', pista: 'Suena como "zri": el numero tres.' },
+    { word: 'world', pista: 'Suena como "uorld": mundo.' },
+    { word: 'yellow', pista: 'Suena como "yelou": amarillo.' },
+    { word: 'juice', pista: 'Suena como "yus": jugo.' },
+    { word: 'chocolate', pista: 'Suena como "chocolat": chocolate.' },
+    { word: 'think', pista: 'Suena como "zink": pensar.' },
+    { word: 'girl', pista: 'Suena como "guerl": nina.' },
+    { word: 'comfortable', pista: 'Suena como "comf-tabl": comodo.' },
+]);
+
+const DEFAULT_ROUNDS = 3;
+const MAX_ROUNDS = PRONUNCIACION_BANK.length;
+
+const HINT_FRAMES: readonly string[] = Object.freeze([
+    ...HELP_CORE_FRAMES,
+    'repite', 'como suena', 'no se', 'no sé',
+]);
+
+const SKIP_FRAMES: readonly string[] = Object.freeze([...SKIP_CORE_FRAMES]);
+
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
+
+type RandomSource = () => number;
+
+interface PronunciacionState {
+    order: number[];
+    cursor: number;
+    maxRounds: number;
+    phase: 'announce' | 'done';
+}
+
+const itemAt = (state: PronunciacionState) => bankItemAt(state, PRONUNCIACION_BANK);
+
+const currentPrompt = (state: PronunciacionState) =>
+    gamePrompt(
+        state,
+        itemAt,
+        (item) => `Repite despues de mi: "${item.word}".`,
+        'Ya se me acabaron las palabras.',
+    );
+
+/** Distancia de edicion (Levenshtein) entre dos cadenas. */
+function editDistance(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i += 1) {
+        const cur = [i];
+        for (let j = 1; j <= n; j += 1) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+        }
+        prev = cur;
+    }
+    return prev[n];
+}
+
+/**
+ * ¿Lo que TRANSCRIBIO el ASR imita la palabra objetivo? Exacto por token o con
+ * distancia de edicion <= 1 en algun token (el ASR no es exacto). Determinista.
+ */
+function imitaLaPalabra(normalized: string, word: string): boolean {
+    if (hasToken(normalized, word)) return true;
+    const target = word.toLowerCase();
+    return normalized
+        .split(/\s+/)
+        .filter(Boolean)
+        .some((token) => editDistance(token, target) <= 1);
+}
+
+export function createPronunciacionEngine(options?: { random?: RandomSource }): GameEngine<PronunciacionState> {
+    let rng: RandomSource = options?.random ?? Math.random;
+    const buildState = (cfg: Record<string, unknown> | undefined): PronunciacionState => {
+        rng = adoptRandom(rng, cfg);
+        return {
+            order: shuffleOrder(rng, PRONUNCIACION_BANK.length),
+            cursor: 0,
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
+            phase: 'announce',
+        };
+    };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PronunciacionState => {
+        const state: PronunciacionState = buildState(cfg);
+        session.state = state;
+        session.score = 0;
+        session.round = 1;
+        return state;
+    };
+
+    return {
+        id: 'pronunciacion',
+
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<PronunciacionState> {
+            return {
+                id: 'pronunciacion',
+                state: buildState(optionsConfig),
+                score: 0,
+                round: 1,
+            };
+        },
+
+        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
+            reset(session, optionsConfig);
+            const state = session.state as PronunciacionState;
+            return turnResult(`¡Vamos a practicar pronunciacion! ${currentPrompt(state)}`, session.score, { emotion: 'excited' });
+        },
+
+        turn(session: GameSession, text = ''): GameTurnResult {
+            const state = session.state as PronunciacionState;
+
+            if (state.phase === 'done') {
+                return gameOverResult('Ya terminamos de practicar. ¿Jugamos otra vez?', session.score);
+            }
+
+            const item = itemAt(state);
+            if (!item) {
+                state.phase = 'done';
+                return gameOverResult(
+                    `¡Se acabaron las palabras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+                    session.score,
+                    { animation: 'Dance' },
+                );
+            }
+
+            const normalized = normalizeForMatch(text);
+
+            if (hasAnyToken(normalized, HINT_FRAMES)) {
+                return turnResult(`"${item.word}". ${item.pista} Ahora repitelo.`, session.score, { emotion: 'thinking' });
+            }
+
+            if (imitaLaPalabra(normalized, item.word)) {
+                session.score += 1;
+                session.round += 1;
+                if (isLastRound(state)) {
+                    state.phase = 'done';
+                    return gameOverResult(
+                        `¡Excelente pronunciacion! Dijiste "${item.word}" muy bien. Completaste ${state.maxRounds} palabras con ${session.score} puntos.`,
+                        session.score,
+                        { valid: true, won: true, animation: 'Dance' },
+                    );
+                }
+                state.cursor += 1;
+                return turnResult(`¡Muy bien! Siguiente: ${currentPrompt(state)}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
+            }
+
+            if (hasAnyToken(normalized, SKIP_FRAMES)) {
+                session.round += 1;
+                const finRonda = finishRoundsIfLast(session, state);
+                if (finRonda) return finRonda;
+                state.cursor += 1;
+                return turnResult(`¡Claro! Aqui va otra: ${currentPrompt(state)}`, session.score);
+            }
+
+            return turnResult(`¡Casi! Escucha: "${item.word}". ${item.pista} Intentalo otra vez.`, session.score, { emotion: 'encouraging', error: 'pronunciacion por mejorar' });
+        },
+
+        isGameCommand(text = ''): boolean {
+            const normalized = normalizeForMatch(text);
+            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+        },
+    };
+}
+
+export const PRONUNCIACION_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES });

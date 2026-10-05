@@ -36,6 +36,7 @@ import { createAbecedarioEngine } from './abecedario';
 import { createLoteriaEngine } from './loteria';
 import { createRespiracionEngine } from './respiracion';
 import { createKaraokeEngine } from './karaoke';
+import { createPronunciacionEngine } from './pronunciacion';
 
 export interface GameIntentEntry {
     id: GameId;
@@ -58,7 +59,7 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
     'quien_soy', 'ahorcado', 'memoria_secuencias', 'trabalenguas',
     'trivia', 'ordena_secuencia', 'adivina_cancion', 'cuentacuentos',
     'cuento_colaborativo', 'repite_traduce', 'cuenta_conmigo',
-    'abecedario', 'loteria', 'respiracion', 'karaoke',
+    'abecedario', 'loteria', 'respiracion', 'karaoke', 'pronunciacion',
   ]);
 
 // --- Tokenización local (sin dependencias) ---
@@ -259,6 +260,12 @@ export const GAME_CATALOG: readonly GameIntentEntry[] = Object.freeze([
         requiresApi: false,
         audio: true,
         suppressAmbient: true,
+    },
+    {
+        id: 'pronunciacion',
+        aliases: ['pronunciacion', 'pronunciation', 'practicar pronunciacion', 'practica de pronunciacion'],
+        engine: createPronunciacionEngine,
+        requiresApi: false,
     },
 ]);
 

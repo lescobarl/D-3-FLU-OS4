@@ -58,8 +58,8 @@ describe('buildSelfKnowledgeSnapshot — compilación desde FLU_CONFIG real (sin
         expect(snapshot.capabilities.some((c) => c.id === 'comando:commandLogPreserveWake')).toBe(false);
     });
 
-    test('compila los juegos del GAME_CATALOG (contrato plan §1.5: 21 juegos)', () => {
-        expect(GAME_IDS).toHaveLength(21);
+    test('compila los juegos del GAME_CATALOG (contrato plan §1.5: 22 juegos)', () => {
+        expect(GAME_IDS).toHaveLength(22);
         expect(snapshot.juegos.length).toBe(GAME_IDS.length);
         for (const id of GAME_IDS) {
             expect(snapshot.capabilities.some((c) => c.id === `juego:${id}`)).toBe(true);
