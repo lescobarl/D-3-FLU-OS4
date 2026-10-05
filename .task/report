@@ -3981,3 +3981,21 @@ por idioma/nivel (hoy fijo) y la suite completa.
 
 Alcance real (0.23): CUBIERTO=el juego de pronunciacion con guard propio y con los guards del catalogo;
 NO CUBIERTO=la transcripcion real del ASR en pantalla, banco configurable y suite completa.
+
+## P8.66 + P8.67 - Repaso espaciado + banco de pronunciacion configurable - 2026-10-05
+
+P8.66: "¿que tengo que repasar?" lista por area lo pendiente de la sesion mas reciente cuando
+ya tiene el primer intervalo (1/3/7/21 dias, declarados); derivado de las minutas y en local.
+P8.67: el banco del juego de pronunciacion sale a core/config/pronunciacionBank (15 con nivel);
+el motor elige por options.nivel.
+
+Validado contra:
+  - Guards: tutoringModel NACE ROJO (3 failed / 31) -> 34/34; pronunciacion +1 caso (banco por nivel).
+  - Simulacion real: "Para repasar: Inglés (hace 95 dias): Practicar 10 verbos irregulares." (3 passed, 0 IA).
+  - Barrera npm run lint 180 ficheros / 1548 casos VERDE; tsc -b limpio; npm run gate VERDE; e2e:plan VERDE.
+
+No validado: un log de repasos (marcar como HECHO), elegir el nivel por voz en el arranque, el ASR
+real en pantalla (DoD-producto) y la suite completa.
+
+Alcance real (0.23): CUBIERTO=el repaso derivado y el banco por nivel, con guards y simulacion real;
+NO CUBIERTO=log de repasos, nivel por voz, ASR real en pantalla, DoD-producto y suite completa.
