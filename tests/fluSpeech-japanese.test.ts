@@ -156,9 +156,22 @@ describe('fluSpeech — resolución de locale por script del texto', () => {
     expect((utterance.voice as MockVoice).voiceURI).toBe('es-MX-Sabina')
   })
 
-  test('inglés configurado (language=en): texto en español → en-US', async () => {
+  test('el TEXTO manda: texto en español con language=en -> es-MX', async () => {
     const mocks = installSpeechSynthesis([ES_MX, EN_US, JA_JP])
     const utterance = await runSpeak(ES_TEXT, 'en', mocks)
+    expect(utterance.lang).toBe('es-MX')
+  })
+
+  // DECISION DEL DUENO (2026-10-04): la VOZ sigue al IDIOMA DEL TEXTO; el ajuste de
+  // sesion es solo respaldo. Antes mandaba el ajuste y una respuesta en INGLES se leia
+  // con la voz espanola ("acento chilango").
+  test('texto en ingles con language=es -> en-US (antes salia voz espanola)', async () => {
+    const mocks = installSpeechSynthesis([ES_MX, EN_US, JA_JP])
+    const utterance = await runSpeak(
+      'Dogs are wonderful companions, what about them would you like to discuss?',
+      'es',
+      mocks,
+    )
     expect(utterance.lang).toBe('en-US')
   })
 

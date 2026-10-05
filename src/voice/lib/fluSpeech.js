@@ -115,14 +115,15 @@ function detectSpeechScriptLocale(text = '') {
 }
 
 function resolveSpeechLocale(language = 'es', text = '') {
-  // Si el texto está escrito en un alfabeto distinto al configurado
-  // (p.ej. japonés), el idioma de la voz lo decide el propio texto.
+  // El idioma de la VOZ lo decide el TEXTO que se va a pronunciar (es/en), y el
+  // ajuste de sesion es solo respaldo: asi una respuesta en ingles NO se lee con
+  // la voz espanola (acento "chilango"). El script no-latino ya se resolvio arriba.
   const scriptLocale = detectSpeechScriptLocale(text)
   if (scriptLocale) return scriptLocale
-  if (language === 'en') return SPEECH_LOCALES.en
-  if (language === 'both') {
-    return detectTranscriptLanguage(text) === 'en' ? SPEECH_LOCALES.en : SPEECH_LOCALES.es
-  }
+  const textLang = detectTranscriptLanguage(text)
+  if (textLang === 'en') return SPEECH_LOCALES.en
+  if (textLang === 'es') return SPEECH_LOCALES.es
+  if (language === 'en' || language === 'both') return SPEECH_LOCALES.en
   return SPEECH_LOCALES.es
 }
 
@@ -265,24 +266,22 @@ function speakSingleChunk(spoken, language, overrides = {}) {
       if (typeof overrides.pitch === 'number') utterance.pitch = overrides.pitch
       if (typeof overrides.volume === 'number') utterance.volume = overrides.volume
 
-      // Selección de voz: si el texto está en un idioma distinto al configurado
-      // (p.ej. japonés detectado por script), priorizar una voz que coincida con
-      // ese locale; en caso contrario respetar la voiceURI configurada.
+      // La VOZ sigue al IDIOMA DEL TEXTO (`utterance.lang`): si el locale del texto
+      // no coincide con el ajuste de sesion, se prioriza una voz de ESE locale
+      // (es/en INCLUIDOS: antes se saltaba justo es/en, asi una respuesta en ingles
+      // salia con voz espanola = "acento chilango"). La voz configurada es respaldo.
       const voices = window.speechSynthesis.getVoices()
       const primary = utterance.lang.split('-')[0].toLowerCase()
       const langPrimary = String(language).split('-')[0].toLowerCase()
-      if (primary !== langPrimary && primary !== 'es' && primary !== 'en') {
-        const matching =
-          voices.find((v) => v.lang && v.lang.toLowerCase() === utterance.lang.toLowerCase()) ||
-          voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(primary))
-        if (matching) {
-          utterance.voice = matching
-        }
-      } else if (voiceCfg.voiceURI) {
-        const selected = voices.find((v) => v.voiceURI === voiceCfg.voiceURI)
-        if (selected) {
-          utterance.voice = selected
-        }
+      const localeVoice =
+        primary !== langPrimary
+          ? voices.find((v) => v.lang && v.lang.toLowerCase() === utterance.lang.toLowerCase()) ||
+            voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(primary))
+          : null
+      const selectedVoice =
+        localeVoice || (voiceCfg.voiceURI ? voices.find((v) => v.voiceURI === voiceCfg.voiceURI) : null)
+      if (selectedVoice) {
+        utterance.voice = selectedVoice
       }
 
       utterance.onend = finish
