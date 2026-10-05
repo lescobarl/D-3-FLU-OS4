@@ -1467,7 +1467,7 @@
     {
       "id": "P8.60",
       "titulo": "El avance de tutoria no mostraba el rango de sesiones ni separaba los pendientes en curso de los ya cerrados (y un \"nivel\" necesitaria bandas que el dueno no ha aprobado)",
-      "estado": "in_progress",
+      "estado": "done",
       "evidencia": "ENCARGO: \"adelante\" sobre mastery/nivel por area. DECISION DECLARADA: NO se inventa un nivel con umbrales (AGENTS 9.3/0.13); se entrega el avance DERIVADO: rango (primera->ultima), pendientes EN CURSO (ultima sesion) y ANTERIORES (los que ya no figuran). Cambios: src/core/tutoring/tutoringProgress.ts (primeraFecha/enCurso/anteriores), src/lib/minuteKnowledgeHelpers.ts (voz/documento). GUARD tests/tutoringModel.test.ts NACE ROJO (2 failed / 20 passed) y queda 50/50; simulacion real 2 passed con el rango y el avance. Alcance real (0.23): CUBIERTO=el avance derivado en voz y documento con guard y simulacion real; NO CUBIERTO=la etiqueta de nivel con bandas (requiere aprobacion del dueno), mastery real, repaso/pronunciacion, DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
     }
@@ -2978,6 +2978,13 @@
       "commit": "a03a4ec",
       "titulo": "La ultima sesion de una tutoria se leia como el codigo crudo de la minuta (\"la ultima el 261005 01\") en vez de una fecha",
       "evidencia": "CERRADO 2026-10-05 (commit a03a4ec = src + tests + contrato + ledger). MEDIDO con la simulacion real al cerrar P8.58: la voz decia \"la ultima el 261005 01\"; la minuta real guarda historyCode YYMMDD-NN y no una fecha. FIX de presentacion en el dueno de la voz (src/lib/minuteKnowledgeHelpers.tutoringDateLabel): el codigo YYMMDD o una fecha ISO se presenta como \"5 de octubre de 2026\" (es) o \"2026-10-05\" (en), con los nombres de mes de calendarNames (dueno unico). GUARD tests/tutoringModel.test.ts: NACE ROJO (1 failed / 20 passed) y queda 21/21. SIMULACION REAL (DESPUES): 2 passed con \"De Ingles llevas 2 sesiones registradas, la ultima el 5 de octubre de 2026...\" y 0 llamadas a la IA. Barrera npm run lint 180 ficheros / 1531 casos VERDE; tsc -b limpio; npm run gate VERDE. Alcance real (0.23): CUBIERTO=la fecha legible de la ultima sesion en la voz y el documento del avance, con guard ROJO->VERDE y simulacion real; NO CUBIERTO=la calidad de la clase (DoD-producto), mastery/repaso/pronunciacion y la suite completa.",
+      "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.60",
+      "commit": "0d016e7",
+      "titulo": "El avance de tutoria no mostraba el rango de sesiones ni separaba los pendientes en curso de los ya cerrados (un \"nivel\" necesitaria bandas aprobadas por el dueno)",
+      "evidencia": "CERRADO 2026-10-05 (commit 0d016e7 = src + tests + spec + contrato + ledger). ENCARGO: \"adelante\" sobre mastery/nivel por area. DECISION DECLARADA: NO se inventa un nivel con umbrales (AGENTS 9.3 los prohibe y 0.13 exige aprobacion del dueno); se entrega el avance DERIVADO real: (1) RANGO (primera -> ultima sesion); (2) pendientes EN CURSO = los de la sesion mas reciente; (3) ANTERIORES = los que estaban pendientes antes y ya NO figuran en la ultima. Cambios: src/core/tutoring/tutoringProgress.ts (primeraFecha/enCurso/anteriores), src/lib/minuteKnowledgeHelpers.ts (voz y documento; puntos_clave pasa a enCurso; el sufijo del rango se arma sin `=== 'en' ?` para no engordar el trinquete de textos de UI). GUARD tests/tutoringModel.test.ts: NACE ROJO (2 failed / 20 passed: enCurso/anteriores undefined y toEqual sin los campos) y queda 22/22. SIMULACION REAL: la voz devuelve \"...2 sesiones registradas desde el 3 de octubre de 2026, la ultima el 5 de octubre de 2026 ... En curso: Practicar 10 verbos irregulares. Ya no figura como pendiente: Write 5 sentences in the past.\" (2 passed, 0 llamadas a la IA). Barrera npm run lint 180 ficheros / 1532 casos VERDE; tsc -b limpio; npm run gate VERDE. Alcance real (0.23): CUBIERTO=el avance derivado (rango + en curso vs anteriores) en la voz y el documento, con guard ROJO->VERDE y simulacion real; NO CUBIERTO=la etiqueta de nivel con bandas (requiere bandas aprobadas por el dueno), el mastery real, el repaso espaciado, la evaluacion de pronunciacion, el DoD-producto y la suite completa.",
       "origen": "encargo-dueno-2026-10-05"
     }
   ]

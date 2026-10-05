@@ -3866,3 +3866,25 @@ No validado: su pantalla (DoD-producto), mastery/repaso/pronunciacion y la suite
 
 Alcance real (0.23): CUBIERTO=la fecha legible de la ultima sesion en la voz y el documento;
 NO CUBIERTO=el DoD-producto, mastery/repaso/pronunciacion y la suite completa.
+
+## P8.60 - El avance muestra su rango y separa pendientes en curso vs cerrados - 2026-10-05
+
+Cambios aplicados: src/core/tutoring/tutoringProgress.ts (primeraFecha/enCurso/anteriores, derivados de
+las minutas), src/lib/minuteKnowledgeHelpers.ts (voz y documento: rango + "En curso" + "Ya no figura
+como pendiente"; puntos_clave = enCurso), tests/tutoringModel.test.ts (+2 casos, guard).
+
+Decision declarada: NO se inventa un "nivel" con umbrales (AGENTS 9.3/0.13); se entrega el avance
+DERIVADO que si responde "¿estoy avanzando?". Un nivel con bandas queda pendiente de tus bandas.
+
+Validado contra:
+  - Guard: 2 casos nuevos NACE ROJO (2 failed / 20 passed) y queda 22/22.
+  - Simulacion real: "...2 sesiones registradas desde el 3 de octubre de 2026, la ultima el 5 de
+    octubre de 2026 ... En curso: Practicar 10 verbos irregulares. Ya no figura como pendiente:
+    Write 5 sentences in the past." (2 passed, 0 llamadas a la IA).
+  - Barrera: npm run lint 180 ficheros / 1532 casos VERDE; tsc -b limpio; npm run gate VERDE.
+
+No validado: su pantalla (DoD-producto), la etiqueta de nivel con bandas, mastery real, repaso,
+pronunciacion y la suite completa.
+
+Alcance real (0.23): CUBIERTO=el avance derivado (rango + en curso vs anteriores) en voz y documento;
+NO CUBIERTO=el nivel con bandas (requiere tu aprobacion), mastery real, repaso/pronunciacion y la suite completa.
