@@ -26,6 +26,7 @@
 import { normalizeSpaces, cleanForSpeech } from './textUtils';
 import { parseTutoringProgressQuery, type TutoringArea } from '../core/tutoring/tutoringModel';
 import { buildTutoringProgress, type TutoringMinuteLike, type TutoringProgress } from '../core/tutoring/tutoringProgress';
+import { MONTH_DISPLAY_ES } from '../core/temporal/calendarNames';
 
 /** Snapshot de minuta (campos opcionales) admitido por los helpers. */
 export interface MinuteSnapshotLike {
@@ -642,6 +643,35 @@ export interface MinuteLookupResult {
 // en su dueno (core/tutoring/tutoringModel).
 
 
+/**
+ * Fecha legible de la ultima sesion (P8.59). La minuta guarda el codigo YYMMDD
+ * (o una fecha ISO); se presenta como "5 de octubre de 2026" (es) o "2026-10-05"
+ * (en). Los nombres de mes salen de su dueno unico (calendarNames).
+ */
+function tutoringDateLabel(raw: string = '', language = 'es'): string {
+    const value = normalizeSpaces(raw);
+    if (!value) return '';
+    const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const code = value.match(/^(\d{2})(\d{2})(\d{2})(?:-\d+)?$/);
+    let year = '';
+    let month = 0;
+    let day = 0;
+    if (iso) {
+        year = iso[1];
+        month = Number(iso[2]);
+        day = Number(iso[3]);
+    } else if (code) {
+        year = `20${code[1]}`;
+        month = Number(code[2]);
+        day = Number(code[3]);
+    } else {
+        return value;
+    }
+    if (!month || month > 12 || !day) return value;
+    if (language === 'en') return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return `${day} de ${MONTH_DISPLAY_ES[month - 1]} de ${year}`;
+}
+
 /** Une items quitando su punto final (evita ".." al cerrar la frase). */
 function joinSpeechItems(items: string[] = []): string {
     return items.map((item) => String(item).replace(/\.+$/, '').trim()).filter(Boolean).join('. ');
@@ -664,14 +694,14 @@ export function buildTutoringProgressSpeech(
     const parts: string[] = [];
     if (isEnglish) {
         parts.push(
-            `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${ultimaFecha ? `, the latest on ${ultimaFecha}` : ''}.`,
+            `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${ultimaFecha ? `, the latest on ${tutoringDateLabel(ultimaFecha, 'en')}` : ''}.`,
         );
         if (practicado.length) parts.push(`Worked on: ${joinSpeechItems(practicado)}.`);
         if (pendientes.length) parts.push(`Next: ${joinSpeechItems(pendientes)}.`);
         else parts.push('Nothing pending: let us move to the next step.');
     } else {
         parts.push(
-            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${ultimaFecha ? `, la última el ${ultimaFecha}` : ''}.`,
+            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${ultimaFecha ? `, la última el ${tutoringDateLabel(ultimaFecha, 'es')}` : ''}.`,
         );
         if (practicado.length) parts.push(`Trabajado: ${joinSpeechItems(practicado)}.`);
         if (pendientes.length) parts.push(`Pendiente: ${joinSpeechItems(pendientes)}.`);
@@ -692,7 +722,7 @@ export function buildTutoringProgressContract(
         : { title: `Avance de ${area.label}`, sessions: 'Sesiones', last: 'Última', worked: 'Trabajado', next: 'Pendiente' };
     const bullets = [
         `${labels.sessions}: ${sesiones}`,
-        ultimaFecha ? `${labels.last}: ${ultimaFecha}` : '',
+        ultimaFecha ? `${labels.last}: ${tutoringDateLabel(ultimaFecha, isEnglish ? 'en' : 'es')}` : '',
         practicado.length ? `${labels.worked}:\n${practicado.map((item) => `- ${item}`).join('\n')}` : '',
         pendientes.length ? `${labels.next}:\n${pendientes.map((item) => `- ${item}`).join('\n')}` : '',
     ].filter(Boolean);

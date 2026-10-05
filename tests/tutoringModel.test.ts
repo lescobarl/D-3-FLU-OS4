@@ -199,4 +199,17 @@ describe('6. el area se puede ETIQUETAR en la minuta (P8.58): el texto deja de s
     expect(result.diagnostics?.route).toBe('tutoring-progress')
     expect(result.contract?.respuesta_voz).toContain('1 sesión registrada')
   })
+
+  it('la ultima sesion se presenta como FECHA legible, no como el codigo de la minuta', () => {
+    // La minuta real guarda historyCode (YYMMDD-NN) y no una fecha: la voz lo leia
+    // tal cual ("261005 01"). Debe sonar como fecha.
+    const minuta = {
+      historyCode: '261005-01',
+      description: 'Clase',
+      summarySnapshot: { titulo: 'Clase', tema_sesion: 'Practica de ingles', resumen: 'Vocabulario.' },
+    }
+    const result = resolveMinuteQuery('¿cómo voy en inglés?', [minuta], { language: 'es' })
+    expect(result.contract?.respuesta_voz).toContain('5 de octubre de 2026')
+    expect(result.contract?.respuesta_voz).not.toContain('261005')
+  })
 })
