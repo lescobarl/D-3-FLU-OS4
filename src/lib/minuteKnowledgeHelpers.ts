@@ -38,6 +38,8 @@ export interface MinuteSnapshotLike {
     acuerdos?: string[];
     pendientes?: string[];
     siguientes_pasos?: string[];
+    /** Area de tutoria de la sesion (P8.58), cuando la sesion la declaro. */
+    tutoring_area?: string;
     date?: string;
     mood?: unknown;
     content?: string;
@@ -640,6 +642,11 @@ export interface MinuteLookupResult {
 // en su dueno (core/tutoring/tutoringModel).
 
 
+/** Une items quitando su punto final (evita ".." al cerrar la frase). */
+function joinSpeechItems(items: string[] = []): string {
+    return items.map((item) => String(item).replace(/\.+$/, '').trim()).filter(Boolean).join('. ');
+}
+
 /** Respuesta hablada del avance: honesta (0 sesiones se dice, no se inventa). */
 export function buildTutoringProgressSpeech(
     progress: TutoringProgress,
@@ -659,15 +666,15 @@ export function buildTutoringProgressSpeech(
         parts.push(
             `On ${area.label} you have ${sesiones} session${sesiones === 1 ? '' : 's'} saved${ultimaFecha ? `, the latest on ${ultimaFecha}` : ''}.`,
         );
-        if (practicado.length) parts.push(`Worked on: ${practicado.join('. ')}.`);
-        if (pendientes.length) parts.push(`Next: ${pendientes.join('. ')}.`);
+        if (practicado.length) parts.push(`Worked on: ${joinSpeechItems(practicado)}.`);
+        if (pendientes.length) parts.push(`Next: ${joinSpeechItems(pendientes)}.`);
         else parts.push('Nothing pending: let us move to the next step.');
     } else {
         parts.push(
-            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión' : 'sesiones'} registradas${ultimaFecha ? `, la última el ${ultimaFecha}` : ''}.`,
+            `De ${area.label} llevas ${sesiones} ${sesiones === 1 ? 'sesión registrada' : 'sesiones registradas'}${ultimaFecha ? `, la última el ${ultimaFecha}` : ''}.`,
         );
-        if (practicado.length) parts.push(`Trabajado: ${practicado.join('. ')}.`);
-        if (pendientes.length) parts.push(`Pendiente: ${pendientes.join('. ')}.`);
+        if (practicado.length) parts.push(`Trabajado: ${joinSpeechItems(practicado)}.`);
+        if (pendientes.length) parts.push(`Pendiente: ${joinSpeechItems(pendientes)}.`);
         else parts.push('Sin pendientes: pasemos al siguiente paso.');
     }
     return cleanForSpeech(parts.join(' '));

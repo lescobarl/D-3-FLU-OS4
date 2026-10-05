@@ -98,6 +98,20 @@ export function findKnownTutoringArea(text: string = ''): TutoringArea | null {
 }
 
 /**
+ * Area de tutoria de una MINUTA (P8.58): la etiqueta que se guarda EN la
+ * minuta para que el avance no dependa de que su resumen nombre el area. Se
+ * resuelve de la union del contenido de la minuta y de la conversacion de la
+ * sesion. Solo areas CONOCIDAS: las libres no se auto-etiquetan (no se adivinan).
+ * Devuelve `null` si ninguna menciona un area conocida.
+ */
+export function resolveMinuteTutoringArea(
+    minuteText: string = '',
+    conversationText: string = '',
+): TutoringArea | null {
+    return findKnownTutoringArea(`${minuteText} ${conversationText}`);
+}
+
+/**
  * Consulta de AVANCE por area: "¿como voy en ingles?", "mi avance en
  * matematicas", "how am I doing in English". Devuelve el area o `null` si el
  * texto no es una consulta de avance (asi no se secuestra una charla normal).

@@ -103,6 +103,12 @@ export interface MinuteSummarySnapshot {
     siguientes_pasos: string[];
     tema_sesion: string;
     /**
+     * Area de tutoria de la sesion (P8.58), cuando la sesion fue una clase o
+     * practica de un area (p.ej. "Inglés"). Es la etiqueta EXPLICITA que usa el
+     * avance por area; sin ella el area se reconoce por el texto de la minuta.
+     */
+    tutoring_area?: string;
+    /**
      * Tipo de registro de conocimiento (Paso 6 — memoria generalizada).
      * Opcional para compatibilidad retroactiva: los registros previos sin
      * `kind` se tratan como 'minuta'.

@@ -21,6 +21,7 @@ import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabas
 import { logCaughtError } from '../lib/caughtError';
 import { resolveConfiguredTemperature } from '../services/aiTemperature';
 import { COMMAND_IDS } from '../voice/lib/commandIds';
+import { resolveMinuteTutoringArea } from '../core/tutoring/tutoringModel';
 
 /**
  * Una escritura de auditoria que falla es un sintoma secundario: se registra con
@@ -30,6 +31,38 @@ import { COMMAND_IDS } from '../voice/lib/commandIds';
  */
 function reportAuditWriteFailure(event: string, e: unknown): void {
     logCaughtError(`useMinuteHandlers: no se pudo escribir el evento de auditoria "${event}"`, e);
+}
+
+/** Texto de una minuta que puede nombrar su area de tutoria (P8.58). */
+function minuteTutoringText(snapshot: { titulo?: string; resumen?: string; tema_sesion?: string; acuerdos?: string[]; pendientes?: string[]; siguientes_pasos?: string[] }): string {
+    return [
+        snapshot.titulo,
+        snapshot.resumen,
+        snapshot.tema_sesion,
+        ...(snapshot.acuerdos || []),
+        ...(snapshot.pendientes || []),
+        ...(snapshot.siguientes_pasos || []),
+    ]
+        .filter(Boolean)
+        .join(' ');
+}
+
+/** Texto de la conversacion de la sesion (para resolver de que area era). */
+function conversationTextOf(history: Array<{ text?: string }> = []): string {
+    return history.map((row) => row.text || '').filter(Boolean).join(' ');
+}
+
+/**
+ * Etiqueta la minuta con su area de tutoria (P8.58). Devuelve un parcial que se
+ * esparce en el snapshot; `{}` si la sesion no declaro un area conocida. Un solo
+ * dueno de la resolucion (core/tutoring/tutoringModel).
+ */
+function withTutoringArea(
+    snapshot: { titulo?: string; resumen?: string; tema_sesion?: string; acuerdos?: string[]; pendientes?: string[]; siguientes_pasos?: string[] },
+    history: Array<{ text?: string }> = [],
+): { tutoring_area?: string } {
+    const area = resolveMinuteTutoringArea(minuteTutoringText(snapshot), conversationTextOf(history));
+    return area ? { tutoring_area: area.label } : {};
 }
 
 /** Draft de minuta producido por `createMinuteDraftFromSummary`. */
@@ -121,7 +154,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 // Add to IndexedDB via minuteKnowledge (expects MinuteSummarySnapshot)
                 // C10: la publicación en integrationStore la hace el dueño de la
                 // minuta (useMinuteKnowledge.addMinute); aquí NO se espeja.
-                const persisted = await minuteKnowledge.addMinute(snapshot);
+                const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) });
                 // OS2 parity: speak the minute title after generation
                 const speechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);
                 if (speechText) {
@@ -203,7 +236,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                         siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
                         tema_sesion: String(sessionRole || '').trim(),
                     };
-                    const persisted = await minuteKnowledge.addMinute(snapshot);
+                    const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) });
                     setSelectedMinuteId(persisted.id);
                     saved = true;
                 }
@@ -266,6 +299,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
     const handleSaveMinute = useCallback(async (draftOverride?: MinuteDraft | null, { announce = true }: { announce?: boolean } = {}) => {
         const sourceDraft = draftOverride || minuteDraft;
         if (!sourceDraft) return;
+        const history = integrationStore.conversationHistory;
 
         try {
             // sourceDraft is a flat draft object (titulo, participantes, resumen, etc.)
@@ -279,7 +313,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 siguientes_pasos: Array.isArray(sourceDraft.siguientes_pasos) ? sourceDraft.siguientes_pasos : [],
                 tema_sesion: String(sourceDraft.tema_sesion || sessionRole || '').trim(),
             };
-            const persisted = await minuteKnowledge.addMinute(snapshot);
+            const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) });
             setSelectedMinuteId(persisted.id);
             setMinuteDraft(
                 createMinuteDraftFromSummary(
@@ -312,7 +346,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 error: String(error),
             }, 'Minute save failed').catch((e) => reportAuditWriteFailure('minute:save-error', e));
         }
-    }, [minuteDraft, minuteKnowledge, language, sessionRole, auditLog, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
+    }, [minuteDraft, minuteKnowledge, integrationStore, language, sessionRole, auditLog, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
 
     // ============================================================
     // handleSaveConversationSummary
@@ -339,7 +373,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
                 tema_sesion: String(sessionRole || '').trim(),
             };
-            const persisted = await minuteKnowledge.addMinute(snapshot, { kind: 'conversacion' });
+            const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) }, { kind: 'conversacion' });
 
             if (announce) {
                 const speechText = getCommandSpeech(COMMAND_IDS.GUARDAR_MINUTA, language);

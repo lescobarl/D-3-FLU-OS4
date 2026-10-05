@@ -9,7 +9,7 @@
 // quien tiene el comparador de codigos de minuta, para no reimplementarlo.
 // ============================================================
 import { cleanForSpeech, normalizeSpaces } from '../../lib/textUtils';
-import { mentionsTutoringArea, type TutoringArea } from './tutoringModel';
+import { mentionsTutoringArea, resolveTutoringArea, type TutoringArea } from './tutoringModel';
 
 /** Minuta tal como la ven los helpers (campos opcionales, snapshot anidado o plano). */
 export interface TutoringMinuteLike {
@@ -24,6 +24,8 @@ export interface TutoringMinuteLike {
     acuerdos?: string[];
     pendientes?: string[];
     siguientes_pasos?: string[];
+    /** Area de tutoria etiquetada EXPLICITAMENTE en la minuta (P8.58). */
+    tutoring_area?: string;
     summarySnapshot?: Omit<TutoringMinuteLike, 'summarySnapshot'>;
 }
 
@@ -52,7 +54,7 @@ function snapshotOf(record: TutoringMinuteLike = {}): TutoringMinuteLike {
 export function minuteSearchText(record: TutoringMinuteLike = {}): string {
     const snapshot = snapshotOf(record);
     return normalizeSpaces(
-        [snapshot.tema_sesion, snapshot.titulo || snapshot.description, snapshot.resumen]
+        [snapshot.tema_sesion, snapshot.tutoring_area, snapshot.titulo || snapshot.description, snapshot.resumen]
             .filter(Boolean)
             .join(' '),
     );
@@ -60,6 +62,13 @@ export function minuteSearchText(record: TutoringMinuteLike = {}): string {
 
 /** ¿La minuta trata del area? (mencion del area o de sus sinonimos, por palabra completa). */
 export function minuteCoversTutoringArea(record: TutoringMinuteLike = {}, area: TutoringArea): boolean {
+    // La etiqueta EXPLICITA manda: una clase de ingles resumida como "Past
+    // simple" se cuenta igual. Solo si no hay etiqueta se cae al texto.
+    const tagged = snapshotOf(record).tutoring_area;
+    if (tagged) {
+        const resolved = resolveTutoringArea(String(tagged));
+        if (resolved && resolved.id === area.id) return true;
+    }
     return mentionsTutoringArea(minuteSearchText(record), area);
 }
 
