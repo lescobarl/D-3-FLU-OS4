@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-04",
+  "updated": "2026-10-06",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -3210,6 +3210,13 @@
       "titulo": "El artefacto GENERADO por FLU (carta/documento, guion de video) ahora entra al historial de conversacion (FLU puede explicarlo; llega a la minuta)",
       "evidencia": "CERRADO 2026-10-06 (commit 4cb4e0a). Hueco medido: el cuerpo generado se guardaba en el historial de DOCUMENTOS (documents) pero NO en conversationHistory, asi que FLU no podia explicar ni referir una carta o un guion que el mismo acababa de producir. Fix: src/core/documents/generatedInsumo.ts (hermano de documentInsumo/imageInsumo; unico dueno del texto del insumo, no inventa contenido) + el dueno unico de generacion src/hooks/useDocumentGeneration.ts anade el insumo al historial + clave es/en en src/lib/uiStrings.ts. GUARD tests/generatedInsumo.test.ts NACE ROJO (medido con el modulo renombrado: 'Cannot find module') y queda 5/5 con prueba de detector. SIMULACION REAL: tests/e2e/insumo-a-minuta.spec.ts 4/4 (una carta generada por la via real entra al historial: '[Documento generado por FLU: ... CARTA_GENERADA_E2E]'). e2eScope += generatedInsumo.ts y useDocumentGeneration.ts; allow/dod += el modulo y su guard. Alcance real (0.23): CUBIERTO=el cuerpo generado (doc/carta/video) como informacion de conversacion con guard ROJO->VERDE y e2e real; NO CUBIERTO=que la IMAGEN generada anada ademas un insumo de texto (su explicacion es la respuesta_voz, ya en la conversacion; cubierto por _sim-aviones-imagen), el DoD-producto y la suite completa.",
       "origen": "encargo-dueno-2026-10-06"
+    },
+    {
+      "id": "P8.83",
+      "commit": "f64ce9d",
+      "titulo": "La diarizacion leia el buffer PCM DESPUES de vaciarlo: 24 de 25 turnos con snap=0 y un solo embedding (todo colapsaba a Hablante 1)",
+      "evidencia": "CERRADO 2026-10-06 (commit f64ce9d). DEFECTO MEDIDO en el debug.log del dev-server (relay /__flu_client_log): 24 de 25 lineas SpeakerTrace con snap=0 y UNA sola linea VoiceId en toda la sesion -> la diarizacion nunca veia audio y blindSpeakerFallback (P8.70) rotulaba TODO Hablante 1. CAUSA: el snapshot de audio del turno (flattenChunks(chunksRef.current)) se leia en useFluVoiceAssistant DESPUES del commit temprano/stream (que vacia el buffer via flushPcmAfterTurnCommit/startListening). FIX (dueno unico): src/voice/lib/turnAudioSnapshot.js captura el audio del turno UNA vez al llegar el FINAL (onresult isFinal), idempotente por turnId, ANTES de los vaciados; createTurnSpeakerAudioResolver consume getCapturedAudio; las 2 lecturas del hook y el preflight leen ese snapshot (readTurnAudioSnapshot/turnAudioForDiarize). Sonda MicPcm (throttle 2s) nueva para distinguir mic muerto de buffer vaciado. GUARD tests/turnAudioSnapshotOwnerGuard.test.ts en lint:guards: ROJO medido contra el turnSpeakerPreflight previo (3 casos: expected spy to be called 1 times but got 0; 6 to be 2; detector true->false) y VERDE con el fix; prueba de detector incluida. godFileSize: el hook sigue en 4537/techo 4539 (logica nueva extraida al modulo; 0 lineas netas). Alcance real (0.23): CUBIERTO=el audio del turno llega al embedder por el camino real de la voz, con guard ROJO->VERDE, lint (191 ficheros/1593 casos) + eslint 0 + tsc 0 + e2e:plan + gate VERDE; NO CUBIERTO=el DoD-producto (la corrida real con micro del dueno: hay que confirmar que SpeakerTrace pasa de snap=0 a snap>0 y aparecen clusters>0), la suite completa y la separacion acustica fina hombre/mujer (depende del umbral, no de este fix).",
+      "origen": "defecto-medido-dueno-2026-10-06"
     }
   ]
 }
