@@ -618,6 +618,7 @@
     "src/voice/lib/idleSchedule.js",
     "tests/e2e/tts-flag-pegado.spec.ts",
     "tests/e2e/documento-insumo.spec.ts",
+    "tests/e2e/insumo-a-minuta.spec.ts",
     "tests/localAi.test.ts",
     "src/core/autonomy/backupSystem.ts",
     "src/core/ai/httpClient.ts",
@@ -672,7 +673,14 @@
       "tests/e2e/musica-en-partida.spec.ts"
     ],
     "src/App.tsx": [
-      "tests/e2e/auditoria-acciones-llm.spec.ts"
+      "tests/e2e/auditoria-acciones-llm.spec.ts",
+      "tests/e2e/insumo-a-minuta.spec.ts"
+    ],
+    "src/core/documents/imageInsumo.ts": [
+      "tests/e2e/insumo-a-minuta.spec.ts"
+    ],
+    "src/lib/uiStrings.ts": [
+      "tests/e2e/insumo-a-minuta.spec.ts"
     ],
     "src/core/agenda/agendaCommandParser.ts": [
       "tests/e2e/auditoria-acciones-llm.spec.ts"
