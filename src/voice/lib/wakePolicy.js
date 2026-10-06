@@ -12,7 +12,7 @@
  * gate (tests/fluSettingsTabView.test.tsx no puede entrar en lint:guards).
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { cleanForSpeech, stripDiacritics } from './audioMath.js'
+import { cleanForSpeech, splitTranscriptAtWakeWord, stripDiacritics } from './audioMath.js'
 
 /** Ordenes de politica (valor interno, no dato de config). */
 export const WAKE_POLICY_ORDER = Object.freeze({ ON: 'on', OFF: 'off' })
@@ -26,7 +26,11 @@ export function getWakePolicyPhrases(config = FLU_CONFIG) {
  * @returns {'on'|'off'|null}
  */
 export function resolveWakePolicyOrder(text = '', config = FLU_CONFIG) {
-    const norm = stripDiacritics(cleanForSpeech(text)).toLowerCase()
+    const raw = cleanForSpeech(text)
+    const split = splitTranscriptAtWakeWord(raw, config.voiceCommands?.wakeWords || [])
+    // La orden llega CON la wake delante ("okay flow exige la wake") o ya pelada
+    // (el gate pasivo entrega el commandText): el splitter unico decide.
+    const norm = stripDiacritics(cleanForSpeech(split.wakeWordMatched ? split.afterWake || split.commandText : raw)).toLowerCase()
     if (!norm) return null
     const phrases = getWakePolicyPhrases(config)
     const matches = (list) =>

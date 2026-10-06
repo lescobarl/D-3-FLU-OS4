@@ -42,6 +42,15 @@ describe('P8.68 — la bandera de wake por voz escribe el valor del dueno', () =
         }
     })
 
+    it('reconoce la orden CON la wake delante (el splitter unico la pela)', () => {
+        for (const text of PHRASES.on) {
+            expect(resolveWakePolicyOrder(`okay flow ${text}`), text).toBe(WAKE_POLICY_ORDER.ON)
+        }
+        for (const text of PHRASES.off) {
+            expect(resolveWakePolicyOrder(`ok flu ${text}`), text).toBe(WAKE_POLICY_ORDER.OFF)
+        }
+    })
+
     it('la orden OFF abre el piso (no exige wake) y la ON lo cierra', () => {
         const original = FLU_CONFIG.voiceCommands.requireWakeAlways
         try {
