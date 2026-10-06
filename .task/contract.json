@@ -655,7 +655,8 @@
     "npx vitest run --reporter=dot tests/arbiterDomainBarrier.test.ts tests/musicActions.test.ts",
     "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/catalogRegistry.test.ts tests/communicationProfileService.test.ts tests/contactsService.test.ts tests/conversationLiveNotWiped.test.ts tests/deviceActionService.test.ts tests/diaryService.test.ts tests/documentsService.test.ts tests/materiaGrisService.test.ts tests/minuteHandlersDayRollover.test.ts tests/notesService.test.ts tests/notesUserScope.test.ts tests/onboardingService.test.ts tests/searchCatalog.test.ts tests/shoppingService.test.ts tests/useAuditLog.test.tsx tests/useDocuments.test.tsx tests/workspaceHubRestoreMedia.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/workspaceLastObjectPerType.test.tsx tests/workspaceMediaResetOnRequest.test.tsx",
     "npx vitest run --reporter=dot tests/analysisFallbacks.test.ts tests/generationPrompts.test.ts",
-    "npx vitest run --reporter=dot tests/pronunciacion.test.ts tests/gameAliasTruncatedName.test.ts tests/gameCommandEscape.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/gameTurnContext.test.ts tests/gamesAudit.test.ts tests/loteria.test.ts"
+    "npx vitest run --reporter=dot tests/pronunciacion.test.ts tests/gameAliasTruncatedName.test.ts tests/gameCommandEscape.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/gameTurnContext.test.ts tests/gamesAudit.test.ts tests/loteria.test.ts",
+    "npx vitest run --reporter=dot tests/conversationHistoryCap.test.ts tests/emotionEngine.test.ts tests/systemEventLog.test.ts tests/voiceConfigCatalog.test.ts tests/fluSettingsTabView.test.tsx"
   ],
   "guard": "npx vitest run --reporter=dot tests/tutoringModel.test.ts",
   "guardExpect": "green",

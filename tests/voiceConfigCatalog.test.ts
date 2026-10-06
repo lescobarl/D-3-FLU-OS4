@@ -61,6 +61,7 @@ const VOICE_FIELDS: Record<keyof VoiceConfig, true> = {
     rate: true,
     pitch: true,
     volume: true,
+    requireWakeAlways: true,
 };
 const VOICE_FIELD_NAMES = new Set<string>(Object.keys(VOICE_FIELDS));
 

@@ -920,6 +920,14 @@ export function FluSettingsPanel({
                                     {(integrationStore.voiceConfig?.volume ?? 1).toFixed(1)}
                                 </span>
                             </label>
+                            <label className="flu-settings-image-config__field flu-settings-image-config__field--checkbox">
+                                <input
+                                    type="checkbox"
+                                    checked={integrationStore.voiceConfig.requireWakeAlways === true}
+                                    onChange={(e) => integrationStore.setVoiceConfig({ requireWakeAlways: e.target.checked })}
+                                />
+                                <span>Exigir la palabra de activación en cada frase (piso cerrado)</span>
+                            </label>
                         </div>
                     </div>
                 </div>

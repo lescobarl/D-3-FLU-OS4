@@ -20,6 +20,7 @@ import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
 import { logCaughtError } from '../lib/caughtError';
 import { localGet, localKeys, localRemove, localSet } from '../core/storage/localStore';
+import { useIntegrationStore } from '../store/integrationStore';
 
 // ============================================================
 // Tipos
@@ -215,6 +216,17 @@ export function useConfigPersistence(): ConfigPersistence {
     useEffect(() => {
         if (FLU_CONFIG.debug) FLU_CONFIG.debug.enabled = debugLogsEnabled;
     }, [debugLogsEnabled]);
+
+    // ---- Bandera de wake (piso cerrado/abierto): el configurador (integrationStore)
+    // es el UNICO almacen de registro; aqui se ESPEJA al runtime que lee el dueno
+    // unico de la decision (requiresWakeWord -> FLU_CONFIG.voiceCommands.requireWakeAlways).
+    useEffect(() => {
+        const apply = (wakeAlways: boolean | undefined) => {
+            if (FLU_CONFIG.voiceCommands) FLU_CONFIG.voiceCommands.requireWakeAlways = wakeAlways === true;
+        };
+        apply(useIntegrationStore.getState().voiceConfig?.requireWakeAlways);
+        return useIntegrationStore.subscribe((state) => apply(state.voiceConfig?.requireWakeAlways));
+    }, []);
 
     // ---- Text (Gemini) config handlers ----
     const handleTextApiKeyCommit = useCallback((key: string) => {

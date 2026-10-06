@@ -139,7 +139,7 @@ import {
   blindSpeakerFallback,
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
-import { applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
+import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
 import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
@@ -2986,6 +2986,7 @@ export function useFluVoiceAssistant({
     async (text, { requireWake = false } = {}) => {
       const order = resolveWakePolicyOrder(text, FLU_CONFIG, { requireWake })
       if (!order || !applyWakePolicyOrder(order)) return false
+      useIntegrationStore.getState?.().setVoiceConfig?.({ requireWakeAlways: order === WAKE_POLICY_ORDER.ON })
       await commitAndResolveTurn({
         capture: cleanForSpeech(text),
         contract: {

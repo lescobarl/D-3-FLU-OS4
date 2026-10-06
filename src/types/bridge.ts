@@ -140,6 +140,13 @@ export interface VoiceConfig {
     pitch: number;
     /** Volumen de voz (0.0 - 1.0, default 1.0) */
     volume: number;
+    /**
+     * Bandera de wake: true exige decir la palabra de activacion en cada frase
+     * (piso cerrado, para juntas/aula); false la deja abierta (piso abierto, 1 a 1).
+     * El configurador es el UNICO almacen de registro; el runtime la espeja en
+     * `FLU_CONFIG.voiceCommands.requireWakeAlways`, que lee `requiresWakeWord`.
+     */
+    requireWakeAlways?: boolean;
 }
 
 /**
