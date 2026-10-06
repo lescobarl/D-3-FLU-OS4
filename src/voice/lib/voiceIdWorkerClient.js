@@ -9,6 +9,7 @@ import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
 import { logCaughtError } from '../../lib/caughtError';
+import { relayLog } from '../../lib/clientLogRelay';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
 import { scheduleIdle } from './idleSchedule.js'
@@ -274,6 +275,13 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
       })
     })
     vector = Array.isArray(raw?.vector) ? raw.vector : []
+    if (typeof window !== 'undefined') {
+      relayLog(
+        'LOG',
+        'Match',
+        `reason=${raw?.reason || ''} sim=${Number(raw?.similarity ?? 0).toFixed(3)} name="${raw?.speakerName || ''}" inClusters=${payload.clusters?.length ?? 0} last="${payload.lastSpeaker || ''}"`,
+      )
+    }
     if (raw?.speakerId && raw?.speakerName && raw?.reason && raw.reason !== 'no-vector') {
       workerHint = {
         speakerId: raw.speakerId,
