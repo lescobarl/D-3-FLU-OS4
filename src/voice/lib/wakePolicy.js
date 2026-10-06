@@ -25,9 +25,13 @@ export function getWakePolicyPhrases(config = FLU_CONFIG) {
  * Orden de politica de wake pedida por el texto.
  * @returns {'on'|'off'|null}
  */
-export function resolveWakePolicyOrder(text = '', config = FLU_CONFIG) {
+export function resolveWakePolicyOrder(text = '', config = FLU_CONFIG, { requireWake = false } = {}) {
     const raw = cleanForSpeech(text)
     const split = splitTranscriptAtWakeWord(raw, config.voiceCommands?.wakeWords || [])
+    // Modo CERRADO: la orden necesita su PROPIO wake en el enunciado (mismo criterio
+    // que un comando). Si no, una frase del aula/TV ("piso abierto") cambiaria la
+    // bandera sola. En el gate pasivo la wake ya la valido la puerta del turno.
+    if (requireWake && !split.wakeWordMatched) return null
     // La orden llega CON la wake delante ("okay flow exige la wake") o ya pelada
     // (el gate pasivo entrega el commandText): el splitter unico decide.
     const norm = stripDiacritics(cleanForSpeech(split.wakeWordMatched ? split.afterWake || split.commandText : raw)).toLowerCase()

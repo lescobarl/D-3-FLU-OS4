@@ -2983,8 +2983,8 @@ export function useFluVoiceAssistant({
   // triple guardia (verbo + nombre + contexto) y aquí se exige det.accion.
   /** Orden de politica de wake por voz (P8.68): aplica la bandera y confirma el turno. */
   const handleWakePolicyOrder = useCallback(
-    async (text) => {
-      const order = resolveWakePolicyOrder(text)
+    async (text, { requireWake = false } = {}) => {
+      const order = resolveWakePolicyOrder(text, FLU_CONFIG, { requireWake })
       if (!order || !applyWakePolicyOrder(order)) return false
       await commitAndResolveTurn({
         capture: cleanForSpeech(text),
@@ -3504,7 +3504,7 @@ export function useFluVoiceAssistant({
         return false
       }
 
-      if (await handleWakePolicyOrder(text)) return true
+      if (await handleWakePolicyOrder(text, { requireWake: true })) return true
 
       const plan = planVoiceCommandDispatch(text, {
         interim,

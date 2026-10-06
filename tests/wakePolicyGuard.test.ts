@@ -51,6 +51,13 @@ describe('P8.68 — la bandera de wake por voz escribe el valor del dueno', () =
         }
     })
 
+    it('en modo CERRADO la orden exige su propio wake (el aula no la cambia sola)', () => {
+        for (const text of [...PHRASES.on, ...PHRASES.off]) {
+            expect(resolveWakePolicyOrder(text, undefined, { requireWake: true }), text).toBeNull()
+            expect(resolveWakePolicyOrder(`okay flow ${text}`, undefined, { requireWake: true }), text).not.toBeNull()
+        }
+    })
+
     it('la orden OFF abre el piso (no exige wake) y la ON lo cierra', () => {
         const original = FLU_CONFIG.voiceCommands.requireWakeAlways
         try {
