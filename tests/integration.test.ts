@@ -1970,9 +1970,11 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         expect(tpSrc).toContain("animacion: 'Dance'");
         // Verificar que detectActionInTranscript existe en transcriptProcessor
         expect(tpSrc).toContain('function detectActionInTranscript');
-        // Verificar que se llama en el post-processing (call site en App.tsx);
-        // el análisis usa speechSource = transcript + respuesta_voz de FLU
-        expect(appSrc).toContain('detectActionInTranscript(speechSource)');
+        // Verificar que se llama en el post-processing (call site en App.tsx). El guard
+        // NO se acopla al argumento exacto: la FUENTE de la accion (el transcript del
+        // USUARIO, nunca la respuesta de FLU) la fija su dueno con CONDUCTA:
+        // shouldAutoPlayDanceTrack + tests/musicActions.test.ts.
+        expect(appSrc).toContain('detectActionInTranscript(');
     });
 
     it('detectActionInTranscript: "ok flu salta" → "Jump_in_place"', () => {
