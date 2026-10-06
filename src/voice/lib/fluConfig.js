@@ -229,8 +229,8 @@ export const FLU_CONFIG = {
         maxAutoSpeakersInRoom: 0,
         /** 0 = sin tope blando; anti-fantasma vía productionClusterReuseThreshold + segmentChronoSplit. */
         maxAutoSpeakersSoftCap: 0,
-        /** NO diferir: el embedding resuelve TRAS el commit; diferido = cluster perdido. */
-        deferClusterWritesUntilCommit: false,
+        /** Los ticks continuos NO escriben clusters (ventanas parciales = inflado: 8/2 voces). */
+        deferClusterWritesUntilCommit: true,
         /** Desactivado: pausas no abren H2+ en la misma voz (causa H46 en monólogo/TV). */
         segmentChronoSplit: false,
         /** No vaciar openLine al límite de turno (evita perder frase al cambiar hablante). */

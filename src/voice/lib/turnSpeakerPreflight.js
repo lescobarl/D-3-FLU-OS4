@@ -15,9 +15,13 @@ const preflightByTurn = new Map()
 /**
  * @param {number} turnId
  * @param {Function} run
- * @param {{ onClusters?: Function, continuous?: boolean }} [options]
+ * @param {{ onClusters?: Function, onResolved?: Function, continuous?: boolean }} [options]
+ *   `onResolved({ speakerId, speakerName, workingClusters })` avisa del hablante
+ *   resuelto por ESTE turno. Es lo que permite etiquetar la fila con el audio del
+ *   propio turno aunque el embedding llegue DESPUES del commit (medido: el commit
+ *   siempre pierde la carrera; sin esto la fila hereda la etiqueta del turno previo).
  */
-export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuous = false } = {}) {
+export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolved, continuous = false } = {}) {
   const id = Number(turnId)
   if (!Number.isFinite(id) || id <= 0 || typeof run !== 'function') return
 
@@ -52,6 +56,9 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuo
         // (defecto medido: `Match inClusters=0` en todos los turnos).
         if (!continuous && typeof onClusters === 'function' && result?.workingClusters?.length) {
           onClusters(result.workingClusters)
+        }
+        if (typeof onResolved === 'function' && result?.speakerName) {
+          onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
         }
         return
       }
@@ -104,6 +111,9 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuo
           continuous &&
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
         if (!defer) onClusters(result.workingClusters)
+      }
+      if (typeof onResolved === 'function' && result?.speakerName) {
+        onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
       }
     },
     onError: () => {

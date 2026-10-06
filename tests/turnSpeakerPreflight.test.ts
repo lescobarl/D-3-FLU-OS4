@@ -141,20 +141,28 @@ describe('turnSpeakerPreflight — slot por turno', () => {
         expect(peekTurnSpeakerPreflight(2)).toBe(null);
     });
 
-    // REGLA VIGENTE (2026-10-06): los clusters se persisten en cuanto un preflight
-    // resuelve, TAMBIEN el continuo. El embedding tarda ~3 s y el commit llega antes,
-    // asi que diferir la escritura al commit dejaba `refClusters=0` para siempre y
-    // ninguna voz se podia separar (defecto medido). Dueño unico: el callback.
-    it('encola los clusters al terminar, tambien en el preflight CONTINUO', async () => {
+    // REGLA VIGENTE (2026-10-06): el preflight CONTINUO NO escribe clusters (sus
+    // ventanas parciales inflaban la cuenta: 8 clusters / 2 voces). Escribe el
+    // snapshot FINAL del turno. Pero el aviso del HABLANTE (`onResolved`) SI sale
+    // del continuo: el embedding llega despues del commit y la fila lo necesita.
+    it('el continuo NO escribe clusters, pero SI avisa del hablante resuelto', async () => {
         const onClusters = vi.fn();
         scheduleTurnSpeakerPreflight(1, fuerte('Hablante 2'), { onClusters });
         await flush();
         expect(onClusters).toHaveBeenCalledWith([{ label: 'Hablante 2' }]);
 
-        const continuo = vi.fn();
-        scheduleTurnSpeakerPreflight(2, fuerte('Hablante 3'), { onClusters: continuo, continuous: true });
+        const diferido = vi.fn();
+        const resuelto = vi.fn();
+        scheduleTurnSpeakerPreflight(2, fuerte('Hablante 3'), {
+            onClusters: diferido,
+            onResolved: resuelto,
+            continuous: true,
+        });
         await flush();
-        expect(continuo).toHaveBeenCalledWith([{ label: 'Hablante 3' }]);
+        expect(diferido).not.toHaveBeenCalled();
+        expect(resuelto).toHaveBeenCalledWith(
+            expect.objectContaining({ speakerName: 'Hablante 3', turnId: 2 }),
+        );
         expect(peekTurnSpeakerPreflight(2)!.continuous).toBe(true);
     });
 });

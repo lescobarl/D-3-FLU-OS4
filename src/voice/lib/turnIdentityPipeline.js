@@ -30,7 +30,7 @@ const DYNAMIC_KEY = '__dynamic__'
  *   al arrancar dejaba los snapshots en un slot que el commit no miraba
  *   (medido: `Preflight turn=5` vs `Commit turn=9` -> `preReady=false` siempre).
  */
-export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters } = {}) {
+export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters, onResolved } = {}) {
   const dynamic = typeof turnId === 'function'
   const initialId = Number(dynamic ? turnId() : turnId)
   if (!Number.isFinite(initialId) || initialId <= 0) return
@@ -42,7 +42,7 @@ export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters
     if (!Number.isFinite(id) || id <= 0) return
     const run = typeof runFactory === 'function' ? runFactory() : runFactory
     if (typeof run !== 'function') return
-    scheduleTurnSpeakerPreflight(id, run, { onClusters, continuous: true })
+    scheduleTurnSpeakerPreflight(id, run, { onClusters, onResolved, continuous: true })
   }
 
   tick()
@@ -82,12 +82,12 @@ export function stopAllContinuousIdentityPipelines() {
  * cluster del turno se perdia (el commit ya habia consumido su slot vacio) y el
  * comparador de voces se quedaba sin nada contra lo que comparar (inClusters=0).
  */
-export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClusters } = {}) {
+export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClusters, onResolved } = {}) {
   const id = Number(turnId)
   stopContinuousIdentityPipeline(id)
 
   if (typeof runFinalSnapshot === 'function') {
-    scheduleTurnSpeakerPreflight(id, runFinalSnapshot, { continuous: false, onClusters })
+    scheduleTurnSpeakerPreflight(id, runFinalSnapshot, { continuous: false, onClusters, onResolved })
   }
 
   const slot = peekTurnSpeakerPreflight(id)

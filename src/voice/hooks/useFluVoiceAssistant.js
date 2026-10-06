@@ -1453,6 +1453,14 @@ export function useFluVoiceAssistant({
     [getContinuousBufferAdapter, userSpeakersView],
   )
 
+  /** El hablante del turno llega DESPUES del commit: se fija aqui para no heredar la
+   *  etiqueta del turno anterior (medido: preReady=false en todos los turnos). */
+  const applyResolvedSpeaker = useCallback(({ speakerName, turnId }) => {
+    if (!speakerName || turnId !== activeTurnIdRef.current) return
+    lastSpeakerRef.current = speakerName
+    lastLoggedSpeakerRef.current = speakerName
+  }, [])
+
   const scheduleIdentityPreflight = useCallback(
     ({ utterance = '' } = {}) => {
       if (!conversationActiveRef?.current) return
@@ -1472,12 +1480,11 @@ export function useFluVoiceAssistant({
       startContinuousIdentityPipeline(
         () => activeTurnIdRef.current,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
-        // §9 Dueño unico de la escritura de clusters: el ref del hook. Se persisten en
-        // cuanto un preflight resuelve (el commit pierde la carrera con el embedding).
-        { onClusters: setSpeakerClusters },
+        // §9 Dueño unico de la escritura de clusters: el ref del hook.
+        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker },
       )
     },
-    [conversationActiveRef, createSpeakerAudioResolver, setSpeakerClusters],
+    [conversationActiveRef, createSpeakerAudioResolver, setSpeakerClusters, applyResolvedSpeaker],
   )
 
   const resolveSpeakerWithAudio = useCallback(
@@ -1844,19 +1851,10 @@ export function useFluVoiceAssistant({
 
   const flushListenStateBeforeRebuild = useCallback(() => {
     if (!conversationActiveRef?.current) return
-    // El interino en vuelo durante un stall/rebuild es NO CONFIABLE: Chrome se
-    // congeló a mitad de frase y puede entregar una palabra truncada (p.ej. "hoa"
-    // de "hola"). Commitearlo como turno final crea filas basura en el log y
-    // reinicia la línea abierta, de modo que la siguiente sesión arranca desde
-    // cero y vuelve a commitear otro fragmento parcial (síntoma "solo escribe hoa
-    // y deja de transcribir" + "escucha pasmada").
-    //
-    // En un rebuild NO se commitea el interino parcial: se descarta la línea
-    // abierta (sin tocar el transcript de sesión ni el índice de hablante) para
-    // que la nueva sesión de reconocimiento recapture limpio desde el audio
-    // actual. El audio hablado durante el congelamiento de Chrome se pierde de
-    // todos modos (Chrome no lo procesó), así que commitear el fragmento previo
-    // no recupera nada y solo ensucia el log.
+    // El interino en vuelo durante un stall/rebuild es NO CONFIABLE (Chrome congela a
+    // mitad de frase y entrega una palabra truncada: "hoa" de "hola"). Commitearlo crea
+    // filas basura y reinicia la linea abierta ("solo escribe hoa y deja de transcribir").
+    // En rebuild se DESCARTA esa linea, sin tocar transcript de sesion ni indice.
     const partial = cleanForSpeech(
       readStreamDisplay(listenStateRef.current) ||
         listenStateRef.current.pendingInterim,
