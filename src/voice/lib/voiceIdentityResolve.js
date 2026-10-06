@@ -12,6 +12,7 @@ import {
   resolveSpeakerNameFromId,
 } from './conversationRow.js'
 import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
+import { relayLog } from '../../lib/clientLogRelay'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**
@@ -45,6 +46,7 @@ export function resolveSpeakerIdentityFromVector(
   }))
 
   let label = fallbackSpeaker
+  const diagnosis = {}
   if (Array.isArray(vector) && vector.length) {
     label =
       matchSpeakerByVoice({
@@ -64,7 +66,15 @@ export function resolveSpeakerIdentityFromVector(
         sessionPrimary,
         minVoicedSamples: getConversationMinVoicedSamples(sampleRate),
         minVoicedSamplesForNew: getConversationMinVoicedForNewSamples(sampleRate),
+        diagnosis,
       }) || fallbackSpeaker
+  }
+  if (typeof window !== 'undefined') {
+    relayLog(
+      'LOG',
+      'Identity',
+      `label="${label}" reason=${diagnosis.reason || ''} lastSim=${Number(diagnosis.lastTurnSimilarity ?? 0).toFixed(3)} auto=${diagnosis.autoClusterCount ?? workingClusters.length} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}`,
+    )
   }
 
   const matched = workingClusters.find(

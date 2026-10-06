@@ -215,3 +215,21 @@ describe('voiceIdentityResolve - fallback y retorno', () => {
     expect(out.label).toBe('X');
   });
 });
+
+// Prueba de DETECTOR del propio guard (no es decorativo, prueba de mutación): el
+// resolutor debe DISCRIMINAR — con vector llama al matcher y usa su etiqueta; sin
+// vector NO lo llama y cae al fallback. Si el resolutor etiquetara igual en ambos
+// casos (sordo al audio), este bloque cae.
+describe('el detector no es decorativo (prueba de mutación)', () => {
+  it('con vector etiqueta por el matcher; sin vector cae al fallback (sin llamarlo)', () => {
+    h.matchSpeakerByVoice.mockReturnValue('Hablante 2');
+    const conVector = resolve([1, 2, 3], { fallbackSpeaker: 'Hablante 1' });
+    expect(conVector.label).toBe('Hablante 2');
+    expect(h.matchSpeakerByVoice).toHaveBeenCalledTimes(1);
+
+    h.matchSpeakerByVoice.mockClear();
+    const sinVector = resolve([], { fallbackSpeaker: 'Hablante 1' });
+    expect(sinVector.label).toBe('Hablante 1');
+    expect(h.matchSpeakerByVoice).not.toHaveBeenCalled();
+  });
+});
