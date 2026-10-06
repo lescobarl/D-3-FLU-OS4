@@ -53,6 +53,7 @@
     "src/core/diary/diaryIntentParser.ts",
     "src/core/documents/documentInsumo.ts",
     "src/core/documents/imageInsumo.ts",
+    "src/core/documents/generatedInsumo.ts",
     "src/core/environments/environmentIntents.ts",
     "src/core/games/**",
     "src/core/games/abecedario.ts",
@@ -317,6 +318,8 @@
     "tests/turnRowNoDuplicate.test.ts",
     "tests/turnSpeakerCommit.test.ts",
     "tests/uiStrings.test.ts",
+    "tests/generatedInsumo.test.ts",
+    "tests/imageInsumo.test.ts",
     "tests/uiStringsSingleOwnerGuard.test.ts",
     "tests/umbralesConfigGuard.test.ts",
     "tests/uuidV4InsercionGuard.test.ts",
@@ -661,7 +664,8 @@
     "npx vitest run --reporter=dot tests/analysisFallbacks.test.ts tests/generationPrompts.test.ts",
     "npx vitest run --reporter=dot tests/pronunciacion.test.ts tests/gameAliasTruncatedName.test.ts tests/gameCommandEscape.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/gameTurnContext.test.ts tests/gamesAudit.test.ts tests/loteria.test.ts",
     "npx vitest run --reporter=dot tests/conversationHistoryCap.test.ts tests/emotionEngine.test.ts tests/systemEventLog.test.ts tests/voiceConfigCatalog.test.ts tests/fluSettingsTabView.test.tsx",
-    "npx vitest run --reporter=dot tests/imageInsumo.test.ts tests/uiStrings.test.ts"
+    "npx vitest run --reporter=dot tests/imageInsumo.test.ts tests/uiStrings.test.ts",
+    "npx vitest run --reporter=dot tests/generatedInsumo.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/tutoringModel.test.ts",
   "guardExpect": "green",
@@ -679,6 +683,12 @@
       "tests/e2e/insumo-a-minuta.spec.ts"
     ],
     "src/core/documents/imageInsumo.ts": [
+      "tests/e2e/insumo-a-minuta.spec.ts"
+    ],
+    "src/core/documents/generatedInsumo.ts": [
+      "tests/e2e/insumo-a-minuta.spec.ts"
+    ],
+    "src/hooks/useDocumentGeneration.ts": [
       "tests/e2e/insumo-a-minuta.spec.ts"
     ],
     "src/lib/uiStrings.ts": [

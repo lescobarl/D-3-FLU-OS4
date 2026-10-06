@@ -24,6 +24,7 @@ import type {
 } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import { safeFileName } from '../lib/formatAdapters';
+import { buildGeneratedInsumo } from '../core/documents/generatedInsumo';
 
 export interface DocumentGenerationState {
     isGenerating: boolean;
@@ -158,6 +159,26 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                     nombreTema && nombreTema.length > 4
                         ? { ...docResult, nombre: nombreTema }
                         : docResult;
+
+                // P8.82: el cuerpo GENERADO entra al historial de conversacion
+                // (unica fuente que consumen los turnos siguientes y la minuta),
+                // simetrico al insumo de lo CARGADO (documentInsumo/imageInsumo).
+                // El dueno unico del texto es buildGeneratedInsumo: sin cuerpo
+                // legible no hay insumo (no se inventa contenido).
+                const insumoGenerado = buildGeneratedInsumo(
+                    { text: namedResult.text, nombre: temaNombre || namedResult.nombre },
+                    language,
+                );
+                if (insumoGenerado) {
+                    const { addConversationEntry } = useIntegrationStore.getState();
+                    addConversationEntry({
+                        id: uuidv4(),
+                        role: 'system' as const,
+                        text: insumoGenerado,
+                        timestamp: Date.now(),
+                        speakerName: 'system',
+                    });
+                }
 
                 if (formato === 'video') {
                     setJob('ensamblando', formato, { progreso: 85 });

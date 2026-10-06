@@ -51,8 +51,10 @@ interface AiRec {
     vision: number;
     doc: number;
     minute: number;
+    gen: number;
     minuteBodies: string[];
     docBodies: string[];
+    genBodies: string[];
 }
 
 /**
@@ -65,9 +67,9 @@ interface AiRec {
  */
 async function stubAi(
     page: Page,
-    opts: { doc: unknown; vision: unknown; minute: unknown },
+    opts: { doc: unknown; vision: unknown; minute: unknown; gen?: string },
 ): Promise<AiRec> {
-    const rec: AiRec = { vision: 0, doc: 0, minute: 0, minuteBodies: [], docBodies: [] };
+    const rec: AiRec = { vision: 0, doc: 0, minute: 0, gen: 0, minuteBodies: [], docBodies: [], genBodies: [] };
     // ORDEN IMPORTANTE: Playwright resuelve por la ULTIMA ruta registrada que
     // casa, asi que el comodin de /api/gemini/** va PRIMERO y la ruta especifica
     // de vision DESPUES (si no, el comodin se lleva el vision y devuelve el
@@ -92,23 +94,30 @@ async function stubAi(
         }
         const msgs = Array.isArray(body.messages) ? body.messages : [];
         const userContent = msgs[1]?.content;
-        let payload: unknown;
+        const userStr = String(userContent || '');
+        let content: string;
         if (Array.isArray(userContent)) {
             rec.vision += 1;
-            payload = opts.vision;
-        } else if (/minute|minuta/i.test(String(userContent || ''))) {
+            content = JSON.stringify(opts.vision);
+        } else if (/Genera el contenido para un documento/i.test(userStr)) {
+            // Generacion F3/F4 (carta/documento/video): el motor espera TEXTO crudo
+            // (formatAdapters solo lo serializa), no un JSON del contrato.
+            rec.gen += 1;
+            rec.genBodies.push(raw);
+            content = opts.gen ?? '';
+        } else if (/minute|minuta/i.test(userStr)) {
             rec.minute += 1;
             rec.minuteBodies.push(raw);
-            payload = opts.minute;
+            content = JSON.stringify(opts.minute);
         } else {
             rec.doc += 1;
             rec.docBodies.push(raw);
-            payload = opts.doc;
+            content = JSON.stringify(opts.doc);
         }
         return route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }),
+            body: JSON.stringify({ choices: [{ message: { content } }] }),
         });
     });
     return rec;
@@ -290,5 +299,53 @@ test.describe('Lo que el usuario carga entra en FLU y en la minuta (flujo real)'
         console.log('[SIM] contexto de dibujo (EN):', (row?.text || '').slice(0, 160));
 
         await captureScreenshot(page, OUT, 'dibujo-contexto-en.png', 500);
+    });
+
+    // El artefacto GENERADO (carta/documento) tambien es informacion para FLU:
+    // su cuerpo entra al historial de conversacion (P8.82), simetrico a lo CARGADO.
+    test('una CARTA generada por FLU entra al historial (FLU puede explicarla)', async ({ page }) => {
+        test.setTimeout(150000);
+        stubLocalSpeech(page);
+        await gotoClean(page);
+        await seedActiveUser(page);
+        const rec = await stubAi(page, {
+            doc: { resumen: 'doc', puntos_clave: [], escenarios: [] },
+            vision: { materia: 'x', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' },
+            minute: MINUTE,
+            gen: 'Querida familia: les escribo desde el viaje. CARTA_GENERADA_E2E',
+        });
+
+        // RUTA REAL de generacion: el contrato pide un documento (workspace.tipo='doc')
+        // y App lo genera por requestMediaRef (unica puerta). La IA se sustituye en
+        // la red; el resto del pipeline (generateDocument -> serializa -> insumo) corre.
+        await page.evaluate(async () => {
+            const hook = (window as any).__fluOnContractResolved;
+            if (typeof hook !== 'function') throw new Error('__fluOnContractResolved no disponible');
+            await hook({
+                transcript: 'ok flu escribeme una carta para la familia',
+                contract: {
+                    respuesta_voz: 'Preparando la carta.',
+                    workspace: {
+                        tipo: 'doc',
+                        titulo: 'Carta a la familia',
+                        contenido: 'Querida familia, les escribo desde el viaje.',
+                    },
+                },
+            });
+        });
+
+        expect(rec.gen, 'la generacion debe pedir la IA (stub de /chat/completions)').toBeGreaterThan(0);
+
+        // El cuerpo GENERADO de la carta entra al historial (fuente unica de la sesion).
+        await expect
+            .poll(async () => (await historyRows(page)).some((r) => r.role === 'system' && r.text.includes('CARTA_GENERADA_E2E')), {
+                message: 'el cuerpo generado por FLU debe entrar al conversationHistory',
+                timeout: 45000,
+            })
+            .toBe(true);
+        const row = (await historyRows(page)).find((r) => r.role === 'system' && r.text.includes('CARTA_GENERADA_E2E'));
+        console.log('[SIM] insumo generado:', (row?.text || '').slice(0, 160));
+
+        await captureScreenshot(page, OUT, 'carta-generada-insumo.png', 500);
     });
 });
