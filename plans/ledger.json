@@ -1533,6 +1533,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-06 (commit 2dc6462). tests/e2e/insumo-a-minuta.spec.ts gana un 3er caso que pone el UNICO selector de idioma de la cabecera (select[aria-label=Idioma], App.tsx:4075) en EN y sube un dibujo: el insumo del dibujo entra al conversationHistory EN INGLES (medido: '[Image context uploaded by user: English initial. initial. name the colors]'), via src/core/documents/imageInsumo + la etiqueta en de src/lib/uiStrings. Spec real: 3 passed. Alcance real (0.23): CUBIERTO=que el CONTEXTO que FLU recibe del dibujo va en el idioma de la app (EN medido); NO CUBIERTO=que la RESPUESTA hablada/escrita de FLU salga en ingles (eso lo gobierna el idioma de sesion del contrato, no lo medido aqui), el DoD-producto y la suite completa.",
       "origen": "encargo-dueno-2026-10-06"
+    },
+    {
+      "id": "P8.82",
+      "titulo": "Falta medir con flujo real que un artefacto GENERADO (carta/documento, video, imagen) forme parte de la informacion que FLU usa para explicar (hoy solo se midio lo CARGADO: P8.78/P8.79/P8.81)",
+      "estado": "todo",
+      "evidencia": "HALLAZGO 2026-10-06, declarado NO CUBIERTO en P8.78/P8.79/P8.81. Lo que el usuario CARGA (documento/imagen) esta medido con e2e real (tests/e2e/insumo-a-minuta.spec.ts). Lo GENERADO no: falta un e2e que conduzca la generacion REAL (contrato -> workspace -> artefacto, como tests/e2e/_sim-aviones-imagen.spec.ts para la imagen) y compruebe que (a) el contenido generado entra al conversationHistory como informacion que FLU puede explicar y (b) llega a la minuta. Sin esto, 'la generacion de cartas, video, imagen forme parte de la informacion para que pueda explicar flu' no esta medido. Cierre propuesto: 1-2 casos en un spec tipo pizarron-funcionalidades/insumo-a-minuta que lean conversationHistory tras generar. NO se ejecuta aqui por alcance/tiempo; queda como pendiente unico restante.",
+      "origen": "hallazgo-agente-2026-10-06"
     }
   ],
   "done": [
