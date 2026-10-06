@@ -1519,6 +1519,13 @@
       "estado": "done",
       "evidencia": "Encargo: \"todo, ejecuta!\". El banco sale a un catalogo declarado (src/core/config/pronunciacionBank.ts, estilo musicCatalog) con 15 palabras y NIVEL (basico/intermedio/avanzado); el motor lo consume y elige por options.nivel (sin nivel = completo). GUARD: caso nuevo en tests/pronunciacion.test.ts (el banco por nivel es menor que el completo). Alcance real (0.23): CUBIERTO=el banco configurable por nivel con guard; NO CUBIERTO=elegir el nivel por voz en el arranque del juego (hoy por opcion), DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.80",
+      "titulo": "Los guards que MIDEN la separacion de voces (diarizacion) existen y pasan, pero NADIE los corre en la barrera por commit (no estan en lint:guards ni en el dod): un cambio en la diarizacion pasaria lint+typecheck en verde",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-06: tests/speakerDiarizationSeparation.test.ts:1 (guard de SEPARACION multihablante: voces distintas -> etiquetas distintas, misma voz se conserva) y tests/speakerDiarizationBehavior.test.ts:1 (INV-1..4 del nucleo+resolver) PASAN (7 passed con `npm run test:file tests/speakerDiarizationSeparation.test.ts tests/speakerDiarizationBehavior.test.ts`) pero NO aparecen en `npm run lint:guards` (package.json:33) ni en el dod de .task/contract.json: `findstr /s \"speakerDiarizationSeparation speakerDiarizationBehavior\" package.json .task/contract.json vitest.config.ts` no devuelve nada. Es el supuesto de 7.7.f: un guard que solo corre en la suite completa (CI) no protege el commit. Nota: SI estan en la barrera speakerDiarizationUnified.test.ts y speakerIdentitySession.test.ts (otros dos guards de diarizacion), asi que el hueco es solo de estos dos. Cierre propuesto: llevarlos a lint:guards con su prueba de DETECTOR (7.7.f/0.24 guardMutationGuard) y anadirlos al allow y al dod; o borrarlos si se demuestran redundantes con los otros dos. No se ejecuta aqui por no ampliar alcance sin decision del dueno.",
+      "origen": "hallazgo-agente-2026-10-06"
     }
   ],
   "done": [
