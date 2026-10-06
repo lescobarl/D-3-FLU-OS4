@@ -1383,8 +1383,7 @@ export function useFluVoiceAssistant({
         const sticky = lastSpeakerRef.current || fallbackSpeaker
         return isProperSpeakerName(sticky) ? GENERIC_SPEAKER : sticky || GENERIC_SPEAKER
       }
-      // Embeddings async (worker): el preflight resuelve identidad por audio; se
-      // consulta su slot del turno (evidencia lista → hablante real; sin ella sticky).
+      // Embeddings async (worker): el preflight resuelve identidad por audio.
       if (canDiarize) {
         const preflight = peekTurnSpeakerPreflight(activeTurnIdRef.current)
         if (preflight?.ready && preflight.speakerName) {
@@ -2188,6 +2187,7 @@ export function useFluVoiceAssistant({
         }
 
         if (conversationActiveRef?.current) {
+          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); relayLog('LOG', 'WakeTrace', `wake=${w.wakeWordMatched} inline=${w.hasInlineBoundary} before="${w.passiveOnly.slice(0, 80)}" after="${w.afterWake.slice(0, 80)}" cap="${w.cleaned.slice(0, 200)}"`) }
           try {
             if (import.meta.env.DEV && debugHotPath) {
               const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
@@ -2433,6 +2433,7 @@ export function useFluVoiceAssistant({
       syncConversationStream,
       setError,
       resolvedWakeWords,
+      userRowsTextView,
     ],
   )
 
@@ -3208,8 +3209,7 @@ export function useFluVoiceAssistant({
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
       captureTurnAudio() // §9 sella el audio ANTES del commit-only (que vacía el buffer)
-      // §9: UNA sola frase canónica para el turno (display y fila salen de ESTE
-      // valor). Se commitea AQUÍ (commitOnly) y luego se re-commitea el mismo.
+      // §9: una sola frase canónica para el turno (display y fila salen de ESTE valor).
       const canonicalPhrase = await commitAndResolveTurn({
         capture: fullTranscript || question,
         fallbackCapture: question, // texto validado del turno (si la captura cruda es basura)
