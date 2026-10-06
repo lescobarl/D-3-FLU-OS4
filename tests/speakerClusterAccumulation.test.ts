@@ -22,6 +22,7 @@ import {
   resolveTurnSpeakerAtCommit,
   applyResolvedSpeakerToSessionRefs,
 } from '../src/voice/lib/turnSpeakerCommit.js'
+import { flattenChunksWindow } from '../src/voice/lib/speakerClusters.js'
 
 /** Deja correr la cola de identidad (idle + microtareas). */
 const flush = async () => {
@@ -40,6 +41,23 @@ const readyPreflight = () => () =>
 
 beforeEach(() => {
   resetTurnIdentityPipeline()
+})
+
+// El embeder descarta ventanas de audio muy cortas (min 0.35 s @16k). MEDIDO en la
+// app: la captura del turno salio de ~8 ms (`TurnAudio snap=384`) y el preflight
+// respondia `no-vector` -> sin firma, sin cluster. Por eso la captura impone un
+// MINIMO (`minSamplesMs`); el primitivo que lo aplica es `flattenChunksWindow`.
+describe('la captura del turno impone un minimo de audio (no ventanas casi vacias)', () => {
+  it('minSamples ENSANCHA una ventana de turno casi vacia hasta el minimo', () => {
+    const chunks = [new Float32Array(48000)] // 1 s @48k
+    const w = flattenChunksWindow(chunks, {
+      totalSamples: 48000,
+      sinceSample: 47616, // el limite de turno acaba de marcar el inicio (384 muestras)
+      maxSamples: 86400,
+      minSamples: 43200, // minimo exigido (0.9 s @48k)
+    })
+    expect(w.length, 'debe ensancharse al minimo, no quedarse en 384').toBe(43200)
+  })
 })
 
 describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', () => {

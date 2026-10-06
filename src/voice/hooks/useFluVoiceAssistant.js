@@ -1341,14 +1341,10 @@ export function useFluVoiceAssistant({
     isStoppingRef.current = false
     recognitionEndResolverRef.current = null
 
-    // Reanudar la escucha si estaba activa antes del habla del asistente.
-    // SOLO en modo pasivo (sin conversación activa): ahí no hay quien reabra
-    // tras el TTS (scheduleResumeListening solo aplica con conversación activa),
-    // y sin esto la escucha ambiental moría (bug que motivó el parche 3132d2e).
-    // En conversación ACTIVA NO se reabre aquí: reabrir durante el habla fuerza
-    // syncAvatarToState(LISTENING) en el mismo ms del SPEAKING → corta MouthMove
-    // (boca congelada) aunque el audio siga. La reapertura activa la hace App
-    // (onContractResolved → scheduleResumeListening) al terminar el TTS.
+    // Reanudar la escucha si estaba activa antes del habla. SOLO en modo pasivo:
+    // en conversación activa lo hace App (onContractResolved →
+    // scheduleResumeListening); reabrir aqui forzaba LISTENING en el mismo ms del
+    // SPEAKING y congelaba la boca aunque el audio siguiera.
     if (wasListeningBefore && !conversationActiveRef?.current) {
       relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras habla (modo pasivo)', {
         wasListeningBefore,
@@ -1404,11 +1400,15 @@ export function useFluVoiceAssistant({
 
   const getContinuousBufferAdapter = useCallback(() => ({
     getTurnStartSample: () => turnAudioStartSampleRef.current,
-    snapshotTurnWindow: ({ turnAudioStartSample, atTurnBoundary = false } = {}) => {
+    snapshotTurnWindow: ({ turnAudioStartSample, atTurnBoundary = false, minSamplesMs = 0 } = {}) => {
       const rate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary })
       const maxSamples = Math.floor(rate * (tailMs / 1000))
-      const minVoiced = getConversationMinVoicedSamples(rate)
+      // `minSamplesMs` (captura del turno) garantiza MINIMO de audio: sin el, la
+      // ventana salia de ~8 ms (medido: `snap=384` -> `vec=0` -> sin clusters).
+      const minVoiced = Number(minSamplesMs) > 0
+        ? Math.floor(rate * (Number(minSamplesMs) / 1000))
+        : getConversationMinVoicedSamples(rate)
       return flattenChunksWindow(chunksRef.current, {
         totalSamples: chunkTotalSamplesRef.current,
         sinceSample: Number.isFinite(turnAudioStartSample)
@@ -1423,7 +1423,7 @@ export function useFluVoiceAssistant({
   /** §9 Captura el audio del turno (turnAudioSnapshot.js) antes de vaciar el buffer. */
   const captureTurnAudio = useCallback(
     () => captureTurnAudioSnapshot(activeTurnIdRef.current, {
-      buildWindow: () => getContinuousBufferAdapter().snapshotTurnWindow({ turnAudioStartSample: turnAudioStartSampleRef.current, atTurnBoundary: true }),
+      buildWindow: () => getContinuousBufferAdapter().snapshotTurnWindow({ turnAudioStartSample: turnAudioStartSampleRef.current, atTurnBoundary: true, minSamplesMs: getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary: true }) }),
       meta: { total: chunkTotalSamplesRef.current, since: turnAudioStartSampleRef.current, chunks: chunksRef.current.length, sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE },
     }),
     [getContinuousBufferAdapter],
