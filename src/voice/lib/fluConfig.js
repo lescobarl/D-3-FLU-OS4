@@ -175,7 +175,7 @@ export const FLU_CONFIG = {
       /** Sala / TV: captura pasiva sin AEC; reglas anti-clusters fantasma. */
       roomCapture: {
         deferNewSpeakerUntilCommit: true,
-        pruneGhostClusters: true,
+        pruneGhostClusters: false, // borraba el cluster recien escrito -> inClusters=0
         stickySpeaker: true,
         /** Tras «ok flu soy …» mantener ese nombre en turnos siguientes (misma voz). */
         pinRegisteredSpeaker: true,
