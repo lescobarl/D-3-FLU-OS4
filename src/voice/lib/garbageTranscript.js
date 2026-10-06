@@ -52,9 +52,13 @@ export function classifyGarbageTranscript(text = '') {
     }
   }
 
-  // 2) Ratio de tokens "no-palabra" (sin vocal) alto → ruido incoherente.
+  // 2) Ratio de tokens "no-palabra" (sin letras ni vocales) alto → ruido incoherente.
+  // Un token con DIGITOS es CONTENIDO legitimo (dictado de cifras): la alucinacion
+  // del ASR es jerga sin vocales, no numeros. Medido: "25 58" se descartaba como
+  // `nonword` y el turno se cerraba mudo (log real del dueno, 2026-10-06).
   let nonWord = 0
   for (const w of words) {
+    if (/\d/.test(w)) continue
     const letters = w.replace(/[^a-záéíóúüñ]/g, '')
     if (!letters || !/[aeiouáéíóúü]/.test(letters)) nonWord += 1
   }

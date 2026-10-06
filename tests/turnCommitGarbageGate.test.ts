@@ -42,6 +42,16 @@ describe('el criterio de basura sigue siendo el mismo (comportamiento validado)'
         expect(looksLikeGarbageTranscript('okay flu borra todas las notas')).toBe(false);
     });
 
+    // El dictado de CIFRAS es contenido legitimo (prueba de que transcribe).
+    // Medido: el filtro `nonword` (sin vocales) descartaba "25 58" y el turno se
+    // cerraba mudo. Un token con digitos NO es jerga del ASR.
+    it('el dictado de SOLO numeros NO es basura', () => {
+        expect(looksLikeGarbageTranscript('25 58')).toBe(false);
+        expect(looksLikeGarbageTranscript('36 93')).toBe(false);
+        expect(looksLikeGarbageTranscript('1 2690')).toBe(false);
+        expect(classifyGarbageTranscript('25 58')).toMatchObject({ garbage: false, reason: null });
+    });
+
     it('el motivo queda clasificado, no en un booleano opaco', () => {
         expect(classifyGarbageTranscript('')).toMatchObject({ garbage: true, reason: 'empty' });
         expect(classifyGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toMatchObject({
@@ -141,6 +151,16 @@ describe('el log del dueno: habla real con repeticion no puede quedar muda', () 
 
         expect(resolved.phrase).toBe(AVIONES);
         expect(resolved.usedFallback).toBe(true);
+    });
+});
+
+// Prueba de DETECTOR del propio guard (no es decorativo): el MISMO llamador con
+// una captura infractora (jerga sin vocales) y con una legítima (cifras) debe
+// discriminar. Si el filtro volviera a tratar las cifras como ruido, cae.
+describe('el detector no es decorativo (prueba de mutación)', () => {
+    it('la marca distingue la jerga sin vocales del dictado de cifras', () => {
+        expect(looksLikeGarbageTranscript('hmm mmm nnn'), 'jerga = basura').toBe(true);
+        expect(looksLikeGarbageTranscript('25 58'), 'cifras = contenido').toBe(false);
     });
 });
 

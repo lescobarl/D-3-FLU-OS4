@@ -28,8 +28,23 @@ describe('garbageTranscript — guard anti-alucinación ASR', () => {
     expect(looksLikeGarbageTranscript('what is on my schedule today')).toBe(false);
   });
 
+  it('conserva el dictado de SOLO números (contenido, no jerga)', () => {
+    expect(looksLikeGarbageTranscript('25 58')).toBe(false);
+    expect(looksLikeGarbageTranscript('1 2690')).toBe(false);
+  });
+
   it('descarta vacío', () => {
     expect(looksLikeGarbageTranscript('')).toBe(true);
     expect(looksLikeGarbageTranscript('   ')).toBe(true);
+  });
+});
+
+// Prueba de DETECTOR del propio guard (no es decorativo): alimenta una entrada
+// infractora (jerga sin vocales) y una legítima (cifras) y exige que la marca
+// discrimine. Si el detector fuera sordo (todo basura o todo legítimo), cae.
+describe('el detector no es decorativo (prueba de mutación)', () => {
+  it('marca la jerga sin vocales y NO el dictado de cifras', () => {
+    expect(looksLikeGarbageTranscript('hmm mmm nnn'), 'jerga = basura').toBe(true);
+    expect(looksLikeGarbageTranscript('25 58'), 'cifras = contenido').toBe(false);
   });
 });
