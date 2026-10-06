@@ -1526,6 +1526,13 @@
       "estado": "done",
       "evidencia": "MEDIDO 2026-10-06: tests/speakerDiarizationSeparation.test.ts:1 (guard de SEPARACION multihablante: voces distintas -> etiquetas distintas, misma voz se conserva) y tests/speakerDiarizationBehavior.test.ts:1 (INV-1..4 del nucleo+resolver) PASAN (7 passed con `npm run test:file tests/speakerDiarizationSeparation.test.ts tests/speakerDiarizationBehavior.test.ts`) pero NO aparecen en `npm run lint:guards` (package.json:33) ni en el dod de .task/contract.json: `findstr /s \"speakerDiarizationSeparation speakerDiarizationBehavior\" package.json .task/contract.json vitest.config.ts` no devuelve nada. Es el supuesto de 7.7.f: un guard que solo corre en la suite completa (CI) no protege el commit. Nota: SI estan en la barrera speakerDiarizationUnified.test.ts y speakerIdentitySession.test.ts (otros dos guards de diarizacion), asi que el hueco es solo de estos dos. Cierre propuesto: llevarlos a lint:guards con su prueba de DETECTOR (7.7.f/0.24 guardMutationGuard) y anadirlos al allow y al dod; o borrarlos si se demuestran redundantes con los otros dos. CERRADO 2026-10-06 (commit 97845bc, autorizado por el dueno: \"adelante\"). Prueba de DETECTOR real anadida a los DOS guards (predicado exportado que marca la entrada INFRACTORA -voz distinta, coseno 0/0.5- y NO la legitima -misma voz, coseno 0.9/1.0-): speakerDiarizationSeparation.separatesVoices y speakerDiarizationBehavior.detectsNewVoice, con su caso \"el detector no es decorativo\". Entran en lint:guards (188 -> 190 ficheros, 1580 -> 1589 casos VERDE) y al allow del contrato. guardMutationGuard VERDE (sin drift de teatro).",
       "origen": "hallazgo-agente-2026-10-06"
+    },
+    {
+      "id": "P8.81",
+      "titulo": "El contexto del dibujo es language-aware pero no se habia medido con la app en INGLES (el ejemplo del dueno: cargar un dibujo para tutoria en ingles)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-06 (commit 2dc6462). tests/e2e/insumo-a-minuta.spec.ts gana un 3er caso que pone el UNICO selector de idioma de la cabecera (select[aria-label=Idioma], App.tsx:4075) en EN y sube un dibujo: el insumo del dibujo entra al conversationHistory EN INGLES (medido: '[Image context uploaded by user: English initial. initial. name the colors]'), via src/core/documents/imageInsumo + la etiqueta en de src/lib/uiStrings. Spec real: 3 passed. Alcance real (0.23): CUBIERTO=que el CONTEXTO que FLU recibe del dibujo va en el idioma de la app (EN medido); NO CUBIERTO=que la RESPUESTA hablada/escrita de FLU salga en ingles (eso lo gobierna el idioma de sesion del contrato, no lo medido aqui), el DoD-producto y la suite completa.",
+      "origen": "encargo-dueno-2026-10-06"
     }
   ],
   "done": [
@@ -3182,6 +3189,13 @@
       "titulo": "La separacion de voces (diarizacion) no estaba en la barrera por commit: los 2 guards que la miden existian y pasaban pero fuera de lint:guards",
       "evidencia": "CERRADO 2026-10-06 (commit 97845bc, autorizado por el dueno: \"adelante\"). Los guards tests/speakerDiarizationSeparation.test.ts (separacion multihablante con config real) y tests/speakerDiarizationBehavior.test.ts (INV-1..4 del nucleo+resolver) PASABAN (7/7) pero NO corrian en ninguna barrera (ni lint:guards ni el dod): un cambio en la diarizacion habria pasado lint+typecheck en verde. Se les da prueba de DETECTOR real (predicado exportado + caso que marca la entrada infractora y NO la legitima) y entran en lint:guards (188 -> 190 ficheros, 1580 -> 1589 casos VERDE) + allow del contrato. guardMutationGuard pasa (sin NUEVO teatro). NO se toca el baseline .task/guard-proof-baseline.json (shrink-only, intacto). Alcance real (0.23): CUBIERTO=la separacion de voces medida en la barrera por commit con prueba de detector del propio guard; NO CUBIERTO=la diarizacion con audio real de aula (DoD-producto) y la suite completa.",
       "origen": "hallazgo-agente-2026-10-06"
+    },
+    {
+      "id": "P8.81",
+      "commit": "2dc6462",
+      "titulo": "El contexto del dibujo es language-aware: con la app en INGLES el insumo tambien va en INGLES",
+      "evidencia": "CERRADO 2026-10-06 (commit 2dc6462). Mide el ejemplo del dueno (dibujo para tutoria en ingles): con el selector unico de idioma en EN, el insumo del dibujo entra al historial en INGLES. Cambio: tests/e2e/insumo-a-minuta.spec.ts (3er caso; el fichero ya estaba en allow y e2eScope). Medido: '[Image context uploaded by user: English initial. initial. name the colors]' (3 passed). Alcance real (0.23): CUBIERTO=el insumo del dibujo es language-aware (EN medido en la app viva); NO CUBIERTO=la respuesta de FLU en ingles (idioma de sesion), el DoD-producto y la suite completa.",
+      "origen": "encargo-dueno-2026-10-06"
     }
   ]
 }
