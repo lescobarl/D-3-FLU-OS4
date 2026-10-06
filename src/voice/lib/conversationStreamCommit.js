@@ -508,6 +508,7 @@ export function handleConversationStreamSync(
   lastSpeakerRef.current = speakerName
 
   relayLog('LOG', 'RowTrace', `refresh=${refreshNeeded} blocked=${ambientRowBlocked} replace=${replaceLast} turn=${activeTurnIdRef.current} cap="${capture.slice(0, 60)}"`) // BANDERA DE DIAGNOSTICO
+  relayLog('LOG', 'Commit', `preReady=${Boolean(preflight?.ready)} src=${resolved.source} name="${resolved.speakerName}" wc=${resolved.workingClusters?.length ?? 0} refClusters=${speakerClustersRef.current?.length ?? 0} sticky="${stickyFallback}"`) // BANDERA DE DIAGNOSTICO
   let delivered = false
   if (refreshNeeded) {
     delivered = emitTurnRow(capture, {

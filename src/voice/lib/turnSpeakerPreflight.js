@@ -54,7 +54,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuo
         relayLog(
           'LOG',
           'Preflight',
-          `turn=${id} ready=${!weakResult} reason=${result?.reason || ''} clusters=${result?.workingClusters?.length ?? 0} vec=${(Array.isArray(result?.signatureVector) ? result.signatureVector : result?.vector)?.length ?? 0}`,
+          `turn=${id} ready=${!weakResult} reason=${result?.reason || ''} name="${result?.speakerName || ''}" clusters=${result?.workingClusters?.length ?? 0} vec=${(Array.isArray(result?.signatureVector) ? result.signatureVector : result?.vector)?.length ?? 0}`,
         )
       }
       if (weakResult && slot.ready) {
