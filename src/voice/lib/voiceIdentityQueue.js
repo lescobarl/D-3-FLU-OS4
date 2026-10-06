@@ -43,7 +43,7 @@ function drainQueue() {
 
 /**
  * Encola identidad. Si hay pending sin iniciar → DROP. Si inFlight → solo la más reciente espera.
- * @param {{ rowId?: string, run?: Function, onSuccess?: Function, onError?: Function, onDrop?: Function, fallback?: unknown }} [job]
+ * @param {{ rowId?: string, run?: Function, onSuccess?: Function, onError?: Function, onDrop?: Function, fallback?: unknown, priority?: boolean }} [job]
  */
 export function enqueueSpeakerIdentityJob({
   rowId = '',
@@ -52,9 +52,14 @@ export function enqueueSpeakerIdentityJob({
   onError,
   onDrop,
   fallback = null,
+  priority = false,
 } = {}) {
   if (typeof run !== 'function') return
 
+  // Un job con `priority` (el snapshot FINAL del turno) NO se puede superseder: es
+  // el unico que escribe clusters, y los ticks del turno siguiente lo descartaban
+  // antes de correr -> `refClusters` quedaba en 0 (defecto medido, 2026-10-06).
+  if (pending?.priority) return
   if (pending && !inFlight) {
     dropPendingJob('superseded-before-start')
   } else if (pending && inFlight) {
@@ -68,6 +73,7 @@ export function enqueueSpeakerIdentityJob({
     onError,
     onDrop,
     fallback,
+    priority: Boolean(priority),
     enqueuedAt: Date.now(),
   }
   drainQueue()

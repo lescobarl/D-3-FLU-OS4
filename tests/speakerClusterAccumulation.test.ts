@@ -23,6 +23,7 @@ import {
   applyResolvedSpeakerToSessionRefs,
 } from '../src/voice/lib/turnSpeakerCommit.js'
 import { flattenChunksWindow } from '../src/voice/lib/speakerClusters.js'
+import { enqueueSpeakerIdentityJob } from '../src/voice/lib/voiceIdentityQueue.js'
 
 /** Deja correr la cola de identidad (idle + microtareas). */
 const flush = async () => {
@@ -93,6 +94,26 @@ describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', 
       'el continuo NO debe escribir clusters: sus ventanas parciales inflan la cuenta',
     ).not.toHaveBeenCalled()
     expect(onResolved, 'si debe avisar del hablante resuelto (lo necesita la fila)').toHaveBeenCalled()
+  })
+
+  it('un tick posterior NO descarta el snapshot FINAL que espera en la cola', async () => {
+    // Un job lento EN VUELO deja al FINAL esperando en la cola (pending).
+    enqueueSpeakerIdentityJob({
+      rowId: 'lento',
+      run: () => new Promise((resolve) => setTimeout(() => resolve({}), 30)),
+      onSuccess: () => {},
+    })
+    const setSpeakerClusters = vi.fn()
+    finalizeTurnIdentityPipeline(7, readyPreflight(), { onClusters: setSpeakerClusters })
+    // El tick del turno siguiente llega mientras el FINAL espera.
+    enqueueSpeakerIdentityJob({ rowId: 'tick-late', run: () => Promise.resolve({}), onSuccess: () => {} })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flush()
+    expect(
+      setSpeakerClusters,
+      'el FINAL es prioritario: si un tick lo descarta, no hay clusters (refClusters=0)',
+    ).toHaveBeenCalled()
   })
 
   it('si el preflight resuelve TARDE, el cluster se persiste igual (no se pierde)', async () => {

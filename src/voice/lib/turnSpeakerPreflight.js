@@ -47,6 +47,9 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
   enqueueSpeakerIdentityJob({
     rowId: `preflight-${id}-${continuous ? Date.now() : 0}`,
     run,
+    // El snapshot FINAL es prioritario: es el que escribe clusters (los ticks
+    // continuos no) y los ticks del turno siguiente lo descartaban sin correr.
+    priority: !continuous,
     onSuccess: (result) => {
       const slot = preflightByTurn.get(id)
       if (!slot) {
