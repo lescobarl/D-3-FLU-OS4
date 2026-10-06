@@ -1527,9 +1527,72 @@
       "estado": "todo",
       "evidencia": "ABIERTO 2026-10-05 por pedido del dueno. DIAGNOSTICO CERRADO: la decision vive en `requiresWakeWord` (src/voice/lib/wakeTurnCommit.js, dueno unico vigilado por tests/decisionSingleOwnerGuard.test.ts) y la bandera existe a medias en voiceCommands.requireWakeAlways (src/voice/lib/fluConfig.js:2326, hoy false). El cable del configurador YA existe (VoiceConfig -> integrationStore.setVoiceConfig -> src/app/configActions.ts -> src/components/FluSettingsPanel.tsx) y la via de voz por catalogo (src/core/config/voiceConfigCatalog.ts). BLOQUEO MEDIDO (no se cierra sin enmienda del contrato): el toggle de UI toca src/components/FluSettingsPanel.tsx y tests/dodScopeGuard.test.ts exige en el gate tests/fluSettingsTabView.test.tsx, que NO puede ir en lint:guards porque el regex de tests/guardMutationGuard.test.ts extrae .test.ts de .test.tsx y lo denuncia como inexistente; ademas tocar src/types/bridge.ts y el catalogo arrastra 6 tests (configActions, configCommands, conversationHistoryCap, emotionEngine, systemEventLog, voiceConfigCatalog) y NINGUNO tiene prueba de detector (P2.4), asi que registrarlos exigiria sembrar detectores artificiales en tests ajenos. CAMINOS LEGALES: (a) el DUENO anade esos tests al dod de .task/contract.json (inmutable por el agente); (b) implementar la bandera como modulo propio (src/voice/lib/) + comando de sesion en el arbitro, cuyos tests YA estan en el gate, dejando el toggle de UI para (a).",
       "origen": "pedido-dueno-2026-10-05"
+    },
+    {
+      "id": "P8.77",
+      "titulo": "E2E: dos ficheros de src sin spec declarado (micCapture.js, speakerPolicy.js) dejan npm run e2e:plan en ROJO",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-05 al correr el paso 4 de validacion (npm run e2e:plan) tras el fix de E0/1/2: src/voice/lib/micCapture.js y src/voice/lib/speakerPolicy.js aparecen como src cambiado SIN spec declarado. Son modulos de DECISION pura (constraints/ganancia de captura y relleno de hablante), ya cubiertos por guards de comportamiento (tests/captureSensitivityGuard.test.ts, tests/blindSpeakerFallbackGuard.test.ts), asi que el mapeo E2E no aporta una pantalla nueva: lo que falta es la declaracion. El mapeo va en .task/contract.json -> e2eScope, INMUTABLE por el agente; hasta entonces el runner SIGUE ROJO nombrandolos (precedente del repo: se deja el hueco a la VISTA, como P8.8, en vez de declarar un mapeo no medido).",
+      "origen": "hallazgo-validacion-2026-10-05"
     }
   ],
   "done": [
+    {
+      "id": "P8.69",
+      "commit": "a42af79",
+      "titulo": "E0: el embedding desacoplaba el buffer del llamador y la diarizacion no veia audio",
+      "evidencia": "src/voice/lib/voiceIdWorkerClient.js: el embedding transferia el MISMO buffer del llamador (postMessage zero-copy) y lo DESACOPLABA; la firma y la diarizacion lo comparten EN PARALELO, asi que la segunda media 0 muestras (SpeakerTrace vecLen=4 snap=0; VoiceId dim=512 empty=false snap=0, imposible salvo por el detach). Fix: copia y transfiere la copia (opt-in transferOwnership). Alcance real (0.23): CUBIERTO=la propiedad del buffer con guard de conducta (tests/audioBufferOwnershipGuard.test.ts, ROJO->VERDE) y la barrera entera (187 ficheros/1572 tests); NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.70",
+      "commit": "a42af79",
+      "titulo": "Diarizacion: sin evidencia acustica la etiqueta heredaba el NOMBRE PROPIO",
+      "evidencia": "src/voice/lib/speakerPolicy.js: medido que SpeakerTrace fallback=luis last=luis rotulaba con el nombre del dueno TODOS los turnos sin audio, incluidas voces de mujeres del salon. Fix: blindSpeakerFallback degrada a Hablante N y el nombre solo entra por evidencia; aplicado en los dos puntos ciegos del hook. Alcance real (0.23): CUBIERTO=la regla con guard de conducta (tests/blindSpeakerFallbackGuard.test.ts) y los 10 guards de hablante en verde; NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.71",
+      "commit": "a42af79",
+      "titulo": "Sensibilidad: maxSensitivity era config muerta y la ganancia no aplicaba fuera de conversacion",
+      "evidencia": "src/voice/lib/micCapture.js: medido por lectura que voiceIdentity.capture.maxSensitivity (src/voice/lib/fluConfig.js:295) NO lo leia nadie; captureGain solo aplicaba con la conversacion activa y fuera de ella el navegador metia AGC/NS/EC (atenuaba voces lejanas del aula). Fix: resolveCaptureAudioConstraints + resolveCaptureGain, consumidos por el hook. Alcance real (0.23): CUBIERTO=la decision unica con guard de conducta (tests/captureSensitivityGuard.test.ts); NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.72",
+      "commit": "a42af79",
+      "titulo": "Imagen atascada en GENERANDO: applyImageResult se auto-recursaba y nunca aplicaba la URL",
+      "evidencia": "src/hooks/useWorkspaceImage.ts: introducido en 12da3ea (P4.8, extraccion del helper): el cuerpo quedo con una llamada a SI MISMA y sin setImageUrl, asi que retry (dentro de un .then sin .catch) dejaba isLoading=true para siempre (RangeError). Fix: cuerpo restaurado + generateFromContract por el mismo helper (un solo orden en la cascada). Alcance real (0.23): CUBIERTO=el reintento con guard de comportamiento (tests/useWorkspaceImageRetry.test.ts, ROJO->VERDE) y cascadeSingleOrder en verde; NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.73",
+      "commit": "a42af79",
+      "titulo": "Piso: una afirmacion suelta tras la wake caia a consulta en vez de conceder la palabra",
+      "evidencia": "src/voice/lib/fluConfig.js: medido en el log del dueno (2026-10-05 16:50:54 okay flow si -> respuesta generica). El planificador confirmo que la concesion con verbo (adelante/no ahora) SI se despacha; lo que faltaba era la afirmacion suelta, asi que si/si entran en voiceCommands.grantFloor. Alcance real (0.23): CUBIERTO=la conducta con guard (tests/floorCommandDispatchGuard.test.ts, ROJO->VERDE) sin crecer el god-file; NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.74",
+      "commit": "a42af79",
+      "titulo": "Musica: silencio no detenia la pista y la propia voz de FLU arrancaba baila",
+      "evidencia": "src/core/media/musicActions.ts: medido que la pista del karaoke sono ~6 min encima de la clase de ingles porque silencio no estaba en MUSIC_CONTROL_FRAMES/MUSIC_STOP_WORDS, y el auto-play de baila se disparaba tambien por la respuesta_voz de FLU (speechSource). Fix: vocabulario de parada ampliado + shouldAutoPlayDanceTrack como dueno unico (App encoge). Alcance real (0.23): CUBIERTO=las dos conductas con guard (tests/musicActions.test.ts, ROJO->VERDE); NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.75",
+      "commit": "a42af79",
+      "titulo": "Coherencia fila<->despacho: con el piso abierto la fila se abria pero no se despachaba",
+      "evidencia": "src/voice/lib/audioMath.js: medido que Platicame de los barcos (16:54:19) no genero ENTER pero si abrio fila, y el siguiente turno con wake la respondio 19 s tarde (la fila quedaba como peticion PENDIENTE en el historial). resolveFinalConversationAction devolvia log SIEMPRE para una captura sin wake. Fix: wakeRequired llega al planificador y los DOS modos coinciden (cerrado: no es turno; abierto: es turno). P8.38/P8.49 intactos. Alcance real (0.23): CUBIERTO=la coherencia con guard (tests/floorOpenDispatchGuard.test.ts, ROJO->VERDE); NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
+    {
+      "id": "P8.76",
+      "commit": "a42af79",
+      "titulo": "La IA esquivaba la pregunta y la tutoria se sentia troceada (prompt)",
+      "evidencia": "src/services/capabilities.ts: medido que respuesta_voz era Entendido. Desea informacion sobre aviones? / En que puedo ayudarte ahora? para peticiones claras con el tema presente. Diagnostico: prompt (modelo flash-lite + estilo neutral/conciso + ruta consulta simple) con la tutoria existente neutralizada. Fix: regla RESPONDER PRIMERO (el contenido, nunca una pregunta de confirmacion) + PRIORIDAD DE TUTOR sobre el estilo neutro. Alcance real (0.23): CUBIERTO=el texto del prompt inyectado y 92 tests de prompt en verde (tutoringModel, musicCapabilities, simpleRequestDetection, geminiContractPayload); NO CUBIERTO=la corrida real en pantalla y la suite completa.",
+      "origen": "sesion-aula-2026-10-05"
+    },
     {
       "id": "P8.29",
       "commit": "49cb0d3",
