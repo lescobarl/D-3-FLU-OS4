@@ -491,6 +491,7 @@ export function useFluVoiceAssistant({
   const setSpeakerClusters = useCallback((next) => {
     speakerClustersRef.current =
       typeof next === 'function' ? next(speakerClustersRef.current) : next
+    relayLog('LOG', 'Clusters', `write=${speakerClustersRef.current?.length ?? 0}`) // BANDERA DE DIAGNOSTICO
   }, [])
 
   /**
