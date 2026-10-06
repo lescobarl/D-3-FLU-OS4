@@ -10,13 +10,13 @@
  * payload abre la fila por el escritor unico `commitUserTurnRow`. El camino de
  * RECHAZO del hook no la escribe: cuando llega ahi, la fila ya existe.
  *
- * REGLA (un solo dueno): con `voiceCommands.requireWakeAlways` (aula/casa), una
- * captura SIN wake en conversacion activa NO es un turno del usuario -> NO se
- * emite su fila de conversacion (ni la ve el usuario ni la lee la IA). Su texto
- * sigue en la transcripcion viva, y la fila de SESION se sigue escribiendo
- * (`commitTurnToSessionRows`), que es la via del dictado/minuta. Una captura
- * MIXTA ("... ok flu <orden>") conserva su fila pasiva: su wake la marca como
- * turno.
+ * REGLA VIGENTE (dueno, 2026-10-06 — corrige P8.38): la wake SOLO es compuerta
+ * de ACCION (¿se ejecuta el comando?), NUNCA de fila. La TRANSCRIPCION se registra
+ * SIEMPRE en la conversacion, con o sin wake y con la bandera puesta. Lo unico que
+ * NO abre fila es la re-emision de la MISMA locucion viva (`ambientRowBlocked`). La
+ * respuesta de FLU sigue exigiendo la wake (eso lo decide el ingress, no la fila).
+ * Una captura MIXTA ("... ok flu <orden>") se registra igual: su wake es compuerta
+ * de la ACCION, no de la fila.
  *
  * El oraculo es la conducta observada por los callbacks (colaboradores REALES:
  * wakeTurnCommit, conversationStream, speakerPolicy), no una reimplementacion.
@@ -86,20 +86,21 @@ afterEach(() => {
 });
 
 describe('P8.38 - el ruido de fondo no abre fila de conversacion', () => {
-  it('una captura SIN wake (TV/aula) no emite fila, pero si su fila de sesion', () => {
+  it('una captura SIN wake (TV/aula) TAMBIEN registra su fila: la transcripcion es siempre', () => {
     const deps = makeDeps();
 
     handleConversationStreamSync(deps, { capture: RUIDO, turnCommit: true });
 
-    // No hay fila de conversacion (lo que ve el usuario y lo que lee la IA).
-    expect(deps.emitConversationLog).not.toHaveBeenCalled();
+    // La transcripcion se ve SIEMPRE (la bandera no gatea la fila, solo la accion).
+    expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
+    expect(deps.emitConversationLog.mock.calls[0][0]).toBe(RUIDO);
     // El turno CIERRA igual: sin esto quedaria abierto y el siguiente se fusionaria.
     expect(deps.flushPcmAfterTurnCommit).toHaveBeenCalledTimes(1);
     expect(deps.flushPendingStreamLog).toHaveBeenCalledTimes(1);
     expect(deps.openPreviewTurnRef.current).toBe(false);
     expect(deps.publishedLiveRef.current).toBe('');
     expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
-    // Dictado/minuta: la fila de SESION si recibe el texto (via separada del log).
+    // Dictado/minuta: la fila de SESION tambien recibe el texto.
     expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
     expect(deps.commitTurnToSessionRows.mock.calls[0][0]).toBe(RUIDO);
   });
@@ -138,11 +139,11 @@ describe('P8.38 - el ruido de fondo no abre fila de conversacion', () => {
 });
 
 // P2.4 - prueba de detector: el MISMO texto, con y sin wake, discrimina.
-describe('P8.36 - el ruido de fondo no acuna id de turno (si lo moviera, la resolucion duplicaria)', () => {
-  it('un FINAL de ruido no acuna id; una orden con wake si', () => {
+describe('P8.36 - el id del turno se acuna para todo COMMIT con fila', () => {
+  it('un FINAL sin wake TAMBIEN acuna id (su fila lo necesita); una orden con wake, tambien', () => {
     const ruido = makeDeps();
     handleConversationStreamSync(ruido, { capture: RUIDO, turnCommit: true });
-    expect(ruido.activeTurnIdRef.current).toBe(0);
+    expect(ruido.activeTurnIdRef.current).toBe(1);
 
     const orden = makeDeps();
     handleConversationStreamSync(orden, { capture: ORDEN, turnCommit: true });
@@ -184,25 +185,27 @@ describe('P8.49 - por defecto la captura SIN wake SI se refleja en la conversaci
   });
 });
 
-// P2.4 - prueba de detector: el MISMO texto, con y sin wake, discrimina.
-describe('P8.38 - el detector no es decorativo', () => {
-  it('la marca distingue la captura sin wake de la misma con wake', () => {
-    const conRuido = makeDeps();
-    handleConversationStreamSync(conRuido, { capture: RUIDO, turnCommit: true });
+// P2.4 - prueba de DETECTOR: si alguien vuelve a poner la wake como compuerta de
+// FILA (el defecto que el dueno reporto el 2026-10-06), este caso cae en ROJO: la
+// captura SIN wake dejaria de emitir. La marca ya no depende del tamano ni del texto.
+describe('P8.84 - el detector no es decorativo (la fila NO depende de la wake)', () => {
+  it('una captura SIN wake emite fila (infractor: volver a gatear la fila por wake)', () => {
+    const sinWake = makeDeps();
+    handleConversationStreamSync(sinWake, { capture: RUIDO, turnCommit: true });
+    expect(sinWake.emitConversationLog).toHaveBeenCalledTimes(1);
+
+    // Control: la MISMA captura con wake tambien emite (la wake no cambia la fila).
     const conWake = makeDeps();
     handleConversationStreamSync(conWake, { capture: `okay flow ${RUIDO}`, turnCommit: true });
-
-    expect(conRuido.emitConversationLog).toHaveBeenCalledTimes(0);
     expect(conWake.emitConversationLog).toHaveBeenCalledTimes(1);
   });
 
-  it('la marca no depende del tamano del texto (ruido largo y ruido corto)', () => {
-    const corto = makeDeps();
-    handleConversationStreamSync(corto, { capture: 'el cocodrilo', turnCommit: true });
+  it('la marca no depende del tamano del texto (mas de 60 s de dictado)', () => {
     const largo = makeDeps();
-    handleConversationStreamSync(largo, { capture: MIXTA.replace('okay flow pon musica', '').trim(), turnCommit: true });
-
-    expect(corto.emitConversationLog).toHaveBeenCalledTimes(0);
-    expect(largo.emitConversationLog).toHaveBeenCalledTimes(0);
+    handleConversationStreamSync(largo, {
+      capture: MIXTA.replace('okay flow pon musica', '').trim().repeat(4),
+      turnCommit: true,
+    });
+    expect(largo.emitConversationLog).toHaveBeenCalledTimes(1);
   });
 });

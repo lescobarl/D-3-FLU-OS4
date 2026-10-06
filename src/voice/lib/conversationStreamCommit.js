@@ -231,30 +231,20 @@ export function handleConversationStreamSync(
   if (inlineWake.fluTail) {
     fluTailAfterCommit = inlineWake.fluTail
   }
-  // El veredicto se toma sobre la captura ANTES de recortarle la cola flu: una
-  // captura mixta ("... ok flu <orden>") SI lleva wake y es un turno.
-  const capturaEsTurno = esTurno(capture)
+  // La wake SOLO es compuerta de ACCION (¿se ejecuta el comando?), NUNCA de fila:
+  // la TRANSCRIPCION se registra SIEMPRE (requisito del dueno, 2026-10-06). El
+  // veredicto de wake se calcula ANTES de recortar la cola flu: una captura mixta
+  // ("... ok flu <orden>") SI lleva wake.
   capture = inlineWake.capture
 
-  // Ruido de fondo (aula/casa: TV, ninos, familia). Con la wake word exigida
-  // SIEMPRE, una captura SIN wake no es un turno del usuario y NO abre fila en
-  // el historial (la que ve el usuario y la que lee la IA); su texto sigue en la
-  // transcripcion viva. La fila de SESION se sigue escribiendo
-  // (`commitTurnToSessionRows`), que es la via del dictado/minuta. La captura
-  // MIXTA ("... ok flu <orden>") si abre su fila pasiva: su wake la marca como
-  // turno, y el veredicto sale del MISMO analisis del turno (antes del recorte
-  // de la cola flu), no de un segundo criterio.
   // MISMA locucion viva: la decide el MISMO criterio que el id (la memoria del
-  // despacho + la ventana compartida). Antes habia un SEGUNDO criterio aqui
-  // (estado de la UI: "el turno esta vivo") — dos regimenes para la misma pregunta.
+  // despacho + la ventana compartida). Solo esa (re-emision) se bloquea, no el habla.
   const mismaLocucionViva = sameRequestAsLastDispatch(capture)
-  const ambientRowBlocked = !capturaEsTurno || mismaLocucionViva
+  const ambientRowBlocked = mismaLocucionViva
 
-  // El id del turno se acuña SOLO para un turno de verdad: el ruido de fondo no
-  // mueve el id del turno vivo (P8.36). Un commit directo (sin preview) tambien
-  // abre turno, asi que el id existe antes de que nada de este turno escriba
-  // (fila, log crudo, resolucion).
-  ensureTurnId(capturaEsTurno, mismaLocucionViva)
+  // El id del turno se acuna para todo COMMIT real: la fila lo necesita (antes
+  // se acunaba solo con wake y el ruido se quedaba sin fila NI id).
+  ensureTurnId(true, mismaLocucionViva)
 
   // §9 Sella el turno: captura UNA vez su audio (dueño: turnAudioSnapshot.js) con
   // el id YA acuñado, antes de que `finalizeTurnCommit` vacíe el buffer PCM.
