@@ -22,6 +22,7 @@ import {
   wouldShrinkListenLog,
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
+import { relayLog } from '../../lib/clientLogRelay'
 import { finalizeTurnIdentityPipeline } from './turnIdentityPipeline.js'
 import { planAsrTurnSegments, segmentPlanCoversCapture } from './asrTurnSegmentation.js'
 import { resolveTurnSpeakerAtCommit, applyResolvedSpeakerToSessionRefs } from './turnSpeakerCommit.js'
@@ -506,6 +507,7 @@ export function handleConversationStreamSync(
   lastLoggedSpeakerRef.current = speakerName
   lastSpeakerRef.current = speakerName
 
+  relayLog('LOG', 'RowTrace', `refresh=${refreshNeeded} blocked=${ambientRowBlocked} replace=${replaceLast} turn=${activeTurnIdRef.current} cap="${capture.slice(0, 60)}"`) // BANDERA DE DIAGNOSTICO
   let delivered = false
   if (refreshNeeded) {
     delivered = emitTurnRow(capture, {
