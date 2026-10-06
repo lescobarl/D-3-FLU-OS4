@@ -136,6 +136,7 @@ export function handleConversationStreamSync(
     logRowSpeakersRef,
     speakerClustersRef,
     setSpeakerClusters,
+    applyResolvedSpeaker,
     lastSpeakerRef,
     lastTurnSignatureRef,
     lastLogLineTextRef,
@@ -350,11 +351,14 @@ export function handleConversationStreamSync(
         atTurnBoundary: true,
         allowNewCluster: true,
         utterance: phrase,
+        // El FINAL resuelve TARDE: el id se fija al commit para que lea el audio de
+        // ESTE turno (`turnAudioSnapshot`) y no el del turno que ya empezo.
+        turnId,
       }),
     // §9 El cluster del turno se persiste POR EL DUEÑO UNICO (`setSpeakerClusters`)
     // cuando el snapshot final resuelve — aunque sea despues del commit. Sin esto el
     // primer cluster se perdia y ninguna voz se podia separar (inClusters=0 siempre).
-    { onClusters: setSpeakerClusters },
+    { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker },
   )
 
   const stickyFallback = resolveCommitStickyFallback({

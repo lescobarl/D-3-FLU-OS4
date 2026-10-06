@@ -541,6 +541,7 @@ export function useFluVoiceAssistant({
   const lastSpeakerRef = useRef('')
   const lastLoggedSpeakerRef = useRef('')
   const lastTurnSignatureRef = useRef(null)
+const lastResolvedTurnRef = useRef(0)
   const isCommittingRef = useRef(false)
   const commitBaselineRef = useRef('')
   const liveDebounceTimerRef = useRef(null)
@@ -1431,7 +1432,7 @@ export function useFluVoiceAssistant({
   )
 
   const createSpeakerAudioResolver = useCallback(
-    ({ atTurnBoundary = false, allowNewCluster = false, utterance = '' } = {}) =>
+    ({ atTurnBoundary = false, allowNewCluster = false, utterance = '', turnId = 0 } = {}) =>
       createTurnSpeakerAudioResolver({
         getAudioBuffer: () => getContinuousBufferAdapter(),
         getSampleRate: () => sampleRateRef.current || AUDIO_SAMPLE_RATE,
@@ -1449,17 +1450,17 @@ export function useFluVoiceAssistant({
         getPreferSpeaker: () => lastLoggedSpeakerRef.current || '',
         getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
         getReservedLabels: () => [...userSpeakersView.current].filter(Boolean),
-        getCapturedAudio: () => readTurnAudioSnapshot(activeTurnIdRef.current),
+        getCapturedAudio: () => readTurnAudioSnapshot(turnId || activeTurnIdRef.current),
       }),
     [getContinuousBufferAdapter, userSpeakersView],
   )
 
-  /** El hablante del turno llega DESPUES del commit: se fija aqui para no heredar la
-   *  etiqueta del turno anterior (medido: preReady=false en todos los turnos). */
+  /** El embedding tarda MAS que el commit: manda el ULTIMO turno resuelto (monotono). */
   const applyResolvedSpeaker = useCallback(({ speakerName, turnId }) => {
-    if (!speakerName || turnId !== activeTurnIdRef.current) return
-    lastSpeakerRef.current = speakerName
-    lastLoggedSpeakerRef.current = speakerName
+    const id = Number(turnId)
+    if (!speakerName || (Number.isFinite(id) && id < lastResolvedTurnRef.current)) return
+    if (Number.isFinite(id)) lastResolvedTurnRef.current = id
+    lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
   }, [])
 
   const scheduleIdentityPreflight = useCallback(
@@ -1816,7 +1817,7 @@ export function useFluVoiceAssistant({
           emitConversationLog,
           createSpeakerAudioResolver,
           sessionPrimarySpeakerRef,
-          lastLoggedSpeakerRef,
+          lastLoggedSpeakerRef, applyResolvedSpeaker,
           logRowSpeakersRef: userSpeakersView,
           speakerClustersRef,
           setSpeakerClusters,
@@ -1845,6 +1846,7 @@ export function useFluVoiceAssistant({
       flushPcmAfterTurnCommit,
       scheduleLiveTranscriptUpdate,
       setSpeakerClusters,
+      applyResolvedSpeaker,
       userRowsTextView,
       userSpeakersView,
     ],

@@ -76,7 +76,8 @@ export function stopAllContinuousIdentityPipelines() {
 
 /**
  * @param {number} turnId
- * @param {Function} [runFinalSnapshot]
+ * @param {Function} [runFinalSnapshot] - RESOLUTOR (funcion -> resultado) o FABRICA
+ *   (funcion -> resolutor); ambas formas se aceptan (ver `run` abajo).
  * @param {{ onClusters?: Function }} [options] — `onClusters` recibe los clusters del
  * snapshot FINAL cuando resuelve (aunque sea DESPUES del commit). Sin esto, el primer
  * cluster del turno se perdia (el commit ya habia consumido su slot vacio) y el
@@ -87,7 +88,17 @@ export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClust
   stopContinuousIdentityPipeline(id)
 
   if (typeof runFinalSnapshot === 'function') {
-    scheduleTurnSpeakerPreflight(id, runFinalSnapshot, { continuous: false, onClusters, onResolved })
+    // El snapshot FINAL puede llegar como RESOLUTOR (funcion -> resultado) o como
+    // FABRICA (funcion -> resolutor). El consumidor vivo pasa la FABRICA
+    // (`() => createSpeakerAudioResolver(...)`); al no desenvolverla, el resultado era
+    // la propia funcion y NO un snapshot: `Preflight ready=false vec=0` en TODOS los
+    // turnos y ningun cluster persistido (`refClusters=0`). Se desenvuelve de forma
+    // PEREZOSA para no arrancar el trabajo antes de que la cola lo pida.
+    const run = () => {
+      const maybeRun = runFinalSnapshot()
+      return typeof maybeRun === 'function' ? maybeRun() : maybeRun
+    }
+    scheduleTurnSpeakerPreflight(id, run, { continuous: false, onClusters, onResolved })
   }
 
   const slot = peekTurnSpeakerPreflight(id)

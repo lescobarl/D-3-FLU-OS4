@@ -133,6 +133,23 @@ describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', 
     ).toHaveBeenCalled()
     expect(setSpeakerClusters.mock.calls[0][0].length).toBe(1)
   })
+
+  it('con FABRICA, el snapshot FINAL se INVOCA (el commit pasa la fabrica, no el resolutor)', async () => {
+    // MEDIDO en la app (debug.log, 2026-10-06): el commit pasa
+    // `() => createSpeakerAudioResolver(...)` (una FABRICA) y `finalizeTurnIdentityPipeline`
+    // la trataba como el RESOLUTOR. El resultado era la propia funcion -> `Preflight
+    // ready=false vec=0` en TODOS los turnos y `refClusters=0` siempre.
+    const setSpeakerClusters = vi.fn()
+    const fabrica = () => readyPreflight()
+
+    finalizeTurnIdentityPipeline(7, fabrica, { onClusters: setSpeakerClusters })
+    await flush()
+
+    expect(
+      setSpeakerClusters,
+      'la fabrica devuelve el RESOLUTOR: sin invocarlo no hay clusters (inClusters=0)',
+    ).toHaveBeenCalledWith([{ label: 'Hablante 1', speakerId: 'spk-1', signature: [1, 0, 0] }])
+  })
 })
 
 // Prueba de DETECTOR del propio guard (no es decorativo, prueba de mutación): el
