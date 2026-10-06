@@ -919,6 +919,12 @@
     "src/voice/lib/wakeTurnCommit.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
     ],
+    "src/voice/lib/micCapture.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/speakerPolicy.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
     "src/services/deepseek.ts": [
       "tests/e2e/documento-insumo.spec.ts",
       "tests/e2e/matriz-comandos-productivos.spec.ts"

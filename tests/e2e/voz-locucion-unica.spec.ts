@@ -93,3 +93,48 @@ test.describe('voz - una locucion = una fila = una ejecucion (P8.41)', () => {
         expect(filas[0].speaker).toBe('Luis');
     });
 });
+
+/**
+ * Captura de audio del aula (fuente unica de la decision: micCapture.resolveCaptureAudioConstraints).
+ *
+ * Con `voiceIdentity.capture.maxSensitivity: true` (fluConfig.js) la captura de SALA
+ * se pide CRUDA tambien FUERA de la conversacion: sin echoCancellation, sin
+ * noiseSuppression y sin autoGainControl, que es lo que atenuaba las voces lejanas
+ * del salon ("se pierde conversacion"). Aqui se conduce la ruta REAL de arranque de
+ * escucha y se mide lo que la app PIDE a getUserMedia.
+ */
+test.describe('captura de audio del aula (micCapture)', () => {
+    test.beforeEach(async ({ page }) => {
+        await autoSkipOnboarding(page);
+        await stubLocalSpeech(page);
+        await stubSpeechRecognition(page);
+        // Micro FALSO: se registra lo PEDIDO y se deja la promesa pendiente (no
+        // resuelve la captura): la decision que se mide es la de
+        // resolveCaptureAudioConstraints, no el hardware.
+        await page.addInitScript(() => {
+            (window as any).__micCalls = [];
+            const md: any = {};
+            Object.defineProperty(navigator, 'mediaDevices', { value: md, configurable: true });
+            md.getUserMedia = (constraints: any) => {
+                (window as any).__micCalls.push(constraints);
+                return new Promise(() => {});
+            };
+        });
+        await gotoClean(page);
+    });
+
+    test('maxSensitivity fuera de conversacion pide audio CRUDO (sin AGC/NS/EC)', async ({ page }) => {
+        await startConversation(page);
+        await expect
+            .poll(async () => page.evaluate(() => ((window as any).__micCalls || []).length), {
+                timeout: 30000,
+            })
+            .toBeGreaterThanOrEqual(1);
+        const audio = await page.evaluate(() => (window as any).__micCalls[0]?.audio);
+        expect(audio).toEqual({
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+        });
+    });
+});
