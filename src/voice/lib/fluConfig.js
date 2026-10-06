@@ -2622,14 +2622,14 @@ export const FLU_CONFIG = {
     listeningAckPhrases: [
       ...LISTENING_ACK_PHRASES,
     ],
+    /** Wake por voz (P8.68): bandera "exigir la wake en cada frase". */
+    wakePolicyPhrases: { on: ['exige la wake', 'wake obligatoria'], off: ['piso abierto', 'sin wake'], speechOn: { es: 'Listo, te exijo la palabra de activacion en cada frase.', en: 'Got it, I require the wake word in every phrase.' }, speechOff: { es: 'Listo, dejo el piso abierto.', en: 'Got it, the floor stays open.' } },
     /** Tras wake: ceder la palabra a Flu (mano alzada). */
     grantFloor: [
       'adelante', 'si', 'sí',
-      'participa',
-      'dale',
+      'participa', 'dale',
       'dale flu',
-      'continua',
-      'continúa',
+      'continua', 'continúa',
       'sigue',
       'procede',
       'go ahead',

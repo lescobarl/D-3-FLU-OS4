@@ -139,6 +139,7 @@ import {
   blindSpeakerFallback,
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
+import { applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
 import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
@@ -2980,6 +2981,27 @@ export function useFluVoiceAssistant({
   // respuesta_voz) llega después con configuracion anulada (idempotencia: sin
   // doble aplicación). Nunca dispara en conversación casual: el resolver tiene
   // triple guardia (verbo + nombre + contexto) y aquí se exige det.accion.
+  /** Orden de politica de wake por voz (P8.68): aplica la bandera y confirma el turno. */
+  const handleWakePolicyOrder = useCallback(
+    async (text) => {
+      const order = resolveWakePolicyOrder(text)
+      if (!order || !applyWakePolicyOrder(order)) return false
+      await commitAndResolveTurn({
+        capture: cleanForSpeech(text),
+        contract: {
+          respuesta_voz: wakePolicySpeech(order, language),
+          navegacion: { comando: null, destino: null, parametros: {} },
+        },
+        diagnostics: null,
+        speakerName: lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
+        speakerAlias: null,
+        phase, session, timestamp: formatClock(), signature: null, language,
+      })
+      return true
+    },
+    [commitAndResolveTurn, language, phase, session],
+  )
+
   const dispatchFastConfigCommand = useCallback(
     async (
       configuracion,
@@ -3482,6 +3504,8 @@ export function useFluVoiceAssistant({
         return false
       }
 
+      if (await handleWakePolicyOrder(text)) return true
+
       const plan = planVoiceCommandDispatch(text, {
         interim,
         lastSignature: lastConversationActionRef.current.signature,
@@ -3544,7 +3568,7 @@ export function useFluVoiceAssistant({
       }
       return false
     },
-    [conversationActiveRef, dispatchPassiveVoiceCommand, processConversationFluQuery, resolvedWakeWords, userRowsTextView],
+    [conversationActiveRef, dispatchPassiveVoiceCommand, processConversationFluQuery, resolvedWakeWords, userRowsTextView, handleWakePolicyOrder],
   )
 
   const tryDispatchConversationAction = useCallback(
@@ -3743,6 +3767,12 @@ export function useFluVoiceAssistant({
       // calculan ANTES de la diarización pesada. La diarización (resolveSpeaker) arranca
       // EN PARALELO con la llamada a la API y se reconcilia justo antes de
       // onContractResolved — mismo patrón que processConversationFluQuery (lote paralelo).
+      // Orden de politica de wake por voz (bandera P8.68): se aplica y se confirma.
+      if (await handleWakePolicyOrder(bufferedValidation.commandText)) {
+        finishTurn(); await cleanupAudio(); setStatus('idle'); isListeningRef.current = false
+        return
+      }
+
       const bufferedTranscript = bufferedValidation.commandText
       // §2A: la resolución de navegación se delega al árbitro determinista UNIFICADO
       // (src/voice/lib/deterministicArbiter.js), que evalúa config/juego/ambiente/
@@ -4204,6 +4234,7 @@ export function useFluVoiceAssistant({
     conversationActiveRef,
     evaluateDeterministicFastPaths,
     emitActiveConversationCommand,
+    handleWakePolicyOrder,
     emitConversationLog,
     finalizeRecognition,
     getConversationContext,
