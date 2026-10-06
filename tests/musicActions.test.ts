@@ -8,7 +8,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest'
 
-import { MUSIC_ACTIONS, asMusicAction, resolveMusicIntent } from '../src/core/media/musicActions'
+import { MUSIC_ACTIONS, asMusicAction, resolveMusicIntent, shouldAutoPlayDanceTrack } from '../src/core/media/musicActions'
 
 describe('MUSIC_ACTIONS - conjunto admitido de acciones de musica', () => {
   it('contiene exactamente reproducir, pausar y detener', () => {
@@ -96,5 +96,36 @@ describe('resolveMusicIntent - CONDUCTA del vocabulario de musica (P8.53/P8.54/P
     for (const frase of ['pon la mesa', 'dame agua', 'toca la guitarra', 'canta otra']) {
       expect(resolveMusicIntent(frase), frase).toBeNull()
     }
+  })
+})
+
+// Defecto medido (sesion real del dueno, 2026-10-05): "silencio"/"silencio la
+// musica" NO detenian la musica (solo "para/deten/apaga/quita/corta"), asi que la
+// pista del karaoke sono ~6 min encima de la clase de ingles. Una palabra que el
+// usuario dice de forma natural para callar musica tiene que detenerla.
+describe('resolveMusicIntent - "silencio" detiene (medido 2026-10-05)', () => {
+  it('"silencio" (y con su objeto de musica) detiene la musica', () => {
+    for (const frase of ['silencio', 'Silencio', 'silencio la musica', 'silencio a la musica']) {
+      expect(resolveMusicIntent(frase), frase).toEqual({ accion: 'stop_music' })
+    }
+  })
+
+  it('no detiene con una frase que solo CONTIENE la palabra', () => {
+    for (const frase of ['hay mucho silencio', 'guarda silencio un momento', 'hable mas silencio']) {
+      expect(resolveMusicIntent(frase), frase).toBeNull()
+    }
+  })
+})
+
+// Defecto medido (sesion real del dueno, 2026-10-05): en clase de ingles, la pista
+// "baila" arrancaba sola. La decision vivia inline en App y se disparaba tambien
+// por la PROPIA respuesta de FLU ("sing/dance"). Fuente unica: el dueno de musica.
+describe('shouldAutoPlayDanceTrack - el auto-play solo lo pide el USUARIO', () => {
+  it('solo con Dance y sin musica en curso', () => {
+    expect(shouldAutoPlayDanceTrack({ detectedAnim: 'Dance', musicaAccion: null, musicPlaying: false })).toBe(true)
+    expect(shouldAutoPlayDanceTrack({ detectedAnim: 'Dance', musicaAccion: 'play_music', musicPlaying: false })).toBe(false)
+    expect(shouldAutoPlayDanceTrack({ detectedAnim: 'Dance', musicaAccion: null, musicPlaying: true })).toBe(false)
+    expect(shouldAutoPlayDanceTrack({ detectedAnim: 'Walk', musicaAccion: null, musicPlaying: false })).toBe(false)
+    expect(shouldAutoPlayDanceTrack({})).toBe(false)
   })
 })

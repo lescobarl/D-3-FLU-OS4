@@ -91,3 +91,38 @@ export function getLastTurnSignatureContinuityDistance(config = FLU_CONFIG) {
       ?.lastTurnSignatureContinuityDistance,
   )
 }
+
+/**
+ * Constraints del microfono (fuente unica de la decision).
+ *
+ * `maxSensitivity` (config) extiende la captura de SALA tambien FUERA de la
+ * conversacion: antes solo se aplicaba con la conversacion activa, asi que en
+ * escucha pasiva el navegador metia AGC/NS/EC y atenuaba las voces lejanas del
+ * aula ("se pierde conversacion"). `roomCapture` manda como siempre.
+ */
+export function resolveCaptureAudioConstraints({
+  conversationActive = false,
+  roomCapture = false,
+  maxSensitivity = false,
+  audio = getConversationAudioConfig(),
+} = {}) {
+  const raw = Boolean(roomCapture) || (!conversationActive && Boolean(maxSensitivity))
+  if (!conversationActive && !raw) {
+    return { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+  }
+  return {
+    echoCancellation: raw ? (audio?.echoCancellation ?? false) : true,
+    noiseSuppression: raw ? (audio?.noiseSuppression ?? false) : true,
+    autoGainControl: raw ? (audio?.autoGainControl ?? false) : true,
+  }
+}
+
+/** Ganancia digital del micro (mayor = mas sensible); 1 = sin refuerzo. */
+export function resolveCaptureGain({
+  conversationActive = false,
+  maxSensitivity = false,
+  audio = getConversationAudioConfig(),
+} = {}) {
+  if (!conversationActive && !maxSensitivity) return 1
+  return Number(audio?.captureGain) || 8
+}

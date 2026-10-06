@@ -41,14 +41,26 @@ const bridge = createWorkerPendingBridge({
   },
 })
 
-/** Búfer transferible: propiedad pasa al worker (zero-copy). */
-export function prepareTransferableAudio(samples) {
+/**
+ * Búfer transferible para el worker.
+ *
+ * SEGURIDAD (E0): `postMessage(payload, [buffer])` DESACOPLA el ArrayBuffer del
+ * hilo emisor (`.length`/`.byteLength` -> 0). Un búfer que NO es nuestro no se
+ * puede transferir: el MISMO `audioSnapshot` lo comparten EN PARALELO la firma
+ * (`computeTurnSignature`) y la diarización (`resolveSpeaker`), así que el
+ * transfer de la firma dejaba el snapshot a 0 y la diarización NO veía audio
+ * (medido: `SpeakerTrace vecLen=4 snap=0` y `dim=512 empty=false snap=0`; todo
+ * caía a "Hablante 1"). Por defecto se COPIA y se transfiere la copia, que sí
+ * es nuestra. `transferOwnership` existe para un llamador que ceda la propiedad
+ * a propósito (hoy: ninguno).
+ */
+export function prepareTransferableAudio(samples, { transferOwnership = false } = {}) {
   const src = samples instanceof Float32Array ? samples : new Float32Array(samples || [])
   if (!src.length) {
     return { audioBuffer: null, byteOffset: 0, sampleCount: 0, transfer: [] }
   }
   const owned =
-    src.byteOffset === 0 && src.byteLength === src.buffer.byteLength
+    transferOwnership && src.byteOffset === 0 && src.byteLength === src.buffer.byteLength
       ? src
       : new Float32Array(src)
   const audioBuffer = owned.buffer

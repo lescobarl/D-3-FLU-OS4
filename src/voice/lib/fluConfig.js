@@ -2624,7 +2624,7 @@ export const FLU_CONFIG = {
     ],
     /** Tras wake: ceder la palabra a Flu (mano alzada). */
     grantFloor: [
-      'adelante',
+      'adelante', 'si', 'sí',
       'participa',
       'dale',
       'dale flu',

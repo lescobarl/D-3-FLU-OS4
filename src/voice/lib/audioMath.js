@@ -841,7 +841,11 @@ export function detectSessionVoiceCommand(text = '', voiceCommands = {}) {
 }
 
 /** Acción al cerrar un final en conversación pasiva. */
-export function resolveFinalConversationAction(text = '', voiceCommands = {}, { lastCommitted = '' } = {}) {
+export function resolveFinalConversationAction(
+  text = '',
+  voiceCommands = {},
+  { lastCommitted = '', wakeRequired = true } = {},
+) {
   const snapshot = cleanForSpeech(text)
   const wakeWords = voiceCommands.wakeWords || []
   const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
@@ -898,7 +902,19 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
     return { kind: 'command', command }
   }
 
-  if (!split.wakeWordMatched) return { kind: 'log' }
+  if (!split.wakeWordMatched) {
+    // Piso CERRADO: sin wake no es un turno (ni fila ni despacho) — P8.38.
+    if (wakeRequired) return { kind: 'log' }
+    // Piso ABIERTO (la wake no es obligatoria): la captura ES un turno, con el
+    // texto completo como pregunta. Antes se devolvia 'log' SIEMPRE, asi que la
+    // fila que abre el stream (P8.49) nunca se despachaba y quedaba como peticion
+    // PENDIENTE en el historial: la respondia el turno siguiente, tarde y fuera de
+    // turno (medido 2026-10-05: "Platicame de los barcos" -> respuesta 19s despues).
+    const openQuestion = cleanForSpeech(snapshot)
+    return openQuestion
+      ? { kind: 'flu', question: openQuestion, beforeWake: '' }
+      : { kind: 'log' }
+  }
 
   if (!afterWake) return { kind: 'command', command: COMMAND_IDS.FLU_WAKE }
   if (shouldAckFluWake(afterWake, voiceCommands)) {
@@ -1070,6 +1086,7 @@ export function planConversationDispatch(
     lastAt = 0,
     lastPhrase = '',
     dedupMs = sameRequestWindowMs(),
+    wakeRequired = true,
     now = Date.now(),
     lastCommitted = '',
   } = {},
@@ -1080,6 +1097,7 @@ export function planConversationDispatch(
   // §9: la query se deriva de la fila canónica en UN solo lugar.
   const action = deriveQueryFromRow(phrase, voiceCommands, {
     lastCommitted: cleanForSpeech(lastCommitted),
+    wakeRequired,
   })
   if (
     !shouldDispatchConversationAction(action, {

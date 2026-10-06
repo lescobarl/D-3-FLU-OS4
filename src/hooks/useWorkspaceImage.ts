@@ -116,7 +116,13 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
      */
     const applyImageResult = useCallback((result: { image_url?: string }, requestId: number): boolean => {
         if (requestRef.current !== requestId) return false;
-            applyImageResult(result, requestId);
+        if (result?.image_url) {
+            urlRef.current = result.image_url;
+            setImageUrl(result.image_url);
+            setIsLoading(false);
+            setIsFailed(false);
+            return true;
+        }
         setIsLoading(false);
         setIsFailed(true);
         return false;
@@ -233,22 +239,14 @@ export function useWorkspaceImage(language: string): WorkspaceImageState {
                 url: String(result.image_url || '').slice(0, 90),
                 trace: result.trace || undefined,
             });
-            if (result.image_url) {
-                urlRef.current = result.image_url;
-                setImageUrl(result.image_url);
-                setIsLoading(false);
-                setIsFailed(false);
-            } else {
-                setIsLoading(false);
-                setIsFailed(true);
-            }
+            applyImageResult(result, requestId);
         } catch (err) {
             if (requestRef.current !== requestId) return;
             logCaughtError('[useWorkspaceImage] Generation failed', err);
             setIsLoading(false);
             setIsFailed(true);
         }
-    }, [language, beginImageRequest]);
+    }, [language, beginImageRequest, applyImageResult]);
 
     // ---- Clear ----
     const clear = useCallback(() => {

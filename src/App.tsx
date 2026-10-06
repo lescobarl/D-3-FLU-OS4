@@ -57,6 +57,7 @@ import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
 import { playSong, pauseMusic, stopMusic, isMusicPlaying } from './services/musicPlayer';
+import { shouldAutoPlayDanceTrack } from './core/media/musicActions';
 import { getPreferredAIProvider, setPreferredAIProvider } from './services/aiServiceFactory';
 import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
@@ -2023,13 +2024,14 @@ function App() {
                     geminiEmocion = undefined;
                 }
 
-                // Fuente de análisis para alinear emociones/acciones al evento REAL:
-                // se escanea tanto el transcript (lo que dijo el usuario) como la
-                // respuesta_voz de FLU (ej. anuncio de canción "¡vamos a bailar!" → Dance).
+                                // ACCION y EMOCION salen de fuentes distintas: el transcript (lo que dijo el
+                // USUARIO) manda para ACTUAR y para el auto-play del baile; la respuesta de FLU
+                // solo alimenta la EMOCION del avatar. Medido 2026-10-05: un "sing/dance" de la
+                // propia respuesta de FLU en clase de ingles arrancaba la pista sobre la tarea.
                 const speechSource = [transcript, respuestaVoz].filter(Boolean).join(' ');
                 if (speechSource) {
                     // 1. Detectar acciones físicas (baila→Dance, salta→Jump_in_place, etc.)
-                    const detectedAnim = detectActionInTranscript(speechSource);
+                    const detectedAnim = detectActionInTranscript(String(transcript || ''));
                     if (detectedAnim) {
                         // Acción física → forzar animacion y limpiar emocion
                         geminiAnimacion = detectedAnim;
@@ -2038,11 +2040,7 @@ function App() {
                         // canción en curso, arranca la pista de baile del catálogo
                         // (config: MUSIC_CATALOG, id "baila"). El caso inverso
                         // (música -> Dance) ya se cubre arriba con musica.accion.
-                        if (
-                            detectedAnim === 'Dance' &&
-                            musica?.accion !== 'play_music' &&
-                            !isMusicPlaying()
-                        ) {
+                        if (shouldAutoPlayDanceTrack({ detectedAnim, musicaAccion: musica?.accion ?? null, musicPlaying: isMusicPlaying() })) {
                             playSong('baila').catch((err: unknown) =>
                                 logCaughtError('[App] baile sin musica', err),
                             );

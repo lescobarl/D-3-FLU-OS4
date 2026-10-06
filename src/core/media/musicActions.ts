@@ -98,7 +98,7 @@ const MUSIC_STOP_OBJECTS: readonly string[] = Object.freeze([
 const MUSIC_CONTROL_FRAMES: ReadonlyArray<{ accion: MusicAction; frames: readonly string[] }> = Object.freeze([
     {
         accion: 'stop_music',
-        frames: ['deten la musica', 'detente la musica', 'para la musica', 'apaga la musica', 'quita la musica', 'corta la musica'],
+        frames: ['deten la musica', 'detente la musica', 'para la musica', 'apaga la musica', 'quita la musica', 'corta la musica', 'silencio la musica', 'silencio a la musica'],
     },
     { accion: 'pause_music', frames: ['pausa la musica', 'pausa musica'] },
 ]);
@@ -112,7 +112,7 @@ const MUSIC_CONTROL_FRAMES: ReadonlyArray<{ accion: MusicAction; frames: readonl
  * como `end` ANTES que este modulo, asi que el juego se sigue cerrando con la misma
  * palabra y ademas se detiene la musica.
  */
-const MUSIC_STOP_WORDS: readonly string[] = Object.freeze(['alto', 'stop']);
+const MUSIC_STOP_WORDS: readonly string[] = Object.freeze(['alto', 'stop', 'silencio']);
 
 /** Quita la puntuacion de los bordes: "Alto!" -> "alto". */
 function sinPuntuacionBordes(norm: string): string {
@@ -198,4 +198,23 @@ export function musicActionSpeech(accion: MusicAction, language: string = 'es'):
     if (accion === 'stop_music') return isEnglish ? 'Music stopped.' : 'Música detenida.';
     if (accion === 'pause_music') return isEnglish ? 'Music paused.' : 'Música en pausa.';
     return isEnglish ? 'Playing music.' : 'Pongo la música.';
+}
+
+/**
+ * "BAILA" tambien SUENA: arranca la pista de baile SOLO si la accion fisica la
+ * pide el USUARIO (Dance) y no hay musica en curso. Fuente unica de la decision
+ * (antes vivia inline en App). La FUENTE de la accion es el transcript del
+ * usuario, NUNCA la respuesta de FLU (medido 2026-10-05: un "sing/dance" de la
+ * propia respuesta de FLU en clase de ingles arrancaba la pista sobre la tarea).
+ */
+export function shouldAutoPlayDanceTrack({
+    detectedAnim = '',
+    musicaAccion = null,
+    musicPlaying = false,
+}: {
+    detectedAnim?: string;
+    musicaAccion?: string | null;
+    musicPlaying?: boolean;
+} = {}): boolean {
+    return detectedAnim === 'Dance' && musicaAccion !== 'play_music' && !musicPlaying;
 }

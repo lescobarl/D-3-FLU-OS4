@@ -11,7 +11,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { detectWakeIntroducedName } from './audioMath.js'
-import { isAutoSpeakerLabel, normalizeSpeakerLabel } from './voiceIdentity.js'
+import { isAutoSpeakerLabel, isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
 import { parseSpeakerIndex } from './speakerCore.js';
 
@@ -134,4 +134,21 @@ export function resolveCommitStickyFallback({
     return primary
   }
   return lastLogged || sessionPrimary || fallback
+}
+
+/**
+ * Etiqueta de RELLENO sin evidencia acustica.
+ *
+ * Un NOMBRE PROPIO no se hereda a ciegas: ni por continuidad, ni cuando no hay
+ * audio con el que confirmar el timbre. Solo entra por wake ("ok flu soy Ana") o
+ * por diarizacion de AUDIO (con firma). Medido (sesion real del dueno,
+ * 2026-10-05): `SpeakerTrace ... fallback="luis" last="luis"` rotulaba TODOS los
+ * turnos sin audio con su nombre, incluidas voces de mujeres del salon. Sin
+ * evidencia, el turno degrada al label generico ("Hablante N"), que es honesto;
+ * el nombre propio lo pone la via acustica cuando de verdad coincide.
+ */
+export function blindSpeakerFallback(label = '') {
+  const clean = normalizeSpeakerLabel(label)
+  if (!clean) return FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
+  return isProperSpeakerName(clean) ? FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker : clean
 }

@@ -69,6 +69,8 @@ import {
   getLastTurnSignatureContinuityDistance,
   getMaxSilenceWindowsForHold,
   getVoiceDetectionThreshold,
+  resolveCaptureAudioConstraints,
+  resolveCaptureGain,
 } from '../lib/micCapture.js'
 import {
   computeSpillAfterLog,
@@ -134,6 +136,7 @@ import {
   peekTurnSpeakerPreflight,
 } from '../lib/turnSpeakerPreflight.js'
 import {
+  blindSpeakerFallback,
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
 import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPause.js'
@@ -1500,7 +1503,7 @@ export function useFluVoiceAssistant({
         })
         if (turnWindow.length >= minVoiced) tail = turnWindow
       }
-      if (!tail.length) return fallbackSpeaker
+      if (!tail.length) return blindSpeakerFallback(fallbackSpeaker)
       return resolveConversationSpeakerSync(utterance, tail, sampleRate, fallbackSpeaker, {
         atTurnBoundary,
         allowNewCluster,
@@ -1511,7 +1514,7 @@ export function useFluVoiceAssistant({
 
   const applyConversationSpeaker = useCallback(
     (utterance = '', fallbackSpeaker = '', { force = false, atTurnBoundary = false, allowNewCluster = false } = {}) => {
-      const fallback = cleanForSpeech(fallbackSpeaker) || getSpeakerLabel(listenStateRef.current)
+      const fallback = blindSpeakerFallback(cleanForSpeech(fallbackSpeaker) || getSpeakerLabel(listenStateRef.current))
       const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
       if (
         shouldSkipPreviewDiarize({
@@ -2006,24 +2009,16 @@ export function useFluVoiceAssistant({
     const conversationAudio = captureCfg.conversationAudio
     const roomCapture =
       conversationActiveRef?.current && captureCfg.captureRoomAudio !== false
+    // Decision unica (micCapture): `maxSensitivity` extiende la captura CRUDA de
+    // sala tambien fuera de la conversacion; antes el navegador metia AGC/NS/EC y
+    // atenuaba las voces lejanas del aula ("se pierde conversacion").
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: conversationActiveRef?.current
-        ? {
-          echoCancellation: roomCapture
-            ? (conversationAudio?.echoCancellation ?? false)
-            : true,
-          noiseSuppression: roomCapture
-            ? (conversationAudio?.noiseSuppression ?? false)
-            : true,
-          autoGainControl: roomCapture
-            ? (conversationAudio?.autoGainControl ?? false)
-            : true,
-        }
-        : {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+      audio: resolveCaptureAudioConstraints({
+        conversationActive: Boolean(conversationActiveRef?.current),
+        roomCapture,
+        maxSensitivity: captureCfg.maxSensitivity === true,
+        audio: conversationAudio,
+      }),
     })
     mediaStreamRef.current = stream
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -2036,10 +2031,11 @@ export function useFluVoiceAssistant({
     const source = audioContext.createMediaStreamSource(stream)
     sourceRef.current = source
 
-    const captureGain =
-      conversationActiveRef?.current
-        ? Number(FLU_CONFIG.voiceIdentity?.capture?.conversationAudio?.captureGain) || 8
-        : 1
+    const captureGain = resolveCaptureGain({
+      conversationActive: Boolean(conversationActiveRef?.current),
+      maxSensitivity: captureCfg.maxSensitivity === true,
+      audio: conversationAudio,
+    })
 
     const inputGain = audioContext.createGain()
     inputGain.gain.value = captureGain
@@ -3496,6 +3492,10 @@ export function useFluVoiceAssistant({
         // la ventana como literal (1600) y el planificador con su propia dedupe.
         lastPhrase: lastConversationActionRef.current.text,
         lastCommitted,
+        // Piso: la wake es obligatoria? (dueno unico: requiresWakeWord). Decide si
+        // una captura sin wake es turno; antes el despacho la descartaba SIEMPRE
+        // aunque el stream le hubiera abierto fila (P8.49) -> peticion pendiente.
+        wakeRequired: requiresWakeWord(conversationActiveRef?.current),
       })
 
       if (import.meta.env.DEV && debugHotPath) {
