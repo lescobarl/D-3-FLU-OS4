@@ -926,6 +926,12 @@
     "src/voice/lib/speakerPolicy.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
     ],
+    "src/components/FluSettingsPanel.tsx": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/hooks/useConfigPersistence.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
     "src/services/deepseek.ts": [
       "tests/e2e/documento-insumo.spec.ts",
       "tests/e2e/matriz-comandos-productivos.spec.ts"
