@@ -114,6 +114,7 @@ import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/dev
 import { diaDeFecha, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
 import { createScheduleAdapter } from './core/documents/scheduleAdapter';
 import { buildDocumentInsumo } from './core/documents/documentInsumo';
+import { buildImageInsumo } from './core/documents/imageInsumo';
 import type { NotificationService } from './core/notifications/notificationService';
 import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
 import {
@@ -3227,10 +3228,11 @@ function App() {
                 }
 
                 // ── Tutor experience: FLU speaks proactively after analysis ──
-                if (result.texto_extraido) {
+                const insumoImagen = buildImageInsumo(result, language);
+                if (insumoImagen) {
                     // 1. El contexto entra al historial (única fuente de verdad); Gemini
                     //    lo ve por derivación del store, sin canal lateral.
-                    const contextLabel = pickText(language, 'contexto_de_documento_subido_por_el_usua', { texto_extraido: result.texto_extraido });
+                    const contextLabel = insumoImagen;
                     const entry = {
                         id: uuidv4(),
                         role: 'system' as const,
@@ -3246,7 +3248,7 @@ function App() {
                     integrationStore.setWorkspaceArtifact({
                         id: uuidv4(),
                         respuesta: '',
-                        titulo: result.materia || result.texto_extraido.slice(0, 60),
+                        titulo: result.materia || result.texto_extraido.slice(0, 60) || result.instrucciones.slice(0, 60),
                         tipo: 'text',
                         contenido: result.texto_extraido,
                         puntos_clave: result.problemas.length > 0 ? result.problemas : (result.instrucciones ? [result.instrucciones] : []),
