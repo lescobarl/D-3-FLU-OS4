@@ -1421,6 +1421,15 @@ export function useFluVoiceAssistant({
     },
   }), [])
 
+  /** §9 Captura el audio del turno (turnAudioSnapshot.js) antes de vaciar el buffer. */
+  const captureTurnAudio = useCallback(
+    () => captureTurnAudioSnapshot(activeTurnIdRef.current, {
+      buildWindow: () => getContinuousBufferAdapter().snapshotTurnWindow({ turnAudioStartSample: turnAudioStartSampleRef.current, atTurnBoundary: true }),
+      meta: { total: chunkTotalSamplesRef.current, since: turnAudioStartSampleRef.current, chunks: chunksRef.current.length, sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE },
+    }),
+    [getContinuousBufferAdapter],
+  )
+
   const createSpeakerAudioResolver = useCallback(
     ({ atTurnBoundary = false, allowNewCluster = false, utterance = '' } = {}) =>
       createTurnSpeakerAudioResolver({
@@ -1788,6 +1797,7 @@ export function useFluVoiceAssistant({
           flushPendingStreamLog,
           logRowsTextRef: userRowsTextView,
           activeTurnIdRef,
+          captureTurnAudio,
           flushPcmAfterTurnCommit,
           lastCommitAtRef,
           lastOnresultAtRef,
@@ -1820,6 +1830,7 @@ export function useFluVoiceAssistant({
       activeParticipantName,
       activeParticipantSpeakerLabel,
       applyConversationSpeaker,
+      captureTurnAudio,
       commitTurnToSessionRows,
       conversationActiveRef,
       createSpeakerAudioResolver,
@@ -2177,13 +2188,6 @@ export function useFluVoiceAssistant({
         }
 
         if (conversationActiveRef?.current) {
-          if (finalText) {
-            // §9 Sella el turno: captura el audio UNA vez al FINAL, antes del vaciado.
-            captureTurnAudioSnapshot(activeTurnIdRef.current, {
-              buildWindow: () => getContinuousBufferAdapter().snapshotTurnWindow({ turnAudioStartSample: turnAudioStartSampleRef.current, atTurnBoundary: true }),
-              meta: { total: chunkTotalSamplesRef.current, since: turnAudioStartSampleRef.current, chunks: chunksRef.current.length, sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE },
-            })
-          }
           try {
             if (import.meta.env.DEV && debugHotPath) {
               const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
@@ -2427,7 +2431,6 @@ export function useFluVoiceAssistant({
       scheduleAutoProcess,
       readActiveSnapshot,
       syncConversationStream,
-      getContinuousBufferAdapter,
       setError,
       resolvedWakeWords,
     ],
@@ -3204,11 +3207,9 @@ export function useFluVoiceAssistant({
       openPreviewTurnRef.current = false
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
-      // §9: UNA sola frase canónica para el turno. Display y fila de
-      // conversación salen de ESTE mismo valor (con wake word), no de dos
-      // derivaciones distintas. Se commitea AQUÍ (commitOnly) para que la
-      // transcripción sea visible de inmediato, sin esperar a la IA; la
-      // resolución posterior re-commitea el mismo valor.
+      captureTurnAudio() // §9 sella el audio ANTES del commit-only (que vacía el buffer)
+      // §9: UNA sola frase canónica para el turno (display y fila salen de ESTE
+      // valor). Se commitea AQUÍ (commitOnly) y luego se re-commitea el mismo.
       const canonicalPhrase = await commitAndResolveTurn({
         capture: fullTranscript || question,
         fallbackCapture: question, // texto validado del turno (si la captura cruda es basura)
@@ -3471,6 +3472,7 @@ export function useFluVoiceAssistant({
       }
     },
     [
+      captureTurnAudio,
       conversationActiveRef,
       commitAndResolveTurn,
       getConversationContext,

@@ -118,6 +118,7 @@ export function handleConversationStreamSync(
     flushPendingStreamLog,
     logRowsTextRef,
     activeTurnIdRef,
+    captureTurnAudio,
     flushPcmAfterTurnCommit,
     lastCommitAtRef,
     lastOnresultAtRef,
@@ -254,6 +255,10 @@ export function handleConversationStreamSync(
   // abre turno, asi que el id existe antes de que nada de este turno escriba
   // (fila, log crudo, resolucion).
   ensureTurnId(capturaEsTurno, mismaLocucionViva)
+
+  // §9 Sella el turno: captura UNA vez su audio (dueño: turnAudioSnapshot.js) con
+  // el id YA acuñado, antes de que `finalizeTurnCommit` vacíe el buffer PCM.
+  if (turnCommit && typeof captureTurnAudio === 'function') captureTurnAudio()
 
   // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
   // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión

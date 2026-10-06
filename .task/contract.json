@@ -686,6 +686,9 @@
     "kilo.json"
   ],
   "e2eScope": {
+    "src/voice/lib/wakePolicy.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
     "src/voice/lib/turnAudioSnapshot.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
     ],
