@@ -38,6 +38,7 @@ import {
 import { noteGameTurn } from '../../core/games/gameSessionStore'
 import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
+import { captureTurnAudioSnapshot, probePcmBlock, readTurnAudioSnapshot, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
 import {
@@ -167,17 +168,6 @@ import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
-
-function flattenChunks(chunks) {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const result = new Float32Array(length)
-  let offset = 0
-  chunks.forEach((chunk) => {
-    result.set(chunk, offset)
-    offset += chunk.length
-  })
-  return result
-}
 
 function segmentAudio(samples, sampleRate, threshold) {
   const voiceThreshold = threshold ?? getVoiceDetectionThreshold()
@@ -1393,10 +1383,8 @@ export function useFluVoiceAssistant({
         const sticky = lastSpeakerRef.current || fallbackSpeaker
         return isProperSpeakerName(sticky) ? GENERIC_SPEAKER : sticky || GENERIC_SPEAKER
       }
-      // Embeddings async (worker): el preflight ya resolvió identidad por audio
-      // (assignSpeaker, signatureVector 512-D). Se consulta el slot del
-      // turno activo para que la vista previa NO rompa la diarización de conversación:
-      // con evidencia lista se usa el hablante real; sin ella se mantiene sticky.
+      // Embeddings async (worker): el preflight resuelve identidad por audio; se
+      // consulta su slot del turno (evidencia lista → hablante real; sin ella sticky).
       if (canDiarize) {
         const preflight = peekTurnSpeakerPreflight(activeTurnIdRef.current)
         if (preflight?.ready && preflight.speakerName) {
@@ -1452,6 +1440,7 @@ export function useFluVoiceAssistant({
         getPreferSpeaker: () => lastLoggedSpeakerRef.current || '',
         getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
         getReservedLabels: () => [...userSpeakersView.current].filter(Boolean),
+        getCapturedAudio: () => readTurnAudioSnapshot(activeTurnIdRef.current),
       }),
     [getContinuousBufferAdapter, userSpeakersView],
   )
@@ -2064,6 +2053,7 @@ export function useFluVoiceAssistant({
       onPcmBlock: (input) => {
         chunksRef.current.push(new Float32Array(input))
         chunkTotalSamplesRef.current += input.length
+        probePcmBlock({ total: chunkTotalSamplesRef.current, chunks: chunksRef.current.length, listening: isListeningRef.current, conversation: Boolean(conversationActiveRef?.current) })
         trimAudioChunkBuffer(
           chunksRef,
           sampleRateRef.current || AUDIO_SAMPLE_RATE,
@@ -2187,6 +2177,13 @@ export function useFluVoiceAssistant({
         }
 
         if (conversationActiveRef?.current) {
+          if (finalText) {
+            // §9 Sella el turno: captura el audio UNA vez al FINAL, antes del vaciado.
+            captureTurnAudioSnapshot(activeTurnIdRef.current, {
+              buildWindow: () => getContinuousBufferAdapter().snapshotTurnWindow({ turnAudioStartSample: turnAudioStartSampleRef.current, atTurnBoundary: true }),
+              meta: { total: chunkTotalSamplesRef.current, since: turnAudioStartSampleRef.current, chunks: chunksRef.current.length, sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE },
+            })
+          }
           try {
             if (import.meta.env.DEV && debugHotPath) {
               const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
@@ -2430,6 +2427,7 @@ export function useFluVoiceAssistant({
       scheduleAutoProcess,
       readActiveSnapshot,
       syncConversationStream,
+      getContinuousBufferAdapter,
       setError,
       resolvedWakeWords,
     ],
@@ -3224,7 +3222,7 @@ export function useFluVoiceAssistant({
       setLiveTranscript('')
 
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
-      const streamSamples = flattenChunks(chunksRef.current)
+      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, chunksRef.current)
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const currentClock = formatClock()
@@ -3696,7 +3694,7 @@ export function useFluVoiceAssistant({
       }
 
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
-      const streamSamples = flattenChunks(chunksRef.current)
+      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, chunksRef.current)
       const currentClock = formatClock()
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)

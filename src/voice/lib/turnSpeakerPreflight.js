@@ -118,7 +118,7 @@ export function resetTurnSpeakerPreflights() {
 }
 
 /** Job de audio → hablante (preflight o refresh de clusters).
- * @param {{ getAudioBuffer?: Function, getSampleRate?: Function, getTurnStartSample?: Function, getSpeakerClusters?: Function, getLastSpeaker?: Function, getLastSignature?: Function, getFallbackSpeaker?: Function, getUtteranceText?: Function, atTurnBoundary?: boolean, allowNewCluster?: boolean, getPreferSpeaker?: Function, getSessionPrimary?: Function, getReservedLabels?: Function, getAudioStartSample?: Function, getAudioStartedAtMs?: Function }} [options]
+ * @param {{ getAudioBuffer?: Function, getSampleRate?: Function, getTurnStartSample?: Function, getSpeakerClusters?: Function, getLastSpeaker?: Function, getLastSignature?: Function, getFallbackSpeaker?: Function, getUtteranceText?: Function, atTurnBoundary?: boolean, allowNewCluster?: boolean, getPreferSpeaker?: Function, getSessionPrimary?: Function, getReservedLabels?: Function, getAudioStartSample?: Function, getAudioStartedAtMs?: Function, getCapturedAudio?: Function }} [options]
  */
 export function createTurnSpeakerAudioResolver({
   getAudioBuffer,
@@ -136,18 +136,25 @@ export function createTurnSpeakerAudioResolver({
   getReservedLabels,
   getAudioStartSample,
   getAudioStartedAtMs,
+  getCapturedAudio,
 } = {}) {
   return () => {
     const sampleRate = getSampleRate?.() || DEFAULT_SAMPLE_RATE
     const audioStartSample = getAudioStartSample?.() ?? getTurnStartSample?.() ?? 0
     const audioStartedAtMs = getAudioStartedAtMs?.() || 0
+    // §9 El audio del turno lo captura UN dueño antes del vaciado del buffer: si
+    // ya existe, se consume ESE snapshot (el buffer vivo puede estar a 0).
+    const captured = getCapturedAudio?.()
     const buffer = getAudioBuffer?.()
-    const audio = buffer
-      ? extractTurnAudioSnapshot(buffer, sampleRate, {
-          turnAudioStartSample: getTurnStartSample?.() || 0,
-          atTurnBoundary,
-        })
-      : new Float32Array(0)
+    const audio =
+      captured?.length
+        ? captured
+        : buffer
+          ? extractTurnAudioSnapshot(buffer, sampleRate, {
+              turnAudioStartSample: getTurnStartSample?.() || 0,
+              atTurnBoundary,
+            })
+          : new Float32Array(0)
     const fallback = getFallbackSpeaker?.() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     if (!audio.length) {
       return Promise.resolve({
