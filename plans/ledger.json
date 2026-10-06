@@ -1519,6 +1519,14 @@
       "estado": "done",
       "evidencia": "Encargo: \"todo, ejecuta!\". El banco sale a un catalogo declarado (src/core/config/pronunciacionBank.ts, estilo musicCatalog) con 15 palabras y NIVEL (basico/intermedio/avanzado); el motor lo consume y elige por options.nivel (sin nivel = completo). GUARD: caso nuevo en tests/pronunciacion.test.ts (el banco por nivel es menor que el completo). Alcance real (0.23): CUBIERTO=el banco configurable por nivel con guard; NO CUBIERTO=elegir el nivel por voz en el arranque del juego (hoy por opcion), DoD-producto y suite completa.",
       "origen": "encargo-dueno-2026-10-05"
+    },
+
+    {
+      "id": "P8.68",
+      "titulo": "Bandera conmutable de wake (exigir ok flu en cada frase) desde el configurador y por voz",
+      "estado": "todo",
+      "evidencia": "ABIERTO 2026-10-05 por pedido del dueno. DIAGNOSTICO CERRADO: la decision vive en `requiresWakeWord` (src/voice/lib/wakeTurnCommit.js, dueno unico vigilado por tests/decisionSingleOwnerGuard.test.ts) y la bandera existe a medias en voiceCommands.requireWakeAlways (src/voice/lib/fluConfig.js:2326, hoy false). El cable del configurador YA existe (VoiceConfig -> integrationStore.setVoiceConfig -> src/app/configActions.ts -> src/components/FluSettingsPanel.tsx) y la via de voz por catalogo (src/core/config/voiceConfigCatalog.ts). BLOQUEO MEDIDO (no se cierra sin enmienda del contrato): el toggle de UI toca src/components/FluSettingsPanel.tsx y tests/dodScopeGuard.test.ts exige en el gate tests/fluSettingsTabView.test.tsx, que NO puede ir en lint:guards porque el regex de tests/guardMutationGuard.test.ts extrae .test.ts de .test.tsx y lo denuncia como inexistente; ademas tocar src/types/bridge.ts y el catalogo arrastra 6 tests (configActions, configCommands, conversationHistoryCap, emotionEngine, systemEventLog, voiceConfigCatalog) y NINGUNO tiene prueba de detector (P2.4), asi que registrarlos exigiria sembrar detectores artificiales en tests ajenos. CAMINOS LEGALES: (a) el DUENO anade esos tests al dod de .task/contract.json (inmutable por el agente); (b) implementar la bandera como modulo propio (src/voice/lib/) + comando de sesion en el arbitro, cuyos tests YA estan en el gate, dejando el toggle de UI para (a).",
+      "origen": "pedido-dueno-2026-10-05"
     }
   ],
   "done": [
