@@ -1467,15 +1467,13 @@ export function useFluVoiceAssistant({
       }
 
       preflightScheduledForTurnRef.current = true
-      const turnId = activeTurnIdRef.current
+      // GETTER, no id fijo: el id se acuña DESPUES de este aviso; fijarlo dejaba los
+      // snapshots en un slot que el commit no miraba (Preflight turn=5 vs Commit=9).
       startContinuousIdentityPipeline(
-        turnId,
+        () => activeTurnIdRef.current,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
-        {
-          // §9 Decisión: el COMMIT es autoritativo; el segmento solo propone
-          // (no persiste clusters). Persistir aquí era una 2ª ruta de escritura.
-          onClusters: () => {},
-        },
+        // §9 el COMMIT es autoritativo; el segmento solo propone (no persiste clusters).
+        { onClusters: () => {} },
       )
     },
     [conversationActiveRef, createSpeakerAudioResolver],

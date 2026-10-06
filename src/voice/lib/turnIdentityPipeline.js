@@ -20,13 +20,26 @@ export function getIdentitySnapshotIntervalMs(config = FLU_CONFIG) {
   return Number.isFinite(ms) && ms >= 200 ? ms : 800
 }
 
-export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters } = {}) {
-  const id = Number(turnId)
-  if (!Number.isFinite(id) || id <= 0) return
+/** Clave del pipeline que sigue al turno ACTUAL (su id se resuelve en cada tick). */
+const DYNAMIC_KEY = '__dynamic__'
 
-  stopContinuousIdentityPipeline(id)
+/**
+ * @param {number|(() => number)} turnId — numero (pipeline atado a ese turno) o
+ *   GETTER (pipeline que sigue al turno actual). El getter es lo que usa el hook:
+ *   el id del turno se acuña MAS TARDE que el aviso de inicio, asi que capturarlo
+ *   al arrancar dejaba los snapshots en un slot que el commit no miraba
+ *   (medido: `Preflight turn=5` vs `Commit turn=9` -> `preReady=false` siempre).
+ */
+export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters } = {}) {
+  const dynamic = typeof turnId === 'function'
+  const initialId = Number(dynamic ? turnId() : turnId)
+  if (!Number.isFinite(initialId) || initialId <= 0) return
+
+  stopContinuousIdentityPipeline(initialId)
 
   const tick = () => {
+    const id = dynamic ? Number(turnId()) : initialId
+    if (!Number.isFinite(id) || id <= 0) return
     const run = typeof runFactory === 'function' ? runFactory() : runFactory
     if (typeof run !== 'function') return
     scheduleTurnSpeakerPreflight(id, run, { onClusters, continuous: true })
@@ -35,7 +48,7 @@ export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters
   tick()
   const intervalMs = getIdentitySnapshotIntervalMs()
   const timer = setInterval(tick, intervalMs)
-  timersByTurn.set(id, timer)
+  timersByTurn.set(dynamic ? DYNAMIC_KEY : initialId, timer)
 }
 
 export function stopContinuousIdentityPipeline(turnId) {
@@ -44,6 +57,13 @@ export function stopContinuousIdentityPipeline(turnId) {
   if (timer) {
     clearInterval(timer)
     timersByTurn.delete(id)
+  }
+  // El pipeline DINAMICO sigue al turno actual: pararlo con el id del commit
+  // (cualquiera) debe detenerlo, o sus ticks siguen pisando el slot final.
+  const dynamicTimer = timersByTurn.get(DYNAMIC_KEY)
+  if (dynamicTimer && id !== DYNAMIC_KEY) {
+    clearInterval(dynamicTimer)
+    timersByTurn.delete(DYNAMIC_KEY)
   }
 }
 

@@ -201,4 +201,38 @@ describe('turnIdentityPipeline — cierre de turno', () => {
         await vi.advanceTimersByTimeAsync(getIdentitySnapshotIntervalMs() * 3);
         expect(factory.mock.calls.length).toBe(antes);
     });
+
+    // DEFECTO MEDIDO (2026-10-06): el hook arranca el pipeline cuando el id del turno
+    // AUN NO existe; si se captura el id al arrancar, los snapshots caen en un slot
+    // que el commit no mira (`Preflight turn=5` vs `Commit turn=9`) y el cluster se
+    // pierde. Con un GETTER, el pipeline sigue al turno ACTUAL.
+    it('con un GETTER, el pipeline sigue al turno ACTUAL (no al id capturado al arrancar)', async () => {
+        let idActual = 1;
+        const factory = fabrica();
+
+        startContinuousIdentityPipeline(() => idActual, factory);
+        await flush();
+        expect(peekTurnSpeakerPreflight(1)?.snapshots?.length).toBe(1);
+
+        idActual = 9;
+        await vi.advanceTimersByTimeAsync(getIdentitySnapshotIntervalMs());
+        await flush();
+        expect(
+            peekTurnSpeakerPreflight(9)?.snapshots?.length,
+            'el snapshot debe caer en el turno actual (9), no en el viejo (1)',
+        ).toBeGreaterThan(0);
+    });
+
+    it('el pipeline con GETTER se detiene con el id del commit (aunque sea otro)', async () => {
+        let idActual = 1;
+        const factory = fabrica();
+        startContinuousIdentityPipeline(() => idActual, factory);
+        await flush();
+
+        idActual = 9;
+        stopContinuousIdentityPipeline(9);
+        const antes = factory.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(getIdentitySnapshotIntervalMs() * 3);
+        expect(factory.mock.calls.length).toBe(antes);
+    });
 });
