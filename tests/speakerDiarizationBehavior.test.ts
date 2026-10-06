@@ -99,3 +99,27 @@ describe('diarización — comportamiento del núcleo puro', () => {
     expect(String(emptyResolve).trim()).toBeTruthy()
   })
 })
+
+// ---- Prueba de DETECTOR del propio guard (no es decorativo) ----------------
+// Predicado EXPORTADO para poder falsificarlo: ¿el nucleo marca esta firma como
+// un hablante NUEVO respecto a la de 'Hablante 1'?
+export function detectsNewVoice(vec: number[]): boolean {
+  const r = assignSpeaker(vec, {
+    ...WORKER_OPTS,
+    clusters: [{ label: 'Hablante 1', signature: E1 }],
+    lastSpeaker: 'Hablante 1',
+    lastSignature: E1,
+  } as any)
+  return r.speakerName === 'Hablante 2'
+}
+
+describe('el detector no es decorativo (prueba de mutacion del propio guard)', () => {
+  it('marca la ENTRADA INFRACTORA (voz distinta) y NO la legitima (misma voz)', () => {
+    // Entrada infractora sintetica: una voz distinta DEBE marcar hablante nuevo.
+    expect(detectsNewVoice(E2), 'voz ortogonal debe marcar nuevo hablante').toBe(true)
+    expect(detectsNewVoice(query(0.0)), 'voz a coseno 0 debe marcar nuevo hablante').toBe(true)
+    // Entrada legitima: la MISMA voz NO debe marcar hablante nuevo.
+    expect(detectsNewVoice(E1), 'la misma voz no debe marcar nuevo hablante').toBe(false)
+    expect(detectsNewVoice(query(0.9)), 'la misma voz (coseno 0.9) no debe marcar nuevo').toBe(false)
+  })
+})

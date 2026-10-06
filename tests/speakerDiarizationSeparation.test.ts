@@ -61,3 +61,28 @@ describe('diarización — separación multihablante (config real, sin threshold
     expect(r.reason).toMatch(/cluster|continuity|prefer/)
   })
 })
+
+// ---- Prueba de DETECTOR del propio guard (no es decorativo) ----------------
+// Predicado EXPORTADO para poder falsificarlo: ¿el detector reporta como OTRO
+// hablante una voz con ese coseno contra la firma de 'Hablante 1'?
+export function separatesVoices(sim: number): boolean {
+  const r = assignSpeaker(query(sim), {
+    clusters: [{ label: 'Hablante 1', signature: E_A }],
+    lastSpeaker: 'Hablante 1',
+    lastSignature: E_A,
+  } as any)
+  return r.speakerName === 'Hablante 2'
+}
+
+describe('el detector no es decorativo (prueba de mutacion del propio guard)', () => {
+  it('marca la ENTRADA INFRACTORA (voz distinta) y NO la legitima (misma voz)', () => {
+    // Entrada infractora sintetica: una voz claramente distinta DEBE marcarse.
+    // Si el detector fuera sordo (todo = mismo hablante), esto pasaria sin marca.
+    expect(separatesVoices(0.0), 'voz ortogonal debe separarse').toBe(true)
+    expect(separatesVoices(0.5), 'voz a coseno 0.5 debe separarse').toBe(true)
+    // Entrada legitima: la MISMA voz NO debe marcarse (si el detector marcara
+    // todo, partiria a un solo hablante en varios).
+    expect(separatesVoices(0.9), 'la misma voz no debe separarse').toBe(false)
+    expect(separatesVoices(1.0), 'la misma voz (coseno 1) no debe separarse').toBe(false)
+  })
+})

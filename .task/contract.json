@@ -286,6 +286,8 @@
     "tests/sesionBackendUnicoGuard.test.ts",
     "tests/simonDice.test.ts",
     "tests/simpleRequestDetection.test.ts",
+    "tests/speakerDiarizationBehavior.test.ts",
+    "tests/speakerDiarizationSeparation.test.ts",
     "tests/speakerDiarizationUnified.test.ts",
     "tests/speakerIdentitySession.test.ts",
     "tests/specificDeadGuard.test.ts",
