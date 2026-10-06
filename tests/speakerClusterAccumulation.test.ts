@@ -83,6 +83,17 @@ describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', 
     expect(setSpeakerClusters.mock.calls[0][0].length).toBe(1)
   })
 
+  it('un preflight CONTINUO tambien persiste sus clusters (el commit pierde la carrera)', async () => {
+    const setSpeakerClusters = vi.fn()
+    startContinuousIdentityPipeline(1, readyPreflight, { onClusters: setSpeakerClusters })
+    await flush()
+    expect(
+      setSpeakerClusters,
+      'si el commit siempre llega antes que el embedding, el continuo debe persistir',
+    ).toHaveBeenCalled()
+    expect(setSpeakerClusters.mock.calls[0][0].length).toBe(1)
+  })
+
   it('si el preflight resuelve TARDE, el cluster se persiste igual (no se pierde)', async () => {
     const setSpeakerClusters = vi.fn()
 

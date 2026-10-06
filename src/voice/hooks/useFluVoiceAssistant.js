@@ -1472,11 +1472,12 @@ export function useFluVoiceAssistant({
       startContinuousIdentityPipeline(
         () => activeTurnIdRef.current,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
-        // §9 el COMMIT es autoritativo; el segmento solo propone (no persiste clusters).
-        { onClusters: () => {} },
+        // §9 Dueño unico de la escritura de clusters: el ref del hook. Se persisten en
+        // cuanto un preflight resuelve (el commit pierde la carrera con el embedding).
+        { onClusters: setSpeakerClusters },
       )
     },
-    [conversationActiveRef, createSpeakerAudioResolver],
+    [conversationActiveRef, createSpeakerAudioResolver, setSpeakerClusters],
   )
 
   const resolveSpeakerWithAudio = useCallback(
