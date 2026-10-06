@@ -248,4 +248,47 @@ test.describe('Lo que el usuario carga entra en FLU y en la minuta (flujo real)'
         await captureScreenshot(page, OUT, 'dibujo-contexto.png', 500);
         expect(pageErrors, 'el flujo de imagen no debe romper el render').toEqual([]);
     });
+
+    // El ejemplo exacto del dueno: "si cargan un dibujo para tutoria en INGLES
+    // pueda continuar con la explicacion en ingles". El contexto del insumo es
+    // language-aware: con la app en EN, la etiqueta del contexto tambien es EN,
+    // que es lo que FLU recibe en el historial para responder en ese idioma.
+    test('un DIBUJO con la app en INGLES deja el contexto en INGLES', async ({ page }) => {
+        test.setTimeout(150000);
+        stubLocalSpeech(page);
+        await gotoClean(page);
+        await seedActiveUser(page);
+
+        // Cambia el idioma por el UNICO selector de la cabecera (aria-label="Idioma").
+        await page.locator('select[aria-label="Idioma"]').first().selectOption('en');
+
+        const rec = await stubAi(page, {
+            doc: { resumen: 'doc', puntos_clave: [], escenarios: [] },
+            vision: { materia: 'English initial', problemas: [], instrucciones: 'name the colors', nivel: 'initial', texto_extraido: '' },
+            minute: MINUTE,
+        });
+
+        const png = Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+            'base64',
+        );
+        await page.locator('input[accept="image/*"]').first().setInputFiles({ name: 'drawing.png', mimeType: 'image/png', buffer: png });
+
+        await expect.poll(() => rec.vision, { message: 'la vision debe pedirse', timeout: 30000 }).toBeGreaterThan(0);
+
+        // La etiqueta EN del insumo (uiStrings: contexto_de_imagen_subida_por_el_usua.en).
+        await expect
+            .poll(
+                async () =>
+                    (await historyRows(page)).some(
+                        (r) => r.role === 'system' && /image context uploaded by user/i.test(r.text),
+                    ),
+                { message: 'con la app en EN el contexto del dibujo debe ir en INGLES', timeout: 30000 },
+            )
+            .toBe(true);
+        const row = (await historyRows(page)).find((r) => r.role === 'system' && /image context uploaded by user/i.test(r.text));
+        console.log('[SIM] contexto de dibujo (EN):', (row?.text || '').slice(0, 160));
+
+        await captureScreenshot(page, OUT, 'dibujo-contexto-en.png', 500);
+    });
 });
