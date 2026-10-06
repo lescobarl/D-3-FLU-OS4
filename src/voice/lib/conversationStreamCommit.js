@@ -343,12 +343,18 @@ export function handleConversationStreamSync(
 
   markCommitPerfNow()
   const turnId = activeTurnIdRef.current
-  const preflight = finalizeTurnIdentityPipeline(turnId, () =>
-    createSpeakerAudioResolver({
-      atTurnBoundary: true,
-      allowNewCluster: true,
-      utterance: phrase,
-    }),
+  const preflight = finalizeTurnIdentityPipeline(
+    turnId,
+    () =>
+      createSpeakerAudioResolver({
+        atTurnBoundary: true,
+        allowNewCluster: true,
+        utterance: phrase,
+      }),
+    // §9 El cluster del turno se persiste POR EL DUEÑO UNICO (`setSpeakerClusters`)
+    // cuando el snapshot final resuelve — aunque sea despues del commit. Sin esto el
+    // primer cluster se perdia y ninguna voz se podia separar (inClusters=0 siempre).
+    { onClusters: setSpeakerClusters },
   )
 
   const stickyFallback = resolveCommitStickyFallback({

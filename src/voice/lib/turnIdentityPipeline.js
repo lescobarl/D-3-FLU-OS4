@@ -54,12 +54,20 @@ export function stopAllContinuousIdentityPipelines() {
   timersByTurn.clear()
 }
 
-export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot) {
+/**
+ * @param {number} turnId
+ * @param {Function} [runFinalSnapshot]
+ * @param {{ onClusters?: Function }} [options] — `onClusters` recibe los clusters del
+ * snapshot FINAL cuando resuelve (aunque sea DESPUES del commit). Sin esto, el primer
+ * cluster del turno se perdia (el commit ya habia consumido su slot vacio) y el
+ * comparador de voces se quedaba sin nada contra lo que comparar (inClusters=0).
+ */
+export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClusters } = {}) {
   const id = Number(turnId)
   stopContinuousIdentityPipeline(id)
 
   if (typeof runFinalSnapshot === 'function') {
-    scheduleTurnSpeakerPreflight(id, runFinalSnapshot, { continuous: false })
+    scheduleTurnSpeakerPreflight(id, runFinalSnapshot, { continuous: false, onClusters })
   }
 
   const slot = peekTurnSpeakerPreflight(id)

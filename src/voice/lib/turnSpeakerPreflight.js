@@ -45,7 +45,16 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuo
     run,
     onSuccess: (result) => {
       const slot = preflightByTurn.get(id)
-      if (!slot) return
+      if (!slot) {
+        // El commit ya CONSUMIO el slot (lo borra al cerrar el turno). El snapshot
+        // FINAL resuelve despues: sus clusters se persisten igual, o el primer
+        // cluster del turno se pierde para siempre y ninguna voz se puede separar
+        // (defecto medido: `Match inClusters=0` en todos los turnos).
+        if (!continuous && typeof onClusters === 'function' && result?.workingClusters?.length) {
+          onClusters(result.workingClusters)
+        }
+        return
+      }
       const weakResult =
         result?.reason === 'no-audio' ||
         result?.reason === 'no-vector' ||
