@@ -8,6 +8,7 @@ import { labelToSpeakerId } from './conversationRow.js'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { relayLog } from '../../lib/clientLogRelay'
 
 const preflightByTurn = new Map()
 
@@ -49,6 +50,13 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, continuo
         result?.reason === 'no-audio' ||
         result?.reason === 'no-vector' ||
         !(Array.isArray(result?.signatureVector) ? result.signatureVector : result?.vector)?.length
+      if (typeof window !== 'undefined') {
+        relayLog(
+          'LOG',
+          'Preflight',
+          `turn=${id} ready=${!weakResult} reason=${result?.reason || ''} clusters=${result?.workingClusters?.length ?? 0} vec=${(Array.isArray(result?.signatureVector) ? result.signatureVector : result?.vector)?.length ?? 0}`,
+        )
+      }
       if (weakResult && slot.ready) {
         preflightByTurn.set(id, { ...slot, pending: false })
         return
