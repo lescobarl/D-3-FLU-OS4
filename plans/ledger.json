@@ -1617,6 +1617,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit ea14bf6). DEFECTO: `applyResolvedSpeaker` (acustico) llamaba a renameSpeakerRows, pero la introduccion por wake-intro (la que trae el nombre del TEXTO) no disparaba renombre; en el log del dueno, tras decir soy Luis, sus filas seguian como Hablante 1. FIX: `applyResolvedSpeakerToSessionRefs` (turnSpeakerCommit.js), cadena real de TODO commit, renombra con `source === wake-intro` las etiquetas [la que ese hablante venia usando (fila anterior), ...findLabelsWithSharedVoice(clusters, nombre)]; conversationStreamCommit pasa renameSpeakerRows. EVIDENCIA inyectada por la RUTA REAL, sin microfono (tests/vozEscenarioInyectado.test.ts): ROJO medido antes del fix (filas Hablante 1/Hablante 1/Hablante 2) y VERDE despues (luis/luis/Hablante 2, la otra voz intacta). Alcance real (0.23): CUBIERTO=el renombre de lo YA dicho por la ruta del texto; NO CUBIERTO=que los turnos POSTERIORES mantengan el nombre (eso depende de la acustica).",
       "origen": "requisito-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.12",
+      "titulo": "El nombre identificado no PEGABA: tras decir soy Luis, la etiqueta automatica de esa voz seguia generando filas a su nombre (defecto de DATOS, no del microfono)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit a36fcc7). DATO de la pantalla del dueno: 11:29:19 luis (se identifica), 11:30:03 Hablante 1 (44 s despues VUELVE a su etiqueta) y 11:31:52 Hablante 1 para la voz de la mujer. FIX: alias de sesion etiqueta -> nombre; renameSpeakerRows lo registra y el escritor unico de filas lo aplica en commitUserTurnRow y updateTurnRowSpeaker. EVIDENCIA inyectada por la ruta real (tests/vozEscenarioInyectado.test.ts, caso el nombre PEGA para lo siguiente): fila escrita con Hablante 1 despues de identificarse sale luis; la completada tarde tambien; la otra voz intacta. Alcance real (0.23): CUBIERTO=la reaparicion de la MISMA etiqueta; NO CUBIERTO=que la acustica devuelva una etiqueta NUEVA para la misma voz (umbrales/consolidacion ya aplicados).",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ],
   "done": [
@@ -3476,6 +3483,13 @@
       "titulo": "soy Luis renombra toda su participacion por la ruta del TEXTO (no depende del microfono)",
       "evidencia": "src/voice/lib/turnSpeakerCommit.js: CERRADO 2026-10-07 (commit ea14bf6); guard tests/vozEscenarioInyectado.test.ts con ROJO medido antes del fix (Hablante 1 -> luis; la otra voz intacta). Alcance real (0.23): CUBIERTO=el renombre de lo ya dicho; NO CUBIERTO=los turnos posteriores (acustica).",
       "origen": "requisito-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.12",
+      "commit": "a36fcc7",
+      "titulo": "El nombre identificado pega para lo siguiente (alias etiqueta -> nombre en el escritor unico de filas)",
+      "evidencia": "src/voice/lib/conversationTurnRow.ts: CERRADO 2026-10-07 (commit a36fcc7) con guard tests/vozEscenarioInyectado.test.ts (el nombre PEGA para lo siguiente) y tests/vozRenombreHablanteGuard.test.ts. Alcance real (0.23): CUBIERTO=la reaparicion de la misma etiqueta; NO CUBIERTO=una etiqueta nueva para la misma voz.",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ]
 }
