@@ -362,7 +362,7 @@ type ContractResolution = FastPathExecutedMarks & {
     userCommitOnly?: boolean; effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
     turnId?: number | string | null; // identidad del turno: la fila se reutiliza por IDENTIDAD
     transcript?: string;
-    speakerName?: string;
+    speakerName?: string; evidenciaAcustica?: boolean;
     rawOnly?: boolean;
     phase?: string;
     replaceLastRawLog?: boolean;
@@ -1328,6 +1328,7 @@ function App() {
                 commitUserTurnRow({
                     text: transcript,
                     speakerName: speakerRegistrado || speakerName,
+                    evidenciaAcustica: resolved?.evidenciaAcustica !== false,
                     replaceLast: resolved?.replaceLastRawLog === true,
                     turnId: resolved?.turnId ?? null,
                 });

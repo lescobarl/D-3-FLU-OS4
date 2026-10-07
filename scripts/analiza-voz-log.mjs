@@ -91,6 +91,9 @@ for (const ev of eventos) {
         t.commitT = ev.t;
     }
     if (ev.tag === 'row' && ev.data) {
+        // La sonda imprime el nombre de ENTRADA y el EFECTIVO: el veredicto es el
+        // efectivo (lo que quedo en la fila), no lo que el que llama pretendia.
+        if (ev.data.efectivo !== undefined) ev.data = { ...ev.data, speaker: ev.data.efectivo };
         const turnId = ev.data.turnId;
         const objetivo = [...turnos].reverse().find((x) => x.commit && x.commit.turn === turnId);
         filas.push(ev.data);

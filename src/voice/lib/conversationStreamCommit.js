@@ -535,7 +535,7 @@ export function handleConversationStreamSync(
   let delivered = false
   if (refreshNeeded) {
     delivered = emitTurnRow(capture, {
-      speakerName: speakerEscrito,
+      speakerName: speakerEscrito, evidenciaAcustica: Boolean(preflight?.ready),
       fallbackSpeaker: speakerName,
       currentClock: formatClock(),
       replaceLastRawLog: replaceLast,

@@ -65,10 +65,18 @@ export function resetSpeakerAliases(): void {
  * @param currentName hablante que la fila YA tiene
  * @returns el hablante que debe quedar
  */
-export function preserveProperSpeaker(nextName: string, currentName?: string): string {
+export function preserveProperSpeaker(
+    nextName: string,
+    currentName?: string,
+    evidenciaAcustica = true,
+): string {
     const next = String(nextName || '').trim();
     const current = String(currentName || '').trim();
     if (!next) return current;
+    // Una etiqueta AUTOMATICA ("Hablante N") solo entra con evidencia declarada: el
+    // sincrono sin ventana y el tick sin clusters devolvian el FALLBACK y la fila
+    // acababa con dos nombres para el mismo turno (medido 2026-10-07).
+    if (isAutoSpeakerLabel(next) && !evidenciaAcustica) return current;
     if (current && isProperSpeakerName(current) && isAutoSpeakerLabel(next)) return current;
     return next;
 }
@@ -133,6 +141,7 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
 export function updateTurnRowSpeaker(
     turnId: number | string | null,
     speakerName: string,
+    { evidenciaAcustica = true }: { evidenciaAcustica?: boolean } = {},
 ): boolean {
     const resolved = resolveSpeakerAlias(speakerName);
     if (turnId === null || turnId === undefined || !resolved) return false;
@@ -145,7 +154,7 @@ export function updateTurnRowSpeaker(
     const entry = history.find((e) => e.id === rowId);
     if (!entry || entry.role !== 'user') return false;
     // Una etiqueta AUTOMATICA no pisa el nombre propio ya escrito en la fila.
-    const objetivo = preserveProperSpeaker(resolved, entry.speakerName);
+    const objetivo = preserveProperSpeaker(resolved, entry.speakerName, evidenciaAcustica);
     voiceProbe('row-update', {
         turnId,
         pedido: resolved,
@@ -165,6 +174,8 @@ export interface UserTurnRowInput {
     text: string;
     /** Hablante resuelto (puede llegar en el commit final, no en el temprano). */
     speakerName?: string;
+    /** El que llama DECLARA que el nombre viene de una ventana de AUDIO medida. */
+    evidenciaAcustica?: boolean;
     /** Reloj inyectable (por defecto Date.now()). */
     timestamp?: number;
     /**
@@ -214,6 +225,8 @@ export interface UserTurnRowResult {
  */
 export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
     const result = commitUserTurnRowInner(input);
+    const fila =
+        result.id && useIntegrationStore.getState().conversationHistory.find((e) => e.id === result.id);
     const fullText = String(input.text || '');
     voiceProbe('row', {
         action: result.action,
@@ -221,6 +234,7 @@ export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
         len: fullText.length,
         text: fullText,
         speaker: resolveSpeakerAlias(input.speakerName || ''),
+        efectivo: fila ? String(fila.speakerName || '') : '',
         turnId: input.turnId ?? null,
     });
     return result;
@@ -232,6 +246,7 @@ function commitUserTurnRowInner({
     timestamp,
     replaceLast = false,
     turnId,
+    evidenciaAcustica = true,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -258,7 +273,7 @@ function commitUserTurnRowInner({
             if (!entry || entry.role !== 'user') continue;
             const updated = history.map((e) =>
                 e.id === entry.id
-                    ? { ...e, text: raw, speakerName: preserveProperSpeaker(resolved, e.speakerName), timestamp: stamp }
+                    ? { ...e, text: raw, speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica), timestamp: stamp }
                     : e,
             );
             store.batchLoadHistory(updated);
@@ -284,7 +299,7 @@ function commitUserTurnRowInner({
                     ? {
                         ...e,
                         text: masCompleto ? raw : e.text,
-                        speakerName: preserveProperSpeaker(resolved, e.speakerName),
+                        speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica),
                         timestamp: masCompleto ? stamp : e.timestamp,
                     }
                     : e,
@@ -301,7 +316,7 @@ function commitUserTurnRowInner({
         id,
         role: 'user',
         text: raw,
-        speakerName: resolved || undefined,
+        speakerName: preserveProperSpeaker(resolved, '', evidenciaAcustica) || undefined,
         timestamp: stamp,
         sentiment: 'neutral',
     });

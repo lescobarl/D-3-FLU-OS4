@@ -1460,12 +1460,12 @@ const lastResolvedTurnRef = useRef(0)
   )
 
   /** El embedding tarda MAS que el commit: manda el ULTIMO turno resuelto (monotono). */
-  const applyResolvedSpeaker = useCallback(({ speakerName, turnId }) => {
+  const applyResolvedSpeaker = useCallback(({ speakerName, turnId, workingClusters }) => {
     const id = Number(turnId)
     if (!speakerName || (Number.isFinite(id) && id < lastResolvedTurnRef.current)) return
     if (Number.isFinite(id)) lastResolvedTurnRef.current = id
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
-    updateTurnRowSpeaker(turnId, speakerName) // completa la fila de ESE turno, no la hereda
+    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length) }) // completa la fila de ESE turno, no la hereda
     if (isProperSpeakerName(speakerName)) {
       renameSpeakerRows(findLabelsWithSharedVoice(speakerClustersRef.current, speakerName), speakerName)
     }
@@ -1599,9 +1599,9 @@ const lastResolvedTurnRef = useRef(0)
         voiceProbe('identity', { path: 'sync', vec: signatureVector.length, snap: audioSnapshot.length, sr: sampleRate, clusters: speakerClustersRef.current?.length ?? 0, resolved: resolvedSpeakerName, fallback: fallbackSpeaker, last: lastSpeakerRef.current || '' })
         return {
           signatureVector,
-          // Sin ventana de audio el sync devuelve el FALLBACK, no una medida: sin
-          // evidencia NO se escribe hablante (P8.98); el tick tardio COMPLETA la fila.
+          // Sin ventana de audio el sync devuelve el FALLBACK, no una medida (P8.98).
           speakerName: audioSnapshot.length ? resolvedSpeakerName : '',
+          evidenciaAcustica: audioSnapshot.length > 0,
           introducedName: null,
           resolvedSpeakerName: audioSnapshot.length ? resolvedSpeakerName : '',
           speakerAlias: null,
@@ -3797,9 +3797,7 @@ const lastResolvedTurnRef = useRef(0)
         }
         : { comando: null, destino: null, parametros: {} }
 
-      // Orador rápido basado en texto para el prompt de la API y el fast-path
-      // (instantáneo): nombre introducido por voz > último orador conocido > fallback.
-      // La diarización real (audio) reconcilia el orador definitivo antes de hablar.
+      // Orador rapido por TEXTO para el prompt y el fast-path; lo reconcilia el audio.
       const fastSpeakerName =
         detectIntroducedName(bufferedTranscript || capturedTranscript) ||
         lastSpeakerRef.current ||
@@ -3827,6 +3825,7 @@ const lastResolvedTurnRef = useRef(0)
         }
         return {
           signatureVector: turnSpeaker.signatureVector,
+          evidenciaAcustica: turnSpeaker.evidenciaAcustica === true,
           resolvedSpeakerName:
             turnSpeaker.resolvedSpeakerName || turnSpeaker.speakerName || fastSpeakerName,
           speakerAlias: turnSpeaker.speakerAlias ?? null,
@@ -3836,7 +3835,7 @@ const lastResolvedTurnRef = useRef(0)
       if (directCommand) {
         // El comando directo espera la diarización (ya en curso) para conservar el
         // orador real y la firma; si ésta fallara, se degrada al orador rápido.
-        const { signatureVector, resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
+        const { signatureVector, resolvedSpeakerName, speakerAlias, evidenciaAcustica } = await resolveTurnSpeaker()
 
         if (directCommand === FLU_CONFIG.navigation.sessionResetCommand && conversationActiveRef?.current) {
           await emitActiveConversationCommand(FLU_CONFIG.navigation.sessionResetCommand, capturedTranscript)
@@ -3866,7 +3865,7 @@ const lastResolvedTurnRef = useRef(0)
           },
           diagnostics: null,
           speakerName: resolvedSpeakerName,
-          speakerAlias,
+          speakerAlias, evidenciaAcustica,
           phase,
           timestamp: currentClock,
           signature: signatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
@@ -4196,6 +4195,7 @@ const lastResolvedTurnRef = useRef(0)
         diagnostics: contract.diagnostics || null,
         speakerName: resolvedSpeakerName,
         speakerAlias,
+        evidenciaAcustica,
         phase: 'SESION_ACTIVA',
         session,
         timestamp: currentClock,

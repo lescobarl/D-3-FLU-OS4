@@ -123,7 +123,6 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         // con la ultima que escribe: a veces "Luis", a veces "Hablante 1". test.fail
         // mantiene el caso VIVO documentado en verde; si algun dia pasa, este spec se
         // pone en ROJO y obliga a actualizar el instrumento.
-        test.fail(true, 'DEFECTO VIVO: el nombre de la fila depende de que ruta escriba ultima');
         await startConversation(page);
         await esperarListo(page);
 
