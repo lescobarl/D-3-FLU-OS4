@@ -7,9 +7,11 @@
  * del configurador, en su version por voz). Sin orden del usuario manda el
  * default de la config, asi que el comportamiento no cambia solo.
  *
- * LIMITE DECLARADO (P8.68): el ajuste vive en memoria (se pierde al recargar) y
- * el toggle de UI + su persistencia son la otra mitad del item, bloqueada por el
- * gate (tests/fluSettingsTabView.test.tsx no puede entrar en lint:guards).
+ * P8.68 CERRADO (commit 1d95290): la bandera ya NO vive solo en memoria. Tiene
+ * DOS vias de entrada y UNA sola fuente de verdad: el configurador (checkbox ->
+ * integrationStore.setVoiceConfig) y esta orden por voz, que PERSISTE por la
+ * misma via. useConfigPersistence espeja ese almacen de registro al runtime que
+ * lee el dueno unico (requiresWakeWord).
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { cleanForSpeech, splitTranscriptAtWakeWord, stripDiacritics } from './audioMath.js'
