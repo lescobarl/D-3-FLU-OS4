@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-06",
+  "updated": "2026-10-07",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1540,6 +1540,27 @@
       "estado": "done",
       "evidencia": "HALLAZGO 2026-10-06, declarado NO CUBIERTO en P8.78/P8.79/P8.81. Lo que el usuario CARGA (documento/imagen) esta medido con e2e real (tests/e2e/insumo-a-minuta.spec.ts). Lo GENERADO no: falta un e2e que conduzca la generacion REAL (contrato -> workspace -> artefacto, como tests/e2e/_sim-aviones-imagen.spec.ts para la imagen) y compruebe que (a) el contenido generado entra al conversationHistory como informacion que FLU puede explicar y (b) llega a la minuta. Sin esto, 'la generacion de cartas, video, imagen forme parte de la informacion para que pueda explicar flu' no esta medido. Cierre propuesto: 1-2 casos en un spec tipo pizarron-funcionalidades/insumo-a-minuta que lean conversationHistory tras generar. CERRADO 2026-10-06 (commit 4cb4e0a, autorizado por el dueno: \"adelante\"). FIX: nuevo src/core/documents/generatedInsumo.ts (buildGeneratedInsumo: compone el cuerpo generado + titulo; null si no hay cuerpo legible, sin inventar); el DUENO UNICO de generacion (src/hooks/useDocumentGeneration.generate) mete el insumo al conversationHistory, simetrico a lo cargado (documentInsumo/imageInsumo); clave es/en en src/lib/uiStrings.ts. GUARD tests/generatedInsumo.test.ts NACE ROJO (medido: Cannot find module) y queda 5/5 con prueba de detector. E2E real (tests/e2e/insumo-a-minuta.spec.ts, 4/4): una carta generada por la via real (contrato workspace.tipo=doc -> requestMediaRef -> generateDocument) entra al historial (medido: '[Documento generado por FLU: ...: ... CARTA_GENERADA_E2E]'). Barrera lint:guards 190/190 ficheros y 1589/1589 VERDE; typecheck VERDE; e2e:plan VERDE (declarados generatedInsumo.ts y useDocumentGeneration.ts -> insumo-a-minuta.spec.ts).",
       "origen": "hallazgo-agente-2026-10-06"
+    },
+    {
+      "id": "P9.1",
+      "titulo": "En bloques largos la transcripcion quedaba en ULTIMA FRASE pero NO en la conversacion: `utterancesAsrProgress` colapsaba dos locuciones DISTINTAS que comparten la primera palabra (la propia wake)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 55ba76d). DEFECTO MEDIDO en el debug.log del dueno (2026-10-07 14:10-14:17 UTC): el turno 5 se commiteo con `RowTrace ... replace=true` entre dos locuciones largas distintas. Causa: src/voice/lib/conversationStream.js `utterancesAsrProgress` devolvia true cuando solo coincidia la PRIMERA palabra, asi que `resolveLogRowAction` pedia replaceLast y `commitUserTurnRow` reemplazaba la fila del bloque anterior. FIX: la cabeza solo cuenta como progreso de UN token (prev de una palabra); con varias palabras se exige relacion/ancla reales. GUARD tests/vozBloqueLargoPierdeFilaGuard.test.ts (ROJO medido antes del fix: 4 fallos; VERDE despues). Alcance real (0.23): CUBIERTO=el no-colapso de locuciones distintas con guard rojo->verde y escenario de fila (2 filas conservadas); NO CUBIERTO=el DoD-producto (pantalla del dueno), que el ASR real no parta el bloque por otras vias, y la suite completa.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.2",
+      "titulo": "La diarizacion inflaba hablantes (Hablante 1..4 y el nombre para 2 voces): el umbral de voz nueva 0.70 caia DENTRO de la banda de la misma voz (0.69-0.74) y abria un cluster por turno",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 55ba76d). MEDIDO: misma voz 0.69-0.74, distinta 0.58 (P8.98); con 0.70 de umbral de voz nueva, `resolveProductionSpeakerAtBoundary` (src/voice/lib/speakerDiarization.js:339/375) caia en grey-zone y abria un Hablante N por turno (log: clusters=4 para 2 voces). FIX: cosineNewVoiceThreshold 0.70 -> 0.64 y productionClusterReuseThreshold 0.78 -> 0.66 en src/voice/lib/fluConfig.js. SIMULACION determinista del escenario (calibrada a los cosenos medidos, 2 voces alternando): 7 clusters -> 2, cada voz conserva SU etiqueta; GUARD tests/vozDiarizacionDosVocesGuard.test.ts (ROJO medido con los umbrales viejos). Alcance real (0.23): CUBIERTO=el no-inflado con simulacion + guard y los umbrales medidos; NO CUBIERTO=el DoD-producto (micro real del dueno), la separacion fina en sala con TV y la suite completa.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.3",
+      "titulo": "RUTA DOBLE en la decision de hablante: el worker calcula `assignSpeaker` (con SUS thresholds) y el hilo principal REHACE la decision con `resolveConversationSpeaker`; la rama que consumia el hint del worker es codigo MUERTO",
+      "estado": "todo",
+      "evidencia": "HALLAZGO 2026-10-07 (auditoria pedida por el dueno: hay parches o rutas dobles). src/voice/lib/voiceIdWorkerClient.js:323 solo consume el hint del worker si su `reason` es `last-signature` o `cluster-nearest`, motivos que src/voice/workers/voiceId.worker.js (assignSpeaker, speakerCore.js) NUNCA devuelve (devuelve prefer-cluster-match, cluster-reidentify, last-continuity, new-voice-below-threshold...). Resultado: el worker calcula una asignacion completa que SIEMPRE se descarta (log: `Match ...` con un motivo y `Identity ...` con otro para el MISMO turno) y las dos engines usan umbrales distintos. Cierre propuesto: que el worker devuelva SOLO el vector (embed) o que la asignacion tenga un unico dueno; medir que desaparece el segundo motivo en el log. Sin cambio de conducta hoy (el hint ya se ignora), por eso no se toco en P9.1/P9.2.",
+      "origen": "hallazgo-agente-2026-10-07"
     }
   ],
   "done": [
@@ -3322,6 +3343,20 @@
       "titulo": "La fila se escribia con el hablante PREDICHO (Hablante 8/12 para 2 voces) y el umbral de voz nueva abria un cluster por turno",
       "evidencia": "CERRADO 2026-10-06 (commit 9ea9b11). DEFECTO MEDIDO en debug.log (corrida del dueno 03:31-03:35): `Clusters write` llego a 11 y `Match reason=new-voice-below-threshold sim=0.697/0.735/0.741` con `inClusters=6`: la MISMA voz puntuaba 0.69-0.74 justo POR DEBAJO del umbral de voz nueva (0.75), asi que cada turno abria un 'Hablante N' nuevo (hasta Hablante 12) para 2 voces reales; y la fila se escribia con la PREDICCION del commit (que siempre llega antes que el embedding) -> etiquetas inventadas y heredadas. FIX (2 piezas): (1) `conversationStreamCommit` escribe la fila SIN hablante mientras no haya evidencia (`speakerEscrito = preflight?.ready ? speakerName : ''`); la resolucion tardia la COMPLETA por identidad de turno (`updateTurnRowSpeaker`, P8.96) -- regla del dueno: 'escribes sin hablante y ya que lo tienes lo pones'; (2) `conversationSpeakerThresholds.cosineNewVoiceThreshold` 0.75 -> 0.70, MEDIDO: la misma voz da 0.69-0.74 y la distinta ~0.58. Los tests que fijaban la prediccion se actualizaron a la regla nueva (la fila y el log comparten hablante; en el reemplazo la fila CONSERVA el suyo porque `commitUserTurnRow` hace `resolved || e.speakerName`). lint 1638 verdes + tsc 0 + eslint 0. Alcance real (0.23): CUBIERTO=la politica 'sin evidencia no se escribe hablante' y el umbral medido, con los guards actualizados; NO CUBIERTO=el DoD-producto (verlo en vivo), que la voz distinta a ~0.58 separe siempre, la perdida de conversacion en 'ultima frase' (no reproducida: `RowTrace` no la vio) y el frame end-to-end del inflado.",
       "origen": "defecto-medido-dueno-2026-10-06"
+    },
+    {
+      "id": "P9.1",
+      "commit": "55ba76d",
+      "titulo": "En bloques largos la transcripcion quedaba en ULTIMA FRASE pero NO en la conversacion (colapso de locuciones distintas por la primera palabra)",
+      "evidencia": "tests/vozBloqueLargoPierdeFilaGuard.test.ts: PROPIETARIO del caso. CERRADO 2026-10-07 (commit 55ba76d). ROJO medido antes del fix (4 fallos) y VERDE despues. Alcance real (0.23): CUBIERTO=el no-colapso de locuciones distintas (fila del bloque anterior conservada); NO CUBIERTO=el DoD-producto y la suite completa.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.2",
+      "commit": "55ba76d",
+      "titulo": "La diarizacion inflaba hablantes para 2 voces (umbral de voz nueva dentro de la banda de la misma voz)",
+      "evidencia": "tests/vozDiarizacionDosVocesGuard.test.ts: PROPIETARIO del caso. CERRADO 2026-10-07 (commit 55ba76d). ROJO medido con los umbrales viejos (7 clusters) y VERDE con 0.64/0.66 (2 clusters). Alcance real (0.23): CUBIERTO=el no-inflado con simulacion calibrada + guard; NO CUBIERTO=el DoD-producto (micro real) y la suite completa.",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ]
 }
