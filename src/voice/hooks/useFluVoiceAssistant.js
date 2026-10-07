@@ -495,7 +495,7 @@ export function useFluVoiceAssistant({
   const setSpeakerClusters = useCallback((next) => {
     speakerClustersRef.current =
       typeof next === 'function' ? next(speakerClustersRef.current) : next
-    relayLog('LOG', 'Clusters', `write=${speakerClustersRef.current?.length ?? 0}`) // BANDERA DE DIAGNOSTICO
+    relayLog('LOG', 'Clusters', `write=${speakerClustersRef.current?.length ?? 0} labels=${JSON.stringify((speakerClustersRef.current || []).map((c) => c?.label))}`) // BANDERA DE DIAGNOSTICO
   }, [])
 
   /**
@@ -2192,7 +2192,7 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         if (conversationActiveRef?.current) {
-          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); relayLog('LOG', 'WakeTrace', `wake=${w.wakeWordMatched} inline=${w.hasInlineBoundary} before="${w.passiveOnly.slice(0, 80)}" after="${w.afterWake.slice(0, 80)}" cap="${w.cleaned.slice(0, 200)}"`) }
+          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); relayLog('LOG', 'WakeTrace', `wake=${w.wakeWordMatched} inline=${w.hasInlineBoundary} before="${w.passiveOnly.slice(0, 80)}" after="${w.afterWake.slice(0, 80)}" len=${w.cleaned.length} cap="${w.cleaned}"`) }
           try {
             if (import.meta.env.DEV && debugHotPath) {
               const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)

@@ -4,6 +4,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { cleanForSpeech } from './audioMath.js'
+import { voiceProbe } from './voiceProbe'
 
 export const TRANSCRIPT_PAUSE_KEYS = [
   'interimOpenLineFlushMs',
@@ -68,12 +69,16 @@ export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs =
   if (!silence && !staleTurn) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
   }
+  voiceProbe('srGap', {
+    reason: silence ? 'sr-silence' : 'sr-live-turn-stale',
+    sinceResult: Number(sinceLastResultMs) || 0,
+    sinceCommit: Number(sinceLastCommitMs) || 0,
+  })
   return {
     fire: true,
     sinceLastResultMs: Math.max(Number(sinceLastResultMs) || 0, gapMs),
     reason: silence ? 'sr-silence' : 'sr-live-turn-stale',
-  }
-}
+  }}
 
 export function countSpeechWords(text = '') {
   // Recuento de "palabras habladas": el tokenizador tiene dueno unico

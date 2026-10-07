@@ -8,6 +8,7 @@ import { labelToSpeakerId } from './conversationRow.js'
 import { isAutoSpeakerLabel } from './speakerCore.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { consolidateSpeakerClusters } from './speakerClusters.js'
+import { voiceProbe } from './voiceProbe'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
@@ -158,10 +159,10 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
         if (!defer) emitClusters(result.workingClusters)
       }
+      voiceProbe('identity', { turn: id, reason: result?.reason || '', name: result?.speakerName || '', vec: (Array.isArray(result?.signatureVector) ? result.signatureVector : result?.vector)?.length ?? 0, clusters: result?.workingClusters?.length ?? 0, continuous: Boolean(continuous) })
       notifyResolvedForTurn(result)
     },
-    onError: () => {
-      const slot = preflightByTurn.get(id)
+    onError: () => {      const slot = preflightByTurn.get(id)
       if (slot) preflightByTurn.set(id, { ...slot, ready: false, pending: false })
     },
   })

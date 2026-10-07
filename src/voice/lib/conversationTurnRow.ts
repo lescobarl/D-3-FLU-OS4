@@ -14,6 +14,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
+import { voiceProbe } from './voiceProbe';
 
 /**
  * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.
@@ -182,7 +183,19 @@ export interface UserTurnRowResult {
  * idempotente por texto normalizado dentro del turno (reutiliza y completa
  * hablante) y por identidad de emisión cuando `replaceLast` (texto que crece).
  */
-export function commitUserTurnRow({
+export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
+    const result = commitUserTurnRowInner(input);
+    voiceProbe('row', {
+        action: result.action,
+        id: result.id,
+        text: String(input.text || '').slice(0, 220),
+        speaker: resolveSpeakerAlias(input.speakerName || ''),
+        turnId: input.turnId ?? null,
+    });
+    return result;
+}
+
+function commitUserTurnRowInner({
     text,
     speakerName,
     timestamp,
