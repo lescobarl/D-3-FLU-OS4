@@ -1610,6 +1610,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit 433402f). MEDIDO en el log del dueno 17:28-17:33: refClusters=5 para 2 personas + TV y Jump entre Hablante 1/2/4 y luis. FIX: (1) `consolidateSpeakerClusters` (speakerClusters.js) fusiona clusters de la MISMA voz con el umbral de REUTILIZACION de config (0.66; medido: misma voz 0.69-0.74, distinta 0.58), con los nombres propios EXENTOS; (2) se llama en el unico escritor de clusters (el snapshot FINAL, turnSpeakerPreflight.emitClusters); (3) histeresis: con la sesion ya multi-locutor no se abre cluster nuevo salvo que el mejor cluster este a mas de newVoiceHysteresis (0.06) del umbral. Verificado con la simulacion calibrada de 2 voces: 5 clusters -> 2 sin fusionar a las dos personas. GUARD tests/vozClusterConsolidacionGuard.test.ts (ROJO medido antes del fix) en lint:guards. Alcance real (0.23): CUBIERTO=la consolidacion y la histeresis con simulacion + guard; NO CUBIERTO=la calidad acustica con el microfono real del dueno (DoD-producto).",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.11",
+      "titulo": "soy Luis NO renombraba su participacion: el renombre estaba colgado solo de la resolucion ACUSTICA, no de la introduccion por TEXTO (y el nombre no depende del microfono)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit ea14bf6). DEFECTO: `applyResolvedSpeaker` (acustico) llamaba a renameSpeakerRows, pero la introduccion por wake-intro (la que trae el nombre del TEXTO) no disparaba renombre; en el log del dueno, tras decir soy Luis, sus filas seguian como Hablante 1. FIX: `applyResolvedSpeakerToSessionRefs` (turnSpeakerCommit.js), cadena real de TODO commit, renombra con `source === wake-intro` las etiquetas [la que ese hablante venia usando (fila anterior), ...findLabelsWithSharedVoice(clusters, nombre)]; conversationStreamCommit pasa renameSpeakerRows. EVIDENCIA inyectada por la RUTA REAL, sin microfono (tests/vozEscenarioInyectado.test.ts): ROJO medido antes del fix (filas Hablante 1/Hablante 1/Hablante 2) y VERDE despues (luis/luis/Hablante 2, la otra voz intacta). Alcance real (0.23): CUBIERTO=el renombre de lo YA dicho por la ruta del texto; NO CUBIERTO=que los turnos POSTERIORES mantengan el nombre (eso depende de la acustica).",
+      "origen": "requisito-dueno-2026-10-07"
     }
   ],
   "done": [
@@ -3462,6 +3469,13 @@
       "titulo": "Consolidacion de clusters de la misma voz + histeresis de voz nueva",
       "evidencia": "src/voice/lib/speakerClusters.js: CERRADO 2026-10-07 (commit 433402f) con guard tests/vozClusterConsolidacionGuard.test.ts. Alcance real (0.23): CUBIERTO=la fusion segura y la histeresis con simulacion calibrada; NO CUBIERTO=el DoD-producto (micro real).",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.11",
+      "commit": "ea14bf6",
+      "titulo": "soy Luis renombra toda su participacion por la ruta del TEXTO (no depende del microfono)",
+      "evidencia": "src/voice/lib/turnSpeakerCommit.js: CERRADO 2026-10-07 (commit ea14bf6); guard tests/vozEscenarioInyectado.test.ts con ROJO medido antes del fix (Hablante 1 -> luis; la otra voz intacta). Alcance real (0.23): CUBIERTO=el renombre de lo ya dicho; NO CUBIERTO=los turnos posteriores (acustica).",
+      "origen": "requisito-dueno-2026-10-07"
     }
   ]
 }
