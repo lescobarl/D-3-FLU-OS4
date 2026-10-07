@@ -154,12 +154,28 @@ function assignEmbeddedSegments(embedded, speakerRuns = [], fallbackSpeaker = ''
 
   for (const part of novel) {
     const text = cleanForSpeech(part.text)
-    if (speechWords(text).length < minWords) continue
+    if (!text) continue
     const speaker =
       part.speakerHint ||
       (segments.length === 0 ? firstSpeaker : lastSpeaker) ||
       fallback
+    // Un fragmento corto (< minWords) NO se descarta: se ABSORBE en la fila
+    // contigua. Descartarlo perdia su texto (nadie mas lo emite: el `skip` es de la
+    // fila YA commiteada) y el guard de cobertura no lo ve porque mide un RATIO
+    // (reproducido: cabeza de 2 palabras + cola de 37 -> cobertura 0.881 >= 0.85 ->
+    // el plan se mantiene y la cabeza se pierde). Antes no se veia porque el troceo
+    // exige 2 tramos y sin clusters persistidos nunca habia 2.
+    if (speechWords(text).length < minWords && segments.length) {
+      segments[segments.length - 1].text = `${segments[segments.length - 1].text} ${text}`
+      continue
+    }
     segments.push({ text, speaker })
+  }
+
+  // Cabeza corta (sin fila previa en la que absorberse): se absorbe en la SIGUIENTE.
+  if (segments.length >= 2 && speechWords(segments[0].text).length < minWords) {
+    segments[1].text = `${segments[0].text} ${segments[1].text}`
+    segments.shift()
   }
 
   if (segments.length === 1) return segments

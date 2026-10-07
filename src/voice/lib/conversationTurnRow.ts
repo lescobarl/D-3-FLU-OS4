@@ -22,6 +22,49 @@ import { cleanForSpeech } from './audioMath';
  */
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
+/**
+ * Fila del usuario por turno: permite COMPLETAR su hablante cuando el embedding
+ * resuelve, que puede tardar mucho (el commit SIEMPRE gana la carrera). Sin este
+ * registro, una resolucion tardia no tenia a que fila aplicarse y su etiqueta se
+ * perdia -> el turno se quedaba con la etiqueta heredada ("Hablante 1").
+ */
+const recentTurns = new Map<string, string>();
+const RECENT_TURNS_MAX = 8;
+
+function rememberTurn(turnId: number | string | null, rowId: string): void {
+    if (turnId === null || turnId === undefined || !rowId) return;
+    recentTurns.set(String(turnId), rowId);
+    if (recentTurns.size > RECENT_TURNS_MAX) {
+        const oldest = recentTurns.keys().next().value;
+        if (oldest != null) recentTurns.delete(oldest);
+    }
+}
+
+/**
+ * COMPLETA el hablante de la fila de un turno YA registrado (mismo dueno: la fila
+ * se reutiliza por IDENTIDAD de turno). Devuelve `true` si la fila cambio.
+ */
+export function updateTurnRowSpeaker(
+    turnId: number | string | null,
+    speakerName: string,
+): boolean {
+    const resolved = String(speakerName || '').trim();
+    if (turnId === null || turnId === undefined || !resolved) return false;
+    const rowId =
+        recentTurns.get(String(turnId)) ||
+        (currentTurn.id === turnId ? currentTurn.rowId : null);
+    if (!rowId) return false;
+    const store = useIntegrationStore.getState();
+    const history = store.conversationHistory;
+    const entry = history.find((e) => e.id === rowId);
+    if (!entry || entry.role !== 'user') return false;
+    if (String(entry.speakerName || '').trim() === resolved) return false;
+    store.batchLoadHistory(
+        history.map((e) => (e.id === rowId ? { ...e, speakerName: resolved } : e)),
+    );
+    return true;
+}
+
 export interface UserTurnRowInput {
     /** Frase canónica de la locución (con wake word, tal como se muestra). */
     text: string;
@@ -110,6 +153,7 @@ export function commitUserTurnRow({
                     : e,
             );
             store.batchLoadHistory(updated);
+            rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'replaced' };
         }
     }
@@ -137,6 +181,7 @@ export function commitUserTurnRow({
                     : e,
             );
             store.batchLoadHistory(updated);
+            rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
     }
@@ -152,5 +197,6 @@ export function commitUserTurnRow({
         sentiment: 'neutral',
     });
     currentTurn = { id: turnId, rowId: id };
+    rememberTurn(turnId, id);
     return { id, action: 'added' };
 }

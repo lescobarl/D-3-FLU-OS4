@@ -679,7 +679,8 @@
     "npx vitest run --reporter=dot tests/pronunciacion.test.ts tests/gameAliasTruncatedName.test.ts tests/gameCommandEscape.test.ts tests/gameStartRequestNotInGameAction.test.ts tests/gameTurnContext.test.ts tests/gamesAudit.test.ts tests/loteria.test.ts",
     "npx vitest run --reporter=dot tests/conversationHistoryCap.test.ts tests/emotionEngine.test.ts tests/systemEventLog.test.ts tests/voiceConfigCatalog.test.ts tests/fluSettingsTabView.test.tsx",
     "npx vitest run --reporter=dot tests/imageInsumo.test.ts tests/uiStrings.test.ts",
-    "npx vitest run --reporter=dot tests/generatedInsumo.test.ts"
+    "npx vitest run --reporter=dot tests/generatedInsumo.test.ts",
+    "npx vitest run --reporter=dot tests/asrTurnSegmentation.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/turnRowNoDuplicate.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/tutoringModel.test.ts",
   "guardExpect": "green",

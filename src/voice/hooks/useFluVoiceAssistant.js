@@ -63,6 +63,7 @@ import {
   trimAudioChunkBuffer,
 } from '../lib/voiceIdentity'
 import { clearSessionPrimarySpeaker, setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
+import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
 import {
   getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
@@ -798,7 +799,6 @@ const lastResolvedTurnRef = useRef(0)
     return readCommandSnapshot(turnRef.current, pendingSpillRef.current)
   }, [conversationActiveRef])
 
-
   const clearListeningAck = useCallback(() => {
     if (typeof window === 'undefined') return
     if (listeningAckTimerRef.current) {
@@ -1461,6 +1461,7 @@ const lastResolvedTurnRef = useRef(0)
     if (!speakerName || (Number.isFinite(id) && id < lastResolvedTurnRef.current)) return
     if (Number.isFinite(id)) lastResolvedTurnRef.current = id
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
+    updateTurnRowSpeaker(turnId, speakerName) // completa la fila de ESE turno, no la hereda
   }, [])
 
   const scheduleIdentityPreflight = useCallback(
@@ -2647,7 +2648,6 @@ const lastResolvedTurnRef = useRef(0)
       if (!startSpeechRecognition(Recognition)) {
         requestRecognitionRestart(getActiveListenConfig().restart.retryBackoffMs)
       }
-
 
       schedulePassiveAudioCapture()
     } catch (caughtError) {
