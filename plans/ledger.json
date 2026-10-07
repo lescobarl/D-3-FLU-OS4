@@ -1582,6 +1582,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit 3c546b8). FIX (1): startContinuousIdentityPipeline acepta getAudioRevision y el tick no corre si el habla viva no avanzo (antes re-embebia la MISMA ventana cada 800 ms). FIX (2): flattenChunksWindow calcula la ventana y copia SOLO sus muestras (antes copiaba el buffer entero de 30 s y tomaba su cola). GUARD tests/vozRendimientoVozGuard.test.ts ROJO medido antes del fix (2 de 3 casos). NO CUBIERTO: el perfil real en el navegador. ANALISIS ORIGINAL 2026-10-07 (peticion del dueno: hay momentos que se alenta). (1) src/voice/lib/turnIdentityPipeline.js getIdentitySnapshotIntervalMs = 800 ms: cada tick llama a createTurnSpeakerAudioResolver y embebe la ventana del turno aunque su audio NO haya cambiado (log: Preflight turn=7 ready=true repetido cada ~3 s con el MISMO vec=512); lo util es 1 embedding por turno. (2) src/voice/lib/speakerClusters.js flattenChunksWindow llama a flattenChunksTail(chunks, Infinity), que ALOCA y COPIA los 11250 chunks (~1.44 M muestras = 30 s) y luego hace subarray: en cada tick y en cada commit (TurnAudio). (3) el worker recibe el audio por transfer pero el cliente re-construye el payload con trimClustersForWorker. Cierre propuesto: (a) correr el tick solo si el audio del turno crecio y (b) construir la ventana sin copiar el buffer completo; medir con perfil antes/despues. NO se toca sin medir.",
       "origen": "hallazgo-agente-2026-10-07"
+    },
+    {
+      "id": "P9.7",
+      "titulo": "El eco de FLU se filtraba por TIEMPO (mientras habla, descarta TODO): el habla real dicha durante su respuesta se perdia sin fila ni rastro",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 78a0126). MEDIDO con el escenario INYECTADO sobre la app real (banco fuera del repo, %TEMP%/flu-repro/sim-escenario.cjs): dos frases del guion cayeron sin fila; el debug.log mostro que NO llegaban ni a WakeTrace (el onresult hacia `if (isFluSpeaking()) return`). FIX: `isAssistantSpeechEcho(event, assistantText)` (conversationStream.js, reusa isAssistantVoiceEcho) -> se descarta SOLO el eco del texto de FLU. VERIFICADO con el MISMO escenario antes/despues: T3 (soy Luis) y el segundo bloque de T4 AHORA dejan su fila. GUARD tests/vozEcoPorContenidoGuard.test.ts (ROJO medido: 3 de 4). Alcance real (0.23): CUBIERTO=el filtro por contenido con guard rojo->verde y la verificacion inyectada antes/despues; NO CUBIERTO=el DoD-producto (micro real).",
+      "origen": "defecto-medido-escenario-inyectado-2026-10-07"
     }
   ],
   "done": [
@@ -3406,6 +3413,13 @@
       "titulo": "Rendimiento de voz: el tick de identidad no re-embebe sin habla nueva y la ventana de audio deja de copiar los 30 s",
       "evidencia": "src/voice/lib/turnIdentityPipeline.js: CERRADO 2026-10-07 (commit 3c546b8) con guard tests/vozRendimientoVozGuard.test.ts (rojo medido: el tick relanzaba el resolutor y la ventana copiaba el buffer completo). Alcance real (0.23): CUBIERTO=no re-embeber sin habla nueva y copiar solo la ventana, con guard; NO CUBIERTO=el perfil real del navegador y el DoD-producto.",
       "origen": "hallazgo-agente-2026-10-07"
+    },
+    {
+      "id": "P9.7",
+      "commit": "78a0126",
+      "titulo": "El eco de FLU deja de filtrarse por tiempo: se descarta solo su eco, no el habla real durante la respuesta",
+      "evidencia": "src/voice/lib/conversationStream.js: CERRADO 2026-10-07 (commit 78a0126) con guard tests/vozEcoPorContenidoGuard.test.ts (rojo medido) y el escenario inyectado (%TEMP%/flu-repro/sim-escenario.cjs) verificado antes/despues. Alcance real (0.23): CUBIERTO=el filtro por contenido y la verificacion inyectada; NO CUBIERTO=el DoD-producto.",
+      "origen": "defecto-medido-escenario-inyectado-2026-10-07"
     }
   ]
 }
