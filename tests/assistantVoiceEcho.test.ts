@@ -47,3 +47,10 @@ describe('eco de la propia voz de FLU (no debe ser un turno de persona)', () => 
         expect(isAssistantVoiceEcho(fluLargo, fluLargo)).toBe(true);
     });
 });
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
+    it('marca el eco re-capturado y NO una frase ajena al TTS', () => {
+        expect(isAssistantVoiceEcho(FLU_TTS, FLU_TTS)).toBe(true);
+        expect(isAssistantVoiceEcho('compra pan y leche en el super', FLU_TTS)).toBe(false);
+    });
+});

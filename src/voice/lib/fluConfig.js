@@ -131,14 +131,14 @@ export const FLU_CONFIG = {
         roomRematchThresholdMax: 0.80,
         roomRematchShortThreshold: 0.80,
         cosineContinuityThreshold: 0.80,
-        cosineNewVoiceThreshold: 0.70, // medido 2026-10-06: la MISMA voz da 0.69-0.74; con 0.75 cada turno abria 'Hablante N' (12 para 2 voces)
+        cosineNewVoiceThreshold: 0.64, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
         /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
         abruptSimilarityDrop: 0.08,
         cosineRegisteredMatchThreshold: 0.76,
         /** Distancia coseno máxima para pegar al hablante del turno anterior. */
         lastTurnSignatureContinuityDistance: 0.075,
         /** Reutilización de cluster en producción (512-D real). */
-        productionClusterReuseThreshold: 0.78,
+        productionClusterReuseThreshold: 0.66,
         shortUtteranceMaxMs: 1500,
         shortUtteranceThresholdRelax: 0.04,
         /** Con ≥N clusters y frase no corta: sube umbral (evita colapsar voces distintas). */

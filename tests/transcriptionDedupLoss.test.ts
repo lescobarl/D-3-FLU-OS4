@@ -229,3 +229,22 @@ describe('transcriptionDedupLoss - la fila no puede ser mas corta que la ultima 
         );
     });
 });
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
+    it('el commit de un bloque largo NUEVO no pide replaceLast sobre el bloque anterior', () => {
+        const anterior = 'Okay Flow buen dia como estas Platicame de ti';
+        const nuevo =
+            'okay Este es una prueba de la diarizacion en este caso vamos a revisar como funciona yo soy Luis estoy hablando';
+        const action = resolveLogRowAction({
+            activeLogStream: false,
+            newParagraph: false,
+            turnBoundary: false,
+            turnCommit: true,
+            lastEmitted: anterior,
+            lastCommitted: anterior,
+            capture: nuevo,
+            logRowContext: {},
+        });
+        expect(action.replaceLast).toBe(false);
+    });
+});

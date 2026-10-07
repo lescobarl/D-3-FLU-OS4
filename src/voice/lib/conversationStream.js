@@ -45,7 +45,17 @@ export function utterancesAsrProgress(previous = '', next = '') {
   if (!prev || !nxt) return false
   if (utterancesRelate(prev, nxt) || utterancesSameRevision(prev, nxt)) return true
   if (hasSpeechAnchor(prev, nxt) || hasSpeechAnchor(nxt, prev)) return true
-  const pw = prev.toLowerCase().split(/\s+/)[0] || ''
+  // Crecimiento de UN SOLO token ("com"→"Comes", "po"→"Comes pollo"): el ASR aun
+  // esta formando la PRIMERA palabra, asi que comparar la cabeza basta.
+  // NO se aplica a locuciones de VARIAS palabras: dos frases DISTINTAS que solo
+  // comparten la primera palabra (p. ej. la propia wake "Okay ...") NO son la misma
+  // locucion creciendo. Tratarlas como tal hacia que el commit de un bloque nuevo
+  // pidiera `replaceLast` y REEMPLAZARA la fila del bloque anterior -> la
+  // transcripcion del bloque previo desaparecia de la conversacion aunque siguiera
+  // en ULTIMA FRASE (medido en el log del dueno: 2026-10-07 14:10-14:11, turno 5
+  // `RowTrace ... replace=true` entre dos locuciones largas distintas).
+  if (speechWords(prev).length > 1) return false
+  const pw = prev.toLowerCase()
   const nw = nxt.toLowerCase().split(/\s+/)[0] || ''
   if (pw.length >= 2 && nw.startsWith(pw)) return true
   if (nw.length >= 2 && pw.startsWith(nw)) return true

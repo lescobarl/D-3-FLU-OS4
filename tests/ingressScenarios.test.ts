@@ -134,3 +134,12 @@ describe('ingress — 7. una sola frase canónica (display = fila)', () => {
         expect(readPublishedText(state)).toBe('quiero una receta de pan');
     });
 });
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
+    it('el interino NO pierde el arranque (marca la version recortada)', () => {
+        const state = createActiveListenState();
+        const packet = processListenPacket(state, '', { interim: 'hola ya hola' });
+        expect(packet.published).toBe('hola ya hola');
+        expect(packet.published).not.toBe('ya hola');
+    });
+});
