@@ -14,7 +14,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow, escribeFilaDeUsuario, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
 
 /** Marcas `effectOnly: true` en un fuente (mismo criterio del guard). */
 export function effectOnlyMarks(src: string): number {
@@ -196,5 +196,33 @@ describe('reentrega identica - el detector no es decorativo', () => {
             dedupPorCapturaInline('const correctionInFlight = isNavSettlePending() || isProcessingRef.current'),
         ).toBe(true);
         expect(dedupPorCapturaInline('const skipReason = shouldSkipCapture({ prevText })')).toBe(false);
+    });
+});
+
+// MEDIDO en la app (debug.log del dueno, 2026-10-06): el embedding del
+// hablante resuelve DESPUES del commit (7-19 s de cola), asi que la etiqueta caia en
+// el turno SIGUIENTE ("Hablante 1" en el habla de Luis). La fila ya se reutiliza por
+// IDENTIDAD de turno: la resolucion tardia COMPLETA la suya, no la del vecino.
+describe('el hablante que llega tarde COMPLETA su fila (no la del turno siguiente)', () => {
+    beforeEach(() => {
+        useIntegrationStore.getState().resetConversationHistory();
+    });
+
+    it('completa la fila del turno resuelto aunque el turno actual sea otro', () => {
+        commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', turnId: 201 });
+        fliHabla('Entendido.');
+        commitUserTurnRow({ text: 'otra locucion distinta', speakerName: 'Hablante 1', turnId: 202 });
+
+        expect(updateTurnRowSpeaker(201, 'luis')).toBe(true);
+
+        const rows = userRows();
+        expect(rows).toHaveLength(2);
+        expect(rows[0].speakerName, 'la resolucion tardia completa SU fila').toBe('luis');
+        expect(rows[1].speakerName, 'y NO toca la del turno siguiente').toBe('Hablante 1');
+    });
+
+    it('no hace nada si el turno no tiene fila registrada o el hablante esta vacio', () => {
+        expect(updateTurnRowSpeaker(999, 'luis')).toBe(false);
+        expect(updateTurnRowSpeaker(201, '')).toBe(false);
     });
 });

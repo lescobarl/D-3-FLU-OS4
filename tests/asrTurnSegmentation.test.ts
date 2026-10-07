@@ -149,7 +149,27 @@ describe('asrTurnSegmentation — plan de commit', () => {
             fallbackSpeaker: 'Hablante 1',
         });
 
-        expect(plan).toEqual([{ text: NOVEL_TAIL, speaker: 'Hablante 2' }]);
+        expect(plan).toEqual([{ text: `hola profesora ${NOVEL_TAIL}`, speaker: 'Hablante 3' }]);
+    });
+
+    it('el fragmento CORTO de cabeza se ABSORBE, no se pierde (defecto real reproducido)', () => {
+        // Reproducido con estas MISMAS funciones: cabeza corta + prior corto + cola
+        // larga -> cobertura 0.881 >= 0.85, asi que el commit MANTIENE el plan y la
+        // cabeza desaparecia ("se pierde un poco de conversacion al inicio de cada
+        // cambio de hablante"). El minimo de palabras no puede descartar texto.
+        const cola = `${NOVEL_TAIL} y despues corregimos el examen de sociales y preparamos la exposicion del proyecto final`;
+        const capture = `y luego ${PRIOR} ${cola}`;
+        const plan = planAsrTurnSegments({
+            phrase: capture,
+            priorTexts: [PRIOR],
+            priorSpeakers: ['Hablante 3'],
+            preflight,
+            fallbackSpeaker: 'Hablante 1',
+        });
+
+        const texto = plan.map((row) => row.text).join(' ');
+        expect(texto, 'la cabeza no puede desaparecer del plan').toContain('y luego');
+        expect(texto, 'tampoco la cola del hablante nuevo').toContain('exposicion del proyecto final');
     });
 
     it('sin evidencia de dos hablantes (1 racha estable) no trocea', () => {
