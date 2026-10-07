@@ -33,6 +33,7 @@ import {
 } from './speakerPolicy.js'
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
+import { renameSpeakerRows } from './conversationTurnRow'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel, resolveRegisteredSpeakerName } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
 
@@ -462,6 +463,7 @@ export function handleConversationStreamSync(
           sessionPrimarySpeakerRef,
           speakerClustersRef,
           setSpeakerClusters,
+          renameSpeakerRows,
         },
       )
       if (resolved.signatureVector?.length) {
@@ -514,6 +516,7 @@ export function handleConversationStreamSync(
       sessionPrimarySpeakerRef,
       speakerClustersRef,
       setSpeakerClusters,
+      renameSpeakerRows,
     },
   )
   if (resolved.signatureVector?.length) {

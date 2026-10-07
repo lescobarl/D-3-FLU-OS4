@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, updateTurnRowSpeaker, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit'
 import { findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters'
 
 /** Vectores de la MISMA voz (coseno alto) y de otra voz (bajo). */
@@ -53,6 +54,33 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
     const cambiadas = renameSpeakerRows(labels, 'luis')
     expect(cambiadas).toBe(2)
     expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'luis', 'Hablante 2', 'Hablante 2'])
+  })
+
+  it('RUTA REAL, sin microfono: "soy Luis" renombra la participacion del hablante que venia hablando', () => {
+    // Las filas de ESE hablante estaban como "Hablante 1" (su etiqueta automatica);
+    // la mujer, "Hablante 2".
+    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', turnId: 1 })
+    commitUserTurnRow({ text: 'estoy probando la transcripcion', speakerName: 'Hablante 1', turnId: 2 })
+    commitUserTurnRow({ text: 'hoy me robo el estilo lolita', speakerName: 'Hablante 2', turnId: 3 })
+
+    const clusters = [
+      { label: 'Hablante 1', signature: [1, 0, 0] },
+      { label: 'Hablante 2', signature: [0, 1, 0] },
+    ]
+    // La cadena REAL del commit de un turno "soy Luis" (source wake-intro).
+    applyResolvedSpeakerToSessionRefs(
+      { speakerName: 'luis', source: 'wake-intro' },
+      {
+        lastSpeakerRef: { current: 'Hablante 1' },
+        lastLoggedSpeakerRef: { current: 'Hablante 1' },
+        sessionPrimarySpeakerRef: { current: '' },
+        speakerClustersRef: { current: clusters },
+        setSpeakerClusters: () => {},
+        renameSpeakerRows,
+      },
+    )
+
+    expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'luis', 'Hablante 2'])
   })
 
   it('la etiqueta AUTOMATICA no renombra (solo el nombre propio)', () => {

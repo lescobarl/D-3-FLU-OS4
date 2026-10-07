@@ -201,3 +201,14 @@ describe('turnSpeakerCommit — applyResolvedSpeakerToSessionRefs', () => {
         expect(refs.sessionPrimarySpeakerRef.current).toBe('Hablante 1');
     });
 });
+
+describe('turnSpeakerCommit - PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
+    it('marca el nombre presentado por wake-intro y NO lo inventa sin el', () => {
+        const con = resolveTurnSpeakerAtCommit({ phrase: 'okay flu soy Luis', wakeWords: ['okay flu'] } as any);
+        expect(con.source).toBe('wake-intro');
+        expect(String(con.speakerName).toLowerCase()).toBe('luis');
+
+        const sin = resolveTurnSpeakerAtCommit({ phrase: 'hola buenos dias a todos', wakeWords: ['okay flu'] } as any);
+        expect(sin.source).not.toBe('wake-intro');
+    });
+});

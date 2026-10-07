@@ -6,7 +6,7 @@ import { cleanForSpeech } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { labelToSpeakerId, normalizeRowSignature } from './conversationRow.js'
-import { normalizeSpeakerLabel } from './voiceIdentity.js'
+import { normalizeSpeakerLabel, findLabelsWithSharedVoice } from './voiceIdentity.js'
 import { detectNextSpeakerPhrase, nextSpeakerLabel } from './activeListen.js'
 import { isNewAudioSegment, getLastCommitPerfAt } from './audioSegmentClock.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
@@ -183,6 +183,7 @@ export function resolveTurnSpeakerAtCommit({
 export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   const name = normalizeSpeakerLabel(resolved?.speakerName)
   if (!name) return
+  const previous = normalizeSpeakerLabel(refs.lastLoggedSpeakerRef?.current || refs.lastSpeakerRef?.current || '')
   if (refs.lastSpeakerRef) refs.lastSpeakerRef.current = name
   if (refs.lastLoggedSpeakerRef) refs.lastLoggedSpeakerRef.current = name
   // Ruta unica: el dueno de `sessionPrimarySpeakerRef` es `setSessionPrimarySpeaker`
@@ -195,5 +196,14 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
     } else if (refs.speakerClustersRef) {
       refs.speakerClustersRef.current = resolved.workingClusters
     }
+  }
+  // #8 (requisito del dueno; NO depende del microfono): identificado el hablante
+  // (soy Luis lo detecta el TEXTO), TODA su participacion previa lleva su nombre.
+  // Etiquetas: la que ese hablante venia usando (fila anterior) MAS las que el
+  // dueno de clusters sabe que son la MISMA voz.
+  if (resolved?.source === 'wake-intro' && typeof refs.renameSpeakerRows === 'function') {
+    const clusters = refs.speakerClustersRef?.current || []
+    const labels = [previous, ...findLabelsWithSharedVoice(clusters, name)].filter(Boolean)
+    refs.renameSpeakerRows(labels, name)
   }
 }
