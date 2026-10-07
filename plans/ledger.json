@@ -1589,6 +1589,20 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit 78a0126). MEDIDO con el escenario INYECTADO sobre la app real (banco fuera del repo, %TEMP%/flu-repro/sim-escenario.cjs): dos frases del guion cayeron sin fila; el debug.log mostro que NO llegaban ni a WakeTrace (el onresult hacia `if (isFluSpeaking()) return`). FIX: `isAssistantSpeechEcho(event, assistantText)` (conversationStream.js, reusa isAssistantVoiceEcho) -> se descarta SOLO el eco del texto de FLU. VERIFICADO con el MISMO escenario antes/despues: T3 (soy Luis) y el segundo bloque de T4 AHORA dejan su fila. GUARD tests/vozEcoPorContenidoGuard.test.ts (ROJO medido: 3 de 4). Alcance real (0.23): CUBIERTO=el filtro por contenido con guard rojo->verde y la verificacion inyectada antes/despues; NO CUBIERTO=el DoD-producto (micro real).",
       "origen": "defecto-medido-escenario-inyectado-2026-10-07"
+    },
+    {
+      "id": "P9.8",
+      "titulo": "Los ticks continuos de identidad REESCRIBIAN la fila del turno: la misma persona salia Hablante 1, luego 2, luego 4 (y la mujer con la etiqueta del titular)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 792c77a). MEDIDO en el log del dueno 17:28-17:33: dentro del MISMO turno aparecen Identity H1 -> H2 -> luis y el Commit con `name=` oscilando; sintomas narrados por el dueno: me puso primero como hablante uno, luego como hablante dos y ahora puso hablante cuatro, y en el hablante uno puso a la mujer. CAUSA: los ticks continuos (ventanas parciales) tenian onResolved y el hook lo aplicaba con updateTurnRowSpeaker. FIX: el aviso que completa la fila lo da SOLO el snapshot FINAL (turnSpeakerPreflight.notifyResolvedForTurn). GUARD tests/vozHablanteFilaUnicaGuard.test.ts (ROJO medido) + tests/speakerClusterAccumulation.test.ts actualizado a la regla vigente. Alcance real (0.23): CUBIERTO=que un tick parcial no toca la fila ni el historial; NO CUBIERTO=la calidad acustica de la etiqueta final (micro del dueno).",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.9",
+      "titulo": "FLU decia el literal Registrado {name}. al registrar un participante",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 792c77a). VISTO en la pantalla del dueno (17:29:19 FLU dijo el literal). CAUSA: getCommandSpeech YA interpola {name} con params.name, pero los dos caminos del hook lo llamaban sin params. FIX: se pasa el nombre detectado en el enunciado. GUARD tests/vozHablanteFilaUnicaGuard.test.ts (con params interpola; sin params el placeholder queda, que es lo que documenta por que el hook DEBE pasarlo). Alcance real (0.23): CUBIERTO=la interpolacion en los dos caminos; NO CUBIERTO=el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ],
   "done": [
@@ -3420,6 +3434,20 @@
       "titulo": "El eco de FLU deja de filtrarse por tiempo: se descarta solo su eco, no el habla real durante la respuesta",
       "evidencia": "src/voice/lib/conversationStream.js: CERRADO 2026-10-07 (commit 78a0126) con guard tests/vozEcoPorContenidoGuard.test.ts (rojo medido) y el escenario inyectado (%TEMP%/flu-repro/sim-escenario.cjs) verificado antes/despues. Alcance real (0.23): CUBIERTO=el filtro por contenido y la verificacion inyectada; NO CUBIERTO=el DoD-producto.",
       "origen": "defecto-medido-escenario-inyectado-2026-10-07"
+    },
+    {
+      "id": "P9.8",
+      "commit": "792c77a",
+      "titulo": "Solo el snapshot FINAL rotula la fila (los ticks continuos ya no la reescriben)",
+      "evidencia": "src/voice/lib/turnSpeakerPreflight.js: CERRADO 2026-10-07 (commit 792c77a) con guard tests/vozHablanteFilaUnicaGuard.test.ts. Alcance real (0.23): CUBIERTO=que un tick parcial no reescribe la fila; NO CUBIERTO=la calidad acustica final.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.9",
+      "commit": "792c77a",
+      "titulo": "El registro de participante ya no pronuncia el literal {name}",
+      "evidencia": "src/voice/hooks/useFluVoiceAssistant.js: CERRADO 2026-10-07 (commit 792c77a); el hook pasa el nombre a getCommandSpeech (que ya interpolaba). Guard tests/vozHablanteFilaUnicaGuard.test.ts. Alcance real (0.23): CUBIERTO=la interpolacion en los dos caminos; NO CUBIERTO=el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ]
 }
