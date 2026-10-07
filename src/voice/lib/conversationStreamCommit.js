@@ -23,6 +23,7 @@ import {
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { relayLog } from '../../lib/clientLogRelay'
+import { voiceProbe } from './voiceProbe'
 import { finalizeTurnIdentityPipeline } from './turnIdentityPipeline.js'
 import { planAsrTurnSegments, segmentPlanCoversCapture } from './asrTurnSegmentation.js'
 import { resolveTurnSpeakerAtCommit, applyResolvedSpeakerToSessionRefs } from './turnSpeakerCommit.js'
@@ -528,7 +529,7 @@ export function handleConversationStreamSync(
   lastSpeakerRef.current = speakerName
 
   relayLog('LOG', 'RowTrace', `refresh=${refreshNeeded} blocked=${ambientRowBlocked} replace=${replaceLast} turn=${activeTurnIdRef.current} cap="${capture.slice(0, 60)}"`) // BANDERA DE DIAGNOSTICO
-  relayLog('LOG', 'Commit', `preReady=${Boolean(preflight?.ready)} src=${resolved.source} name="${resolved.speakerName}" wc=${resolved.workingClusters?.length ?? 0} refClusters=${speakerClustersRef.current?.length ?? 0} sticky="${stickyFallback}"`) // BANDERA DE DIAGNOSTICO
+  voiceProbe('commit', { preReady: Boolean(preflight?.ready), src: resolved.source, name: resolved.speakerName, written: speakerEscrito, wc: resolved.workingClusters?.length ?? 0, refClusters: speakerClustersRef.current?.length ?? 0, sticky: stickyFallback, turn: activeTurnIdRef.current, replace: replaceLast, capture: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
   let delivered = false
   if (refreshNeeded) {
     delivered = emitTurnRow(capture, {
