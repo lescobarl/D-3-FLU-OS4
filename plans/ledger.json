@@ -1603,6 +1603,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit 792c77a). VISTO en la pantalla del dueno (17:29:19 FLU dijo el literal). CAUSA: getCommandSpeech YA interpola {name} con params.name, pero los dos caminos del hook lo llamaban sin params. FIX: se pasa el nombre detectado en el enunciado. GUARD tests/vozHablanteFilaUnicaGuard.test.ts (con params interpola; sin params el placeholder queda, que es lo que documenta por que el hook DEBE pasarlo). Alcance real (0.23): CUBIERTO=la interpolacion en los dos caminos; NO CUBIERTO=el DoD-producto.",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.10",
+      "titulo": "El indice de clusters crecia sin fin (5 clusters para 2 personas) y las filas saltaban de etiqueta: faltaba consolidacion (la poda esta en false desde P8.93) e histeresis de voz nueva",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 433402f). MEDIDO en el log del dueno 17:28-17:33: refClusters=5 para 2 personas + TV y Jump entre Hablante 1/2/4 y luis. FIX: (1) `consolidateSpeakerClusters` (speakerClusters.js) fusiona clusters de la MISMA voz con el umbral de REUTILIZACION de config (0.66; medido: misma voz 0.69-0.74, distinta 0.58), con los nombres propios EXENTOS; (2) se llama en el unico escritor de clusters (el snapshot FINAL, turnSpeakerPreflight.emitClusters); (3) histeresis: con la sesion ya multi-locutor no se abre cluster nuevo salvo que el mejor cluster este a mas de newVoiceHysteresis (0.06) del umbral. Verificado con la simulacion calibrada de 2 voces: 5 clusters -> 2 sin fusionar a las dos personas. GUARD tests/vozClusterConsolidacionGuard.test.ts (ROJO medido antes del fix) en lint:guards. Alcance real (0.23): CUBIERTO=la consolidacion y la histeresis con simulacion + guard; NO CUBIERTO=la calidad acustica con el microfono real del dueno (DoD-producto).",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ],
   "done": [
@@ -3447,6 +3454,13 @@
       "commit": "792c77a",
       "titulo": "El registro de participante ya no pronuncia el literal {name}",
       "evidencia": "src/voice/hooks/useFluVoiceAssistant.js: CERRADO 2026-10-07 (commit 792c77a); el hook pasa el nombre a getCommandSpeech (que ya interpolaba). Guard tests/vozHablanteFilaUnicaGuard.test.ts. Alcance real (0.23): CUBIERTO=la interpolacion en los dos caminos; NO CUBIERTO=el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.10",
+      "commit": "433402f",
+      "titulo": "Consolidacion de clusters de la misma voz + histeresis de voz nueva",
+      "evidencia": "src/voice/lib/speakerClusters.js: CERRADO 2026-10-07 (commit 433402f) con guard tests/vozClusterConsolidacionGuard.test.ts. Alcance real (0.23): CUBIERTO=la fusion segura y la histeresis con simulacion calibrada; NO CUBIERTO=el DoD-producto (micro real).",
       "origen": "defecto-medido-dueno-2026-10-07"
     }
   ]
