@@ -131,7 +131,7 @@ export const FLU_CONFIG = {
         roomRematchThresholdMax: 0.80,
         roomRematchShortThreshold: 0.80,
         cosineContinuityThreshold: 0.80,
-        cosineNewVoiceThreshold: 0.75,
+        cosineNewVoiceThreshold: 0.70, // medido 2026-10-06: la MISMA voz da 0.69-0.74; con 0.75 cada turno abria 'Hablante N' (12 para 2 voces)
         /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
         abruptSimilarityDrop: 0.08,
         cosineRegisteredMatchThreshold: 0.76,

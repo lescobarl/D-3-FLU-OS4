@@ -419,6 +419,13 @@ export function handleConversationStreamSync(
     resolveRegisteredSpeakerName(speakerResuelto, participantSpeakerRef?.current || {}) ||
       speakerResuelto,
   )
+  // El hablante del turno llega DESPUES del commit (el embedding tarda 7-19 s): lo que
+  // se escribe aqui es una PREDICCION, y escribirla inventaba etiquetas ('Hablante 8/12'
+  // para 2 voces reales) y las heredaba el turno siguiente. Sin evidencia NO se escribe:
+  // la resolucion tardia COMPLETA la fila por identidad de turno
+  // (`updateTurnRowSpeaker`). Regla del dueno: "escribes sin hablante y ya que lo tienes
+  // lo pones".
+  const speakerEscrito = preflight?.ready ? speakerName : ''
 
   let segmentPlan =
     !sameRevisionReplace && turnCommit
@@ -522,7 +529,7 @@ export function handleConversationStreamSync(
   let delivered = false
   if (refreshNeeded) {
     delivered = emitTurnRow(capture, {
-      speakerName,
+      speakerName: speakerEscrito,
       fallbackSpeaker: speakerName,
       currentClock: formatClock(),
       replaceLastRawLog: replaceLast,
@@ -533,7 +540,7 @@ export function handleConversationStreamSync(
       lastEmittedTranscriptRef.current = capture
     }
   }
-  commitTurnToSessionRows(capture, speakerName, { replaceLast })
+  commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })
   if (!delivered) {
     lastEmittedTranscriptRef.current = capture
   }
