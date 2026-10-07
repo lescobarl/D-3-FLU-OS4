@@ -1638,6 +1638,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit e203d0d). MEDIDO en debug.log del dueno (20:02-20:08 UTC): la MISMA persona alternaba luis / Hablante 1 / Hablante 2 / Hablante 3 en turnos consecutivos. CAUSA RAIZ: src/voice/workers/voiceId.worker.js pasaba a assignSpeaker `matchThresholdCluster ?? 0.76`, `newVoiceThreshold ?? 0.68`, `continuityThreshold ?? 0.74`; al venir el literal, assignSpeaker NO leia voiceIdentity.capture.conversationSpeakerThresholds (0.66 / 0.64). Con el umbral efectivo 0.76, una voz que puntua 0.68-0.79 (misma persona) cae por debajo y se declara voz nueva (Match reason=new-voice-below-threshold sim=0.756 / 0.731 / 0.694). FIX: el worker no incrusta ningun umbral; lo deja a FLU_CONFIG (fuente unica). El Match log ahora imprime clusterMatch/newVoice para que el dato sea visible. GUARD tests/voiceWorkerThresholdsConfigGuard.test.ts (ROJO medido: nombra voiceId.worker.js:111-113; con prueba de detector: inyectar 0.76 vuelve \"voz nueva\" la MISMA voz que con 0.66 reutiliza el cluster). Alcance real (0.23): CUBIERTO=que el worker use los umbrales de la config y el detector de comportamiento; NO CUBIERTO=la calidad acustica fina con el microfono del dueno (depende del hardware) y la corrida real.",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.15",
+      "titulo": "El nombre registrado manda sobre la etiqueta generica (sessionPrimary -> prefer en el worker)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 74aba46). MEDIDO (debug.log del dueno, 21:08-21:11 UTC): tras \"Okay flu Soy Luis\" el preflight dio name=\"luis\" a las 21:09:30 y EN EL MISMO SEGUNDO los turnos volvieron a \"Hablante 2\": `Match reason=prefer-cluster-match sim=0.982 name=\"Hablante 2\"` (y siguio asi 21:09:31-21:11:05). CAUSA A: voiceIdWorkerClient calculaba sessionPrimary/preferSpeaker y los TIRABA (no viajaban al worker), asi que el worker preferia `lastSpeaker` = la etiqueta generica pegajosa. CAUSA B: la compuerta de `prefer` era `floor` (0.85); para un NOMBRE PROPIO es la de identidad registrada (cosineRegisteredMatchThreshold, en config), y con 0.85 una misma voz (0.70-0.79) no entraba. FIX: se reenvia sessionPrimary como preferSpeaker y, si el prefer es un nombre propio, la compuerta baja a la de identidad registrada. GUARD tests/voicePreferRegisteredGuard.test.ts (ROJO medido sin el fix: 2 fallos, A y B; con prueba de detector). Alcance real (0.23): CUBIERTO=que la identidad resuelta use el nombre registrado de la sesion; NO CUBIERTO=la calidad acustica fina con el microfono del dueno y la corrida real.",
+      "origen": "defecto-medido-dueno-2026-10-07"
     }
   ],
   "done": [
@@ -3517,6 +3524,13 @@
       "commit": "e203d0d",
       "titulo": "La MISMA voz deja de ser \"Hablante N\" cada turno: el worker incrustaba los umbrales de identidad y no leia la config",
       "evidencia": "src/voice/workers/voiceId.worker.js: CERRADO 2026-10-07 (commit e203d0d) con guard tests/voiceWorkerThresholdsConfigGuard.test.ts (tambien toca src/voice/lib/voiceIdWorkerClient.js). Alcance real (0.23): CUBIERTO=los umbrales de identidad salen de la config (no de un literal) y el guard lo impide; NO CUBIERTO=la estabilidad final de etiquetas en una sesion real (es del dueno).",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.15",
+      "commit": "74aba46",
+      "titulo": "El nombre registrado manda sobre la etiqueta generica (sessionPrimary -> prefer en el worker)",
+      "evidencia": "src/voice/lib/voiceIdWorkerClient.js: CERRADO 2026-10-07 (commit 74aba46) con guard tests/voicePreferRegisteredGuard.test.ts (tambien toca src/voice/lib/speakerCore.js). Alcance real (0.23): CUBIERTO=el primario de la sesion manda en la resolucion de identidad; NO CUBIERTO=estabilidad final de etiquetas en sesion real (es del dueno).",
       "origen": "defecto-medido-dueno-2026-10-07"
     }
   ]
