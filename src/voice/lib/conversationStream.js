@@ -370,6 +370,28 @@ export function isAssistantVoiceEcho(candidate = '', assistantText = '') {
   return false
 }
 
+/**
+ * ¿Este evento ASR es eco del TTS de FLU? Filtro por CONTENIDO, no por tiempo.
+ *
+ * DEFECTO MEDIDO (2026-10-07, escenario inyectado sobre la app real): el
+ * `onresult` descartaba TODO mientras FLU hablaba (`if (isFluSpeaking()) return`),
+ * asi que una locucion real dicha durante la respuesta se perdia SIN fila y SIN
+ * rastro (dos frases del guion cayeron: "soy Luis" y un bloque entero). Se
+ * conserva el filtro, pero por contenido: solo se descarta lo que es eco del texto
+ * que FLU acaba de decir.
+ */
+/**
+ * @param {{ resultIndex?: number, results?: Array<Record<number, { transcript?: string }>> }|null} [event]
+ * @param {string} [assistantText]
+ * @returns {boolean}
+ */
+export function isAssistantSpeechEcho(event = null, assistantText = '') {
+  const heard = cleanForSpeech(
+    event?.results?.[Number(event?.resultIndex) || 0]?.[0]?.transcript || '',
+  )
+  return Boolean(heard) && isAssistantVoiceEcho(heard, assistantText)
+}
+
 /** Separa texto nuevo cuando Chrome prependea el turno ya cerrado. */
 export function peelCommittedPrefixFromInterim(interim = '', lastCommitted = '') {
   const chunk = cleanForSpeech(interim)

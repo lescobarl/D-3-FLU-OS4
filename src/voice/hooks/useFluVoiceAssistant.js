@@ -166,6 +166,7 @@ import {
 import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
 import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
+import { isAssistantSpeechEcho } from '../lib/conversationStream.js'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
@@ -2157,9 +2158,7 @@ const lastResolvedTurnRef = useRef(0)
         // Se usa la promesa propia de FLU (`isFluSpeaking`, acotada por el
         // watchdog), NUNCA el flag global del motor TTS: ese
         // quedaba pegado y silenciaba la escucha hasta recargar la página.
-        if (isFluSpeaking()) {
-          return
-        }
+        if (isFluSpeaking() && isAssistantSpeechEcho(event, resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()).lastAssistantText)) return
         logChromeSpeechResult(event)
         lastOnresultAtRef.current = Date.now()
         recognitionRetryCountRef.current = 0
@@ -4388,7 +4387,7 @@ const lastResolvedTurnRef = useRef(0)
         const pauseCfg = getTranscriptPauseCfg()
         const srGapMinWords = Number(pauseCfg.srGapCommitMinWords) || 0
         const sinceResult = now - (lastOnresultAtRef.current || 0)
-        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: now - (lastCommitAtRef.current || 0) })
+        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0 })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
           const openLine = cleanForSpeech(
             listenStateRef.current?.openLine ||
