@@ -1624,6 +1624,13 @@
       "estado": "done",
       "evidencia": "CERRADO 2026-10-07 (commit a36fcc7). DATO de la pantalla del dueno: 11:29:19 luis (se identifica), 11:30:03 Hablante 1 (44 s despues VUELVE a su etiqueta) y 11:31:52 Hablante 1 para la voz de la mujer. FIX: alias de sesion etiqueta -> nombre; renameSpeakerRows lo registra y el escritor unico de filas lo aplica en commitUserTurnRow y updateTurnRowSpeaker. EVIDENCIA inyectada por la ruta real (tests/vozEscenarioInyectado.test.ts, caso el nombre PEGA para lo siguiente): fila escrita con Hablante 1 despues de identificarse sale luis; la completada tarde tambien; la otra voz intacta. Alcance real (0.23): CUBIERTO=la reaparicion de la MISMA etiqueta; NO CUBIERTO=que la acustica devuelva una etiqueta NUEVA para la misma voz (umbrales/consolidacion ya aplicados).",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.13",
+      "titulo": "SONDA unica de diagnostico de voz (VozProbe): una linea por evento con asrFinal -> commit -> row (etiqueta FINAL) + identity + clusters + srGap, para no depurar a ciegas",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 7779c62). MOTIVO (peticion del dueno: no puedo seguir a prueba y error): los logs obligaban a cruzar a mano WakeTrace/RowTrace/Commit/Identity y NINGUNA linea decia la ETIQUETA FINAL escrita en la fila. FUENTE: src/voice/lib/voiceProbe.ts (encendida solo en DEV; no-op en produccion; rele cargado diferido) instrumentada en el escritor unico de filas (row), turnSpeakerPreflight (identity), fluTranscriptPause.resolveSrGapTrigger (srGap), WakeTrace (ahora con el texto COMPLETO del final, antes cortado a 200) y Clusters write= (ahora con las etiquetas). GUARD tests/vozSondaDatosGuard.test.ts en lint:guards (encendida emite JSON parseable, apagada no emite).",
+      "origen": "peticion-dueno-2026-10-07"
     }
   ],
   "done": [
@@ -3490,6 +3497,13 @@
       "titulo": "El nombre identificado pega para lo siguiente (alias etiqueta -> nombre en el escritor unico de filas)",
       "evidencia": "src/voice/lib/conversationTurnRow.ts: CERRADO 2026-10-07 (commit a36fcc7) con guard tests/vozEscenarioInyectado.test.ts (el nombre PEGA para lo siguiente) y tests/vozRenombreHablanteGuard.test.ts. Alcance real (0.23): CUBIERTO=la reaparicion de la misma etiqueta; NO CUBIERTO=una etiqueta nueva para la misma voz.",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.13",
+      "commit": "7779c62",
+      "titulo": "Sonda unica de diagnostico de voz (VozProbe)",
+      "evidencia": "src/voice/lib/voiceProbe.ts: CERRADO 2026-10-07 (commit 7779c62) con guard tests/vozSondaDatosGuard.test.ts. Alcance real (0.23): CUBIERTO=la sonda y su evento row en el escritor unico de filas; NO CUBIERTO=usarla en una corrida real (es del dueno).",
+      "origen": "peticion-dueno-2026-10-07"
     }
   ]
 }
