@@ -1558,8 +1558,29 @@
     {
       "id": "P9.3",
       "titulo": "RUTA DOBLE en la decision de hablante: el worker calcula `assignSpeaker` (con SUS thresholds) y el hilo principal REHACE la decision con `resolveConversationSpeaker`; la rama que consumia el hint del worker es codigo MUERTO",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 76320ce): la rama MUERTA de voiceIdWorkerClient.js (reasons last-signature/cluster-nearest) se elimino junto con `workerHint`; la decision de hablante queda con un solo motor (resolveConversationSpeaker). HALLAZGO 2026-10-07 (auditoria pedida por el dueno: hay parches o rutas dobles). src/voice/lib/voiceIdWorkerClient.js:323 solo consume el hint del worker si su `reason` es `last-signature` o `cluster-nearest`, motivos que src/voice/workers/voiceId.worker.js (assignSpeaker, speakerCore.js) NUNCA devuelve (devuelve prefer-cluster-match, cluster-reidentify, last-continuity, new-voice-below-threshold...). Resultado: el worker calcula una asignacion completa que SIEMPRE se descarta (log: `Match ...` con un motivo y `Identity ...` con otro para el MISMO turno) y las dos engines usan umbrales distintos. Cierre propuesto: que el worker devuelva SOLO el vector (embed) o que la asignacion tenga un unico dueno; medir que desaparece el segundo motivo en el log. Sin cambio de conducta hoy (el hint ya se ignora), por eso no se toco en P9.1/P9.2.",
+      "origen": "hallazgo-agente-2026-10-07"
+    },
+    {
+      "id": "P9.4",
+      "titulo": "La locucion que Chrome NO cierra se perdia entera: 76 s de audio continuo -> UNA fila de una palabra (el texto vivia solo en ULTIMA FRASE)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 76320ce). MEDIDO en debug.log del dueno 15:37:15-15:38:31 UTC: MicPcm saturado en 30 s durante 46 s y CERO commits en 76 s; despues un final de UNA palabra (mientras). Causa: el unico cierre por srGap exigia `srGapCommitMs` SIN onresult y los interinos refrescaban ese reloj; Chrome puede emitir interinos minutos sin final. FIX: `resolveSrGapTrigger` (fluTranscriptPause.js) con segundo disparador (locucion viva estancada) por la MISMA ruta de cierre. GUARD tests/vozLocucionVivaLargaGuard.test.ts. Alcance real (0.23): CUBIERTO=el disparador y el escenario (interinos largos + srGap -> fila con el texto); NO CUBIERTO=el DoD-producto y el comportamiento del ASR real de Chrome.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.5",
+      "titulo": "Requisito del dueno no implementado: identificado un hablante, TODA su participacion debe llevar su nombre (la bandera estaba en config y sin consumidor)",
+      "estado": "done",
+      "evidencia": "CERRADO 2026-10-07 (commit 76320ce). roomCapture.renameSessionAutoLabelsOnRegister estaba en true y los helpers (findLabelsWithSharedVoice, mergeSpeakerClustersOnRename) existian SIN consumidor: al decir soy Luis su participacion anterior conservaba Hablante N. FIX: `renameSpeakerRows(labels, name)` en conversationTurnRow.ts (mismo escritor unico de filas) y el hook lo aplica en applyResolvedSpeaker para nombres propios, con las etiquetas de la MISMA voz que aporta el dueno de clusters. GUARD tests/vozRenombreHablanteGuard.test.ts. Alcance real (0.23): CUBIERTO=el renombre por etiquetas de la misma voz; NO CUBIERTO=el DoD-producto y la calidad del matching acustico en sala.",
+      "origen": "requisito-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.6",
+      "titulo": "RENDIMIENTO: el pipeline de identidad re-embebe la MISMA ventana cada 800 ms y flattenChunksTail copia el buffer entero (hasta 30 s) en cada tick y en cada commit",
       "estado": "todo",
-      "evidencia": "HALLAZGO 2026-10-07 (auditoria pedida por el dueno: hay parches o rutas dobles). src/voice/lib/voiceIdWorkerClient.js:323 solo consume el hint del worker si su `reason` es `last-signature` o `cluster-nearest`, motivos que src/voice/workers/voiceId.worker.js (assignSpeaker, speakerCore.js) NUNCA devuelve (devuelve prefer-cluster-match, cluster-reidentify, last-continuity, new-voice-below-threshold...). Resultado: el worker calcula una asignacion completa que SIEMPRE se descarta (log: `Match ...` con un motivo y `Identity ...` con otro para el MISMO turno) y las dos engines usan umbrales distintos. Cierre propuesto: que el worker devuelva SOLO el vector (embed) o que la asignacion tenga un unico dueno; medir que desaparece el segundo motivo en el log. Sin cambio de conducta hoy (el hint ya se ignora), por eso no se toco en P9.1/P9.2.",
+      "evidencia": "ANALISIS 2026-10-07 (peticion del dueno: hay momentos que se alenta). (1) src/voice/lib/turnIdentityPipeline.js getIdentitySnapshotIntervalMs = 800 ms: cada tick llama a createTurnSpeakerAudioResolver y embebe la ventana del turno aunque su audio NO haya cambiado (log: Preflight turn=7 ready=true repetido cada ~3 s con el MISMO vec=512); lo util es 1 embedding por turno. (2) src/voice/lib/speakerClusters.js flattenChunksWindow llama a flattenChunksTail(chunks, Infinity), que ALOCA y COPIA los 11250 chunks (~1.44 M muestras = 30 s) y luego hace subarray: en cada tick y en cada commit (TurnAudio). (3) el worker recibe el audio por transfer pero el cliente re-construye el payload con trimClustersForWorker. Cierre propuesto: (a) correr el tick solo si el audio del turno crecio y (b) construir la ventana sin copiar el buffer completo; medir con perfil antes/despues. NO se toca sin medir.",
       "origen": "hallazgo-agente-2026-10-07"
     }
   ],
@@ -3357,6 +3378,27 @@
       "titulo": "La diarizacion inflaba hablantes para 2 voces (umbral de voz nueva dentro de la banda de la misma voz)",
       "evidencia": "tests/vozDiarizacionDosVocesGuard.test.ts: PROPIETARIO del caso. CERRADO 2026-10-07 (commit 55ba76d). ROJO medido con los umbrales viejos (7 clusters) y VERDE con 0.64/0.66 (2 clusters). Alcance real (0.23): CUBIERTO=el no-inflado con simulacion calibrada + guard; NO CUBIERTO=el DoD-producto (micro real) y la suite completa.",
       "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.3",
+      "commit": "76320ce",
+      "titulo": "Ruta doble en la decision de hablante: eliminada la rama muerta del hint del worker",
+      "evidencia": "src/voice/lib/voiceIdWorkerClient.js: CERRADO 2026-10-07 (commit 76320ce); la rama no podia ejecutarse (assignSpeaker nunca devuelve last-signature/cluster-nearest). Alcance real (0.23): CUBIERTO=la eliminacion de la ruta muerta; NO CUBIERTO=que el worker deje de calcular su asignacion (hoy alimenta solo la sonda Match).",
+      "origen": "hallazgo-agente-2026-10-07"
+    },
+    {
+      "id": "P9.4",
+      "commit": "76320ce",
+      "titulo": "La locucion que Chrome no cierra se perdia entera (76 s -> una palabra)",
+      "evidencia": "src/voice/lib/fluTranscriptPause.js: CERRADO 2026-10-07 (commit 76320ce) con guard tests/vozLocucionVivaLargaGuard.test.ts. Alcance real (0.23): CUBIERTO=el disparador de la locucion estancada por la ruta de cierre ya existente; NO CUBIERTO=el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-07"
+    },
+    {
+      "id": "P9.5",
+      "commit": "76320ce",
+      "titulo": "Identificado el hablante, toda su participacion lleva su nombre",
+      "evidencia": "src/voice/lib/conversationTurnRow.ts: CERRADO 2026-10-07 (commit 76320ce) con guard tests/vozRenombreHablanteGuard.test.ts. Alcance real (0.23): CUBIERTO=el renombre de las filas de la misma voz; NO CUBIERTO=el DoD-producto.",
+      "origen": "requisito-dueno-2026-10-07"
     }
   ]
 }
