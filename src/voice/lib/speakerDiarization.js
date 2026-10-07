@@ -129,7 +129,14 @@ function resolveProductionSpeakerAtBoundary({
   ).length
   const soloNewVoiceFactor = Number(roomCfg.soloNewVoiceFactor) || VOICE_DIARIZATION_DEFAULTS.soloNewVoiceFactor
   const soloSession = autoCount === 1
-  const NEW_VOICE_OPEN = soloSession ? NEW_VOICE_EFF * soloNewVoiceFactor : NEW_VOICE_EFF
+  // HISTERESIS (medido 2026-10-07): con la sesion YA multi-locutor no se abre un
+  // cluster nuevo si el mejor cluster existente esta a menos de `newVoiceHysteresis`
+  // del umbral de voz nueva: se REIDENTIFICA en vez de inflar el indice (con 2
+  // personas + TV la sesion acumulaba 5 clusters y las filas saltaban de etiqueta).
+  const HYST = Number(roomCfg.newVoiceHysteresis) || VOICE_DIARIZATION_DEFAULTS.newVoiceHysteresis
+  const multiSession = autoCount >= multiMin
+  const NEW_VOICE_GATE = multiSession ? Math.max(0.5, NEW_VOICE_EFF - HYST) : NEW_VOICE_EFF
+  const NEW_VOICE_OPEN_GATE = soloSession ? NEW_VOICE_GATE * soloNewVoiceFactor : NEW_VOICE_GATE
 
   const historical = findShortUtteranceHistoricalMatch({
     vector: normalized,
@@ -336,7 +343,7 @@ function resolveProductionSpeakerAtBoundary({
     }
   }
 
-  if (lastSpeaker && lastSim < NEW_VOICE_OPEN && bestSim < NEW_VOICE_OPEN) {
+  if (lastSpeaker && lastSim < NEW_VOICE_OPEN_GATE && bestSim < NEW_VOICE_OPEN_GATE) {
     const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
     speakerClusters.push({
       label,
@@ -376,7 +383,7 @@ function resolveProductionSpeakerAtBoundary({
     if (bestLabel === lastSpeaker && bestSim >= REUSE_EFF) {
       return adoptCluster(lastSpeaker, 'production-grey-zone-cluster-agreement', Math.max(lastSim, bestSim))
     }
-    if (!soloSession && bestSim < REUSE_EFF && lastSim < REUSE_EFF) {
+    if (!soloSession && bestSim < NEW_VOICE_OPEN_GATE && lastSim < NEW_VOICE_OPEN_GATE) {
       const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
       speakerClusters.push({
         label,
@@ -392,7 +399,7 @@ function resolveProductionSpeakerAtBoundary({
       })
       return label
     }
-    if (!soloSession && bestSim < NEW_VOICE_EFF) {
+    if (!soloSession && bestSim < NEW_VOICE_OPEN_GATE) {
       const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
       speakerClusters.push({
         label,

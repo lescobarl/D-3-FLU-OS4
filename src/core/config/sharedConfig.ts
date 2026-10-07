@@ -378,6 +378,7 @@ export const VOICE_DIARIZATION_DEFAULTS = {
     classroomNewVoiceRelax: 0.04,
     classroomLastSpeakerSwitchMargin: 0.06,
     soloNewVoiceFactor: 0.82,
+    newVoiceHysteresis: 0.06,
     switchRelax: 0.45,
     turnBoundaryClusterReabsorbMargin: 0.035,
     cosineMatch: 0.76,

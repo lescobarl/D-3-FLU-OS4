@@ -405,6 +405,55 @@ export function findSpeakerLabelsMatchingSignature(
   return [...out].filter(Boolean)
 }
 
+/**
+ * CONSOLIDA clusters de la MISMA voz: fusiona los que tienen firma muy similar en
+ * el mas antiguo. MEDIDO en el log del dueno (2026-10-07 17:28-17:33): con 2
+ * personas (y TV) la sesion acumulaba `refClusters=5` y las filas iban saltando de
+ * etiqueta; el indice de clusters no se reducia nunca (`pruneGhostClusters` esta en
+ * false desde P8.93 porque borraba el cluster recien escrito).
+ *
+ * Reglas de seguridad (no es un borrado ciego):
+ *  - solo se fusionan firmas con coseno >= `matchThreshold` (config
+ *    `cosineMatchThreshold`: "misma persona");
+ *  - un NOMBRE PROPIO es un ancla de identidad: nunca se absorbe en una etiqueta
+ *    automatica, ni dos nombres propios distintos se fusionan;
+ *  - el superviviente conserva su etiqueta (el mas antiguo) y refuerza su firma.
+ */
+export function consolidateSpeakerClusters(speakerClusters = [], matchThreshold = 0.85) {
+  const floor = Number(matchThreshold) > 0 && Number(matchThreshold) <= 1 ? Number(matchThreshold) : 0.85
+  const out = []
+  for (const cluster of speakerClusters) {
+    const label = String(cluster?.label || '').trim()
+    if (!label) continue
+    const signature = Array.isArray(cluster?.signature) && cluster.signature.length
+      ? normalizeEmbeddingVector(cluster.signature)
+      : []
+    if (!signature.length) {
+      out.push(cluster)
+      continue
+    }
+    const target = out.find((candidate) => {
+      if (isRegisteredSpeakerLabel(String(candidate?.label || '')) !== isRegisteredSpeakerLabel(label)) return false
+      const other = Array.isArray(candidate?.signature) && candidate.signature.length
+        ? normalizeEmbeddingVector(candidate.signature)
+        : []
+      if (!other.length) return false
+      return compareCosineSignatures(signature, other) >= floor
+    })
+    if (!target) {
+      out.push(cluster)
+      continue
+    }
+    updateClusterSignature(target, signature)
+    const merged = [
+      ...(target.signatureHistory || []),
+      ...(cluster.signatureHistory || []),
+    ].filter((entry) => Array.isArray(entry) && entry.length)
+    target.signatureHistory = merged.slice(-3)
+  }
+  return out
+}
+
 /** Fusiona cluster origen en destino (registro / renombrar participante). */
 export function mergeSpeakerClustersOnRename(speakerClusters = [], fromLabel = '', toLabel = '') {
   const from = String(fromLabel || '').trim()

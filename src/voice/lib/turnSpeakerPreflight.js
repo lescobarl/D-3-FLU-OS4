@@ -7,12 +7,23 @@ import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { isAutoSpeakerLabel } from './speakerCore.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
+import { consolidateSpeakerClusters } from './speakerClusters.js'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { relayLog } from '../../lib/clientLogRelay'
 
 const preflightByTurn = new Map()
+
+/** Umbral de fusion de clusters: el de REUTILIZACION ("misma voz") de la config.
+ *  Medido: misma voz 0.69-0.74, distinta 0.58 -> el umbral (0.66) cae entre las dos
+ *  bandas; NO se usa el de "misma persona" (0.85) porque los clusters de una misma
+ *  voz entre turnos quedan ~0.70 y nunca se fusionarian. */
+function clusterMergeFloor() {
+  const thresholds = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
+  const floor = Number(thresholds.productionClusterReuseThreshold)
+  return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : 0.66
+}
 
 /**
  * @param {number} turnId
@@ -53,6 +64,14 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
     notifyResolved(result)
   }
 
+  // Escritor unico de clusters: CONSOLIDA antes de escribir. Con 2 personas la
+  // sesion acumulaba 5 clusters y las filas saltaban de etiqueta (medido en el log
+  // del dueno 2026-10-07); la fusion es segura (misma firma, nombres propios exentos).
+  const emitClusters = (clusters) => {
+    if (typeof onClusters !== 'function' || !clusters?.length) return
+    onClusters(consolidateSpeakerClusters(clusters, clusterMergeFloor()))
+  }
+
   const prior = preflightByTurn.get(id)
   preflightByTurn.set(id, {
     ...(prior?.ready
@@ -85,9 +104,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         // FINAL resuelve despues: sus clusters se persisten igual, o el primer
         // cluster del turno se pierde para siempre y ninguna voz se puede separar
         // (defecto medido: `Match inClusters=0` en todos los turnos).
-        if (!continuous && typeof onClusters === 'function' && result?.workingClusters?.length) {
-          onClusters(result.workingClusters)
-        }
+        if (!continuous) emitClusters(result?.workingClusters)
         notifyResolvedForTurn(result)
         return
       }
@@ -139,7 +156,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         const defer =
           continuous &&
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
-        if (!defer) onClusters(result.workingClusters)
+        if (!defer) emitClusters(result.workingClusters)
       }
       notifyResolvedForTurn(result)
     },
