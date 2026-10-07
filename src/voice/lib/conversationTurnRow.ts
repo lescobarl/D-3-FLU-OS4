@@ -23,6 +23,36 @@ import { cleanForSpeech } from './audioMath';
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
 /**
+ * Alias de etiqueta -> nombre (sesion). Cuando "soy Luis" renombra la etiqueta con
+ * la que ese hablante venia apareciendo, TODA fila posterior escrita o completada
+ * con esa etiqueta sale ya con su nombre. NO depende del microfono: es un dato de
+ * sesion (log del dueno 2026-10-07 17:29-17:33: tras identificarse, sus filas
+ * volvian a "Hablante 1" y la misma etiqueta se reutilizaba para otra voz).
+ */
+const speakerAliases = new Map<string, string>();
+
+/** Registra el alias; devuelve 1 si cambio algo. */
+export function registerSpeakerAlias(fromLabel: string, toName: string): number {
+    const from = String(fromLabel || '').trim().toLowerCase();
+    const to = String(toName || '').trim();
+    if (!from || !to || from === to.toLowerCase()) return 0;
+    if (speakerAliases.get(from) === to) return 0;
+    speakerAliases.set(from, to);
+    return 1;
+}
+
+/** Nombre final de un hablante: aplica los alias de sesion si los hay. */
+export function resolveSpeakerAlias(speakerName: string): string {
+    const name = String(speakerName || '').trim();
+    return speakerAliases.get(name.toLowerCase()) || name;
+}
+
+/** Solo para pruebas: limpia los alias de sesion. */
+export function resetSpeakerAliases(): void {
+    speakerAliases.clear();
+}
+
+/**
  * Fila del usuario por turno: permite COMPLETAR su hablante cuando el embedding
  * resuelve, que puede tardar mucho (el commit SIEMPRE gana la carrera). Sin este
  * registro, una resolucion tardia no tenia a que fila aplicarse y su etiqueta se
@@ -64,6 +94,7 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
         labels.map((l) => String(l || '').trim().toLowerCase()).filter(Boolean),
     );
     normalized.add(name.toLowerCase());
+    for (const label of labels) registerSpeakerAlias(label, name);
     const store = useIntegrationStore.getState();
     const history = store.conversationHistory;
     let changed = 0;
@@ -78,12 +109,11 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
     if (changed) store.batchLoadHistory(updated);
     return changed;
 }
-
 export function updateTurnRowSpeaker(
     turnId: number | string | null,
     speakerName: string,
 ): boolean {
-    const resolved = String(speakerName || '').trim();
+    const resolved = resolveSpeakerAlias(speakerName);
     if (turnId === null || turnId === undefined || !resolved) return false;
     const rowId =
         recentTurns.get(String(turnId)) ||
@@ -174,7 +204,7 @@ export function commitUserTurnRow({
         }
     }
 
-    const resolved = String(speakerName || '').trim();
+    const resolved = resolveSpeakerAlias(speakerName || '');
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
     // 1) Emisión que crece: reemplaza la fila de usuario del turno (una sola).
