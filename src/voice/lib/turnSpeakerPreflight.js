@@ -5,6 +5,8 @@
 import { extractTurnAudioSnapshot } from './continuousAudioBuffer.js'
 import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
+import { isAutoSpeakerLabel } from './speakerCore.js'
+import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
@@ -15,15 +17,29 @@ const preflightByTurn = new Map()
 /**
  * @param {number} turnId
  * @param {Function} run
- * @param {{ onClusters?: Function, onResolved?: Function, continuous?: boolean }} [options]
+ * @param {{ onClusters?: Function, onResolved?: Function, continuous?: boolean, getSpeakerClusters?: Function }} [options]
  *   `onResolved({ speakerId, speakerName, workingClusters })` avisa del hablante
  *   resuelto por ESTE turno. Es lo que permite etiquetar la fila con el audio del
  *   propio turno aunque el embedding llegue DESPUES del commit (medido: el commit
  *   siempre pierde la carrera; sin esto la fila hereda la etiqueta del turno previo).
  */
-export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolved, continuous = false } = {}) {
+export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolved, continuous = false, getSpeakerClusters } = {}) {
   const id = Number(turnId)
   if (!Number.isFinite(id) || id <= 0 || typeof run !== 'function') return
+
+  // Una etiqueta AUTOMATICA ('Hablante N') que los clusters PERSISTIDOS no conocen la
+  // inventa la vista PARCIAL de un tick: no rotula la fila. Medido (2026-10-06) con
+  // `Clusters write=3`: las filas salian 'Hablante 4'/'Hablante 5' (voces inventadas)
+  // para 2 voces reales. Sin `getSpeakerClusters` la puerta no aplica.
+  const notifyResolved = (result) => {
+    if (typeof onResolved !== 'function' || !result?.speakerName) return
+    const label = normalizeSpeakerLabel(result.speakerName)
+    if (typeof getSpeakerClusters === 'function' && isAutoSpeakerLabel(label)) {
+      const known = (getSpeakerClusters() || []).some((c) => normalizeSpeakerLabel(c?.label) === label)
+      if (!known) return
+    }
+    onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
+  }
 
   const prior = preflightByTurn.get(id)
   preflightByTurn.set(id, {
@@ -60,9 +76,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         if (!continuous && typeof onClusters === 'function' && result?.workingClusters?.length) {
           onClusters(result.workingClusters)
         }
-        if (typeof onResolved === 'function' && result?.speakerName) {
-          onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
-        }
+        notifyResolved(result)
         return
       }
       const weakResult =
@@ -115,9 +129,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
         if (!defer) onClusters(result.workingClusters)
       }
-      if (typeof onResolved === 'function' && result?.speakerName) {
-        onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
-      }
+      notifyResolved(result)
     },
     onError: () => {
       const slot = preflightByTurn.get(id)
