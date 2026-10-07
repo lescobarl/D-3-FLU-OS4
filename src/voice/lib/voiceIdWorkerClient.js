@@ -254,6 +254,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
     ...getEmbeddingConfig(),
     clusters: trimClustersForWorker(matchPayload.speakerClusters || []),
     lastSpeaker: matchPayload.lastSpeaker || '',
+    preferSpeaker: matchPayload.sessionPrimary || matchPayload.preferSpeaker || '',
     lastSignature: Array.isArray(matchPayload.lastSignature)
       ? matchPayload.lastSignature.slice(0, 512)
       : null,

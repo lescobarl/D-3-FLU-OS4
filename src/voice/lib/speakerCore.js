@@ -212,7 +212,11 @@ export function assignSpeaker(
         normalized,
         normalizeEmbeddingVector(preferCluster.signature),
       )
-      if (preferSim >= floor) {
+      const preferGate =
+        preferCluster.label && !isAutoSpeakerLabel(preferCluster.label)
+          ? Math.min(floor, thresholdFromConfig('cosineRegisteredMatchThreshold', 0.76, config))
+          : floor
+      if (preferSim >= preferGate) {
         return {
           speakerName: prefer,
           speakerId: labelToSpeakerIdSimple(prefer),
