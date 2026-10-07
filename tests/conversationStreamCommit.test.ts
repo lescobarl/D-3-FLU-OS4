@@ -379,13 +379,16 @@ describe('conversationStreamCommit — commit de turno', () => {
         // Solo la voz NUEVA abre fila; el tramo ya commitido no se duplica.
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
         const [emitText, emitOpts] = deps.emitConversationLog.mock.calls[0] as [string, EmitOptions];
-        expect(emitText).toBe(NOVEL_TAIL);
+        // La cabeza corta del hablante ANTERIOR (< minWordsPerSegment) se ABSORBE en la
+        // fila de la voz nueva: el troceo nunca descarta texto (antes se perdia).
+        expect(emitText).toBe(`hola a todos ${NOVEL_TAIL}`);
         expect(emitText).not.toContain('examen de sociales');
         expect(emitOpts.turnCommit).toBe(true);
         expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
         const [rowText, rowSpeaker] = deps.commitTurnToSessionRows.mock.calls[0];
-        expect(rowText).toBe(NOVEL_TAIL);
-        expect(rowSpeaker).toBe('Hablante 2');
+        expect(rowText).toBe(`hola a todos ${NOVEL_TAIL}`);
+        // La fila es de la VOZ NUEVA (la cabeza corta viaja con ella, sin perderse).
+        expect(rowSpeaker).toBe('Hablante 3');
 
         // El turno cierra igual (una sola ruta de cierre) y deja el texto COMPLETO como marca.
         expect(deps.flushPcmAfterTurnCommit).toHaveBeenCalledTimes(1);
