@@ -227,7 +227,10 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(rowOpts).toEqual({ replaceLast: false });
         // La misma locucion va al log y a la fila con EL MISMO hablante.
         expect(rowSpeaker).toBe(emitOpts.speakerName);
-        expect(String(rowSpeaker)).not.toBe('');
+        // Sin evidencia acustica (el preflight resuelve DESPUES del commit) la fila se
+        // escribe SIN hablante y la resolucion tardia la COMPLETA por identidad de
+        // turno: escribir la prediccion inventaba 'Hablante 8/12' para 2 voces reales.
+        expect(String(emitOpts.speakerName ?? '')).toBe(String(rowSpeaker ?? ''));
 
         // Cierre: el turno deja de estar abierto y la sesion queda lista para el siguiente.
         expect(deps.flushPcmAfterTurnCommit).toHaveBeenCalledTimes(1);
@@ -300,7 +303,9 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.emitConversationLog).not.toHaveBeenCalled();
         const [, rowSpeaker, rowOpts] = deps.commitTurnToSessionRows.mock.calls[0];
         expect(rowOpts).toEqual({ replaceLast: true });
-        expect(rowSpeaker).toBe('Hablante 2');
+        // La fila se REEMPLAZA sin hablante nuevo (no hay evidencia en este commit); el
+        // dueno de la fila CONSERVA el suyo (`commitUserTurnRow`: `resolved || e.speakerName`).
+        expect(rowSpeaker).toBe('');
         expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
     });
 
