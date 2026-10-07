@@ -1599,9 +1599,11 @@ const lastResolvedTurnRef = useRef(0)
         voiceProbe('identity', { path: 'sync', vec: signatureVector.length, snap: audioSnapshot.length, sr: sampleRate, clusters: speakerClustersRef.current?.length ?? 0, resolved: resolvedSpeakerName, fallback: fallbackSpeaker, last: lastSpeakerRef.current || '' })
         return {
           signatureVector,
-          speakerName: resolvedSpeakerName,
+          // Sin ventana de audio el sync devuelve el FALLBACK, no una medida: sin
+          // evidencia NO se escribe hablante (P8.98); el tick tardio COMPLETA la fila.
+          speakerName: audioSnapshot.length ? resolvedSpeakerName : '',
           introducedName: null,
-          resolvedSpeakerName,
+          resolvedSpeakerName: audioSnapshot.length ? resolvedSpeakerName : '',
           speakerAlias: null,
         }
       }

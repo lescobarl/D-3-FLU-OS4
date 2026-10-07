@@ -410,11 +410,13 @@ export function handleConversationStreamSync(
     }
   }
 
-  const speakerResuelto = sameRevisionReplace
-    ? logRowSpeakersRef.current.at(-1) ||
-      lastLoggedSpeakerRef.current ||
-      fallbackSpeaker
-    : resolved.speakerName || fallbackSpeaker
+  // UN DUENO de "que hablante lleva la fila": la resolucion del turno
+  // (`resolveTurnSpeakerAtCommit`, que YA trata la revision del mismo utterance).
+  // La segunda cadena (`logRowSpeakersRef.at(-1) || lastLogged || fallback`) pisaba
+  // el nombre ya resuelto con la etiqueta pegajosa: medido en el log del dueno
+  // (2026-10-07), `commit{src:asr-revision, name:"luis"}` y la fila quedaba
+  // "Hablante 2" (D6: 5 filas).
+  const speakerResuelto = resolved.speakerName || fallbackSpeaker
   // P8.40: si la etiqueta resuelta es una automatica REGISTRADA en participantes, la
   // fila lleva el NOMBRE de la persona (mismo dueno del vinculo: el panel).
   const speakerName = normalizeSpeakerLabel(

@@ -166,6 +166,22 @@ export function assignSpeaker(
       reason: 'empty-vector',
     }
   }
+  // Vector DEGENERADO (todo ceros): la ventana no trajo VOZ, asi que NO hay medida
+  // que comparar. Se trata como no-vector: se conserva el ultimo hablante en vez de
+  // inventar un "Hablante N" (medido 2026-10-07: `snap=0 vec=[0,0,0,0]` abria
+  // etiqueta nueva por turno y el renombre de la sesion no la cubria). Un vector
+  // REAL que no encaja con nadie sigue abriendo hablante nuevo: eso SI es evidencia
+  // (tests/speakerDiarizationSeparation lo fija).
+  if (!normalized.some((value) => Math.abs(value) > 1e-9)) {
+    const fallback =
+      String(lastSpeaker || getFallbackSpeaker(config)).trim() || getFallbackSpeaker(config)
+    return {
+      speakerName: fallback,
+      speakerId: labelToSpeakerIdSimple(fallback),
+      similarity: 0,
+      reason: 'no-vector',
+    }
+  }
 
   const floor = Number(matchThreshold) > 0 && Number(matchThreshold) <= 1
     ? Number(matchThreshold)
@@ -235,6 +251,7 @@ export function assignSpeaker(
       reason: bestLabel === lastSpeaker ? 'cluster-cosine-match' : 'cluster-reidentify',
     }
   }
+
 
   if (lastSpeaker && lastSim >= 0 && lastSim < newVoiceOpen && bestSim < newVoiceOpen) {
     const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)

@@ -107,7 +107,7 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         }
     });
 
-    test('P3b: "soy Luis" registra el nombre SIN etiqueta sembrada (ruta del texto)', async ({ page }) => {
+    test('P3b: "soy Luis" no deja etiquetas inventadas (sin etiqueta sembrada)', async ({ page }) => {
         // DEFECTO MEDIDO (2026-10-07, RED): tras "Okay flow soy luis" la fila del
         // turno SIGUIENTE vuelve a la etiqueta generica en 1 de cada 2 intentos
         // (log: commit {"name":"Luis"} y la fila acaba en "Hablante 1"). La causa
@@ -116,9 +116,14 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         // sin la etiqueta que el hablante VENIA usando, y turnSpeakerCommit.js:200-208
         // con ella). test.fail() = se ejecuta y mide; si algun dia PASA, este spec se
         // pone en ROJO y obliga a actualizar el instrumento (la reversa del defecto).
-        test.fail(true, 'DEFECTO MEDIDO: el nombre registrado no pega en el turno siguiente (ver comentario)');
         // El dueño lo dice con la voz: no hay etiqueta previa. La ruta del texto
         // (P9.11) debe registrar el participante y firmar sus filas con el nombre.
+        // DEFECTO VIVO (2026-10-07): TRES rutas dan nombre al MISMO turno (la
+        // resolucion del commit, el sync sin audio y el tick tardio) y la fila acaba
+        // con la ultima que escribe: a veces "Luis", a veces "Hablante 1". test.fail
+        // mantiene el caso VIVO documentado en verde; si algun dia pasa, este spec se
+        // pone en ROJO y obliga a actualizar el instrumento.
+        test.fail(true, 'DEFECTO VIVO: el nombre de la fila depende de que ruta escriba ultima');
         await startConversation(page);
         await esperarListo(page);
 
@@ -129,7 +134,15 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         const filas = await usuarios(page);
         const hablantes = filas.map((row) => row.speaker);
         console.log(`[P3b] hablantes = ${JSON.stringify(hablantes)}`);
-        expect(hablantes.filter((h) => h === 'Luis').length, `hablantes=${JSON.stringify(hablantes)}`).toBeGreaterThanOrEqual(2);
+        // INVARIANTE (la que el dueno pide): una sesion identificada NO puede acabar
+        // con etiquetas INVENTADAS. El turno identificado lleva el nombre; el turno
+        // sin evidencia acustica queda SIN hablante (P8.98) en vez de "Hablante N";
+        // nada de dos nombres para el mismo turno.
+        expect(hablantes[0], `hablantes=${JSON.stringify(hablantes)}`).toBe('Luis');
+        expect(
+            hablantes.filter((h) => /^Hablante\s+\d+$/.test(h)),
+            `no puede quedar una etiqueta inventada: ${JSON.stringify(hablantes)}`,
+        ).toHaveLength(0);
     });
 
     test('P4: latencia final -> fila (medicion de rendimiento)', async ({ page }) => {

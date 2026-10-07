@@ -24,6 +24,8 @@ import {
 } from '../src/voice/lib/turnSpeakerCommit.js'
 import { flattenChunksWindow } from '../src/voice/lib/speakerClusters.js'
 import { scheduleTurnSpeakerPreflight } from '../src/voice/lib/turnSpeakerPreflight.js'
+import { assignSpeaker } from '../src/voice/lib/speakerCore.js'
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { enqueueSpeakerIdentityJob } from '../src/voice/lib/voiceIdentityQueue.js'
 
 /** Deja correr la cola de identidad (idle + microtareas). */
@@ -229,5 +231,75 @@ describe('solo el snapshot FINAL rotula la fila', () => {
     expect(onResolved).toHaveBeenCalledWith(
       expect.objectContaining({ speakerName: 'luis', turnId: 6 }),
     )
+  })
+})
+
+// ============================================================
+// PISO DE EVIDENCIA (defecto medido en el log real del dueno, 2026-10-07)
+// ------------------------------------------------------------
+// Con la misma voz de siempre y ventanas cortas, el comparador recibia sim=0.247 /
+// 0.396 / 0.452 y declaraba "voz nueva" en CADA turno: los clusters crecieron
+// 1 -> 2 -> 3 -> 4 -> 5 (`Match reason=forced-new-voice-below-threshold` x4,
+// `new-voice-below-threshold` x3) para 2-3 voces reales, y el dueno quedo con
+// "Hablante 1" y "Hablante 2" a la vez (26 filas / 6 etiquetas).
+// Por debajo del piso la ventana NO mide VOZ (ni continuidad ni voz distinta): sin
+// evidencia no se inventa hablante.
+// ============================================================
+describe('piso de evidencia: una ventana sin VOZ medida no abre un "Hablante N" nuevo', () => {
+  const clusters = [
+    { label: 'Hablante 1', speakerId: 'spk-1', signature: [1, 0, 0] },
+    { label: 'Hablante 2', speakerId: 'spk-2', signature: [0, 1, 0] },
+  ]
+  // Ventana sin VOZ medida: [0,0,0,0] (snap=0 -> el vector llega degenerado).
+  const VENTANA_SIN_VOZ = [0, 0, 0, 0]
+  // Coseno 0.58: sobre el piso (voz distinta con evidencia suficiente).
+  const VOZ_DISTINTA_DEBIL = [0.58, 0, 0.8146]
+
+  it('conserva el hablante anterior en vez de inventar uno nuevo', () => {
+    const r = assignSpeaker(VENTANA_SIN_VOZ, {
+      clusters,
+      lastSpeaker: 'Hablante 1',
+      lastSignature: [1, 0, 0],
+      reservedLabels: [],
+      config: FLU_CONFIG,
+    } as any)
+    expect(r.reason, JSON.stringify(r)).not.toMatch(/new-voice|first-voice/)
+    expect(r.speakerName).toBe('Hablante 1')
+  })
+
+  it('una voz DISTINTA con evidencia suficiente (0.58) si abre hablante nuevo', () => {
+    const r = assignSpeaker(VOZ_DISTINTA_DEBIL, {
+      clusters,
+      lastSpeaker: 'Hablante 1',
+      lastSignature: [1, 0, 0],
+      reservedLabels: [],
+      config: FLU_CONFIG,
+    } as any)
+    expect(r.speakerName).toBe('Hablante 3')
+    expect(r.reason).toMatch(/new-voice/)
+  })
+
+  it('un cluster que encaja con fuerza sigue mandando (no se bloquea lo legitimo)', () => {
+    const r = assignSpeaker([0, 1, 0], {
+      clusters,
+      lastSpeaker: 'Hablante 1',
+      lastSignature: [1, 0, 0],
+      reservedLabels: [],
+      config: FLU_CONFIG,
+    } as any)
+    expect(r.speakerName).toBe('Hablante 2')
+    expect(r.reason).toMatch(/cluster/)
+  })
+
+  it('sin vector no se inventa etiqueta', () => {
+    const r = assignSpeaker([], {
+      clusters,
+      lastSpeaker: 'Hablante 1',
+      lastSignature: [1, 0, 0],
+      reservedLabels: [],
+      config: FLU_CONFIG,
+    } as any)
+    expect(r.speakerName).toBe('Hablante 1')
+    expect(r.reason).not.toMatch(/new-voice|first-voice/)
   })
 })

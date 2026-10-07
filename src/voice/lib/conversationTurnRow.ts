@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
+import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 
 /**
  * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.
@@ -51,6 +52,25 @@ export function resolveSpeakerAlias(speakerName: string): string {
 /** Solo para pruebas: limpia los alias de sesion. */
 export function resetSpeakerAliases(): void {
     speakerAliases.clear();
+}
+
+/**
+ * Un nombre PROPIO ya escrito en la fila NO lo pisa una etiqueta AUTOMATICA
+ * ("Hablante N"). Medido en el log del dueno (2026-10-07): la sesion quedo
+ * identificada como "Luis" y las filas acabaron en "Hablante 2/1/4/5" (D3: 8 filas)
+ * porque el tick de identidad reescribia con la etiqueta generica. La etiqueta
+ * automatica solo COMPLETA una fila sin hablante: nunca degrada un nombre propio.
+ *
+ * @param nextName etiqueta/nombre que quiere escribir el que llama
+ * @param currentName hablante que la fila YA tiene
+ * @returns el hablante que debe quedar
+ */
+export function preserveProperSpeaker(nextName: string, currentName?: string): string {
+    const next = String(nextName || '').trim();
+    const current = String(currentName || '').trim();
+    if (!next) return current;
+    if (current && isProperSpeakerName(current) && isAutoSpeakerLabel(next)) return current;
+    return next;
 }
 
 /**
@@ -124,9 +144,18 @@ export function updateTurnRowSpeaker(
     const history = store.conversationHistory;
     const entry = history.find((e) => e.id === rowId);
     if (!entry || entry.role !== 'user') return false;
-    if (String(entry.speakerName || '').trim() === resolved) return false;
+    // Una etiqueta AUTOMATICA no pisa el nombre propio ya escrito en la fila.
+    const objetivo = preserveProperSpeaker(resolved, entry.speakerName);
+    voiceProbe('row-update', {
+        turnId,
+        pedido: resolved,
+        actual: String(entry.speakerName || ''),
+        objetivo,
+        cambia: String(entry.speakerName || '').trim() !== objetivo,
+    });
+    if (String(entry.speakerName || '').trim() === objetivo) return false;
     store.batchLoadHistory(
-        history.map((e) => (e.id === rowId ? { ...e, speakerName: resolved } : e)),
+        history.map((e) => (e.id === rowId ? { ...e, speakerName: objetivo } : e)),
     );
     return true;
 }
@@ -229,7 +258,7 @@ function commitUserTurnRowInner({
             if (!entry || entry.role !== 'user') continue;
             const updated = history.map((e) =>
                 e.id === entry.id
-                    ? { ...e, text: raw, speakerName: resolved || e.speakerName, timestamp: stamp }
+                    ? { ...e, text: raw, speakerName: preserveProperSpeaker(resolved, e.speakerName), timestamp: stamp }
                     : e,
             );
             store.batchLoadHistory(updated);
@@ -255,7 +284,7 @@ function commitUserTurnRowInner({
                     ? {
                         ...e,
                         text: masCompleto ? raw : e.text,
-                        speakerName: resolved || e.speakerName,
+                        speakerName: preserveProperSpeaker(resolved, e.speakerName),
                         timestamp: masCompleto ? stamp : e.timestamp,
                     }
                     : e,
