@@ -185,10 +185,12 @@ export interface UserTurnRowResult {
  */
 export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
     const result = commitUserTurnRowInner(input);
+    const fullText = String(input.text || '');
     voiceProbe('row', {
         action: result.action,
         id: result.id,
-        text: String(input.text || '').slice(0, 220),
+        len: fullText.length,
+        text: fullText.slice(0, 220),
         speaker: resolveSpeakerAlias(input.speakerName || ''),
         turnId: input.turnId ?? null,
     });

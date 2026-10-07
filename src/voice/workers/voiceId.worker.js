@@ -108,10 +108,10 @@ self.onmessage = async (event) => {
         preferLabel: payload.preferSpeaker || payload.lastSpeaker || '',
         lastSpeaker: payload.lastSpeaker || '',
         lastSignature: payload.lastSignature || null,
-        continuityThreshold: payload.continuityThreshold ?? 0.74,
-        newVoiceThreshold: payload.newVoiceThreshold ?? 0.68,
-        matchThresholdCluster: payload.matchThresholdCluster ?? 0.76,
-        soloNewVoiceFactor: payload.soloNewVoiceFactor ?? 0.82,
+        continuityThreshold: payload.continuityThreshold,
+        newVoiceThreshold: payload.newVoiceThreshold,
+        matchThresholdCluster: payload.matchThresholdCluster,
+        soloNewVoiceFactor: payload.soloNewVoiceFactor,
       })
 
       reply(true, {

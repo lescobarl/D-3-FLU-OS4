@@ -278,7 +278,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
       relayLog(
         'LOG',
         'Match',
-        `reason=${raw?.reason || ''} sim=${Number(raw?.similarity ?? 0).toFixed(3)} name="${raw?.speakerName || ''}" inClusters=${payload.clusters?.length ?? 0} last="${payload.lastSpeaker || ''}"`,
+        `reason=${raw?.reason || ''} sim=${Number(raw?.similarity ?? 0).toFixed(3)} name="${raw?.speakerName || ''}" inClusters=${payload.clusters?.length ?? 0} last="${payload.lastSpeaker || ''}" clusterMatch=${Number(cfg.productionClusterReuseThreshold) || '-'} newVoice=${Number(cfg.cosineNewVoiceThreshold) || '-'}`,
       )
     }
   } catch (error) {
