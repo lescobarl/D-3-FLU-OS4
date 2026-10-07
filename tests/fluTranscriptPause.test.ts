@@ -155,3 +155,12 @@ describe('fluTranscriptPause - isWeakAsrSpeakerEvidence', () => {
     ).toBe(true);
   });
 });
+
+describe('fluTranscriptPause - resolveSrGapTrigger (PRUEBA DE DETECTOR, el detector no es decorativo)', () => {
+  it('dispara con la locucion viva estancada y NO con el ASR activo reciente', async () => {
+    h.config.transcript!.pauseAndWeakAsr!.srGapCommitMs = 10000;
+    const { resolveSrGapTrigger } = await import('../src/voice/lib/fluTranscriptPause.js');
+    expect(resolveSrGapTrigger({ sinceLastResultMs: 500, sinceLastCommitMs: 12000 }).fire).toBe(true);
+    expect(resolveSrGapTrigger({ sinceLastResultMs: 2000, sinceLastCommitMs: 2000 }).fire).toBe(false);
+  });
+});

@@ -54,6 +54,7 @@ import {
   resolveNavigationCommand,
 } from '../lib/voiceCommands'
 import {
+  findLabelsWithSharedVoice,
   flattenChunksTail,
   flattenChunksWindow,
   isProperSpeakerName,
@@ -63,7 +64,7 @@ import {
   trimAudioChunkBuffer,
 } from '../lib/voiceIdentity'
 import { clearSessionPrimarySpeaker, setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
-import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
+import { updateTurnRowSpeaker, renameSpeakerRows } from '../lib/conversationTurnRow'
 import {
   getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
@@ -142,7 +143,7 @@ import {
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
 import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
-import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPause.js'
+import { getTranscriptPauseCfg, countSpeechWords, resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción
 // App.tsx inyecta su instancia vía participantRef (mismo módulo).
@@ -1462,6 +1463,9 @@ const lastResolvedTurnRef = useRef(0)
     if (Number.isFinite(id)) lastResolvedTurnRef.current = id
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
     updateTurnRowSpeaker(turnId, speakerName) // completa la fila de ESE turno, no la hereda
+    if (isProperSpeakerName(speakerName)) {
+      renameSpeakerRows(findLabelsWithSharedVoice(speakerClustersRef.current, speakerName), speakerName)
+    }
   }, [])
 
   const scheduleIdentityPreflight = useCallback(
@@ -4382,14 +4386,10 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         const pauseCfg = getTranscriptPauseCfg()
-        const srGapMs = Number(pauseCfg.srGapCommitMs) || 0
         const srGapMinWords = Number(pauseCfg.srGapCommitMinWords) || 0
         const sinceResult = now - (lastOnresultAtRef.current || 0)
-        if (
-          srGapMs > 0 &&
-          sinceResult >= srGapMs &&
-          !srGapFiredForOpenLineRef.current
-        ) {
+        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: now - (lastCommitAtRef.current || 0) })
+        if (srGap.fire && !srGapFiredForOpenLineRef.current) {
           const openLine = cleanForSpeech(
             listenStateRef.current?.openLine ||
             publishedLiveRef.current ||
@@ -4397,7 +4397,7 @@ const lastResolvedTurnRef = useRef(0)
           )
           if (openLine && countSpeechWords(openLine) >= srGapMinWords) {
             srGapFiredForOpenLineRef.current = true
-            ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: sinceResult })
+            ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })
           }
         }
         return

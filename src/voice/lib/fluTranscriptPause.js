@@ -49,6 +49,32 @@ export function listConfiguredTranscriptHardRules() {
   }))
 }
 
+/**
+ * Disparador del cierre de SEGMENTO vivo (`srGap`): dos caminos, la MISMA regla
+ * ("el ASR no va a cerrar esta locucion"):
+ *   1) el ASR lleva `srGapCommitMs` sin onresult (Chrome mudo / TV), o
+ *   2) la LOCUCION VIVA lleva `srGapCommitMs` sin cerrar: Chrome puede emitir
+ *      interinos durante minutos y no entregar nunca un final.
+ * El caso 2 se midio el 2026-10-07 (debug.log): 76 s de audio continuo con
+ * interinos -> UNA fila "mientras"; el texto vivia solo en ULTIMA FRASE y se
+ * perdia. Devuelve el valor sintetico de silencio para reutilizar el MISMO
+ * cierre (`evaluateSrGapSegmentCommit`), sin una segunda ruta de commit.
+ */
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0 } = {}) {
+  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
+  if (gapMs <= 0) return { fire: false, sinceLastResultMs: 0, reason: 'sr-gap-commit-disabled' }
+  const silence = Number(sinceLastResultMs) >= gapMs
+  const staleTurn = Number(sinceLastCommitMs) >= gapMs
+  if (!silence && !staleTurn) {
+    return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
+  }
+  return {
+    fire: true,
+    sinceLastResultMs: Math.max(Number(sinceLastResultMs) || 0, gapMs),
+    reason: silence ? 'sr-silence' : 'sr-live-turn-stale',
+  }
+}
+
 export function countSpeechWords(text = '') {
   // Recuento de "palabras habladas": el tokenizador tiene dueno unico
   // (audioMath.speechWords, minusculas). Aqui solo se usa el NUMERO, invariante a

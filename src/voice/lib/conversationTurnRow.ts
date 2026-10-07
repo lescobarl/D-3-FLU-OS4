@@ -44,6 +44,41 @@ function rememberTurn(turnId: number | string | null, rowId: string): void {
  * COMPLETA el hablante de la fila de un turno YA registrado (mismo dueno: la fila
  * se reutiliza por IDENTIDAD de turno). Devuelve `true` si la fila cambio.
  */
+/**
+ * Renombra TODA la participacion de una voz YA identificada (requisito del dueno:
+ * "cuando identifique a un hablante especifico toda su participacion debe llevar
+ * ese nombre; soy Luis y todo lo que lleve mi hablante debe cambiar a luis").
+ *
+ * Quien sabe QUE etiquetas son la MISMA voz es el dueno de los clusters
+ * (`findLabelsWithSharedVoice`); aqui solo se escriben las filas, con el MISMO
+ * escritor unico (`batchLoadHistory`) que el resto de la conversacion.
+ *
+ * @param {string[]} labels etiquetas que pertenecen a esa voz (incluye el nombre)
+ * @param {string} toName nombre identificado (persona registrada)
+ * @returns {number} filas cambiadas
+ */
+export function renameSpeakerRows(labels: string[], toName: string): number {
+    const name = String(toName || '').trim();
+    if (!name || !Array.isArray(labels) || !labels.length) return 0;
+    const normalized = new Set(
+        labels.map((l) => String(l || '').trim().toLowerCase()).filter(Boolean),
+    );
+    normalized.add(name.toLowerCase());
+    const store = useIntegrationStore.getState();
+    const history = store.conversationHistory;
+    let changed = 0;
+    const updated = history.map((e) => {
+        if (e.role !== 'user') return e;
+        const current = String(e.speakerName || '').trim();
+        if (!current || !normalized.has(current.toLowerCase())) return e;
+        if (current === name) return e;
+        changed += 1;
+        return { ...e, speakerName: name };
+    });
+    if (changed) store.batchLoadHistory(updated);
+    return changed;
+}
+
 export function updateTurnRowSpeaker(
     turnId: number | string | null,
     speakerName: string,

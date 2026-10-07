@@ -265,7 +265,6 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
   }
 
   let vector = []
-  let workerHint = null
   try {
     const raw = await post('embedAndMatch', payload, transfer).catch((error) => {
       if (typeof window !== 'undefined') throw error
@@ -281,13 +280,6 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
         'Match',
         `reason=${raw?.reason || ''} sim=${Number(raw?.similarity ?? 0).toFixed(3)} name="${raw?.speakerName || ''}" inClusters=${payload.clusters?.length ?? 0} last="${payload.lastSpeaker || ''}"`,
       )
-    }
-    if (raw?.speakerId && raw?.speakerName && raw?.reason && raw.reason !== 'no-vector') {
-      workerHint = {
-        speakerId: raw.speakerId,
-        speakerName: raw.speakerName,
-        reason: raw.reason,
-      }
     }
   } catch (error) {
         logCaughtError('[catch] src/voice/lib/voiceIdWorkerClient.js', error);
@@ -317,24 +309,6 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
       workingClusters: matchPayload.speakerClusters || [],
       signatureVector: [],
       reason: 'no-vector',
-    }
-  }
-
-  if (
-    workerHint &&
-    (workerHint.reason === 'last-signature' || workerHint.reason === 'cluster-nearest')
-  ) {
-    const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, sampleCount)
-    const sameLabel =
-      String(identity.speakerName || '').trim() === String(workerHint.speakerName || '').trim()
-    if (sameLabel) {
-      return {
-        speakerId: workerHint.speakerId,
-        speakerName: workerHint.speakerName,
-        workingClusters: identity.workingClusters,
-        signatureVector: vector,
-        reason: workerHint.reason,
-      }
     }
   }
 
