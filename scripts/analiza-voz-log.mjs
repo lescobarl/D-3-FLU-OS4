@@ -118,7 +118,7 @@ const ms = (a, b) => {
     return Math.round(s(b) - s(a));
 };
 
-const banderas = { D1: [], D2: [], D3: [], D4: [] };
+const banderas = { D1: [], D2: [], D3: [], D4: [], D5: [], D6: [] };
 let nombrePropio = '';
 
 console.log('');
@@ -175,6 +175,53 @@ for (const f of filas) {
     console.log(`  ${f.action || '-'} spk=${spk} txt="${String(f.text || '').slice(0, 90)}"`);
 }
 console.log('  hablantes: ' + [...conteoHab.entries()].map(([k, v]) => `${k}=${v}`).join(' '));
+
+// --- D5: palabras del ASR FINAL que NO aparecen en NINGUNA fila (perdida global) ---
+const asrFinalWords = [];
+for (const ev of eventos) {
+    if (ev.tag === 'asrRaw' && ev.data && Array.isArray(ev.data.items)) {
+        for (const item of ev.data.items) {
+            if (item && item.f === 1 && item.t) asrFinalWords.push(...palabras(item.t));
+        }
+    }
+    if (ev.tag === 'asrFinal' && ev.data && ev.data.text) asrFinalWords.push(...palabras(ev.data.text));
+}
+const rowWords = new Set();
+for (const f of filas) for (const w of palabras(f.text)) rowWords.add(w);
+const RUIDO = new Set(['okay', 'ok', 'flow', 'flu', 'oye', 'hey', 'the', 'and']);
+const perdidas = [...new Set(asrFinalWords)].filter((w) => !rowWords.has(w) && !RUIDO.has(w) && w.length > 2);
+if (perdidas.length) {
+    banderas.D5.push(
+        `palabras del ASR FINAL que no estan en ninguna fila (${perdidas.length}): ${perdidas.slice(0, 60).join(' ')}`,
+    );
+}
+
+// --- D5b: interinos (f=0) que NUNCA llegaron a una fila (texto visto y no conversado) ---
+const interimWords = [];
+for (const ev of eventos) {
+    if (ev.tag === 'asrRaw' && ev.data && Array.isArray(ev.data.items)) {
+        for (const item of ev.data.items) {
+            if (item && item.f === 0 && item.t) interimWords.push(...palabras(item.t));
+        }
+    }
+}
+const perdidasInterim = [...new Set(interimWords)].filter((w) => !rowWords.has(w) && !RUIDO.has(w) && w.length > 3);
+if (perdidasInterim.length) {
+    banderas.D5.push(
+        `INTERINOS que no llegaron a ninguna fila (${perdidasInterim.length}): ${perdidasInterim.slice(0, 60).join(' ')}`,
+    );
+}
+
+// --- D6: la fila no lleva el nombre que el COMMIT resolvio ---
+for (const t of turnos) {
+    const c = t.commit || {};
+    const row = t.row || {};
+    const cn = String(c.name || '').trim();
+    const rs = String(row.speaker || '').trim();
+    if (cn && rs && cn.toLowerCase() !== rs.toLowerCase()) {
+        banderas.D6.push(`t=${c.turn} commit.name="${cn}" pero la fila quedo "${rs}" (txt="${String(row.text || '').slice(0, 60)}")`);
+    }
+}
 
 console.log('');
 console.log('--- BANDERAS ---');
