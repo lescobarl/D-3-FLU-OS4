@@ -47,23 +47,31 @@ export function flattenChunksTail(chunks = [], maxSamples = 0) {
   return result
 }
 
-/** Ventana de audio del turno actual (desde último cierre) con fallback a cola fija. */
+/** Ventana de audio del turno actual (desde ultimo cierre) con fallback a cola fija. */
 export function flattenChunksWindow(
   chunks = [],
   { totalSamples = 0, sinceSample = 0, maxSamples = 0, minSamples = 0 } = {},
 ) {
-  const flat = flattenChunksTail(chunks, Number.POSITIVE_INFINITY)
-  if (!flat.length) return new Float32Array(0)
+  // RENDIMIENTO (medido 2026-10-07): el buffer vivo llega a 30 s (~1,44 M muestras,
+  // 11250 chunks). Antes se copiaba ENTERO (`flattenChunksTail(chunks, Infinity)`) y
+  // luego se tomaba su cola: esa copia corria en CADA tick de identidad (800 ms) y en
+  // CADA commit. Aqui se calcula la ventana y se copian SOLO sus muestras (mismo
+  // resultado, sin la copia del buffer completo).
+  let bufferLen = 0
+  for (let index = 0; index < chunks.length; index += 1) {
+    bufferLen += chunks[index]?.length || 0
+  }
+  if (!bufferLen) return new Float32Array(0)
 
-  const bufferLen = flat.length
   const turnSpan = Math.max(0, totalSamples - sinceSample)
   let windowLen = turnSpan > 0 ? Math.min(turnSpan, bufferLen) : bufferLen
   if (maxSamples > 0) windowLen = Math.min(windowLen, maxSamples)
   if (minSamples > 0 && windowLen < minSamples) {
     windowLen = Math.min(Math.max(windowLen, minSamples), bufferLen)
   }
+  if (windowLen <= 0) return new Float32Array(0)
 
-  return flat.subarray(Math.max(0, flat.length - windowLen))
+  return flattenChunksTail(chunks, windowLen)
 }
 
 export function trimAudioChunkBuffer(

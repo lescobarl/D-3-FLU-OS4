@@ -30,16 +30,26 @@ const DYNAMIC_KEY = '__dynamic__'
  *   al arrancar dejaba los snapshots en un slot que el commit no miraba
  *   (medido: `Preflight turn=5` vs `Commit turn=9` -> `preReady=false` siempre).
  */
-export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters, onResolved } = {}) {
+export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters, onResolved, getAudioRevision } = {}) {
   const dynamic = typeof turnId === 'function'
   const initialId = Number(dynamic ? turnId() : turnId)
   if (!Number.isFinite(initialId) || initialId <= 0) return
 
   stopContinuousIdentityPipeline(initialId)
 
+  // RENDIMIENTO (medido 2026-10-07): el tick corria cada 800 ms aunque el audio del
+  // turno NO hubiera cambiado -> se re-embebia la MISMA ventana (log: `Preflight
+  // turn=7 ready=true vec=512` repetido cada ~3 s). Con `getAudioRevision`, la
+  // revision del audio gobierna el tick: si no avanzo, no hay nada nuevo que embeber.
+  let lastRevision = null
   const tick = () => {
     const id = dynamic ? Number(turnId()) : initialId
     if (!Number.isFinite(id) || id <= 0) return
+    if (typeof getAudioRevision === 'function') {
+      const revision = getAudioRevision()
+      if (lastRevision !== null && revision === lastRevision) return
+      lastRevision = revision
+    }
     const run = typeof runFactory === 'function' ? runFactory() : runFactory
     if (typeof run !== 'function') return
     scheduleTurnSpeakerPreflight(id, run, { onClusters, onResolved, continuous: true })

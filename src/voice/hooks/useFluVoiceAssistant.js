@@ -1488,7 +1488,7 @@ const lastResolvedTurnRef = useRef(0)
         () => activeTurnIdRef.current,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
         // §9 Dueño unico de la escritura de clusters: el ref del hook.
-        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker, getSpeakerClusters: () => speakerClustersRef.current },
+        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker, getSpeakerClusters: () => speakerClustersRef.current, getAudioRevision: () => publishedLiveRef.current },
       )
     },
     [conversationActiveRef, createSpeakerAudioResolver, setSpeakerClusters, applyResolvedSpeaker],
