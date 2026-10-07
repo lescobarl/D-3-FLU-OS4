@@ -190,7 +190,7 @@ export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
         action: result.action,
         id: result.id,
         len: fullText.length,
-        text: fullText.slice(0, 220),
+        text: fullText,
         speaker: resolveSpeakerAlias(input.speakerName || ''),
         turnId: input.turnId ?? null,
     });

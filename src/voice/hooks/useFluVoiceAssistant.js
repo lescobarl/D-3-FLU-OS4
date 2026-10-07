@@ -168,7 +168,7 @@ import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
 import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
 import { isAssistantSpeechEcho } from '../lib/conversationStream.js'
-import { voiceProbe } from '../lib/voiceProbe'
+import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
@@ -2151,6 +2151,7 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       Recognition.onresult = (event) => {
+        if (isVoiceProbeEnabled()) voiceProbe('asrRaw', { items: Array.from(event.results || []).map((r) => ({ f: r?.isFinal ? 1 : 0, t: String(r?.[0]?.transcript || '') })) })
         // Supresión de eco: mientras FLU HABLA, ignorar resultados del
         // reconocedor para no capturar la propia voz y re-mandarla a la IA.
         // Se usa la promesa propia de FLU (`isFluSpeaking`, acotada por el
