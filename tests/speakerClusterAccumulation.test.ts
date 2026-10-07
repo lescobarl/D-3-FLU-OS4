@@ -85,7 +85,7 @@ describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', 
     expect(setSpeakerClusters.mock.calls[0][0].length).toBe(1)
   })
 
-  it('el preflight CONTINUO no escribe clusters (ventanas parciales = inflado), pero si avisa del hablante', async () => {
+  it('el preflight CONTINUO no escribe clusters NI avisa (solo calienta la cache)', async () => {
     const setSpeakerClusters = vi.fn()
     const onResolved = vi.fn()
     startContinuousIdentityPipeline(1, readyPreflight, { onClusters: setSpeakerClusters, onResolved })
@@ -94,7 +94,10 @@ describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', 
       setSpeakerClusters,
       'el continuo NO debe escribir clusters: sus ventanas parciales inflan la cuenta',
     ).not.toHaveBeenCalled()
-    expect(onResolved, 'si debe avisar del hablante resuelto (lo necesita la fila)').toHaveBeenCalled()
+    expect(
+      onResolved,
+      'un tick parcial tampoco avisa: la fila se rotula SOLO con el snapshot FINAL (evita reescribirla con H1->H2->H4)',
+    ).not.toHaveBeenCalled()
   })
 
   it('un tick posterior NO descarta el snapshot FINAL que espera en la cola', async () => {
@@ -181,41 +184,50 @@ const resuelve = (speakerName: string) => () =>
 // etiquetas que los clusters guardados NO conocen y que solo existen en la vista
 // PARCIAL de un tick continuo. Sintomas del dueno: "esta inflando los hablantes, no
 // es mas: es una chica y yo".
-describe('la etiqueta de un tick continuo no puede inventar hablantes', () => {
-  it('una etiqueta automatica NO persistida no rotula; una SI persistida si', async () => {
-    const clusters = [{ label: 'Hablante 2' }]
+//
+// AMPLIADO 2026-10-07 (log del dueno 17:28-17:33): los ticks continuos SI rotulaban la
+// fila (con la etiqueta que les saliera) y la reescribian varias veces por turno --
+// "me puso primero como hablante uno luego como hablante dos y ahora puso hablante
+// cuatro" y "en el hablante uno puso a la mujer". REGLA VIGENTE: el aviso que COMPLETA
+// la fila lo da SOLO el snapshot FINAL; un tick continuo no avisa, ni siquiera con una
+// etiqueta ya persistida.
+describe('solo el snapshot FINAL rotula la fila', () => {
+  it('un tick continuo no avisa ni con la etiqueta persistida ni con un nombre propio', async () => {
     const onResolved = vi.fn()
+    const clusters = [{ label: 'Hablante 2' }]
 
-    scheduleTurnSpeakerPreflight(3, resuelve('Hablante 9'), {
+    scheduleTurnSpeakerPreflight(3, resuelve('Hablante 2'), {
+      onResolved,
+      continuous: true,
+      getSpeakerClusters: () => clusters,
+    })
+    scheduleTurnSpeakerPreflight(4, resuelve('luis'), {
       onResolved,
       continuous: true,
       getSpeakerClusters: () => clusters,
     })
     await flush()
-    expect(
-      onResolved,
-      'Hablante 9 no esta en los clusters persistidos: es una etiqueta inventada por una ventana parcial',
-    ).not.toHaveBeenCalled()
-
-    scheduleTurnSpeakerPreflight(4, resuelve('Hablante 2'), {
-      onResolved,
-      continuous: true,
-      getSpeakerClusters: () => clusters,
-    })
-    await flush()
-    expect(onResolved, 'Hablante 2 SI existe en los clusters: debe rotular la fila').toHaveBeenCalledWith(
-      expect.objectContaining({ speakerName: 'Hablante 2', turnId: 4 }),
-    )
+    expect(onResolved, 'un tick parcial no puede reescribir la fila').not.toHaveBeenCalled()
   })
 
-  it('un nombre propio (registrado) pasa aunque no sea un cluster automatico', async () => {
+  it('el snapshot FINAL si rotula, y respeta la puerta de etiquetas inventadas', async () => {
     const onResolved = vi.fn()
-    scheduleTurnSpeakerPreflight(5, resuelve('luis'), {
+    scheduleTurnSpeakerPreflight(5, resuelve('Hablante 9'), {
       onResolved,
-      continuous: true,
+      continuous: false,
       getSpeakerClusters: () => [{ label: 'Hablante 2' }],
     })
     await flush()
-    expect(onResolved, 'un nombre propio no es una etiqueta automatica: no se filtra').toHaveBeenCalled()
+    expect(onResolved).not.toHaveBeenCalled()
+
+    scheduleTurnSpeakerPreflight(6, resuelve('luis'), {
+      onResolved,
+      continuous: false,
+      getSpeakerClusters: () => [{ label: 'Hablante 2' }],
+    })
+    await flush()
+    expect(onResolved).toHaveBeenCalledWith(
+      expect.objectContaining({ speakerName: 'luis', turnId: 6 }),
+    )
   })
 })

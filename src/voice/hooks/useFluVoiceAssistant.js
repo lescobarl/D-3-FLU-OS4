@@ -4,6 +4,7 @@ import {
   cleanForSpeech,
   decideVoiceTurnDispatch,
   detectIntroducedName,
+  detectWakeIntroducedName,
   detectListeningControl,
   detectRole,
   detectTranscriptLanguage,
@@ -2874,7 +2875,7 @@ const lastResolvedTurnRef = useRef(0)
       await commitAndResolveTurn({
         capture: cleaned,
         contract: {
-          respuesta_voz: getCommandSpeech(command, language),
+          respuesta_voz: getCommandSpeech(command, language, FLU_CONFIG, { name: detectWakeIntroducedName(cleaned, resolvedWakeWords) }),
           navegacion: {
             comando: command,
             destino: null,
@@ -2891,7 +2892,7 @@ const lastResolvedTurnRef = useRef(0)
         conversationCommandPreLogged,
       })
     },
-    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters],
+    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters, resolvedWakeWords],
   )
 
   const dispatchPassiveVoiceCommand = useCallback(
@@ -3856,7 +3857,7 @@ const lastResolvedTurnRef = useRef(0)
         await commitAndResolveTurn({
           capture: capturedTranscript,
           contract: {
-            respuesta_voz: getCommandSpeech(directCommand, detectedLanguage || language),
+            respuesta_voz: getCommandSpeech(directCommand, detectedLanguage || language, FLU_CONFIG, { name: detectWakeIntroducedName(capturedTranscript, resolvedWakeWords) }),
             navegacion: {
               comando: directCommand,
               destino: null,

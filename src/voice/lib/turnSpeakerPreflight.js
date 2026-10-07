@@ -41,6 +41,18 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
     onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
   }
 
+  // El aviso que COMPLETA la fila lo da SOLO el snapshot FINAL: es el unico que
+  // escribe clusters y la respuesta DEFINITIVA del turno. Los ticks continuos
+  // resuelven sobre ventanas parciales y dan etiquetas que oscilan; si ellos
+  // completaran la fila, la reescribirian varias veces por turno (medido en el
+  // log del dueno 2026-10-07: la misma persona salia Hablante 1, luego 2, luego 4
+  // y "en el hablante uno puso a la mujer"). Los ticks siguen calentando la cache
+  // del embedding, pero NO tocan la fila ni el historial.
+  const notifyResolvedForTurn = (result) => {
+    if (continuous) return
+    notifyResolved(result)
+  }
+
   const prior = preflightByTurn.get(id)
   preflightByTurn.set(id, {
     ...(prior?.ready
@@ -76,7 +88,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         if (!continuous && typeof onClusters === 'function' && result?.workingClusters?.length) {
           onClusters(result.workingClusters)
         }
-        notifyResolved(result)
+        notifyResolvedForTurn(result)
         return
       }
       const weakResult =
@@ -129,7 +141,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
         if (!defer) onClusters(result.workingClusters)
       }
-      notifyResolved(result)
+      notifyResolvedForTurn(result)
     },
     onError: () => {
       const slot = preflightByTurn.get(id)
