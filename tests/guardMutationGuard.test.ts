@@ -13,17 +13,13 @@
  * del baseline gana su prueba, hay que sacarlo del baseline o el meta-guard falla.
  * Asi el teatro no se puede AMPLIAR nunca y el existente obliga a reducirse.
  *
- * La lista de guards se lee del mecanismo (package.json), no de prosa.
+ * La lista de guards vive en scripts/guard-files.mjs (un DATO), no en el comando ni en prosa.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { GUARD_FILES } from '../scripts/guard-files.mjs'
 const PROOF_RE = /no es decorativo|no decorativo|mutaci[oó]n|mutation|el detector/i
-/** Guards (tests/*.test.ts) referenciados por un comando de package.json. */
-export function guardFilesFrom(command: string): string[] {
-  const found = command.match(/tests\/[A-Za-z0-9_.-]+\.test\.ts/g) || []
-  return [...new Set(found)]
-}
 /** Un guard tiene prueba de detector si declara un caso que lo falsifica. */
 export function hasDetectorProof(src: string): boolean {
   return PROOF_RE.test(src)
@@ -42,7 +38,6 @@ export function baselineDrift(theater: string[], baseline: string[]): string[] {
   ]
 }
 const ROOT = process.cwd()
-const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const BASELINE_PATH = join(ROOT, '.task/guard-proof-baseline.json')
 function readBaseline(): string[] {
   try {
@@ -53,8 +48,8 @@ function readBaseline(): string[] {
 }
 describe('P2.4 guardMutation - ningun guard teatro nuevo', () => {
   it('todo guard de lint:guards tiene prueba de detector, o esta en el baseline', () => {
-    const files = guardFilesFrom(pkg.scripts['lint:guards'] || '')
-    expect(files.length, 'no se pudo leer la lista de guards de package.json').toBeGreaterThan(0)
+    const files = [...GUARD_FILES]
+    expect(files.length, 'la lista de guards (scripts/guard-files.mjs) esta vacia').toBeGreaterThan(0)
     const missing = files.filter((f) => !readFileSyncSafe(join(ROOT, f)))
     expect(missing, `guards registrados que no existen:\n  ${missing.join('\n  ')}`).toEqual([])
     const theater = theaterGuards(files, (f) => readFileSync(join(ROOT, f), 'utf8'))
@@ -76,10 +71,6 @@ function readFileSyncSafe(abs: string): string {
   }
 }
 describe('P2.4 guardMutation - el detector no es decorativo', () => {
-  it('extrae los guards del comando real de package.json', () => {
-    const got = guardFilesFrom('vitest run tests/aGuard.test.ts tests/b.test.ts tests/aGuard.test.ts')
-    expect(got).toEqual(['tests/aGuard.test.ts', 'tests/b.test.ts'])
-  })
   it('reconoce un guard con prueba de detector', () => {
     expect(hasDetectorProof("describe('el detector no es decorativo', () => {})")).toBe(true)
     expect(hasDetectorProof("it('marca una entrada infractora sintetica', () => {})")).toBe(false)

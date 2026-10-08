@@ -21,9 +21,9 @@ import { runAsync } from './_asyncExec'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { GUARD_FILES } from '../scripts/guard-files.mjs'
 
 const ROOT = process.cwd()
-const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const base: string = JSON.parse(readFileSync(join(ROOT, '.task/contract.json'), 'utf8')).base
 
 /**
@@ -37,11 +37,6 @@ const EXEMPT: Record<string, string> = {}
 /** Entradas de EXEMPT que ya NO valen por estar en el gate (la lista se vacia sola). */
 export function exemptInvalidos(exempt: Record<string, string>, gate: Set<string>): string[] {
     return Object.keys(exempt).filter((f) => gate.has(f))
-}
-
-/** Guards declarados en un comando de package.json. */
-export function gateGuards(command: string): string[] {
-    return [...new Set(command.match(/tests\/[A-Za-z0-9_.-]+\.test\.tsx?/g) || [])]
 }
 
 /** Un guard de TEXTO mide leyendo fuente como texto. */
@@ -85,7 +80,7 @@ export function uncoveredReaders(tocados: string[], inGate: Set<string>, sources
     return [...out].sort()
 }
 
-const GATE = new Set(gateGuards(pkg.scripts['lint:guards'] || ''))
+const GATE = new Set<string>(GUARD_FILES)
 
 function testSources(): Map<string, string> {
     const m = new Map<string, string>()

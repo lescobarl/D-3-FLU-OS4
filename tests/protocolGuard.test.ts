@@ -13,6 +13,7 @@
 // los scripts de package.json y el workflow de CI. El documento se redacta libre.
 // ============================================================
 import { describe, it, expect } from 'vitest';
+import { GUARD_FILES } from '../scripts/guard-files.mjs';
 import fs from 'fs';
 import path from 'path';
 // Directorio raíz de la aplicación (una carpeta arriba de tests/).
@@ -61,12 +62,15 @@ describe('Protocolo de Iteración Rápida — Guard estructural (inamovible)', (
         expect(pkg.scripts['typecheck'] ?? '').toBe('tsc -b');
         expect(lint).not.toContain('test:full');
     });
-    it('los guards del protocolo corren en lint:guards (no solo dentro de la suite)', () => {
-        const guards = pkg.scripts['lint:guards'] ?? '';
-        expect(guards).toContain('protocolGuard.test.ts');
-        expect(guards).toContain('stability-guards.test.ts');
-        expect(guards).toContain('taskGateInvariant.test.ts');
-        expect(guards).toContain('taskLedgerGuard.test.ts');
+    it('los guards del protocolo corren en el gate (lista unica, no solo dentro de la suite)', () => {
+        // La lista vive en scripts/guard-files.mjs y la consume el config del gate
+        // (lint:guards -> vitest.guards.config.ts): sacarla de la linea de comandos es lo
+        // que cierra el techo de cmd.exe (P9.22) sin dejar de correr en el gate (0.24/0.25).
+        expect(GUARD_FILES).toContain('tests/protocolGuard.test.ts');
+        expect(GUARD_FILES).toContain('tests/stability-guards.test.ts');
+        expect(GUARD_FILES).toContain('tests/taskGateInvariant.test.ts');
+        expect(GUARD_FILES).toContain('tests/taskLedgerGuard.test.ts');
+        expect(pkg.scripts['lint:guards'] ?? '').toContain('vitest.guards.config.ts');
     });
     it('debe existir el workflow de CI con suite completa + build (gate de entrega)', () => {
         const ciPath = path.join(ROOT_DIR, '.github', 'workflows', 'ci.yml');

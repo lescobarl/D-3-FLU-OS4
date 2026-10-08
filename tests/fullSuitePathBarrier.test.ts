@@ -114,3 +114,22 @@ describe('B5 los dos caminos comparten UN criterio (no dos copias)', () => {
     expect(readFileSync(policy, 'utf8')).toContain('export function isSuiteAuthorized')
   })
 })
+
+describe('B6 un config DECLARADO acotado cuenta como corrida acotada (P9.22)', () => {
+  it('`--config vitest.guards.config.ts` no pide autorizacion', async () => {
+    // El gate de guards lleva su lista en un config (`include` EXPLICITO, no el repo
+    // entero) porque la lista no cabe en la linea de comandos (cmd.exe corta en 8191:
+    // P9.22). Si esto no contara como acotado, `npm run lint:guards` se BLOQUEARIA solo.
+    expect(hasScopeFilter(argvDe('run', '--config', 'vitest.guards.config.ts'))).toBe(true)
+    expect(isUnfilteredRun(argvDe('run', '--config', 'vitest.guards.config.ts'))).toBe(false)
+    expect(() => assertSuiteScope({ argv: argvDe('run', '--config', 'vitest.guards.config.ts'), env: envSinAuth() })).not.toThrow()
+  })
+
+  it('PRUEBA DE DETECTOR: solo el config DECLARADO acota; otro config no', async () => {
+    // SCOPED_CONFIGS es una lista CERRADA: el config base (o cualquiera otro) sigue
+    // contando como corrida SIN filtro, asi que el atajo no se abre por esta via.
+    expect(isUnfilteredRun(argvDe('run', '--config', 'vitest.config.ts'))).toBe(true)
+    expect(isUnfilteredRun(argvDe('run', '--config', 'otro.config.ts'))).toBe(true)
+    expect(isUnfilteredRun(argvDe('run', '--config=vitest.guards.config.ts'))).toBe(false)
+  })
+})

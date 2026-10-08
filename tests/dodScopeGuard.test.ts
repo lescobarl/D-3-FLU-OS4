@@ -19,6 +19,7 @@ import { runAsync } from './_asyncExec'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { GUARD_FILES } from '../scripts/guard-files.mjs'
 
 const ROOT = process.cwd()
 const CONTRACT = JSON.parse(readFileSync(join(ROOT, '.task/contract.json'), 'utf8'))
@@ -115,7 +116,7 @@ const CTX = {
 const TESTS = readdirSync(join(ROOT, 'tests'))
     .filter((f) => /\.test\.tsx?$/.test(f))
     .map((f) => `tests/${f}`)
-const COMANDOS = [CONTRACT.dod, CONTRACT.guard, JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts['lint:guards']]
+const COMANDOS = [CONTRACT.dod, CONTRACT.guard, ...GUARD_FILES]
 
 describe('P7.88 - todo test de comportamiento del src tocado corre en el gate', () => {
     it('no hay tests que cubran el src tocado fuera del gate', async () => {

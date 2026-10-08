@@ -37,6 +37,33 @@ const CIERRA_SOLO = new Set(['run', 'bench'])
 const FLAGS_QUE_ACOTAN = ['--changed', '-t', '--testNamePattern', '--related', '--shard']
 
 /**
+ * Configs ACOTADOS: su `include` es una lista EXPLICITA de tests (no el repo entero),
+ * asi que una corrida con `--config <uno de ellos>` es ACOTADA aunque la CLI no lleve
+ * filtro. Existe por P9.22: la lista del gate de guards no cabe en la linea de comandos
+ * (cmd.exe corta en 8191 chars) y vive en un config que la importa de un dato.
+ * Es una lista CERRADA y versionada: anadir un config aqui es una decision visible.
+ */
+export const SCOPED_CONFIGS = ['vitest.guards.config.ts']
+
+/**
+ * El argv carga un config declarado ACOTADO?
+ * @param {string[]} args argumentos (sin node ni el binario)
+ * @returns {boolean}
+ */
+function usaConfigAcotado(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const token = String(args[i] || '')
+    let crudo = ''
+    if (token === '--config' || token === '-c') crudo = String(args[i + 1] || '')
+    else if (token.startsWith('--config=') || token.startsWith('-c=')) crudo = token.slice(token.indexOf('=') + 1)
+    if (!crudo) continue
+    const normal = crudo.replace(/\\/g, '/')
+    if (SCOPED_CONFIGS.some((c) => normal.endsWith(c))) return true
+  }
+  return false
+}
+
+/**
  * Una sesion con autorizacion expresa (humana o CI) puede correr la suite entera.
  *
  * @param {NodeJS.ProcessEnv} [env]
@@ -79,7 +106,19 @@ function esRutaDeTest(token, cwd) {
  */
 export function hasScopeFilter(argv = process.argv, { cwd = process.cwd() } = {}) {
   const args = argv.slice(2)
-  for (const token of args) {
+  if (usaConfigAcotado(args)) return true
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i]
+    // El VALOR de `--config`/`-c` NO es una ruta de test: era una forma de colar la
+    // suite entera, porque el fichero de config EXISTE y `esRutaDeTest` lo daba por
+    // filtro (medido 2026-10-08 con el caso de detector: `vitest run --config
+    // vitest.config.ts` esquivaba la barrera). Un config paradoja ACOTADO ya lo cubre
+    // `usaConfigAcotado` arriba.
+    if (token === '--config' || token === '-c') {
+      i += 1
+      continue
+    }
+    if (token.startsWith('--config=') || token.startsWith('-c=')) continue
     if (FLAGS_QUE_ACOTAN.some((flag) => token === flag || token.startsWith(`${flag}=`))) return true
     if (esRutaDeTest(token, cwd)) return true
   }
