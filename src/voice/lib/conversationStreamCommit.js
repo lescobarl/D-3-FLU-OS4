@@ -50,6 +50,8 @@ import { isSameEmissionWithinWindow } from './captureDedup.js'
  * @property {boolean} [diarize]
  * @property {boolean} [atTurnBoundary]
  * @property {boolean} [forceNewRowOnSegment]
+ * @property {boolean} [settlesTurn] Cierre REAL del turno (onend/srGap/wake-split):
+ *   un `final` de SEGMENTO de Chrome NO lo declara.
  */
 
 /**
@@ -108,6 +110,10 @@ export function handleConversationStreamSync(
     diarize = false,
     atTurnBoundary = false,
     forceNewRowOnSegment = false,
+    // CIERRE REAL del turno (onend / srGap / split por wake). Un `final` de SEGMENTO
+    // de Chrome NO lo declara: la fila de conversacion no se escribe a mitad del
+    // dictado (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba "vaciada").
+    settlesTurn = false,
   } = {},
 ) {
   const {
@@ -270,18 +276,27 @@ export function handleConversationStreamSync(
     return
   }
 
-  const finalizeTurnCommit = () => {
+  const finalizeTurnCommit = (closeTurn = false) => {
     finalizeTurnIdentityPipeline(activeTurnIdRef.current)
     flushPcmAfterTurnCommit()
     lastCommitAtRef.current = Date.now()
     turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
-    openPreviewTurnRef.current = false
-    publishedLiveRef.current = ''
-    setLiveTranscript('')
-    listenStateRef.current.openLine = ''
-    listenStateRef.current.pendingInterim = ''
-    preflightScheduledForTurnRef.current = false
-    srGapFiredForOpenLineRef.current = false
+    // SOLO el cierre REAL limpia la locucion viva y sella el turno. Un `final` de
+    // SEGMENTO de Chrome (pausa BREVE dentro del mismo dictado) NO cierra: el texto
+    // sigue visible en ULTIMA FRASE hasta el silencio/onend/cambio de hablante.
+    // Antes cada segmento cerraba el turno y "vaciaba" la ultima frase a la
+    // conversacion (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
+    // vaciada, sin silencio real ni cambio de hablante). Mientras no cierre, el id
+    // del turno NO avanza (`openPreviewTurnRef` sigue abierto) -> UNA fila.
+    if (closeTurn) {
+      openPreviewTurnRef.current = false
+      publishedLiveRef.current = ''
+      setLiveTranscript('')
+      listenStateRef.current.openLine = ''
+      listenStateRef.current.pendingInterim = ''
+      preflightScheduledForTurnRef.current = false
+      srGapFiredForOpenLineRef.current = false
+    }
     if (fluTailAfterCommit?.action?.kind === 'flu' && fluTailAfterCommit.action.question) {
       void processConversationFluQueryRef.current(
         fluTailAfterCommit.fullCapture,
@@ -294,7 +309,7 @@ export function handleConversationStreamSync(
   // Las dos ramas (segmentada y simple) cierran por aquí; no se invoca
   // `finalizeTurnCommit` en más de un punto.
   const finalizeAndNotify = () => {
-    finalizeTurnCommit()
+    finalizeTurnCommit(settlesTurn)
     fluParticipantRef.current?.onTurnCommitted?.()
   }
 
@@ -458,7 +473,7 @@ export function handleConversationStreamSync(
 
       const segmentSpeaker = normalizeSpeakerLabel(segment.speaker || speakerName)
       applyResolvedSpeakerToSessionRefs(
-        { ...resolved, speakerName: segmentSpeaker },
+        { ...resolved, speakerName: segmentSpeaker, previousLabel: fallbackSpeaker || stickyFallback || segmentSpeaker },
         {
           lastSpeakerRef,
           lastLoggedSpeakerRef,
@@ -477,7 +492,7 @@ export function handleConversationStreamSync(
       lastSpeakerRef.current = segmentSpeaker
 
       const segmentReplace = replaceNext
-      if (refreshNeeded) {
+      if (refreshNeeded && settlesTurn) {
         const delivered = emitTurnRow(segmentText, {
           speakerName: segmentSpeaker,
           fallbackSpeaker: segmentSpeaker,
@@ -511,7 +526,7 @@ export function handleConversationStreamSync(
   }
 
   applyResolvedSpeakerToSessionRefs(
-    { ...resolved, speakerName },
+    { ...resolved, speakerName, previousLabel: fallbackSpeaker || stickyFallback },
     {
       lastSpeakerRef,
       lastLoggedSpeakerRef,
@@ -532,7 +547,13 @@ export function handleConversationStreamSync(
   relayLog('LOG', 'RowTrace', `refresh=${refreshNeeded} blocked=${ambientRowBlocked} replace=${replaceLast} turn=${activeTurnIdRef.current} cap="${capture.slice(0, 60)}"`) // BANDERA DE DIAGNOSTICO
   voiceProbe('commit', { preReady: Boolean(preflight?.ready), src: resolved.source, name: resolved.speakerName, written: speakerEscrito, wc: resolved.workingClusters?.length ?? 0, refClusters: speakerClustersRef.current?.length ?? 0, sticky: stickyFallback, turn: activeTurnIdRef.current, replace: replaceLast, len: capture.length, capture: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
   let delivered = false
-  if (refreshNeeded) {
+  // La fila de CONVERSACION solo se escribe al CIERRE REAL del turno. Chrome cierra
+  // SEGMENTOS mientras sigues hablando (un `final` por tramo) y esos commits NO
+  // declaran `settlesTurn`: antes cada tramo volcaba la ultima frase a la
+  // conversacion (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
+  // vaciada). El texto NO se pierde: sigue en la locucion viva (ULTIMA FRASE) y en
+  // la fila de SESION; el cierre (onend, srGap, split por wake) la escribe completa.
+  if (refreshNeeded && settlesTurn) {
     delivered = emitTurnRow(capture, {
       speakerName: speakerEscrito, evidenciaAcustica: Boolean(preflight?.ready),
       fallbackSpeaker: speakerName,

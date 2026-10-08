@@ -1322,8 +1322,9 @@ function App() {
             // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
-                // P8.40: la etiqueta automatica de la diarizacion puede pertenecer a un
-                // participante registrado (speakerLabel del panel): la fila lleva su NOMBRE.
+                // P8.40: la etiqueta automatica puede pertenecer a un participante registrado
+                // (speakerLabel del panel): la fila lleva su NOMBRE solo con VOZ medida, y
+                // el mapeo lo aplica el DUENO UNICO de la fila (`resolveRowSpeakerName`).
                 commitUserTurnRow({
                     text: transcript,
                     speakerName, registeredSpeaker: participantSpeakerRef.current,
