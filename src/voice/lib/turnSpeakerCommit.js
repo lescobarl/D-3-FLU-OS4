@@ -183,17 +183,7 @@ export function resolveTurnSpeakerAtCommit({
 export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   const name = normalizeSpeakerLabel(resolved?.speakerName)
   if (!name) return
-  // `previousLabel`: la etiqueta que el hablante VENIA usando (fallback/sticky). Es
-  // imprescindible cuando aun no hay fila previa (primera locucion): "soy Luis" debe
-  // renombrar la etiqueta con la que su voz aparecia ('Hablante N'), no solo las
-  // filas posteriores. Medido 2026-10-08: sin esto, la identificacion en el primer
-  // turno no registraba alias y la fila siguiente volvia a la etiqueta generica.
-  const previous = normalizeSpeakerLabel(
-    refs.lastLoggedSpeakerRef?.current ||
-      refs.lastSpeakerRef?.current ||
-      resolved?.previousLabel ||
-      '',
-  )
+  const previous = normalizeSpeakerLabel(refs.lastLoggedSpeakerRef?.current || refs.lastSpeakerRef?.current || '')
   if (refs.lastSpeakerRef) refs.lastSpeakerRef.current = name
   if (refs.lastLoggedSpeakerRef) refs.lastLoggedSpeakerRef.current = name
   // Ruta unica: el dueno de `sessionPrimarySpeakerRef` es `setSessionPrimarySpeaker`

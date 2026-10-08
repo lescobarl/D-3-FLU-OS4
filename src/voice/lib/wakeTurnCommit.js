@@ -118,8 +118,6 @@ export function applyWakeTurnCommit(ctx, capture, commitOpts = {}) {
     turnBoundary: true,
     atTurnBoundary: true,
     freshUtterance: true,
-    // Cierre REAL: el split por wake sella la parte pasiva como turno cerrado.
-    settlesTurn: true,
     ...commitOpts,
   }
 
