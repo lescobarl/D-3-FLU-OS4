@@ -61,23 +61,36 @@ export function listConfiguredTranscriptHardRules() {
  * perdia. Devuelve el valor sintetico de silencio para reutilizar el MISMO
  * cierre (`evaluateSrGapSegmentCommit`), sin una segunda ruta de commit.
  */
-export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0 } = {}) {
-  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
+/**
+ * Sonda `srGap` con FRENO: el disparador se evalua en cada tick del watchdog
+ * (~350 ms). Sin freno, un turno que no cierra emite la sonda ~3 veces por
+ * segundo durante minutos y ENTIERRA el log (medido 2026-10-08: 421 de 421
+ * eventos eran `srGap`, cero `commit`/`row`). Un log que inunda es un defecto
+ * (§10.7): se emite una vez por motivo y como maximo cada 5 s.
+ */
+let lastSrGapProbeAt = 0
+let lastSrGapProbeReason = ''
+function emitSrGapProbe(reason, data) {
+  const now = Date.now()
+  if (reason === lastSrGapProbeReason && now - lastSrGapProbeAt < 5000) return
+  lastSrGapProbeAt = now
+  lastSrGapProbeReason = reason
+  voiceProbe('srGap', { reason, ...data })
+}
+
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0 } = {}) {  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
   if (gapMs <= 0) return { fire: false, sinceLastResultMs: 0, reason: 'sr-gap-commit-disabled' }
   const silence = Number(sinceLastResultMs) >= gapMs
   const staleTurn = Number(sinceLastCommitMs) >= gapMs
   if (!silence && !staleTurn) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
   }
-  voiceProbe('srGap', {
-    reason: silence ? 'sr-silence' : 'sr-live-turn-stale',
-    sinceResult: Number(sinceLastResultMs) || 0,
-    sinceCommit: Number(sinceLastCommitMs) || 0,
-  })
+  const reason = silence ? 'sr-silence' : 'sr-live-turn-stale'
+  emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0 })
   return {
     fire: true,
     sinceLastResultMs: Math.max(Number(sinceLastResultMs) || 0, gapMs),
-    reason: silence ? 'sr-silence' : 'sr-live-turn-stale',
+    reason,
   }}
 
 export function countSpeechWords(text = '') {
