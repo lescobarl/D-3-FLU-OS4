@@ -10,6 +10,7 @@
  * "Hablante 1": el audio existía en el buffer, pero se leía DESPUÉS de vaciarlo.
  */
 import { relayLog } from '../../lib/clientLogRelay'
+import { concatFloat32 } from './pcmChunks.js'
 
 let slot = null
 let lastProbeAt = 0
@@ -39,22 +40,10 @@ export function readTurnAudioSnapshot(turnId = 0) {
   return null
 }
 
-/** Concatena los chunks PCM vivos en un único Float32Array. */
-function concatChunks(chunks = []) {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const result = new Float32Array(length)
-  let offset = 0
-  chunks.forEach((chunk) => {
-    result.set(chunk, offset)
-    offset += chunk.length
-  })
-  return result
-}
-
 /** Audio del turno para diarización: snapshot del dueño único, o el buffer vivo. */
 export function turnAudioForDiarize(turnId, chunks = []) {
   const snap = readTurnAudioSnapshot(turnId)
-  return snap?.length ? snap : concatChunks(chunks)
+  return snap?.length ? snap : concatFloat32(chunks)
 }
 
 /**

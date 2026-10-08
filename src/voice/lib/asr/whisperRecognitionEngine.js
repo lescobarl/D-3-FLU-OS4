@@ -21,17 +21,7 @@ import { isSpeechSynthesisSpeaking } from '../fluSpeech.js'
 import { logCaughtError } from '../../../lib/caughtError';
 import { DEFAULT_SAMPLE_RATE } from '../audioConstants.js'
 import { downsample } from './resample.js'
-
-function concatChunks(chunks) {
-  const total = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
-  const out = new Float32Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    out.set(chunk, offset)
-    offset += chunk.length
-  }
-  return out
-}
+import { concatFloat32 } from '../pcmChunks.js'
 
 function buildResultEvent(transcript, isFinal) {
   // Forma estándar de Web Speech API:
@@ -190,7 +180,7 @@ export function createWhisperRecognitionEngine({
   async function runPartial() {
     partialInFlight = true
     try {
-      const full = concatChunks(turnChunks)
+      const full = concatFloat32(turnChunks)
       // Solo los últimos `partialWindowMs`: no re-transcribir todo el turno.
       const maxSamples = Math.round((partialWindowMs / 1000) * targetRate)
       const audio = full.length > maxSamples ? full.subarray(full.length - maxSamples) : full

@@ -1,7 +1,7 @@
 /**
  * Guardas de ingress: relajar shrink/redundante y forzar filas nuevas en el log.
  */
-import { cleanForSpeech, compareCosineSignatures, speechWords } from './audioMath.js'
+import { cleanForSpeech, compareCosineSignatures, novelWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getIngressGuardsCfg, getSpeakerThresholdsCfg } from './fluTranscriptMotor.js'
@@ -58,12 +58,6 @@ export function shouldRelaxIngressTextGuards(context = {}) {
     context.relaxAfterCommitMs ?? FLU_CONFIG.transcript?.relaxGuardsAfterCommitMs,
   )
   return msSinceLastCommit(context) >= gateMs
-}
-
-function novelWords(next = '', prior = '') {
-  const nw = speechWords(next)
-  const priorSet = new Set(speechWords(prior))
-  return nw.filter((word) => !priorSet.has(word))
 }
 
 /**

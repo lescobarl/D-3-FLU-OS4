@@ -1,7 +1,7 @@
 /**
  * Fusión de texto ASR (interinos acumulativos y finales).
  */
-import { cleanForSpeech, speechWords } from './audioMath.js'
+import { cleanForSpeech, novelWords, speechWords } from './audioMath.js'
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getShortFinalKeywordSet, getSpeechMergeCfg } from './fluTranscriptMotor.js'
 import { getTranscriptDelta, mergeTranscriptText } from './transcriptDelta.js'
@@ -335,12 +335,6 @@ function mergeSpeechTextBlind(base = '', incoming = '', { keepAll = false } = {}
   return collapseRepeatedSpeech(!keepAll || merged.length >= prev.length ? merged : prev)
 }
 
-function novelWordsInShortFinal(next = '', prior = '') {
-  const nextWords = speechWords(next)
-  const priorWords = new Set(speechWords(prior))
-  return nextWords.filter((word) => !priorWords.has(word))
-}
-
 /**
  * Final corto tras pausa del usuario con palabras nuevas (p. ej. «hola» tras monólogo TV):
  * priorizar fila nueva en el log, no reemplazar ni truncar la fila anterior.
@@ -380,7 +374,7 @@ export function shouldPreferShortFinalRow(next = '', prior = '', context = {}) {
 
   if (!related) return false
 
-  const novel = novelWordsInShortFinal(fin, prev)
+  const novel = novelWords(fin, prev)
   if (!novel.length) return false
   return shortFinalHasKeyword(novel)
 }

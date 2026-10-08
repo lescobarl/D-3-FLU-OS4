@@ -13,6 +13,7 @@ import { getAsrConfig } from './asrConfig.js'
 // cambiar la API del segmentador (lo consumen el worker y los tests).
 export { getAsrConfig }
 import { DEFAULT_TARGET_SAMPLE_RATE } from '../audioConstants.js'
+import { concatFloat32 } from '../pcmChunks.js'
 
 /**
  * @typedef {{ type: 'speech-start', atMs: number }} SpeechStartEvent
@@ -39,17 +40,6 @@ function rootMeanSquare(samples) {
     sum += samples[index] * samples[index]
   }
   return Math.sqrt(sum / samples.length)
-}
-
-function concatFrames(frames) {
-  const total = frames.reduce((acc, frame) => acc + frame.length, 0)
-  const out = new Float32Array(total)
-  let offset = 0
-  for (const frame of frames) {
-    out.set(frame, offset)
-    offset += frame.length
-  }
-  return out
 }
 
 /**
@@ -98,7 +88,7 @@ export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAs
     }
     events.push({
       type: 'speech-end',
-      samples: concatFrames(segmentFrames),
+      samples: concatFloat32(segmentFrames),
       startMs: (doneFrames - segmentFrames.length) * frameMs,
       durationMs: segmentFrames.length * frameMs,
     })
@@ -146,7 +136,7 @@ export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAs
     const input = samples instanceof Float32Array ? samples : new Float32Array(samples || [])
     if (!input.length) return []
     events.length = 0
-    const merged = leftover.length ? concatFrames([leftover, input]) : input
+    const merged = leftover.length ? concatFloat32([leftover, input]) : input
     let offset = 0
     while (offset + frameSamples <= merged.length) {
       processFrame(merged.subarray(offset, offset + frameSamples))

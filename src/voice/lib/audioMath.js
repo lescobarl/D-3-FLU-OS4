@@ -435,6 +435,15 @@ export function speechWords(text = '') {
   return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
+/**
+ * Palabras de `next` que NO aparecen en `prior`. Dueño único (P9.24): estaba copiado
+ * como `novelWords` (ingressGuards) y `novelWordsInShortFinal` (speechMerge).
+ */
+export function novelWords(next = '', prior = '') {
+  const priorSet = new Set(speechWords(prior))
+  return speechWords(next).filter((word) => !priorSet.has(word))
+}
+
 /** Quita eco TV/ASR repetido al inicio de la pregunta tras «ok flu» (p. ej. «primeros partidos platicame…»). */
 export function peelWakeQuestionEcho(question = '', echoSources = []) {
   // §9.6: la comparación es insensible a acentos/mayúsculas, pero el texto que

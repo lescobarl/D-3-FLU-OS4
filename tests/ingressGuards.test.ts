@@ -30,6 +30,12 @@ vi.mock('../src/voice/lib/audioMath.js', () => ({
       .trim(),
   speechWords: (t: unknown) =>
     String(t ?? '').toLowerCase().replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean),
+  novelWords: (next: unknown, prior: unknown) => {
+    const words = (t: unknown) =>
+      String(t ?? '').toLowerCase().replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const priorSet = new Set(words(prior));
+    return words(next).filter((w) => !priorSet.has(w));
+  },
   compareCosineSignatures: h.compare,
 }));
 
