@@ -71,6 +71,13 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
 
         console.log(`[P1] filas de usuario durante el interino = ${antes} (esperado 0)`);
         expect(antes, 'la fila no puede nacer antes del final').toBe(0);
+        // INVARIANTE del dueno: el texto que se vio en la transcripcion tiene que estar
+        // en la conversacion (cabeza Y cola), no una parte.
+        const filas = await usuarios(page);
+        console.log(`[P1] fila = ${JSON.stringify(filas.map((f) => f.text))}`);
+        const texto = filas.map((f) => f.text.toLowerCase()).join(' | ');
+        expect(texto, 'la cabeza de la locucion no puede perderse').toContain('necesitamos');
+        expect(texto, 'la cola de la locucion no puede perderse').toContain('puso');
     });
 
     test('P2: el final que trae solo la COLA no se come la cabeza', async ({ page }) => {
@@ -154,5 +161,36 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         const ms = Date.now() - inicio;
         console.log(`[P4] final -> fila = ${ms} ms`);
         expect(ms, 'la fila debe nacer en un margen humano').toBeLessThan(8000);
+    });
+
+    test('P5: la locucion que Chrome NO cierra (interino + onend) llega a la conversacion', async ({ page }) => {
+        // Defecto reportado: "lo vi en la transcripcion y no esta en la conversacion".
+        // Chrome puede cerrar el reconocimiento SIN final: lo unico oido es el interino.
+        await startConversation(page);
+        await esperarListo(page);
+
+        await speakViaMic(page, 'Okay flow quiero apuntar la lista de la compra', { final: false, endTurn: true });
+
+        await expect.poll(async () => await countUserRows(page), { timeout: 20000 }).toBeGreaterThanOrEqual(1);
+        await page.waitForTimeout(2000); // deja FLUSHear el relay antes de cerrar la pagina
+        const filas = await usuarios(page);
+        console.log(`[P5] filas = ${JSON.stringify(filas.map((f) => f.text))}`);
+        expect(filas[0].text.toLowerCase(), 'el interino sin final no puede perderse').toContain('compra');
+    });
+
+    test('P6: la continuacion sin wake tras un turno commiteado conserva su texto', async ({ page }) => {
+        // Defecto reportado: la frase se parte (interino + final) y se pierde una parte.
+        await startConversation(page);
+        await esperarListo(page);
+
+        await speakUntilHeard(page, 'Okay flow necesitamos la lechita', { expectedUserRows: 1 });
+        await page.waitForTimeout(1500);
+        await speakViaMic(page, 'y no lo pusiste ahi en el vaso', { final: false });
+        await speakViaMic(page, 'y no lo pusiste ahi en el vaso grande', { final: true, endTurn: true });
+
+        await expect.poll(async () => await countUserRows(page), { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+        const filas = await usuarios(page);
+        console.log(`[P6] filas = ${JSON.stringify(filas.map((f) => f.text))}`);
+        expect(filas[1].text.toLowerCase(), 'la continuacion no puede perder su texto').toContain('vaso');
     });
 });
