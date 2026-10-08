@@ -234,6 +234,7 @@ export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
         len: fullText.length,
         text: fullText,
         speaker: resolveSpeakerAlias(input.speakerName || ''),
+        evidencia: input.evidenciaAcustica === true,
         efectivo: fila ? String(fila.speakerName || '') : '',
         turnId: input.turnId ?? null,
     });
