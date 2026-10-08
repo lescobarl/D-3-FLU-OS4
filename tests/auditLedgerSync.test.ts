@@ -13,10 +13,39 @@
  * hallazgo puede quedar abierto en el sensor e invisible en el ledger (o al reves:
  * marcado done mientras el codigo sigue mal).
  */
-import { spawnSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
+
+const runFile = promisify(execFile)
+
+/**
+ * Subproceso ASINCRONO. `spawnSync`/`execFileSync` BLOQUEAN el event loop del worker
+ * durante toda la medicion; con varios segundos de bloqueo (auditoria.mjs ~3 s, dos
+ * veces) el RPC del worker se corta bajo contencion y la corrida sale roja por
+ * 'Unhandled Error: Timeout calling onTaskUpdate' AUNQUE los tests pasen. Es el MISMO
+ * defecto que P7.68 midio y arreglo en jsReferenceGuard (spawnSync 9445ms/ticks=0 vs
+ * execFile 8913ms/ticks=281); aqui lo fija la prueba de detector de abajo.
+ */
+async function runScript(args: string[]): Promise<{ stdout: string; stderr: string; status: number }> {
+  try {
+    const { stdout, stderr } = await runFile('node', args, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    })
+    return { stdout: String(stdout), stderr: String(stderr), status: 0 }
+  } catch (error) {
+    const e = error as { stdout?: string | Buffer; stderr?: string | Buffer; code?: number | string }
+    return {
+      stdout: String(e.stdout ?? ''),
+      stderr: String(e.stderr ?? ''),
+      status: typeof e.code === 'number' ? e.code : 1,
+    }
+  }
+}
 
 const ROOT = process.cwd()
 
@@ -54,28 +83,43 @@ export function desincronizados(audit: Hallazgo[], items: ItemLedger[]): string[
   return out
 }
 
-function leerSensor(): Hallazgo[] {
-  const r = spawnSync('node', ['scripts/auditoria.mjs', '--json'], { cwd: ROOT, encoding: 'utf8' })
+async function leerSensor(): Promise<Hallazgo[]> {
+  const r = await runScript(['scripts/auditoria.mjs', '--json'])
   if (r.status !== 0) throw new Error('auditoria.mjs fallo: ' + (r.stderr || '').slice(0, 400))
   return JSON.parse(r.stdout)
 }
 
 describe('P7.20 - el sensor de auditoria y el ledger no divergen', () => {
-  it('todo hallazgo abierto del sensor esta registrado en el ledger', () => {
+  it('todo hallazgo abierto del sensor esta registrado en el ledger', async () => {
     const ledger = JSON.parse(readFileSync(join(ROOT, 'plans/ledger.json'), 'utf8'))
-    const out = desincronizados(leerSensor(), ledger.items)
+    const out = desincronizados(await leerSensor(), ledger.items)
     expect(out, 'trabajo invisible (sensor abierto, ledger sin registrar):\n  ' + out.join('\n  ')).toEqual([])
   })
 
-  it('el catalogo completo pasa --strict: el sensor es un gate, no prosa', () => {
+  it('el catalogo completo pasa --strict: el sensor es un gate, no prosa', async () => {
     // P7.23: la clasificacion de scripts/auditoria.mjs (ALLOW_COLLISION, KNOWN_GROUPS,
     // META por hallazgo) la aplicaba el auditor A MANO. Sin esto, el catalogo era prosa:
     // nada impedia meter un hallazgo nuevo y no mirarlo. Con --strict dentro de
     // lint:guards (que cuelga de `npm run lint`), un hallazgo por encima de su META
     // rompe el lint.
-    const r = spawnSync('node', ['scripts/auditoria.mjs', '--strict'], { cwd: ROOT, encoding: 'utf8' })
+    const r = await runScript(['scripts/auditoria.mjs', '--strict'])
     expect(r.status, 'auditoria --strict fallo:\n' + (r.stdout || '') + (r.stderr || '')).toBe(0)
   })
+
+  it(
+    'la medicion NO bloquea el event loop (el RPC del worker sigue latiendo)',
+    { timeout: 120000 },
+    async () => {
+      let ticks = 0
+      const id = setInterval(() => {
+        ticks += 1
+      }, 20)
+      const audit = await leerSensor()
+      clearInterval(id)
+      expect(audit.length, 'el sensor devolvio catalogo').toBeGreaterThan(0)
+      expect(ticks, 'la medicion bloqueo el event loop').toBeGreaterThan(0)
+    },
+  )
 
   it('el detector no es decorativo', () => {
     const audit: Hallazgo[] = [
