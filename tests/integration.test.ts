@@ -1415,6 +1415,7 @@ describe('🔄 End-to-End Conversation Flow', () => {
 
     it('flujo con detección emocional: mensaje positivo → happy', () => {
         useIntegrationStore.getState().setConversationState('LISTENING');
+        addUserRow('¡Excelente trabajo!');
         useIntegrationStore.getState().addUserMessage('¡Excelente trabajo!');
         expect(useIntegrationStore.getState().emotionalState).toBe('happy');
         useIntegrationStore.getState().setConversationState('THINKING');
@@ -1432,6 +1433,7 @@ describe('🔄 End-to-End Conversation Flow', () => {
 
         for (const ex of exchanges) {
             useIntegrationStore.getState().setConversationState('LISTENING');
+            addUserRow(ex.user);
             useIntegrationStore.getState().addUserMessage(ex.user);
             useIntegrationStore.getState().setConversationState('THINKING');
             useIntegrationStore.getState().setConversationState('SPEAKING');
