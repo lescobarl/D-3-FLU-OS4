@@ -1,0 +1,5 @@
+[
+  "src/components/AmbienteEditorForm.tsx:handleSubmit | src/components/PaletaEditorForm.tsx:handleSubmit",
+  "src/voice/lib/fluDevConsole.js:isFluDevConsolePanelEnabled | src/voice/lib/listenLog.js:isListenTraceEnabled",
+  "src/voice/lib/fluTranscriptMotor.js:getAsrSegmentationCfg | src/voice/lib/fluTranscriptMotor.js:getIngressGuardsCfg | src/voice/lib/fluTranscriptMotor.js:getSpeechMergeCfg | src/voice/lib/fluTranscriptPause.js:getTranscriptPauseCfg"
+]

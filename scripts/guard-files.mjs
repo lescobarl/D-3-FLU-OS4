@@ -118,6 +118,7 @@ export const GUARD_FILES = [
     'tests/speakerIdentitySession.test.ts',
     'tests/specificDeadGuard.test.ts',
     'tests/stability-guards.test.ts',
+    'tests/structureDuplicationGuard.test.ts',
     'tests/stateOwnershipGuard.test.ts',
     'tests/storageKeysAliveGuard.test.ts',
     'tests/styleInlineGuard.test.ts',
