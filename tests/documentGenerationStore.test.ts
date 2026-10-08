@@ -96,3 +96,17 @@ describe('documentGenerationStore', () => {
         expect(useIntegrationStore.getState().generationJob).toBeNull();
     });
 });
+
+describe('documentGenerationStore - PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
+    test('la marca del partialize distingue el slice volatil del persistido', () => {
+        window.localStorage.removeItem(STORE_KEY);
+        resetStore();
+        useIntegrationStore.getState().setVoiceConfig({ requireWakeAlways: true });
+        useIntegrationStore.getState().setGenerationJob(job);
+
+        const raw = JSON.parse(window.localStorage.getItem(STORE_KEY) || '{}');
+        const persisted = raw.state || raw;
+        expect(persisted.voiceConfig, 'lo persistido SI tiene que estar').toBeDefined();
+        expect(persisted.generationJob, 'lo volatil NO puede estar').toBeUndefined();
+    });
+});

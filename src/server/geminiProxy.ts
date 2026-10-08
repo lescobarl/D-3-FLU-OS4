@@ -28,8 +28,24 @@ function writeClientLogLine(file: string | null, line: string, data: unknown): v
     if (data !== undefined) console.info(line, data);
     else console.info(line);
     if (!file) return;
+    // El dato ADJUNTO tambien va al fichero: antes solo se imprimia en la consola del
+    // servidor, asi que `debug.log` (el unico artefacto que se puede analizar despues)
+    // perdia justo el detalle del error (medido: un `NotSupportedError` llegaba sin
+    // causa ni pila). Acotado para no reventar el fichero.
+    let extra = '';
+    if (data !== undefined) {
+        let texto = '';
+        try {
+            texto = typeof data === 'string' ? data : JSON.stringify(data);
+        } catch (err: unknown) {
+            // Dato no serializable (p. ej. circular): se registra y se usa su forma textual.
+            logCaughtError('[geminiProxy] client log: dato no serializable', errorField(err, 'message') || err);
+            texto = String(data);
+        }
+        extra = ` :: ${texto.length > 600 ? texto.slice(0, 600) + '...' : texto}`;
+    }
     try {
-        appendFileSync(file, line + '\n');
+        appendFileSync(file, line + extra + '\n');
     } catch (err: unknown) {
         logCaughtError('[geminiProxy] client log: fallo al escribir debug.log', errorField(err, 'message') || err);
     }

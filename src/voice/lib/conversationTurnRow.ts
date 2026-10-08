@@ -176,6 +176,8 @@ export interface UserTurnRowInput {
     speakerName?: string;
     /** El que llama DECLARA que el nombre viene de una ventana de AUDIO medida. */
     evidenciaAcustica?: boolean;
+    /** Sentimiento de la locucion (lo calcula quien la captura); por defecto 'neutral'. */
+    sentiment?: 'positive' | 'negative' | 'neutral' | 'question';
     /** Reloj inyectable (por defecto Date.now()). */
     timestamp?: number;
     /**
@@ -248,6 +250,7 @@ function commitUserTurnRowInner({
     replaceLast = false,
     turnId,
     evidenciaAcustica = true,
+    sentiment = 'neutral',
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -319,7 +322,7 @@ function commitUserTurnRowInner({
         text: raw,
         speakerName: preserveProperSpeaker(resolved, '', evidenciaAcustica) || undefined,
         timestamp: stamp,
-        sentiment: 'neutral',
+        sentiment,
     });
     currentTurn = { id: turnId, rowId: id };
     rememberTurn(turnId, id);

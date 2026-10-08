@@ -1328,6 +1328,7 @@ function App() {
                 commitUserTurnRow({
                     text: transcript,
                     speakerName: speakerRegistrado || speakerName,
+                    sentiment: detectSentiment(transcript),
                     evidenciaAcustica: resolved?.evidenciaAcustica === true,
                     replaceLast: resolved?.replaceLastRawLog === true,
                     turnId: resolved?.turnId ?? null,

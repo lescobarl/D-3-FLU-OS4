@@ -48,3 +48,21 @@ describe('aislamiento multiusuario del historial del Pizarrón', () => {
         expect(bobRows[0].text).toBe('de bob');
     });
 });
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
+    it('la marca del sello distingue la entrada sellada de la que no lo esta', () => {
+        useIntegrationStore.getState().reset();
+        useIntegrationStore.getState().addUserMessage('sin sello'); // sin participante activo
+        useIntegrationStore.getState().setActivePersonId('alice');
+        useIntegrationStore.getState().addUserMessage('con sello', 'Alice');
+
+        const history = useIntegrationStore.getState().conversationHistory;
+        const sinSello = history.filter((e) => e.personId === undefined);
+        const conSello = history.filter((e) => e.personId === 'alice');
+
+        expect(sinSello, 'la marca NO puede sellar la entrada legacy').toHaveLength(1);
+        expect(sinSello[0].text).toBe('sin sello');
+        expect(conSello, 'la marca SI debe sellar la del participante activo').toHaveLength(1);
+        expect(conSello[0].text).toBe('con sello');
+    });
+});

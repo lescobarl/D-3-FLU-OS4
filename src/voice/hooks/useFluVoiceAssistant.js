@@ -1242,7 +1242,7 @@ const lastResolvedTurnRef = useRef(0)
           try {
             stopSpeechRecognition(recognitionRef.current)
           } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
             // ignore
           }
           const retryCount = recognitionRetryCountRef.current + 1
@@ -1259,7 +1259,7 @@ const lastResolvedTurnRef = useRef(0)
         try {
           stopSpeechRecognition(recognitionRef.current)
         } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
           // ignore
         }
         const retryCount = recognitionRetryCountRef.current + 1
@@ -1304,7 +1304,7 @@ const lastResolvedTurnRef = useRef(0)
 
     try {
       recognitionRef.current.stop()
-    } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+    } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
 
     await Promise.race([
       waitForEnd,
@@ -1336,7 +1336,7 @@ const lastResolvedTurnRef = useRef(0)
         recognitionRef.current.stop()
       }
     } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
       // ignore
     }
 
@@ -1908,7 +1908,7 @@ const lastResolvedTurnRef = useRef(0)
       try {
         recognitionRef.current.stop()
       } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
         // Ignore stop errors.
       }
       recognitionRef.current = null
@@ -1917,35 +1917,35 @@ const lastResolvedTurnRef = useRef(0)
     if (processorRef.current) {
       try {
         processorRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       processorRef.current = null
     }
 
     if (sourceRef.current) {
       try {
         sourceRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       sourceRef.current = null
     }
 
     if (analyserRef.current) {
       try {
         analyserRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       analyserRef.current = null
     }
 
     if (zeroGainRef.current) {
       try {
         zeroGainRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       zeroGainRef.current = null
     }
 
     if (audioContextRef.current) {
       try {
         await audioContextRef.current.close()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       audioContextRef.current = null
     }
 
@@ -1957,35 +1957,35 @@ const lastResolvedTurnRef = useRef(0)
     if (processorRef.current) {
       try {
         processorRef.current.disconnect?.()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       processorRef.current = null
     }
 
     if (sourceRef.current) {
       try {
         sourceRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       sourceRef.current = null
     }
 
     if (analyserRef.current) {
       try {
         analyserRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       analyserRef.current = null
     }
 
     if (zeroGainRef.current) {
       try {
         zeroGainRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       zeroGainRef.current = null
     }
 
     if (audioContextRef.current) {
       try {
         await audioContextRef.current.close()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err) }
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
       audioContextRef.current = null
     }
 
@@ -2091,7 +2091,7 @@ const lastResolvedTurnRef = useRef(0)
 
   const schedulePassiveAudioCapture = useCallback(() => {
     const runCapture = () => {
-      void setupPassiveAudioCapture().catch((e) => { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e) })
+      void setupPassiveAudioCapture().catch((e) => { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack) })
     }
 
     if (!conversationActiveRef?.current) {
@@ -2317,7 +2317,7 @@ const lastResolvedTurnRef = useRef(0)
               if (typeof previous.abort === 'function') previous.abort()
               else previous.stop()
             } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
               // ignore
             }
           }
@@ -2712,7 +2712,7 @@ const lastResolvedTurnRef = useRef(0)
           setStatus('idle')
         }
       } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e);
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
         if (closing) {
           isListeningRef.current = false
           await cleanupAudio().catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
@@ -3320,7 +3320,7 @@ const lastResolvedTurnRef = useRef(0)
             `processConversationFluQuery TRACE: determinista sobre question="${(question || '').slice(0, 80)}" → matched=${Boolean(probe?.matched)} domain="${probe?.domain || ''}" action="${JSON.stringify(probe?.action?.action ?? probe?.action ?? null)?.slice(0, 120)}"`,
           )
         } catch (probeError) {
-    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', probeError);
+    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', probeError, probeError?.stack);
           relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery TRACE determinista lanzó: ${probeError?.message || probeError}`)
         }
 
@@ -3437,7 +3437,7 @@ const lastResolvedTurnRef = useRef(0)
           fastPathEnvironment: Boolean(fastEnv?.tipo),
         })
       } catch (error) {
-    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', error);
+    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', error, error?.stack);
         relayLog('ERROR', 'useFluVoiceAssistant', `processConversationFluQuery CATCH: message="${error?.message || error}", code="${error?.code}", status="${error?.status}"`)
         reportGeminiFailure(error, { phase: 'SESION_ACTIVA', transcript: fullTranscript })
         // Also notify the UI (FluShell) so FLU speaks the error to the user
