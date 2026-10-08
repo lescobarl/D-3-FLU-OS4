@@ -1322,9 +1322,9 @@ function App() {
             // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
-                // P8.40: la etiqueta automatica de la diarizacion puede pertenecer a un
-                // participante registrado (speakerLabel del panel): la fila lleva su NOMBRE.
-                const speakerRegistrado = resolveRegisteredSpeakerName(speakerName, participantSpeakerRef.current);
+                // P8.40: etiqueta automatica -> NOMBRE del participante, SOLO con VOZ
+                // medida: sin evidencia no se convierte (la diarizacion reutiliza etiquetas).
+                const speakerRegistrado = resolved?.evidenciaAcustica === true ? resolveRegisteredSpeakerName(speakerName, participantSpeakerRef.current) : '';
                 commitUserTurnRow({
                     text: transcript,
                     speakerName: speakerRegistrado || speakerName,

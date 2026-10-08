@@ -224,13 +224,18 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
     }
   }
 
-  if (ctx.tryDispatch?.(capture, { interim: false, source: 'sr-gap' })) {
+  ctx.tryDispatch?.(capture, { interim: false, source: 'sr-gap' })
+
+  // El cierre REAL del segmento se sella SIEMPRE: el `tryDispatch` de arriba puede
+  // haber deduplicado (sin escribir fila) o haber respondido. El commit es
+  // idempotente (una sola fila por locucion), asi que no hay doble fila.
+  const lastRowSrGap = cleanForSpeech(ctx.logRowsTextRef?.current?.at(-1) || '')
+  if (lastRowSrGap && phrasesEquivalent(capture, lastRowSrGap)) {
     sealTurnBoundaryAfterFinal(ctx)
     return {
-      flushed: true,
-      dispatched: true,
+      flushed: false,
+      reason: 'already-committed',
       capture,
-      reason: 'sr-gap-dispatched',
       sinceLastResultMs,
     }
   }
@@ -243,6 +248,8 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
     freshUtterance: true,
     turnBoundary: true,
     atTurnBoundary: true,
+    // Cierre REAL por SILENCIO (srGap): la fila de conversacion se escribe aqui.
+    settlesTurn: true,
     forceNewRow,
   })
 
@@ -271,12 +278,17 @@ export function flushRecognitionEndThroughIngress(ctx) {
 
   if (ctx.tryDispatch?.(capture, { interim: false, source: 'onend' })) {
     sealPendingInterim(ctx.listenState)
-    return { flushed: true, dispatched: true, capture }
   }
 
-  if (phrasesEquivalent(capture, ctx.lastEmittedTranscriptRef?.current)) {
+  // La fila de conversacion se escribe al CIERRE real (onend). El `tryDispatch` de
+  // arriba puede haberla escrito ya (commit temprano de la respuesta); si no (p.ej.
+  // la peticion se dedupeo porque el interim ya la registro), se sella aqui. El
+  // criterio NO puede ser `lastEmittedTranscriptRef` (avanza en cada commit de
+  // SEGMENTO aunque no haya fila): se mide contra la ULTIMA FILA del store.
+  const lastRow = cleanForSpeech(ctx.logRowsTextRef?.current?.at(-1) || '')
+  if (lastRow && phrasesEquivalent(capture, lastRow)) {
     sealPendingInterim(ctx.listenState)
-    return { flushed: false, reason: 'already-emitted', capture }
+    return { flushed: false, reason: 'already-committed', capture }
   }
 
   const result = sealPendingInterim(ctx.listenState)
@@ -286,6 +298,8 @@ export function flushRecognitionEndThroughIngress(ctx) {
     speaker: result.speaker,
     utterance: capture,
     turnCommit: true,
+    // Cierre REAL: SpeechRecognition termino (onend) sin turno cerrado antes.
+    settlesTurn: true,
   })
   return { flushed: true, capture, source: 'onend' }
 }
@@ -405,18 +419,18 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   }
 
   const {
-    logRowsTextRef,
     lastLoggedSpeakerRef,
-    tryDispatch,
     debugHotPath,
   } = ctx
 
-  const lastCommittedForWake = logRowsTextRef?.current?.at(-1) || ''
-  const wakeAnalysis = analyzeWakeTurn(commitCapture, { lastCommitted: lastCommittedForWake })
-
-  if (!wakeAnalysis.hasInlineBoundary && tryDispatch(commitCapture, { interim: false, source: 'final' })) {
-    return { handled: true, capture: commitCapture }
-  }
+  // Un `final` de SEGMENTO de Chrome (pausa BREVE DENTRO de un mismo dictado) NO
+  // cierra el turno: antes se despachaba aqui y eso volcaba la ultima frase a la
+  // conversacion y hacia responder a FLU a mitad del dictado, sin silencio real ni
+  // cambio de hablante (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
+  // "vaciada"). El cierre REAL llega por `onend`
+  // (flushRecognitionEndThroughIngress) o por `srGap` (silencio/locucion
+  // estancada); un wake INLINE lo cierra `applyWakeTurnCommit` mas abajo. El texto
+  // NO se pierde: sigue en la locucion viva (ULTIMA FRASE) y en la fila de SESION.
 
   const rowContext = buildIngressRowContext(ctx, commitCapture)
   const forceNewRow = shouldForceNewLogRowOnCommit(
