@@ -115,9 +115,20 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         const filas = await usuarios(page);
         const hablantes = filas.map((row) => row.speaker);
         console.log(`[P3] hablantes = ${JSON.stringify(hablantes)}`);
-        for (const fila of filas) {
-            expect(fila.speaker, `la fila "${fila.text}" debe llevar el nombre`).toBe('Luis');
-        }
+        // El turno IDENTIFICADO por voz ("soy luis") lleva su nombre.
+        expect(hablantes[0], `hablantes=${JSON.stringify(hablantes)}`).toBe('Luis');
+        // La sesion YA identificada NO puede estampar NINGUN nombre a una locucion
+        // SIN evidencia de voz (caso 2 del dueno: 'Luis' pegado a una voz distinta).
+        // En este arnes no hay audio, asi que la fila siguiente queda SIN hablante;
+        // lo que NUNCA puede quedar es una etiqueta inventada ni el nombre ajeno.
+        expect(
+            hablantes.slice(1),
+            `sin evidencia no se estampa nombre ajeno: ${JSON.stringify(hablantes)}`,
+        ).not.toContain('Luis');
+        expect(
+            hablantes.filter((h) => /^Hablante\s+\d+$/.test(h)),
+            `no puede quedar una etiqueta inventada: ${JSON.stringify(hablantes)}`,
+        ).toHaveLength(0);
     });
 
     test('P3b: "soy Luis" no deja etiquetas inventadas (sin etiqueta sembrada)', async ({ page }) => {
@@ -155,6 +166,40 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
             hablantes.filter((h) => /^Hablante\s+\d+$/.test(h)),
             `no puede quedar una etiqueta inventada: ${JSON.stringify(hablantes)}`,
         ).toHaveLength(0);
+    });
+
+    test('P7: dictado CON PAUSAS (1..25) - no se vacia antes del corte y no falta nada', async ({ page }) => {
+        // Caso del dueno (2026-10-08 08:25): contando 1..25 con pausas de dictado, la
+        // fila se "vacio" a la conversacion al llegar al 9, ANTES de un silencio real.
+        await startConversation(page);
+        await esperarListo(page);
+
+        // Chrome NO entrega interinos indefinidos: CIERRA segmentos (final) mientras
+        // sigues hablando (su log real: asrRaw con varios items f=1 seguidos). Ese
+        // 'final' es lo que disparaba el vaciado antes del silencio real.
+        const cortes = ['1 2 3', '1 2 3 4 5', '1 2 3 4 5 6 7', '1 2 3 4 5 6 7 8 9', '1 2 3 4 5 6 7 8 9 10 11 12'];
+        for (const corte of cortes) {
+            const frase = `voy a contar unos numeros para ver si se pierde la secuencia ${corte}`;
+            await speakViaMic(page, frase, { final: false });
+            await page.waitForTimeout(700);
+            await speakViaMic(page, frase, { final: true }); // cierre de SEGMENTO de Chrome
+            await page.waitForTimeout(500);
+        }
+        const durante = await countUserRows(page);
+        console.log(`[P7] filas durante el dictado = ${durante} (esperado 0)`);
+
+        await speakViaMic(
+            page,
+            'voy a contar unos numeros para ver si se pierde la secuencia 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15',
+            { final: true, endTurn: true },
+        );
+        await expect.poll(async () => await countUserRows(page), { timeout: 25000 }).toBeGreaterThanOrEqual(1);
+        const filas = await usuarios(page);
+        const texto = filas.map((f) => f.text.toLowerCase()).join(' | ');
+        console.log(`[P7] filas = ${JSON.stringify(filas.map((f) => f.text))}`);
+        expect(durante, 'la fila no puede vaciarse antes del corte/silencio').toBe(0);
+        expect(texto, 'no puede faltar la secuencia').toContain('15');
+        expect(filas, 'una sola fila').toHaveLength(1);
     });
 
     test('P4: latencia final -> fila (medicion de rendimiento)', async ({ page }) => {

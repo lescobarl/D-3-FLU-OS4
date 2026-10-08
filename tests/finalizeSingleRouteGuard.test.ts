@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const TARGET = 'src/voice/lib/conversationStreamCommit.js'
-const RE = /finalizeTurnCommit\(\)/
+const RE = /finalizeTurnCommit\([^)]*\)/
 
 /** Llamadas a finalizeTurnCommit (mismo criterio del guard), alimentable. */
 export function finalizeCalls(src: string, file: string): string[] {

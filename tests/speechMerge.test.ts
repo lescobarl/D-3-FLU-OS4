@@ -206,3 +206,25 @@ describe('transcriptIngress — collectRecognitionResultChunks', () => {
         expect(collectRecognitionResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
     });
 });
+
+// ------------------------------------------------------------
+// PRUEBA DE DETECTOR (el detector no es decorativo): el reparto de
+// `collectRecognitionResultChunks` DEBE discriminar - un item final SIN texto no
+// puede reaparecer como chunk de contenido (abriria una fila vacia y perderia la
+// voz). Caso que lo falsifica: si el detector no discriminara, el final vacio
+// contaria como contenido.
+// ------------------------------------------------------------
+describe('collectRecognitionResultChunks - el detector no es decorativo', () => {
+    it('un final SIN texto no aporta chunk de contenido (infractor sintetico)', () => {
+        const conTexto = collectRecognitionResultChunks({
+            resultIndex: 0,
+            results: [{ isFinal: true, length: 1, 0: { transcript: 'hola como estas', confidence: 0.9 } }],
+        });
+        const sinTexto = collectRecognitionResultChunks({
+            resultIndex: 0,
+            results: [{ isFinal: true, length: 1, 0: { transcript: '', confidence: 0.9 } }],
+        });
+        expect(conTexto.finalChunks).toContain('hola como estas');
+        expect(sinTexto.finalChunks.filter(Boolean)).toEqual([]);
+    });
+});

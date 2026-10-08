@@ -428,7 +428,10 @@ export async function speakUntilHeard(
     let intentos = 0;
     while (Date.now() < deadline) {
         intentos += 1;
-        await speakViaMic(page, text);
+        // `endTurn: true` = la locucion TERMINA (Chrome cierra la sesion). Es el
+        // CIERRE REAL del turno: la fila de conversacion se escribe al cierre
+        // (silencio/onend), no en cada `final` de SEGMENTO de Chrome.
+        await speakViaMic(page, text, { endTurn: true });
         const oida = await page
             .waitForFunction(
                 (n) =>
