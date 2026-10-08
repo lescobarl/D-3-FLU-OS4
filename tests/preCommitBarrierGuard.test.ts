@@ -15,7 +15,7 @@
  *   4. AGENTS.md declara exactamente esa barrera (sin la promesa falsa del gate).
  */
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { runAsync } from './_asyncExec';
 import { describe, expect, it } from 'vitest';
 
 const HOOK = '.githooks/pre-commit';
@@ -34,9 +34,9 @@ export function npmCommands(shell: string): string[] {
   return [...new Set(out)];
 }
 
-function tracked(path: string): boolean {
+async function tracked(path: string): Promise<boolean> {
   try {
-    const out = execFileSync('git', ['ls-files', '--', path], { encoding: 'utf8' });
+    const out = (await runAsync('git', ['ls-files', '--', path])).stdout;
     return out.split('\n').map((l) => l.trim()).includes(path);
   } catch {
     return false;
@@ -44,15 +44,15 @@ function tracked(path: string): boolean {
 }
 
 describe('P0.8 preCommitBarrier - la barrera documentada es la real', () => {
-  it('el hook esta versionado y es ligero (lint + typecheck)', () => {
+  it('el hook esta versionado y es ligero (lint + typecheck)', async () => {
     const hook = readFileSync(HOOK, 'utf8');
-    expect(tracked(HOOK), HOOK + ' debe estar versionado (no en .git/hooks)').toBe(true);
+    expect(await tracked(HOOK), HOOK + ' debe estar versionado (no en .git/hooks)').toBe(true);
     const cmds = npmCommands(hook);
     for (const c of LIGHT) expect(cmds, 'falta ' + c).toContain(c);
     for (const c of NEVER) expect(cmds, 'no debe correr ' + c).not.toContain(c);
   });
 
-  it('npm lo activa via prepare -> core.hooksPath', () => {
+  it('npm lo activa via prepare -> core.hooksPath', async () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
     expect(pkg.scripts.prepare).toContain('install-hooks');
     const installer = readFileSync(INSTALLER, 'utf8');
@@ -60,7 +60,7 @@ describe('P0.8 preCommitBarrier - la barrera documentada es la real', () => {
     expect(installer).toContain('.githooks');
   });
 
-  it('AGENTS.md no promete el gate de contrato como pre-commit', () => {
+  it('AGENTS.md no promete el gate de contrato como pre-commit', async () => {
     const L = readFileSync('AGENTS.md', 'utf8').split(/\r?\n/);
     const i = L.findIndex((l) => l.startsWith('- Pre-commit'));
     expect(i, 'AGENTS.md debe documentar la barrera pre-commit').toBeGreaterThan(-1);
@@ -73,7 +73,7 @@ describe('P0.8 preCommitBarrier - la barrera documentada es la real', () => {
 });
 
 describe('P0.8 - el detector no es decorativo (7.7.d)', () => {
-  it('detecta comandos npm run y no confunde texto suelto', () => {
+  it('detecta comandos npm run y no confunde texto suelto', async () => {
     expect(npmCommands('npm run lint || exit 1')).toEqual(['npm run lint']);
     expect(npmCommands('npm run gate')).toEqual(['npm run gate']);
     expect(npmCommands('echo "npm run test:full"')).toEqual(['npm run test:full']);

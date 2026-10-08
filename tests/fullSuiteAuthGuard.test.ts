@@ -8,7 +8,7 @@
  * este guard falla.
  */
 import { describe, expect, it } from 'vitest'
-import { execFileSync } from 'node:child_process'
+import { runAsync, runOk } from './_asyncExec'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -26,18 +26,18 @@ function envWithoutAuth(): NodeJS.ProcessEnv {
 }
 
 describe('la suite completa exige autorizacion expresa', () => {
-    it('test:full pasa por la barrera de autorizacion', () => {
+    it('test:full pasa por la barrera de autorizacion', async () => {
         expect(pkg.scripts['test:full']).toContain('scripts/require-full-suite-auth.mjs')
     })
 
-    it('la via rapida existe y esta documentada en AGENTS.md', () => {
+    it('la via rapida existe y esta documentada en AGENTS.md', async () => {
         expect(pkg.scripts['test:file']).toBeTruthy()
         expect(pkg.scripts['test:grep']).toBeTruthy()
         expect(pkg.scripts['verify:fast']).toBeTruthy()
         expect(agents).toContain('npm run test:file')
     })
 
-    it('AGENTS.md declara la regla dura', () => {
+    it('AGENTS.md declara la regla dura', async () => {
         expect(agents).toContain('autorizacion EXPRESA')
         expect(agents).toContain('FLU_AUTH_FULL_SUITE=1')
     })
@@ -47,24 +47,15 @@ describe('la suite completa exige autorizacion expresa', () => {
     // (exit 1); y un entorno autorizado, que deja pasar. Si el detector no
     // discriminara, estos casos fallarian: por eso este guard no es teatro.
     describe('P2.4-S el detector no es decorativo (mutacion del entorno)', () => {
-        it('sin autorizacion el proceso BLOQUEA (codigo 1)', () => {
-            let code: number | null = null
-            let stderr = ''
-            try {
-                execFileSync(process.execPath, [authScript], { env: envWithoutAuth(), stdio: 'pipe' })
-            } catch (err) {
-                const e = err as { status?: number; stderr?: Buffer }
-                code = e.status ?? null
-                stderr = String(e.stderr || '')
-            }
-            expect(code).toBe(1)
-            expect(stderr).toContain('BLOQUEADO')
+        it('sin autorizacion el proceso BLOQUEA (codigo 1)', async () => {
+            const r = await runAsync(process.execPath, [authScript], { env: envWithoutAuth() })
+            expect(r.status).toBe(1)
+            expect(r.stderr).toContain('BLOQUEADO')
         })
 
-        it('con autorizacion expresa deja pasar', () => {
-            const out = execFileSync(process.execPath, [authScript], {
+        it('con autorizacion expresa deja pasar', async () => {
+            const out = await runOk(process.execPath, [authScript], {
                 env: { ...envWithoutAuth(), FLU_AUTH_FULL_SUITE: '1' },
-                encoding: 'utf8',
             })
             expect(out).toContain('autorizado')
         })

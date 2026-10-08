@@ -31,6 +31,7 @@
  * falsifican de verdad y no son decorativos).
  */
 import { describe, expect, it } from 'vitest'
+import { ticksWhile } from './_asyncExec'
 import { erroresDeNombreLibre } from '../scripts/js-ref-metric.mjs'
 import {
   evaluateSrGapSegmentCommit,
@@ -101,12 +102,10 @@ describe('P6.7 jsReferenceGuard - referencias a nombres que no existen', () => {
   // spawnSync 9445ms/ticks=0, execFile 8913ms/ticks=281. Este caso falsifica de
   // verdad: si alguien vuelve a la version sincrona, ticks es 0 y cae.
   it('la medicion no bloquea el event loop (el RPC del worker sigue latiendo)', { timeout: 120000 }, async () => {
-    let ticks = 0
-    const id = setInterval(() => {
-      ticks += 1
-    }, 20)
-    const errores = await erroresDeNombreLibre()
-    clearInterval(id)
+    let errores: string[] = []
+    const ticks = await ticksWhile(async () => {
+      errores = await erroresDeNombreLibre()
+    })
     expect(errores).toEqual([])
     expect(ticks).toBeGreaterThan(0)
   })

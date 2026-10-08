@@ -13,7 +13,7 @@
  * compara el REGISTRO (`done[]`) y no el commit que el cierre cita: asi no hay
  * hueco por citar un commit viejo.
  */
-import { execFileSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -50,18 +50,18 @@ export function hasBothFields(evidencia: string): boolean {
     return positivo && negativo
 }
 
-function git(args: string[]): string {
-    return execFileSync('git', args, { encoding: 'utf8' })
+async function git(args: string[]): Promise<string> {
+    return (await runAsync('git', args)).stdout
 }
 
 /** Commit que introdujo este guard; `null` mientras no este en la historia. */
-function ratchetCommit(): string | null {
-    const out = git(['log', '--diff-filter=A', '-1', '--format=%H', '--', SELF]).trim()
+async function ratchetCommit(): Promise<string | null> {
+    const out = (await git(['log', '--diff-filter=A', '-1', '--format=%H', '--', SELF])).trim()
     return out === '' ? null : out
 }
 
-function closuresAt(ref: string): Cierre[] {
-    const raw = git(['show', `${ref}:${LEDGER}`])
+async function closuresAt(ref: string): Promise<Cierre[]> {
+    const raw = await git(['show', `${ref}:${LEDGER}`])
     return JSON.parse(raw).done ?? []
 }
 
@@ -70,43 +70,43 @@ function currentClosures(): Cierre[] {
 }
 
 describe('0.23 alcance declarado - todo cierre nuevo dice que cubre y que no', () => {
-    it('los cierres posteriores al trinquete traen CUBIERTO y NO CUBIERTO', () => {
-        const start = ratchetCommit()
+    it('los cierres posteriores al trinquete traen CUBIERTO y NO CUBIERTO', async () => {
+        const start = await ratchetCommit()
         // Sin commit de arranque (el guard aun no esta en la historia) el conjunto
         // de cierres nuevos es vacio: el trinquete empieza cuando el guard entra.
-        const before = start === null ? currentClosures() : closuresAt(start)
+        const before = start === null ? currentClosures() : await closuresAt(start)
         const falta = missingScopeField(currentClosures(), before)
         expect(
             falta,
             'Cierres nuevos sin campo de alcance (0.23). Formato: "Alcance real (obligatorio, 0.23): CUBIERTO=<medido>; NO CUBIERTO=<no verificado>"',
         ).toEqual([])
     })
-    it('el guard esta versionado (si no, el trinquete no tiene arranque)', () => {
+    it('el guard esta versionado (si no, el trinquete no tiene arranque)', async () => {
         // Mientras el fichero no este en git, ratchetCommit() es null y el caso de
         // arriba pasa por vacio: este caso deja constancia de que entonces NO mide.
-        const start = ratchetCommit()
+        const start = await ratchetCommit()
         expect(typeof start === 'string' || start === null, 'git no respondio').toBe(true)
     })
 })
 
 describe('el detector no es decorativo', () => {
-    it('marca el cierre nuevo sin campo, y no marca el que lo trae', () => {
+    it('marca el cierre nuevo sin campo, y no marca el que lo trae', async () => {
         const before: Cierre[] = [{ id: 'P1', commit: 'aaa', evidencia: 'viejo' }]
         const conCampo: Cierre = { id: 'P9', commit: 'bbb', evidencia: 'Alcance real (0.23): CUBIERTO=x; NO CUBIERTO=y' }
         const sinCampo: Cierre = { id: 'P8', commit: 'ccc', evidencia: 'gate verde, nada roto' }
         expect(missingScopeField([...before, sinCampo], before)).toEqual(['P8'])
         expect(missingScopeField([...before, conCampo], before)).toEqual([])
     })
-    it('exige las DOS mitades del campo', () => {
+    it('exige las DOS mitades del campo', async () => {
         const before: Cierre[] = []
         expect(missingScopeField([{ id: 'P9', commit: 'b', evidencia: 'CUBIERTO=x' }], before)).toEqual(['P9'])
         expect(missingScopeField([{ id: 'P9', commit: 'b', evidencia: 'NO CUBIERTO=y' }], before)).toEqual(['P9'])
     })
-    it('no retroactivo: lo ya registrado antes del trinquete queda abuelado', () => {
+    it('no retroactivo: lo ya registrado antes del trinquete queda abuelado', async () => {
         const before: Cierre[] = [{ id: 'P1', commit: 'aaa' }, { id: 'P2', commit: 'bbb' }]
         expect(missingScopeField(before, before)).toEqual([])
     })
-    it('los cierres nuevos se calculan por ID de registro, no por el commit citado', () => {
+    it('los cierres nuevos se calculan por ID de registro, no por el commit citado', async () => {
         const before: Cierre[] = [{ id: 'P1', commit: 'aaa' }]
         const citandoCommitViejo: Cierre = { id: 'P9', commit: 'aaa', evidencia: 'sin campo' }
         expect(newClosures([...before, citandoCommitViejo], before)).toEqual([citandoCommitViejo])

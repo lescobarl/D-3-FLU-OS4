@@ -12,7 +12,7 @@
  * comentario o de un string y NO tiene que marcarla. Sin eso el guard podria
  * estar en verde midiendo otra cosa.
  */
-import { execSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -93,12 +93,12 @@ export function offenders(readSource: (f: string) => string, files: string[]): s
 
 const ROOT = process.cwd()
 
-function trackedSources(): string[] {
-  return execSync('git ls-files src', { encoding: 'utf8', cwd: ROOT }).split('\n').filter(Boolean)
+async function trackedSources(): Promise<string[]> {
+  return (await runAsync('git', ['ls-files', 'src'], { cwd: ROOT })).stdout.split('\n').filter(Boolean)
 }
 
 describe('P5.9 localStorageGateway - la puerta es la unica que mira el almacen', () => {
-  it('el detector marca el acceso directo y la guarda, y no el comentario ni el string', () => {
+  it('el detector marca el acceso directo y la guarda, y no el comentario ni el string', async () => {
     expect(directStorageLines("const raw = localStorage.getItem('k');")).toEqual([1])
     expect(directStorageLines("if (typeof localStorage === 'undefined') return {};")).toEqual([1])
     expect(directStorageLines('localSet(k, v);')).toEqual([])
@@ -106,13 +106,13 @@ describe('P5.9 localStorageGateway - la puerta es la unica que mira el almacen',
     expect(directStorageLines("const msg = 'localStorage no disponible';")).toEqual([])
   })
 
-  it('el detector cuenta la expresion de una plantilla y no su texto (prueba de mutacion)', () => {
+  it('el detector cuenta la expresion de una plantilla y no su texto (prueba de mutacion)', async () => {
     expect(directStorageLines('const n = `${localStorage.length}`;')).toEqual([1])
     expect(directStorageLines('logCaughtError(`[x] localStorage no disponible`);')).toEqual([])
   })
 
-  it('cero accesos directos en src/ fuera de la puerta', () => {
-    const files = trackedSources()
+  it('cero accesos directos en src/ fuera de la puerta', async () => {
+    const files = await trackedSources()
     expect(files.length, 'no se pudo leer el universo de ficheros').toBeGreaterThan(100)
     const bad = offenders((f) => readFileSync(join(ROOT, f), 'utf8'), files)
     expect(
@@ -121,8 +121,8 @@ describe('P5.9 localStorageGateway - la puerta es la unica que mira el almacen',
     ).toEqual([])
   })
 
-  it('la metrica congelada coincide con el detector', () => {
-    const out = execSync('node scripts/audit-metric.mjs localstorage-directo', { encoding: 'utf8', cwd: ROOT })
+  it('la metrica congelada coincide con el detector', async () => {
+    const out = (await runAsync('node', ['scripts/audit-metric.mjs', 'localstorage-directo'], { cwd: ROOT })).stdout
     expect(out.trim(), 'metrica y guard en desacuerdo (el detector derive)').toBe('0')
   })
 })

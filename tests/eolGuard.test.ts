@@ -14,7 +14,7 @@
  * de trabajo conserva la MISMA clase de EOL que su blob en el indice. Si editas un
  * archivo conservando su EOL, no te afecta.
  */
-import { execSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { describe, expect, it } from 'vitest'
 /** Clase de EOL segun `git ls-files --eol`: lf | crlf | mixed | none | -text. */
 export type EolKind = string
@@ -42,8 +42,8 @@ export function eolMismatches(rows: EolRow[]): string[] {
   }
   return out
 }
-function lsFilesEol(): EolRow[] {
-  const out = execSync('git ls-files --eol', { encoding: 'utf8' })
+async function lsFilesEol(): Promise<EolRow[]> {
+  const out = (await runAsync('git', ['ls-files', '--eol'])).stdout
   return out
     .split('\n')
     .filter(Boolean)
@@ -54,8 +54,8 @@ function lsFilesEol(): EolRow[] {
     })
 }
 describe('P0.7 eolGuard — el arbol de trabajo conserva la clase EOL del indice', () => {
-  it('ningun archivo versionado cambia de EOL solo por editarlo', () => {
-    const offenders = eolMismatches(lsFilesEol())
+  it('ningun archivo versionado cambia de EOL solo por editarlo', async () => {
+    const offenders = eolMismatches(await lsFilesEol())
     expect(
       offenders,
       `EOL cambiado respecto al indice (N=${offenders.length}):\n  ${offenders.join('\n  ')}\n` +
@@ -64,22 +64,22 @@ describe('P0.7 eolGuard — el arbol de trabajo conserva la clase EOL del indice
   })
 })
 describe('P0.7 eolGuard — el detector no es decorativo', () => {
-  it('marca un archivo con blob en LF guardado en CRLF (el caso que rompio f1a1ca6)', () => {
+  it('marca un archivo con blob en LF guardado en CRLF (el caso que rompio f1a1ca6)', async () => {
     expect(eolMismatches([{ i: 'i/lf', w: 'w/crlf', path: 'src/x.ts' }])).toHaveLength(1)
   })
-  it('marca un blob en CRLF guardado en LF (flip inverso)', () => {
+  it('marca un blob en CRLF guardado en LF (flip inverso)', async () => {
     expect(eolMismatches([{ i: 'i/crlf', w: 'w/lf', path: 'src/x.ts' }])).toHaveLength(1)
   })
-  it('no marca cuando la clase coincide', () => {
+  it('no marca cuando la clase coincide', async () => {
     expect(eolMismatches([{ i: 'i/lf', w: 'w/lf', path: 'a' }])).toHaveLength(0)
     expect(eolMismatches([{ i: 'i/crlf', w: 'w/crlf', path: 'b' }])).toHaveLength(0)
     expect(eolMismatches([{ i: 'i/mixed', w: 'w/mixed', path: 'c' }])).toHaveLength(0)
   })
-  it('ignora binarios/no-texto (git no los normaliza)', () => {
+  it('ignora binarios/no-texto (git no los normaliza)', async () => {
     expect(eolMismatches([{ i: 'i/-text', w: 'w/-text', path: 'logo.png' }])).toHaveLength(0)
     expect(eolMismatches([{ i: 'i/lf', w: 'w/-text', path: 'raro.bin' }])).toHaveLength(0)
   })
-  it('encuentra el desajuste aunque haya muchos archivos correctos', () => {
+  it('encuentra el desajuste aunque haya muchos archivos correctos', async () => {
     const rows: EolRow[] = [
       { i: 'i/lf', w: 'w/lf', path: 'ok1' },
       { i: 'i/crlf', w: 'w/crlf', path: 'ok2' },

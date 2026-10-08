@@ -23,7 +23,7 @@
  *      VEREDICTO en plans/ledger.json (P6.9). Lo que sí se fija es la barrera de peso: un
  *      activo nuevo >= 2 MB obliga a decidir (LFS o allowlist), no entra por silencio.
  */
-import { execFileSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import {
   mkdirSync,
   mkdtempSync,
@@ -63,7 +63,7 @@ function walkSrc(dir: string, acc: string[] = []): string[] {
 }
 
 describe('C53 higiene — marcadores de deuda reales', () => {
-  it('src no tiene un solo TODO/FIXME/HACK de verdad', () => {
+  it('src no tiene un solo TODO/FIXME/HACK de verdad', async () => {
     const hits: string[] = []
     for (const f of walkSrc(join(ROOT, 'src'))) {
       const rel = f.slice(ROOT.length + 1).replace(/\\/g, '/')
@@ -72,13 +72,13 @@ describe('C53 higiene — marcadores de deuda reales', () => {
     expect(hits, `marcadores reales (N=${hits.length}):\n  ${hits.join('\n  ')}`).toEqual([])
   })
 
-  it('el detector no confunde la palabra «TODOS» con deuda (falso positivo del audit)', () => {
+  it('el detector no confunde la palabra «TODOS» con deuda (falso positivo del audit)', async () => {
     expect(realDebtMarkers('// Se listan TODOS los estados (no solo pending)')).toEqual([])
     expect(realDebtMarkers(' * Genérico para TODOS los juegos: el enrutador lo consulta')).toEqual([])
     expect(realDebtMarkers('// TODO el manejo de Web Speech API vive aquí')).toEqual([])
   })
 
-  it('el detector sí ve la deuda real (no es decorativo)', () => {
+  it('el detector sí ve la deuda real (no es decorativo)', async () => {
     expect(realDebtMarkers('// TODO: unificar con el motor')).toEqual(['TODO'])
     expect(realDebtMarkers('/* FIXME: rompe en iOS */')).toEqual(['FIXME'])
     expect(realDebtMarkers(' * HACK: parche temporal')).toEqual(['HACK'])
@@ -112,14 +112,12 @@ function fixtureDir(only?: string): string {
   return dir
 }
 
-function frozenMetric(id: string, cwd: string): number {
-  return Number(execFileSync('node', [AM, id], { cwd, encoding: 'utf8' }).trim())
+async function frozenMetric(id: string, cwd: string): Promise<number> {
+  return Number((await runAsync('node', [AM, id], { cwd })).stdout.trim())
 }
 
-function catalogToday(id: string, cwd: string): number {
-  const json = JSON.parse(
-    execFileSync('node', [AU, '--json', '--only', id], { cwd, encoding: 'utf8' }),
-  )
+async function catalogToday(id: string, cwd: string): Promise<number> {
+  const json = JSON.parse((await runAsync('node', [AU, '--json', '--only', id], { cwd })).stdout)
   const row = json.find((r: { id: string }) => r.id === id)
   return Number(row?.today)
 }
@@ -135,26 +133,26 @@ afterAll(() => {
 })
 
 describe('C53 higiene — los dos auditores no son un duplicado', () => {
-  it('el medidor congelado ve SU literal exacto', () => {
-    expect(frozenMetric('uuid-no-v4', fx('narrowVoiceId'))).toBe(1)
-    expect(frozenMetric('console-debug', fx('narrowDebug'))).toBe(1)
+  it('el medidor congelado ve SU literal exacto', async () => {
+    expect(await frozenMetric('uuid-no-v4', fx('narrowVoiceId'))).toBe(1)
+    expect(await frozenMetric('console-debug', fx('narrowDebug'))).toBe(1)
   })
 
-  it('y NO ve la forma ancha del catálogo: no son el mismo detector', () => {
-    expect(frozenMetric('uuid-no-v4', fx('broadGen'))).toBe(0)
-    expect(frozenMetric('console-debug', fx('broadLog'))).toBe(0)
+  it('y NO ve la forma ancha del catálogo: no son el mismo detector', async () => {
+    expect(await frozenMetric('uuid-no-v4', fx('broadGen'))).toBe(0)
+    expect(await frozenMetric('console-debug', fx('broadLog'))).toBe(0)
   })
 
-  it('el catálogo ve SU clase ancha (está vivo, no sordo)', () => {
-    expect(catalogToday('V1', fx('broadGen'))).toBeGreaterThan(0)
-    expect(catalogToday('V4', fx('broadLog'))).toBeGreaterThan(0)
+  it('el catálogo ve SU clase ancha (está vivo, no sordo)', async () => {
+    expect(await catalogToday('V1', fx('broadGen'))).toBeGreaterThan(0)
+    expect(await catalogToday('V4', fx('broadLog'))).toBeGreaterThan(0)
   })
 
-  it('en el repo real los dos coinciden en 0', () => {
-    expect(frozenMetric('uuid-no-v4', ROOT)).toBe(0)
-    expect(frozenMetric('console-debug', ROOT)).toBe(0)
-    expect(catalogToday('V1', ROOT)).toBe(0)
-    expect(catalogToday('V4', ROOT)).toBe(0)
+  it('en el repo real los dos coinciden en 0', async () => {
+    expect(await frozenMetric('uuid-no-v4', ROOT)).toBe(0)
+    expect(await frozenMetric('console-debug', ROOT)).toBe(0)
+    expect(await catalogToday('V1', ROOT)).toBe(0)
+    expect(await catalogToday('V4', ROOT)).toBe(0)
   })
 })
 
@@ -179,8 +177,8 @@ const HEAVY_ALLOWLIST = [
   'public/textures/Bunny_Pants_1_N.png',
 ]
 
-function heavyTracked(): string[] {
-  const files = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
+async function heavyTracked(): Promise<string[]> {
+  const files = (await runAsync('git', ['ls-files'], { cwd: ROOT })).stdout
     .split('\n')
     .filter(Boolean)
   return files
@@ -195,14 +193,14 @@ function heavyTracked(): string[] {
 }
 
 describe('C53 higiene — peso de binarios (LFS aplazado a propósito)', () => {
-  it('ningún activo pesado nuevo entra sin decisión explícita', () => {
-    const found = heavyTracked()
+  it('ningún activo pesado nuevo entra sin decisión explícita', async () => {
+    const found = await heavyTracked()
     const news = found.filter((f) => !HEAVY_ALLOWLIST.includes(f))
     expect(news, `activos >=${HEAVY_MB} MB fuera de la allowlist:\n  ${news.join('\n  ')}`).toEqual([])
   })
 
-  it('la allowlist describe la realidad (no es una lista muerta)', () => {
-    const present = new Set(heavyTracked())
+  it('la allowlist describe la realidad (no es una lista muerta)', async () => {
+    const present = new Set(await heavyTracked())
     const missing = HEAVY_ALLOWLIST.filter((f) => !present.has(f))
     expect(missing, `ya no pesan >=${HEAVY_MB} MB:\n  ${missing.join('\n  ')}`).toEqual([])
   })
@@ -238,8 +236,8 @@ export function mojibakeHits(text: string): string[] {
 }
 
 describe('C53 higiene — texto versionado sin mojibake', () => {
-  it('ningún fichero versionado arrastra UTF-8 mal decodificado', () => {
-    const files = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
+  it('ningún fichero versionado arrastra UTF-8 mal decodificado', async () => {
+    const files = (await runAsync('git', ['ls-files'], { cwd: ROOT })).stdout
       .split('\n')
       .filter((f) => /\.(json|md|ts|tsx|js|jsx|mjs|css|html)$/.test(f))
     const bad: string[] = []
@@ -250,19 +248,68 @@ describe('C53 higiene — texto versionado sin mojibake', () => {
     expect(bad, `ficheros con mojibake:\n  ${bad.join('\n  ')}`).toEqual([])
   })
 
-  it('el detector no confunde el arte ASCII de los planes con mojibake', () => {
+  it('el detector no confunde el arte ASCII de los planes con mojibake', async () => {
     expect(mojibakeHits('│  ├──────────────────────────┤ │')).toEqual([])
     expect(mojibakeHits('───────────────┬──────────────────────────────┤')).toEqual([])
     expect(mojibakeHits('└───────────────┬─────────────────────────────────────┘')).toEqual([])
     expect(mojibakeHits('├── transitorio  →  resultados[]')).toEqual([])
   })
 
-  it('el detector ve el mojibake real y no marca el texto correcto', () => {
+  it('el detector ve el mojibake real y no marca el texto correcto', async () => {
     expect(mojibakeHits('sesión de trabajo: navegación')).toEqual([])
     expect(mojibakeHits('// useNavigationCommands - comandos de navegaci\u00c3\u00b3n')).toHaveLength(1)
     expect(mojibakeHits('la secci\u251c\u2502n 4 del doc')).toHaveLength(1)
     expect(mojibakeHits('Protocolo \u0393\u00c7\u00f6 Guard')).toHaveLength(1)
     expect(mojibakeHits('(secci\u252c\u00ba7.7)')).toHaveLength(1)
     expect(mojibakeHits('a\u251c\u00a1adido de ra\u251c\u2502z')).toHaveLength(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 5) Ninguna barrera bloquea el event loop (un solo ejecutor de subprocesos)
+// ---------------------------------------------------------------------------
+
+/**
+ * `spawnSync`/`execFileSync`/`execSync` BLOQUEAN el event loop del worker durante
+ * toda la medicion: la suma de esos bloqueos bajo contencion cruza el timeout de
+ * 60 s del RPC de vitest y la corrida ENTERA sale roja por "Timeout calling
+ * onTaskUpdate" aunque los tests pasen (medido: P7.68 en jsReferenceGuard y P9.21
+ * en la barrera). Todo subproceso se lanza por el UNICO dueno
+ * (tests/_asyncExec.ts -> runAsync/runOk), que no bloquea.
+ */
+const SYNC_EXEC = new RegExp(["(spawn|exec)", "(File)?Sync\\s*\\("].join(""))
+
+/** Ficheros que ejecutan un subproceso de forma SINCRONA (el defecto). */
+export function blockers(srcByFile: Map<string, string>): string[] {
+  const out: string[] = []
+  for (const [name, src] of srcByFile) {
+    if (SYNC_EXEC.test(src)) out.push(name)
+  }
+  return out.sort()
+}
+
+describe('C53 higiene - una sola via para medir con subprocesos (no bloquea el loop)', () => {
+  it('ningun test lanza un subproceso sincrono (usa tests/_asyncExec.ts -> runAsync)', async () => {
+    const listado = (await runAsync('git', ['ls-files', 'tests'], { cwd: ROOT })).stdout.split('\n').filter(Boolean)
+    const mapa = new Map<string, string>()
+    for (const f of listado) {
+      if (!/\.test\.tsx?$/.test(f)) continue
+      mapa.set(f, readFileSync(join(ROOT, f), 'utf8'))
+    }
+    expect(mapa.size, 'no se pudo leer el universo de tests').toBeGreaterThan(50)
+    const bad = blockers(mapa).filter((f) => f !== 'tests/hygieneIndicatorsGuard.test.ts')
+    expect(bad, `tests que bloquean el event loop; usa tests/_asyncExec.ts (runAsync):\n  ${bad.join('\n  ')}`).toEqual([])
+  })
+
+  it('el detector no es decorativo (marca la forma sincrona y no la asincrona)', () => {
+    // Las formas se arman por concatenacion para que ESTE fichero no se marque a si mismo.
+    const sincrona = ['execFile', 'Sync(', "'git'", ')'].join('')
+    const asincrona = ['run', 'Async(', "'git'", ')'].join('')
+    const sintetico = new Map([
+      ['tests/sincrono.test.ts', sincrona],
+      ['tests/asincrono.test.ts', asincrona],
+      ['tests/mencion.test.ts', '// spawn' + 'Sync bloquea el event loop (comentario, sin llamada)'],
+    ])
+    expect(blockers(sintetico)).toEqual(['tests/sincrono.test.ts'])
   })
 })

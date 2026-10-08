@@ -15,7 +15,7 @@
  * Ademas, el trinquete vigila que toda excepcion este justificada: no vale un
  * `eslint-disable` mudo.
  */
-import { execFileSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { ESLint } from 'eslint'
@@ -82,8 +82,8 @@ const ROOT = process.cwd()
  * transitorios en `src`, que eslint contaria como deuda ajena. `git ls-files` los deja
  * fuera y ademas ata el trinquete a lo que de verdad se mantiene.
  */
-export function ficherosVersionados(cwd = process.cwd()): string[] {
-  return execFileSync('git', ['ls-files', 'src'], { cwd, encoding: 'utf8' })
+export async function ficherosVersionados(cwd = process.cwd()): Promise<string[]> {
+  return (await runAsync('git', ['ls-files', 'src'], { cwd })).stdout
     .split('\n')
     .filter((f) => /\.(ts|tsx|js|jsx|mjs)$/.test(f))
 }
@@ -101,12 +101,12 @@ export async function medir(): Promise<ReturnType<typeof porFichero>> {
     overrideConfigFile: join(ROOT, 'eslint.config.mjs'),
     overrideConfig: { rules: { 'react-hooks/exhaustive-deps': 'warn' } },
   })
-  cacheo = porFichero((await eslint.lintFiles(ficherosVersionados())) as Resultado[], ROOT)
+  cacheo = porFichero((await eslint.lintFiles(await ficherosVersionados())) as Resultado[], ROOT)
   return cacheo
 }
 
 describe('P7.4 hookDeps - la deuda de deps de hooks se congela, no se esconde', () => {
-  it('el detector marca al que pasa del techo y deja pasar al que no (prueba de mutacion)', () => {
+  it('el detector marca al que pasa del techo y deja pasar al que no (prueba de mutacion)', async () => {
     const r: Resultado[] = [
       {
         filePath: join(ROOT, 'src/a.ts'),
@@ -122,7 +122,7 @@ describe('P7.4 hookDeps - la deuda de deps de hooks se congela, no se esconde', 
     expect(excedidos({ 'src/a.ts': 5 }, por)).toEqual([])
   })
 
-  it('clasifica el plural de "unnecessary dependencies" (no lo confunde con compleja)', () => {
+  it('clasifica el plural de "unnecessary dependencies" (no lo confunde con compleja)', async () => {
     expect(tipoDe('has unnecessary dependencies: "a" and "b"')).toBe('unnecessary')
     expect(tipoDe('has an unnecessary dependency: "a"')).toBe('unnecessary')
     expect(tipoDe('has a missing dependency: "a"')).toBe('missing')
@@ -165,15 +165,15 @@ export function excepcionesSinMotivo(fuentes: { file: string; src: string }[]): 
 }
 
 describe('P7.4 hookDeps - toda excepcion esta justificada (no vale un disable mudo)', () => {
-  it('el detector marca un disable sin motivo y deja pasar al que lo lleva', () => {
+  it('el detector marca un disable sin motivo y deja pasar al que lo lleva', async () => {
     const malo = [{ file: 'a.ts', src: '// eslint-disable-next-line react-hooks/exhaustive-deps' }]
     const bien = [{ file: 'b.ts', src: '// eslint-disable-next-line react-hooks/exhaustive-deps -- por TDZ' }]
     expect(excepcionesSinMotivo(malo)).toEqual(['a.ts:1'])
     expect(excepcionesSinMotivo(bien)).toEqual([])
   })
 
-  it('ninguna excepcion real en src carece de motivo', () => {
-    const fuentes = ficherosVersionados().map((f) => ({ file: f, src: readFileSync(join(ROOT, f), 'utf8') }))
+  it('ninguna excepcion real en src carece de motivo', async () => {
+    const fuentes = (await ficherosVersionados()).map((f) => ({ file: f, src: readFileSync(join(ROOT, f), 'utf8') }))
     expect(excepcionesSinMotivo(fuentes)).toEqual([])
   })
 })

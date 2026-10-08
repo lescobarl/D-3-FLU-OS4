@@ -17,7 +17,7 @@
  * mencionar el fichero o su carpeta. Es una sobre-aproximacion a proposito: antes
  * de mas, nunca de menos.
  */
-import { execFileSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -95,60 +95,62 @@ function testSources(): Map<string, string> {
     return m
 }
 
-function git(args: string[]): string {
-    return execFileSync('git', args, { encoding: 'utf8' })
+async function git(args: string[]): Promise<string> {
+    return (await runAsync('git', args)).stdout
 }
 
 /** El commit EN CURSO (lo que el pre-commit va a crear), si lo hay. */
-function staged(): string[] {
-    return git(['diff', '--cached', '--name-only']).trim().split('\n').map((s) => s.trim()).filter(Boolean)
+async function staged(): Promise<string[]> {
+    return (await git(['diff', '--cached', '--name-only'])).trim().split('\n').map((s) => s.trim()).filter(Boolean)
 }
 
 /** Commits del rango + su lista de ficheros. */
-function commits(): Array<{ sha: string; files: string[] }> {
-    const shas = git(['rev-list', `${base}..HEAD`]).trim().split('\n').filter(Boolean)
-    return shas.map((sha) => ({
-        sha,
-        files: git(['show', '--name-only', '--format=', sha]).trim().split('\n').filter(Boolean),
-    }))
+async function commits(): Promise<Array<{ sha: string; files: string[] }>> {
+    const shas = (await git(['rev-list', `${base}..HEAD`])).trim().split('\n').filter(Boolean)
+    return Promise.all(
+        shas.map(async (sha) => ({
+            sha,
+            files: (await git(['show', '--name-only', '--format=', sha])).trim().split('\n').filter(Boolean),
+        })),
+    )
 }
 
 /** Lo tocado por el cambio en curso, con el mismo criterio que la puerta. */
-function touched(): string[] {
-    const tracked = git(['diff', '--name-only', base]).trim().split('\n')
-    const untracked = git(['ls-files', '--others', '--exclude-standard']).trim().split('\n')
-    return [...new Set([...tracked, ...untracked, ...staged()].map((s) => s.trim()).filter(Boolean))]
+async function touched(): Promise<string[]> {
+    const tracked = (await git(['diff', '--name-only', base])).trim().split('\n')
+    const untracked = (await git(['ls-files', '--others', '--exclude-standard'])).trim().split('\n')
+    return [...new Set([...tracked, ...untracked, ...(await staged())].map((s) => s.trim()).filter(Boolean))]
 }
 
 describe('0.22 instrumento - src y los guards que lo miden no viajan en el mismo commit', () => {
-    it('ningun commit del rango mezcla src con sus guards de texto', () => {
+    it('ningun commit del rango mezcla src con sus guards de texto', async () => {
         const sources = testSources()
-        const bad = commits().flatMap((c) => separationViolations(c.files, sources).map((v) => `${c.sha.slice(0, 7)}: ${v}`))
+        const bad = (await commits()).flatMap((c) => separationViolations(c.files, sources).map((v) => `${c.sha.slice(0, 7)}: ${v}`))
         expect(bad, 'El arreglo del guard va en commit APARTE del src que mide (0.22)').toEqual([])
     })
-    it('el commit en curso (indice) tampoco los mezcla', () => {
+    it('el commit en curso (indice) tampoco los mezcla', async () => {
         expect(
-            separationViolations(staged(), testSources()),
+            separationViolations(await staged(), testSources()),
             'Estas dejando en el indice src y el guard que lo mide juntos: separalos (0.22)',
         ).toEqual([])
     })
 })
 
 describe('0.24 instrumento - todo guard que lee un fichero tocado corre en el gate', () => {
-    it('no hay lectores fuera de lint:guards sin declarar', () => {
-        const bad = uncoveredReaders(touched(), GATE, testSources())
+    it('no hay lectores fuera de lint:guards sin declarar', async () => {
+        const bad = uncoveredReaders(await touched(), GATE, testSources())
         expect(
             bad,
             'Estos guards leen ficheros tocados y NO estan en lint:guards ni declarados en EXEMPT (0.24)',
         ).toEqual([])
     })
-    it('lo declarado en EXEMPT sigue fuera del gate (la lista se vacia sola)', () => {
+    it('lo declarado en EXEMPT sigue fuera del gate (la lista se vacia sola)', async () => {
         expect(exemptInvalidos(EXEMPT, GATE), 'Ya estan en lint:guards: sacalos de EXEMPT').toEqual([])
     })
 })
 
 describe('el detector no es decorativo', () => {
-    it('0.22 marca el commit que mezcla, y no marca el separado', () => {
+    it('0.22 marca el commit que mezcla, y no marca el separado', async () => {
         const sources = new Map([['tests/g.test.ts', "const s = readFileSync('src/core/games/x.ts', 'utf8')"]])
         expect(separationViolations(['src/core/games/x.ts', 'tests/g.test.ts'], sources)).toEqual([
             'tests/g.test.ts mide src/core/games/x.ts',
@@ -156,22 +158,22 @@ describe('el detector no es decorativo', () => {
         expect(separationViolations(['src/core/games/x.ts'], sources)).toEqual([])
         expect(separationViolations(['tests/g.test.ts'], sources)).toEqual([])
     })
-    it('0.22 no marca un guard que no mide ese src', () => {
+    it('0.22 no marca un guard que no mide ese src', async () => {
         const sources = new Map([['tests/g.test.ts', "const s = readFileSync('src/otro/y.ts', 'utf8')"]])
         expect(separationViolations(['src/core/games/x.ts', 'tests/g.test.ts'], sources)).toEqual([])
     })
-    it('0.24 marca al lector que no esta en el gate ni declarado', () => {
+    it('0.24 marca al lector que no esta en el gate ni declarado', async () => {
         const sources = new Map([['tests/g.test.ts', "const s = readFileSync('src/core/games/x.ts', 'utf8')"]])
         expect(uncoveredReaders(['src/core/games/x.ts'], new Set<string>(), sources)).toEqual([
             'tests/g.test.ts lee src/core/games/x.ts',
         ])
         expect(uncoveredReaders(['src/core/games/x.ts'], new Set(['tests/g.test.ts']), sources)).toEqual([])
     })
-    it('el escaneo encuentra al guard por la CARPETA (arma rutas con join(DIR, f))', () => {
+    it('el escaneo encuentra al guard por la CARPETA (arma rutas con join(DIR, f))', async () => {
         const sources = new Map([['tests/g.test.ts', "const DIR = 'src/core/games'\nconst s = readFileSync(join(DIR, f), 'utf8')"]])
         expect(readersOf('src/core/games/quienSoy.ts', sources)).toEqual(['tests/g.test.ts'])
     })
-    it('el detector de EXEMPT marca al guard que ya entro en el gate', () => {
+    it('el detector de EXEMPT marca al guard que ya entro en el gate', async () => {
         const gate = new Set(['tests/g.test.ts'])
         expect(exemptInvalidos({ 'tests/g.test.ts': 'x' }, gate)).toEqual(['tests/g.test.ts'])
         expect(exemptInvalidos({ 'tests/otro.test.ts': 'x' }, gate)).toEqual([])

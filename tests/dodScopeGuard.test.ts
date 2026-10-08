@@ -15,7 +15,7 @@
  * No sustituye a 0.22/0.23/0.24: 0.24 cubre los guards de TEXTO sobre el src
  * tocado; esto cubre los tests de COMPORTAMIENTO, que son otro agujero.
  */
-import { execFileSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -91,16 +91,16 @@ export function sinCobertura(
     return [...out].sort()
 }
 
-function git(args: string[]): string {
-    return execFileSync('git', args, { encoding: 'utf8' })
+async function git(args: string[]): Promise<string> {
+    return (await runAsync('git', args)).stdout
 }
 
 /** Ficheros de src tocados por el cambio en curso (mismo criterio que la puerta). */
-export function srcTocados(base: string): string[] {
+export async function srcTocados(base: string): Promise<string[]> {
     const lineas = [
-        ...git(['diff', '--name-only', base]).split('\n'),
-        ...git(['diff', '--cached', '--name-only']).split('\n'),
-        ...git(['ls-files', '--others', '--exclude-standard']).split('\n'),
+        ...(await git(['diff', '--name-only', base])).split('\n'),
+        ...(await git(['diff', '--cached', '--name-only'])).split('\n'),
+        ...(await git(['ls-files', '--others', '--exclude-standard'])).split('\n'),
     ]
     return [...new Set(lineas.map((s) => s.trim()).filter(Boolean))]
         .filter((f) => f.startsWith('src/'))
@@ -118,8 +118,8 @@ const TESTS = readdirSync(join(ROOT, 'tests'))
 const COMANDOS = [CONTRACT.dod, CONTRACT.guard, JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts['lint:guards']]
 
 describe('P7.88 - todo test de comportamiento del src tocado corre en el gate', () => {
-    it('no hay tests que cubran el src tocado fuera del gate', () => {
-        const malos = sinCobertura(srcTocados(CONTRACT.base), TESTS, CTX, (t) => enElGate(COMANDOS, t))
+    it('no hay tests que cubran el src tocado fuera del gate', async () => {
+        const malos = sinCobertura(await srcTocados(CONTRACT.base), TESTS, CTX, (t) => enElGate(COMANDOS, t))
         expect(
             malos,
             'Estos tests IMPORTAN ficheros de src que el cambio toca y NO corren en el gate (dod/guard/lint:guards): el cierre no los habria visto (P7.88)',
@@ -128,7 +128,7 @@ describe('P7.88 - todo test de comportamiento del src tocado corre en el gate', 
 })
 
 describe('el detector no es decorativo', () => {
-    it('marca al test que cubre el src tocado y NO al que ya esta en el gate', () => {
+    it('marca al test que cubre el src tocado y NO al que ya esta en el gate', async () => {
         const ctx = {
             leer: () => "import { x } from '../src/juego'",
             existe: (p: string) => p.endsWith('juego.ts') || p.endsWith('juego.test.ts'),
@@ -139,7 +139,7 @@ describe('el detector no es decorativo', () => {
         ])
         expect(sinCobertura(['src/juego.ts'], ['tests/juego.test.ts'], ctx, () => true)).toEqual([])
     })
-    it('NO marca un test que importa otro fichero', () => {
+    it('NO marca un test que importa otro fichero', async () => {
         const ctx = {
             leer: () => "import { x } from '../src/otro'",
             existe: (p: string) => p.endsWith('otro.ts') || p.endsWith('juego.test.ts'),
@@ -147,13 +147,13 @@ describe('el detector no es decorativo', () => {
         }
         expect(sinCobertura(['src/juego.ts'], ['tests/juego.test.ts'], ctx, () => false)).toEqual([])
     })
-    it('resuelve el .js de un import ESM sobre fuente .ts', () => {
+    it('resuelve el .js de un import ESM sobre fuente .ts', async () => {
         const raiz = resolve('/raiz')
         const objetivo = resolve(raiz, 'src/uno.ts')
         const ctx = { existe: (p: string) => p === objetivo, raiz }
         expect(resuelveImport('../src/uno.js', resolve(raiz, 'tests/t.test.ts'), ctx)).toBe('src/uno.ts')
     })
-    it('lee el gate del mecanismo (dod, guard y lint:guards), no de una constante', () => {
+    it('lee el gate del mecanismo (dod, guard y lint:guards), no de una constante', async () => {
         expect(enElGate(['npx vitest run tests/a.test.ts'], 'tests/a.test.ts')).toBe(true)
         expect(enElGate(['npx vitest run tests/a.test.ts'], 'tests/b.test.ts')).toBe(false)
         expect(testsDeComando('npx vitest run tests/x/a.test.tsx --reporter=dot')).toEqual(['tests/x/a.test.tsx'])

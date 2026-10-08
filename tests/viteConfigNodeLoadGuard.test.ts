@@ -21,7 +21,7 @@
  * medido, la auditoria del dist (47 chunks) queda en 0 imports desnudos.
  */
 import { buildSync } from 'esbuild'
-import { execFileSync } from 'node:child_process'
+import { runAsync } from './_asyncExec'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -69,14 +69,12 @@ const RUNNER = [
  * Importa el bundle en un proceso Node LIMPIO (sin el entorno de Vite de
  * Vitest). Devuelve stdout, o null si el import revienta.
  */
-export function loadsInNode(outfile: string): string | null {
+export async function loadsInNode(outfile: string): Promise<string | null> {
   const runner = outfile.replace(/\.mjs$/, '') + '.runner.mjs'
   writeFileSync(runner, RUNNER + '\n', 'utf8')
   try {
-    return execFileSync(process.execPath, [runner, pathToFileURL(outfile).href], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const r = await runAsync(process.execPath, [runner, pathToFileURL(outfile).href])
+    return r.status === 0 ? r.stdout : null
   } catch {
     return null
   }
@@ -110,27 +108,27 @@ export function externalesDelConfig(source: string): string[] {
 }
 
 describe('P6.13 configEnNode - el config de Vite carga en Node', () => {
-  it('el detector marca la entrada infractora y no la correcta (prueba de mutacion)', () => {
+  it('el detector marca la entrada infractora y no la correcta (prueba de mutacion)', async () => {
     const dir = sandbox('sintetico')
     const malo = join(dir, 'malo.mjs')
     writeFileSync(malo, 'export const IS_DEV = import.meta.env.DEV ? 1 : 0\n', 'utf8')
-    expect(loadsInNode(malo), 'el detector NO marca la lectura en scope de modulo').toBeNull()
+    expect(await loadsInNode(malo), 'el detector NO marca la lectura en scope de modulo').toBeNull()
 
     const bueno = join(dir, 'bueno.mjs')
     writeFileSync(bueno, 'export const IS_DEV = Boolean(import.meta.env?.DEV)\n', 'utf8')
-    expect(loadsInNode(bueno), 'el detector marca una lectura que si es segura').not.toBeNull()
+    expect(await loadsInNode(bueno), 'el detector marca una lectura que si es segura').not.toBeNull()
   })
 
-  it('la config real se empaqueta, se importa en Node limpio y produce plugins', () => {
+  it('la config real se empaqueta, se importa en Node limpio y produce plugins', async () => {
     const dir = sandbox('real')
     const out = join(dir, 'vite.config.mjs')
     bundleForNode(join(ROOT, 'vite.config.ts'), out)
-    const salida = loadsInNode(out)
+    const salida = await loadsInNode(out)
     expect(salida, 'el config de Vite NO carga en Node (P6.13 vuelve)').not.toBeNull()
     expect(salida, 'la config no produjo plugins: los proxies no se cargaron').toContain('plugins=4')
   })
 
-  it('external no nombra nada instalado, que si se puede empaquetar', () => {
+  it('external no nombra nada instalado, que si se puede empaquetar', async () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
     const instalados = paquetesInstalados(pkg)
     expect(instalados.size, 'no se pudieron leer las dependencias instaladas').toBeGreaterThan(0)
