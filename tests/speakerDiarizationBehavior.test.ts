@@ -98,6 +98,37 @@ describe('diarización — comportamiento del núcleo puro', () => {
     expect(String(emptyResolve).trim()).not.toBe('')
     expect(String(emptyResolve).trim()).toBeTruthy()
   })
+
+  it('INV-5: ventana SIN VOZ (vector degenerado) NO abre A�Hablante NA� nuevo', () => {
+    // RUTA DOBLE MEDIDA (2026-10-08): la MISMA decision "esta ventana trae VOZ" esta
+    // escrita en DOS resolvedores vivos: `speakerCore.assignSpeaker` (worker) SI la
+    // protege (empty-vector/no-vector) y `resolveProductionSpeakerAtBoundary`
+    // (hilo principal, la rama que corre con atTurnBoundary) NO: con un vector de
+    // ceros compara coseno 0 con todo y abre `production-forced-new-voice`
+    // (medido en el log del dueno: Identity label="Hablante 3" reason=
+    // production-forced-new-voice lastSim=0.000, con la MISMA voz). Un vector
+    // degenerado NO es "voz distinta": es AUSENCIA de medida -> conservar hablante.
+    const clusters: any[] = [{ label: 'Hablante 1', signature: E1 }]
+    const r = resolveConversationSpeaker({
+      signatureVector: new Array(DIM).fill(0),
+      speakerClusters: clusters,
+      lastSpeaker: 'Hablante 1',
+      lastSignature: E1,
+      utteranceText: 'mientras tanto la tele seguia encendida',
+      voicedSampleCount: 20000,
+      sampleRate: 48000,
+      thresholds: {
+        shortUtteranceHistoricalMatch: 0.7,
+        cosineMatchThreshold: 0.76,
+        cosineContinuityThreshold: 0.7,
+        cosineNewVoiceThreshold: 0.68,
+      },
+      atTurnBoundary: true,
+      allowNewCluster: true,
+    } as any)
+    expect(r).toBe('Hablante 1')
+    expect(clusters.map((c) => c.label)).toEqual(['Hablante 1'])
+  })
 })
 
 // ---- Prueba de DETECTOR del propio guard (no es decorativo) ----------------
@@ -121,5 +152,37 @@ describe('el detector no es decorativo (prueba de mutacion del propio guard)', (
     // Entrada legitima: la MISMA voz NO debe marcar hablante nuevo.
     expect(detectsNewVoice(E1), 'la misma voz no debe marcar nuevo hablante').toBe(false)
     expect(detectsNewVoice(query(0.9)), 'la misma voz (coseno 0.9) no debe marcar nuevo').toBe(false)
+  })
+})
+
+// ---- Prueba de DETECTOR del INV-5 (resolvedor del HILO PRINCIPAL) -----------
+// El mismo par discriminante: AUSENCIA de medida (degenerado) vs VOZ distinta
+// real. El resolvedor del hilo principal debe tratarlas distinto.
+export function opensNewVoiceFromMainThread(vec: number[]): boolean {
+  const clusters: any[] = [{ label: 'Hablante 1', signature: E1 }]
+  const r = resolveConversationSpeaker({
+    signatureVector: vec,
+    speakerClusters: clusters,
+    lastSpeaker: 'Hablante 1',
+    lastSignature: E1,
+    utteranceText: 'mientras tanto la tele seguia encendida',
+    voicedSampleCount: 20000,
+    sampleRate: 48000,
+    thresholds: {
+      shortUtteranceHistoricalMatch: 0.7,
+      cosineMatchThreshold: 0.76,
+      cosineContinuityThreshold: 0.7,
+      cosineNewVoiceThreshold: 0.68,
+    },
+    atTurnBoundary: true,
+    allowNewCluster: true,
+  } as any)
+  return r !== 'Hablante 1'
+}
+
+describe('INV-5 - el detector no es decorativo (ausencia de medida != voz distinta)', () => {
+  it('el vector degenerado NO abre etiqueta; una voz distinta real SI', () => {
+    expect(opensNewVoiceFromMainThread(new Array(DIM).fill(0)), 'sin VOZ no abre etiqueta').toBe(false)
+    expect(opensNewVoiceFromMainThread(E2), 'voz distinta real SI abre etiqueta').toBe(true)
   })
 })

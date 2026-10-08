@@ -46,6 +46,20 @@ export function normalizeEmbeddingVector(vector = []) {
   return out.map((value) => value / norm)
 }
 
+/**
+ * ¿La ventana trae VOZ (medida)? Un vector vacio o DEGENERADO (todo ceros) NO es
+ * "una voz distinta": es AUSENCIA de medida, y su coseno es 0 con todo. DUENO UNICO
+ * del criterio: lo consumen los DOS resolvedores vivos (el nucleo del worker
+ * `assignSpeaker` y el del hilo principal `resolveProductionSpeakerAtBoundary`),
+ * que antes lo tenian escrito por separado y solo uno lo protegia (medido
+ * 2026-10-08: el hilo principal abria `production-forced-new-voice` con lastSim=0).
+ * @param {number[]} normalized vector YA normalizado (normalizeEmbeddingVector)
+ * @returns {boolean} `true` si hay al menos una componente util
+ */
+export function hasVoiceMeasurement(normalized = []) {
+  return Array.isArray(normalized) && normalized.some((value) => Math.abs(value) > 1e-9)
+}
+
 /** Similitud coseno pura [0, 1] entre embeddings; 1 = misma identidad de voz. */
 export function compareCosineSignatures(sig1 = [], sig2 = []) {
   if (!Array.isArray(sig1) || !Array.isArray(sig2) || !sig1.length || !sig2.length) {
@@ -167,12 +181,13 @@ export function assignSpeaker(
     }
   }
   // Vector DEGENERADO (todo ceros): la ventana no trajo VOZ, asi que NO hay medida
-  // que comparar. Se trata como no-vector: se conserva el ultimo hablante en vez de
-  // inventar un "Hablante N" (medido 2026-10-07: `snap=0 vec=[0,0,0,0]` abria
-  // etiqueta nueva por turno y el renombre de la sesion no la cubria). Un vector
-  // REAL que no encaja con nadie sigue abriendo hablante nuevo: eso SI es evidencia
+  // que comparar. Criterio UNICO en `hasVoiceMeasurement` (lo comparten los dos
+  // resolvedores): se conserva el ultimo hablante en vez de inventar un "Hablante N"
+  // (medido 2026-10-07: `snap=0 vec=[0,0,0,0]` abria etiqueta nueva por turno y el
+  // renombre de la sesion no la cubria). Un vector REAL que no encaja con nadie
+  // sigue abriendo hablante nuevo: eso SI es evidencia
   // (tests/speakerDiarizationSeparation lo fija).
-  if (!normalized.some((value) => Math.abs(value) > 1e-9)) {
+  if (!hasVoiceMeasurement(normalized)) {
     const fallback =
       String(lastSpeaker || getFallbackSpeaker(config)).trim() || getFallbackSpeaker(config)
     return {

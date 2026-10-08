@@ -7,7 +7,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
-import { compareCosineSignatures, normalizeEmbeddingVector, getFallbackSpeaker } from './speakerCore.js'
+import { compareCosineSignatures, normalizeEmbeddingVector, getFallbackSpeaker, hasVoiceMeasurement } from './speakerCore.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import {
   foldSpeakerKey,
@@ -91,6 +91,17 @@ function resolveProductionSpeakerAtBoundary({
   note,
 }) {
   const normalized = normalizeEmbeddingVector(vector)
+  // Sin MEDIDA no hay nada que comparar: un vector vacio o degenerado da coseno 0
+  // con TODO, y tratarlo como "voz distinta" abria `production-forced-new-voice`
+  // (medido 2026-10-08 en el log del dueno: Identity label="Hablante 3" reason=
+  // production-forced-new-voice con lastSim nulo, con la MISMA voz). Mismo criterio y
+  // mismo DUENO que el nucleo del worker: `hasVoiceMeasurement`.
+  if (!hasVoiceMeasurement(normalized)) {
+    const keep =
+      String(lastSpeaker || getFallbackSpeaker(FLU_CONFIG)).trim() || getFallbackSpeaker(FLU_CONFIG)
+    note?.({ reason: 'no-vector', speaker: keep, lastSim: 0, bestSim: 0 })
+    return keep
+  }
   const roomCfg = FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
   const classroom = roomCfg.classroomMultiSpeaker === true
   const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', VOICE_DIARIZATION_DEFAULTS.cosineContinuity)
