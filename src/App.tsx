@@ -1328,7 +1328,7 @@ function App() {
                 commitUserTurnRow({
                     text: transcript,
                     speakerName: speakerRegistrado || speakerName,
-                    evidenciaAcustica: resolved?.evidenciaAcustica !== false,
+                    evidenciaAcustica: resolved?.evidenciaAcustica === true,
                     replaceLast: resolved?.replaceLastRawLog === true,
                     turnId: resolved?.turnId ?? null,
                 });

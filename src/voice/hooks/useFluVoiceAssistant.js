@@ -394,6 +394,7 @@ export function useFluVoiceAssistant({
   const commitAndResolveTurn = useCallback(
     async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
       const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
+      const evidenciaAcustica = payload.evidenciaAcustica === true // solo la DECLARA quien midio VOZ (preflight/sync con ventana)
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
       if (!canonicalPhrase) return ''
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
@@ -401,11 +402,11 @@ export function useFluVoiceAssistant({
       // y deduplica la fila, así no hay doble fuente.
       if (commitOnly) {
         if (!earlyCommitDedupeRef.current.isRepeat(canonicalPhrase)) {
-          await onContractResolved?.({ contract: null, userCommitOnly: true, transcript: canonicalPhrase, speakerName: payload.speakerName, phase: payload.phase, turnId: activeTurnIdRef.current })
+          await onContractResolved?.({ contract: null, userCommitOnly: true, transcript: canonicalPhrase, speakerName: payload.speakerName, evidenciaAcustica, phase: payload.phase, turnId: activeTurnIdRef.current })
         }
         return canonicalPhrase
       }
-      const result = await onContractResolved?.({ contract, ...payload, transcript: canonicalPhrase, turnId: activeTurnIdRef.current })
+      const result = await onContractResolved?.({ contract, ...payload, evidenciaAcustica, transcript: canonicalPhrase, turnId: activeTurnIdRef.current })
       // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no
       // se reprocese (ciclo de comandos/ambient que repetían la misma orden).
       clearTurnAfterResolveRef.current?.()
@@ -1599,7 +1600,6 @@ const lastResolvedTurnRef = useRef(0)
         voiceProbe('identity', { path: 'sync', vec: signatureVector.length, snap: audioSnapshot.length, sr: sampleRate, clusters: speakerClustersRef.current?.length ?? 0, resolved: resolvedSpeakerName, fallback: fallbackSpeaker, last: lastSpeakerRef.current || '' })
         return {
           signatureVector,
-          // Sin ventana de audio el sync devuelve el FALLBACK, no una medida (P8.98).
           speakerName: audioSnapshot.length ? resolvedSpeakerName : '',
           evidenciaAcustica: audioSnapshot.length > 0,
           introducedName: null,
