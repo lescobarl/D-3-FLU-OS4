@@ -42,6 +42,12 @@ const usuarios = async (page: Page) =>
     (await readHistoryRows(page)).filter((row) => row.role === 'user');
 
 test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () => {
+    // El relay del cliente manda los logs en lote (200 ms): al cerrar la pagina el
+    // ultimo lote se pierde y el analizador no ve la fila del test. Se le da aire.
+    test.afterEach(async ({ page }) => {
+        await page.waitForTimeout(1500).catch(() => undefined);
+    });
+
     test.beforeEach(async ({ page }) => {
         await autoSkipOnboarding(page);
         await stubLocalSpeech(page);

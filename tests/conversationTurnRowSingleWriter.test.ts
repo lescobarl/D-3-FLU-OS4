@@ -96,3 +96,29 @@ describe('un solo escritor - el detector no es decorativo', () => {
         expect(commitUserTurnRowCalls('row.commit({ text })')).toBe(0)
     })
 })
+
+// P9.17 - la fila del usuario la escribe UN dueno. El store (addUserMessage) solo
+// aporta su parte: sentimiento y estadisticas. Antes TAMBIEN concatenaba la entrada
+// en conversationHistory (ruta doble de la MISMA fila). Esta barrera lo fija: si
+// alguien vuelve a escribir la fila desde el store, cae.
+describe('P9.17 el store no es un segundo escritor de la fila', () => {
+    beforeEach(() => {
+        useIntegrationStore.getState().reset();
+    });
+
+    it('addUserMessage NO escribe la fila (y SI actualiza sus estadisticas)', () => {
+        useIntegrationStore.getState().addUserMessage('hola que tal', 'Hablante 1');
+
+        expect(history().filter((e) => e.role === 'user')).toHaveLength(0);
+        expect(useIntegrationStore.getState().sessionStats.totalUserMessages).toBe(1);
+    });
+
+    it('la fila aparece cuando la escribe el dueno', () => {
+        useIntegrationStore.getState().addUserMessage('hola que tal', 'Hablante 1');
+        commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', turnId: 'p917' });
+
+        const filas = history();
+        expect(filas.filter((e) => e.role === 'user')).toHaveLength(1);
+        expect(filas[filas.length - 1].text).toBe('hola que tal');
+    });
+});
