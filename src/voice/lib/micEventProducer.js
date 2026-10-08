@@ -3,16 +3,33 @@
  */
 import { buildCurrentPhraseFromResults } from './audioMath.js'
 import { logMicProducerRaw } from './micIngressLog.js'
+import { voiceProbe } from './voiceProbe'
 import { collectRecognitionResultChunks } from './transcriptIngress.js'
 
 export function pushMicSpeechEvent(event, queue) {
-  if (!queue || !event?.results?.length) return null
+  // SIN TEXTO UTIL no hay nada que encolar, pero es justo el caso que hay que
+  // poder MEDIR: un onresult vacio (Chrome "escuchando" sin reconocer) dejaba el
+  // pipeline sin traza y se confundia con "el micro no alimenta".
+  if (!queue) return null
+  const total = Number(event?.results?.length) || 0
+  if (!total) {
+    voiceProbe('asrEmpty', { results: 0, idx: null, finals: 0, interims: 0 })
+    return null
+  }
 
   const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
   const text = buildCurrentPhraseFromResults(event.results, event.resultIndex)
   const kind = finalChunks.length ? 'final' : 'interim'
   const chunks = kind === 'final' ? finalChunks : interimChunks
-  if (!chunks.length && !text) return null
+  if (!chunks.length && !text) {
+    voiceProbe('asrEmpty', {
+      results: total,
+      idx: event.resultIndex ?? null,
+      finals: finalChunks.length,
+      interims: interimChunks.length,
+    })
+    return null
+  }
 
   logMicProducerRaw({ source: 'browser', kind, text })
   return queue.push({
