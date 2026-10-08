@@ -7,6 +7,21 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
+import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { detectSentiment } from '../src/store/integrationStore';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
+
+let __seedTurn = 0;
+/** Siembra una fila de usuario por el DUENO unico de la fila (una sola fila). */
+const addUserRow = (text: string, speakerName?: string) => {
+    const speaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
+    commitUserTurnRow({
+        text,
+        speakerName: speaker,
+        sentiment: detectSentiment(text),
+        turnId: `seed-${++__seedTurn}`,
+    });
+};
 
 describe('aislamiento multiusuario del historial del Pizarrón', () => {
     beforeEach(() => {
@@ -15,7 +30,7 @@ describe('aislamiento multiusuario del historial del Pizarrón', () => {
 
     it('sella las entradas del historial con el personId del participante activo', () => {
         useIntegrationStore.getState().setActivePersonId('alice');
-        useIntegrationStore.getState().addUserMessage('hola', 'Alice');
+        addUserRow('hola', 'Alice');
         useIntegrationStore.getState().addFluMessage('¡Hola!');
 
         const history = useIntegrationStore.getState().conversationHistory;
@@ -25,7 +40,7 @@ describe('aislamiento multiusuario del historial del Pizarrón', () => {
     });
 
     it('una entrada sin participante activo no queda sellada (ruta legacy)', () => {
-        useIntegrationStore.getState().addUserMessage('hola legacy');
+        addUserRow('hola legacy');
 
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(1);
@@ -34,10 +49,10 @@ describe('aislamiento multiusuario del historial del Pizarrón', () => {
 
     it('cada participante sella SUS propias entradas (no se mezclan)', () => {
         useIntegrationStore.getState().setActivePersonId('alice');
-        useIntegrationStore.getState().addUserMessage('de alice', 'Alice');
+        addUserRow('de alice', 'Alice');
 
         useIntegrationStore.getState().setActivePersonId('bob');
-        useIntegrationStore.getState().addUserMessage('de bob', 'Bob');
+        addUserRow('de bob', 'Bob');
 
         const history = useIntegrationStore.getState().conversationHistory;
         const aliceRows = history.filter((e) => e.personId === 'alice');
@@ -52,9 +67,9 @@ describe('aislamiento multiusuario del historial del Pizarrón', () => {
 describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     it('la marca del sello distingue la entrada sellada de la que no lo esta', () => {
         useIntegrationStore.getState().reset();
-        useIntegrationStore.getState().addUserMessage('sin sello'); // sin participante activo
+        addUserRow('sin sello'); // sin participante activo
         useIntegrationStore.getState().setActivePersonId('alice');
-        useIntegrationStore.getState().addUserMessage('con sello', 'Alice');
+        addUserRow('con sello', 'Alice');
 
         const history = useIntegrationStore.getState().conversationHistory;
         const sinSello = history.filter((e) => e.personId === undefined);

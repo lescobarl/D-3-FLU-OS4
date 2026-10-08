@@ -52,6 +52,21 @@ import { buildSyncTuple } from '../src/core/db/syncTuple';
 import { EXPRESSION_MAP } from '../src/avatar/index';
 import { EXPRESSION_REGISTRY, getValidAnimations } from '../src/core/anim/expressionRegistry';
 import { resolveStateExpression } from '../src/core/anim/emotionEngine';
+import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { detectSentiment } from '../src/store/integrationStore';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
+
+let __seedTurn = 0;
+/** Siembra una fila de usuario por el DUENO unico de la fila (una sola fila). */
+const addUserRow = (text: string, speakerName?: string) => {
+    const speaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
+    commitUserTurnRow({
+        text,
+        speakerName: speaker,
+        sentiment: detectSentiment(text),
+        turnId: `seed-${++__seedTurn}`,
+    });
+};
 
 // ============================================================
 // HELPERS
@@ -363,7 +378,7 @@ describe('💬 Conversation Memory', () => {
     beforeEach(() => resetStore());
 
     it('debe añadir entrada de usuario con addUserMessage', () => {
-        useIntegrationStore.getState().addUserMessage('Hola FLU');
+        addUserRow('Hola FLU');
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(1);
         expect(history[0].role).toBe('user');
@@ -373,8 +388,8 @@ describe('💬 Conversation Memory', () => {
     });
 
     it('debe asignar UUIDv4 a cada entrada', () => {
-        useIntegrationStore.getState().addUserMessage('Mensaje 1');
-        useIntegrationStore.getState().addUserMessage('Mensaje 2');
+        addUserRow('Mensaje 1');
+        addUserRow('Mensaje 2');
         const history = useIntegrationStore.getState().conversationHistory;
         for (const entry of history) {
             expect(isValidUUIDv4(entry.id)).toBe(true);
@@ -389,7 +404,7 @@ describe('💬 Conversation Memory', () => {
     });
 
     it('debe añadir respuesta de FLU con addFluMessage', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola! ¿Cómo estás?');
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(2);
@@ -398,7 +413,7 @@ describe('💬 Conversation Memory', () => {
     });
 
     it('debe enlazar response al último mensaje de usuario', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola! ¿Cómo estás?');
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history[0].response).toBe('¡Hola! ¿Cómo estás?');
@@ -409,7 +424,7 @@ describe('💬 Conversation Memory', () => {
     });
 
     it('debe incrementar totalFluMessages al añadir mensaje de FLU', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola!');
         expect(useIntegrationStore.getState().sessionStats.totalFluMessages).toBe(1);
     });
@@ -420,14 +435,14 @@ describe('💬 Conversation Memory', () => {
     });
 
     it('debe limpiar historial con clearHistory', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola!');
         useIntegrationStore.getState().clearHistory();
         expect(useIntegrationStore.getState().conversationHistory).toEqual([]);
     });
 
     it('debe resetear conversación con resetConversationHistory', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola!');
         useIntegrationStore.getState().setLastResponse('test');
         useIntegrationStore.getState().resetConversationHistory();
@@ -831,7 +846,7 @@ describe('🔑 Key Points Extraction', () => {
     beforeEach(() => resetStore());
 
     it('debe extraer temas de la conversación', () => {
-        useIntegrationStore.getState().addUserMessage('Necesito ayuda con el proyecto');
+        addUserRow('Necesito ayuda con el proyecto');
         useIntegrationStore.getState().addFluMessage('Claro, ¿qué necesitas?');
         const points = useIntegrationStore.getState().extractKeyPoints();
         expect(points.length).toBeGreaterThan(0);
@@ -842,9 +857,9 @@ describe('🔑 Key Points Extraction', () => {
     });
 
     it('debe contar preguntas realizadas', () => {
-        useIntegrationStore.getState().addUserMessage('¿Qué es la IA?');
+        addUserRow('¿Qué es la IA?');
         useIntegrationStore.getState().addFluMessage('La IA es...');
-        useIntegrationStore.getState().addUserMessage('¿Cómo funciona?');
+        addUserRow('¿Cómo funciona?');
         useIntegrationStore.getState().addFluMessage('Funciona así...');
         const points = useIntegrationStore.getState().extractKeyPoints();
         const hasQuestions = points.some(p => p.includes('Preguntas'));
@@ -852,7 +867,7 @@ describe('🔑 Key Points Extraction', () => {
     });
 
     it('debe incluir estado emocional en puntos clave', () => {
-        useIntegrationStore.getState().addUserMessage('Estoy muy feliz');
+        addUserRow('Estoy muy feliz');
         useIntegrationStore.getState().addFluMessage('Me alegra');
         const points = useIntegrationStore.getState().extractKeyPoints();
         const hasEmotion = points.some(p => p.includes('emocional'));
@@ -860,7 +875,7 @@ describe('🔑 Key Points Extraction', () => {
     });
 
     it('debe incluir duración de sesión', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('Hola');
         const points = useIntegrationStore.getState().extractKeyPoints();
         // La duración puede ser 0 minutos si el test corre muy rápido
@@ -870,7 +885,7 @@ describe('🔑 Key Points Extraction', () => {
     });
 
     it('debe incluir total de intercambios', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('Hola');
         const points = useIntegrationStore.getState().extractKeyPoints();
         const hasTotal = points.some(p => p.includes('intercambios'));
@@ -927,7 +942,7 @@ describe('📊 Productive Data Injection', () => {
     it('debe mantener historial completo después de múltiples interacciones', () => {
         const scenario = PRODUCTIVE_SCENARIOS.newUser;
         for (const msg of scenario.messages) {
-            useIntegrationStore.getState().addUserMessage(msg);
+            addUserRow(msg);
             useIntegrationStore.getState().addFluMessage(`Respuesta a: ${msg}`);
         }
         expect(useIntegrationStore.getState().conversationHistory.length).toBe(scenario.messages.length * 2);
@@ -964,7 +979,7 @@ describe('👥 Multi-Speaker Conversations', () => {
     it('teamMeeting: debe preservar nombres de hablantes', () => {
         const scenario = MULTI_SPEAKER_CONVERSATIONS.teamMeeting;
         for (const msg of scenario.messages) {
-            useIntegrationStore.getState().addUserMessage(msg.text, msg.speaker);
+            addUserRow(msg.text, msg.speaker);
         }
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
@@ -976,7 +991,7 @@ describe('👥 Multi-Speaker Conversations', () => {
     it('multiTechSupport: debe manejar múltiples hablantes de soporte', () => {
         const scenario = MULTI_SPEAKER_CONVERSATIONS.multiTechSupport;
         for (const msg of scenario.messages) {
-            useIntegrationStore.getState().addUserMessage(msg.text, msg.speaker);
+            addUserRow(msg.text, msg.speaker);
         }
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
@@ -988,7 +1003,7 @@ describe('👥 Multi-Speaker Conversations', () => {
     it('brainstorming: debe manejar 3 hablantes diferentes', () => {
         const scenario = MULTI_SPEAKER_CONVERSATIONS.brainstorming;
         for (const msg of scenario.messages) {
-            useIntegrationStore.getState().addUserMessage(msg.text, msg.speaker);
+            addUserRow(msg.text, msg.speaker);
         }
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
@@ -998,7 +1013,7 @@ describe('👥 Multi-Speaker Conversations', () => {
     });
 
     it('debe usar default speakerName cuando no se proporciona', () => {
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history[0].speakerName).toBe('Hablante 1');
     });
@@ -1130,7 +1145,7 @@ describe('🔄 Complete Reset', () => {
     it('debe resetear todo el estado a valores iniciales', () => {
         // Modify state extensively using fresh getState() each time
         useIntegrationStore.getState().setConversationState('LISTENING');
-        useIntegrationStore.getState().addUserMessage('Hola');
+        addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola!');
         useIntegrationStore.getState().setMicActive(true);
         useIntegrationStore.getState().setFluSpeaking(true);
@@ -1383,7 +1398,7 @@ describe('🔄 End-to-End Conversation Flow', () => {
         useIntegrationStore.getState().setConversationState('LISTENING');
         expect(useIntegrationStore.getState().conversationState).toBe('LISTENING');
 
-        useIntegrationStore.getState().addUserMessage('Hola FLU');
+        addUserRow('Hola FLU');
         expect(useIntegrationStore.getState().conversationHistory).toHaveLength(1);
 
         useIntegrationStore.getState().setConversationState('THINKING');
@@ -2405,9 +2420,8 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
     // Test 13: Diarización — addUserMessage con diferentes speakerName
     // ============================================================
     it('addUserMessage debe preservar speakerName para diarización', () => {
-        const store = useIntegrationStore.getState();
-        store.addUserMessage('Hola FLU', 'Hablante 1');
-        store.addUserMessage('¿Cómo estás?', 'Hablante 2');
+        addUserRow('Hola FLU', 'Hablante 1');
+        addUserRow('¿Cómo estás?', 'Hablante 2');
 
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(2);
@@ -2418,17 +2432,15 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
     });
 
     it('addUserMessage debe detectar sentimiento y actualizar emotionalDistribution', () => {
-        const store = useIntegrationStore.getState();
-        store.addUserMessage('Estoy muy feliz hoy!');
+        useIntegrationStore.getState().addUserMessage('Estoy muy feliz hoy!');
         const state = useIntegrationStore.getState();
         expect(state.emotionalState).toBe('happy');
         expect(state.sessionStats.emotionalDistribution.positive).toBe(1);
     });
 
     it('addUserMessage con pregunta debe detectar sentiment question', () => {
-        const store = useIntegrationStore.getState();
         // Usar texto que comience con palabra clave de pregunta para asegurar detección
-        store.addUserMessage('¿Cómo funciona esto?');
+        addUserRow('¿Cómo funciona esto?');
         const history = useIntegrationStore.getState().conversationHistory;
         // Nota: detectSentiment revisa SENTIMENT_KEYWORDS.questions que incluye 'cómo'
         // El texto '¿Cómo funciona esto?' contiene 'cómo' → debe detectar 'question'
@@ -2440,7 +2452,7 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
     // ============================================================
     it('addFluMessage debe enlazar response al último user message', () => {
         const store = useIntegrationStore.getState();
-        store.addUserMessage('Hola FLU');
+        addUserRow('Hola FLU');
         store.addFluMessage('¡Hola! ¿En qué puedo ayudarte?');
 
         const history = useIntegrationStore.getState().conversationHistory;

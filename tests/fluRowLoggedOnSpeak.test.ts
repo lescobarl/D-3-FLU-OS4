@@ -10,6 +10,21 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { logFluReply } from '../src/voice/lib/fluConversationLog';
+import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { detectSentiment } from '../src/store/integrationStore';
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
+
+let __seedTurn = 0;
+/** Siembra una fila de usuario por el DUENO unico de la fila (una sola fila). */
+const addUserRow = (text: string, speakerName?: string) => {
+    const speaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
+    commitUserTurnRow({
+        text,
+        speakerName: speaker,
+        sentiment: detectSentiment(text),
+        turnId: `seed-${++__seedTurn}`,
+    });
+};
 
 /** Llamadas directas a addFluMessage en un fuente (mismo criterio del guard). */
 export function addFluMessageCalls(src: string): string[] {
@@ -39,7 +54,7 @@ describe('fluConversationLog — hablar deja fila en el historial', () => {
 
     it('un texto repetido tras una fila del usuario SÍ se registra', () => {
         logFluReply('¿La tienes?');
-        useIntegrationStore.getState().addUserMessage('no la tengo', 'Hablante 1');
+        addUserRow('no la tengo', 'Hablante 1');
         logFluReply('¿La tienes?');
         expect(fluRows()).toHaveLength(2);
     });
