@@ -78,8 +78,14 @@ function emitSrGapProbe(reason, data) {
   voiceProbe('srGap', { reason, ...data })
 }
 
-export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0 } = {}) {  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true } = {}) {  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
   if (gapMs <= 0) return { fire: false, sinceLastResultMs: 0, reason: 'sr-gap-commit-disabled' }
+  // Sin locucion viva no hay nada que cerrar: no se sondea. En reposo el srGap
+  // emitia `sr-live-turn-stale` cada 5 s durante minutos (medido 2026-10-08) con
+  // cero `commit`/`row`; un log que inunda es un defecto (§10.7).
+  if (!hasOpenLine) {
+    return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-no-open-line' }
+  }
   const silence = Number(sinceLastResultMs) >= gapMs
   const staleTurn = Number(sinceLastCommitMs) >= gapMs
   if (!silence && !staleTurn) {

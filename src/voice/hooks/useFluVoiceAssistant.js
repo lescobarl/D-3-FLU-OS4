@@ -4388,13 +4388,13 @@ const lastResolvedTurnRef = useRef(0)
         const pauseCfg = getTranscriptPauseCfg()
         const srGapMinWords = Number(pauseCfg.srGapCommitMinWords) || 0
         const sinceResult = now - (lastOnresultAtRef.current || 0)
-        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0 })
+        const openLine = cleanForSpeech(
+          listenStateRef.current?.openLine ||
+          publishedLiveRef.current ||
+          readStreamDisplay(listenStateRef.current),
+        )
+        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine) })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
-          const openLine = cleanForSpeech(
-            listenStateRef.current?.openLine ||
-            publishedLiveRef.current ||
-            readStreamDisplay(listenStateRef.current),
-          )
           if (openLine && countSpeechWords(openLine) >= srGapMinWords) {
             srGapFiredForOpenLineRef.current = true
             ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })
