@@ -75,22 +75,31 @@ test.describe('voz - una locucion = una fila = una ejecucion (P8.41)', () => {
         expect(await countUserRows(page)).toBe(2);
     });
 
-    test('A3: la etiqueta de diarizacion registrada estampa el NOMBRE (P8.40)', async ({ page }) => {
+    test('A3: sin evidencia de VOZ no se estampa el nombre registrado (P8.40 corregido)', async ({ page }) => {
+        // REGLA DEL DUENO (2026-10-08): el nombre pertenece a la VOZ. Sin evidencia
+        // acustica de ESA voz, la fila no lleva nombre ni etiqueta inventada. Antes
+        // este test exigia 'Luis' a CUALQUIER fila con la etiqueta registrada, y eso
+        // es MEZCLAR HABLANTES: una voz distinta heredaba el nombre de Luis (el defecto
+        // que el dueno reporto). El mapeo etiqueta->persona solo entra CON evidencia
+        // (tests/rowSpeakerEvidenceGuard.test.ts) y lo aplica un unico dueno.
         await seedActiveUser(page, 'Luis', { speakerLabel: 'Hablante 1' });
         await startConversation(page);
         await esperarListo(page);
 
         await speakUntilHeard(page, FRASE, { expectedUserRows: 1 });
 
-        // El nombre se estampa en el commit de RESOLUCION (el commit temprano solo
-        // muestra el texto): se espera la respuesta y se mide despues.
+        // El nombre se estampa (si procede) en el commit de RESOLUCION: se espera la
+        // respuesta y se mide despues.
         await expect
             .poll(async () => (await respuestas(page)).length, { timeout: 45000 })
             .toBeGreaterThanOrEqual(1);
 
         const filas = await usuarios(page);
         expect(filas).toHaveLength(1);
-        expect(filas[0].speaker).toBe('Luis');
+        // En este arnes NO hay audio (micro falso sin voz): no hay evidencia de la voz,
+        // asi que la fila queda SIN hablante (ni 'Luis' heredado ni 'Hablante N').
+        expect(filas[0].speaker, `sin evidencia no se estampa nombre ajeno`).not.toBe('Luis');
+        expect(filas[0].speaker, `no puede quedar una etiqueta inventada`).not.toMatch(/^Hablante\s+\d+$/);
     });
 });
 

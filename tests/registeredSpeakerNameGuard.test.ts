@@ -12,8 +12,10 @@
  * (b) un nombre propio ya resuelto NUNCA se pisa; (c) una etiqueta no registrada
  * (los ninos del aula) queda como esta; (d) sin registro, '' (no inventa identidad).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { resolveRegisteredSpeakerName } from '../src/voice/lib/speakerLabels.js';
+import { useIntegrationStore } from '../src/store/integrationStore';
+import { commitUserTurnRow, resetSpeakerAliases } from '../src/voice/lib/conversationTurnRow';
 
 const LUIS = { registeredLabel: 'Hablante 1', registeredName: 'Luis' };
 
@@ -45,5 +47,67 @@ describe('P8.40 - el detector no es decorativo', () => {
     expect(resolveRegisteredSpeakerName('Hablante 1', LUIS)).toBe('Luis');
     expect(resolveRegisteredSpeakerName('Hablante 1', { registeredLabel: 'Hablante 9', registeredName: 'Luis' })).toBe('');
     expect(resolveRegisteredSpeakerName('Hablante 1', { registeredLabel: 'Hablante 1', registeredName: '' })).toBe('');
+  });
+});
+
+/**
+ * P8.40b — REGLA DEL DUENO (2026-10-08): el NOMBRE pertenece a la VOZ.
+ *
+ * `resolveRegisteredSpeakerName` mapea etiqueta->persona, pero CUANDO se estampa lo
+ * decide el escritor unico de la fila (`commitUserTurnRow`). Una etiqueta AUTOMATICA
+ * (o su nombre registrado/alias) SOLO entra con EVIDENCIA acustica: sin ella la fila
+ * queda SIN hablante (la completa la resolucion tardia por identidad de turno). Asi
+ * una voz distinta NO hereda el nombre de otra (el defecto "mujer x con Luis", ruta
+ * doble del nombre medida: se mapeaba en App.tsx Y en conversationStreamCommit.js).
+ * Un nombre propio INTRODUCIDO por el texto ("soy Luis") no es automatico y pasa.
+ */
+const LUIS_REG = { registeredLabel: 'Hablante 1', registeredName: 'Luis' };
+const lastRowSpeaker = () => {
+  const rows = useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user');
+  return String(rows.at(-1)?.speakerName ?? '');
+};
+
+describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)', () => {
+  beforeEach(() => {
+    useIntegrationStore.getState().resetConversationHistory();
+    resetSpeakerAliases();
+  });
+
+  it('etiqueta registrada SIN evidencia -> fila sin hablante (no hereda el nombre)', () => {
+    commitUserTurnRow({
+      text: 'eso fue la chica y le puso como hablante a Luis',
+      speakerName: 'Hablante 1',
+      registeredSpeaker: LUIS_REG,
+      evidenciaAcustica: false,
+      turnId: 30,
+    });
+    expect(lastRowSpeaker()).toBe('');
+  });
+
+  it('la MISMA etiqueta CON evidencia -> nombre de la persona', () => {
+    commitUserTurnRow({
+      text: 'hola hola como estan',
+      speakerName: 'Hablante 1',
+      registeredSpeaker: LUIS_REG,
+      evidenciaAcustica: true,
+      turnId: 1,
+    });
+    expect(lastRowSpeaker()).toBe('Luis');
+  });
+
+  it('nombre propio introducido por el texto no se bloquea (soy luis)', () => {
+    commitUserTurnRow({ text: 'okay flu soy luis', speakerName: 'Luis', evidenciaAcustica: false, turnId: 2 });
+    expect(lastRowSpeaker()).toBe('Luis');
+  });
+
+  it('PRUEBA DE DETECTOR: la misma etiqueta cambia de veredicto solo por la evidencia', () => {
+    useIntegrationStore.getState().resetConversationHistory();
+    commitUserTurnRow({ text: 'a', speakerName: 'Hablante 1', registeredSpeaker: LUIS_REG, evidenciaAcustica: false, turnId: 1 });
+    const sin = lastRowSpeaker();
+    commitUserTurnRow({ text: 'b', speakerName: 'Hablante 1', registeredSpeaker: LUIS_REG, evidenciaAcustica: true, turnId: 2 });
+    const con = lastRowSpeaker();
+    expect(con).not.toBe(sin);
+    expect(sin).toBe('');
+    expect(con).toBe('Luis');
   });
 });

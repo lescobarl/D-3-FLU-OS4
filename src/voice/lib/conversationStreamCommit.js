@@ -35,7 +35,7 @@ import {
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { renameSpeakerRows } from './conversationTurnRow'
-import { normalizeSpeakerLabel, isAutoSpeakerLabel, resolveRegisteredSpeakerName } from './voiceIdentity.js'
+import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
 
 /**
@@ -144,7 +144,6 @@ export function handleConversationStreamSync(
     lastLogLineTextRef,
     commitTurnToSessionRows,
     fluParticipantRef,
-    participantSpeakerRef,
     lastRequestRef,
   } = deps
 
@@ -416,13 +415,13 @@ export function handleConversationStreamSync(
   // el nombre ya resuelto con la etiqueta pegajosa: medido en el log del dueno
   // (2026-10-07), `commit{src:asr-revision, name:"luis"}` y la fila quedaba
   // "Hablante 2" (D6: 5 filas).
+  // El nombre de la fila se decide en UN SOLO sitio: el escritor unico de la fila
+  // (`commitUserTurnRow` -> `resolveRowSpeakerName`). Aqui solo se aporta la ETIQUETA
+  // cruda (la voz); el vinculo etiqueta->persona viaja en el payload y el escritor
+  // aplica la regla CON la evidencia. Antes esta MISMA transformacion vivia aqui y en
+  // App.tsx con reglas distintas: ruta doble del nombre de la fila.
   const speakerResuelto = resolved.speakerName || fallbackSpeaker
-  // P8.40: si la etiqueta resuelta es una automatica REGISTRADA en participantes, la
-  // fila lleva el NOMBRE de la persona (mismo dueno del vinculo: el panel).
-  const speakerName = normalizeSpeakerLabel(
-    resolveRegisteredSpeakerName(speakerResuelto, participantSpeakerRef?.current || {}) ||
-      speakerResuelto,
-  )
+  const speakerName = normalizeSpeakerLabel(speakerResuelto)
   // El hablante del turno llega DESPUES del commit (el embedding tarda 7-19 s): lo que
   // se escribe aqui es una PREDICCION, y escribirla inventaba etiquetas ('Hablante 8/12'
   // para 2 voces reales) y las heredaba el turno siguiente. Sin evidencia NO se escribe:
