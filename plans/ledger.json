@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-07",
+  "updated": "2026-10-08",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1694,6 +1694,48 @@
       "estado": "done",
       "evidencia": "VEREDICTO: 2026-10-08 RESUELTO en el commit 6a8bfbe. La lista vive en scripts/guard-files.mjs (DATO) y vitest.guards.config.ts la declara como include; lint:guards = 'vitest run --config vitest.guards.config.ts' (65 chars, antes 7962). Los 4 consumidores (guardMutationGuard, instrumentIntegrityGuard, dodScopeGuard, protocolGuard) importan GUARD_FILES: se retiraron los TRES parsers del texto del comando (guardFilesFrom, gateGuards y el inline de dodScope), que eran otra ruta doble del MISMO dato. La barrera de la suite NO se debilita: SCOPED_CONFIGS (cerrada) hace que un config acotado cuente como corrida acotada, y el caso de detector destapo y cerro un AGUJERO PRE-EXISTENTE (el VALOR de --config se contaba como ruta de test porque el fichero existe: 'vitest run --config vitest.config.ts' esquivaba la barrera). MEDIDO: lint 3/3 verde (219/1835, 0 unhandled, 75-85 s), tsc 0, eslint 0; B6 + su detector en tests/fullSuitePathBarrier.test.ts. NO CUBIERTO: la suite completa y el DoD-producto. --- MEDIDO 2026-10-08: con 219 ficheros; al subir a 221 (dos guards nuevos) el comando MUERE con 'The syntax of the command is incorrect.' (cmd.exe trunca la linea en 8191). Efecto real: AGENTS 0.25 + tests/dodScopeGuard.test.ts OBLIGAN a meter en el gate todo test que importe el src tocado, asi que el techo IMPIDE cumplir el protocolo (en esta sesion hubo que mover los casos a tests/registeredSpeakerNameGuard.test.ts en vez de crear un guard nuevo). SALIDA (toca el mecanismo que protege el repo: decision del dueno): mover la lista a un fichero (p. ej. vitest.guards.config.ts con include, o un JSON) y que lint:guards sea 'vitest run --config ...'; los dos consumidores de la lista por TEXTO (tests/guardMutationGuard.test.ts y tests/dodScopeGuard.test.ts, que hoy hacen guardFilesFrom(pkg.scripts['lint:guards'])) tendrian que leer ese fichero. NO se hizo: hay que acordarlo. HALLAZGO AL INTENTARLO (2026-10-08): mover la lista al config NO es mecanico — `scripts/full-suite-policy.mjs` decide 'corrida SIN filtro' por los ARGUMENTOS de la CLI (sin ruta de test y sin --changed/-t/--related/--shard); con la lista dentro de un config, `vitest run --config vitest.guards.config.ts` no lleva filtro en la CLI, asi que la propia barrera pediria autorizacion y BLOQUEARIA lint:guards (lo vigilan tests/fullSuitePathBarrier.test.ts y tests/fullSuiteAuthGuard.test.ts). La salida correcta exige REDEFINIR que cuenta como corrida acotada (p. ej. 'usar el config de guards = acotada') y actualizar el config base + la politica + sus dos guards. Por eso sigue siendo decision del dueno: es la frontera de seguridad del harness, no una ruta.",
       "origen": "defecto-medido-2026-10-08"
+    },
+    {
+      "id": "P9.23",
+      "titulo": "RUTA DOBLE: la concatenacion de PCM (Float32Array) esta implementada 3 veces (concatFrames/concatChunks) mas 1 copia inline",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08 (auditoria contra el arbol, HEAD ae6611c). Tres funciones con el MISMO algoritmo (reduce de longitudes -> new Float32Array -> .set(x, offset)) en ficheros distintos: src/voice/lib/asr/voiceActivitySegmenter.js:44 concatFrames, src/voice/lib/asr/whisperRecognitionEngine.js:25 concatChunks, src/voice/lib/turnAudioSnapshot.js:43 concatChunks; mas una cuarta copia inline en src/voice/lib/speakerClusters.js:36-42. Comando: findstr /s /n /c:\".set(chunk, offset)\" /c:\".set(frame, offset)\" src -> 4 sitios. NINGUN guard lo cubre: findstr /s /i /m /c:\"concatChunks\" /c:\"concatFrames\" tests\\*.test.ts -> 0 ficheros; smallDuplicatesSingleOwnerGuard solo vigila getAsrConfig/newId/setField. El detector duplicateBodies de scripts/auditoria-codigo.mjs da 0 porque las copias renombran variables y usan for...of vs forEach. Clasificacion 7.7: mismo resultado por el mismo motivo = RUTA DOBLE; META 1 dueno (helper PCM compartido). NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08"
+    },
+    {
+      "id": "P9.24",
+      "titulo": "RUTA DOBLE: el calculo de \"palabras nuevas\" (novelWords) existe 2 veces en la capa de voz",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. Misma funcion con otro nombre: src/voice/lib/ingressGuards.js:63 novelWords(next, prior) y src/voice/lib/speechMerge.js:338 novelWordsInShortFinal(next, prior); ambas hacen speechWords(next).filter(w => !new Set(speechWords(prior)).has(w)). Comando: findstr /s /n /c:\"novelWords(\" /c:\"novelWordsInShortFinal\" src -> 4 lineas (2 definiciones + 2 usos). NINGUN guard/test lo nombra: findstr /s /i /m /c:\"novelWords\" tests\\*.test.ts tests\\*.test.tsx -> 0. Clasificacion 7.7: mismo resultado por el mismo motivo = RUTA DOBLE; META 1 dueno. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08"
+    },
+    {
+      "id": "P9.25",
+      "titulo": "RUTA MULTIPLE: tres remuestreadores de audio con objetivo identico (bajar la tasa de muestreo) en el pipeline de voz",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. Implementaciones distintas de \"reducir la tasa\": src/voice/lib/asr/resample.js:18 downsample (box/low-pass, dueno declarado y guardado por duplicationGuard), src/voice/lib/pcmAudio.js:16 resampleLinear (interpolacion lineal) y src/voice/lib/embeddingFrames.js:15 downsampleTo16k (nearest-neighbor, usado por speakerEmbeddingCore.js:75 y workers/voiceId.worker.js:48). Comando: findstr /s /n /c:\"downsample\" /c:\"resampleLinear\" /c:\"downsampleTo16k\" src. El guard solo detecta el NOMBRE exacto \"downsample\" (duplicationGuard: downsampleOffenders), asi que downsampleTo16k y resampleLinear escapan por renombrado -> hueco 7.7.d (el guard mide el literal, no la implementacion). Falta clasificar: si son el mismo resultado por el mismo motivo, unificar; si difieren a proposito (calidad), declarar el dueno por caso y guardarlo. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08"
+    },
+    {
+      "id": "P9.26",
+      "titulo": "DUPLICACION DE BOILERPLATE: el acceso \"lee bloque de config o lanza es obligatorio\" esta copiado 10 veces en 4 ficheros de voz",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. Comando: findstr /s /n /c:\"es obligatorio\" src -> 10 sitios en src/voice/lib: fluTranscriptMotor.js:10,18,26,34,42,50 (seis funciones getXxxCfg identicas salvo la ruta de FLU_CONFIG), fluTranscriptPause.js:39, fluParticipantConfig.js:62,67, gemini.js:87. El esqueleto de las 6 getXxxCfg de fluTranscriptMotor.js es identico (detector de esqueleto: concat/isFluDev/x getXxxCfg). Candidato a un unico helper requireConfig(path, mensaje). No hay guard que lo mida. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08"
+    },
+    {
+      "id": "P9.27",
+      "titulo": "DUPLICACION DE PATRON: los flags de depuracion con override global + default de config repiten la misma forma en 3 ficheros",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. Misma forma (IS_DEV -> window.__FLU_X true/false -> FLU_CONFIG.debug).src: src/voice/lib/fluDevConsole.js:20 isFluDevConsolePanelEnabled, src/voice/lib/listenLog.js:37 isListenTraceEnabled, src/voice/lib/listenLog.js:44 isChromeRawConsoleEnabled, src/voice/lib/micIngressLog.js (micIngressLog). Comando: findstr /s /n /c:\"FLU_CONFIG.debug?.\" src. El detector de esqueleto los agrupa (isFluDevConsolePanelEnabled vs isListenTraceEnabled). Candidato a un resolveDebugFlag(globalKey, configKey). No hay guard. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08"
+    },
+    {
+      "id": "P9.28",
+      "titulo": "DUPLICACION DE PATRON: los dos formularios de editor de catalogo tienen el mismo handleSubmit (solo cambia el builder del payload)",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. src/components/AmbienteEditorForm.tsx:77 y src/components/PaletaEditorForm.tsx:63 tienen handleSubmit con esqueleto IDENTICO (preventDefault -> if busy -> if !slug -> setBusy/setError -> try build+onSubmit -> finally setBusy(false)); solo difieren en slugifyAmbiente vs slugifyPalette y buildAmbientePayload vs buildPaletaPayload. El guard smallDuplicatesSingleOwnerGuard ya unifica el setField de estos mismos dos ficheros, pero NO cubre handleSubmit. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08"
     }
   ],
   "done": [
