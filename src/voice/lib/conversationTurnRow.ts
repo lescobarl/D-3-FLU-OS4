@@ -16,7 +16,6 @@ import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
-import { resolveRegisteredSpeakerName } from './speakerLabels';
 
 /**
  * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.
@@ -48,33 +47,6 @@ export function registerSpeakerAlias(fromLabel: string, toName: string): number 
 export function resolveSpeakerAlias(speakerName: string): string {
     const name = String(speakerName || '').trim();
     return speakerAliases.get(name.toLowerCase()) || name;
-}
-
-/**
- * Hablante que puede ESCRIBIRSE en la fila del turno. DUENO UNICO de la decision,
- * consumido por la puerta unica de la fila (`commitUserTurnRow`).
- *
- * Regla: una etiqueta AUTOMATICA ("Hablante N") —y el NOMBRE de la persona que le
- * corresponde por registrado (panel) o por alias de sesion— SOLO entra con
- * evidencia acustica declarada. Sin evidencia la fila sale SIN hablante y la
- * resolucion tardia la completa por identidad de turno (`updateTurnRowSpeaker`).
- * Un nombre propio INTRODUCIDO por el texto ("soy luis") no es auto y pasa.
- *
- * @param speakerName etiqueta/nombre que aporta el que llama
- * @param evidenciaAcustica `true` si el nombre viene de una ventana de AUDIO medida
- * @param registered vinculo etiqueta->persona registrada (panel de participantes)
- * @returns el hablante a escribir ('' = sin hablante)
- */
-export function resolveRowSpeakerName(
-    speakerName: string,
-    evidenciaAcustica: boolean,
-    registered: { registeredLabel?: string; registeredName?: string } = {},
-): string {
-    const raw = String(speakerName || '').trim();
-    if (!raw) return '';
-    if (isAutoSpeakerLabel(raw) && !evidenciaAcustica) return '';
-    const registrado = evidenciaAcustica ? resolveRegisteredSpeakerName(raw, registered) : '';
-    return resolveSpeakerAlias(registrado || raw);
 }
 
 /** Solo para pruebas: limpia los alias de sesion. */
@@ -202,12 +174,6 @@ export interface UserTurnRowInput {
     text: string;
     /** Hablante resuelto (puede llegar en el commit final, no en el temprano). */
     speakerName?: string;
-    /**
-     * Vinculo etiqueta de diarizacion -> persona registrada (panel de participantes).
-     * Lo aporta el llamante; el dueno de la decision (`resolveRowSpeakerName`) lo
-     * aplica SOLO con evidencia acustica declarada.
-     */
-    registeredSpeaker?: { registeredLabel?: string; registeredName?: string };
     /** El que llama DECLARA que el nombre viene de una ventana de AUDIO medida. */
     evidenciaAcustica?: boolean;
     /** Sentimiento de la locucion (lo calcula quien la captura); por defecto 'neutral'. */
@@ -284,7 +250,6 @@ function commitUserTurnRowInner({
     replaceLast = false,
     turnId,
     evidenciaAcustica = true,
-    registeredSpeaker,
     sentiment = 'neutral',
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
@@ -302,7 +267,7 @@ function commitUserTurnRowInner({
         }
     }
 
-    const resolved = resolveRowSpeakerName(speakerName || '', evidenciaAcustica, registeredSpeaker);
+    const resolved = resolveSpeakerAlias(speakerName || '');
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
     // 1) Emisión que crece: reemplaza la fila de usuario del turno (una sola).

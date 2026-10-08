@@ -124,7 +124,7 @@ import {
 } from './core/onboarding/onboardingService';
 // ---- Fase 3 — Multi-usuario: participantes, materia gris y paneles ----
 import { useParticipants } from './hooks/useParticipants';
-
+import { resolveRegisteredSpeakerName } from './voice/lib/speakerLabels';
 import { resolveKindRole } from './core/multiuser/participantRegistry';
 import { useMateriaGris } from './hooks/useMateriaGris';
 // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
@@ -1324,9 +1324,10 @@ function App() {
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
                 // P8.40: la etiqueta automatica de la diarizacion puede pertenecer a un
                 // participante registrado (speakerLabel del panel): la fila lleva su NOMBRE.
+                const speakerRegistrado = resolveRegisteredSpeakerName(speakerName, participantSpeakerRef.current);
                 commitUserTurnRow({
                     text: transcript,
-                    speakerName, registeredSpeaker: participantSpeakerRef.current,
+                    speakerName: speakerRegistrado || speakerName,
                     sentiment: detectSentiment(transcript),
                     evidenciaAcustica: resolved?.evidenciaAcustica === true,
                     replaceLast: resolved?.replaceLastRawLog === true,
