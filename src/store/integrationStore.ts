@@ -12,7 +12,6 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage';
@@ -495,29 +494,18 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             addUserMessage: (text: string, speakerName?: string) => {
                 const sentiment = detectSentiment(text);
-                // OS2 parity: default speaker label is the configured fallback, not 'Usuario'
-                // OS2's activeListen.js resolveConversationSpeaker falls back to
-                // cleanForSpeech(lastSpeaker) || speakers.defaultLabel (fallback configurado)
-                const resolvedSpeaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
                 const emotion = sentimentToEmotion(sentiment);
-                const entry: ConversationEntry = withActivePersonId({
-                    role: 'user',
-                    text,
-                    timestamp: Date.now(),
-                    sentiment,
-                    id: nextId(),
-                    speakerName: resolvedSpeaker,
-                    response: '', // will be filled by addFluMessage
-                }, get().activePersonId);
-                // Single set() call — combine conversation update + emotional state
-                // to avoid two separate Zustand state updates (and two re-renders).
+                // UN DUENO de la fila del usuario: `commitUserTurnRow` (el unico sitio que
+                // escribe la conversacion, App.tsx:1328). Antes este metodo TAMBIEN concatenaba
+                // la entrada en `conversationHistory`: la MISMA fila escrita dos veces, con otras
+                // reglas de hablante y sin la sonda de diagnostico. Aqui queda lo suyo:
+                // sentimiento y estadisticas de la sesion.
                 set((current) => {
                     const stats = current.sessionStats;
                     const emoDist = { ...stats.emotionalDistribution };
                     const emoKey = sentiment || 'neutral';
                     emoDist[emoKey] = (emoDist[emoKey] || 0) + 1;
                     return {
-                        conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                         emotionalState: emotion,
                         sessionStats: {
                             ...stats,
@@ -527,9 +515,10 @@ export const useIntegrationStore = create<IntegrationStore>()(
                         },
                     };
                 });
+                void speakerName; // la fila la escribe el dueno, no este metodo
             },
-
-            addSystemMessage: (text: string) => {
+            
+addSystemMessage: (text: string) => {
                 const entry: ConversationEntry = withActivePersonId({
                     role: 'system',
                     text,
