@@ -1,24 +1,26 @@
 {
-  "task": "P9.53 - un solo dueno del saludo de cierre del onboarding (quita la ruta doble App + flujo).",
-  "objective": "Que el saludo de cierre del onboarding ('Listo, {name}! Ya estas configurado...') lo hable UN solo dueno (el flujo, que ya devuelve ese texto en su speech) y App deje de buscarlo y repetirlo, eliminando el doble habla y el nombre vacio.",
-  "base": "d955582",
+  "task": "P9.54 - una repeticion de NUMEROS es DATO (cuenta), no eco del ASR: el dictado numerico no pierde items.",
+  "objective": "Que los colapsadores de eco del ASR no borren un bloque repetido de numeros, para que un dictado tipo '1..40' no pierda items (el dueno reporto que se comio el 34).",
+  "base": "74bfb22",
   "allow": [
-    "src/App.tsx",
+    "src/voice/lib/speechMerge.js",
+    "tests/vozRepeticionAsrGuard.test.ts",
+    "tests/ingressSimulation.test.ts",
     "plans/ledger.json"
   ],
   "maxFiles": 6,
   "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/onboardingFlow.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/onboardingFlow.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts tests/speechMerge.test.ts tests/ingressSimulation.test.ts tests/transcriptionDedupLoss.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "App no busca el paso 'complete' del onboarding para hablar el cierre (lo habla el flujo): un solo dueno.",
+    "statement": "Ningun colapsador de eco trata un bloque de NUMEROS como repeticion eliminable.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/App.tsx','utf8');console.log((s.match(/id === 'complete'/g)||[]).length)\"",
-      "target": 0
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/speechMerge.js','utf8');console.log((s.match(/isNumericBlock\\(words,/g)||[]).length)\"",
+      "target": 4
     },
     "guardFiles": [
-      "tests/onboardingFlow.test.ts"
+      "tests/vozRepeticionAsrGuard.test.ts"
     ]
   },
   "ignore": [
@@ -27,7 +29,7 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/App.tsx": [
+    "src/voice/lib/speechMerge.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

@@ -42,6 +42,19 @@ export function hasSpeechAnchor(prev = '', next = '') {
 }
 
 /**
+ * Bloque de palabras que es DATO, no frase: todo numeros. Una repeticion numerica
+ * es una CUENTA (dictado "1..40"), no un eco del ASR: los colapsadores no deben
+ * tocarla. Medido 2026-10-09 (dueno): "31 32 33 34 33 34 35" salia "31 32 33 34 35"
+ * (se comia el "33 34").
+ */
+function isNumericBlock(words, start, size) {
+  for (let i = start; i < start + size; i += 1) {
+    if (!/^\d+$/.test(String(words[i] || ''))) return false
+  }
+  return true
+}
+
+/**
  * Colapsa repeticiones contiguas de un bloque de palabras, en CUALQUIER posicion
  * («foo bar foo bar» -> «foo bar»; «x foo bar foo bar» -> «x foo bar»).
  *
@@ -64,7 +77,7 @@ export function collapseRepeatedSpeech(text = '') {
       for (let start = 0; start + size * 2 <= words.length; start += 1) {
         const head = sliceWordsLower(words, start, start + size)
         const mid = sliceWordsLower(words, start + size, start + size * 2)
-        if (head && head === mid) {
+        if (head && head === mid && !isNumericBlock(words, start, size)) {
           current = cleanForSpeech(
             words.slice(0, start + size).concat(words.slice(start + size * 2)).join(' '),
           )
@@ -126,6 +139,7 @@ export function collapseAsrStutter(text = '', { maxPasses = 6 } = {}) {
     blockSearch: for (let size = Math.min(14, Math.floor(words.length / 2)); size >= 4; size -= 1) {
       for (let i = 0; i <= words.length - size * 2; i += 1) {
         const block = sliceWordsLower(words, i, i + size)
+        if (isNumericBlock(words, i, size)) continue
         for (let j = i + size; j <= words.length - size; j += 1) {
           if (sliceWordsLower(words, j, j + size) !== block) continue
           cur = cleanForSpeech(words.slice(0, j).concat(words.slice(j + size)).join(' '))
@@ -223,6 +237,7 @@ export function collapseEchoPhrase(text = '') {
   for (let size = Math.min(Math.floor(words.length / 2), 14); size >= 3; size -= 1) {
     const tail = sliceWordsLower(words, -size)
     const head = sliceWordsLower(words, 0, -size)
+    if (isNumericBlock(words, words.length - size, size)) continue
     if (head.endsWith(tail) || head.includes(` ${tail}`)) {
       current = cleanForSpeech(words.slice(0, -size).join(' '))
       break

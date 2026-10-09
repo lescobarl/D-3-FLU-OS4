@@ -65,3 +65,15 @@ describe('vozRepeticionAsrGuard - invariante: NO se elimina una palabra cuya rep
         expect(normalizeMicText('hola ya estamos listos hola')).toBe('hola ya estamos listos hola');
     });
 });
+
+describe('vozRepeticionAsrGuard - un bloque de NUMEROS repetido es DATO, no eco del ASR', () => {
+    it('no colapsa la repeticion de un bloque de numeros (dictado contando)', () => {
+        const contando = 'voy en el 31 32 33 34 33 34 35 36 y sigo';
+        expect(normalizeMicText(contando)).toContain('33 34 33 34');
+    });
+
+    it('el detector distingue DATO de eco: numeros no se tocan, palabras si', () => {
+        expect(normalizeMicText('foo bar foo bar')).toBe('foo bar');
+        expect(normalizeMicText('12 13 12 13')).toBe('12 13 12 13');
+    });
+});

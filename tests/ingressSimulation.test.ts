@@ -362,3 +362,53 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
         expect(action.replaceLast).toBe(false);
     });
 });
+
+// ============================================================
+// DEFECTO DEL DUENO (2026-10-09): dictado largo 1..40 pierde un numero
+// (reporto que se comio el 34). Aqui la PROPIEDAD es dura: tras el final,
+// TODOS los numeros 1..40 tienen que estar en lo commiteado.
+// ============================================================
+const SEQUENCE_1_40 = Array.from({ length: 40 }, (_, i) => String(i + 1)).join(' ');
+
+function numerosEn(texto: string): Set<number> {
+    const out = new Set<number>();
+    for (const token of String(texto || '').split(/[^0-9]+/)) {
+        if (token) out.add(Number(token));
+    }
+    return out;
+}
+
+describe('ingress SIM - dictado 1..40: no se pierde NINGUN numero', () => {
+    it('un solo final con la secuencia completa se conserva entero', () => {
+        const h = createHarness();
+        h.inject(chromeEvent([{ isFinal: true, transcript: SEQUENCE_1_40 }], 0));
+        const last = (h.commits.at(-1) || '').replace(/\s+/g, ' ').trim();
+        expect(last).toBe(SEQUENCE_1_40);
+    });
+
+    it('interinos acumulativos 1..40 + final con digito duplicado: siguen los 40', () => {
+        const h = createHarness();
+        for (let n = 1; n <= 40; n += 1) {
+            h.inject(chromeEvent([{ transcript: Array.from({ length: n }, (_, i) => String(i + 1)).join(' ') }], 0));
+        }
+        h.inject(chromeEvent([{ isFinal: true, transcript: SEQUENCE_1_40 }], 0));
+        h.inject(chromeEvent([{ isFinal: true, transcript: SEQUENCE_1_40.replace('33 34', '33 34 34') }], 0));
+        const todo = h.commits.join(' ');
+        const vistos = numerosEn(todo);
+        const faltan: number[] = [];
+        for (let n = 1; n <= 40; n += 1) if (!vistos.has(n)) faltan.push(n);
+        expect(faltan, `faltan del dictado: [${faltan.join(' ')}] en: ${todo}`).toEqual([]);
+    });
+
+    it('N eventos seguidos, uno por numero: no se borra ninguno', () => {
+        const h = createHarness();
+        for (let n = 1; n <= 40; n += 1) {
+            h.inject(chromeEvent([{ isFinal: true, transcript: String(n) }], 0));
+        }
+        const todo = h.commits.join(' ');
+        const vistos = numerosEn(todo);
+        const faltan: number[] = [];
+        for (let n = 1; n <= 40; n += 1) if (!vistos.has(n)) faltan.push(n);
+        expect(faltan, `faltan del dictado: [${faltan.join(' ')}] en: ${todo}`).toEqual([]);
+    });
+});
