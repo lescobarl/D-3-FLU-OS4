@@ -76,7 +76,8 @@
     "src/voice/lib/conversationStream.js",
     "src/voice/lib/turnTranscript.js",
     "src/core/multiuser/participantRegistry.ts",
-    "src/avatar/App.css"
+    "src/avatar/App.css",
+    "AGENTS.md"
   ],
   "maxFiles": 110,
   "maxLines": 6000,

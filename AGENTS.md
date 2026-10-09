@@ -595,6 +595,23 @@ de **0 nuevos**.
    en cp437 y una O acentuada en cp850). C53 vigila el residuo, así que este propio documento
    no puede citar las secuencias rotas en crudo: se describen por su code point.
 
+   **7.7.g — Duplicado vs similitud de forma: la vara NO se mueve a mitad de campaña.**
+   Medido 2026-10-08/09 (cuatro vueltas seguidas del mismo bucle): se respondió «hay rutas dobles»
+   cuatro veces porque la REGLA DE MEDIR se amplió entre vueltas — formas de definición que el
+   detector no veía, umbral 60→40→30 y, al final, otro método (secuencias, idiomas, tokens CSS).
+   Con una vara móvil la respuesta es siempre «sí». Reglas de decisión:
+   (1) **Duplicado** = DOS DUEÑOS DEL MISMO RESPONSABLE que pueden DIVERGIR (el mismo dato en dos
+   almacenes, el mismo ajuste leído por dos motores, dos implementaciones del MISMO resultado para
+   la MISMA entrada). Eso se cierra: es finito y se cuenta.
+   (2) **Similitud de forma** = el mismo esqueleto o la misma sentencia en responsables DISTINTOS
+   (dos mapas de literales, dos accesores `x?.campo || ''`, dos plantillas de texto). NO es un
+   pendiente: se reporta aparte, con otro nombre, y NO entra en el contador de duplicados.
+   (3) **La métrica se congela ANTES de empezar**: `scripts/duplication.mjs` y
+   `scripts/auditoria-codigo.mjs` están en `.task/frozen.json` y la puerta falla si su hash cambia.
+   Ampliar la vara (formas, umbral, alcance) NO es una iteración del mismo trabajo: es una TAREA
+   NUEVA con su propia decisión y su propio contrato. Cambiar el hash en silencio es una violación.
+   (4) Todo reporte dice el ALCANCE de la vara: «0 duplicados con esta definición»; lo que queda
+   fuera se enuncia como clasificado y con su motivo, nunca como «sigue habiendo».
 ## 8. CONTRATO DE TAREA Y VERIFICACIÓN POR COMANDO (anti-sustitución)
 
 Toda tarea se ejecuta contra un contrato escrito ANTES de tocar código. Sin contrato no se

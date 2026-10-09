@@ -4,5 +4,7 @@
   "scripts/auditoria.mjs": "312abb77012f467756d6c4b1d4e66e2172546333b708565b1167a27f646c3b39",
   "scripts/corregir.mjs": "fda60aca735e1b611d84116562dacfa08d532bd49075b2606f5f0862b48c5df5",
   "scripts/audit-metric.mjs": "c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f",
-  "scripts/audit-detectors.mjs": "59f8b992394169e384ec4523c0a499312993903c8a30b3cce3aa154c46320830"
+  "scripts/audit-detectors.mjs": "59f8b992394169e384ec4523c0a499312993903c8a30b3cce3aa154c46320830",
+  "scripts/duplication.mjs": "ee262851dffd275e52aa78a9b61589989e9b5fe845487923117e1339a085e5a7",
+  "scripts/auditoria-codigo.mjs": "b7621ad7ce9fc87a51e3810929b429ebbf484d09b76def6af16d3a26c8695a52"
 }
