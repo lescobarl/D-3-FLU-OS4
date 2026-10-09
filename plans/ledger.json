@@ -1894,6 +1894,13 @@
   ],
   "done": [
     {
+      "id": "P9.51",
+      "commit": "3970d18",
+      "titulo": "La repeticion CONTIGUA del ASR se colapsa en cualquier posicion (no solo en la cabeza del turno)",
+      "evidencia": "src/voice/lib/speechMerge.js: CERRADO 2026-10-09 (commit 3970d18). CAUSA: `collapseRepeatedSpeech` solo comparaba la CABEZA (words[0..size) vs words[size..2size)); una vuelta del ASR en medio o al final sobrevivia, y con <48 chars `normalizeMicText` no llamaba al colapsador fuerte. Caso exacto del dueno (bitacora): \"cer rando cerrando escucha cerrando escucha\". FIX: recorre TODAS las posiciones y quita el bloque contiguo repetido donde este (misma guarda de >=4 palabras). GUARD de comportamiento tests/vozRepeticionAsrGuard.test.ts (ROJO en base c4763b8, 2 fallos -> VERDE) con control negativo del detector; anadido a lint:guards (scripts/guard-files.mjs). MEDIDO: metrica 0 -> 1; `npm run lint` 222 ficheros / 1863 casos VERDE; eslint 0; tsc 0; `npm run gate` OK (guard base=1 actual=0). Alcance real (0.23): CUBIERTO=la propiedad de colapso en cualquier posicion, su guard y la barrera; NO CUBIERTO=el resto de los defectos del dueno (D1 perdida de palabras, D2 fila prematura, D3 nombre, panel \"user\", ultima frase sin color, saludo doble del onboarding y la diarizacion que infla hablantes) que van en sus propios hitos, ni la suite completa (exige autorizacion) ni el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
+    {
       "id": "P8.69",
       "commit": "a42af79",
       "titulo": "E0: el embedding desacoplaba el buffer del llamador y la diarizacion no veia audio",
