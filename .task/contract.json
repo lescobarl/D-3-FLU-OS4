@@ -1,75 +1,21 @@
 {
-  "task": "ENMIENDA (autorizada por el dueno: 'ejecuta secuencialmente, no te detengas hasta terminar', 2026-10-08). Cadena 1->4: (1) capa SEMANTICA de proposito con dueno unico + barrera; (2) P9.25 se cierra como CLASIFICACION (no hay reduccion: la decimacion esta pinned por test); (3) P9.26/P9.27/P9.28 se unifican (trinquete: baseline de duplicacion estructural 3 -> 0); (4) gate.",
-  "objective": "Dejar en UN dueno los propositos duplicados (remuestreo, lectura de config, flag de debug, submit de editor) con una barrera que impida la CUARTA implementacion, y vaciar el baseline de duplicacion estructural (3 -> 0).",
-  "base": "9568e3b",
+  "task": "ENMIENDA (autorizada: 'dale', 2026-10-08). Cerrar el hueco de FORMA del detector estructural (no escaneaba METODOS de objeto/clase ni flecha concisa) y convertir su CEGUERA en un numero medido con trinquete. NO es un refactor de los 27 sitios: esos se declaran como deuda con pendiente. Sin invariant (7.7.e(3): reparar un detector no cabe en la maquinaria de invariante; la evidencia es el antes/despues del detector).",
+  "objective": "Que la barrera estructural vea TODAS las formas de definicion (incluidos metodos) y que 'lo que la barrera NO ve' sea un numero congelado que solo puede bajar.",
+  "base": "b765185",
   "allow": [
-    "src/voice/lib/pcmChunks.js",
-    "src/voice/lib/audioMath.js",
-    "src/voice/lib/asr/voiceActivitySegmenter.js",
-    "src/voice/lib/asr/whisperRecognitionEngine.js",
-    "src/voice/lib/turnAudioSnapshot.js",
-    "src/voice/lib/ingressGuards.js",
-    "src/voice/lib/speechMerge.js",
-    "src/voice/lib/configGuard.js",
-    "src/voice/lib/devFlags.js",
-    "src/voice/lib/fluDevConsole.js",
-    "src/voice/lib/listenLog.js",
-    "src/voice/lib/fluTranscriptMotor.js",
-    "src/voice/lib/fluTranscriptPause.js",
-    "src/components/editorSubmit.ts",
-    "src/components/AmbienteEditorForm.tsx",
-    "src/components/PaletaEditorForm.tsx",
     "scripts/duplication.mjs",
-    "scripts/purposeOwners.mjs",
-    "scripts/guard-files.mjs",
     "tests/structureDuplicationGuard.test.ts",
     "tests/structureDuplicationGuard.baseline.json",
-    "tests/purposeOwnershipGuard.test.ts",
-    "tests/ingressGuards.test.ts",
-    "tests/fluDevConsole.test.ts",
     "plans/ledger.json"
   ],
-  "maxFiles": 40,
-  "maxLines": 1500,
+  "maxFiles": 12,
+  "maxLines": 700,
   "dod": [
-    "npx vitest run --reporter=dot tests/speechMerge.test.ts tests/ingressGuards.test.ts tests/turnAudioSnapshotOwnerGuard.test.ts tests/audioBufferOwnershipGuard.test.ts",
-    "npx vitest run --reporter=dot tests/speakerClusterAccumulation.test.ts tests/asrTurnSegmentation.test.ts tests/vozLocucionVivaLargaGuard.test.ts tests/voiceSingleSourceGuard.test.ts",
-    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts",
-    "npx vitest run --reporter=dot tests/decideVoiceTurnDispatch.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/voiceAsrEventShape.test.ts",
-    "npx vitest run --reporter=dot tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceSegmenter.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts tests/dodScopeGuard.test.ts",
-    "npx vitest run --reporter=dot tests/fluDevConsole.test.ts tests/fluTranscriptPause.test.ts tests/fluTranscriptMotor.test.ts tests/embeddingFrames.test.ts tests/speakerEmbeddingCore.test.ts tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts"
+    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts",
+    "npx vitest run --reporter=dot tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts tests/gameCatalog.test.ts tests/systemMatrix.test.ts tests/gamePlaythrough.test.ts tests/gameDomainOwnership.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
-  "invariant": {
-    "statement": "no queda ninguna duplicacion ESTRUCTURAL (mismo esqueleto, distinto nombre) en src: el baseline queda vacio (3 -> 0)",
-    "metric": { "command": "node scripts/duplication.mjs --groups", "target": 0 },
-    "base": "9568e3b",
-    "guardFiles": [
-      "tests/structureDuplicationGuard.test.ts",
-      "tests/purposeOwnershipGuard.test.ts",
-      "scripts/duplication.mjs",
-      "scripts/purposeOwners.mjs",
-      "tests/structureDuplicationGuard.baseline.json"
-    ]
-  },
   "ignore": [".task/**", "scripts/task-gate*.mjs", "kilo.json"],
-  "e2eScope": {
-    "src/voice/lib/pcmChunks.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/audioMath.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/asr/voiceActivitySegmenter.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/asr/whisperRecognitionEngine.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/turnAudioSnapshot.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/ingressGuards.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/speechMerge.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/configGuard.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/devFlags.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/fluDevConsole.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/listenLog.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/voice/lib/fluTranscriptMotor.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
-    "src/components/editorSubmit.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/AmbienteEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/PaletaEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/voice/lib/fluTranscriptPause.js": ["tests/e2e/voz-locucion-unica.spec.ts"]
-  }
+  "e2eScope": {}
 }

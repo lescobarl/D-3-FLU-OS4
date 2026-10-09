@@ -95,30 +95,53 @@ function block(src, openIdx) {
   return null;
 }
 
-const FN_RE =
-  /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{|(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g;
+/** Formas de definicion que el detector DEBE cubrir (7.7.d: la implementacion, no el nombre). */
+const FORMS = [
+  /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g,
+  /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g,
+  // METODO de objeto/clase: `nombre(args) { ... }`. Era el hueco grande (motores de juego, autonomy).
+  /^\s*(?:public\s+|private\s+|protected\s+)?(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*[:)][^{;]*\{/gm,
+];
+/** `const nombre = (args) => expresion` (flecha CONCISA, sin llaves). */
+const CONCISE = /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*([^;{\n]+)$/gm;
+/** Nombres que no definen un simbolo (control de flujo / reservadas / accesores). */
+const NOT_A_SYMBOL = new Set([...KEYWORDS, 'constructor', 'get', 'set', 'static', 'public', 'private', 'protected']);
 
 /**
- * Funciones con cuerpo `{}` de un fuente, con su esqueleto (>= minLines lineas).
+ * Definiciones de un fuente, con su esqueleto, cubriendo TODAS las formas
+ * (funcion, flecha con llaves, METODO y flecha concisa). Una definicion sin
+ * cuerpo (`{...}`) o con menos de `minLines` lineas se descarta.
  * @param {string} file ruta relativa
  * @param {string} source contenido
  * @param {number} minLines
+ * @param {number} minSkel longitud minima del esqueleto
  * @returns {Array<{ file: string, name: string, line: number, skel: string }>}
  */
-export function findFunctions(file, source, minLines = 3) {
+export function findFunctions(file, source, minLines = 3, minSkel = 40) {
   const out = [];
-  let m;
-  FN_RE.lastIndex = 0;
-  while ((m = FN_RE.exec(source))) {
-    const open = source.indexOf('{', m.index + m[0].length - 1);
-    if (open === -1) continue;
-    const body = block(source, open);
-    if (!body) continue;
-    if (body.split('\n').length < minLines) continue;
-    if (isFacade(body)) continue;
-    const skel = skeleton(body);
-    if (skel.length < 60) continue;
-    out.push({ file, name: m[1] || m[2], line: source.slice(0, m.index).split('\n').length, skel });
+  for (const re of FORMS) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(source))) {
+      if (NOT_A_SYMBOL.has(m[1])) continue;
+      const open = source.indexOf('{', m.index + m[0].length - 1);
+      if (open === -1) continue;
+      const body = block(source, open);
+      if (!body) continue;
+      if (body.split('\n').length < minLines) continue;
+      if (isFacade(body)) continue;
+      const skel = skeleton(body);
+      if (skel.length < minSkel) continue;
+      out.push({ file, name: m[1], line: source.slice(0, m.index).split('\n').length, skel });
+    }
+  }
+  CONCISE.lastIndex = 0;
+  let c;
+  while ((c = CONCISE.exec(source))) {
+    if (NOT_A_SYMBOL.has(c[1])) continue;
+    const skel = skeleton(c[2]);
+    if (skel.length < minSkel) continue;
+    out.push({ file, name: c[1], line: source.slice(0, c.index).split('\n').length, skel });
   }
   return out;
 }
@@ -151,10 +174,10 @@ export function groupKey(sites) {
  * @param {number} minLines
  * @returns {Array<{ key: string, skel: string, sites: Array<{file:string,name:string,line:number}> }>}
  */
-export function structuralGroups(sources, minLines = 3) {
+export function structuralGroups(sources, minLines = 3, minSkel = 40) {
   const bySkel = new Map();
   for (const { file, source } of sources) {
-    for (const fn of findFunctions(file, source, minLines)) {
+    for (const fn of findFunctions(file, source, minLines, minSkel)) {
       if (!bySkel.has(fn.skel)) bySkel.set(fn.skel, []);
       bySkel.get(fn.skel).push({ file: fn.file, name: fn.name, line: fn.line });
     }
@@ -165,6 +188,17 @@ export function structuralGroups(sources, minLines = 3) {
     groups.push({ key: groupKey(sites), skel, sites });
   }
   return groups.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/**
+ * CEGUERA MEDIDA del detector (el numero que responde a "lo que la barrera no ve").
+ * Corre la MISMA logica con un umbral mas bajo (40) y devuelve los grupos que el
+ * detector estricto (60) NO ve. Ese numero es un trinquete: solo puede bajar.
+ * @param {Array<{file: string, source: string}>} sources
+ */
+export function blindGroups(sources) {
+  const seen = new Set(structuralGroups(sources, 3, 40).map((g) => g.key));
+  return structuralGroups(sources, 1, 40).filter((g) => !seen.has(g.key));
 }
 
 /**
@@ -202,6 +236,10 @@ if (process.argv[1] && process.argv[1].endsWith('duplication.mjs')) {
   if (process.argv.includes('--groups')) {
     // Solo el numero de grupos: es lo que mide la invariante del gate.
     console.log(String(groups.length));
+  } else if (process.argv.includes('--blind')) {
+    const ciegos = blindGroups(sources);
+    console.log(String(ciegos.length));
+    for (const g of ciegos) console.log(`CIEGO  ${formatGroup(g)}`);
   } else if (process.argv.includes('--violations')) {
     // La PRIMERA linea es el numero: es lo que lee la metrica del gate.
     console.log(String(violations.length));

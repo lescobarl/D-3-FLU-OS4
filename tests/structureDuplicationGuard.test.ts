@@ -10,15 +10,22 @@
  * cambiar `for..of` por `forEach` los esquiva. Este guard mide el ESQUELETO: la
  * implementacion, no el nombre.
  *
- * EL BASELINE ESTA VACIO (2026-10-08): las 3 duplicaciones que declaraba se cerraron
- * (P9.26 requireConfigBlock, P9.27 resolveDevDebugFlag, P9.28 submitCatalogEditor) y el
- * trinquete obligo a vaciarlo. Sigue siendo shrink-only: si aparece un grupo nuevo es una
- * violacion, y NO se puede ampliar el baseline para taparlo.
+ * COBERTURA DE FORMAS (2026-10-08b): antes el detector solo veia `function` y `const = () => {}`.
+ * MEDIDO: con eso daba 0 grupos mientras existian 6 con METODOS (`start`/`stop`/`updateConfig`/
+ * `turn` en los motores de juego y en autonomy). Ahora cubre funcion, flecha con llaves,
+ * METODO de objeto/clase y flecha concisa, con umbral de esqueleto 40 (meseta medida: 40 y 35
+ * dan los mismos 13 grupos; 60 daba 6 y 30 daba 15).
+ *
+ * EL BASELINE ES DEUDA DECLARADA, NO PERDON (shrink-only): hoy son 13 grupos / 77 sitios
+ * (catalogos, paneles, servicios, autonomy y motores de juego) -> P9.35. El caso "el baseline
+ * no tiene entradas muertas" OBLIGA a encogerlo: al cerrar cualquiera, su entrada tiene que
+ * salir o este guard cae. NO se puede AMPLIAR: un grupo nuevo es una violacion.
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+    blindGroups,
     evaluate,
     findFunctions,
     formatGroup,
@@ -87,6 +94,9 @@ describe('duplicacion estructural — un dueno por implementacion (no por nombre
         // exige un numero de grupos: el objetivo del trinquete es PRECISAMENTE llegar a 0,
         // y exigir "3 grupos" convertiria la meta en un suelo.
         expect(Array.isArray(BASELINE)).toBe(true);
+        // CEGUERA por el filtro de lineas (minLines=3): si un duplicado solo aparece con
+        // minLines=1, la barrera lo esta escondiendo. Hoy es 0; tiene que seguir siendolo.
+        expect(blindGroups(sources), 'grupos que solo aparecen con minLines=1').toEqual([]);
     });
 });
 
