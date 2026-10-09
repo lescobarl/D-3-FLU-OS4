@@ -8,12 +8,17 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_TARGET_SAMPLE_RATE } from './audioConstants.js'
+import { optionalConfigBlock } from './configGuard.js'
 
 /** Fracción mínima de muestras para aceptar un embedding. */
 export const DEFAULT_MIN_SAMPLE_RATIO = 0.35
 
+/**
+ * Bloque de embedding de la captura de identidad (o `{}`).
+ * @returns {NonNullable<typeof FLU_CONFIG.voiceIdentity>['capture']['embedding']}
+ */
 export function getEmbeddingConfig() {
-  return FLU_CONFIG.voiceIdentity?.capture?.embedding || {}
+  return optionalConfigBlock(FLU_CONFIG, ['voiceIdentity', 'capture', 'embedding'])
 }
 
 export function getModelId(cfg = getEmbeddingConfig()) {

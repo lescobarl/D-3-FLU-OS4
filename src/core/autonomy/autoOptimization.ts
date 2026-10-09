@@ -21,6 +21,7 @@
 import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
 import { createModuleSingleton } from './serviceSingleton';
 import { snapshotConfig } from './configSnapshot';
+import { copyList } from '../../lib/listOps';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
@@ -734,7 +735,7 @@ export class ParameterOptimizer {
     }
     
     getOptimizationHistory(): OptimizationResult[] {
-        return [...this.optimizationHistory];
+        return copyList(this.optimizationHistory);
     }
     
     getParameterValue(parameter: OptimizableParameter): number {

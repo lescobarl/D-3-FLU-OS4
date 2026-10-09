@@ -5,9 +5,15 @@
 import { cleanForSpeech, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
+import { optionalConfigBlock } from './configGuard.js'
 
+/**
+ * Bloque de segmentacion del transcript (o `{}`).
+ * @param {typeof FLU_CONFIG} [config]
+ * @returns {NonNullable<typeof FLU_CONFIG.transcript>['asrSegmentation']}
+ */
 export function getAsrTurnSegmentationCfg(config = FLU_CONFIG) {
-  return config.transcript?.asrSegmentation || {}
+  return optionalConfigBlock(config, ['transcript', 'asrSegmentation'])
 }
 
 function snapshotVector(entry = {}) {

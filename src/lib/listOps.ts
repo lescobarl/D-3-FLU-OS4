@@ -3,6 +3,11 @@
  * notesList y shoppingList tenian copiadas cambiando solo el nombre del flag (P9.38).
  */
 
+/** Copia defensiva de una lista (el llamante no muta el historial del servicio). */
+export function copyList<T>(items: readonly T[]): T[] {
+    return [...items];
+}
+
 /** Cuantos items NO tienen marcado el flag (pendientes). Dueno unico (P9.40). */
 export function countUnflagged<T>(items: readonly T[], flagged: (item: T) => boolean): number {
     return items.filter((item) => !flagged(item)).length;

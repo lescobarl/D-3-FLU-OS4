@@ -9,6 +9,22 @@
 import { FLU_CONFIG } from './fluConfig.js'
 
 /**
+ * Bloque OPCIONAL de config en `path`, o `{}` si no hay objeto.
+ *
+ * DUENO UNICO de la forma `config.a?.b?.c || {}` que estaba copiada en 6 getters
+ * (embeddingConfig, micCapture x2, speakerPolicy, asrTurnSegmentation, wakePolicy): P9.41.
+ * Su tipo publico lo declara cada getter con `@returns` (aqui devuelve el mapa crudo).
+ * @param {Record<string, unknown>} config base (FLU_CONFIG o uno inyectado)
+ * @param {string[]} path claves desde la raiz
+ * @returns {unknown}
+ */
+export function optionalConfigBlock(config, path) {
+  let block = config
+  for (const key of path) block = block?.[key]
+  return block && typeof block === 'object' ? block : {}
+}
+
+/**
  * Devuelve el bloque de FLU_CONFIG en `path`, o lanza si no es un objeto.
  * @param {string[]} path claves desde la raíz de FLU_CONFIG
  * @param {string} label ruta legible para el error (p. ej. 'fluConfig.transcript.speechMerge')

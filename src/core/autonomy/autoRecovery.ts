@@ -30,6 +30,7 @@ import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
 import { createModuleSingleton } from './serviceSingleton';
 import { snapshotConfig } from './configSnapshot';
+import { copyList } from '../../lib/listOps';
 
 /** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
 const RC = AUTONOMY_POLICY.recovery;
@@ -913,7 +914,7 @@ export class AutoRecoverySystem {
     }
     
     getIncidentHistory(): RecoveryIncident[] {
-        return [...this.incidentHistory];
+        return copyList(this.incidentHistory);
     }
     
     clearIncident(incidentId: string): void {

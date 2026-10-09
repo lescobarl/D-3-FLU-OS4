@@ -21,6 +21,7 @@
 import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
 import { createModuleSingleton } from './serviceSingleton';
 import { snapshotConfig } from './configSnapshot';
+import { copyList } from '../../lib/listOps';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
@@ -782,7 +783,7 @@ export class DecisionEngine extends IntervalLifecycle<DecisionEngineConfig> {
     }
     
     getDecisionHistory(): AutonomousDecision[] {
-        return [...this.decisionHistory];
+        return copyList(this.decisionHistory);
     }
     
     getRecentDecisions(count: number = 10): AutonomousDecision[] {

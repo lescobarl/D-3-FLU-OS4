@@ -3,9 +3,15 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { optionalConfigBlock } from './configGuard.js'
 
+/**
+ * Bloque de audio de conversacion de la captura (o `{}`).
+ * @param {typeof FLU_CONFIG} [config]
+ * @returns {NonNullable<typeof FLU_CONFIG.voiceIdentity>['capture']['conversationAudio']}
+ */
 export function getConversationAudioConfig(config = FLU_CONFIG) {
-  return config.voiceIdentity?.capture?.conversationAudio || {}
+  return optionalConfigBlock(config, ['voiceIdentity', 'capture', 'conversationAudio'])
 }
 
 /** RMS lineal desde dBFS (p. ej. -45 → ~0.0056). */
@@ -38,8 +44,13 @@ export function getMaxSilenceWindowsForHold(_sampleRate = DEFAULT_SAMPLE_RATE, c
   return Math.max(4, Math.ceil(voiceHoldMs / hopMs))
 }
 
+/**
+ * Bloque de captura de identidad (o `{}`).
+ * @param {typeof FLU_CONFIG} [config]
+ * @returns {NonNullable<typeof FLU_CONFIG.voiceIdentity>['capture']}
+ */
 export function getVoiceIdentityCaptureConfig(config = FLU_CONFIG) {
-  return config.voiceIdentity?.capture || {}
+  return optionalConfigBlock(config, ['voiceIdentity', 'capture'])
 }
 
 export function getPassiveBufferMs(config = FLU_CONFIG) {

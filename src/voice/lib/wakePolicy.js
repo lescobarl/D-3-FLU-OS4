@@ -15,12 +15,18 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { cleanForSpeech, splitTranscriptAtWakeWord, stripDiacritics } from './audioMath.js'
+import { optionalConfigBlock } from './configGuard.js'
 
 /** Ordenes de politica (valor interno, no dato de config). */
 export const WAKE_POLICY_ORDER = Object.freeze({ ON: 'on', OFF: 'off' })
 
+/**
+ * Frases de politica de wake (o `{}`).
+ * @param {typeof FLU_CONFIG} [config]
+ * @returns {NonNullable<typeof FLU_CONFIG.voiceCommands>['wakePolicyPhrases']}
+ */
 export function getWakePolicyPhrases(config = FLU_CONFIG) {
-    return config.voiceCommands?.wakePolicyPhrases || {}
+    return optionalConfigBlock(config, ['voiceCommands', 'wakePolicyPhrases'])
 }
 
 /**

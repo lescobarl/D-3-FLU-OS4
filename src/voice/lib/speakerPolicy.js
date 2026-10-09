@@ -13,10 +13,15 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { detectWakeIntroducedName } from './audioMath.js'
 import { isAutoSpeakerLabel, isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
+import { optionalConfigBlock } from './configGuard.js'
 import { parseSpeakerIndex } from './speakerCore.js';
 
+/**
+ * Bloque de captura de sala (o `{}`).
+ * @returns {NonNullable<typeof FLU_CONFIG.voiceIdentity>['capture']['roomCapture']}
+ */
 export function getRoomCaptureCfg() {
-  return FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
+  return optionalConfigBlock(FLU_CONFIG, ['voiceIdentity', 'capture', 'roomCapture'])
 }
 
 /** Nombre propio en conversación solo tras wake word (configurable). */
