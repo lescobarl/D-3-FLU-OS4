@@ -1736,6 +1736,48 @@
       "estado": "done",
       "evidencia": "VEREDICTO: 2026-10-08 CERRADO. UN dueno: src/components/editorSubmit.ts (submitCatalogEditor), consumido por src/components/AmbienteEditorForm.tsx y src/components/PaletaEditorForm.tsx (mismo esqueleto, solo cambiaban slugify* y build*Payload). MEDIDO: el grupo estructural handleSubmit de los 2 editores desaparece (groups 3 -> 0), con las pruebas de conducta de ambos formularios en verde (tests/ambienteEditorForm.test.tsx, tests/paletaEditorForm.test.tsx). Commit 1df5d17. Alcance real (obligatorio, 0.23): CUBIERTO=la secuencia de submit (reentrada, nombre obligatorio, build+onSubmit+error) en un solo sitio; NO CUBIERTO=la suite completa y el DoD-producto. --- evidencia original: MEDIDO 2026-10-08. src/components/AmbienteEditorForm.tsx:77 y src/components/PaletaEditorForm.tsx:63 tienen handleSubmit con esqueleto IDENTICO (preventDefault -> if busy -> if !slug -> setBusy/setError -> try build+onSubmit -> finally setBusy(false)); solo difieren en slugifyAmbiente vs slugifyPalette y buildAmbientePayload vs buildPaletaPayload. El guard smallDuplicatesSingleOwnerGuard ya unifica el setField de estos mismos dos ficheros, pero NO cubre handleSubmit. NO CUBIERTO: sin tocar codigo.",
       "origen": "auditoria-codigo-2026-10-08"
+    },
+    {
+      "id": "P9.29",
+      "titulo": "RUTA DOBLE: el trio de catalogos repite CRUD + adaptador Dexie (12 sitios) sobre el registry que YA existe",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08 (auditoria contra el arbol, HEAD 02103fa). Tres ficheros con el MISMO cuerpo salvo la tabla y el nombre: src/core/branding/paletasCatalog.ts, src/core/environments/ambientesCatalog.ts y src/core/search/searchCatalog.ts. Duplicado: (a) adaptador Dexie add/put/get/toArray (paletasCatalog.ts:40-55, ambientesCatalog.ts:40-55, searchCatalog.ts:41-56); (b) registerX (74 / 74 / 83), updateX (80 / 80 / 89), removeX (86 / 86 / 95) — cuerpo identico `const result = await registry.X(...); await hydrateX(); return result;`; (c) hydrateX (64 / 64 / 68). El dueno parcial ya existe: src/core/catalogs/catalogRegistry.ts + mergeCatalog.ts; lo que NO se extrajo es esta capa. Detector: `node scripts/duplication.mjs --groups` da 0 porque el esqueleto mide 48-51 chars y el umbral es 60. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08b"
+    },
+    {
+      "id": "P9.30",
+      "titulo": "RUTA DOBLE: la misma forma de servicio CRUD (add/get/list/toggle/rename) en notesService y shoppingService (y 5 servicios mas)",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. src/core/notes/notesService.ts:84-160 y src/core/reminders/shoppingService.ts:67-140 tienen add/get/list/listFiltered/toggle/rename con el MISMO esqueleto; solo cambia el nombre de un campo booleano (done vs checked) y el nombre de la entidad. Secuencias de 3 lineas identicas medidas: notesService.ts:120/169 y shoppingService.ts:102/118 (`const updated: X = { ...row, <flag>: !row.<flag>, updatedAt: timestamp(), sync: buildSyncTuple(row.sync, timestamp()) }; await db.put(updated); await addAuditLog(...)`) y notesService.ts:104/105 / shoppingService.ts:86/87 (`if (!id) return undefined; const row = await db.get(id); return ... copyRecord(row) ...`). Otros 3 sitios con la misma forma: src/core/browser/browserProfileService.ts:203,216, src/core/multiuser/participantRegistry.ts:339,354, src/core/contacts/contactService.ts:229, src/core/diary/diaryService.ts:192, src/core/personalization/communicationProfileService.ts:311. Comando: detector de secuencias de 3 lineas sobre src/core (23 grupos). NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08b"
+    },
+    {
+      "id": "P9.31",
+      "titulo": "RUTA DOBLE: los paneles de catalogo (Ambientes/Paletas) repiten mapReason, startCreate, startClone, startEdit y handleEditorSubmit",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. src/components/AmbientesPanel.tsx vs src/components/PaletasPanel.tsx: mapReason (134 vs 93), startCreate (151 vs 110), startClone (156 vs 115), startEdit (162 vs 121), handleEditorSubmit (171 vs 130). Los esqueletos coinciden; solo cambian el tipo, la fuente de built-ins (ENVIRONMENTS vs builtinPaletteEntries()) y los textos. startCreate/startClone/startEdit entran en el MISMO grupo estructural (esqueleto 41-52 chars, por debajo del umbral 60 de la barrera). src/components/SearchCatalogPanel.tsx:325 (switch) cae en el mismo grupo. Dueno parcial ya existente: src/components/panelUtils.ts y src/core/catalogs/catalogEditorSave.ts (saveCatalogEntry). NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08b"
+    },
+    {
+      "id": "P9.32",
+      "titulo": "RUTA DOBLE: el setter de campo de los dos formularios de editor es el mismo cuerpo",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. src/components/AmbienteEditorForm.tsx:65 setVar y src/components/PaletaEditorForm.tsx:60 setColor: `setFields((prev) => ({ ...prev, X: { ...prev.X, [key]: value } }))` — mismo esqueleto (48 chars), solo cambia vars vs colors. El guard smallDuplicatesSingleOwnerGuard ya unifico el setField de useEditableFields, pero NO este setter por grupo. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08b"
+    },
+    {
+      "id": "P9.33",
+      "titulo": "RUTA DOBLE (CSS): .flu-upload-zone__or y .flu-upload-zone__buttons definidos en dos ficheros",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08. src/index.css importa @import ./styles/unified.css (index.css:12) y ADEMAS vuelve a definir .flu-upload-zone__or y .flu-upload-zone__buttons (con cuerpo distinto, o sea dos fuentes de la misma regla y riesgo de cascada). Comando: parser de selector+cuerpo sobre los CSS de src -> \"selectores que index.css repite de unified.css: 6 (de 34)\"; de esos 6, 4 son pasos de keyframes (from/to/0%,100%/50%) y los 2 reales son los .flu-upload-zone__*. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08b"
+    },
+    {
+      "id": "P9.34",
+      "titulo": "INSTRUMENTO: el umbral de 60 chars de la barrera estructural deja invisibles los duplicados CORTOS (medido 41-52 chars)",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-08 (hallazgo sobre mi propia barrera, la mas importante de esta auditoria). scripts/duplication.mjs descarta en findFunctions todo cuerpo con esqueleto < 60 chars; los duplicados reales de P9.29-P9.32 miden: registerPaleta/registerAmbiente/registerSearchSite=48, updatePaleta=51, setVar=48, setColor=48, startEdit=41, startClone=52. Resultado: `node scripts/duplication.mjs --groups` -> 0 y `npm run lint:guards` VERDE con esas duplicaciones vivas. Arnes: el detector de la barrera solo ve \"funciones con cuerpo {}\"; NO ve flecha concisa sin llaves, ni metodos de objeto/clase, ni bloques sueltos, ni CSS. SALIDA (medida, no aplicada): bajar el umbral a ~40 + mantener la regla de facade y declarar en baseline los que sean legitimamente coincidentes; y/o extender el detector a metodos y a bloques. NO CUBIERTO: sin tocar codigo.",
+      "origen": "auditoria-codigo-2026-10-08b"
     }
   ],
   "done": [
