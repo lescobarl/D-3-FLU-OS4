@@ -106,6 +106,12 @@ const FORMS = [
 ];
 /** `const nombre = (args): R => expresion` (flecha CONCISA anotada). */
 const CONCISE_ANOTADA = /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*:[^=]*?=>\s*([^;{\n]+)$/gm;
+/**
+ * Flecha concisa MULTILINEA: `const f = (a) =>` y la expresion repartida en varias
+ * lineas, hasta el `;`. Se acota a un cuerpo SIN llaves (un objeto literal iria entre
+ * parentesis y queda fuera de este barrido).
+ */
+const CONCISE_MULTI = /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::[^=]*?)?=>\s*([^;{]{1,400}?);/g;
 /** `const nombre = (args) => expresion` (flecha CONCISA, sin llaves). */
 const CONCISE = /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*([^;{\n]+)$/gm;
 /** Nombres que no definen un simbolo (control de flujo / reservadas / accesores). */
@@ -154,6 +160,15 @@ export function findFunctions(file, source, minLines = 3, minSkel = 40) {
     const skel = skeleton(a[2]);
     if (skel.length < minSkel) continue;
     out.push({ file, name: a[1], line: source.slice(0, a.index).split('\n').length, skel });
+  }
+  CONCISE_MULTI.lastIndex = 0;
+  let ml;
+  while ((ml = CONCISE_MULTI.exec(source))) {
+    if (NOT_A_SYMBOL.has(ml[1])) continue;
+    if (!ml[2].includes('\n')) continue;
+    const skel = skeleton(ml[2]);
+    if (skel.length < minSkel) continue;
+    out.push({ file, name: ml[1], line: source.slice(0, ml.index).split('\n').length, skel });
   }
   return out;
 }
