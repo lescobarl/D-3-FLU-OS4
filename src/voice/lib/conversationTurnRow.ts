@@ -169,9 +169,21 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
 export function updateTurnRowSpeaker(
     turnId: number | string | null,
     speakerName: string,
-    { evidenciaAcustica = true }: { evidenciaAcustica?: boolean } = {},
+    {
+        evidenciaAcustica = true,
+        registeredSpeaker,
+    }: {
+        evidenciaAcustica?: boolean;
+        registeredSpeaker?: { registeredLabel?: string; registeredName?: string };
+    } = {},
 ): boolean {
-    const resolved = resolveSpeakerAlias(speakerName);
+    // MISMO DUENO que el commit (`resolveRowSpeakerName`): la resolucion tardia aplica
+    // la MISMA regla (etiqueta automatica -> nombre registrado SOLO con evidencia), no
+    // una copia mas pobre. Antes usaba `resolveSpeakerAlias` a secas, asi que la fila
+    // que rellenaba esta via tardia salia "Hablante N" aunque la persona estuviera
+    // registrada (defecto del dueno: "le puso a un registro Luis y a los demas los dejo
+    // como hablante dos").
+    const resolved = resolveRowSpeakerName(speakerName, evidenciaAcustica, registeredSpeaker);
     if (turnId === null || turnId === undefined || !resolved) return false;
     const rowId =
         recentTurns.get(String(turnId)) ||
