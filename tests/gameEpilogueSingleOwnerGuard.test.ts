@@ -62,7 +62,9 @@ export function countBuildStateOwners(src: string): number {
 
 /** Usos del dueno: la definicion + al menos un camino de arranque. */
 export function countBuildStateUses(src: string): number {
-    return (src.match(/buildState\(/g) || []).length;
+    // Cuenta USOS de buildState, no solo llamadas: delegar la referencia
+    // (`resetGameSession(session, cfg, buildState)`) tambien es usarlo.
+    return (src.match(/\bbuildState\b/g) ?? []).length;
 }
 
 /** Barrido Fisher-Yates a mano: el dueno del barajado es gameUtils.shuffleOrder. */
