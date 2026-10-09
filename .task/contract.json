@@ -1,28 +1,26 @@
 {
-  "task": "P9.49 - el hook cablea el vinculo del participante a la via tardia del nombre (sin tocar el god-file).",
-  "objective": "Cablear el vinculo etiqueta->persona del participante a updateTurnRowSpeaker desde el hook, extrayendo el ref a un modulo de src/app (regla 7.6) para no crecer el god-file.",
-  "base": "8a1d75f",
+  "task": "P9.51 - la repeticion CONTIGUA del ASR se colapsa en cualquier posicion (no solo al inicio).",
+  "objective": "Que el colapsador de repeticiones contiguas elimine el bloque repetido este donde este, y que el caso exacto de la bitacora del dueno (2026-10-09) quede clavado por un guard de comportamiento que nace ROJO.",
+  "base": "c4763b8",
   "allow": [
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "src/app/useParticipantSpeakerRef.ts",
-    "tests/registeredSpeakerNameGuard.test.ts",
+    "src/voice/lib/speechMerge.js",
+    "tests/vozRepeticionAsrGuard.test.ts",
+    "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
   "maxFiles": 6,
   "maxLines": 3000,
-  "dod": [
-    "npx vitest run --reporter=dot tests/useFluVoiceAssistant.behavior.test.tsx tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts"
-  ],
-  "guard": "npx vitest run --reporter=dot tests/registeredSpeakerNameGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts tests/speechMerge.test.ts tests/ingressSimulation.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "El hook pasa el vinculo del participante a la via tardia del nombre.",
+    "statement": "El colapsador recorre TODAS las posiciones del turno (antes solo la cabeza).",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/voice/hooks/useFluVoiceAssistant.js','utf8');console.log((s.match(/registeredSpeaker: participantSpeakerRef\\.current/g)||[]).length)\"",
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/speechMerge.js','utf8');const fn=s.slice(s.indexOf('export function collapseRepeatedSpeech'),s.indexOf('export function collapseAsrStutter'));console.log((fn.match(/start \\+ size \\* 2 <= words\\.length/g)||[]).length)\"",
       "target": 1
     },
     "guardFiles": [
-      "tests/registeredSpeakerNameGuard.test.ts"
+      "tests/vozRepeticionAsrGuard.test.ts"
     ]
   },
   "ignore": [
@@ -31,10 +29,7 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/hooks/useFluVoiceAssistant.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/app/useParticipantSpeakerRef.ts": [
+    "src/voice/lib/speechMerge.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

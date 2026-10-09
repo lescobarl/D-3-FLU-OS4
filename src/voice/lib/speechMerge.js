@@ -41,7 +41,16 @@ export function hasSpeechAnchor(prev = '', next = '') {
   return false
 }
 
-/** Colapsa repeticiones contiguas («foo bar foo bar» → «foo bar»). */
+/**
+ * Colapsa repeticiones contiguas de un bloque de palabras, en CUALQUIER posicion
+ * («foo bar foo bar» -> «foo bar»; «x foo bar foo bar» -> «x foo bar»).
+ *
+ * Antes solo miraba la CABEZA (words[0..size) vs words[size..2size)): una vuelta
+ * del ASR en medio o al final del turno sobrevivia, delante de la repeticion o
+ * detras de un arranque basura. Medido 2026-10-09 (bitacora del dueno):
+ * "cer rando cerrando escucha cerrando escucha" salia tal cual porque el bloque
+ * repetido ("cerrando escucha") NO esta al inicio.
+ */
 export function collapseRepeatedSpeech(text = '') {
   let current = cleanForSpeech(text)
   if (!current) return ''
@@ -51,13 +60,17 @@ export function collapseRepeatedSpeech(text = '') {
     if (words.length < 4) break
 
     let collapsed = false
-    for (let size = Math.floor(words.length / 2); size >= 2; size -= 1) {
-      const head = sliceWordsLower(words, 0, size)
-      const mid = sliceWordsLower(words, size, size * 2)
-      if (head && head === mid) {
-        current = cleanForSpeech(words.slice(0, size).concat(words.slice(size * 2)).join(' '))
-        collapsed = true
-        break
+    for (let size = Math.floor(words.length / 2); size >= 2 && !collapsed; size -= 1) {
+      for (let start = 0; start + size * 2 <= words.length; start += 1) {
+        const head = sliceWordsLower(words, start, start + size)
+        const mid = sliceWordsLower(words, start + size, start + size * 2)
+        if (head && head === mid) {
+          current = cleanForSpeech(
+            words.slice(0, start + size).concat(words.slice(start + size * 2)).join(' '),
+          )
+          collapsed = true
+          break
+        }
       }
     }
     if (!collapsed) break
