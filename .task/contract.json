@@ -55,7 +55,13 @@
     "src/core/autonomy/backupSystem.ts",
     "src/core/autonomy/healthMonitor.ts",
     "src/lib/textUtils.ts",
-    "tests/structureDuplicationGuard.test.ts"
+    "tests/structureDuplicationGuard.test.ts",
+    "src/voice/lib/activeListen.js",
+    "src/voice/lib/conversationDialogue.js",
+    "src/voice/lib/conversationRow.js",
+    "src/core/autonomy/configSnapshot.ts",
+    "tests/conversationStreamCommit.test.ts",
+    "tests/turnSpeakerPreflight.test.ts"
   ],
   "maxFiles": 110,
   "maxLines": 6000,
@@ -69,7 +75,8 @@
     "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx",
     "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts",
     "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx",
-    "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts"
+    "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts",
+    "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/conversationSession.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/validateIntegralCtx.test.ts tests/voiceCanonicalPhrase.test.ts tests/textUtils.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
@@ -206,6 +213,21 @@
       "tests/e2e/autonomia-respaldo.spec.ts"
     ],
     "src/core/autonomy/healthMonitor.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/lib/textUtils.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/voice/lib/activeListen.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/conversationDialogue.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/conversationRow.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/core/autonomy/configSnapshot.ts": [
       "tests/e2e/autonomia-respaldo.spec.ts"
     ]
   }
