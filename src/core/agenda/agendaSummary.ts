@@ -8,6 +8,7 @@
 // consumen ESTO (fuente única de la consulta hablable).
 // ============================================================
 import { dayKey } from '../../lib/dateKey'
+import { formatLocalHHMM } from '../../lib/timeFormat'
 import { itemsInView, type AgendaView } from './agendaQuery';
 import { nextAgendaDue, colorForKind, type AgendaColorMap, type AgendaItem } from './agendaModel';
 
@@ -22,9 +23,9 @@ export interface AgendaSummaryLine {
     dueAt: number;
 }
 
+/** Hora local HH:MM del instante (dueno unico: formatLocalHHMM). */
 function localHHMM(at: number): string {
-    const d = new Date(at);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return formatLocalHHMM(at);
 }
 
 export interface AgendaSummaryResult {

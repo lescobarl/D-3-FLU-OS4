@@ -12,6 +12,7 @@
 // ============================================================
 
 import { normalizeSpaces } from './textUtils';
+import { formatLocalHHMM } from './timeFormat';
 import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
 
 import { pickText } from './uiStrings';
@@ -139,7 +140,7 @@ export function buildDailyAgenda(
 function formatReminderWhen(at: number, language: 'es' | 'en'): string {
     const date = new Date(at);
     const now = new Date();
-    const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    const time = formatLocalHHMM(date);
 
     if (date.toDateString() === now.toDateString()) {
         return pickText(language, 'hoy_a_las_time', { time });

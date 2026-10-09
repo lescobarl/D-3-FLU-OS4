@@ -19,6 +19,7 @@
 // ============================================================
 
 import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
@@ -817,8 +818,6 @@ export class DecisionEngine extends IntervalLifecycle<DecisionEngineConfig> {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalDecisionEngine: DecisionEngine | null = null;
-
 /** Fábrica inyectable del motor global (seam de DI, §2.4). */
 export type DecisionEngineFactory = (config?: Partial<DecisionEngineConfig>) => DecisionEngine;
 
@@ -832,25 +831,21 @@ export function setDecisionEngineFactory(factory: DecisionEngineFactory): void {
     decisionEngineFactory = factory;
 }
 
+const decisionEngineSingleton = createModuleSingleton((config?: Partial<DecisionEngineConfig>) => decisionEngineFactory(config));
+
+/** Instancia global (creada la primera vez con la config dada). */
 export function getDecisionEngine(config?: Partial<DecisionEngineConfig>): DecisionEngine {
-    if (!globalDecisionEngine) {
-        globalDecisionEngine = decisionEngineFactory(config);
-    }
-    return globalDecisionEngine;
+    return decisionEngineSingleton.get(config);
 }
 
 export function startGlobalDecisionEngine(config?: Partial<DecisionEngineConfig>): DecisionEngine {
-    const engine = getDecisionEngine(config);
-    engine.start();
-    return engine;
+    return decisionEngineSingleton.start(config);
 }
 
 export function stopGlobalDecisionEngine(): void {
-    if (globalDecisionEngine) {
-        globalDecisionEngine.stop();
-    }
+    decisionEngineSingleton.stop();
 }
 
 export function getRecentAutonomousDecisions(count: number = 5): AutonomousDecision[] {
-    return globalDecisionEngine?.getRecentDecisions(count) || [];
+    return decisionEngineSingleton.current()?.getRecentDecisions(count) || [];
 }

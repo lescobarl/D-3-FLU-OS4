@@ -19,6 +19,7 @@
 // ============================================================
 
 import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
@@ -863,25 +864,21 @@ export class AutoOptimizationSystem extends IntervalLifecycle<AutoOptimizationCo
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalAutoOptimization: AutoOptimizationSystem | null = null;
+const autoOptimizationSingleton = createModuleSingleton(
+    (config?: Partial<AutoOptimizationConfig>) => AutoOptimizationSystem.create(config),
+);
 
+/** Instancia global (creada la primera vez con la config dada). */
 export function getAutoOptimizationSystem(config?: Partial<AutoOptimizationConfig>): AutoOptimizationSystem {
-    if (!globalAutoOptimization) {
-        globalAutoOptimization = AutoOptimizationSystem.create(config);
-    }
-    return globalAutoOptimization;
+    return autoOptimizationSingleton.get(config);
 }
 
 export function startGlobalAutoOptimization(config?: Partial<AutoOptimizationConfig>): AutoOptimizationSystem {
-    const system = getAutoOptimizationSystem(config);
-    system.start();
-    return system;
+    return autoOptimizationSingleton.start(config);
 }
 
 export function stopGlobalAutoOptimization(): void {
-    if (globalAutoOptimization) {
-        globalAutoOptimization.stop();
-    }
+    autoOptimizationSingleton.stop();
 }
 
 export function getCurrentParameterValues(): Record<OptimizableParameter, number> {

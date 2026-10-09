@@ -1,5 +1,5 @@
 // ============================================================
-import { uncheckAllFlagged } from '../../lib/listOps';
+import { countUnflagged, uncheckAllFlagged } from '../../lib/listOps';
 // Shopping List — Lista de compras (B10)
 // ------------------------------------------------------------
 // Motor puro e inmutable de la lista de compras.
@@ -74,8 +74,9 @@ export function renameItem(items: readonly ShoppingItem[], id: string, label: st
 }
 
 /** Cuenta ítems pendientes. */
+/** Cuantos pendientes: el conteo vive en el dueno unico (src/lib/listOps). */
 export function itemsRemaining(items: readonly ShoppingItem[]): number {
-  return items.filter((item) => !item.checked).length;
+  return countUnflagged(items, (item) => item.checked);
 }
 
 /** Filtra ítems por estado (genérico: sirve para ShoppingItem y variantes persistentes). */

@@ -1,5 +1,5 @@
 import { stripDiacriticsLower } from '../../lib/textUtils';
-import { uncheckAllFlagged } from '../../lib/listOps';
+import { countUnflagged, uncheckAllFlagged } from '../../lib/listOps';
 // ============================================================
 // Notes List — Listado de notas (Pizarrón consolidado)
 // ------------------------------------------------------------
@@ -41,8 +41,9 @@ export function clearDone(items: readonly Note[]): Note[] {
 }
 
 /** Cuenta notas pendientes. */
+/** Cuantos pendientes: el conteo vive en el dueno unico (src/lib/listOps). */
 export function notesRemaining(items: readonly Note[]): number {
-  return items.filter((note) => !note.done).length;
+  return countUnflagged(items, (note) => note.done);
 }
 
 /** Filtra notas por estado (genérico: sirve para Note y variantes persistentes). */

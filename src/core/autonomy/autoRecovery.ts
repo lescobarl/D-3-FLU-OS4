@@ -28,6 +28,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ComponentHealth, HealthMonitor } from './healthMonitor';
 import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
+import { createModuleSingleton } from './serviceSingleton';
 
 /** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
 const RC = AUTONOMY_POLICY.recovery;
@@ -941,17 +942,16 @@ export class AutoRecoverySystem {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalRecoverySystem: AutoRecoverySystem | null = null;
+const autoRecoverySingleton = createModuleSingleton(
+    (config?: Partial<AutoRecoveryConfig>) => AutoRecoverySystem.create(config),
+);
 
+/** Instancia global (creada la primera vez con la config dada). */
 export function getAutoRecoverySystem(config?: Partial<AutoRecoveryConfig>): AutoRecoverySystem {
-    if (!globalRecoverySystem) {
-        globalRecoverySystem = AutoRecoverySystem.create(config);
-    }
-    return globalRecoverySystem;
+    return autoRecoverySingleton.get(config);
 }
 
+/** Devuelve la instancia global; el monitoreo periodico lo aporta el propio sistema. */
 export function startGlobalAutoRecovery(config?: Partial<AutoRecoveryConfig>): AutoRecoverySystem {
-    const system = getAutoRecoverySystem(config);
-    // En una implementación completa, esto iniciaría el monitoreo automático
-    return system;
+    return autoRecoverySingleton.get(config);
 }

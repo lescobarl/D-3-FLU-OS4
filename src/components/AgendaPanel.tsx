@@ -18,6 +18,8 @@ import type { AgendaView } from '../core/agenda/agendaQuery';
 import type { AgendaColorMap, AgendaItem, AgendaKind, AgendaTrigger } from '../core/agenda/agendaModel';
 import { AGENDA_KINDS, nextAgendaDue } from '../core/agenda/agendaModel';
 import { MONTH_DISPLAY_ES, WEEKDAY_DISPLAY_ES } from '../core/temporal/calendarNames';
+import { dayOfWeek } from '../core/temporal/scheduleEngine';
+import { formatLocalHHMM } from '../lib/timeFormat';
 
 const VIEWS: ReadonlyArray<{ key: AgendaView; label: string }> = [
     { key: 'day', label: 'Hoy' },
@@ -83,10 +85,9 @@ function formatDayLabel(ms: number): string {
     return `${WEEKDAY_DISPLAY_ES[d.getDay()]} ${d.getDate()} de ${MONTH_DISPLAY_ES[d.getMonth()]}`;
 }
 
+/** Hora local HH:MM (dueno unico: formatLocalHHMM). */
 function formatTimeLabel(ms: number): string {
-    const d = new Date(ms);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return formatLocalHHMM(ms);
 }
 
 /** Selector de dia: etiquetas derivadas de la fuente canonica (inicial en mayuscula). */
@@ -95,16 +96,12 @@ const WEEK_DAYS: ReadonlyArray<{ day: number; label: string }> = [1, 2, 3, 4, 5,
     label: WEEKDAY_DISPLAY_ES[day].charAt(0).toUpperCase() + WEEKDAY_DISPLAY_ES[day].slice(1),
 }));
 
-function dayOfWeekOf(ms: number): number {
-    return new Date(ms).getDay(); // 0=Domingo..6=Sábado
-}
-
 function itemOccursOnDay(item: AgendaItem, day: number): boolean {
     if (item.status === 'deleted' || item.status === 'done') return false;
     const t = item.trigger;
     if (t.type === 'weekly') return t.daysOfWeek.includes(day);
     if (t.type === 'daily') return true;
-    if (t.type === 'absolute' && t.at !== undefined) return dayOfWeekOf(t.at) === day;
+    if (t.type === 'absolute' && t.at !== undefined) return dayOfWeek(t.at) === day;
     return false;
 }
 

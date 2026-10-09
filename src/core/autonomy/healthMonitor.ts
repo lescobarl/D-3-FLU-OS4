@@ -21,6 +21,7 @@
 // ============================================================
 
 import { IntervalLifecycle } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
 import { fetchTextEngine } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
@@ -938,27 +939,21 @@ export class HealthMonitor extends IntervalLifecycle<HealthMonitorConfig> {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalHealthMonitor: HealthMonitor | null = null;
+const healthMonitorSingleton = createModuleSingleton((config?: Partial<HealthMonitorConfig>) => HealthMonitor.create(config));
 
+/** Instancia global (creada la primera vez con la config dada). */
 export function getHealthMonitor(config?: Partial<HealthMonitorConfig>): HealthMonitor {
-    if (!globalHealthMonitor) {
-        globalHealthMonitor = HealthMonitor.create(config);
-    }
-    return globalHealthMonitor;
+    return healthMonitorSingleton.get(config);
 }
 
 export function startGlobalHealthMonitoring(config?: Partial<HealthMonitorConfig>): HealthMonitor {
-    const monitor = getHealthMonitor(config);
-    monitor.start();
-    return monitor;
+    return healthMonitorSingleton.start(config);
 }
 
 export function stopGlobalHealthMonitoring(): void {
-    if (globalHealthMonitor) {
-        globalHealthMonitor.stop();
-    }
+    healthMonitorSingleton.stop();
 }
 
 export function getSystemHealth(): SystemHealth | null {
-    return globalHealthMonitor?.getLastHealth() || null;
+    return healthMonitorSingleton.current()?.getLastHealth() || null;
 }

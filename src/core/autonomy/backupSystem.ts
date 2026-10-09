@@ -19,6 +19,7 @@
 // ============================================================
 
 import { IntervalLifecycle } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
 import { setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 import { DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
@@ -1140,25 +1141,22 @@ export class BackupSystem extends IntervalLifecycle<BackupSystemConfig> {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalBackupSystem: BackupSystem | null = null;
+const backupSystemSingleton = createModuleSingleton(
+    (config?: Partial<BackupSystemConfig>, backupManager?: IBackupManager) =>
+        new BackupSystem(config, backupManager),
+);
 
+/** Instancia global (creada la primera vez con la config dada). */
 export function getBackupSystem(config?: Partial<BackupSystemConfig>, backupManager?: IBackupManager): BackupSystem {
-    if (!globalBackupSystem) {
-        globalBackupSystem = new BackupSystem(config, backupManager);
-    }
-    return globalBackupSystem;
+    return backupSystemSingleton.get(config, backupManager);
 }
 
 export function startGlobalBackupSystem(config?: Partial<BackupSystemConfig>): BackupSystem {
-    const system = getBackupSystem(config);
-    system.start();
-    return system;
+    return backupSystemSingleton.start(config);
 }
 
 export function stopGlobalBackupSystem(): void {
-    if (globalBackupSystem) {
-        globalBackupSystem.stop();
-    }
+    backupSystemSingleton.stop();
 }
 
 export function createEmergencyBackup(): BackupMetadata | null {
