@@ -4,6 +4,10 @@
   "base": "2c9fc6f",
   "allow": [
     "src/core/games/**",
+    "src/core/autonomy/**",
+    "src/components/catalogPanelEditors.ts",
+    "tests/gameEpilogueSingleOwnerGuard.test.ts",
+    "tests/catalogEditorSaveSingleOwnerGuard.test.ts",
     "src/core/catalogs/catalogRegistry.ts",
     "src/core/branding/paletasCatalog.ts",
     "src/core/environments/ambientesCatalog.ts",
