@@ -37,7 +37,7 @@
     "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts",
     "npx vitest run --reporter=dot tests/decideVoiceTurnDispatch.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/voiceAsrEventShape.test.ts",
     "npx vitest run --reporter=dot tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceSegmenter.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts tests/dodScopeGuard.test.ts",
-    "npx vitest run --reporter=dot tests/fluDevConsole.test.ts tests/fluTranscriptPause.test.ts tests/embeddingFrames.test.ts tests/speakerEmbeddingCore.test.ts tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts"
+    "npx vitest run --reporter=dot tests/fluDevConsole.test.ts tests/fluTranscriptPause.test.ts tests/fluTranscriptMotor.test.ts tests/embeddingFrames.test.ts tests/speakerEmbeddingCore.test.ts tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",

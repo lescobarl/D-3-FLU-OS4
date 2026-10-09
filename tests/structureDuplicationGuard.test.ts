@@ -10,13 +10,10 @@
  * cambiar `for..of` por `forEach` los esquiva. Este guard mide el ESQUELETO: la
  * implementacion, no el nombre.
  *
- * EL BASELINE ES DEUDA DECLARADA, NO PERDON (shrink-only):
- *   - handleSubmit en los 2 editores de catalogo            -> P9.28 (pendiente)
- *   - isFluDevConsolePanelEnabled / isListenTraceEnabled    -> P9.27 (pendiente)
- *   - getXxxCfg (4-6 accesores de FLU_CONFIG)               -> P9.26 (pendiente)
- * El caso "el baseline no tiene entradas muertas" OBLIGA a encogerlo: al cerrar
- * cualquiera de esos pendientes, su entrada tiene que salir o este guard cae.
- * NO se puede AMPLIAR: cualquier grupo nuevo es una violacion.
+ * EL BASELINE ESTA VACIO (2026-10-08): las 3 duplicaciones que declaraba se cerraron
+ * (P9.26 requireConfigBlock, P9.27 resolveDevDebugFlag, P9.28 submitCatalogEditor) y el
+ * trinquete obligo a vaciarlo. Sigue siendo shrink-only: si aparece un grupo nuevo es una
+ * violacion, y NO se puede ampliar el baseline para taparlo.
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
