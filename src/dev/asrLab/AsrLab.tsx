@@ -35,16 +35,7 @@ interface OpenRouterChatResponse {
   error?: { message?: string }
 }
 
-function concat(chunks: Float32Array[]): Float32Array {
-  const total = chunks.reduce((acc, c) => acc + c.length, 0)
-  const out = new Float32Array(total)
-  let offset = 0
-  for (const c of chunks) {
-    out.set(c, offset)
-    offset += c.length
-  }
-  return out
-}
+import { concatFloat32 } from '../../voice/lib/pcmChunks.js';
 
 async function capturePcm(ms: number): Promise<Float32Array> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -63,7 +54,7 @@ async function capturePcm(ms: number): Promise<Float32Array> {
   src.disconnect()
   stream.getTracks().forEach((track) => track.stop())
   await ctx.close()
-  return downsample(concat(chunks), ctx.sampleRate, RATE)
+  return downsample(concatFloat32(chunks), ctx.sampleRate, RATE)
 }
 
 async function runChrome(ms: number): Promise<ProbeResult> {

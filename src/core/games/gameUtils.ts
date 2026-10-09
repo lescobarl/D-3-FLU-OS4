@@ -230,8 +230,7 @@ export function readRounds(
     defaultRounds = 3,
     maxRounds = 20,
 ): number {
-    const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || defaultRounds;
-    return clamp(rounds, 1, maxRounds);
+    return readNumberCfg(cfg, ['rounds', 'defaultRounds'], defaultRounds, maxRounds);
 }
 
 /**
@@ -648,11 +647,38 @@ export function resetGameSession<S>(
 }
 
 /** Lee el maximo de longitud (cfg.longMax / cfg.longitudMax) con fallback y techo. */
+/** Lee el numero de config de la primera clave presente, con fallback y techo. Dueno unico. */
+export function readNumberCfg(
+    cfg: Record<string, unknown> | undefined,
+    keys: readonly string[],
+    fallback: number,
+    ceiling: number,
+): number {
+    let value = Number.NaN;
+    for (const key of keys) {
+        const candidate = Number(cfg?.[key]);
+        if (Number.isFinite(candidate) && candidate !== 0) {
+            value = candidate;
+            break;
+        }
+    }
+    return clamp(Number.isFinite(value) ? value : fallback, 1, ceiling);
+}
+
+/** Lee el maximo de longitud (cfg.longMax / cfg.longitudMax) con fallback y techo. */
 export function readLongMaxCfg(
     cfg: Record<string, unknown> | undefined,
     fallback: number,
     ceiling: number,
 ): number {
-    const longMax = Number(cfg?.longMax) || Number(cfg?.longitudMax) || fallback;
-    return clamp(longMax, 1, ceiling);
+    return readNumberCfg(cfg, ['longMax', 'longitudMax'], fallback, ceiling);
+}
+
+/** Item del cursor actual: `bank[state.order[state.cursor]]` o null. Dueno unico. */
+export function itemAtCursor<S extends { order: readonly number[]; cursor: number }, T>(
+    state: S,
+    bank: readonly T[],
+): T | null {
+    const index = state.order[state.cursor];
+    return index === undefined ? null : bank[index];
 }

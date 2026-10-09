@@ -19,7 +19,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
 import { logCaughtError } from '../lib/caughtError';
-import { localGet, localKeys, localRemove, localSet } from '../core/storage/localStore';
+import { localGet, localKeys, localRemove, localSetSafe } from '../core/storage/localStore';
 import { useIntegrationStore } from '../store/integrationStore';
 
 // ============================================================
@@ -96,15 +96,11 @@ function loadString(key: string, fallback = ''): string {
 }
 
 /**
- * Save a string value to localStorage with error handling.
+ * Save a string value to localStorage tolerando el fallo del almacen.
+ * Envoltorio del dueno unico `localSetSafe` (el try/catch vivia copiado aqui).
  */
 function saveString(key: string, value: string): void {
-    try {
-        localSet(key, value);
-    } catch (e) {
-        logCaughtError('src/hooks/useConfigPersistence.ts', e);
-        // Silently ignore storage errors (quota exceeded, private mode, etc.)
-    }
+    localSetSafe(key, value, 'src/hooks/useConfigPersistence.ts');
 }
 
 // ============================================================

@@ -1,4 +1,5 @@
 import { stripDiacriticsLower } from '../../lib/textUtils';
+import { uncheckAllFlagged } from '../../lib/listOps';
 // ============================================================
 // Notes List — Listado de notas (Pizarrón consolidado)
 // ------------------------------------------------------------
@@ -31,8 +32,7 @@ export type NotesFilter = 'all' | 'pending' | 'done';
 
 /** Marca todas las notas como pendientes (no hechas). */
 export function uncheckAllNotes(items: readonly Note[]): Note[] {
-  const now = Date.now();
-  return items.map((note) => (note.done ? { ...note, done: false, updatedAt: now } : note));
+  return uncheckAllFlagged(items, 'done');
 }
 
 /** Elimina todas las notas marcadas como hechas. */

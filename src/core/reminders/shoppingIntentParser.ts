@@ -1,4 +1,5 @@
 // ============================================================
+import { normalizeSpaces } from '../../lib/textUtils';
 // src/core/reminders/shoppingIntentParser.ts
 // Parser de la LISTA DE COMPRAS (separado del calendario).
 // ------------------------------------------------------------
@@ -42,7 +43,7 @@ const SHOPPING_LIST_EN =
     /^(?:show|open|display)\s+(?:me\s+)?(?:the\s+)?(?:shopping\s+)?list\s*$|^(?:shopping\s+)?list\s*$/i;
 
 function cleanLabel(raw: string): string {
-    return String(raw || '').replace(/\s+/g, ' ').trim();
+    return normalizeSpaces(String(raw || ''));
 }
 
 export function parseShoppingIntent(input: string): ShoppingIntent {

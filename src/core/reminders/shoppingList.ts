@@ -1,4 +1,5 @@
 // ============================================================
+import { uncheckAllFlagged } from '../../lib/listOps';
 // Shopping List — Lista de compras (B10)
 // ------------------------------------------------------------
 // Motor puro e inmutable de la lista de compras.
@@ -57,8 +58,7 @@ export function removeItem(items: readonly ShoppingItem[], id: string): Shopping
 
 /** Marca todos los ítems como no comprados (pendientes). */
 export function uncheckAll(items: readonly ShoppingItem[]): ShoppingItem[] {
-  const now = Date.now();
-  return items.map((item) => (item.checked ? { ...item, checked: false, updatedAt: now } : item));
+  return uncheckAllFlagged(items, 'checked');
 }
 
 /** Elimina todos los ítems marcados. */

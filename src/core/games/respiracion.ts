@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readNumberCfg, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;
@@ -46,10 +46,8 @@ function stepPrompt(step: number): string {
 }
 
 export function createRespiracionEngine(_options?: { random?: RandomSource }): GameEngine<RespiracionState> {
-    const readRondas = (cfg: Record<string, unknown> | undefined): number => {
-        const rondas = Number(cfg?.rondas) || Number(cfg?.defaultRondas) || DEFAULT_RONDAS;
-        return clamp(rondas, 1, MAX_RONDAS);
-    };
+    const readRondas = (cfg: Record<string, unknown> | undefined): number =>
+        readNumberCfg(cfg, ['rondas', 'defaultRondas'], DEFAULT_RONDAS, MAX_RONDAS);
 
     const buildState = (cfg: Record<string, unknown> | undefined): RespiracionState => {
         return {

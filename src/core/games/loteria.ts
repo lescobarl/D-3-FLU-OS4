@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
+import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, itemAtCursor, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -109,8 +109,7 @@ interface LoteriaState {
 }
 
 function cardAt(state: LoteriaState): LoteriaCard | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : LOTERIA_BANK[index];
+    return itemAtCursor(state, LOTERIA_BANK);
 }
 
 function cantarPrompt(state: LoteriaState, intro = 'Siguiente carta: '): string {

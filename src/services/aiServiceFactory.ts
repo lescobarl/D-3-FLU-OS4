@@ -25,7 +25,7 @@ import {
     isAIProvider,
     type AIProvider,
 } from '../core/config/sharedConfig';
-import { localGet, localSet } from '../core/storage/localStore';
+import { localGet, localSetSafe } from '../core/storage/localStore';
 
 // Re-export del tipo canónico (fuente única: sharedConfig.ts) para no romper
 // a los importadores históricos de aiServiceFactory.
@@ -70,12 +70,7 @@ export function getPreferredAIProvider(): AIProvider {
  * Set the preferred AI provider.
  */
 export function setPreferredAIProvider(provider: AIProvider): void {
-    try {
-        localSet(AI_PROVIDER_KEY, provider);
-    } catch (e) {
-        logCaughtError('[catch] src/services/aiServiceFactory.ts', e);
-        // ignore
-    }
+    localSetSafe(AI_PROVIDER_KEY, provider, '[catch] src/services/aiServiceFactory.ts');
 }
 
 /**

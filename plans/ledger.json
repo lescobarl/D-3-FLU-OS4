@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-08",
+  "updated": "2026-10-09",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -1799,6 +1799,13 @@
       "estado": "done",
       "evidencia": "VEREDICTO: 2026-10-08e CERRADO. MEDIDO: `node scripts/auditoria-codigo.mjs` daba \"cuerpos duplicados: 2 grupos\" con isFluDevConsolePanelEnabled/isListenTraceEnabled (ambos `return resolveDevDebugFlag([...])`) y los 4 getXxxCfg/TranscriptPauseCfg (`return requireConfigBlock([...])`): son ENVOLTORIOS de una sola llamada que DELEGAN en su dueno, no copias (7.7.e(5): un detector de higiene tambien sobrecuenta, y lo que se corrige es el DETECTOR). FIX: la regla de façade tiene un solo dueno (scripts/duplication.mjs -> isFacade) y auditoria-codigo.mjs la IMPORTA y la aplica en duplicateBodies. MEDIDO despues: \"cuerpos duplicados: 0 grupos\" y el self-test de las 6 senales sigue disparando. RED: auditCodeSignalsGuard + hygieneIndicatorsGuard + guardMutationGuard VERDES (24 tests). Alcance real (0.23): CUBIERTO=el falso positivo eliminado con una sola fuente del criterio; NO CUBIERTO=la suite completa y el DoD-producto.",
       "origen": "auditoria-codigo-2026-10-08e"
+    },
+    {
+      "id": "P9.38",
+      "titulo": "INSTRUMENTO: la barrera estructural no escaneaba las declaraciones con tipo de retorno (`function f(a): R {`) y sobre-contaba la coincidencia de FORMA entre mapas de literales (falso positivo)",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-09 (auditoria de CODIGO real, no documental). HUECO DE FORMA del detector: el patron de declaracion exigia `) {` entre los parametros y el cuerpo, asi que `function f(a: T): R {` (tipo de retorno explicito) NO se escaneaba. Al cubrirlo aparecieron 8 grupos reales. CERRADOS: (tramo 1) un dueno de \"desmarcar todo\" (`src/lib/listOps.uncheckAllFlagged`) para notesList/shoppingList; `sharedConfig.isMemberOf` para isAIProvider/isTextEngineProvider; `pcmChunks.concatFloat32` (un dueno del concat de PCM) para AsrLab.concat; `normalizeSpaces` (textUtils) para shoppingIntentParser.cleanLabel; (tramo 2) lector numerico unico `readNumberCfg` (gameUtils) para readLongMaxCfg/readRounds/respiracion.readRondas; item del cursor unico `itemAtCursor` (gameUtils) para loteria.cardAt/riddles.riddleAt/trivia.questionAt; escritura tolerante al fallo unica `localSetSafe` (core/storage/localStore) para useConfigPersistence.saveString/aiServiceFactory.setPreferredAIProvider. FALSO POSITIVO declarado: ResultFeed.originClass emparejaba con agendaModel.agendaTriggerAction (mismo esqueleto de 2 comparaciones + fallback, dominios y salidas distintos: clase CSS vs accion de disparo); NO se toco el instrumento: se elimino la coincidencia pasando el mapeo a DATO (tabla ORIGIN_CLASS), que es un mapeo con un solo dueno y no una copia. MEDIDA con `node scripts/duplication.mjs`: grupos 8 -> 0, baseline VACIO, ciegos (minLines=1) 0. Alcance real (obligatorio, 0.23): CUBIERTO=los 8 grupos medidos, las 4 familias unificadas con su test de comportamiento y la barrera en verde; NO CUBIERTO=la suite completa (exige autorizacion expresa) y el DoD-producto (pantalla del dueno).",
+      "origen": "auditoria-codigo-2026-10-09"
     }
   ],
   "done": [

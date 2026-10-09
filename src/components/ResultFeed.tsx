@@ -181,10 +181,14 @@ export function ResultFeed({
     return originOcr;
   };
 
-  const originClass = (origin: ResultOrigin): string => {
-    if (origin === 'web') return 'result-feed__badge--web';
-    if (origin === 'ia') return 'result-feed__badge--ia';
-    return 'result-feed__badge--ocr';
+  // Mapeo DATO, no ramas: la clase del badge segun el origen. Medido 2026-10-09: el
+  // detector estructural emparejaba estas tres ramas con `agendaTriggerAction` (otro
+  // dominio, otra salida); una tabla no es una implementacion duplicada de otra cadena
+  // de ifs. Con la tabla, el mapeo vive UNA vez y el detector no sobre-cuenta forma.
+  const ORIGIN_CLASS: Record<ResultOrigin, string> = {
+    web: 'result-feed__badge--web',
+    ia: 'result-feed__badge--ia',
+    ocr: 'result-feed__badge--ocr',
   };
 
   const filterBtn = (
@@ -227,7 +231,7 @@ export function ResultFeed({
             >
               <div className="result-feed__card-head">
                 <span
-                  className={`result-feed__badge ${originClass(item.origin)}`}
+                  className={`result-feed__badge ${ORIGIN_CLASS[item.origin]}`}
                   title={originLabel(item.origin)}
                 >
                   {originLabel(item.origin)}

@@ -88,6 +88,25 @@ export function localSet(key: string, value: string | number | boolean): void {
   localStorePort().setItem(key, String(value));
 }
 
+/**
+ * Escritura TOLERANTE al fallo del almacen: escribe y, si el almacen falla (cuota,
+ * modo privado), lo registra y SIGUE. Es el dueno unico de "guardar sin propagar el
+ * error del almacen": antes cada consumidor repetia su propio try/catch con su
+ * contexto (useConfigPersistence, aiServiceFactory) y los dos cuerpos eran el mismo.
+ * `localSet` NO captura a proposito (backupSystem reacciona al QuotaExceededError):
+ * si quieres PROPAGAR el fallo, usa `localSet`.
+ * @param key clave del almacen
+ * @param value valor a escribir
+ * @param context contexto del registro de auditoria
+ */
+export function localSetSafe(key: string, value: string | number | boolean, context: string): void {
+  try {
+    localSet(key, value);
+  } catch (e) {
+    logCaughtError(context, e);
+  }
+}
+
 export function localRemove(key: string): void {
   localStorePort().removeItem(key);
 }

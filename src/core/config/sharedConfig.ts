@@ -195,14 +195,19 @@ export const AI_PROVIDER_ROUTES: Readonly<Record<AIProvider, AIProviderRoute>> =
     local: 'text-engine',
 };
 
+/** ¿El valor es una cadena que pertenece a la lista? Un solo dueno del predicado (P9.38). */
+export function isMemberOf(value: unknown, list: readonly string[]): boolean {
+    return typeof value === 'string' && list.includes(value);
+}
+
 /** ¿El valor es un proveedor de IA válido? */
 export function isAIProvider(value: unknown): value is AIProvider {
-    return typeof value === 'string' && (AI_PROVIDERS as readonly string[]).includes(value);
+    return isMemberOf(value, AI_PROVIDERS);
 }
 
 /** ¿El proveedor enruta por el motor de texto OpenAI-compatible? */
 export function isTextEngineProvider(value: string | null | undefined): boolean {
-    return typeof value === 'string' && (TEXT_ENGINE_PROVIDERS as readonly string[]).includes(value);
+    return isMemberOf(value, TEXT_ENGINE_PROVIDERS);
 }
 
 /** Defaults de fal.ai (video text-to-video). */

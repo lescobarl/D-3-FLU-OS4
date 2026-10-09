@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, itemAtCursor, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -75,8 +75,7 @@ interface TriviaState {
 }
 
 function questionAt(state: TriviaState): TriviaQuestion | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : TRIVIA_BANK[index];
+    return itemAtCursor(state, TRIVIA_BANK);
 }
 
 function optionsPrompt(question: TriviaQuestion): string {
