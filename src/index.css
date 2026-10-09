@@ -185,18 +185,10 @@ html {
     padding: 0;
 }
 
-.flu-upload-zone__or {
-    font-size: var(--text-sm);
-    color: var(--text-tertiary, #6a6a7a);
-    margin: 0;
-}
-
-.flu-upload-zone__buttons {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
+/* P9.33: .flu-upload-zone__or y .flu-upload-zone__buttons viven SOLO en
+   styles/unified.css (que este fichero ya importa). Aqui habia una copia con OTROS
+   valores (--text-sm/gap 8px frente a --text-xs/gap 4px): dos fuentes del mismo
+   selector que divergian. El dueno es unified.css. */
 
 .flu-upload-zone__actions {
     display: flex;
