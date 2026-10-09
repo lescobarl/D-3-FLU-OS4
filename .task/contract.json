@@ -51,6 +51,18 @@
     "src/components/panelUtils.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
     "src/components/AmbienteEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
     "src/components/PaletaEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/catalogPanelEditors.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/branding/paletasCatalog.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/environments/ambientesCatalog.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/search/searchCatalog.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/catalogs/catalogRegistry.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/browser/browserProfileService.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/notes/notesService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
+    "src/core/reminders/shoppingService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
+    "src/core/contacts/contactService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
+    "src/core/diary/diaryService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
+    "src/core/db/entityMutations.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
+    "src/index.css": ["tests/e2e/pizarron-funcionalidades.spec.ts"],
     "src/hooks/useEditableFields.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
     "src/core/games/gameUtils.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"]
   }
