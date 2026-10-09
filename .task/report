@@ -4118,3 +4118,39 @@ debug.log), el resto del texto NO numerico, la suite completa y el DoD-producto.
 
 Alcance real (0.23): CUBIERTO=la perdida de items en dictado numerico, su guard y la barrera;
 NO CUBIERTO=los declarados arriba.
+
+========================================================================
+2026-10-09 - P9.55: el cierre por turno VIEJO vuelca la locucion viva
+
+DEFECTO DEL DUENO (su sesion 17:18-17:21): "pierde muchisima transcripcion, la borra de
+ultima frase y no toda la mueve a la conversacion".
+
+MEDIDO (debug.log de esa sesion, VozProbe commit/row + RowTrace):
+  - 18 commits, refresh=true en TODOS; solo 8 escribieron fila.
+  - Los 10 restantes (incluido el turno 1, capture de 474 chars con la cuenta 1..30) NO
+    escribieron fila: el texto quedo en ULTIMA FRASE y se perdio.
+  - El analizador: 51 palabras del asrFinal no estan en NINGUNA fila.
+
+CAUSA RAIZ: el TRIGGER del srGap dispara por SILENCIO o por turno VIEJO (stale); el EVAL
+solo aceptaba SILENCIO. En el log todos los srGap fueron sinceResult=237ms /
+sinceCommit=10272ms: el trigger disparaba y el EVAL respondia 'sr-active'.
+
+Cambios aplicados:
+  - src/voice/lib/conversationStream.js: `evaluateSrGapSegmentCommit` acepta la MISMA
+    condicion que su trigger (silencio O turno viejo). Guardas de duplicado intactas.
+  - tests/vozLocucionVivaLargaGuard.test.ts: caso del turno viejo (ROJO -> verde) +
+    control negativo (turno viejo sin contenido nuevo no duplica).
+
+Validado contra:
+  - Reproduccion ANTES: 'no se escribio ninguna fila: el texto queda en ULTIMA FRASE'
+    (expected 0 to be >= 1). DESPUES: escribe la fila y conserva >60 chars.
+  - Metrica (`staleMs < gapMs`): base=0 -> actual=1 (target 1).
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK (guard base=1 actual=0).
+  - DoD 120/120 VERDE; npm run lint 222 ficheros / 1870 casos VERDE; eslint 0; tsc 0.
+  - Commit: f32dc01.
+
+No validado: la comprobacion en pantalla del dueno; la diarizacion que infla hablantes y
+la propagacion del nombre (comparten raiz); la suite completa y el DoD-producto.
+
+Alcance real (0.23): CUBIERTO=el cierre por turno viejo (la causa de la perdida medida) y
+su barrera; NO CUBIERTO=los declarados arriba.

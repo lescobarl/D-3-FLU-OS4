@@ -1894,6 +1894,13 @@
   ],
   "done": [
     {
+      "id": "P9.55",
+      "commit": "f32dc01",
+      "titulo": "El cierre por turno VIEJO (stale) vuelca la locucion viva: el EVAL del srGap acepta la MISMA condicion que su trigger",
+      "evidencia": "CERRADO 2026-10-09 (commit f32dc01). DEFECTO DEL DUENO (medido en debug.log de su sesion 17:18-17:21): \"pierde muchisima transcripcion, la borra de ultima frase y no toda la mueve a la conversacion\". MEDIDO con el trazo (VozProbe commit/row + RowTrace): 18 commits, refresh=true en TODOS, pero solo 8 escribieron fila; los otros 10 (incluido el turno 1, capture de 474 chars) NO escribieron fila y su texto se perdio (el analizador confirma 51 palabras del asrFinal en NINGUNA fila). CAUSA RAIZ: el TRIGGER `resolveSrGapTrigger` (fluTranscriptPause.js) dispara por SILENCIO **o** turno VIEJO (`sinceCommitMs >= gapMs`), pero el EVAL `evaluateSrGapSegmentCommit` (conversationStream.js) solo aceptaba SILENCIO (`sinceLastResultMs >= gapMs`): en el log TODOS los srGap fueron sinceResult=237ms/sinceCommit=10272ms -> trigger dispara, EVAL responde `sr-active`, cero flush, el texto se queda en ULTIMA FRASE y se pierde al resetear el buffer. FIX: el EVAL acepta las DOS condiciones del trigger (silencio O turno viejo); las guardas de sin-contenido-nuevo/cooldown/minWords siguen evitando duplicar. GUARD en el dueno de la propiedad (tests/vozLocucionVivaLargaGuard.test.ts): ROJO (\"no se escribio ninguna fila\") -> VERDE, con control negativo de turno viejo SIN contenido nuevo. METRICA: `staleMs < gapMs` en conversationStream.js 0 -> 1 (target 1). VALIDADO: `npm run gate` OK (guard base=1 actual=0); DoD 120/120; `npm run lint` 222 ficheros / 1870 casos VERDE; eslint 0; tsc 0. Alcance real (0.23): CUBIERTO=el cierre por turno viejo y su barrera; NO CUBIERTO=la validacion en pantalla del dueno, la diarizacion que infla hablantes y la propagacion del nombre, la suite completa y el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
+    {
       "id": "P9.54",
       "commit": "13f0116",
       "titulo": "Una repeticion de NUMEROS es DATO (cuenta), no eco del ASR: el dictado numerico no pierde items",
