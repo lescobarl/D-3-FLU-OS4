@@ -13,6 +13,8 @@
  * (los ninos del aula) queda como esta; (d) sin registro, '' (no inventa identidad).
  */
 import { describe, expect, it, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { resolveRegisteredSpeakerName } from '../src/voice/lib/speakerLabels.js';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { commitUserTurnRow, resetSpeakerAliases, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
@@ -141,5 +143,23 @@ describe('P9.48 - la resolucion tardia aplica el nombre registrado (un solo duen
     updateTurnRowSpeaker(13, 'Hablante 1', { evidenciaAcustica: true, registeredSpeaker: { registeredLabel: 'Hablante 9', registeredName: 'Luis' } });
     const row = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id);
     expect(row?.speakerName).not.toBe('Luis');
+  });
+});
+
+// P9.48b - el HOOK cablea el vinculo del participante a la via tardia: `applyResolvedSpeaker`
+// pasa `registeredSpeaker` a `updateTurnRowSpeaker` (antes NO lo pasaba -> la via tardia no
+// podia mapear la etiqueta registrada al nombre). Guard de TEXTO sobre el unico escritor del hook.
+describe('P9.48b - el hook cablea el vinculo del participante a la via tardia', () => {
+  const hookSrc = () => readFileSync(join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'), 'utf8');
+
+  it('applyResolvedSpeaker pasa registeredSpeaker a updateTurnRowSpeaker', () => {
+    expect(hookSrc()).toMatch(/updateTurnRowSpeaker\(turnId, speakerName, \{[^}]*registeredSpeaker: participantSpeakerRef\.current/);
+  });
+
+  it('PRUEBA DE DETECTOR: sin el vinculo, la marca no casa', () => {
+    const sinVinculo =
+      'updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length) })';
+    expect(/registeredSpeaker: participantSpeakerRef\.current/.test(sinVinculo)).toBe(false);
+    expect(/registeredSpeaker: participantSpeakerRef\.current/.test('registeredSpeaker: participantSpeakerRef.current')).toBe(true);
   });
 });

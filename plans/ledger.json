@@ -5,6 +5,13 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P9.49",
+      "titulo": "El hook cablea el vinculo del participante a la via tardia del nombre (extraido a src/app por el trinquete del god-file)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: 2026-10-09 CERRADO. Cierra la incompletitud de P9.48: la via tardia ya usaba el dueno unico (`resolveRowSpeakerName`) pero el hook NO le pasaba el vinculo etiqueta->persona (`registeredSpeaker`), asi que no podia mapear la etiqueta registrada del panel al nombre. FIX: el ref del vinculo se extrae a `src/app/useParticipantSpeakerRef.ts` (regla 7.6: el god-file useFluVoiceAssistant.js esta EN su techo y no admite crecer; el bloque se saca a un modulo y se recortan 2 lineas de comentario, net 0) y `applyResolvedSpeaker` pasa `registeredSpeaker: participantSpeakerRef.current`. GUARD de TEXTO nacido ROJO->VERDE medido (en base el hook NO pasa el vinculo) en tests/registeredSpeakerNameGuard.test.ts (P9.48b + prueba de detector). Alcance real (0.23): CUBIERTO=el cableado del vinculo a la via tardia con guard rojo->verde e invariante medido base/actual; NO CUBIERTO=el DoD-producto (su pantalla) y la calibracion de la diarizacion (sigue requiriendo su audio real).",
+      "origen": "auditoria-2026-10-09f"
+    },
+    {
       "id": "P9.48",
       "titulo": "El nombre de la fila tiene UN solo dueno en los DOS caminos: la resolucion tardia usaba una ruta mas pobre (ruta doble del nombre)",
       "estado": "done",

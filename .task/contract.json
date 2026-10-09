@@ -1,25 +1,25 @@
 {
-  "task": "P9.48 - el nombre de la fila del usuario tiene UN solo dueno (resolveRowSpeakerName) en los DOS caminos: el commit y la resolucion tardia.",
-  "objective": "Unificar el nombre de la fila en un solo dueno: la resolucion tardia (updateTurnRowSpeaker) deja de usar una ruta mas pobre (resolveSpeakerAlias) y aplica la MISMA regla que el commit, con el vinculo etiqueta->persona.",
-  "base": "eb104d5",
+  "task": "P9.49 - el hook cablea el vinculo del participante a la via tardia del nombre (sin tocar el god-file).",
+  "objective": "Cablear el vinculo etiqueta->persona del participante a updateTurnRowSpeaker desde el hook, extrayendo el ref a un modulo de src/app (regla 7.6) para no crecer el god-file.",
+  "base": "8a1d75f",
   "allow": [
-    "src/voice/lib/conversationTurnRow.ts",
     "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/app/useParticipantSpeakerRef.ts",
     "tests/registeredSpeakerNameGuard.test.ts",
     "plans/ledger.json"
   ],
   "maxFiles": 6,
   "maxLines": 3000,
   "dod": [
-    "npx vitest run --reporter=dot tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/useFluVoiceAssistant.behavior.test.tsx"
+    "npx vitest run --reporter=dot tests/useFluVoiceAssistant.behavior.test.tsx tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/registeredSpeakerNameGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "La resolucion tardia usa el dueno unico del nombre, no resolveSpeakerAlias(speakerName).",
+    "statement": "El hook pasa el vinculo del participante a la via tardia del nombre.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/conversationTurnRow.ts','utf8');console.log((s.match(/resolveSpeakerAlias\\(speakerName\\)/g)||[]).length)\"",
-      "target": 0
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/hooks/useFluVoiceAssistant.js','utf8');console.log((s.match(/registeredSpeaker: participantSpeakerRef\\.current/g)||[]).length)\"",
+      "target": 1
     },
     "guardFiles": [
       "tests/registeredSpeakerNameGuard.test.ts"
@@ -31,10 +31,10 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/conversationTurnRow.ts": [
+    "src/voice/hooks/useFluVoiceAssistant.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/hooks/useFluVoiceAssistant.js": [
+    "src/app/useParticipantSpeakerRef.ts": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }
