@@ -43,10 +43,22 @@
     "src/core/games/respiracion.ts",
     "src/core/games/loteria.ts",
     "src/core/games/riddles.ts",
-    "src/core/games/trivia.ts"
+    "src/core/games/trivia.ts",
+    "src/lib/timeFormat.ts",
+    "src/lib/dailyAgenda.ts",
+    "src/core/agenda/agendaSummary.ts",
+    "src/components/AgendaPanel.tsx",
+    "src/core/autonomy/serviceSingleton.ts",
+    "src/core/autonomy/autoOptimization.ts",
+    "src/core/autonomy/autoRecovery.ts",
+    "src/core/autonomy/decisionEngine.ts",
+    "src/core/autonomy/backupSystem.ts",
+    "src/core/autonomy/healthMonitor.ts",
+    "src/lib/textUtils.ts",
+    "tests/structureDuplicationGuard.test.ts"
   ],
-  "maxFiles": 70,
-  "maxLines": 4000,
+  "maxFiles": 110,
+  "maxLines": 6000,
   "dod": [
     "npx vitest run --reporter=dot tests/gameCatalog.test.ts tests/gamePlaythrough.test.ts tests/systemMatrix.test.ts tests/commandAndGameCoverage.test.ts tests/gameDomainOwnership.test.ts tests/gameRulesGuards.test.ts tests/gameAccessorSingleOwnerGuard.test.ts tests/gameTurnShapeSingleSourceGuard.test.ts",
     "npx vitest run --reporter=dot tests/abecedario.test.ts tests/adivinaCancion.test.ts tests/adivinaNumero.test.ts tests/ahorcado.test.ts tests/calculoMental.test.ts tests/cuentaConmigo.test.ts tests/cuentoColaborativo.test.ts tests/karaoke.test.ts tests/memoriaSecuencias.test.ts tests/ordenaSecuencia.test.ts tests/simonDice.test.ts",
@@ -56,7 +68,8 @@
     "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts",
     "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx",
     "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts",
-    "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx"
+    "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx",
+    "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
@@ -164,6 +177,36 @@
     ],
     "src/core/games/trivia.ts": [
       "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/lib/timeFormat.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/lib/dailyAgenda.ts": [
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/core/agenda/agendaSummary.ts": [
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/components/AgendaPanel.tsx": [
+      "tests/e2e/cita-agenda.spec.ts"
+    ],
+    "src/core/autonomy/serviceSingleton.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/core/autonomy/autoOptimization.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/core/autonomy/autoRecovery.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/core/autonomy/decisionEngine.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/core/autonomy/backupSystem.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/core/autonomy/healthMonitor.ts": [
+      "tests/e2e/autonomia-respaldo.spec.ts"
     ]
   }
 }
