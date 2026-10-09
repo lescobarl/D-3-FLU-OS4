@@ -1792,6 +1792,13 @@
       "estado": "done",
       "evidencia": "AMPLIACION 2026-10-08e: el residuo declarado (flecha concisa MULTILINEA, una llamada repartida en varias lineas) queda CUBIERTO por CONCISE_MULTI en scripts/duplication.mjs. MEDIDO tras cubrirlo: grupos=0 (no habia duplicados escondidos ahi). --- VEREDICTO: 2026-10-08d CERRADO. scripts/duplication.mjs cubre ahora las flechas ANOTADAS (`const f = (a: T): R => { ... }`) y las concisas anotadas; el helper se generalizo (buildShuffledState/resetGameSession/readLongMaxCfg) para el arranque de los 16 motores. MEDIDO: al cubrirlas aparecieron 10 grupos reales (servicios + buildState/reset/readLongMax) que ya estan a 0 en 78bfab2. RED: 565 tests de juego/servicios en verde + lint:guards 221 ficheros. NO CUBIERTO: flechas concisas MULTILINEA (una llamada repartida en varias lineas sigue fuera del barrido). --- MEDIDO 2026-10-08c: el FN_RE de scripts/duplication.mjs exige `\\)\\s*=>\\s*\\{` entre el cierre de parametros y la flecha, asi que una flecha ANOTADA (`const handleEditorSubmit = async (payload: X): Promise<string | null> => {`) NO se escanea. Caso real medido: handleEditorSubmit era identico en AmbientesPanel y PaletasPanel y la barrera daba 0 grupos (se unifico a mano en af399e6). META: extender el detector a esa forma y re-baselinar (probablemente destapa un lote nuevo de duplicados en un repo con muchas flechas anotadas). NO CUBIERTO: sin tocar codigo.",
       "origen": "auditoria-codigo-2026-10-08c"
+    },
+    {
+      "id": "P9.37",
+      "titulo": "INSTRUMENTO: el auditor de cuerpo EXACTO marcaba como duplicados los envoltorios que la unificacion creo (falso positivo del detector)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: 2026-10-08e CERRADO. MEDIDO: `node scripts/auditoria-codigo.mjs` daba \"cuerpos duplicados: 2 grupos\" con isFluDevConsolePanelEnabled/isListenTraceEnabled (ambos `return resolveDevDebugFlag([...])`) y los 4 getXxxCfg/TranscriptPauseCfg (`return requireConfigBlock([...])`): son ENVOLTORIOS de una sola llamada que DELEGAN en su dueno, no copias (7.7.e(5): un detector de higiene tambien sobrecuenta, y lo que se corrige es el DETECTOR). FIX: la regla de façade tiene un solo dueno (scripts/duplication.mjs -> isFacade) y auditoria-codigo.mjs la IMPORTA y la aplica en duplicateBodies. MEDIDO despues: \"cuerpos duplicados: 0 grupos\" y el self-test de las 6 senales sigue disparando. RED: auditCodeSignalsGuard + hygieneIndicatorsGuard + guardMutationGuard VERDES (24 tests). Alcance real (0.23): CUBIERTO=el falso positivo eliminado con una sola fuente del criterio; NO CUBIERTO=la suite completa y el DoD-producto.",
+      "origen": "auditoria-codigo-2026-10-08e"
     }
   ],
   "done": [

@@ -26,6 +26,13 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+// Regla de FAÇADE: un cuerpo que es UNA sola llamada (`return helper(...)`) es un
+// envoltorio que delega en su dueno, NO una copia. El criterio tiene un solo dueno:
+// scripts/duplication.mjs (la barrera estructural). Medido 2026-10-08: sin esta regla,
+// este auditor marcaba como duplicados los 4 envoltorios de requireConfigBlock y los 2
+// de resolveDevDebugFlag que la unificacion creo a proposito.
+import { isFacade } from './duplication.mjs';
+
 const ROOT = process.cwd();
 
 function walk(dir, acc = []) {
@@ -80,6 +87,7 @@ export function duplicateBodies(sources, minLines = 3) {
       if (!body) continue;
       const lines = body.split('\n').length;
       if (lines < minLines) continue;
+      if (isFacade(body)) continue;
       const key = strip(body);
       if (key.length < 40) continue;
       const entry = { file, name: m[1] || m[2], line: source.slice(0, m.index).split('\n').length };
