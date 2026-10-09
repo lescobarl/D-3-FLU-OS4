@@ -3999,3 +3999,37 @@ real en pantalla (DoD-producto) y la suite completa.
 
 Alcance real (0.23): CUBIERTO=el repaso derivado y el banco por nivel, con guards y simulacion real;
 NO CUBIERTO=log de repasos, nivel por voz, ASR real en pantalla, DoD-producto y suite completa.
+
+========================================================================
+2026-10-09 - P9.51: la repeticion CONTIGUA del ASR se colapsa en cualquier posicion
+
+Cambios aplicados:
+  - src/voice/lib/speechMerge.js: collapseRepeatedSpeech recorre TODAS las posiciones
+    (antes solo la CABEZA: words[0..size) vs words[size..2size)) y quita el bloque
+    contiguo repetido donde este, con la misma guarda de >=4 palabras.
+  - tests/vozRepeticionAsrGuard.test.ts (NUEVO): guard de COMPORTAMIENTO que exige la
+    PROPIEDAD (ningun bloque contiguo repetido tras normalizar) sobre el caso exacto
+    del dueno + la invariante de no comerse una palabra cuya repeticion NO es contigua.
+  - scripts/guard-files.mjs: el guard entra en lint:guards.
+
+Entrada cruda (bitacora del dueno, 2026-10-09): "cer rando cerrando escucha cerrando escucha".
+Esperado: sin la repeticion ("cer rando cerrando escucha").
+
+Validado contra:
+  - Guard NACE ROJO en base c4763b8: `npx vitest run tests/vozRepeticionAsrGuard.test.ts`
+    = 2 failed / 5 (el bloque "cerrando escucha" sobrevive). DESPUES: 5/5 VERDE.
+  - DoD: tests/vozRepeticionAsrGuard + tests/speechMerge + tests/ingressSimulation = 33/33 VERDE.
+  - Metrica del contrato (dentro de collapseRepeatedSpeech): "start + size * 2 <= words.length"
+    base=0 -> actual=1 (target 1).
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK (guard base=1 actual=0).
+  - npm run lint: 222 ficheros / 1863 casos VERDE; eslint 0; tsc -b limpio.
+  - Commits: 3970d18 (fix) + 9d434dd (ledger).
+
+No validado: el resto de los defectos del dueno (D1 perdida de palabras, D2 fila prematura,
+D3 nombre, panel de Participantes mostrando "user", ultima frase sin color, saludo doble del
+onboarding y la diarizacion que infla hablantes); la suite completa (exige autorizacion) y el
+DoD-producto (la pantalla del dueno).
+
+Alcance real (0.23): CUBIERTO=la propiedad de colapso en cualquier posicion, su guard de
+comportamiento y la barrera (lint/gate); NO CUBIERTO=los demas defectos declarados, la suite
+completa y el DoD-producto.
