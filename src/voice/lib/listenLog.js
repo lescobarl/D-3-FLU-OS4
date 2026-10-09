@@ -3,8 +3,8 @@
  * Panel mic: solo vía micIngressLog.js (texto publicado en ingress).
  * Consola chrome-raw: opcional, no alimenta el panel.
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
+import { resolveDevDebugFlag } from './devFlags.js'
 import { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 
 export { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
@@ -35,19 +35,11 @@ function syncListenLogGlobals() {
 }
 
 export function isListenTraceEnabled() {
-  if (!IS_DEV || typeof window === 'undefined') return false
-  if (window.__FLU_LISTEN_DEBUG === false) return false
-  if (window.__FLU_LISTEN_DEBUG === true) return true
-  return FLU_CONFIG.debug?.listenTrace !== false
+  return resolveDevDebugFlag(['__FLU_LISTEN_DEBUG'], 'listenTrace')
 }
 
 export function isChromeRawConsoleEnabled() {
-  if (!IS_DEV || typeof window === 'undefined') return false
-  if (window.__FLU_CHROME_RAW_CONSOLE === false) return false
-  if (window.__FLU_MIC_RAW_CONSOLE === false) return false
-  if (window.__FLU_CHROME_RAW_CONSOLE === true) return true
-  if (window.__FLU_MIC_RAW_CONSOLE === true) return true
-  return FLU_CONFIG.debug?.chromeRawConsole !== false
+  return resolveDevDebugFlag(['__FLU_CHROME_RAW_CONSOLE', '__FLU_MIC_RAW_CONSOLE'], 'chromeRawConsole')
 }
 
 function shouldRecord(stage) {

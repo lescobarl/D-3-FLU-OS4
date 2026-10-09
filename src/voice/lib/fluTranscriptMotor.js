@@ -2,54 +2,30 @@
  * Lectores de config del motor de transcripción/ingress (sin fallbacks numéricos en código).
  * Inventario: docs/reglas-duras.md · validate-pause-config.mjs
  */
-import { FLU_CONFIG } from './fluConfig.js'
+import { requireConfigBlock } from './configGuard.js'
 
 export function getSpeakerThresholdsCfg() {
-  const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.voiceIdentity.capture.conversationSpeakerThresholds es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['voiceIdentity', 'capture', 'conversationSpeakerThresholds'], 'fluConfig.voiceIdentity.capture.conversationSpeakerThresholds')
 }
 
 export function getIngressGuardsCfg() {
-  const cfg = FLU_CONFIG.transcript?.ingressGuards
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.ingressGuards es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'ingressGuards'], 'fluConfig.transcript.ingressGuards')
 }
 
 export function getSpeechMergeCfg() {
-  const cfg = FLU_CONFIG.transcript?.speechMerge
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.speechMerge es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'speechMerge'], 'fluConfig.transcript.speechMerge')
 }
 
 export function getAsrSegmentationCfg() {
-  const cfg = FLU_CONFIG.transcript?.asrSegmentation
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.asrSegmentation es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'asrSegmentation'], 'fluConfig.transcript.asrSegmentation')
 }
 
 export function getProfileMatchCfg() {
-  const cfg = FLU_CONFIG.voiceIdentity?.capture?.profileMatch
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.voiceIdentity.capture.profileMatch es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['voiceIdentity', 'capture', 'profileMatch'], 'fluConfig.voiceIdentity.capture.profileMatch')
 }
 
 export function getFluTimingCfg() {
-  const cfg = FLU_CONFIG.timing
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.timing es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['timing'], 'fluConfig.timing')
 }
 
 /** Set de palabras clave para filas cortas (speechMerge). */

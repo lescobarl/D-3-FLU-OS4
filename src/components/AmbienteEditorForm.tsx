@@ -16,6 +16,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useEditableFields } from '../hooks/useEditableFields';
+import { submitCatalogEditor } from './editorSubmit';
 import {
     ENVIRONMENT_CSS_VAR_KEYS,
     ENVIRONMENT_DECORATIONS,
@@ -74,23 +75,16 @@ export function AmbienteEditorForm({
         }));
     };
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (busy) return;
-        if (!slugifyAmbiente(fields.nombre)) {
-            setError(ui.requiredError || 'El nombre es obligatorio para generar el identificador.');
-            return;
-        }
-        setBusy(true);
-        setError(null);
-        try {
-            const payload = buildAmbientePayload(template, fields);
-            const message = await onSubmit(payload);
-            if (message) setError(message);
-        } finally {
-            setBusy(false);
-        }
-    };
+    const handleSubmit = (event: FormEvent<HTMLFormElement>) =>
+        submitCatalogEditor(event, {
+            busy,
+            setBusy,
+            setError,
+            slug: slugifyAmbiente(fields.nombre),
+            requiredMessage: ui.requiredError || 'El nombre es obligatorio para generar el identificador.',
+            build: () => buildAmbientePayload(template, fields),
+            onSubmit,
+        });
 
     return (
         <form className="flu-settings-section" onSubmit={handleSubmit} data-testid="ambiente-editor-form">

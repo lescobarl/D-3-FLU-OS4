@@ -15,6 +15,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { useEditableFields } from '../hooks/useEditableFields';
+import { submitCatalogEditor } from './editorSubmit';
 import { configChild, configTextMap } from './configText';
 import {
     PALETTE_COLOR_KEYS,
@@ -60,23 +61,16 @@ export function PaletaEditorForm({
         setFields((prev) => ({ ...prev, colors: { ...prev.colors, [key]: value } }));
     };
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (busy) return;
-        if (!slugifyPalette(fields.name)) {
-            setError(ui.requiredError || 'El nombre es obligatorio para generar el identificador.');
-            return;
-        }
-        setBusy(true);
-        setError(null);
-        try {
-            const payload = buildPaletaPayload(template, fields);
-            const message = await onSubmit(payload);
-            if (message) setError(message);
-        } finally {
-            setBusy(false);
-        }
-    };
+    const handleSubmit = (event: FormEvent<HTMLFormElement>) =>
+        submitCatalogEditor(event, {
+            busy,
+            setBusy,
+            setError,
+            slug: slugifyPalette(fields.name),
+            requiredMessage: ui.requiredError || 'El nombre es obligatorio para generar el identificador.',
+            build: () => buildPaletaPayload(template, fields),
+            onSubmit,
+        });
 
     return (
         <form className="flu-settings-section" onSubmit={handleSubmit} data-testid="paleta-editor-form">

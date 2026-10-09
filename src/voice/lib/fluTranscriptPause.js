@@ -2,8 +2,8 @@
  * Pausa / cola ASR débil — lee SOLO fluConfig.transcript.pauseAndWeakAsr (sin fallbacks numéricos aquí).
  * Inventario: docs/reglas-duras.md · listConfiguredTranscriptHardRules()
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import { cleanForSpeech } from './audioMath.js'
+import { requireConfigBlock } from './configGuard.js'
 import { voiceProbe } from './voiceProbe'
 
 export const TRANSCRIPT_PAUSE_KEYS = [
@@ -34,11 +34,7 @@ export const TRANSCRIPT_PAUSE_KEYS = [
 ]
 
 export function getTranscriptPauseCfg() {
-  const cfg = FLU_CONFIG.transcript?.pauseAndWeakAsr
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.pauseAndWeakAsr es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'pauseAndWeakAsr'], 'fluConfig.transcript.pauseAndWeakAsr')
 }
 
 export function listConfiguredTranscriptHardRules() {

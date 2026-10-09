@@ -2,10 +2,10 @@
  * Panel dev: log mic ingress (texto publicado completo, reciente arriba).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { resolveDevDebugFlag } from './devFlags.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 
-const IS_DEV = Boolean(import.meta.env?.DEV)
 const PANEL_ID = 'flu-dev-mic-log'
 const BODY_ID = `${PANEL_ID}-body`
 const POS_KEY = 'flu-dev-mic-log-pos'
@@ -18,10 +18,7 @@ function maxLogLines() {
 }
 
 export function isFluDevConsolePanelEnabled() {
-  if (!IS_DEV || typeof document === 'undefined') return false
-  if (window.__FLU_DEV_CONSOLE_PANEL === false) return false
-  if (window.__FLU_DEV_CONSOLE_PANEL === true) return true
-  return FLU_CONFIG.debug?.micConsolePanel !== false
+  return resolveDevDebugFlag(['__FLU_DEV_CONSOLE_PANEL'], 'micConsolePanel')
 }
 
 function loadPanelPosition(panel) {
