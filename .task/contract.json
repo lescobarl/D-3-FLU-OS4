@@ -29,7 +29,21 @@
     "src/components/PaletaEditorForm.tsx",
     "src/hooks/useEditableFields.ts",
     "tests/structureDuplicationGuard.baseline.json",
-    "plans/ledger.json"
+    "plans/ledger.json",
+    "src/core/storage/localStore.ts",
+    "src/hooks/useConfigPersistence.ts",
+    "src/services/aiServiceFactory.ts",
+    "src/core/config/sharedConfig.ts",
+    "src/core/notes/notesList.ts",
+    "src/core/reminders/shoppingIntentParser.ts",
+    "src/core/reminders/shoppingList.ts",
+    "src/lib/listOps.ts",
+    "src/dev/asrLab/AsrLab.tsx",
+    "src/components/ResultFeed.tsx",
+    "src/core/games/respiracion.ts",
+    "src/core/games/loteria.ts",
+    "src/core/games/riddles.ts",
+    "src/core/games/trivia.ts"
   ],
   "maxFiles": 70,
   "maxLines": 4000,
@@ -41,30 +55,115 @@
     "npx vitest run --reporter=dot tests/catalogRegistry.test.ts tests/dynamicCatalogs.test.ts tests/searchCatalog.test.ts tests/searchCatalogPanel.test.tsx tests/fluSettingsTabView.test.tsx tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts",
     "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts",
     "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx",
-    "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts"
+    "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts",
+    "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
-  "ignore": [".task/**", "scripts/task-gate*.mjs", "kilo.json"],
+  "ignore": [
+    ".task/**",
+    "scripts/task-gate*.mjs",
+    "kilo.json"
+  ],
   "e2eScope": {
-    "src/components/AmbientesPanel.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/PaletasPanel.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/panelUtils.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/AmbienteEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/PaletaEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/components/catalogPanelEditors.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/branding/paletasCatalog.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/environments/ambientesCatalog.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/search/searchCatalog.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/catalogs/catalogRegistry.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/browser/browserProfileService.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/notes/notesService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
-    "src/core/reminders/shoppingService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
-    "src/core/contacts/contactService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
-    "src/core/diary/diaryService.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
-    "src/core/db/entityMutations.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"],
-    "src/index.css": ["tests/e2e/pizarron-funcionalidades.spec.ts"],
-    "src/hooks/useEditableFields.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
-    "src/core/games/gameUtils.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"]
+    "src/components/AmbientesPanel.tsx": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/components/PaletasPanel.tsx": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/components/panelUtils.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/components/AmbienteEditorForm.tsx": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/components/PaletaEditorForm.tsx": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/components/catalogPanelEditors.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/branding/paletasCatalog.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/environments/ambientesCatalog.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/search/searchCatalog.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/catalogs/catalogRegistry.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/browser/browserProfileService.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/notes/notesService.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/reminders/shoppingService.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/contacts/contactService.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/diary/diaryService.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/db/entityMutations.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/index.css": [
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/hooks/useEditableFields.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/games/gameUtils.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/storage/localStore.ts": [
+      "tests/e2e/sesion-un-solo-almacen.spec.ts"
+    ],
+    "src/hooks/useConfigPersistence.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/services/aiServiceFactory.ts": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/core/config/sharedConfig.ts": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/core/notes/notesList.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/reminders/shoppingIntentParser.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/reminders/shoppingList.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/lib/listOps.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/dev/asrLab/AsrLab.tsx": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/components/ResultFeed.tsx": [
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/core/games/respiracion.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/games/loteria.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/games/riddles.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ],
+    "src/core/games/trivia.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    ]
   }
 }
