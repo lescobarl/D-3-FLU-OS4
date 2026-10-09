@@ -74,7 +74,9 @@
     "src/voice/lib/audioMath.js",
     "src/voice/lib/speechMerge.js",
     "src/voice/lib/conversationStream.js",
-    "src/voice/lib/turnTranscript.js"
+    "src/voice/lib/turnTranscript.js",
+    "src/core/multiuser/participantRegistry.ts",
+    "src/avatar/App.css"
   ],
   "maxFiles": 110,
   "maxLines": 6000,
@@ -91,7 +93,8 @@
     "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts",
     "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/conversationSession.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/validateIntegralCtx.test.ts tests/voiceCanonicalPhrase.test.ts tests/textUtils.test.ts",
     "npx vitest run --reporter=dot tests/asrTurnSegmentation.test.ts tests/continuousAudioBuffer.test.ts tests/speakerSoloCoalesce.test.ts tests/captureSensitivityGuard.test.ts",
-    "npx vitest run --reporter=dot tests/decideVoiceTurnDispatch.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts"
+    "npx vitest run --reporter=dot tests/decideVoiceTurnDispatch.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts",
+    "npx vitest run --reporter=dot tests/participantRegistry.test.ts tests/dateKeyGuard.test.ts tests/useParticipants.test.tsx"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
@@ -265,6 +268,9 @@
     ],
     "src/voice/lib/turnTranscript.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/core/multiuser/participantRegistry.ts": [
+      "tests/e2e/matriz-comandos-productivos.spec.ts"
     ]
   }
 }
