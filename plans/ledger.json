@@ -1894,6 +1894,13 @@
   ],
   "done": [
     {
+      "id": "P9.54",
+      "commit": "13f0116",
+      "titulo": "Una repeticion de NUMEROS es DATO (cuenta), no eco del ASR: el dictado numerico no pierde items",
+      "evidencia": "CERRADO 2026-10-09 (commit 13f0116). DEFECTO del dueno: \"se come transcripcion\" (dictado 1..40, falto el 34). REPRODUCIDO determinista: `normalizeMicText('voy en el 31 32 33 34 33 34 35 36 y sigo')` -> `'voy en el 31 32 33 34 35 36 y sigo'` (se comia el bloque '33 34'). CAUSA: los colapsadores de eco (collapseRepeatedSpeech, collapseEchoPhrase, collapseAsrStutter) borraban CUALQUIER bloque contiguo repetido; en un dictado, una repeticion numerica es una CUENTA, no un eco. FIX: helper `isNumericBlock` (bloque = todo numeros) y los TRES colapsadores lo respetan (un bloque de palabras sigue colapsando). GUARD tests/vozRepeticionAsrGuard.test.ts (ROJO: 2 fallos -> VERDE) + casos 1..40 en tests/ingressSimulation.test.ts (antes solo se protegia la cabeza '1 2 3' y el '18'; ahora TODOS los numeros). METRICA: `isNumericBlock(words,` en speechMerge.js 0 -> 4 (target 4). VALIDADO: `npm run gate` OK (metrica base=0 actual=4, guard base=1 actual=0); DoD 72/72; `npm run lint` 222 ficheros / 1868 casos VERDE; eslint 0; tsc 0. Alcance real (0.23): CUBIERTO=la perdida de items en dictado numerico y su barrera; NO CUBIERTO=los defectos que dependen del trazo por turno (D2 fila prematura, diarizacion que infla hablantes y propagacion del nombre, que comparten raiz), el resto del texto no numerico, la suite completa y el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
+    {
       "id": "P9.53",
       "commit": "3618f2b",
       "titulo": "Un solo dueno del saludo de cierre del onboarding (ruta doble App+flujo cerrada)",

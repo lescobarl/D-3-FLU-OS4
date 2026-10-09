@@ -4089,3 +4089,32 @@ la suite completa y el DoD-producto.
 
 Alcance real (0.23): CUBIERTO=la ruta doble del saludo de cierre, su metrica y la barrera;
 NO CUBIERTO=los declarados arriba.
+
+========================================================================
+2026-10-09 - P9.54: una repeticion de NUMEROS es DATO, no eco del ASR
+
+Cambios aplicados:
+  - src/voice/lib/speechMerge.js: helper `isNumericBlock` (bloque = todo numeros) y los
+    TRES colapsadores de eco (collapseRepeatedSpeech, collapseEchoPhrase, collapseAsrStutter)
+    lo respetan: no borran una repeticion de numeros.
+  - tests/vozRepeticionAsrGuard.test.ts: casos de la PROPIEDAD (nace ROJO, 2 fallos).
+  - tests/ingressSimulation.test.ts: casos 1..40 (TODOS los numeros deben estar tras el commit).
+
+Entrada cruda: "se come transcripcion ... en la cuenta 1..40 falto el 34".
+Esperado: el dictado no pierde ningun item.
+
+Validado contra:
+  - Reproduccion determinista ANTES: normalizeMicText('voy en el 31 32 33 34 33 34 35 36 y sigo')
+    = 'voy en el 31 32 33 34 35 36 y sigo'. DESPUES: conserva '33 34 33 34'.
+  - Guard: 2 failed -> 7/7 VERDE. DoD: 72/72 VERDE.
+  - Metrica (`isNumericBlock(words,`): base=0 -> actual=4 (target 4).
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK.
+  - npm run lint: 222 ficheros / 1868 casos VERDE; eslint 0; tsc -b limpio.
+  - Commit: 13f0116.
+
+No validado: D2 (fila escrita antes del corte real), la diarizacion que infla hablantes y la
+propagacion del nombre (comparten raiz: dependen del trazo por turno, hoy inexistente en
+debug.log), el resto del texto NO numerico, la suite completa y el DoD-producto.
+
+Alcance real (0.23): CUBIERTO=la perdida de items en dictado numerico, su guard y la barrera;
+NO CUBIERTO=los declarados arriba.
