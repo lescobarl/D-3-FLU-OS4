@@ -132,7 +132,7 @@ const NOT_A_SYMBOL = new Set([...KEYWORDS, 'constructor', 'get', 'set', 'static'
  * @param {number} minSkel longitud minima del esqueleto
  * @returns {Array<{ file: string, name: string, line: number, skel: string }>}
  */
-export function findFunctions(file, source, minLines = 3, minSkel = 40) {
+export function findFunctions(file, source, minLines = 3, minSkel = 30) {
   const out = [];
   for (const re of FORMS) {
     re.lastIndex = 0;
@@ -206,7 +206,7 @@ export function groupKey(sites) {
  * @param {number} minLines
  * @returns {Array<{ key: string, skel: string, sites: Array<{file:string,name:string,line:number}> }>}
  */
-export function structuralGroups(sources, minLines = 3, minSkel = 40) {
+export function structuralGroups(sources, minLines = 3, minSkel = 30) {
   const bySkel = new Map();
   for (const { file, source } of sources) {
     for (const fn of findFunctions(file, source, minLines, minSkel)) {
@@ -226,14 +226,14 @@ export function structuralGroups(sources, minLines = 3, minSkel = 40) {
  * CEGUERA MEDIDA del detector por el filtro de LINEAS (minLines=1 vs 3): el numero que
  * responde a "lo que la barrera no ve por exigir 3 lineas". Ese numero es un trinquete:
  * solo puede bajar. El eje de la FORMA (minSkel) se declara aparte y MEDIDO 2026-10-09:
- * 40 -> 0 grupos, 30 -> 1 (`isBilingualListenMode`/`isFluSpeaker`/`isCalculatingSpeakerId`,
- * misma comparacion recortada con otro canonico), 25 -> 3 y 20 -> 9. Ese residuo esta en el
- * ledger (P9.41) y NO en el baseline: el baseline no se amplia.
+ * 30 -> 0 (umbral NUEVO, tras cerrar la comparacion recortada), 25 -> 1 (los tres getters
+ * `config.a?.b?.c || {}`) y 20 -> 7. Ese residuo esta en el ledger (P9.41) y NO en el
+ * baseline: el baseline no se amplia.
  * @param {Array<{file: string, source: string}>} sources
  */
 export function blindGroups(sources) {
-  const seen = new Set(structuralGroups(sources, 3, 40).map((g) => g.key));
-  return structuralGroups(sources, 1, 40).filter((g) => !seen.has(g.key));
+  const seen = new Set(structuralGroups(sources, 3, 30).map((g) => g.key));
+  return structuralGroups(sources, 1, 30).filter((g) => !seen.has(g.key));
 }
 
 /**

@@ -10,10 +10,10 @@
  * cambiar `for..of` por `forEach` los esquiva. Este guard mide el ESQUELETO: la
  * implementacion, no el nombre.
  *
- * UMBRAL 40 (2026-10-09): medido otra vez con el arbol limpio, 40 -> 0 y 30 -> 1 grupo REAL
- * (la comparacion recortada de isBilingualListenMode/isFluSpeaker/isCalculatingSpeakerId).
- * El umbral NO baja a 30 mientras ese grupo siga vivo: se declara en el ledger (P9.41) y NO
- * en el baseline (el baseline no se amplia). El umbral es un DATO medido, no una comodidad.
+ * UMBRAL 30 (2026-10-09): con el arbol limpio, 30 -> 0. Se BAJO de 40 a 30 al cerrar la
+ * comparacion recortada; es un DATO medido, no una comodidad. Por debajo queda un residuo
+ * declarado en el ledger P9.41 (25 -> 1 grupo de tres getters de config; 20 -> 7) que NO
+ * entra en el baseline (el baseline no se amplia).
  *
  * COBERTURA DE FORMAS (2026-10-08b): antes el detector solo veia `function` y `const = () => {}`.
  * MEDIDO: con eso daba 0 grupos mientras existian 6 con METODOS (`start`/`stop`/`updateConfig`/
