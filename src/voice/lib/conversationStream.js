@@ -436,7 +436,15 @@ export function evaluateSrGapSegmentCommit(
   if (!gapMs || gapMs <= 0) {
     return { flush: false, capture: '', reason: 'sr-gap-commit-disabled' }
   }
-  if (sinceLastResultMs < gapMs) {
+  // El TRIGGER (`resolveSrGapTrigger`) dispara por SILENCIO o por turno VIEJO
+  // (stale: `sinceCommitMs >= gapMs`). Este EVAL solo aceptaba silencio, asi que un
+  // turno viejo con contenido NUEVO no se volcaba: el texto se quedaba en «ultima
+  // frase» y se perdia al resetear el buffer. Medido 2026-10-09 (log del dueno): 10
+  // de 18 commits no escribieron fila ("se pierde transcripcion"). Se aceptan las
+  // DOS condiciones del trigger; las guardas de abajo (sin contenido nuevo, cooldown)
+  // siguen evitando duplicar la fila.
+  const staleMs = lastCommitAtMs > 0 ? Math.max(0, nowMs - lastCommitAtMs) : 0
+  if (sinceLastResultMs < gapMs && staleMs < gapMs) {
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 

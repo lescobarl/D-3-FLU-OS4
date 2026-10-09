@@ -1,26 +1,25 @@
 {
-  "task": "P9.54 - una repeticion de NUMEROS es DATO (cuenta), no eco del ASR: el dictado numerico no pierde items.",
-  "objective": "Que los colapsadores de eco del ASR no borren un bloque repetido de numeros, para que un dictado tipo '1..40' no pierda items (el dueno reporto que se comio el 34).",
-  "base": "74bfb22",
+  "task": "P9.55 - el cierre por turno VIEJO (stale) vuelca la locucion viva: el EVAL del srGap acepta la MISMA condicion que su trigger.",
+  "objective": "Que la locucion viva de un turno abierto hace rato (stale) con contenido nuevo se escriba en la conversacion, en vez de quedarse solo en ULTIMA FRASE y perderse.",
+  "base": "c2f21ae",
   "allow": [
-    "src/voice/lib/speechMerge.js",
-    "tests/vozRepeticionAsrGuard.test.ts",
-    "tests/ingressSimulation.test.ts",
+    "src/voice/lib/conversationStream.js",
+    "tests/vozLocucionVivaLargaGuard.test.ts",
     "plans/ledger.json"
   ],
   "maxFiles": 6,
   "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts tests/speechMerge.test.ts tests/ingressSimulation.test.ts tests/transcriptionDedupLoss.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts tests/voiceCanonicalPhrase.test.ts tests/conversationStreamCommit.test.ts tests/ingressSimulation.test.ts tests/vozEscenarioInyectado.test.ts tests/turnRowNoDuplicate.test.ts tests/transcriptionDedupLoss.test.ts tests/fluTranscriptPause.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/wakeRowNoiseGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts tests/voiceCanonicalPhrase.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ningun colapsador de eco trata un bloque de NUMEROS como repeticion eliminable.",
+    "statement": "El EVAL del srGap usa la MISMA condicion que su trigger (silencio O turno viejo), no solo silencio.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/speechMerge.js','utf8');console.log((s.match(/isNumericBlock\\(words,/g)||[]).length)\"",
-      "target": 4
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/conversationStream.js','utf8');console.log((s.match(/staleMs < gapMs/g)||[]).length)\"",
+      "target": 1
     },
     "guardFiles": [
-      "tests/vozRepeticionAsrGuard.test.ts"
+      "tests/vozLocucionVivaLargaGuard.test.ts"
     ]
   },
   "ignore": [
@@ -29,7 +28,7 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/speechMerge.js": [
+    "src/voice/lib/conversationStream.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

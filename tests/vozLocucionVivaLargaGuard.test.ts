@@ -87,6 +87,7 @@ function createHarness() {
   return {
     runtime,
     logRowsTextRef,
+    lastCommitAtRef,
     inject(event: unknown) {
       pushMicSpeechEvent(event as never, runtime.queue)
       runtime.drainAll()
@@ -134,5 +135,35 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
   })
   it('SI dispara por silencio del ASR (comportamiento previo, conservado)', () => {
     expect(resolveSrGapTrigger({ sinceLastResultMs: 12000, sinceLastCommitMs: 12000 }).fire).toBe(true)
+  })
+})
+
+describe('turno VIEJO (stale): el srGap NO puede dejar el texto solo en ULTIMA FRASE', () => {
+  it('ASR reciente (no silencio) + turno abierto hace rato -> la fila se escribe igual', () => {
+    const h = createHarness()
+    for (const texto of INTERINOS) {
+      h.inject(chromeEvent([{ isFinal: false, transcript: texto }], 0))
+    }
+    // El turno lleva ABIERTO mas de srGapCommitMs (10 s) sin cerrar, pero el ASR
+    // acaba de entregar un resultado (800 ms): el TRIGGER dispara por STALE y el
+    // EVAL tiene que aceptar esa misma condicion, o el texto se pierde.
+    h.lastCommitAtRef.current = Date.now() - 12000
+    h.srGap(800)
+    const filas = h.logRowsTextRef.current
+    expect(filas.length, 'no se escribio ninguna fila: el texto queda en ULTIMA FRASE').toBeGreaterThanOrEqual(1)
+    expect(filas.join(' ').length).toBeGreaterThan(60)
+  })
+
+  it('turno viejo SIN contenido nuevo NO duplica la fila (guarda conservada)', () => {
+    const h = createHarness()
+    for (const texto of INTERINOS) {
+      h.inject(chromeEvent([{ isFinal: false, transcript: texto }], 0))
+    }
+    h.lastCommitAtRef.current = Date.now() - 12000
+    h.srGap(800)
+    const trasPrimero = h.logRowsTextRef.current.length
+    h.lastCommitAtRef.current = Date.now() - 12000
+    h.srGap(800)
+    expect(h.logRowsTextRef.current.length).toBe(trasPrimero)
   })
 })
