@@ -544,3 +544,74 @@ export function gamePrompt<S, T>(
     if (!item) return empty;
     return render(item);
 }
+
+/** Mensajes por paso del turno de adivinanza; el item y el siguiente son DATO del motor. */
+export interface GuessTurnMessages<I> {
+    done: string;
+    exhausted: (ctx: { score: number }) => string;
+    hint: (item: I) => string;
+    won: (item: I, ctx: { score: number; maxRounds: number }) => string;
+    correct: (item: I, next: I | null) => string;
+    skipped: (item: I, next: I | null) => string;
+    retry: (item: I) => string;
+}
+
+/**
+ * Turno de un motor de adivinanza: fin de partida, item agotado, pista, acierto (con
+ * ronda final y avance de cursor), salto y reintento. Un solo dueno del FLUJO (P9.35):
+ * riddles y veoVeo lo tenian copiado entero; lo unico propio era el predicado de acierto
+ * y los textos.
+ */
+export function runGuessTurn<S extends { phase: string; cursor: number; maxRounds: number; order: readonly number[] }, I>(spec: {
+    session: GameSession;
+    state: S;
+    text: string;
+    itemAt: (state: S) => I | null;
+    matches: (normalized: string, item: I) => boolean;
+    hintFrames: readonly string[];
+    skipFrames: readonly string[];
+    message: GuessTurnMessages<I>;
+}): GameTurnResult {
+    const { session, state, text, message } = spec;
+    if (state.phase === 'done') {
+        return gameOverResult(message.done, session.score);
+    }
+
+    const item = spec.itemAt(state);
+    if (!item) {
+        state.phase = 'done';
+        return gameOverResult(message.exhausted({ score: session.score }), session.score, { animation: 'Dance' });
+    }
+
+    const normalized = normalizeForMatch(text);
+    if (hasAnyToken(normalized, spec.hintFrames)) {
+        return turnResult(message.hint(item), session.score, { emotion: 'thinking' });
+    }
+
+    if (spec.matches(normalized, item)) {
+        session.score += 1;
+        session.round += 1;
+        if (isLastRound(state)) {
+            state.phase = 'done';
+            return gameOverResult(message.won(item, { score: session.score, maxRounds: state.maxRounds }), session.score, {
+                valid: true,
+                won: true,
+                animation: 'Dance',
+            });
+        }
+        state.cursor += 1;
+        const next = spec.itemAt(state);
+        return turnResult(message.correct(item, next), session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
+    }
+
+    if (hasAnyToken(normalized, spec.skipFrames)) {
+        session.round += 1;
+        const finRonda = finishRoundsIfLast(session, state);
+        if (finRonda) return finRonda;
+        state.cursor += 1;
+        const next = spec.itemAt(state);
+        return turnResult(message.skipped(item, next), session.score);
+    }
+
+    return turnResult(message.retry(item), session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
+}

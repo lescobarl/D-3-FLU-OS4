@@ -18,6 +18,7 @@
 //   - Mantiene historial de cambios para rollback
 // ============================================================
 
+import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
@@ -743,10 +744,8 @@ export class ParameterOptimizer {
 // Clase principal de Auto Optimization
 // -----------------------------------------------------------
 
-export class AutoOptimizationSystem {
-    private config: AutoOptimizationConfig;
+export class AutoOptimizationSystem extends IntervalLifecycle<AutoOptimizationConfig> {
     private optimizer: ParameterOptimizer;
-    private evaluationIntervalId: number | null = null;
     
     /** Punto de composición de dependencias (§2.4). */
     static create(
@@ -762,34 +761,15 @@ export class AutoOptimizationSystem {
         config: Partial<AutoOptimizationConfig> = {},
         deps: { optimizer: ParameterOptimizer },
     ) {
-        this.config = { ...DEFAULT_OPTIMIZATION_CONFIG, ...config };
+        super({ ...DEFAULT_OPTIMIZATION_CONFIG, ...config }, 'evaluationInterval');
         this.optimizer = deps.optimizer;
     }
-    
-    start(): void {
-        if (this.evaluationIntervalId !== null || !this.config.enabled) {
-            return;
-        }
-        
-        this.evaluationIntervalId = window.setInterval(() => {
-            this.evaluateAndOptimize().catch(error => {
-                logCaughtError('Error en optimización automática', error);
-            });
-        }, this.config.evaluationInterval);
-        
-        if (this.config.verboseLogging) {
-        }
+    protected tick(): void {
+        fireAndForget(() => this.evaluateAndOptimize(), 'Error en optimizacion automatica');
     }
-    
-    stop(): void {
-        if (this.evaluationIntervalId !== null) {
-            clearInterval(this.evaluationIntervalId);
-            this.evaluationIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-        }
-    }
+
+
+
     
     async evaluateAndOptimize(): Promise<void> {
         if (!this.config.enabled) {
@@ -843,16 +823,7 @@ export class AutoOptimizationSystem {
     getParameterValue(parameter: OptimizableParameter): number {
         return this.optimizer.getParameterValue(parameter);
     }
-    
-    updateConfig(newConfig: Partial<AutoOptimizationConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar si el intervalo cambió
-        if (this.evaluationIntervalId !== null && newConfig.evaluationInterval) {
-            this.stop();
-            this.start();
-        }
-    }
+
     
     getConfig(): AutoOptimizationConfig {
         return { ...this.config };

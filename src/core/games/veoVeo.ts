@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, hasAnyToken, isEngineCommand, readRounds, runGuessTurn, shuffleOrder, stripDiacritics } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -165,58 +165,25 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as VeoVeoState;
-
-            if (state.phase === 'done') {
-                return gameOverResult('Ya terminamos de jugar veo veo. ¿Jugamos otra vez?', session.score);
-            }
-
-            const item = itemAt(state);
-            if (!item) {
-                state.phase = 'done';
-                return gameOverResult(
-                        `¡Se acabaron los objetos! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                        session.score,
-                        { animation: 'Dance' },
-                    );
-            }
-
-            const normalized = normalizeForMatch(text);
-
-            // ¿Pide pista (categoría)?
-            if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return turnResult(`¡Uy! Te doy una pista: es algo de ${item.categoria}. ¿Ya sabes qué es?`, session.score, { emotion: 'thinking' });
-            }
-
-            // ¿Intenta adivinar el objeto?
-            if (hasAnyToken(normalized, item.keywords)) {
-                session.score += 1;
-                session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `¡Correcto, es ${item.nombre}! Completaste ${state.maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
-                            session.score,
-                            { valid: true, won: true, animation: 'Dance' },
-                        );
-                }
-                state.cursor += 1;
-                const next = itemAt(state);
-                return turnResult(`¡Correcto, es ${item.nombre}! ${next ? itemPrompt(next) : ''}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
-            }
-
-            // ¿Salta al siguiente objeto?
-            if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
-                if (finRonda) return finRonda;
-                state.cursor += 1;
-                const next = itemAt(state);
-                return turnResult(`¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`, session.score);
-            }
-
-            // Respuesta incorrecta → reintenta el mismo objeto.
-            return turnResult(`¡Casi! Inténtalo otra vez. ${itemPrompt(item)}`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
+            return runGuessTurn<VeoVeoState, NonNullable<ReturnType<typeof itemAt>>>({
+                session,
+                state: session.state as VeoVeoState,
+                text,
+                itemAt,
+                matches: (normalized, item) => hasAnyToken(normalized, item.keywords),
+                hintFrames: HINT_FRAMES,
+                skipFrames: SKIP_FRAMES,
+                message: {
+                    done: 'Ya terminamos de jugar veo veo. ¿Jugamos otra vez?',
+                    exhausted: ({ score }) => `¡Se acabaron los objetos! Tu puntaje fue ${score}. ¡Muy bien!`,
+                    hint: (item) => `¡Uy! Te doy una pista: es algo de ${item.categoria}. ¿Ya sabes qué es?`,
+                    won: (item, { maxRounds }) =>
+                        `¡Correcto, es ${item.nombre}! Completaste ${maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
+                    correct: (item, next) => `¡Correcto, es ${item.nombre}! ${next ? itemPrompt(next) : ''}`,
+                    skipped: (item, next) => `¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`,
+                    retry: (item) => `¡Casi! Inténtalo otra vez. ${itemPrompt(item)}`,
+                },
+            });
         },
 
         isGameCommand(text = ''): boolean {

@@ -18,6 +18,7 @@
 //   - Registra justificación de cada decisión
 // ============================================================
 
+import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
@@ -617,11 +618,9 @@ class DecisionMaker {
 // Clase principal del Decision Engine
 // -----------------------------------------------------------
 
-export class DecisionEngine {
-    private config: DecisionEngineConfig;
+export class DecisionEngine extends IntervalLifecycle<DecisionEngineConfig> {
     private decisionMaker: DecisionMaker;
     private factorEvaluator: FactorEvaluator;
-    private evaluationIntervalId: number | null = null;
     private decisionHistory: AutonomousDecision[] = [];
     
     /**
@@ -642,35 +641,16 @@ export class DecisionEngine {
         config: Partial<DecisionEngineConfig> = {},
         deps: { decisionMaker: DecisionMaker; factorEvaluator: FactorEvaluator },
     ) {
-        this.config = { ...DEFAULT_DECISION_CONFIG, ...config };
+        super({ ...DEFAULT_DECISION_CONFIG, ...config }, 'evaluationInterval');
         this.decisionMaker = deps.decisionMaker;
         this.factorEvaluator = deps.factorEvaluator;
     }
-    
-    start(): void {
-        if (this.evaluationIntervalId !== null || !this.config.enabled) {
-            return;
-        }
-        
-        this.evaluationIntervalId = window.setInterval(() => {
-            this.evaluateAndDecide().catch(error => {
-                logCaughtError('Error en evaluación de decisiones', error);
-            });
-        }, this.config.evaluationInterval);
-        
-        if (this.config.verboseLogging) {
-        }
+    protected tick(): void {
+        fireAndForget(() => this.evaluateAndDecide(), 'Error en evaluacion de decisiones');
     }
-    
-    stop(): void {
-        if (this.evaluationIntervalId !== null) {
-            clearInterval(this.evaluationIntervalId);
-            this.evaluationIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-        }
-    }
+
+
+
     
     async evaluateAndDecide(): Promise<AutonomousDecision | null> {
         if (!this.config.enabled) {
@@ -810,16 +790,7 @@ export class DecisionEngine {
     clearDecisionHistory(): void {
         this.decisionHistory = [];
     }
-    
-    updateConfig(newConfig: Partial<DecisionEngineConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar si el intervalo cambió
-        if (this.evaluationIntervalId !== null && newConfig.evaluationInterval) {
-            this.stop();
-            this.start();
-        }
-    }
+
     
     getConfig(): DecisionEngineConfig {
         return { ...this.config };

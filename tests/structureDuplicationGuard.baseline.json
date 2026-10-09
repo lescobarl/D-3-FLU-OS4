@@ -1,6 +1,1 @@
-[
-  "src/core/autonomy/autoOptimization.ts:start | src/core/autonomy/decisionEngine.ts:start",
-  "src/core/autonomy/autoOptimization.ts:stop | src/core/autonomy/backupSystem.ts:stop | src/core/autonomy/decisionEngine.ts:stop | src/core/autonomy/healthMonitor.ts:stop",
-  "src/core/autonomy/autoOptimization.ts:updateConfig | src/core/autonomy/backupSystem.ts:updateConfig | src/core/autonomy/decisionEngine.ts:updateConfig | src/core/autonomy/healthMonitor.ts:updateConfig",
-  "src/core/games/riddles.ts:turn | src/core/games/veoVeo.ts:turn"
-]
+[]

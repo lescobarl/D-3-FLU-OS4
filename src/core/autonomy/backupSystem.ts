@@ -18,6 +18,7 @@
 //   - Integración con sistema de recuperación
 // ============================================================
 
+import { IntervalLifecycle } from './intervalLifecycle';
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
 import { setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 import { DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
@@ -1018,42 +1019,24 @@ class BackupManager implements IBackupManager {
 // Clase principal del Backup System
 // -----------------------------------------------------------
 
-export class BackupSystem {
-    private config: BackupSystemConfig;
+export class BackupSystem extends IntervalLifecycle<BackupSystemConfig> {
     private backupManager: IBackupManager;
-    private autoBackupIntervalId: number | null = null;
     
     constructor(config: Partial<BackupSystemConfig> = {}, backupManager?: IBackupManager) {
-        this.config = { ...DEFAULT_BACKUP_CONFIG, ...config };
+        super({ ...DEFAULT_BACKUP_CONFIG, ...config }, 'autoBackupInterval');
         this.backupManager = backupManager ?? BackupManager.create();
     }
-    
     start(): void {
-        if (this.autoBackupIntervalId !== null || !this.config.enabled) {
-            return;
-        }
-        
-        // Ejecutar backup inicial
         this.performAutoBackup();
-        
-        // Configurar intervalo para backups automáticos
-        this.autoBackupIntervalId = window.setInterval(() => {
-            this.performAutoBackup();
-        }, this.config.autoBackupInterval);
-        
-        if (this.config.verboseLogging) {
-        }
+        super.start();
     }
-    
-    stop(): void {
-        if (this.autoBackupIntervalId !== null) {
-            clearInterval(this.autoBackupIntervalId);
-            this.autoBackupIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-        }
+
+    protected tick(): void {
+        this.performAutoBackup();
     }
+
+
+
     
     performAutoBackup(): BackupMetadata | null {
         if (!this.config.enabled) {
@@ -1146,16 +1129,7 @@ export class BackupSystem {
             averageSizeKB: Math.round(sizeStats.average / 1024) || 0,
         };
     }
-    
-    updateConfig(newConfig: Partial<BackupSystemConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar si el intervalo cambió
-        if (this.autoBackupIntervalId !== null && newConfig.autoBackupInterval) {
-            this.stop();
-            this.start();
-        }
-    }
+
     
     getConfig(): BackupSystemConfig {
         return { ...this.config };

@@ -20,6 +20,7 @@
 //   - Integración con sistema de recuperación automática
 // ============================================================
 
+import { IntervalLifecycle } from './intervalLifecycle';
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
 import { fetchTextEngine } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
@@ -731,10 +732,8 @@ export function calculateOverallStatus(components: ComponentHealth[]): HealthSta
  */
 export type ComponentCheckers = Record<string, () => Promise<ComponentHealth>>;
 
-export class HealthMonitor {
-    private config: HealthMonitorConfig;
+export class HealthMonitor extends IntervalLifecycle<HealthMonitorConfig> {
     private metricTracker: HealthMetricTracker;
-    private monitoringIntervalId: number | null = null;
     private startPromise: Promise<void> | null = null;
     private lastSystemHealth: SystemHealth | null = null;
     private listeners: Array<(health: SystemHealth) => void> = [];
@@ -755,7 +754,7 @@ export class HealthMonitor {
         config: Partial<HealthMonitorConfig> = {},
         deps: { metricTracker: HealthMetricTracker; componentCheckers?: ComponentCheckers },
     ) {
-        this.config = { ...DEFAULT_HEALTH_CONFIG, ...config };
+        super({ ...DEFAULT_HEALTH_CONFIG, ...config }, 'monitoringInterval');
         this.metricTracker = deps.metricTracker;
         
         this.componentCheckers = deps.componentCheckers ?? {
@@ -771,7 +770,7 @@ export class HealthMonitor {
 
     async start(): Promise<void> {
         // Si el monitoreo ya está en marcha (intervalo activo), no hacer nada.
-        if (this.monitoringIntervalId !== null) {
+        if (this.intervalId !== null) {
             return;
         }
 
@@ -789,7 +788,7 @@ export class HealthMonitor {
             await this.performHealthCheck();
 
             // Configurar intervalo de monitoreo
-            this.monitoringIntervalId = window.setInterval(() => {
+            this.intervalId = window.setInterval(() => {
                 this.performHealthCheck().catch(error => {
                     logCaughtError('Error en verificación de salud', error);
                 });
@@ -804,15 +803,11 @@ export class HealthMonitor {
         return this.startPromise;
     }
 
-    stop(): void {
-        if (this.monitoringIntervalId !== null) {
-            clearInterval(this.monitoringIntervalId);
-            this.monitoringIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-        }
+    protected tick(): void {
+        void this.performHealthCheck();
     }
+
+
 
     async performHealthCheck(): Promise<SystemHealth> {
         Date.now();
@@ -929,15 +924,6 @@ export class HealthMonitor {
         }
     }
 
-    updateConfig(newConfig: Partial<HealthMonitorConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar monitoreo si el intervalo cambió
-        if (this.monitoringIntervalId !== null && newConfig.monitoringInterval) {
-            this.stop();
-            this.start();
-        }
-    }
 
     getConfig(): HealthMonitorConfig {
         return { ...this.config, monitoredComponents: [...this.config.monitoredComponents] };

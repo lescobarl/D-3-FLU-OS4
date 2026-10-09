@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, gamePrompt, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, gamePrompt, hasAnyToken, isEngineCommand, readRounds, runGuessTurn, shuffleOrder, turnResult } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -151,58 +151,26 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as RiddlesState;
-
-            if (state.phase === 'done') {
-                return gameOverResult('Ya terminamos las adivinanzas. ¿Jugamos otra vez?', session.score);
-            }
-
-            const riddle = riddleAt(state);
-            if (!riddle) {
-                state.phase = 'done';
-                return gameOverResult(
-                        `¡Se acabaron las adivinanzas! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                        session.score,
-                        { animation: 'Dance' },
-                    );
-            }
-
-            const normalized = normalizeForMatch(text);
-
-            // ¿Pide pista?
-            if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return turnResult(`Aquí va una pista: ${riddle.pista}`, session.score, { emotion: 'thinking' });
-            }
-
-            // ¿Intenta responder?
-            if (hasAnyToken(normalized, riddle.respuesta)) {
-                session.score += 1;
-                session.round += 1;
-                if (isLastRound(state)) {
-                    state.phase = 'done';
-                    return gameOverResult(
-                            `¡Correcto, era ${riddle.respuesta[0]}! Completaste ${state.maxRounds} adivinanzas con ${session.score} puntos. ¡Eres muy listo!`,
-                            session.score,
-                            { valid: true, won: true, animation: 'Dance' },
-                        );
-                }
-                state.cursor += 1;
-                const next = riddleAt(state);
-                return turnResult(`¡Correcto, era ${riddle.respuesta[0]}! Siguiente: ${next ? next.pregunta : ''} ¿Qué soy?`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
-            }
-
-            // ¿Salta a la siguiente?
-            if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
-                if (finRonda) return finRonda;
-                state.cursor += 1;
-                const next = riddleAt(state);
-                return turnResult(`¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`, session.score);
-            }
-
-            // Respuesta incorrecta → reintenta la misma.
-            return turnResult(`¡Casi! Inténtalo otra vez. ${riddle.pregunta} ¿Qué soy?`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
+            return runGuessTurn<RiddlesState, NonNullable<ReturnType<typeof riddleAt>>>({
+                session,
+                state: session.state as RiddlesState,
+                text,
+                itemAt: riddleAt,
+                matches: (normalized, riddle) => hasAnyToken(normalized, riddle.respuesta),
+                hintFrames: HINT_FRAMES,
+                skipFrames: SKIP_FRAMES,
+                message: {
+                    done: 'Ya terminamos las adivinanzas. ¿Jugamos otra vez?',
+                    exhausted: ({ score }) => `¡Se acabaron las adivinanzas! Tu puntaje fue ${score}. ¡Muy bien!`,
+                    hint: (riddle) => `Aquí va una pista: ${riddle.pista}`,
+                    won: (riddle, { score, maxRounds }) =>
+                        `¡Correcto, era ${riddle.respuesta[0]}! Completaste ${maxRounds} adivinanzas con ${score} puntos. ¡Eres muy listo!`,
+                    correct: (riddle, next) =>
+                        `¡Correcto, era ${riddle.respuesta[0]}! Siguiente: ${next ? next.pregunta : ''} ¿Qué soy?`,
+                    skipped: (_riddle, next) => `¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`,
+                    retry: (riddle) => `¡Casi! Inténtalo otra vez. ${riddle.pregunta} ¿Qué soy?`,
+                },
+            });
         },
 
         isGameCommand(text = ''): boolean {

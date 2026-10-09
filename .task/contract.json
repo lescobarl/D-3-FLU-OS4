@@ -25,7 +25,8 @@
     "npx vitest run --reporter=dot tests/palabrasEncadenadas.test.ts tests/pronunciacion.test.ts tests/quienSoy.test.ts tests/quienSoyMention.test.ts tests/quienSoySiNo.test.ts tests/repiteTraduce.test.ts tests/respiracion.test.ts tests/riddles.test.ts tests/trabalenguas.test.ts tests/trivia.test.ts tests/veoVeo.test.ts tests/storyteller.test.ts",
     "npx vitest run --reporter=dot tests/loteria.test.ts tests/loteriaAdvance.test.ts tests/gameCommandEscape.test.ts tests/gameEngine.test.ts tests/gamesAudit.test.ts tests/injectedValues.test.ts",
     "npx vitest run --reporter=dot tests/catalogRegistry.test.ts tests/dynamicCatalogs.test.ts tests/searchCatalog.test.ts tests/searchCatalogPanel.test.tsx tests/fluSettingsTabView.test.tsx tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts",
-    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts"
+    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts",
+    "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
