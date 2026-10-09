@@ -122,3 +122,38 @@ describe('P9.17 el store no es un segundo escritor de la fila', () => {
         expect(filas[filas.length - 1].text).toBe('hola que tal');
     });
 });
+
+// P9.47 - el store NO escribe el hablante de una fila YA existente. El UNICO sitio
+// que escribe el hablante de la fila del usuario es `commitUserTurnRow`
+// (conversationTurnRow.ts). Un mutador del store que reescriba `speakerName` de una
+// entrada existente es un SEGUNDO escritor del MISMO dato (ruta doble latente):
+// `setConversationEntrySpeaker` lo era (0 llamadores) y se retiro. La barrera lo fija
+// por FORMA (spread de la entrada), no por nombre.
+export function rowSpeakerWriters(src: string): string[] {
+    return src.match(/\{\s*\.\.\.\s*\w+\s*,\s*speakerName/g) || [];
+}
+
+describe('P9.47 el store no escribe el hablante de una fila existente', () => {
+    const storeSrc = () =>
+        readFileSync(join(process.cwd(), 'src', 'store', 'integrationStore.ts'), 'utf8');
+
+    it('ningun mutador del store reescribe el hablante de la fila (escritor unico)', () => {
+        const hits = rowSpeakerWriters(storeSrc());
+        expect(hits, `escritores del hablante en el store: ${JSON.stringify(hits)}`).toHaveLength(0);
+    });
+
+    it('el segundo escritor retirado NO vuelve', () => {
+        expect(storeSrc().includes('setConversationEntrySpeaker')).toBe(false);
+    });
+});
+
+// P2.4 - prueba de DETECTOR (mutacion): sintetico infractor, la marca. Si el guard
+// siguiera verde con el escritor inyectado, seria teatro.
+describe('P9.47 - el detector no es decorativo (prueba de mutacion)', () => {
+    it('marca el escritor sintetico y NO la fila nueva', () => {
+        expect(rowSpeakerWriters('{ ...entry, speakerName }')).toHaveLength(1);
+        expect(rowSpeakerWriters('{ ...e, speakerName }')).toHaveLength(1);
+        expect(rowSpeakerWriters("speakerName: 'FLU'")).toHaveLength(0);
+        expect(rowSpeakerWriters('{ ...entry, text }')).toHaveLength(0);
+    });
+});

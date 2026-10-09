@@ -5,6 +5,13 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P9.47",
+      "titulo": "El hablante de la fila del usuario tiene UN solo escritor: el store deja de ser segundo escritor (barrera por forma)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: 2026-10-09 CERRADO. MEDIDO: `setConversationEntrySpeaker` (src/store/integrationStore.ts) escribia el `speakerName` de una fila YA existente (spread de la entrada) y NO tenia llamadores en src ni tests: segundo escritor latente del MISMO dato (la fila del usuario), misma forma que el `addUserMessage` que cerro P9.17. CAUSA: el guard `conversationTurnRowSingleWriter` cubria `addUserMessage` pero NO esta forma (7.7.d: el guard no alcanzaba todas las formas). FIX: se retira el mutador (interfaz + impl) -> el hablante de la fila lo escribe SOLO `commitUserTurnRow`. GUARD nacido por FORMA (no por nombre): `rowSpeakerWriters` marca el spread `{ ...entry, speakerName }`; ROJO->VERDE medido con el src de base (base=1 -> actual=0) y caso sintetico de mutacion. Alcance real (0.23): CUBIERTO=el segundo escritor retirado y la barrera por forma con prueba de detector; NO CUBIERTO=el DoD-producto (su pantalla) y la suite completa.",
+      "origen": "auditoria-2026-10-09d"
+    },
+    {
       "id": "P8.28",
       "titulo": "Mecanismo NO reproducido de la perdida del cuerpo en un turno de contrato (P8.27 cerro el sintoma: el proxy ya no genera sin transcript)",
       "estado": "done",

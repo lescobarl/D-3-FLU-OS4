@@ -1,277 +1,37 @@
 {
-  "task": "ENMIENDA (autorizada: 'Resuelvelos de una vez', 2026-10-08c). Campana: eliminar las duplicaciones estructurales declaradas (P9.35) y los hallazgos P9.29/P9.31/P9.32, familia por familia, con la barrera como rojo. Los 'createSession'/'isGameCommand' de los 22 motores, el adaptador+CRUD de los 3 catalogos, el 'startClone' de los paneles y el setter de los formularios quedan en UN dueno.",
-  "objective": "Bajar los grupos de duplicacion estructural de 13 a los minimos posibles, dejando en un solo dueno cada familia tocada, sin cambiar conducta (los tests de juego y de catalogo son la red).",
-  "base": "2c9fc6f",
+  "task": "P9.47 - el hablante de la fila del usuario tiene UN solo escritor (el store deja de ser segundo escritor).",
+  "objective": "Retirar el segundo escritor del hablante de la fila del usuario (setConversationEntrySpeaker) y blindarlo por FORMA con el guard del escritor unico.",
+  "base": "ce31ed7",
   "allow": [
-    "src/core/games/**",
-    "src/index.css",
-    "src/core/autonomy/**",
-    "src/core/db/entityMutations.ts",
-    "src/core/notes/notesService.ts",
-    "src/core/reminders/shoppingService.ts",
-    "src/core/contacts/contactService.ts",
-    "src/core/diary/diaryService.ts",
-    "src/core/browser/browserProfileService.ts",
-    "scripts/duplication.mjs",
-    "scripts/auditoria-codigo.mjs",
-    "tests/gameEpilogueSingleOwnerGuard.test.ts",
-    "src/components/catalogPanelEditors.ts",
-    "tests/gameEpilogueSingleOwnerGuard.test.ts",
-    "tests/catalogEditorSaveSingleOwnerGuard.test.ts",
-    "src/core/catalogs/catalogRegistry.ts",
-    "src/core/branding/paletasCatalog.ts",
-    "src/core/environments/ambientesCatalog.ts",
-    "src/core/search/searchCatalog.ts",
-    "src/components/AmbientesPanel.tsx",
-    "src/components/PaletasPanel.tsx",
-    "src/components/panelUtils.ts",
-    "src/components/AmbienteEditorForm.tsx",
-    "src/components/PaletaEditorForm.tsx",
-    "src/hooks/useEditableFields.ts",
-    "tests/structureDuplicationGuard.baseline.json",
-    "plans/ledger.json",
-    "src/core/storage/localStore.ts",
-    "src/hooks/useConfigPersistence.ts",
-    "src/services/aiServiceFactory.ts",
-    "src/core/config/sharedConfig.ts",
-    "src/core/notes/notesList.ts",
-    "src/core/reminders/shoppingIntentParser.ts",
-    "src/core/reminders/shoppingList.ts",
-    "src/lib/listOps.ts",
-    "src/dev/asrLab/AsrLab.tsx",
-    "src/components/ResultFeed.tsx",
-    "src/core/games/respiracion.ts",
-    "src/core/games/loteria.ts",
-    "src/core/games/riddles.ts",
-    "src/core/games/trivia.ts",
-    "src/lib/timeFormat.ts",
-    "src/lib/dailyAgenda.ts",
-    "src/core/agenda/agendaSummary.ts",
-    "src/components/AgendaPanel.tsx",
-    "src/core/autonomy/serviceSingleton.ts",
-    "src/core/autonomy/autoOptimization.ts",
-    "src/core/autonomy/autoRecovery.ts",
-    "src/core/autonomy/decisionEngine.ts",
-    "src/core/autonomy/backupSystem.ts",
-    "src/core/autonomy/healthMonitor.ts",
-    "src/lib/textUtils.ts",
-    "tests/structureDuplicationGuard.test.ts",
-    "src/voice/lib/activeListen.js",
-    "src/voice/lib/conversationDialogue.js",
-    "src/voice/lib/conversationRow.js",
-    "src/core/autonomy/configSnapshot.ts",
-    "tests/conversationStreamCommit.test.ts",
-    "tests/turnSpeakerPreflight.test.ts",
-    "src/voice/lib/configGuard.js",
-    "src/voice/lib/embeddingConfig.js",
-    "src/voice/lib/micCapture.js",
-    "src/voice/lib/speakerPolicy.js",
-    "src/voice/lib/asrTurnSegmentation.js",
-    "src/voice/lib/wakePolicy.js",
-    "src/lib/downloadFile.ts",
-    "src/components/FluSettingsPanel.tsx",
-    "src/components/GenerationProgressPanel.tsx",
-    "src/voice/lib/audioMath.js",
-    "src/voice/lib/speechMerge.js",
-    "src/voice/lib/conversationStream.js",
-    "src/voice/lib/turnTranscript.js",
-    "src/core/multiuser/participantRegistry.ts",
-    "src/avatar/App.css",
-    "AGENTS.md"
+    "src/store/integrationStore.ts",
+    "tests/conversationTurnRowSingleWriter.test.ts",
+    "plans/ledger.json"
   ],
-  "maxFiles": 110,
-  "maxLines": 6000,
+  "maxFiles": 5,
+  "maxLines": 2000,
   "dod": [
-    "npx vitest run --reporter=dot tests/gameCatalog.test.ts tests/gamePlaythrough.test.ts tests/systemMatrix.test.ts tests/commandAndGameCoverage.test.ts tests/gameDomainOwnership.test.ts tests/gameRulesGuards.test.ts tests/gameAccessorSingleOwnerGuard.test.ts tests/gameTurnShapeSingleSourceGuard.test.ts",
-    "npx vitest run --reporter=dot tests/abecedario.test.ts tests/adivinaCancion.test.ts tests/adivinaNumero.test.ts tests/ahorcado.test.ts tests/calculoMental.test.ts tests/cuentaConmigo.test.ts tests/cuentoColaborativo.test.ts tests/karaoke.test.ts tests/memoriaSecuencias.test.ts tests/ordenaSecuencia.test.ts tests/simonDice.test.ts",
-    "npx vitest run --reporter=dot tests/palabrasEncadenadas.test.ts tests/pronunciacion.test.ts tests/quienSoy.test.ts tests/quienSoyMention.test.ts tests/quienSoySiNo.test.ts tests/repiteTraduce.test.ts tests/respiracion.test.ts tests/riddles.test.ts tests/trabalenguas.test.ts tests/trivia.test.ts tests/veoVeo.test.ts tests/storyteller.test.ts",
-    "npx vitest run --reporter=dot tests/loteria.test.ts tests/loteriaAdvance.test.ts tests/gameCommandEscape.test.ts tests/gameEngine.test.ts tests/gamesAudit.test.ts tests/injectedValues.test.ts",
-    "npx vitest run --reporter=dot tests/catalogRegistry.test.ts tests/dynamicCatalogs.test.ts tests/searchCatalog.test.ts tests/searchCatalogPanel.test.tsx tests/fluSettingsTabView.test.tsx tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts",
-    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts",
-    "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx",
-    "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts",
-    "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx",
-    "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts",
-    "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/conversationSession.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/validateIntegralCtx.test.ts tests/voiceCanonicalPhrase.test.ts tests/textUtils.test.ts",
-    "npx vitest run --reporter=dot tests/asrTurnSegmentation.test.ts tests/continuousAudioBuffer.test.ts tests/speakerSoloCoalesce.test.ts tests/captureSensitivityGuard.test.ts",
-    "npx vitest run --reporter=dot tests/decideVoiceTurnDispatch.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts",
-    "npx vitest run --reporter=dot tests/participantRegistry.test.ts tests/dateKeyGuard.test.ts tests/useParticipants.test.tsx"
+    "npx vitest run --reporter=dot tests/conversationHistoryCap.test.ts tests/conversationLiveNotWiped.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/conversationTurnSingleRow.test.ts tests/minuteHandlersDayRollover.test.ts tests/voiceCanonicalPhrase.test.ts"
   ],
-  "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/conversationTurnRowSingleWriter.test.ts",
   "guardExpect": "green",
+  "invariant": {
+    "statement": "El store no escribe el hablante de una fila existente (escritor unico).",
+    "metric": {
+      "command": "node -e \"const s=require('fs').readFileSync('src/store/integrationStore.ts','utf8');const m=s.match(/\\{\\s*\\.\\.\\.\\s*\\w+\\s*,\\s*speakerName/g)||[];console.log(m.length)\"",
+      "target": 0
+    },
+    "guardFiles": [
+      "tests/conversationTurnRowSingleWriter.test.ts"
+    ]
+  },
   "ignore": [
     ".task/**",
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
   "e2eScope": {
-    "src/components/AmbientesPanel.tsx": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/components/PaletasPanel.tsx": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/components/panelUtils.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/components/AmbienteEditorForm.tsx": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/components/PaletaEditorForm.tsx": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/components/catalogPanelEditors.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/branding/paletasCatalog.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/environments/ambientesCatalog.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/search/searchCatalog.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/catalogs/catalogRegistry.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/browser/browserProfileService.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/notes/notesService.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/reminders/shoppingService.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/contacts/contactService.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/diary/diaryService.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/db/entityMutations.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/index.css": [
-      "tests/e2e/pizarron-funcionalidades.spec.ts"
-    ],
-    "src/hooks/useEditableFields.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/games/gameUtils.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/storage/localStore.ts": [
-      "tests/e2e/sesion-un-solo-almacen.spec.ts"
-    ],
-    "src/hooks/useConfigPersistence.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/services/aiServiceFactory.ts": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/core/config/sharedConfig.ts": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/core/notes/notesList.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/reminders/shoppingIntentParser.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/reminders/shoppingList.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/lib/listOps.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/dev/asrLab/AsrLab.tsx": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/components/ResultFeed.tsx": [
-      "tests/e2e/pizarron-funcionalidades.spec.ts"
-    ],
-    "src/core/games/respiracion.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/games/loteria.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/games/riddles.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/core/games/trivia.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/lib/timeFormat.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/lib/dailyAgenda.ts": [
-      "tests/e2e/cita-agenda.spec.ts"
-    ],
-    "src/core/agenda/agendaSummary.ts": [
-      "tests/e2e/cita-agenda.spec.ts"
-    ],
-    "src/components/AgendaPanel.tsx": [
-      "tests/e2e/cita-agenda.spec.ts"
-    ],
-    "src/core/autonomy/serviceSingleton.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/core/autonomy/autoOptimization.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/core/autonomy/autoRecovery.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/core/autonomy/decisionEngine.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/core/autonomy/backupSystem.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/core/autonomy/healthMonitor.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/lib/textUtils.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
-    ],
-    "src/voice/lib/activeListen.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/conversationDialogue.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/conversationRow.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/core/autonomy/configSnapshot.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
-    ],
-    "src/lib/downloadFile.ts": [
-      "tests/e2e/pizarron-funcionalidades.spec.ts"
-    ],
-    "src/components/FluSettingsPanel.tsx": [
-      "tests/e2e/flu-settings-panel.spec.ts"
-    ],
-    "src/components/GenerationProgressPanel.tsx": [
-      "tests/e2e/pizarron-funcionalidades.spec.ts"
-    ],
-    "src/voice/lib/audioMath.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/speechMerge.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/conversationStream.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/turnTranscript.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/core/multiuser/participantRegistry.ts": [
-      "tests/e2e/matriz-comandos-productivos.spec.ts"
+    "src/store/integrationStore.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }
 }
