@@ -86,10 +86,10 @@ describe('duplicacion estructural — un dueno por implementacion (no por nombre
         expect(sources.length, 'se leyeron muy pocos ficheros de src').toBeGreaterThan(300);
         const funciones = sources.flatMap((s) => findFunctions(s.file, s.source));
         expect(funciones.length, 'se escanearon muy pocas funciones').toBeGreaterThan(500);
-        // Control positivo: el arbol real TIENE grupos (los 3 declarados). Si el
-        // detector se quedara sordo, groups=0 y el guard pasaria por vaciedad.
-        expect(groups.length).toBeGreaterThanOrEqual(3);
-        expect(BASELINE.length).toBe(3);
+        // El control POSITIVO del detector es SINTETICO (describe de abajo). Aqui NO se
+        // exige un numero de grupos: el objetivo del trinquete es PRECISAMENTE llegar a 0,
+        // y exigir "3 grupos" convertiria la meta en un suelo.
+        expect(Array.isArray(BASELINE)).toBe(true);
     });
 });
 
@@ -106,6 +106,17 @@ describe('el detector no es decorativo (prueba de mutacion)', () => {
         // La misma funcion repetida en SU fichero tampoco (no es ruta doble).
         const dosVeces = COPIA_A + '\n' + COPIA_A;
         expect(structuralGroups([{ file: 'src/a.js', source: dosVeces }])).toEqual([]);
+    });
+
+    it('un ENVOLTORIO de UNA sola llamada (façade) NO es una copia: no sobre-contar (7.7.e(5))', () => {
+        const args = 'a, b, c, d, e, f, g, h, i, j, k, l, m, n';
+        const facade = (name: string) => `export function ${name}() {\n  return helperWithLongName(down, ${args})\n}`;
+        expect(
+            structuralGroups([
+                { file: 'src/a.js', source: facade('getUno') },
+                { file: 'src/b.js', source: facade('getDos') },
+            ]),
+        ).toEqual([]);
     });
 
     it('la METRICA del gate cuenta lo mismo que el guard (un solo dueno de la logica)', () => {

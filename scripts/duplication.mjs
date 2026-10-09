@@ -51,6 +51,37 @@ export function skeleton(src) {
     .trim();
 }
 
+/**
+ * Un cuerpo que es UNA sola llamada (`return helper(...)`, `await helper(...)`) es una
+ * FAÇADE, no una copia: es justo el patron de "dueno unico + envoltorio". Contarlo como
+ * duplicado seria sobre-contar (7.7.e(5)): el detector debe marcar la logica copiada, no
+ * la delegacion. Se exige: una sola sentencia de nivel 0 y que empiece por una llamada.
+ */
+export function isFacade(body) {
+  const inner = body.slice(1, -1).trim();
+  if (!inner) return false;
+  const stripped = inner.replace(/;$/, '').trim().replace(/^(?:(?:return|await|void)\s+)*/, '');
+  const head = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/.exec(stripped);
+  if (!head) return false;
+  let depth = 0;
+  let quote = null;
+  for (let i = head[0].length - 1; i < stripped.length; i += 1) {
+    const c = stripped[i];
+    if (quote) {
+      if (c === '\\') i += 1;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+    if (c === '(') depth += 1;
+    else if (c === ')') {
+      depth -= 1;
+      if (depth === 0) return i === stripped.length - 1;
+    }
+  }
+  return false;
+}
+
 /** Cuerpo `{...}` balanceado que empieza en `openIdx` (o null). */
 function block(src, openIdx) {
   let depth = 0;
@@ -84,6 +115,7 @@ export function findFunctions(file, source, minLines = 3) {
     const body = block(source, open);
     if (!body) continue;
     if (body.split('\n').length < minLines) continue;
+    if (isFacade(body)) continue;
     const skel = skeleton(body);
     if (skel.length < 60) continue;
     out.push({ file, name: m[1] || m[2], line: source.slice(0, m.index).split('\n').length, skel });
@@ -167,7 +199,10 @@ if (process.argv[1] && process.argv[1].endsWith('duplication.mjs')) {
     baseline = [];
   }
   const { violations, stale } = evaluate(groups, baseline);
-  if (process.argv.includes('--violations')) {
+  if (process.argv.includes('--groups')) {
+    // Solo el numero de grupos: es lo que mide la invariante del gate.
+    console.log(String(groups.length));
+  } else if (process.argv.includes('--violations')) {
     // La PRIMERA linea es el numero: es lo que lee la metrica del gate.
     console.log(String(violations.length));
     for (const v of violations) console.log(`DUPLICADO  ${formatGroup(v)}`);
