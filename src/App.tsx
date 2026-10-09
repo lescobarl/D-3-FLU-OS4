@@ -3991,7 +3991,7 @@ const {
         const history = integrationStore.conversationHistory;
         for (let i = 0; i < history.length; i++) {
             const e = history[i];
-            const label = e.speakerName || e.role || '';
+            const label = String(e.speakerName || '').trim();
             if (label) historyLabels.add(label);
         }
         const profiles = voiceProfiles.profiles;

@@ -2196,7 +2196,7 @@
 /* Live-phrase del pizarrón: conserva su tipografía cuando NO está vacío
    (antes heredaba de .frame-content__response; ahora la clase es propia del bloque response).
    La transcripción en vivo se muestra en itálica y azul para distinguirla de la respuesta. */
-.frame-content--workspace .conversation-live-phrase {
+.conversation-live-phrase {
   font-size: var(--text-md);
   line-height: 1.5;
   color: #4da6ff;

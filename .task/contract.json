@@ -1,26 +1,25 @@
 {
-  "task": "P9.51 - la repeticion CONTIGUA del ASR se colapsa en cualquier posicion (no solo al inicio).",
-  "objective": "Que el colapsador de repeticiones contiguas elimine el bloque repetido este donde este, y que el caso exacto de la bitacora del dueno (2026-10-09) quede clavado por un guard de comportamiento que nace ROJO.",
-  "base": "c4763b8",
+  "task": "P9.52 - la ultima frase de la Bitacora tiene color propio y el panel de Participantes no muestra el slug de rol.",
+  "objective": "Que la live-phrase de la Bitacora deje de salir en color por defecto (su regla CSS estaba scopeada a un contenedor que no la envuelve) y que el panel de Participantes deje de listar el slug interno 'user' cuando la fila no tiene hablante.",
+  "base": "bcbca8c",
   "allow": [
-    "src/voice/lib/speechMerge.js",
-    "tests/vozRepeticionAsrGuard.test.ts",
-    "scripts/guard-files.mjs",
+    "src/App.tsx",
+    "src/styles/unified.css",
     "plans/ledger.json"
   ],
   "maxFiles": 6,
   "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts tests/speechMerge.test.ts tests/ingressSimulation.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozRepeticionAsrGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/App.shell.test.tsx",
+  "guard": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/appNormalizaGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "El colapsador recorre TODAS las posiciones del turno (antes solo la cabeza).",
+    "statement": "El panel de Participantes no cae al slug de rol ('' || e.role) cuando la fila no tiene hablante.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/speechMerge.js','utf8');const fn=s.slice(s.indexOf('export function collapseRepeatedSpeech'),s.indexOf('export function collapseAsrStutter'));console.log((fn.match(/start \\+ size \\* 2 <= words\\.length/g)||[]).length)\"",
-      "target": 1
+      "command": "node -e \"const s=require('fs').readFileSync('src/App.tsx','utf8');console.log((s.match(/speakerName \\|\\| e\\.role/g)||[]).length)\"",
+      "target": 0
     },
     "guardFiles": [
-      "tests/vozRepeticionAsrGuard.test.ts"
+      "tests/App.shell.test.tsx"
     ]
   },
   "ignore": [
@@ -29,8 +28,11 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/speechMerge.js": [
+    "src/App.tsx": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/styles/unified.css": [
+      "tests/e2e/flu-settings-panel.spec.ts"
     ]
   }
 }
