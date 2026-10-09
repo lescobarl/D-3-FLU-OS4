@@ -551,7 +551,6 @@ function App() {
     const speakFluRef = useRef<(text: string, lang: string) => Promise<void>>(async () => {});
     // Guarda "ya se anunció el saludo de cierre" para no repetirlo con cada
     // re-render/re-efecto del mismo participante (una vez por activación).
-    const onboardingAckSpokenForRef = useRef<string | null>(null);
 
     // ---- Medios (video/documento): ruta ÚNICA e idempotente ----
     // El ASR puede re-capturar el mismo comando; sin gate, cada captura
@@ -2672,32 +2671,6 @@ function App() {
             // y se descarta (no entra a la conversación).
             conversationMode.enter();
             const tryStartListening = async () => {
-                // Saludo de cierre "¡Listo… Háblame cuando quieras": se anuncia UNA
-                // vez por participante al completar el onboarding (texto del paso
-                // 'complete' de la config, sin hardcode).
-                const currentLang = (languageRef.current as 'es' | 'en') || 'es';
-                if (onboardingAckSpokenForRef.current !== id) {
-                    onboardingAckSpokenForRef.current = id;
-                    const steps = FLU_CONFIG?.onboarding?.steps || [];
-                    const completeStep = steps.find((s) => s.id === 'complete');
-                    const name = participants.participants.find((p) => p.id === id)?.name as string;
-                    const ackText = completeStep
-                        ? String(completeStep[normalizeLang(currentLang)] || '')
-                              .replace('{name}', name || '')
-                        : pickText(currentLang, 'listo_hablame_cuando_quieras');
-                    if (ackText) {
-                        // Esperar a que el saludo TERMINE de hablarse antes de abrir
-                        // el micrófono: si se abre durante el TTS, FLU se escucha a sí
-                        // misma (eco → fila fantasma "Hablante 1: háblame cuando
-                        // quieras") y el anti-eco aborta la escucha (se cierra sola).
-                        try {
-                            await speakFluRef.current(ackText, currentLang);
-                        } catch (e) {
-        logCaughtError('src/App.tsx', e);
-                            // Sin TTS disponible: continuar igual.
-                        }
-                    }
-                }
                 try {
                     // El TTS de cierre ("Háblame cuando quieras") puede seguir
                     // sonando cuando este arranque se dispara: si la reconocedora
@@ -2744,7 +2717,7 @@ function App() {
                 Number(FLU_CONFIG.timing.onboardingStartListeningDelayMs),
             );
         },
-        [conversationMode, languageRef, participants.participants],
+        [conversationMode],
     );
 
     // Al COMPLETAR el onboarding (primer arranque, perfil nuevo o re-entrega en
