@@ -96,7 +96,13 @@ describe('P7.81 gameEpilogue - un solo dueno del epilogo', () => {
         expect(set.length, 'el universo de motores no puede ser vacio').toBeGreaterThanOrEqual(15);
         for (const f of set) {
             const src = readFileSync(join(DIR, f), 'utf8');
-            expect(src, `${f} debe importar el dueno`).toContain('gameOverResult');
+            // El motor USA el dueno del epilogo. Dos vias validas: llamarlo
+            // (`gameOverResult`) o delegar el FLUJO del turno en el dueno del turno de
+            // adivinanza (`runGuessTurn`, en gameUtils), que es quien construye el epilogo.
+            expect(
+                src.includes('gameOverResult') || src.includes('runGuessTurn'),
+                `${f} no usa el dueno del epilogo (ni gameOverResult ni runGuessTurn)`,
+            ).toBe(true);
         }
     });
 });
