@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, resolveNumericAnswer, shuffleOrder, turnResult, gamePrompt, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resolveNumericAnswer, shuffleOrder, turnResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -154,9 +154,10 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as TriviaState;
-            return turnResult(`¡Vamos a jugar a la trivia! ${currentPrompt(state)}`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as TriviaState;
+                return `¡Vamos a jugar a la trivia! ${currentPrompt(state)}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

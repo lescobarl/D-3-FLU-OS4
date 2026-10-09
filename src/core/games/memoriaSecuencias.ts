@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { roundsOverMessage, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, turnResult, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readRounds, roundsOverMessage, turnResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -124,9 +124,10 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as MemoriaSecuenciasState;
-            return turnResult(`¡Vamos a entrenar la memoria! Memoriza esta secuencia: ${sequencePrompt(state.sequence)}. Repítela en orden.`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as MemoriaSecuenciasState;
+                return `¡Vamos a entrenar la memoria! Memoriza esta secuencia: ${sequencePrompt(state.sequence)}. Repítela en orden.`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

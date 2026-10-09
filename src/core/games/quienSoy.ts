@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -429,10 +429,11 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as QuienSoyState;
-            const item = itemAt(state);
-            return turnResult(`¡Vamos a jugar a ¿Quién soy?! Soy un animal. ${item ? cluePrompt(state, item) : ''}`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as QuienSoyState;
+                const item = itemAt(state);
+                return `¡Vamos a jugar a ¿Quién soy?! Soy un animal. ${item ? cluePrompt(state, item) : ''}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

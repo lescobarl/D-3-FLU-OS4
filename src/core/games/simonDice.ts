@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult, baseSession } from './gameUtils';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -139,13 +139,7 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         id: 'simon_dice',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<SimonDiceState> {
-            const state = buildState(optionsConfig);
-            return {
-                id: 'simon_dice',
-                state,
-                score: 0,
-                round: 1,
-            };
+            return baseSession('simon_dice', buildState(optionsConfig));
         },
 
         start(session: GameSession<SimonDiceState>, optionsConfig: Record<string, unknown> = {}): GameTurnResult {

@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -167,19 +167,14 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
         id: 'adivina_cancion',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaCancionState> {
-            const state = buildState(optionsConfig);
-            return {
-                id: 'adivina_cancion',
-                state,
-                score: 0,
-                round: 1,
-            };
+            return baseSession('adivina_cancion', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as AdivinaCancionState;
-            return turnResult(`¡Vamos a adivinar canciones! Escucha con atención. ${songPrompt(state)}`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as AdivinaCancionState;
+                return `¡Vamos a adivinar canciones! Escucha con atención. ${songPrompt(state)}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

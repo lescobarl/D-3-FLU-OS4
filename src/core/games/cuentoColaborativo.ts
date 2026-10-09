@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, normalizeForMatch, turnResult, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, isEngineCommand, normalizeForMatch, turnResult } from './gameUtils';
 
 export interface CuentoItem {
     inicio: string;
@@ -123,9 +123,10 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as CuentoColaborativoState;
-            return turnResult(`¡Vamos a inventar un cuento juntos! Yo empiezo: "${state.cuento[0]}" ¿Qué pasa después?`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as CuentoColaborativoState;
+                return `¡Vamos a inventar un cuento juntos! Yo empiezo: "${state.cuento[0]}" ¿Qué pasa después?`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

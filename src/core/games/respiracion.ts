@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;
@@ -71,19 +71,14 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         id: 'respiracion',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RespiracionState> {
-            const state = buildState(optionsConfig);
-            return {
-                id: 'respiracion',
-                state,
-                score: 0,
-                round: 1,
-            };
+            return baseSession('respiracion', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as RespiracionState;
-            return turnResult(`Vamos a calmarnos respirando juntos. ${stepPrompt(state.step)} Dime "listo" cuando termines.`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as RespiracionState;
+                return `Vamos a calmarnos respirando juntos. ${stepPrompt(state.step)} Dime "listo" cuando termines.`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

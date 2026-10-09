@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, stripDiacritics, turnResult, baseSession } from './gameUtils';
+import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, hasToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, stripDiacritics, turnResult } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -137,9 +137,10 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as PalabrasEncadenadasState;
-            return turnResult(`¡Vamos a jugar a palabras encadenadas! Empiezo yo con ${state.word}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as PalabrasEncadenadasState;
+                return `¡Vamos a jugar a palabras encadenadas! Empiezo yo con ${state.word}. Di una palabra que empiece con la letra ${state.nextLetter.toUpperCase()}.`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -206,9 +207,7 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isStopOrSkipCommand(text, END_FRAMES, SKIP_FRAMES);
         },
     };
 }

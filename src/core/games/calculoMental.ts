@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { roundsOverMessage, END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, turnResult, baseSession } from './gameUtils';
+import { END_GAME_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, roundsOverMessage, turnResult } from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -121,9 +121,10 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as CalculoMentalState;
-            return turnResult(`¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as CalculoMentalState;
+                return `¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
@@ -183,9 +184,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return matchesEndGameFrames(normalized, END_FRAMES)
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isStopOrSkipCommand(text, END_FRAMES, SKIP_FRAMES);
         },
     };
 }

@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { adoptRandom, bankItemAt, END_GAME_FRAMES, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, HELP_CORE_FRAMES, isLastRound, normalizeForMatch, readRounds, shuffleOrder, SKIP_CORE_FRAMES, turnResult, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
 import {
     PRONUNCIACION_BANK,
     pronunciacionWordsByLevel,
@@ -125,9 +125,10 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as PronunciacionState;
-            return turnResult(`¡Vamos a practicar pronunciacion! ${currentPrompt(state)}`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as PronunciacionState;
+                return `¡Vamos a practicar pronunciacion! ${currentPrompt(state)}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

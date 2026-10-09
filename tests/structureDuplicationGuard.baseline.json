@@ -2,9 +2,5 @@
   "src/core/autonomy/autoOptimization.ts:start | src/core/autonomy/decisionEngine.ts:start",
   "src/core/autonomy/autoOptimization.ts:stop | src/core/autonomy/backupSystem.ts:stop | src/core/autonomy/decisionEngine.ts:stop | src/core/autonomy/healthMonitor.ts:stop",
   "src/core/autonomy/autoOptimization.ts:updateConfig | src/core/autonomy/backupSystem.ts:updateConfig | src/core/autonomy/decisionEngine.ts:updateConfig | src/core/autonomy/healthMonitor.ts:updateConfig",
-  "src/core/games/abecedario.ts:start | src/core/games/quienSoy.ts:start | src/core/games/veoVeo.ts:start",
-  "src/core/games/adivinaCancion.ts:createSession | src/core/games/adivinaNumero.ts:createSession | src/core/games/respiracion.ts:createSession | src/core/games/simonDice.ts:createSession | src/core/games/storyteller.ts:createSession",
-  "src/core/games/adivinaCancion.ts:start | src/core/games/ahorcado.ts:start | src/core/games/calculoMental.ts:start | src/core/games/cuentaConmigo.ts:start | src/core/games/cuentoColaborativo.ts:start | src/core/games/memoriaSecuencias.ts:start | src/core/games/palabrasEncadenadas.ts:start | src/core/games/pronunciacion.ts:start | src/core/games/repiteTraduce.ts:start | src/core/games/respiracion.ts:start | src/core/games/trabalenguas.ts:start | src/core/games/trivia.ts:start",
-  "src/core/games/calculoMental.ts:isGameCommand | src/core/games/palabrasEncadenadas.ts:isGameCommand",
   "src/core/games/riddles.ts:turn | src/core/games/veoVeo.ts:turn"
 ]

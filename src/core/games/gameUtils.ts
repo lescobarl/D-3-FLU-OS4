@@ -464,6 +464,32 @@ export function baseSession<S>(id: GameSession<S>['id'], state: S): GameSession<
  * Un solo dueno del `normalizeForMatch` + `isGameCommandSurface` para los motores que
  * comparten esa forma (los que componen otros frames no la usan).
  */
+/**
+ * Superficie alternativa de comandos: fin de partida (frames) o cualquiera de los
+ * frames de salto. Un solo dueno (P9.35) para los motores que componen asi su superficie
+ * en vez de usar frames de pista.
+ */
+export function isStopOrSkipCommand(text: string, end: readonly string[], skips: readonly string[]): boolean {
+    const normalized = normalizeForMatch(text);
+    return matchesEndGameFrames(normalized, end) || skips.some((frame) => hasToken(normalized, frame));
+}
+
+/**
+ * Arranque de una partida: `reset` + el prompt del motor. Un solo dueno de la secuencia
+ * (antes copiada en 15 motores: reset, cast del estado, item y turnResult). El prompt es
+ * DATO por motor y viaja como callback, asi que el arranque no se re-implementa.
+ */
+export function beginGame(
+    session: GameSession,
+    optionsConfig: Record<string, unknown>,
+    reset: (session: GameSession, optionsConfig: Record<string, unknown>) => void,
+    prompt: (state: unknown) => string,
+    options: { valid?: boolean; animation?: AvatarAnimation; emotion?: string; error?: string } = {},
+): GameTurnResult {
+    reset(session, optionsConfig);
+    return turnResult(prompt(session.state), session.score, options);
+}
+
 export function isEngineCommand(
     text: string,
     frames: { end: readonly string[]; hint: readonly string[]; skip: readonly string[] },

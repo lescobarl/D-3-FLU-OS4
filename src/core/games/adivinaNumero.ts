@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult, isEngineCommand, baseSession } from './gameUtils';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -99,13 +99,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         id: 'adivina_numero',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AdivinaNumeroState> {
-            const state = buildState(optionsConfig);
-            return {
-                id: 'adivina_numero',
-                state,
-                score: 0,
-                round: 1,
-            };
+            return baseSession('adivina_numero', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {

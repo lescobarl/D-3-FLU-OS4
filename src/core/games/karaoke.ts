@@ -18,7 +18,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, turnResult, baseSession, isEngineCommand } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, turnResult } from './gameUtils';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)
@@ -176,10 +176,11 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as KaraokeState;
-            state.phase = 'singing';
-            return turnResult(`¡Hora de cantar! Vamos a cantar "${state.titulo}" juntos. La pista ya suena. Escucha la primera línea: "${state.lineas[0]}" Cántala conmigo y dime "sigue" para la siguiente.`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as KaraokeState;
+                state.phase = 'singing';
+                return `¡Hora de cantar! Vamos a cantar "${state.titulo}" juntos. La pista ya suena. Escucha la primera línea: "${state.lineas[0]}" Cántala conmigo y dime "sigue" para la siguiente.`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
