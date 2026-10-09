@@ -20,24 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import {
-    adoptRandom,
-    bankItemAt,
-    END_GAME_FRAMES,
-    finishRoundsIfLast,
-    gameOverResult,
-    gamePrompt,
-    hasAnyToken,
-    hasToken,
-    HELP_CORE_FRAMES,
-    isGameCommandSurface,
-    isLastRound,
-    normalizeForMatch,
-    readRounds,
-    shuffleOrder,
-    SKIP_CORE_FRAMES,
-    turnResult,
-} from './gameUtils';
+import { adoptRandom, bankItemAt, END_GAME_FRAMES, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, HELP_CORE_FRAMES, isLastRound, normalizeForMatch, readRounds, shuffleOrder, SKIP_CORE_FRAMES, turnResult, baseSession, isEngineCommand } from './gameUtils';
 import {
     PRONUNCIACION_BANK,
     pronunciacionWordsByLevel,
@@ -138,12 +121,7 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
         id: 'pronunciacion',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<PronunciacionState> {
-            return {
-                id: 'pronunciacion',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('pronunciacion', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -202,8 +180,7 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

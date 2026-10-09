@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult, isEngineCommand } from './gameUtils';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -185,8 +185,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

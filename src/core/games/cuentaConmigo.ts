@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult, baseSession, isEngineCommand } from './gameUtils';
 
 const DEFAULT_HASTA = 10;
 const MAX_HASTA = 20;
@@ -64,12 +64,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         id: 'cuenta_conmigo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentaConmigoState> {
-            return {
-                id: 'cuenta_conmigo',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('cuenta_conmigo', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -130,8 +125,7 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

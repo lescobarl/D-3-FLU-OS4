@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { roundsOverMessage, END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, turnResult } from './gameUtils';
+import { roundsOverMessage, END_GAME_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, matchesEndGameFrames, normalizeForMatch, pickRandom, readRounds, resolveNumericAnswer, turnResult, baseSession } from './gameUtils';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -117,12 +117,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
         id: 'calculo_mental',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CalculoMentalState> {
-            return {
-                id: 'calculo_mental',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('calculo_mental', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {

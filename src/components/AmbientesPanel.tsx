@@ -45,6 +45,7 @@ import {
     type EditableAmbienteFields,
 } from '../core/environments/ambienteFactory';
 import { AmbienteEditorForm } from './AmbienteEditorForm';
+import { cloneSeedEntry } from './panelUtils';
 
 export interface AmbientesPanelProps {
     /** Catálogo de ambientes (getAmbientes()). */
@@ -153,11 +154,8 @@ export function AmbientesPanel({
         setEditor({ mode: 'create', template, seed: emptyEnvironmentEditableFields(template) });
     };
 
-    const startClone = (builtin: EnvironmentDefinition) => {
-        const seed = editableFieldsOfEnvironment(builtin);
-        seed.nombre = `${builtin.nombre}${ui.cloneNameSuffix || ' (copia)'}`;
-        setEditor({ mode: 'create', template: builtin, seed });
-    };
+    const startClone = (builtin: EnvironmentDefinition) =>
+        setEditor({ mode: 'create', ...cloneSeedEntry(builtin, editableFieldsOfEnvironment, 'nombre', builtin.nombre, ui.cloneNameSuffix) });
 
     const startEdit = (ambiente: EnvironmentDefinition) => {
         setEditor({

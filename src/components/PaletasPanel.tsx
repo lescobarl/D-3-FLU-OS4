@@ -41,6 +41,7 @@ import {
     type EditablePaletteFields,
 } from '../core/branding/paletaFactory';
 import { PaletaEditorForm } from './PaletaEditorForm';
+import { cloneSeedEntry } from './panelUtils';
 
 export interface PaletasPanelProps {
     /** Catálogo de paletas fusionado (getAllPalettes()). */
@@ -112,11 +113,8 @@ export function PaletasPanel({
         setEditor({ mode: 'create', template, seed: emptyEditableFields(template) });
     };
 
-    const startClone = (builtin: PaletteDefinition) => {
-        const seed = editableFieldsOf(builtin);
-        seed.name = `${builtin.name}${ui.cloneNameSuffix || ' (copia)'}`;
-        setEditor({ mode: 'create', template: builtin, seed });
-    };
+    const startClone = (builtin: PaletteDefinition) =>
+        setEditor({ mode: 'create', ...cloneSeedEntry(builtin, editableFieldsOf, 'name', builtin.name, ui.cloneNameSuffix) });
 
     const startEdit = (paleta: PaletteDefinition) => {
         setEditor({

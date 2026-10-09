@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, gamePrompt } from './gameUtils';
+import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, gamePrompt, baseSession, isEngineCommand } from './gameUtils';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -90,12 +90,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
         id: 'repite_traduce',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RepiteTraduceState> {
-            return {
-                id: 'repite_traduce',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('repite_traduce', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -160,8 +155,7 @@ export function createRepiteTraduceEngine(options?: { random?: RandomSource }): 
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

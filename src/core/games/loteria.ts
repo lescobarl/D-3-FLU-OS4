@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
+import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult, baseSession } from './gameUtils';
 
 export interface LoteriaCard {
     id: string;
@@ -149,12 +149,7 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         id: 'loteria',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<LoteriaState> {
-            return {
-                id: 'loteria',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('loteria', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {

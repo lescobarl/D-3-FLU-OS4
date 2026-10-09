@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, gamePrompt } from './gameUtils';
+import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, gamePrompt, baseSession, isEngineCommand } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -142,12 +142,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         id: 'adivinanzas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RiddlesState> {
-            return {
-                id: 'adivinanzas',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('adivinanzas', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -211,8 +206,7 @@ export function createRiddlesEngine(options?: { random?: RandomSource }): GameEn
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

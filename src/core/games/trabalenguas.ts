@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, gamePrompt } from './gameUtils';
+import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, gamePrompt, baseSession, isEngineCommand } from './gameUtils';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -84,12 +84,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
         id: 'trabalenguas',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TrabalenguasState> {
-            return {
-                id: 'trabalenguas',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('trabalenguas', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -154,8 +149,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

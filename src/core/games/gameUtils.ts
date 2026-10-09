@@ -11,7 +11,7 @@
 
 export type RandomSource = () => number;
 
-import type { AvatarAnimation, GameTurnResult } from './types';
+import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
 
 /**
  * EPILOGO de un motor: la forma UNICA de un resultado de fin de partida.
@@ -448,6 +448,27 @@ export function isGameCommandSurface(
         hasAnyToken(normalized, frames.hint) ||
         hasAnyToken(normalized, frames.skip)
     );
+}
+
+/**
+ * Sesion base de un motor: el MISMO contrato para los 22 motores. Antes cada motor
+ * re-declaraba el objeto (`{ id, state, score: 0, round: 1 }`, 22 copias medidas):
+ * una sola fuente, para que un cambio de forma no haya que hacerlo 22 veces.
+ */
+export function baseSession<S>(id: GameSession<S>['id'], state: S): GameSession<S> {
+    return { id, state, score: 0, round: 1 };
+}
+
+/**
+ * Superficie de comandos de un motor (`end/hint/skip` son DATO por motor).
+ * Un solo dueno del `normalizeForMatch` + `isGameCommandSurface` para los motores que
+ * comparten esa forma (los que componen otros frames no la usan).
+ */
+export function isEngineCommand(
+    text: string,
+    frames: { end: readonly string[]; hint: readonly string[]; skip: readonly string[] },
+): boolean {
+    return isGameCommandSurface(normalizeForMatch(text), frames);
 }
 
 /**

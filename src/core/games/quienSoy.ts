@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt } from './gameUtils';
+import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, baseSession, isEngineCommand } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -425,12 +425,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         id: 'quien_soy',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<QuienSoyState> {
-            return {
-                id: 'quien_soy',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('quien_soy', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -556,8 +551,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

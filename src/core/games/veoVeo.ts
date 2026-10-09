@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult, bankItemAt } from './gameUtils';
+import { finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult, bankItemAt, baseSession, isEngineCommand } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -153,12 +153,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         id: 'veo_veo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<VeoVeoState> {
-            return {
-                id: 'veo_veo',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('veo_veo', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -224,8 +219,7 @@ export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEng
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

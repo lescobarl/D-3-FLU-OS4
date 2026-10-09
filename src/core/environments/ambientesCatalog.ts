@@ -15,7 +15,7 @@ import {
     setMergedAmbientes,
     type EnvironmentDefinition,
 } from './environmentRegistry';
-import { createCatalogRegistry, type CatalogDb, type CatalogRecord } from '../catalogs/catalogRegistry';
+import { createCatalogDb, createCatalogMutations, createCatalogRegistry, type CatalogRecord } from '../catalogs/catalogRegistry';
 import { ambienteSchema } from '../catalogs/catalogSchema';
 import { mergeCatalog } from '../catalogs/mergeCatalog';
 
@@ -37,22 +37,7 @@ const toAmbienteRecord = (record: CatalogRecord<EnvironmentDefinition>): Ambient
 });
 
 /** Adaptador de la tabla Dexie `ambientes` al contrato genérico CatalogDb. */
-const ambientesDb: CatalogDb<EnvironmentDefinition> = {
-    async add(record) {
-        await fluDb.ambientes.add(toAmbienteRecord(record));
-    },
-    async put(record) {
-        await fluDb.ambientes.put(toAmbienteRecord(record));
-    },
-    async get(id) {
-        const row = await fluDb.ambientes.get(id);
-        return row ? toCatalogRecord(row) : undefined;
-    },
-    async toArray() {
-        const rows = await fluDb.ambientes.toArray();
-        return rows.map(toCatalogRecord);
-    },
-};
+const ambientesDb = createCatalogDb<EnvironmentDefinition, AmbienteCatalogRecord>(fluDb.ambientes, toAmbienteRecord, toCatalogRecord);
 
 const registry = createCatalogRegistry<EnvironmentDefinition>({
     db: ambientesDb,
@@ -71,23 +56,14 @@ export function resetAmbientesCache(): void {
     resetMergedAmbientes();
 }
 
-export async function registerAmbiente(data: EnvironmentDefinition) {
-    const result = await registry.register(data);
-    await hydrateAmbientes();
-    return result;
-}
+const registerAmbienteMutations = createCatalogMutations(registry, hydrateAmbientes);
 
-export async function updateAmbiente(id: string, data: EnvironmentDefinition) {
-    const result = await registry.update(id, data);
-    await hydrateAmbientes();
-    return result;
-}
-
-export async function removeAmbiente(id: string): Promise<boolean> {
-    const removed = await registry.remove(id);
-    await hydrateAmbientes();
-    return removed;
-}
+/** Registra y rehidrata la cache (dueño: createCatalogMutations). */
+export const registerAmbiente = registerAmbienteMutations.register;
+/** Actualiza y rehidrata la cache (dueño: createCatalogMutations). */
+export const updateAmbiente = registerAmbienteMutations.update;
+/** Borra y rehidrata la cache (dueño: createCatalogMutations). */
+export const removeAmbiente = registerAmbienteMutations.remove;
 
 /** Lista solo los ambientes dinámicos persistidos (sin built-ins). */
 export async function listDynamicAmbientes(): Promise<EnvironmentDefinition[]> {

@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, hasToken, normalizeForMatch, pickRandom, turnResult, baseSession, isEngineCommand } from './gameUtils';
 
 export interface AhorcadoWord {
     palabra: string;
@@ -140,12 +140,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         id: 'ahorcado',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AhorcadoState> {
-            return {
-                id: 'ahorcado',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('ahorcado', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -235,8 +230,7 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

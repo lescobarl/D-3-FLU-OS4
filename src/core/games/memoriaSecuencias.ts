@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { roundsOverMessage, isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, turnResult } from './gameUtils';
+import { roundsOverMessage, END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, turnResult, baseSession, isEngineCommand } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -120,12 +120,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         id: 'memoria_secuencias',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<MemoriaSecuenciasState> {
-            return {
-                id: 'memoria_secuencias',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('memoria_secuencias', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -191,8 +186,7 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

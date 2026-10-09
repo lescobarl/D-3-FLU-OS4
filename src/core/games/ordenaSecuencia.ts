@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { roundsOverMessage, finishRoundsIfLast, isGameCommandSurface, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt } from './gameUtils';
+import { roundsOverMessage, finishRoundsIfLast, isLastRound, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, findTokenIndex, gameOverResult, hasAnyToken, normalizeForMatch, readRounds, shuffleOrder, turnResult, bankItemAt, baseSession, isEngineCommand } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -184,12 +184,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
         id: 'ordena_secuencia',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<OrdenaSecuenciaState> {
-            return {
-                id: 'ordena_secuencia',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('ordena_secuencia', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -279,8 +274,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { isGameCommandSurface, END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, normalizeForMatch, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, normalizeForMatch, turnResult, baseSession, isEngineCommand } from './gameUtils';
 
 export interface CuentoItem {
     inicio: string;
@@ -119,12 +119,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         id: 'cuento_colaborativo',
 
         createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CuentoColaborativoState> {
-            return {
-                id: 'cuento_colaborativo',
-                state: buildState(optionsConfig),
-                score: 0,
-                round: 1,
-            };
+            return baseSession('cuento_colaborativo', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
@@ -178,8 +173,7 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return isGameCommandSurface(normalized, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }

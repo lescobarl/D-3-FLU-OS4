@@ -15,7 +15,7 @@ import {
     setMergedPalettes,
     type PaletteDefinition,
 } from './seasonalPalettes';
-import { createCatalogRegistry, type CatalogDb, type CatalogRecord } from '../catalogs/catalogRegistry';
+import { createCatalogDb, createCatalogMutations, createCatalogRegistry, type CatalogRecord } from '../catalogs/catalogRegistry';
 import { paletaSchema } from '../catalogs/catalogSchema';
 import { mergeCatalog } from '../catalogs/mergeCatalog';
 
@@ -37,22 +37,7 @@ const toPaletaRecord = (record: CatalogRecord<PaletteDefinition>): PaletaCatalog
 });
 
 /** Adaptador de la tabla Dexie `paletas` al contrato genérico CatalogDb. */
-const paletasDb: CatalogDb<PaletteDefinition> = {
-    async add(record) {
-        await fluDb.paletas.add(toPaletaRecord(record));
-    },
-    async put(record) {
-        await fluDb.paletas.put(toPaletaRecord(record));
-    },
-    async get(id) {
-        const row = await fluDb.paletas.get(id);
-        return row ? toCatalogRecord(row) : undefined;
-    },
-    async toArray() {
-        const rows = await fluDb.paletas.toArray();
-        return rows.map(toCatalogRecord);
-    },
-};
+const paletasDb = createCatalogDb<PaletteDefinition, PaletaCatalogRecord>(fluDb.paletas, toPaletaRecord, toCatalogRecord);
 
 const registry = createCatalogRegistry<PaletteDefinition>({
     db: paletasDb,
@@ -71,23 +56,14 @@ export function resetPaletasCache(): void {
     resetMergedPalettes();
 }
 
-export async function registerPaleta(data: PaletteDefinition) {
-    const result = await registry.register(data);
-    await hydratePalettes();
-    return result;
-}
+const registerPaletaMutations = createCatalogMutations(registry, hydratePalettes);
 
-export async function updatePaleta(id: string, data: PaletteDefinition) {
-    const result = await registry.update(id, data);
-    await hydratePalettes();
-    return result;
-}
-
-export async function removePaleta(id: string): Promise<boolean> {
-    const removed = await registry.remove(id);
-    await hydratePalettes();
-    return removed;
-}
+/** Registra y rehidrata la cache (dueño: createCatalogMutations). */
+export const registerPaleta = registerPaletaMutations.register;
+/** Actualiza y rehidrata la cache (dueño: createCatalogMutations). */
+export const updatePaleta = registerPaletaMutations.update;
+/** Borra y rehidrata la cache (dueño: createCatalogMutations). */
+export const removePaleta = registerPaletaMutations.remove;
 
 /** Lista solo las paletas dinámicas persistidas (sin built-ins). */
 export async function listDynamicPaletas(): Promise<PaletteDefinition[]> {

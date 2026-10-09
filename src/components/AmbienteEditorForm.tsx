@@ -15,7 +15,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { useEditableFields } from '../hooks/useEditableFields';
+import { setGroupedField, useEditableFields } from '../hooks/useEditableFields';
 import { submitCatalogEditor } from './editorSubmit';
 import {
     ENVIRONMENT_CSS_VAR_KEYS,
@@ -62,9 +62,7 @@ export function AmbienteEditorForm({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const setVar = (key: string, value: string) => {
-        setFields((prev) => ({ ...prev, vars: { ...prev.vars, [key]: value } }));
-    };
+    const setVar = (key: string, value: string) => setGroupedField(setFields, 'vars', key, value);
 
     const toggleTab = (tabId: string, checked: boolean) => {
         setFields((prev) => ({

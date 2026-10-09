@@ -27,3 +27,19 @@ export function useEditableFields<T extends object>(seed: T, clone: (seed: T) =>
 
     return { fields, setFields, setField };
 }
+
+/**
+ * Setter de UN campo dentro de un grupo anidado del estado (`{ ...prev, [group]: { ...prev[group], [key]: value } }`).
+ *
+ * DUENO UNICO de esa forma: los dos formularios de editor tenian su propia copia
+ * (`setVar` en AmbienteEditorForm, `setColor` en PaletaEditorForm), identicas salvo
+ * el nombre del grupo. Un solo sitio, el grupo es DATO.
+ */
+export function setGroupedField<T extends object, K extends keyof T>(
+    setFields: (next: T | ((prev: T) => T)) => void,
+    group: K,
+    key: string,
+    value: string,
+): void {
+    setFields((prev) => ({ ...prev, [group]: { ...(prev[group] as Record<string, string>), [key]: value } }));
+}

@@ -174,3 +174,70 @@ export function createCatalogRegistry<T>({
     return { register, update, get, list, remove };
 }
 
+/**
+ * Adaptador Dexie -> CatalogDb. DUENO UNICO (P9.29): los 3 catalogos (paletas,
+ * ambientes, searchSites) repetian `{ add, put, get, toArray }` cambiando solo la
+ * tabla y el mapeo fila <-> registro.
+ */
+export function createCatalogDb<T, Row>(
+    table: {
+        add(record: Row): Promise<unknown>;
+        put(record: Row): Promise<unknown>;
+        get(id: string): Promise<Row | undefined>;
+        toArray(): Promise<Row[]>;
+    },
+    toRow: (record: CatalogRecord<T>) => Row,
+    toRecord: (row: Row) => CatalogRecord<T>,
+): CatalogDb<T> {
+    return {
+        async add(record) {
+            await table.add(toRow(record));
+        },
+        async put(record) {
+            await table.put(toRow(record));
+        },
+        async get(id) {
+            const row = await table.get(id);
+            return row ? toRecord(row) : undefined;
+        },
+        async toArray() {
+            const rows = await table.toArray();
+            return rows.map(toRecord);
+        },
+    };
+}
+
+/**
+ * Mutaciones de un catalogo + rehidratacion de la cache tras cada una. DUENO UNICO (P9.29):
+ * los 3 catalogos repetian registrar/actualizar/borrar + hydrate.
+ */
+export function createCatalogMutations<T>(
+    registry: {
+        register(data: T): Promise<RegisterResult<T>>;
+        update(id: string, data: T): Promise<UpdateResult<T>>;
+        remove(id: string): Promise<boolean>;
+    },
+    hydrate: () => Promise<void>,
+): {
+    register(data: T): Promise<RegisterResult<T>>;
+    update(id: string, data: T): Promise<UpdateResult<T>>;
+    remove(id: string): Promise<boolean>;
+} {
+    return {
+        async register(data) {
+            const result = await registry.register(data);
+            await hydrate();
+            return result;
+        },
+        async update(id, data) {
+            const result = await registry.update(id, data);
+            await hydrate();
+            return result;
+        },
+        async remove(id) {
+            const removed = await registry.remove(id);
+            await hydrate();
+            return removed;
+        },
+    };
+}

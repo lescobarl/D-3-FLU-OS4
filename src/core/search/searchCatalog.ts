@@ -12,7 +12,7 @@
 // ============================================================
 
 import { fluDb, type SearchSiteRecord } from '../db/fluDatabase';
-import { createCatalogRegistry, type CatalogDb, type CatalogRecord } from '../catalogs/catalogRegistry';
+import { createCatalogDb, createCatalogMutations, createCatalogRegistry, type CatalogRecord } from '../catalogs/catalogRegistry';
 import { searchSiteSchema } from '../catalogs/catalogSchema';
 import { mergeCatalog } from '../catalogs/mergeCatalog';
 import {
@@ -38,22 +38,7 @@ const toSearchSiteRecord = (record: CatalogRecord<SearchSite>): SearchSiteRecord
 });
 
 /** Adaptador de la tabla Dexie `searchSites` al contrato genérico CatalogDb. */
-const searchSitesDb: CatalogDb<SearchSite> = {
-    async add(record) {
-        await fluDb.searchSites.add(toSearchSiteRecord(record));
-    },
-    async put(record) {
-        await fluDb.searchSites.put(toSearchSiteRecord(record));
-    },
-    async get(id) {
-        const row = await fluDb.searchSites.get(id);
-        return row ? toCatalogRecord(row) : undefined;
-    },
-    async toArray() {
-        const rows = await fluDb.searchSites.toArray();
-        return rows.map(toCatalogRecord);
-    },
-};
+const searchSitesDb = createCatalogDb<SearchSite, SearchSiteRecord>(fluDb.searchSites, toSearchSiteRecord, toCatalogRecord);
 
 const registry = createCatalogRegistry<SearchSite>({
     db: searchSitesDb,
@@ -80,23 +65,14 @@ export function getSearchSites(): readonly SearchSite[] {
     return mergedCache;
 }
 
-export async function registerSearchSite(data: SearchSite) {
-    const result = await registry.register(data);
-    await hydrateSearchSites();
-    return result;
-}
+const registerSearchSiteMutations = createCatalogMutations(registry, hydrateSearchSites);
 
-export async function updateSearchSite(id: string, data: SearchSite) {
-    const result = await registry.update(id, data);
-    await hydrateSearchSites();
-    return result;
-}
-
-export async function removeSearchSite(id: string): Promise<boolean> {
-    const removed = await registry.remove(id);
-    await hydrateSearchSites();
-    return removed;
-}
+/** Registra y rehidrata la cache (dueño: createCatalogMutations). */
+export const registerSearchSite = registerSearchSiteMutations.register;
+/** Actualiza y rehidrata la cache (dueño: createCatalogMutations). */
+export const updateSearchSite = registerSearchSiteMutations.update;
+/** Borra y rehidrata la cache (dueño: createCatalogMutations). */
+export const removeSearchSite = registerSearchSiteMutations.remove;
 
 /** Lista solo los sitios dinámicos persistidos (sin built-ins). */
 export async function listDynamicSearchSites(): Promise<SearchSite[]> {

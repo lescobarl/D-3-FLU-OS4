@@ -1,21 +1,42 @@
 {
-  "task": "ENMIENDA (autorizada: 'dale', 2026-10-08). Cerrar el hueco de FORMA del detector estructural (no escaneaba METODOS de objeto/clase ni flecha concisa) y convertir su CEGUERA en un numero medido con trinquete. NO es un refactor de los 27 sitios: esos se declaran como deuda con pendiente. Sin invariant (7.7.e(3): reparar un detector no cabe en la maquinaria de invariante; la evidencia es el antes/despues del detector).",
-  "objective": "Que la barrera estructural vea TODAS las formas de definicion (incluidos metodos) y que 'lo que la barrera NO ve' sea un numero congelado que solo puede bajar.",
-  "base": "b765185",
+  "task": "ENMIENDA (autorizada: 'Resuelvelos de una vez', 2026-10-08c). Campana: eliminar las duplicaciones estructurales declaradas (P9.35) y los hallazgos P9.29/P9.31/P9.32, familia por familia, con la barrera como rojo. Los 'createSession'/'isGameCommand' de los 22 motores, el adaptador+CRUD de los 3 catalogos, el 'startClone' de los paneles y el setter de los formularios quedan en UN dueno.",
+  "objective": "Bajar los grupos de duplicacion estructural de 13 a los minimos posibles, dejando en un solo dueno cada familia tocada, sin cambiar conducta (los tests de juego y de catalogo son la red).",
+  "base": "2c9fc6f",
   "allow": [
-    "scripts/duplication.mjs",
-    "tests/structureDuplicationGuard.test.ts",
+    "src/core/games/**",
+    "src/core/catalogs/catalogRegistry.ts",
+    "src/core/branding/paletasCatalog.ts",
+    "src/core/environments/ambientesCatalog.ts",
+    "src/core/search/searchCatalog.ts",
+    "src/components/AmbientesPanel.tsx",
+    "src/components/PaletasPanel.tsx",
+    "src/components/panelUtils.ts",
+    "src/components/AmbienteEditorForm.tsx",
+    "src/components/PaletaEditorForm.tsx",
+    "src/hooks/useEditableFields.ts",
     "tests/structureDuplicationGuard.baseline.json",
     "plans/ledger.json"
   ],
-  "maxFiles": 12,
-  "maxLines": 700,
+  "maxFiles": 45,
+  "maxLines": 2500,
   "dod": [
-    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts",
-    "npx vitest run --reporter=dot tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts tests/gameCatalog.test.ts tests/systemMatrix.test.ts tests/gamePlaythrough.test.ts tests/gameDomainOwnership.test.ts"
+    "npx vitest run --reporter=dot tests/gameCatalog.test.ts tests/gamePlaythrough.test.ts tests/systemMatrix.test.ts tests/commandAndGameCoverage.test.ts tests/gameDomainOwnership.test.ts tests/gameRulesGuards.test.ts tests/gameAccessorSingleOwnerGuard.test.ts tests/gameTurnShapeSingleSourceGuard.test.ts",
+    "npx vitest run --reporter=dot tests/abecedario.test.ts tests/adivinaCancion.test.ts tests/adivinaNumero.test.ts tests/ahorcado.test.ts tests/calculoMental.test.ts tests/cuentaConmigo.test.ts tests/cuentoColaborativo.test.ts tests/karaoke.test.ts tests/memoriaSecuencias.test.ts tests/ordenaSecuencia.test.ts",
+    "npx vitest run --reporter=dot tests/palabrasEncadenadas.test.ts tests/pronunciacion.test.ts tests/quienSoy.test.ts tests/quienSoyMention.test.ts tests/quienSoySiNo.test.ts tests/repiteTraduce.test.ts tests/respiracion.test.ts tests/riddles.test.ts tests/trabalenguas.test.ts tests/trivia.test.ts tests/veoVeo.test.ts tests/storyteller.test.ts",
+    "npx vitest run --reporter=dot tests/loteria.test.ts tests/loteriaAdvance.test.ts tests/gameCommandEscape.test.ts tests/gameEngine.test.ts tests/gamesAudit.test.ts tests/injectedValues.test.ts",
+    "npx vitest run --reporter=dot tests/catalogRegistry.test.ts tests/dynamicCatalogs.test.ts tests/searchCatalog.test.ts tests/searchCatalogPanel.test.tsx tests/fluSettingsTabView.test.tsx tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts",
+    "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
   "ignore": [".task/**", "scripts/task-gate*.mjs", "kilo.json"],
-  "e2eScope": {}
+  "e2eScope": {
+    "src/components/AmbientesPanel.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/PaletasPanel.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/panelUtils.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/AmbienteEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/PaletaEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/hooks/useEditableFields.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/core/games/gameUtils.ts": ["tests/e2e/matriz-comandos-productivos.spec.ts"]
+  }
 }

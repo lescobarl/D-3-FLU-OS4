@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { useEditableFields } from '../hooks/useEditableFields';
+import { setGroupedField, useEditableFields } from '../hooks/useEditableFields';
 import { submitCatalogEditor } from './editorSubmit';
 import { configChild, configTextMap } from './configText';
 import {
@@ -57,9 +57,7 @@ export function PaletaEditorForm({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const setColor = (key: PaletteColorKey, value: string) => {
-        setFields((prev) => ({ ...prev, colors: { ...prev.colors, [key]: value } }));
-    };
+    const setColor = (key: PaletteColorKey, value: string) => setGroupedField(setFields, 'colors', key, value);
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) =>
         submitCatalogEditor(event, {
