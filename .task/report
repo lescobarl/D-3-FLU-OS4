@@ -4033,3 +4033,31 @@ DoD-producto (la pantalla del dueno).
 Alcance real (0.23): CUBIERTO=la propiedad de colapso en cualquier posicion, su guard de
 comportamiento y la barrera (lint/gate); NO CUBIERTO=los demas defectos declarados, la suite
 completa y el DoD-producto.
+
+========================================================================
+2026-10-09 - P9.52: live-phrase de la Bitacora con color propio + panel sin "user"
+
+Cambios aplicados:
+  - src/styles/unified.css: la regla de color de `.conversation-live-phrase` estaba
+    scopeada a `.frame-content--workspace ...` (contenedor que NO envuelve la Bitacora,
+    que es donde vive el unico elemento con esa clase). Des-scopada a `.conversation-live-phrase`.
+  - src/App.tsx:3994: el panel de Participantes usaba `e.speakerName || e.role || ''` y
+    caia al slug interno del rol ('user'). Ahora usa `String(e.speakerName || '').trim()`
+    (misma linea; App.tsx no crece).
+
+Entrada cruda: "la ultima frase aparece en color negro" y "el panel de Participantes muestra user".
+
+Validado contra:
+  - Metrica App.tsx (`speakerName || e.role`): base=1 -> actual=0 (target 0).
+  - Metrica unified.css (selectores raiz `.conversation-live-phrase {`): base=0 -> actual=1.
+  - DoD tests/App.shell.test.tsx: 31/31 VERDE.
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK.
+  - npm run lint: 222 ficheros / 1863 casos VERDE; eslint 0; tsc -b limpio.
+  - Commit: 8a2f2f3.
+
+No validado: la comprobacion VISUAL del dueno (su pantalla); el resto de los defectos
+(D1 perdida de palabras, D2 fila prematura, D3 nombre, diarizacion que infla hablantes,
+saludo doble del onboarding); la suite completa y el DoD-producto.
+
+Alcance real (0.23): CUBIERTO=el color de la live-phrase y el fallback del panel, con sus
+dos metricas y la barrera; NO CUBIERTO=los declarados arriba.

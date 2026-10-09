@@ -1894,6 +1894,13 @@
   ],
   "done": [
     {
+      "id": "P9.52",
+      "commit": "8a2f2f3",
+      "titulo": "La live-phrase de la Bitacora tiene su propio color; el panel de Participantes no muestra el slug 'user'",
+      "evidencia": "CERRADO 2026-10-09 (commit 8a2f2f3). DEFECTO 1 (color): el UNICO elemento con la clase `conversation-live-phrase` es FluConversationTabView.tsx:72 (la Bitacora), pero la regla de color estaba en src/styles/unified.css:2199 scopeada a `.frame-content--workspace .conversation-live-phrase`, contenedor que solo existe en el Pizarron (FluWorkspaceTabView.tsx:48): la regla NUNCA aplicaba y la ultima frase salia con el color por defecto. FIX: des-scopada a `.conversation-live-phrase` (dueno propio). METRICA: selectores `.conversation-live-phrase {` de nivel raiz 0 -> 1. DEFECTO 2 (panel): App.tsx:3994 construia la lista del panel con `e.speakerName || e.role || ''`; sin hablante caia al slug INTERNO del rol y las filas de usuario (role 'user', fluDatabase.ts:49) se listaban como \"user\". FIX: `String(e.speakerName || '').trim()` (misma linea; App.tsx NO crece: techo 4643). METRICA: `speakerName || e.role` 1 -> 0 (target 0). VALIDADO: `npm run gate` OK (metrica base=1 actual=0); DoD tests/App.shell.test.tsx 31/31; `npm run lint` 222 ficheros / 1863 casos VERDE; eslint 0; tsc 0. Alcance real (0.23): CUBIERTO=el color de la live-phrase y el fallback del panel, con sus dos metricas y la barrera; NO CUBIERTO=la validacion VISUAL del dueno (su pantalla), el resto de los defectos (D1/D2/D3, diarizacion, saludo doble del onboarding), la suite completa y el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
+    {
       "id": "P9.51",
       "commit": "3970d18",
       "titulo": "La repeticion CONTIGUA del ASR se colapsa en cualquier posicion (no solo en la cabeza del turno)",
