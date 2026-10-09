@@ -101,8 +101,11 @@ const FORMS = [
   // `function f(a: T): R {` — declaracion de funcion CON tipo de retorno (P9.38).
   /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*:[^{;]*\{/g,
   /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g,
-  // METODO de objeto/clase: `nombre(args) { ... }`. Era el hueco grande (motores de juego, autonomy).
-  /^\s*(?:public\s+|private\s+|protected\s+)?(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*[:)][^{;]*\{/gm,
+  // METODO de objeto/clase con tipo de retorno: `nombre(args): R {`. Se acota a UNA linea
+  // (`[ \\t]*`, sin `\n`): antes `\s*[^{;]*` cruzaba lineas y atribuia el cuerpo del `catch`
+  // siguiente a la LLAMADA previa (medido 2026-10-09: `reply(false, null, new Error(...))` se
+  // reportaba como el metodo `reply` en los dos workers y daba un grupo FALSO).
+  /^[ \t]*(?:public |private |protected )?(?:static )?(?:async )?([A-Za-z_$][\w$]*)[ \t]*\([^)]*\)[ \t]*[:)][^{;(\n]*\{/gm,
   // Flecha ANOTADA con tipo de retorno: `const f = (a: T): R => { ... }` (P9.36).
   /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*:[^=]*?=>\s*\{/g,
 ];
@@ -220,9 +223,12 @@ export function structuralGroups(sources, minLines = 3, minSkel = 40) {
 }
 
 /**
- * CEGUERA MEDIDA del detector (el numero que responde a "lo que la barrera no ve").
- * Corre la MISMA logica con un umbral mas bajo (40) y devuelve los grupos que el
- * detector estricto (60) NO ve. Ese numero es un trinquete: solo puede bajar.
+ * CEGUERA MEDIDA del detector por el filtro de LINEAS (minLines=1 vs 3): el numero que
+ * responde a "lo que la barrera no ve por exigir 3 lineas". Ese numero es un trinquete:
+ * solo puede bajar. El eje de la FORMA (minSkel) se declara aparte y MEDIDO 2026-10-09:
+ * 40 -> 0 grupos, 30 -> 1 (`isBilingualListenMode`/`isFluSpeaker`/`isCalculatingSpeakerId`,
+ * misma comparacion recortada con otro canonico), 25 -> 3 y 20 -> 9. Ese residuo esta en el
+ * ledger (P9.41) y NO en el baseline: el baseline no se amplia.
  * @param {Array<{file: string, source: string}>} sources
  */
 export function blindGroups(sources) {

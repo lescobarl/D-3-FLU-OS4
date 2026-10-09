@@ -10,11 +10,17 @@
  * cambiar `for..of` por `forEach` los esquiva. Este guard mide el ESQUELETO: la
  * implementacion, no el nombre.
  *
+ * UMBRAL 40 (2026-10-09): medido otra vez con el arbol limpio, 40 -> 0 y 30 -> 1 grupo REAL
+ * (la comparacion recortada de isBilingualListenMode/isFluSpeaker/isCalculatingSpeakerId).
+ * El umbral NO baja a 30 mientras ese grupo siga vivo: se declara en el ledger (P9.41) y NO
+ * en el baseline (el baseline no se amplia). El umbral es un DATO medido, no una comodidad.
+ *
  * COBERTURA DE FORMAS (2026-10-08b): antes el detector solo veia `function` y `const = () => {}`.
  * MEDIDO: con eso daba 0 grupos mientras existian 6 con METODOS (`start`/`stop`/`updateConfig`/
  * `turn` en los motores de juego y en autonomy). Ahora cubre funcion, flecha con llaves,
- * METODO de objeto/clase y flecha concisa, con umbral de esqueleto 40 (meseta medida: 40 y 35
- * dan los mismos 13 grupos; 60 daba 6 y 30 daba 15).
+ * METODO de objeto/clase y flecha concisa. La forma METODO se acota a UNA linea (2026-10-09):
+ * con `\s*[^{;]*` el detector cruzaba el `}` de un `catch` y atribuia su cuerpo a la LLAMADA
+ * anterior (falso positivo medido en los dos workers: un metodo `reply` que no existia).
  *
  * EL BASELINE ES DEUDA DECLARADA, NO PERDON (shrink-only): hoy son 13 grupos / 77 sitios
  * (catalogos, paneles, servicios, autonomy y motores de juego) -> P9.35. El caso "el baseline
@@ -124,6 +130,48 @@ describe('el detector no es decorativo (prueba de mutacion)', () => {
                 { file: 'src/b.js', source: facade('getDos') },
             ]),
         ).toEqual([]);
+    });
+
+    it('la forma METODO no cruza lineas: una llamada con `new Error(...)` antes de un `catch` no presta su cuerpo', () => {
+        // Falso positivo MEDIDO (2026-10-09): en los dos workers `reply(false, null, new Error(...))`
+        // iba seguido de `} catch (error) {`, y el detector reportaba un metodo `reply` cuyo
+        // cuerpo era el catch. El grupo era un artefacto, no una copia.
+        const worker = (contexto: string): string =>
+            `async function handle(type) {\n` +
+            `  try {\n` +
+            `    if (type === 'x') {\n` +
+            `      reply(false, null, new Error(\`unknown type: \${type}\`))\n` +
+            `      return\n` +
+            `    }\n` +
+            `  } catch (error) {\n` +
+            `    logCaughtError('${contexto}', error);\n` +
+            `    reply(false, null, error);\n` +
+            `  }\n` +
+            `}`;
+        const claves = structuralGroups([
+            { file: 'src/a.js', source: worker('worker a') },
+            { file: 'src/b.js', source: worker('worker b') },
+        ])
+            .map((g) => g.key)
+            .join(' ');
+        expect(claves).not.toContain(':reply');
+    });
+
+    it('y SIGUE viendo el metodo real con tipo de retorno copiado', () => {
+        const metodo = (name: string, campo: string): string =>
+            `class X {\n` +
+            `  ${name}(): number {\n` +
+            `    const total = this.${campo}.length;\n` +
+            `    const extra = this.limite + 1;\n` +
+            `    return total + extra;\n` +
+            `  }\n` +
+            `}`;
+        expect(
+            structuralGroups([
+                { file: 'src/a.js', source: metodo('totalA', 'items') },
+                { file: 'src/b.js', source: metodo('totalB', 'cosas') },
+            ]),
+        ).toHaveLength(1);
     });
 
     it('la METRICA del gate cuenta lo mismo que el guard (un solo dueno de la logica)', () => {
