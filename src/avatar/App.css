@@ -12,21 +12,16 @@
 }
 
 :root {
-  --bg-primary: #0f0f1a;
-  --bg-secondary: #1a1a2e;
+  /* P9.44: los tokens COMPARTIDOS tienen un solo dueno: src/styles/unified.css (que index.css
+     ya importa), donde salen de la paleta (--flu-*). Aqui vivian copias hardcodeadas que
+     tapaban la paleta segun el orden de carga, y --radius-sm/-md DISCREPABAN (6/10px frente a
+     los 4/6px del dueno). Este bloque conserva SOLO lo propio del lienzo del avatar. */
   --bg-tertiary: #16213e;
-  --bg-card: #1e1e36;
-  --text-primary: #e0e0e0;
-  --text-secondary: #8888aa;
   --text-muted: #555;
-  --accent-cyan: #00d4ff;
   --accent-green: #00ff88;
   --accent-orange: #ffaa00;
   --accent-red: #ff4444;
   --accent-pink: #ff66ff;
-  --border-color: #2a2a4a;
-  --radius-sm: 6px;
-  --radius-md: 10px;
   --radius-lg: 16px;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;

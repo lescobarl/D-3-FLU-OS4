@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
-import { createGetRow, createSoftDelete } from '../db/entityMutations';
+import { createGetRow, createSoftDelete, listAliveByName } from '../db/entityMutations';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -230,11 +230,7 @@ export function createContactService({
 
   const listContacts = async (): Promise<ContactRecord[]> => {
     const all = await db.contacts.toArray();
-    return all
-      .filter((row) => !row.sync?.deleted)
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-      .map(copyRecord);
+    return listAliveByName(all, copyRecord);
   };
   const removeContact = createSoftDelete<ContactRecord, RemoveContactResult>({
     table: db.contacts,

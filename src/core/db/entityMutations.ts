@@ -134,3 +134,17 @@ export function createClearFlagged<T extends SyncRow>(
         return flagged.length;
     };
 }
+/**
+ * Filas VIVAS (sin borrado logico) ordenadas por nombre, con copia defensiva.
+ * DUENO UNICO (P9.45): el idioma `.filter(!deleted).slice().sort(nombre).map(copy)` estaba
+ * copiado en contactService.listContacts y participantRegistry.list (el `.slice()` sobraba:
+ * `filter` ya devuelve un array nuevo).
+ * @param rows filas de la tabla (tal cual salen de Dexie)
+ * @param copy copia defensiva (convencion del proyecto: `copyRecord`)
+ */
+export function listAliveByName<T extends SyncRow & { name: string }>(rows: readonly T[], copy: (row: T) => T): T[] {
+    return rows
+        .filter((row) => !row.sync?.deleted)
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+        .map(copy);
+}

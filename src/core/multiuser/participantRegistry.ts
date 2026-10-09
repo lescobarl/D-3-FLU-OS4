@@ -22,6 +22,7 @@ import { copyRecord } from '../db/recordCopy';
 import { stripDiacriticsLower } from '../../lib/textUtils';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
+import { listAliveByName } from '../db/entityMutations';
 
 // ------------------------------------------------------------
 // Tipos
@@ -344,11 +345,7 @@ export function createParticipantRegistry({
 
   const list = async (): Promise<ParticipantRecord[]> => {
     const all = await db.toArray();
-    return all
-      .filter((p) => !p.sync?.deleted)
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-      .map(copyRecord);
+    return listAliveByName(all, copyRecord);
   };
 
   const remove = async (id: string): Promise<boolean> => {
