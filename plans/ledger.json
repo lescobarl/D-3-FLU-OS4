@@ -5,6 +5,13 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P9.50",
+      "titulo": "FLAKE MEDIDO: el e2e P6 (continuacion sin wake) es inestable; no es regresion de P9.49",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-09: el e2e P6 (continuacion sin wake) es intermitente y FALLA IGUAL con el hook de BASE 8a1d75f (sin el cableado de P9.49): `--repeat-each=3` dio 1-2 fallos de 3 en AMBOS arboles. NO es regresion de P9.49. Es un FLAKE de timing/estado del spec (mismo sintoma que P7.49 con systemMatrix G7). El pipeline voz-escenario-dueno pasa 8/8 en corrida limpia. PENDIENTE: estabilizar P6 (fake timers / espera determinista) o declararlo como deuda medida; NO se silencia.",
+      "origen": "flake-2026-10-09"
+    },
+    {
       "id": "P9.49",
       "titulo": "El hook cablea el vinculo del participante a la via tardia del nombre (extraido a src/app por el trinquete del god-file)",
       "estado": "done",
