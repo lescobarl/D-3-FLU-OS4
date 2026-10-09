@@ -1,27 +1,28 @@
 {
-  "task": "P9.47 - el hablante de la fila del usuario tiene UN solo escritor (el store deja de ser segundo escritor).",
-  "objective": "Retirar el segundo escritor del hablante de la fila del usuario (setConversationEntrySpeaker) y blindarlo por FORMA con el guard del escritor unico.",
-  "base": "ce31ed7",
+  "task": "P9.48 - el nombre de la fila del usuario tiene UN solo dueno (resolveRowSpeakerName) en los DOS caminos: el commit y la resolucion tardia.",
+  "objective": "Unificar el nombre de la fila en un solo dueno: la resolucion tardia (updateTurnRowSpeaker) deja de usar una ruta mas pobre (resolveSpeakerAlias) y aplica la MISMA regla que el commit, con el vinculo etiqueta->persona.",
+  "base": "eb104d5",
   "allow": [
-    "src/store/integrationStore.ts",
-    "tests/conversationTurnRowSingleWriter.test.ts",
+    "src/voice/lib/conversationTurnRow.ts",
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "tests/registeredSpeakerNameGuard.test.ts",
     "plans/ledger.json"
   ],
-  "maxFiles": 5,
-  "maxLines": 2000,
+  "maxFiles": 6,
+  "maxLines": 3000,
   "dod": [
-    "npx vitest run --reporter=dot tests/conversationHistoryCap.test.ts tests/conversationLiveNotWiped.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/conversationTurnSingleRow.test.ts tests/minuteHandlersDayRollover.test.ts tests/voiceCanonicalPhrase.test.ts"
+    "npx vitest run --reporter=dot tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/useFluVoiceAssistant.behavior.test.tsx"
   ],
-  "guard": "npx vitest run --reporter=dot tests/conversationTurnRowSingleWriter.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/registeredSpeakerNameGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "El store no escribe el hablante de una fila existente (escritor unico).",
+    "statement": "La resolucion tardia usa el dueno unico del nombre, no resolveSpeakerAlias(speakerName).",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/store/integrationStore.ts','utf8');const m=s.match(/\\{\\s*\\.\\.\\.\\s*\\w+\\s*,\\s*speakerName/g)||[];console.log(m.length)\"",
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/conversationTurnRow.ts','utf8');console.log((s.match(/resolveSpeakerAlias\\(speakerName\\)/g)||[]).length)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/conversationTurnRowSingleWriter.test.ts"
+      "tests/registeredSpeakerNameGuard.test.ts"
     ]
   },
   "ignore": [
@@ -30,7 +31,10 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/store/integrationStore.ts": [
+    "src/voice/lib/conversationTurnRow.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/hooks/useFluVoiceAssistant.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

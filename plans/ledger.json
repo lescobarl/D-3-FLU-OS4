@@ -5,6 +5,13 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P9.48",
+      "titulo": "El nombre de la fila tiene UN solo dueno en los DOS caminos: la resolucion tardia usaba una ruta mas pobre (ruta doble del nombre)",
+      "estado": "done",
+      "evidencia": "VEREDICTO: 2026-10-09 CERRADO. DEFECTO MEDIDO en debug.log (corrida del dueno 18:42-18:48): 58/58 commits con `written:\"\"` (fila sin hablante) y `evidencia:false`, y `row-update` escribia etiquetas GENERICAS (`pedido:\"Hablante 5\"`, `\"Hablante 6\"`) aunque la sesion estaba identificada -> el nombre registrado NO llegaba a las filas (queja del dueno: \"le puso a un registro Luis y a los demas los dejo como hablante dos\"). CAUSA RAIZ (ruta doble, 7.7): el commit decide el nombre con `resolveRowSpeakerName` (con el vinculo etiqueta->persona) pero la RESOLUCION TARDIA --la via que realmente rellena la fila cuando el commit escribe vacio-- usaba `resolveSpeakerAlias(speakerName)` a secas, sin el vinculo ni la regla de evidencia; y el hook no le pasaba el vinculo. FIX (un solo dueno, sin duplicar la regla): `updateTurnRowSpeaker` pasa a usar `resolveRowSpeakerName` y recibe `registeredSpeaker`; el hook (`applyResolvedSpeaker`) le pasa el vinculo del participante activo. GUARD nacido ROJO->VERDE medido (apartando el src viejo cae el caso \"updateTurnRowSpeaker mapea la etiqueta registrada al NOMBRE\"; con el fix 12/12) en tests/registeredSpeakerNameGuard.test.ts. METRICA: `resolveSpeakerAlias(speakerName)` en conversationTurnRow.ts = 1 -> 0. Alcance real (0.23): CUBIERTO=la ruta doble del nombre eliminada (los DOS caminos usan el mismo dueno) con guard rojo->verde e invariante medido base/actual; NO CUBIERTO=el DoD-producto (su pantalla) y la calibracion de la diarizacion con su micro real (los umbrales caen en la banda de la misma voz; sigue abierto).",
+      "origen": "auditoria-2026-10-09e"
+    },
+    {
       "id": "P9.47",
       "titulo": "El hablante de la fila del usuario tiene UN solo escritor: el store deja de ser segundo escritor (barrera por forma)",
       "estado": "done",

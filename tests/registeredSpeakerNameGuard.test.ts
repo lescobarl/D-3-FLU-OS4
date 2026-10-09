@@ -15,7 +15,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { resolveRegisteredSpeakerName } from '../src/voice/lib/speakerLabels.js';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow, resetSpeakerAliases } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow, resetSpeakerAliases, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
 
 const LUIS = { registeredLabel: 'Hablante 1', registeredName: 'Luis' };
 
@@ -109,5 +109,37 @@ describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)',
     expect(con).not.toBe(sin);
     expect(sin).toBe('');
     expect(con).toBe('Luis');
+  });
+});
+
+// P9.48 - la RESOLUCION TARDIA (`updateTurnRowSpeaker`) usa el MISMO dueno que el
+// commit (`resolveRowSpeakerName`): tambien mapea etiqueta->nombre registrado. Antes
+// usaba `resolveSpeakerAlias` a secas (ruta doble del nombre), asi que la fila que
+// rellenaba esa via salia "Hablante N" aunque la persona estuviera registrada.
+describe('P9.48 - la resolucion tardia aplica el nombre registrado (un solo dueno)', () => {
+  beforeEach(() => {
+    useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined });
+    resetSpeakerAliases();
+  });
+
+  it('updateTurnRowSpeaker mapea la etiqueta registrada al NOMBRE', () => {
+    const { id } = commitUserTurnRow({ text: 'hola soy luis', turnId: 11 });
+    updateTurnRowSpeaker(11, 'Hablante 1', { evidenciaAcustica: true, registeredSpeaker: LUIS });
+    const row = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id);
+    expect(row?.speakerName).toBe('Luis');
+  });
+
+  it('sin evidencia acustica NO inventa el nombre (etiqueta automatica)', () => {
+    const { id } = commitUserTurnRow({ text: 'hola', turnId: 12 });
+    updateTurnRowSpeaker(12, 'Hablante 1', { evidenciaAcustica: false, registeredSpeaker: LUIS });
+    const row = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id);
+    expect(String(row?.speakerName || '')).toBe('');
+  });
+
+  it('PRUEBA DE DETECTOR: con el vinculo renombra; con otro registro, no', () => {
+    const { id } = commitUserTurnRow({ text: 'x', turnId: 13 });
+    updateTurnRowSpeaker(13, 'Hablante 1', { evidenciaAcustica: true, registeredSpeaker: { registeredLabel: 'Hablante 9', registeredName: 'Luis' } });
+    const row = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id);
+    expect(row?.speakerName).not.toBe('Luis');
   });
 });
