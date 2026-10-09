@@ -20,6 +20,7 @@
 
 import { IntervalLifecycle } from './intervalLifecycle';
 import { createModuleSingleton } from './serviceSingleton';
+import { snapshotConfig } from './configSnapshot';
 import { STORAGE_KEYS, GEMINI_CONFIG, DEEPSEEK_CONFIG, readStorage } from '../config/appConfig';
 import { setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
 import { DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
@@ -1133,7 +1134,7 @@ export class BackupSystem extends IntervalLifecycle<BackupSystemConfig> {
 
     
     getConfig(): BackupSystemConfig {
-        return { ...this.config };
+        return snapshotConfig(this.config);
     }
 }
 

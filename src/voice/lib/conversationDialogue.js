@@ -4,6 +4,7 @@
  */
 import { cleanForSpeech } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { equalsTrimmed } from '../../lib/textUtils'
 
 const FALLBACK_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
@@ -17,7 +18,7 @@ export const DIALOGUE_SOURCE = Object.freeze({
 })
 
 export function isFluSpeaker(speaker = '') {
-  return String(speaker || '').trim() === FLU_DIALOGUE_SPEAKER
+  return equalsTrimmed(speaker, FLU_DIALOGUE_SPEAKER)
 }
 
 export function trimDialogueHistory(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {

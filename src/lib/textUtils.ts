@@ -18,6 +18,15 @@ export function escapeRegExp(s: string): string {
 }
 
 /**
+ * Compara un texto (recortado de espacios) con un valor canonico. DUENO UNICO de la forma
+ * `String(v || '').trim() === CONST`, copiada en activeListen.isBilingualListenMode,
+ * conversationDialogue.isFluSpeaker y conversationRow.isCalculatingSpeakerId (P9.41).
+ */
+export function equalsTrimmed(value: unknown, canonical: string): boolean {
+    return String(value || '').trim() === canonical;
+}
+
+/**
  * Normalizar espacios en blanco (OS2 audioMath.js parity).
  * Coerción defensiva: null/undefined/0 → ''.
  */

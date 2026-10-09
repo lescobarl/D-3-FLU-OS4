@@ -5,6 +5,7 @@
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
+import { equalsTrimmed } from '../../lib/textUtils'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
 export const SPEAKER_ID_FLU = 'flu'
@@ -17,7 +18,7 @@ export function getIdentifyingSpeakerName(config = FLU_CONFIG) {
 }
 
 export function isCalculatingSpeakerId(speakerId = '') {
-  return String(speakerId || '').trim() === SPEAKER_ID_CALCULATING
+  return equalsTrimmed(speakerId, SPEAKER_ID_CALCULATING)
 }
 
 export function isValidSpeakerId(speakerId = '') {

@@ -1,4 +1,4 @@
-import { pickLabel } from '../../lib/textUtils';
+import { equalsTrimmed, pickLabel } from '../../lib/textUtils';
 /**
  * Escucha activa: estado, hablantes, finales. Motor de texto en conversationStream.js.
  */
@@ -247,7 +247,7 @@ export function getRecognitionLanguage(language = 'es', activeLocale = '') {
 
 /** Modo escucha: es | en | both (bilingüe). */
 export function isBilingualListenMode(language = '') {
-  return String(language || '').trim() === 'both'
+  return equalsTrimmed(language, 'both')
 }
 
 /** Locale BCP-47 del motor SR según modo UI y texto detectado. */

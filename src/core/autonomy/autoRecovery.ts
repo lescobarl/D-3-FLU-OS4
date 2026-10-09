@@ -29,6 +29,7 @@ import type { ComponentHealth, HealthMonitor } from './healthMonitor';
 import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
 import { createModuleSingleton } from './serviceSingleton';
+import { snapshotConfig } from './configSnapshot';
 
 /** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
 const RC = AUTONOMY_POLICY.recovery;
@@ -930,7 +931,7 @@ export class AutoRecoverySystem {
     }
     
     getConfig(): AutoRecoveryConfig {
-        return { ...this.config };
+        return snapshotConfig(this.config);
     }
 }
 

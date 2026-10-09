@@ -20,6 +20,7 @@
 
 import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
 import { createModuleSingleton } from './serviceSingleton';
+import { snapshotConfig } from './configSnapshot';
 import { emitAutonomyEvent } from './autonomyEvents';
 import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
@@ -827,7 +828,7 @@ export class AutoOptimizationSystem extends IntervalLifecycle<AutoOptimizationCo
 
     
     getConfig(): AutoOptimizationConfig {
-        return { ...this.config };
+        return snapshotConfig(this.config);
     }
     
     resetParameter(parameter: OptimizableParameter): void {
