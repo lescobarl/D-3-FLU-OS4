@@ -67,6 +67,9 @@
     "src/voice/lib/fluDevConsole.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
     "src/voice/lib/listenLog.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
     "src/voice/lib/fluTranscriptMotor.js": ["tests/e2e/voz-locucion-unica.spec.ts"],
+    "src/components/editorSubmit.ts": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/AmbienteEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
+    "src/components/PaletaEditorForm.tsx": ["tests/e2e/flu-settings-panel.spec.ts"],
     "src/voice/lib/fluTranscriptPause.js": ["tests/e2e/voz-locucion-unica.spec.ts"]
   }
 }
