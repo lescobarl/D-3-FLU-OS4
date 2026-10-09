@@ -67,7 +67,14 @@
     "src/voice/lib/micCapture.js",
     "src/voice/lib/speakerPolicy.js",
     "src/voice/lib/asrTurnSegmentation.js",
-    "src/voice/lib/wakePolicy.js"
+    "src/voice/lib/wakePolicy.js",
+    "src/lib/downloadFile.ts",
+    "src/components/FluSettingsPanel.tsx",
+    "src/components/GenerationProgressPanel.tsx",
+    "src/voice/lib/audioMath.js",
+    "src/voice/lib/speechMerge.js",
+    "src/voice/lib/conversationStream.js",
+    "src/voice/lib/turnTranscript.js"
   ],
   "maxFiles": 110,
   "maxLines": 6000,
@@ -83,7 +90,8 @@
     "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx",
     "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts",
     "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/conversationSession.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/validateIntegralCtx.test.ts tests/voiceCanonicalPhrase.test.ts tests/textUtils.test.ts",
-    "npx vitest run --reporter=dot tests/asrTurnSegmentation.test.ts tests/continuousAudioBuffer.test.ts tests/speakerSoloCoalesce.test.ts tests/captureSensitivityGuard.test.ts"
+    "npx vitest run --reporter=dot tests/asrTurnSegmentation.test.ts tests/continuousAudioBuffer.test.ts tests/speakerSoloCoalesce.test.ts tests/captureSensitivityGuard.test.ts",
+    "npx vitest run --reporter=dot tests/decideVoiceTurnDispatch.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
@@ -236,6 +244,27 @@
     ],
     "src/core/autonomy/configSnapshot.ts": [
       "tests/e2e/autonomia-respaldo.spec.ts"
+    ],
+    "src/lib/downloadFile.ts": [
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/components/FluSettingsPanel.tsx": [
+      "tests/e2e/flu-settings-panel.spec.ts"
+    ],
+    "src/components/GenerationProgressPanel.tsx": [
+      "tests/e2e/pizarron-funcionalidades.spec.ts"
+    ],
+    "src/voice/lib/audioMath.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/speechMerge.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/conversationStream.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/lib/turnTranscript.js": [
+      "tests/e2e/voz-locucion-unica.spec.ts"
     ]
   }
 }
