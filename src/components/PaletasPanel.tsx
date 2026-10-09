@@ -25,7 +25,6 @@
 // ============================================================
 import { useState } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { saveCatalogEntry } from '../core/catalogs/catalogEditorSave';
 import { configChild, configTextMap } from './configText';
 import type {
     RegisterResult,
@@ -42,6 +41,13 @@ import {
 } from '../core/branding/paletaFactory';
 import { PaletaEditorForm } from './PaletaEditorForm';
 import { cloneSeedEntry } from './panelUtils';
+import {
+    catalogCreateValue,
+    catalogEditValue,
+    mapCatalogReason,
+    submitCatalogPanel,
+    type CatalogReason,
+} from './catalogPanelEditors';
 
 export interface PaletasPanelProps {
     /** Catálogo de paletas fusionado (getAllPalettes()). */
@@ -91,52 +97,30 @@ export function PaletasPanel({
     const ui = configTextMap(configChild(FLU_CONFIG.ui, 'paletas'));
     const [editor, setEditor] = useState<EditorState>(null);
 
-    const mapReason = (
-        reason:
-            | Extract<RegisterResult<PaletteDefinition>, { ok: false }>['reason']
-            | Extract<UpdateResult<PaletteDefinition>, { ok: false }>['reason']
-    ): string => {
-        switch (reason) {
-            case 'duplicate':
-                return ui.duplicateError || 'Ya existe una temporada con ese identificador.';
-            case 'reserved':
-                return ui.reservedError || 'Ese identificador está reservado por el sistema.';
-            case 'not-found':
-                return ui.notFoundError || 'La temporada ya no existe.';
-            default:
-                return ui.invalidError || 'El formulario contiene datos inválidos.';
-        }
-    };
+    const mapReason = (reason: CatalogReason<PaletteDefinition>): string =>
+        mapCatalogReason(reason, ui, {
+            duplicate: 'Ya existe una temporada con ese identificador.',
+            notFound: 'La temporada ya no existe.',
+        });
 
-    const startCreate = () => {
-        const template = structuredClone(builtinPaletteEntries()[0]);
-        setEditor({ mode: 'create', template, seed: emptyEditableFields(template) });
-    };
+    const startCreate = () =>
+        setEditor(catalogCreateValue(structuredClone(builtinPaletteEntries()[0]), emptyEditableFields));
 
     const startClone = (builtin: PaletteDefinition) =>
         setEditor({ mode: 'create', ...cloneSeedEntry(builtin, editableFieldsOf, 'name', builtin.name, ui.cloneNameSuffix) });
 
-    const startEdit = (paleta: PaletteDefinition) => {
-        setEditor({
-            mode: 'edit',
-            id: paleta.id,
-            template: paleta,
-            seed: editableFieldsOf(paleta),
-        });
-    };
+    const startEdit = (paleta: PaletteDefinition) =>
+        setEditor(catalogEditValue(paleta, editableFieldsOf));
 
-    const handleEditorSubmit = async (payload: PaletteDefinition): Promise<string | null> => {
-        const error = await saveCatalogEntry({
+    const handleEditorSubmit = async (payload: PaletteDefinition): Promise<string | null> =>
+        submitCatalogPanel({
             editor,
             payload,
             register: onRegister,
             update: onUpdate,
             mapReason,
+            close: () => setEditor(null),
         });
-        if (error) return error;
-        setEditor(null);
-        return null;
-    };
 
     const handleRemove = async (paleta: PaletteDefinition) => {
         await onRemove(paleta.id);

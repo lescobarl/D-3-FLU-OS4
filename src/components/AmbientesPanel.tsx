@@ -28,7 +28,6 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { saveCatalogEntry } from '../core/catalogs/catalogEditorSave';
 import type {
     RegisterResult,
     UpdateResult,
@@ -46,6 +45,13 @@ import {
 } from '../core/environments/ambienteFactory';
 import { AmbienteEditorForm } from './AmbienteEditorForm';
 import { cloneSeedEntry } from './panelUtils';
+import {
+    catalogCreateValue,
+    catalogEditValue,
+    mapCatalogReason,
+    submitCatalogPanel,
+    type CatalogReason,
+} from './catalogPanelEditors';
 
 export interface AmbientesPanelProps {
     /** Catálogo de ambientes (getAmbientes()). */
@@ -132,52 +138,30 @@ export function AmbientesPanel({
         return labels;
     }, []);
 
-    const mapReason = (
-        reason:
-            | Extract<RegisterResult<EnvironmentDefinition>, { ok: false }>['reason']
-            | Extract<UpdateResult<EnvironmentDefinition>, { ok: false }>['reason']
-    ): string => {
-        switch (reason) {
-            case 'duplicate':
-                return ui.duplicateError || 'Ya existe un ambiente con ese identificador.';
-            case 'reserved':
-                return ui.reservedError || 'Ese identificador está reservado por el sistema.';
-            case 'not-found':
-                return ui.notFoundError || 'El ambiente ya no existe.';
-            default:
-                return ui.invalidError || 'El formulario contiene datos inválidos.';
-        }
-    };
+    const mapReason = (reason: CatalogReason<EnvironmentDefinition>): string =>
+        mapCatalogReason(reason, ui, {
+            duplicate: 'Ya existe un ambiente con ese identificador.',
+            notFound: 'El ambiente ya no existe.',
+        });
 
-    const startCreate = () => {
-        const template = structuredClone(ENVIRONMENTS[0]);
-        setEditor({ mode: 'create', template, seed: emptyEnvironmentEditableFields(template) });
-    };
+    const startCreate = () =>
+        setEditor(catalogCreateValue(structuredClone(ENVIRONMENTS[0]), emptyEnvironmentEditableFields));
 
     const startClone = (builtin: EnvironmentDefinition) =>
         setEditor({ mode: 'create', ...cloneSeedEntry(builtin, editableFieldsOfEnvironment, 'nombre', builtin.nombre, ui.cloneNameSuffix) });
 
-    const startEdit = (ambiente: EnvironmentDefinition) => {
-        setEditor({
-            mode: 'edit',
-            id: ambiente.id,
-            template: ambiente,
-            seed: editableFieldsOfEnvironment(ambiente),
-        });
-    };
+    const startEdit = (ambiente: EnvironmentDefinition) =>
+        setEditor(catalogEditValue(ambiente, editableFieldsOfEnvironment));
 
-    const handleEditorSubmit = async (payload: EnvironmentDefinition): Promise<string | null> => {
-        const error = await saveCatalogEntry({
+    const handleEditorSubmit = async (payload: EnvironmentDefinition): Promise<string | null> =>
+        submitCatalogPanel({
             editor,
             payload,
             register: onRegister,
             update: onUpdate,
             mapReason,
+            close: () => setEditor(null),
         });
-        if (error) return error;
-        setEditor(null);
-        return null;
-    };
 
     const handleRemove = async (ambiente: EnvironmentDefinition) => {
         await onRemove(ambiente.id);
