@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_HASTA = 10;
 const MAX_HASTA = 20;
@@ -52,13 +52,8 @@ export function createCuentaConmigoEngine(_options?: { random?: RandomSource }):
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentaConmigoState => {
-        const state: CuentaConmigoState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentaConmigoState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'cuenta_conmigo',

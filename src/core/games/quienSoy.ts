@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -413,13 +413,8 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): QuienSoyState => {
-        const state: QuienSoyState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): QuienSoyState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'quien_soy',

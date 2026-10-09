@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ContactRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { createGetRow, createSoftDelete } from '../db/entityMutations';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -225,12 +226,7 @@ export function createContactService({
     );
     return { ok: true, record: copyRecord(updated) };
   };
-
-  const getContact = async (id: string): Promise<ContactRecord | undefined> => {
-    if (!id) return undefined;
-    const row = await db.contacts.get(id);
-    return row ? copyRecord(row) : undefined;
-  };
+  const getContact = createGetRow({ table: db.contacts, copy: copyRecord });
 
   const listContacts = async (): Promise<ContactRecord[]> => {
     const all = await db.contacts.toArray();
@@ -240,27 +236,19 @@ export function createContactService({
       .sort((a, b) => a.name.localeCompare(b.name, 'es'))
       .map(copyRecord);
   };
-
-  const removeContact = async (id: string): Promise<RemoveContactResult> => {
-    if (!id) return { ok: false, reason: INVALID_INPUT };
-    const contact = await db.contacts.get(id);
-    if (!contact) return { ok: false, reason: 'contact-not-found' };
-    const updated: ContactRecord = {
-      ...contact,
-      updatedAt: timestamp(),
-      sync: { ...buildSyncTuple(contact.sync, timestamp()), deleted: true },
-    };
-    await db.contacts.put(updated);
-    await addAuditLog(
-      'contact.remove',
-      'contacts',
-      id,
-      { name: contact.name, birthday: contact.birthday },
-      { name: updated.name, birthday: updated.birthday },
-      'contactService',
-    );
-    return { ok: true };
-  };
+  const removeContact = createSoftDelete<ContactRecord, RemoveContactResult>({
+    table: db.contacts,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'contact.remove', entity: 'contacts', source: 'contactService' },
+    onInvalid: () => ({ ok: false, reason: INVALID_INPUT }),
+    onMissing: () => ({ ok: false, reason: 'contact-not-found' }),
+    onDone: () => ({ ok: true }),
+    auditValues: (before, after) => ({
+      before: { name: before.name, birthday: before.birthday },
+      after: { name: after.name, birthday: after.birthday },
+    }),
+  });
 
   const contactsWithBirthdayNear = async (reference?: number): Promise<BirthdayContact[]> => {
     const ref = reference ?? timestamp();

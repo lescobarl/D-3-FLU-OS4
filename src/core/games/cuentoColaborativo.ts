@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, isEngineCommand, normalizeForMatch, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils';
 
 export interface CuentoItem {
     inicio: string;
@@ -107,13 +107,8 @@ export function createCuentoColaborativoEngine(options?: { random?: RandomSource
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentoColaborativoState => {
-        const state: CuentoColaborativoState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CuentoColaborativoState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'cuento_colaborativo',

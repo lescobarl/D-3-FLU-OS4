@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readRounds, roundsOverMessage, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readLongMaxCfg, readRounds, resetGameSession, roundsOverMessage, turnResult } from './gameUtils';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -92,10 +92,8 @@ function isOrderedMatch(sub: readonly string[], seq: readonly string[]): boolean
 
 export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource }): GameEngine<MemoriaSecuenciasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const readLongMax = (cfg: Record<string, unknown> | undefined): number => {
-        const longMax = Number(cfg?.longMax) || Number(cfg?.longitudMax) || DEFAULT_LONG_MAX;
-        return clamp(longMax, 1, MAX_LONG_MAX);
-    };
+    const readLongMax = (cfg: Record<string, unknown> | undefined): number =>
+        readLongMaxCfg(cfg, DEFAULT_LONG_MAX, MAX_LONG_MAX);
 
     const buildState = (cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState => {
         rng = adoptRandom(rng, cfg);
@@ -108,13 +106,8 @@ export function createMemoriaSecuenciasEngine(options?: { random?: RandomSource 
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState => {
-        const state: MemoriaSecuenciasState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): MemoriaSecuenciasState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'memoria_secuencias',

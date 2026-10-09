@@ -5,6 +5,14 @@
   "allow": [
     "src/core/games/**",
     "src/core/autonomy/**",
+    "src/core/db/entityMutations.ts",
+    "src/core/notes/notesService.ts",
+    "src/core/reminders/shoppingService.ts",
+    "src/core/contacts/contactService.ts",
+    "src/core/diary/diaryService.ts",
+    "src/core/browser/browserProfileService.ts",
+    "scripts/duplication.mjs",
+    "tests/gameEpilogueSingleOwnerGuard.test.ts",
     "src/components/catalogPanelEditors.ts",
     "tests/gameEpilogueSingleOwnerGuard.test.ts",
     "tests/catalogEditorSaveSingleOwnerGuard.test.ts",
@@ -30,7 +38,8 @@
     "npx vitest run --reporter=dot tests/loteria.test.ts tests/loteriaAdvance.test.ts tests/gameCommandEscape.test.ts tests/gameEngine.test.ts tests/gamesAudit.test.ts tests/injectedValues.test.ts",
     "npx vitest run --reporter=dot tests/catalogRegistry.test.ts tests/dynamicCatalogs.test.ts tests/searchCatalog.test.ts tests/searchCatalogPanel.test.tsx tests/fluSettingsTabView.test.tsx tests/ambienteEditorForm.test.tsx tests/paletaEditorForm.test.tsx tests/catalogEditorSaveSingleOwnerGuard.test.ts",
     "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts tests/duplicationGuard.test.ts tests/smallDuplicatesSingleOwnerGuard.test.ts tests/guardMutationGuard.test.ts tests/instrumentIntegrityGuard.test.ts tests/dodScopeGuard.test.ts",
-    "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx"
+    "npx vitest run --reporter=dot tests/autoOptimization.test.ts tests/autoRecovery.test.ts tests/backupSystem.test.ts tests/decisionEngine.test.ts tests/healthMonitor.test.ts tests/useAutonomyIntegration.test.tsx",
+    "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",

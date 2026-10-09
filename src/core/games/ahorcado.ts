@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, hasToken, isEngineCommand, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, hasToken, isEngineCommand, normalizeForMatch, pickRandom, resetGameSession, turnResult } from './gameUtils';
 
 export interface AhorcadoWord {
     palabra: string;
@@ -127,14 +127,8 @@ export function createAhorcadoEngine(options?: { random?: RandomSource }): GameE
             phase: 'announce',
         };
     };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AhorcadoState => {
-        const state: AhorcadoState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AhorcadoState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'ahorcado',

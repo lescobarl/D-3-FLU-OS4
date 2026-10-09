@@ -101,7 +101,11 @@ const FORMS = [
   /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g,
   // METODO de objeto/clase: `nombre(args) { ... }`. Era el hueco grande (motores de juego, autonomy).
   /^\s*(?:public\s+|private\s+|protected\s+)?(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*[:)][^{;]*\{/gm,
+  // Flecha ANOTADA con tipo de retorno: `const f = (a: T): R => { ... }` (P9.36).
+  /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*:[^=]*?=>\s*\{/g,
 ];
+/** `const nombre = (args): R => expresion` (flecha CONCISA anotada). */
+const CONCISE_ANOTADA = /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*:[^=]*?=>\s*([^;{\n]+)$/gm;
 /** `const nombre = (args) => expresion` (flecha CONCISA, sin llaves). */
 const CONCISE = /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*([^;{\n]+)$/gm;
 /** Nombres que no definen un simbolo (control de flujo / reservadas / accesores). */
@@ -142,6 +146,14 @@ export function findFunctions(file, source, minLines = 3, minSkel = 40) {
     const skel = skeleton(c[2]);
     if (skel.length < minSkel) continue;
     out.push({ file, name: c[1], line: source.slice(0, c.index).split('\n').length, skel });
+  }
+  CONCISE_ANOTADA.lastIndex = 0;
+  let a;
+  while ((a = CONCISE_ANOTADA.exec(source))) {
+    if (NOT_A_SYMBOL.has(a[1])) continue;
+    const skel = skeleton(a[2]);
+    if (skel.length < minSkel) continue;
+    out.push({ file, name: a[1], line: source.slice(0, a.index).split('\n').length, skel });
   }
   return out;
 }

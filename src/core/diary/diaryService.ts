@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type DiaryEntryRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { createGetRow, createSoftDelete } from '../db/entityMutations';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -188,12 +189,7 @@ export function createDiaryService({
     );
     return { ok: true, record: copyRecord(updated) };
   };
-
-  const getEntry = async (id: string): Promise<DiaryEntryRecord | undefined> => {
-    if (!id) return undefined;
-    const row = await db.diaryEntries.get(id);
-    return row ? copyRecord(row) : undefined;
-  };
+  const getEntry = createGetRow({ table: db.diaryEntries, copy: copyRecord });
 
   const listEntries = async (date?: string): Promise<DiaryEntryRecord[]> => {
     const all = await db.diaryEntries.toArray();
@@ -210,27 +206,19 @@ export function createDiaryService({
     const sorted = await listEntries();
     return typeof limit === 'number' && limit >= 0 ? sorted.slice(0, limit) : sorted;
   };
-
-  const removeEntry = async (id: string): Promise<RemoveDiaryResult> => {
-    if (!id) return { ok: false, reason: INVALID_INPUT };
-    const entry = await db.diaryEntries.get(id);
-    if (!entry) return { ok: false, reason: 'diary-not-found' };
-    const updated: DiaryEntryRecord = {
-      ...entry,
-      updatedAt: timestamp(),
-      sync: { ...buildSyncTuple(entry.sync, timestamp()), deleted: true },
-    };
-    await db.diaryEntries.put(updated);
-    await addAuditLog(
-      'diary.remove',
-      'diaryEntries',
-      id,
-      { date: entry.date, content: entry.content },
-      { date: entry.date, content: entry.content },
-      'diaryService',
-    );
-    return { ok: true };
-  };
+  const removeEntry = createSoftDelete<DiaryEntryRecord, RemoveDiaryResult>({
+    table: db.diaryEntries,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'diary.remove', entity: 'diaryEntries', source: 'diaryService' },
+    onInvalid: () => ({ ok: false, reason: INVALID_INPUT }),
+    onMissing: () => ({ ok: false, reason: 'diary-not-found' }),
+    onDone: () => ({ ok: true }),
+    auditValues: (before, after) => ({
+      before: { date: before.date, content: before.content },
+      after: { date: after.date, content: after.content },
+    }),
+  });
 
   return {
     addEntry,

@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, fluDb, type NoteRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { createClearFlagged, createRename, createToggle } from '../db/entityMutations';
 import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter, type NewNoteInput } from './notesList';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
@@ -117,35 +118,21 @@ export function createNotesService({
     return filterNotes(all.filter(isLive), filter).map(copyRecord);
   };
 
-  const toggle = async (id: string): Promise<NoteRecord | null> => {
-    const row = await db.get(id);
-    if (!row) return null;
-    const updated: NoteRecord = {
-      ...row,
-      done: !row.done,
-      updatedAt: timestamp(),
-      sync: buildSyncTuple(row.sync, timestamp()),
-    };
-    await db.put(updated);
-    await addAuditLog('notes.toggle', 'note', id, row.done, updated.done, 'notesService');
-    return copyRecord(updated);
-  };
+  const toggle = createToggle({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'notes.toggle', entity: 'note', source: 'notesService' },
+    setFlag: (row, at) => ({ ...row, done: !row.done, updatedAt: at, sync: buildSyncTuple(row.sync, at) }),
+    flagOf: (row) => row.done,
+  });
 
-  const rename = async (id: string, label: string): Promise<NoteRecord | null> => {
-    const clean = typeof label === 'string' ? label.trim() : '';
-    if (!clean) return null;
-    const row = await db.get(id);
-    if (!row) return null;
-    const updated: NoteRecord = {
-      ...row,
-      label: clean,
-      updatedAt: timestamp(),
-      sync: buildSyncTuple(row.sync, timestamp()),
-    };
-    await db.put(updated);
-    await addAuditLog('notes.rename', 'note', id, row.label, clean, 'notesService');
-    return copyRecord(updated);
-  };
+  const rename = createRename({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'notes.rename', entity: 'note', source: 'notesService' },
+  });
 
   /** Actualiza el contenido (body) de una nota. */
   const setBody = async (id: string, body: string): Promise<NoteRecord | null> => {
@@ -217,22 +204,13 @@ export function createNotesService({
   };
 
   /** Elimina todas las notas marcadas como hechas; devuelve cuántas se quitaron. */
-  const clearDone = async (): Promise<number> => {
-    const all = await db.toArray();
-    const done = all.filter((note) => note.done && !note.sync?.deleted);
-    const t = timestamp();
-    // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
-    const marked = done.map((note) => ({
-      ...note,
-      updatedAt: t,
-      sync: { ...buildSyncTuple(note.sync, t), deleted: true },
-    }));
-    if (marked.length > 0) await db.bulkPut(marked);
-    if (done.length > 0) {
-      await addAuditLog('notes.clearDone', 'note', '', done.length, 0, 'notesService');
-    }
-    return done.length;
-  };
+  const clearDone = createClearFlagged({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'notes.clearDone', entity: 'note', source: 'notesService' },
+    isFlagged: (row) => row.done,
+  });
 
   /** Borrado LÓGICO de TODAS las notas (§2.9): devuelve cuántas se marcaron. */
   const clearAll = async (opts?: { personId?: string }): Promise<number> => {

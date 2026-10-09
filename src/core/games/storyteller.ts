@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { AvatarAnimation, GameNarrativeScene, GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, pickRandom, resetGameSession, turnResult } from './gameUtils';
 
 export type StoryScene = GameNarrativeScene;
 
@@ -201,14 +201,8 @@ export function createCuentacuentosEngine(options?: { random?: RandomSource }): 
             source: 'local',
         };
     };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): StorytellerState => {
-        const state = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): StorytellerState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'cuentacuentos',

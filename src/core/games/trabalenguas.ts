@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, turnResult } from './gameUtils';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -62,23 +62,21 @@ const currentPrompt = (state: TrabalenguasState) =>
 
 export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): TrabalenguasState => {
-        rng = adoptRandom(rng, cfg);
-        return {
-            order: shuffleOrder(rng, TRABALENGUAS_BANK.length),
-            cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
-            phase: 'announce',
-        };
-    };
+    const buildState = (cfg: Record<string, unknown> | undefined): TrabalenguasState =>
+        buildShuffledState({
+            cfg,
+            bankLength: TRABALENGUAS_BANK.length,
+            defaultRounds: DEFAULT_ROUNDS,
+            maxRounds: MAX_ROUNDS,
+            adopt: (cfg2) => {
+                rng = adoptRandom(rng, cfg2);
+                return rng;
+            },
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState => {
-        const state: TrabalenguasState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'trabalenguas',

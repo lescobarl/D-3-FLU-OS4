@@ -15,6 +15,8 @@ import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
 import { shoppingItemsTable } from '../notes/notesService';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { createSoftDelete } from '../db/entityMutations';
+import { createClearFlagged, createRename, createToggle } from '../db/entityMutations';
 import { filterItems, itemsRemaining, type ShoppingListFilter, type NewShoppingItemInput } from './shoppingList';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
@@ -99,48 +101,30 @@ export function createShoppingService({
     return filterItems(all, filter).map(copyRecord);
   };
 
-  const toggle = async (id: string): Promise<ShoppingItemRecord | null> => {
-    const row = await db.get(id);
-    if (!row) return null;
-    const updated: ShoppingItemRecord = {
-      ...row,
-      checked: !row.checked,
-      updatedAt: timestamp(),
-      sync: buildSyncTuple(row.sync, timestamp()),
-    };
-    await db.put(updated);
-    await addAuditLog('shopping.toggle', 'shoppingItem', id, row.checked, updated.checked, 'shoppingService');
-    return copyRecord(updated);
-  };
+  const toggle = createToggle({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'shopping.toggle', entity: 'shoppingItem', source: 'shoppingService' },
+    setFlag: (row, at) => ({ ...row, checked: !row.checked, updatedAt: at, sync: buildSyncTuple(row.sync, at) }),
+    flagOf: (row) => row.checked,
+  });
 
-  const rename = async (id: string, label: string): Promise<ShoppingItemRecord | null> => {
-    const clean = typeof label === 'string' ? label.trim() : '';
-    if (!clean) return null;
-    const row = await db.get(id);
-    if (!row) return null;
-    const updated: ShoppingItemRecord = {
-      ...row,
-      label: clean,
-      updatedAt: timestamp(),
-      sync: buildSyncTuple(row.sync, timestamp()),
-    };
-    await db.put(updated);
-    await addAuditLog('shopping.rename', 'shoppingItem', id, row.label, clean, 'shoppingService');
-    return copyRecord(updated);
-  };
-
-  const remove = async (id: string): Promise<boolean> => {
-    const row = await db.get(id);
-    if (!row) return false;
-    const updated: ShoppingItemRecord = {
-      ...row,
-      updatedAt: timestamp(),
-      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
-    };
-    await db.put(updated);
-    await addAuditLog('shopping.remove', 'shoppingItem', id, row, updated, 'shoppingService');
-    return true;
-  };
+  const rename = createRename({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'shopping.rename', entity: 'shoppingItem', source: 'shoppingService' },
+  });
+  const remove = createSoftDelete<ShoppingItemRecord, boolean>({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'shopping.remove', entity: 'shoppingItem', source: 'shoppingService' },
+    onInvalid: () => false,
+    onMissing: () => false,
+    onDone: () => true,
+  });
 
   /** Marca todos los ítems como no comprados (pendientes). */
   const uncheckAll = async (): Promise<number> => {
@@ -163,22 +147,13 @@ export function createShoppingService({
   };
 
   /** Elimina todos los ítems marcados; devuelve cuántos se quitaron. */
-  const clearChecked = async (): Promise<number> => {
-    const all = await db.toArray();
-    const checked = all.filter((item) => item.checked && !item.sync?.deleted);
-    const t = timestamp();
-    // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
-    const marked = checked.map((item) => ({
-      ...item,
-      updatedAt: t,
-      sync: { ...buildSyncTuple(item.sync, t), deleted: true },
-    }));
-    if (marked.length > 0) await db.bulkPut(marked);
-    if (checked.length > 0) {
-      await addAuditLog('shopping.clearChecked', 'shoppingItem', '', checked.length, 0, 'shoppingService');
-    }
-    return checked.length;
-  };
+  const clearChecked = createClearFlagged({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'shopping.clearChecked', entity: 'shoppingItem', source: 'shoppingService' },
+    isFlagged: (row) => row.checked,
+  });
 
   const remaining = async (): Promise<number> => {
     const all = (await db.toArray()).filter((row) => !row.sync?.deleted);

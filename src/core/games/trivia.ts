@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resolveNumericAnswer, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -128,23 +128,21 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
 export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine<TriviaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const buildState = (cfg: Record<string, unknown> | undefined): TriviaState => {
-        rng = adoptRandom(rng, cfg);
-        return {
-            order: shuffleOrder(rng, TRIVIA_BANK.length),
-            cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
-            phase: 'announce',
-        };
-    };
+    const buildState = (cfg: Record<string, unknown> | undefined): TriviaState =>
+        buildShuffledState({
+            cfg,
+            bankLength: TRIVIA_BANK.length,
+            defaultRounds: DEFAULT_ROUNDS,
+            maxRounds: MAX_ROUNDS,
+            adopt: (cfg2) => {
+                rng = adoptRandom(rng, cfg2);
+                return rng;
+            },
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TriviaState => {
-        const state: TriviaState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TriviaState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'trivia',

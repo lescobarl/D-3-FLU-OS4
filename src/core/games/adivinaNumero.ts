@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, clamp, gameOverResult, hasAnyToken, normalizeForMatch, resolveNumericAnswer, turnResult, isEngineCommand, baseSession } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;

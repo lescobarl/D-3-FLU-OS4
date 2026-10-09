@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, gamePrompt, hasAnyToken, isEngineCommand, readRounds, runGuessTurn, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, buildShuffledState, gamePrompt, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, turnResult } from './gameUtils';
 
 export interface Riddle {
     pregunta: string;
@@ -120,23 +120,21 @@ const currentPrompt = (state: RiddlesState) =>
 
 export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): RiddlesState => {
-        rng = adoptRandom(rng, cfg);
-        return {
-            order: shuffleOrder(rng, RIDDLE_BANK.length),
-            cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
-            phase: 'announce',
-        };
-    };
+    const buildState = (cfg: Record<string, unknown> | undefined): RiddlesState =>
+        buildShuffledState({
+            cfg,
+            bankLength: RIDDLE_BANK.length,
+            defaultRounds: DEFAULT_ROUNDS,
+            maxRounds: MAX_ROUNDS,
+            adopt: (cfg2) => {
+                rng = adoptRandom(rng, cfg2);
+                return rng;
+            },
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
-        const state: RiddlesState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'adivinanzas',

@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, hasAnyToken, isEngineCommand, readRounds, runGuessTurn, shuffleOrder, stripDiacritics } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, stripDiacritics } from './gameUtils';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -131,23 +131,21 @@ function itemPrompt(item: VeoVeoItem): string {
 
 export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine<VeoVeoState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): VeoVeoState => {
-        rng = adoptRandom(rng, cfg);
-        return {
-            order: shuffleOrder(rng, VEO_VEO_BANK.length),
-            cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
-            phase: 'announce',
-        };
-    };
+    const buildState = (cfg: Record<string, unknown> | undefined): VeoVeoState =>
+        buildShuffledState({
+            cfg,
+            bankLength: VEO_VEO_BANK.length,
+            defaultRounds: DEFAULT_ROUNDS,
+            maxRounds: MAX_ROUNDS,
+            adopt: (cfg2) => {
+                rng = adoptRandom(rng, cfg2);
+                return rng;
+            },
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState => {
-        const state: VeoVeoState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'veo_veo',

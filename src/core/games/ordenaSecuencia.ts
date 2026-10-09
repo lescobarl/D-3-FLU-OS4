@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, findTokenIndex, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, buildShuffledState, findTokenIndex, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -162,23 +162,21 @@ function countRecognized(normalized: string, item: OrdenaSecuenciaItem): number 
 
 export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine<OrdenaSecuenciaState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState => {
-        rng = adoptRandom(rng, cfg);
-        return {
-            order: shuffleOrder(rng, ORDENA_BANK.length),
-            cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
-            phase: 'announce',
-        };
-    };
+    const buildState = (cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState =>
+        buildShuffledState({
+            cfg,
+            bankLength: ORDENA_BANK.length,
+            defaultRounds: DEFAULT_ROUNDS,
+            maxRounds: MAX_ROUNDS,
+            adopt: (cfg2) => {
+                rng = adoptRandom(rng, cfg2);
+                return rng;
+            },
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState => {
-        const state: OrdenaSecuenciaState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'ordena_secuencia',

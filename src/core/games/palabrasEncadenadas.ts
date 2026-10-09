@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, hasToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, stripDiacritics, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, hasToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, stripDiacritics, turnResult } from './gameUtils';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',
@@ -121,13 +121,8 @@ export function createPalabrasEncadenadasEngine(options?: { random?: RandomSourc
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState => {
-        const state: PalabrasEncadenadasState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): PalabrasEncadenadasState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'palabras_encadenadas',

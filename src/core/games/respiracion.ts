@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;
@@ -59,13 +59,8 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RespiracionState => {
-        const state: RespiracionState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RespiracionState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'respiracion',

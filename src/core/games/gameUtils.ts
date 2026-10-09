@@ -615,3 +615,44 @@ export function runGuessTurn<S extends { phase: string; cursor: number; maxRound
 
     return turnResult(message.retry(item), session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
 }
+
+/** Estado inicial con orden barajado, cursor 0, rondas y fase: el arranque comun. */
+export function buildShuffledState<S>(spec: {
+    cfg: Record<string, unknown> | undefined;
+    bankLength: number;
+    defaultRounds: number;
+    maxRounds: number;
+    /** Adopta el RNG (lo guarda el motor) y lo devuelve. */
+    adopt: (cfg: Record<string, unknown> | undefined) => RandomSource;
+    /** Construye el estado del motor desde la base comun. */
+    build: (base: { order: number[]; maxRounds: number }) => S;
+}): S {
+    const rng = spec.adopt(spec.cfg);
+    return spec.build({
+        order: shuffleOrder(rng, spec.bankLength),
+        maxRounds: readRounds(spec.cfg, spec.defaultRounds, spec.maxRounds),
+    });
+}
+
+/** Reinicia la sesion: estado nuevo del motor + score 0 + ronda 1. Un solo dueno. */
+export function resetGameSession<S>(
+    session: GameSession,
+    cfg: Record<string, unknown> | undefined,
+    build: (cfg: Record<string, unknown> | undefined) => S,
+): S {
+    const state = build(cfg);
+    session.state = state;
+    session.score = 0;
+    session.round = 1;
+    return state;
+}
+
+/** Lee el maximo de longitud (cfg.longMax / cfg.longitudMax) con fallback y techo. */
+export function readLongMaxCfg(
+    cfg: Record<string, unknown> | undefined,
+    fallback: number,
+    ceiling: number,
+): number {
+    const longMax = Number(cfg?.longMax) || Number(cfg?.longitudMax) || fallback;
+    return clamp(longMax, 1, ceiling);
+}

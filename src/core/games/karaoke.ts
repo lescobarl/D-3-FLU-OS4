@@ -18,7 +18,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)
@@ -160,13 +160,8 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
         };
     };
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): KaraokeState => {
-        const state: KaraokeState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): KaraokeState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'karaoke',

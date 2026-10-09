@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST
@@ -146,14 +146,8 @@ export function createAdivinaCancionEngine(options?: { random?: RandomSource }):
             options,
         };
     };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AdivinaCancionState => {
-        const state = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AdivinaCancionState =>
+        resetGameSession(session, cfg, buildState);
 
     const advance = (_session: GameSession, state: AdivinaCancionState): void => {
         state.cursor += 1;

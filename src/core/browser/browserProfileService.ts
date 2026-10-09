@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type BrowserProfileRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { copyRecord } from '../db/recordCopy';
+import { createSoftDelete } from '../db/entityMutations';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -199,19 +200,15 @@ export function createBrowserProfileService({
     );
     return { ok: true, record: copyRecord(updated) };
   };
-
-  const reset = async (participantId: string): Promise<boolean> => {
-    const row = await db.get(participantId);
-    if (!row) return false;
-    const updated: BrowserProfileRecord = {
-      ...row,
-      updatedAt: timestamp(),
-      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
-    };
-    await db.put(updated);
-    await addAuditLog('browser.profile.reset', 'browserProfile', participantId, row, updated, 'browserProfileService');
-    return true;
-  };
+  const reset = createSoftDelete<BrowserProfileRecord, boolean>({
+    table: db,
+    now: timestamp,
+    copy: copyRecord,
+    audit: { action: 'browser.profile.reset', entity: 'browserProfile', source: 'browserProfileService' },
+    onInvalid: () => false,
+    onMissing: () => false,
+    onDone: () => true,
+  });
 
   const getForParticipant = async (participantId: string): Promise<BrowserProfileRecord | undefined> => {
     if (!participantId) return undefined;

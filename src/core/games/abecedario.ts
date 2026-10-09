@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, shuffleOrder, stripDiacritics, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, stripDiacritics, turnResult } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -103,23 +103,20 @@ function matchedWord(texto: string, normalized: string, item: AbecedarioItem): s
 
 export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine<AbecedarioState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): AbecedarioState => {
-        rng = adoptRandom(rng, cfg);
-        return {
-            order: shuffleOrder(rng, ABECEDARIO_BANK.length),
-            cursor: 0,
-            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
-            phase: 'announce',
-        };
-    };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AbecedarioState => {
-        const state: AbecedarioState = buildState(cfg);
-        session.state = state;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const buildState = (cfg: Record<string, unknown> | undefined): AbecedarioState =>
+        buildShuffledState({
+            cfg,
+            bankLength: ABECEDARIO_BANK.length,
+            defaultRounds: DEFAULT_ROUNDS,
+            maxRounds: MAX_ROUNDS,
+            adopt: (cfg2) => {
+                rng = adoptRandom(rng, cfg2);
+                return rng;
+            },
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AbecedarioState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'abecedario',
