@@ -98,6 +98,8 @@ function block(src, openIdx) {
 /** Formas de definicion que el detector DEBE cubrir (7.7.d: la implementacion, no el nombre). */
 const FORMS = [
   /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g,
+  // `function f(a: T): R {` — declaracion de funcion CON tipo de retorno (P9.38).
+  /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*:[^{;]*\{/g,
   /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g,
   // METODO de objeto/clase: `nombre(args) { ... }`. Era el hueco grande (motores de juego, autonomy).
   /^\s*(?:public\s+|private\s+|protected\s+)?(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*[:)][^{;]*\{/gm,
