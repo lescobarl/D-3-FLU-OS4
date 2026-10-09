@@ -165,6 +165,7 @@ import {
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
 import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
+import { useParticipantSpeakerRef } from '../../app/useParticipantSpeakerRef';
 import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
 import { isAssistantSpeechEcho } from '../lib/conversationStream.js'
@@ -659,11 +660,9 @@ const lastResolvedTurnRef = useRef(0)
     speakers: userSpeakersView.current,
   })
 
-  // OS3 parity: if an external participantRef is provided, use it instead of creating a new instance.
-  // This ensures voice commands (FLU_ADELANTE) and the UI button share the same participant state.
-  // El hook SIEMPRE se invoca (orden de hooks estable): useFluParticipant no dispara
-  // efectos por si solo -- evaluar requiere llamar a la API que devuelve --, por lo que la
-  // instancia propia queda inerte cuando App.tsx inyecta la suya. No omitirlo condicionalmente.
+  // OS3 parity: if an external participantRef is provided, use it instead of creating a new
+  // instance (voz y boton de UI comparten estado). El hook SIEMPRE se invoca (orden estable);
+  // la instancia propia queda inerte cuando App.tsx inyecta la suya -> no omitirlo.
   const ownParticipant = useFluParticipant({
     apiKey,
     language,
@@ -674,6 +673,7 @@ const lastResolvedTurnRef = useRef(0)
   const fluParticipant = participantRef?.current ?? ownParticipant
   const fluParticipantRef = useRef(fluParticipant)
   fluParticipantRef.current = fluParticipant
+  const participantSpeakerRef = useParticipantSpeakerRef(activeParticipantSpeakerLabel, activeParticipantName)
 
   const flushTranscriptOnFinal = useCallback(() => {
     flushTranscriptStateOnFinal({
@@ -1466,11 +1466,11 @@ const lastResolvedTurnRef = useRef(0)
     if (!speakerName || (Number.isFinite(id) && id < lastResolvedTurnRef.current)) return
     if (Number.isFinite(id)) lastResolvedTurnRef.current = id
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
-    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length) }) // completa la fila de ESE turno, no la hereda
+    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length), registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, no la hereda
     if (isProperSpeakerName(speakerName)) {
       renameSpeakerRows(findLabelsWithSharedVoice(speakerClustersRef.current, speakerName), speakerName)
     }
-  }, [])
+  }, [participantSpeakerRef])
 
   const scheduleIdentityPreflight = useCallback(
     ({ utterance = '' } = {}) => {
