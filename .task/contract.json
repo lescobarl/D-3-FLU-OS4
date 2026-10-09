@@ -13,6 +13,7 @@
     "src/core/diary/diaryService.ts",
     "src/core/browser/browserProfileService.ts",
     "scripts/duplication.mjs",
+    "scripts/auditoria-codigo.mjs",
     "tests/gameEpilogueSingleOwnerGuard.test.ts",
     "src/components/catalogPanelEditors.ts",
     "tests/gameEpilogueSingleOwnerGuard.test.ts",
