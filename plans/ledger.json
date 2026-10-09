@@ -1894,6 +1894,13 @@
   ],
   "done": [
     {
+      "id": "P9.53",
+      "commit": "3618f2b",
+      "titulo": "Un solo dueno del saludo de cierre del onboarding (ruta doble App+flujo cerrada)",
+      "evidencia": "CERRADO 2026-10-09 (commit 3618f2b). DEFECTO del dueno: FLU hablaba DOBLE el cierre y con el nombre vacio (\"¡Listo, ! Ya estas configurado\" + \"¡Genial, luis! ¡Listo, luis!...\"). CAUSA: DOS duenos del MISMO texto del paso 'complete': (1) `onboardingFlow.advanceOnboarding` devuelve `speech = [prefix, closing]` (onboardingFlow.ts:207-215) y `useOnboarding.answer` lo habla; (2) `App.activateParticipant` volvia a buscarlo con `steps.find(s => s.id === 'complete')` y a hablarlo, con el nombre leido de la LISTA de participantes, que en ese instante puede estar vacia -> nombre vacio. FIX: el dueno es el FLUJO (ya rellena {name} del capturado); App deja de buscar/hablar el cierre y se elimina `onboardingAckSpokenForRef`. App sigue esperando el fin real del TTS (`waitForSpeechIdle`) antes de abrir el micro. Se ajusta la dep de `activateParticipant` a `[conversationMode]` (la lista ya no se usa ahi) para mantener exhaustive-deps en 0. METRICA: `id === 'complete'` en src/App.tsx 1 -> 0 (target 0). VALIDADO: `npm run gate` OK (metrica base=1 actual=0); DoD 56/56; `npm run lint` 222 ficheros / 1863 casos VERDE (hookDepsRatchet incluido); eslint 0; tsc 0; App.tsx 4643 -> 4616 lineas (BAJA, respeta el trinquete). Alcance real (0.23): CUBIERTO=la ruta doble del saludo, su metrica y la barrera; NO CUBIERTO=la validacion en pantalla del dueno, el resto de los defectos (D1/D2/D3, diarizacion que infla hablantes), la suite completa y el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
+    {
       "id": "P9.52",
       "commit": "8a2f2f3",
       "titulo": "La live-phrase de la Bitacora tiene su propio color; el panel de Participantes no muestra el slug 'user'",

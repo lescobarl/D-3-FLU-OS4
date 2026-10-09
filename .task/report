@@ -4061,3 +4061,31 @@ saludo doble del onboarding); la suite completa y el DoD-producto.
 
 Alcance real (0.23): CUBIERTO=el color de la live-phrase y el fallback del panel, con sus
 dos metricas y la barrera; NO CUBIERTO=los declarados arriba.
+
+========================================================================
+2026-10-09 - P9.53: un solo dueno del saludo de cierre del onboarding (ruta doble)
+
+Cambios aplicados:
+  - src/App.tsx: se ELIMINA el bloque de activateParticipant que volvia a buscar el paso
+    'complete' del onboarding y a hablar el cierre (y su ref onboardingAckSpokenForRef).
+    El dueno del cierre es el FLUJO (onboardingFlow.advanceOnboarding, que ya rellena
+    {name} del capturado). Se ajusta la dep de activateParticipant a [conversationMode].
+
+Entrada cruda: "¡Listo, ! Ya estas configurado" + "¡Genial, luis! ¡Listo, luis!...".
+Esperado: UN solo cierre, con el nombre correcto.
+
+Validado contra:
+  - Metrica App.tsx (`id === 'complete'`): base=1 -> actual=0 (target 0).
+  - DoD tests/App.shell.test.tsx + tests/onboardingFlow.test.ts: 56/56 VERDE.
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK.
+  - npm run lint: 222 ficheros / 1863 casos VERDE (incluye hookDepsRatchet, que se puso
+    ROJO al quitar el bloque y se resolvio quitando la dep que quedo sin uso);
+    eslint 0; tsc -b limpio. App.tsx 4643 -> 4616 lineas (baja).
+  - Commit: 3618f2b.
+
+No validado: la comprobacion en pantalla del dueno; el resto de los defectos
+(D1 perdida de palabras, D2 fila prematura, D3 nombre, diarizacion que infla hablantes);
+la suite completa y el DoD-producto.
+
+Alcance real (0.23): CUBIERTO=la ruta doble del saludo de cierre, su metrica y la barrera;
+NO CUBIERTO=los declarados arriba.
