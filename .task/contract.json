@@ -4,6 +4,7 @@
   "base": "2c9fc6f",
   "allow": [
     "src/core/games/**",
+    "src/index.css",
     "src/core/autonomy/**",
     "src/core/db/entityMutations.ts",
     "src/core/notes/notesService.ts",
