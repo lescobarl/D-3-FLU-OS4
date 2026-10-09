@@ -12,6 +12,7 @@ import { dataUrlToBlob, isDataUrl } from '../lib/formatAdapters';
 import type { GenerationJob } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { VideoAssemblyResult } from '../services/videoAssembler';
+import { downloadBlob } from '../lib/downloadFile';
 import {
     buildLocalNarrationSegments,
     isLocalTtsAvailable,
@@ -44,12 +45,8 @@ function triggerDownload(result: GeneratedDocumentResult): void {
     // Descarga binaria (PDF/DOCX/…): decodifica el data URL a Blob real.
     const binaryBlob = isDataUrl(result.content) ? dataUrlToBlob(result.content) : null;
     const blob = binaryBlob || new Blob([text], { type: result.mime || 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = result.nombre;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), TIMEOUT_POLICY_MS.documentObjectUrlRevoke);
+    // Dueno unico de la descarga: downloadBlob (src/lib/downloadFile).
+    downloadBlob(blob, result.nombre, TIMEOUT_POLICY_MS.documentObjectUrlRevoke);
 }
 
 const ESTADO_LABEL: Record<string, string> = {

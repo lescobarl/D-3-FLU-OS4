@@ -1,4 +1,4 @@
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, sliceWordsLower } from './audioMath.js';
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   getTranscriptDelta as getTranscriptDeltaFromBoundary,
@@ -100,7 +100,7 @@ function collapseStutterPass(text = '', minWords = 2) {
       if (
         left.length === unit &&
         right.length === unit &&
-        left.join(' ').toLowerCase() === right.join(' ').toLowerCase()
+        sliceWordsLower(left, 0) === sliceWordsLower(right, 0)
       ) {
         unitLen = unit
         break
@@ -116,8 +116,8 @@ function collapseStutterPass(text = '', minWords = 2) {
     collapsed.push(...words.slice(index, index + unitLen))
     index += unitLen
     while (index + unitLen <= words.length) {
-      const prev = collapsed.slice(-unitLen).join(' ').toLowerCase()
-      const next = words.slice(index, index + unitLen).join(' ').toLowerCase()
+      const prev = sliceWordsLower(collapsed, -unitLen)
+      const next = sliceWordsLower(words, index, index + unitLen)
       if (prev === next) {
         index += unitLen
       } else {

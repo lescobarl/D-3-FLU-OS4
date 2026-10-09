@@ -518,6 +518,25 @@ export function roundsOverMessage(score: number): string {
 }
 
 /**
+ * Avanza una ronda y, si era la ULTIMA, cierra la partida (phase done).
+ *
+ * DUENO UNICO (P9.43): la secuencia `session.round += 1` + `finishRoundsIfLast` estaba
+ * copiada literal en 9 motores (abecedario, adivinaCancion, ordenaSecuencia, pronunciacion,
+ * quienSoy, repiteTraduce, trabalenguas, trivia y el runGuessTurn de este modulo).
+ *
+ * @param session sesion con `round`
+ * @param state estado con cursor/rondas
+ * @returns el resultado final si la partida termino, o `null` para seguir jugando
+ */
+export function advanceRound(
+    session: { round: number; score: number },
+    state: { cursor: number; maxRounds: number; order: readonly unknown[]; phase: string },
+): GameTurnResult | null {
+    session.round += 1;
+    return finishRoundsIfLast(session, state);
+}
+
+/**
  * Item del banco que apunta el cursor del estado. DUENO UNICO (auditoria
  * 2026-10-02): estaba copiado con el mismo cuerpo en 6 motores.
  */
@@ -604,8 +623,7 @@ export function runGuessTurn<S extends { phase: string; cursor: number; maxRound
     }
 
     if (hasAnyToken(normalized, spec.skipFrames)) {
-        session.round += 1;
-        const finRonda = finishRoundsIfLast(session, state);
+        const finRonda = advanceRound(session, state);
         if (finRonda) return finRonda;
         state.cursor += 1;
         const next = spec.itemAt(state);

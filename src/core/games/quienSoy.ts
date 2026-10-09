@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, gameOverResult, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
 
 export interface QuienSoyItem {
     nombre: string;
@@ -512,8 +512,7 @@ export function createQuienSoyEngine(options?: { random?: RandomSource }): GameE
              * `apertura` es como se dice que el animal se acabo.
              */
             const cerrarAnimal = (apertura: string): GameTurnResult => {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
+                const finRonda = advanceRound(session, state);
                 if (finRonda) return finRonda;
                 advanceSkippingMentioned(state);
                 const next = itemAt(state);

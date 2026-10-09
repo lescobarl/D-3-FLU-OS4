@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, itemAtCursor, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, itemAtCursor, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -203,8 +203,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
+                const finRonda = advanceRound(session, state);
                 if (finRonda) return finRonda;
                 state.cursor += 1;
                 return turnResult(`¡Claro! Aquí va otra: ${currentPrompt(state)}`, session.score);

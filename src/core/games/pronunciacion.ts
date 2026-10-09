@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, finishRoundsIfLast, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
 import {
     PRONUNCIACION_BANK,
     pronunciacionWordsByLevel,
@@ -165,8 +165,7 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
             }
 
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
+                const finRonda = advanceRound(session, state);
                 if (finRonda) return finRonda;
                 state.cursor += 1;
                 return turnResult(`¡Claro! Aqui va otra: ${currentPrompt(state)}`, session.score);

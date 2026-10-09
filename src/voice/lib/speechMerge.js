@@ -1,7 +1,7 @@
 /**
  * Fusión de texto ASR (interinos acumulativos y finales).
  */
-import { cleanForSpeech, novelWords, speechWords } from './audioMath.js'
+import { cleanForSpeech, novelWords, sliceWordsLower, speechWords } from './audioMath.js';
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getShortFinalKeywordSet, getSpeechMergeCfg } from './fluTranscriptMotor.js'
 import { getTranscriptDelta, mergeTranscriptText } from './transcriptDelta.js'
@@ -52,8 +52,8 @@ export function collapseRepeatedSpeech(text = '') {
 
     let collapsed = false
     for (let size = Math.floor(words.length / 2); size >= 2; size -= 1) {
-      const head = words.slice(0, size).join(' ').toLowerCase()
-      const mid = words.slice(size, size * 2).join(' ').toLowerCase()
+      const head = sliceWordsLower(words, 0, size)
+      const mid = sliceWordsLower(words, size, size * 2)
       if (head && head === mid) {
         current = cleanForSpeech(words.slice(0, size).concat(words.slice(size * 2)).join(' '))
         collapsed = true
@@ -86,7 +86,7 @@ function hasRepeatedWordBlock(words = [], minSize = 4) {
   for (let size = minSize; size <= Math.min(10, Math.floor(words.length / 2)); size += 1) {
     const seen = new Set()
     for (let i = 0; i <= words.length - size; i += 1) {
-      const key = words.slice(i, i + size).join(' ').toLowerCase()
+      const key = sliceWordsLower(words, i, i + size)
       if (seen.has(key)) return true
       seen.add(key)
     }
@@ -112,9 +112,9 @@ export function collapseAsrStutter(text = '', { maxPasses = 6 } = {}) {
     let found = false
     blockSearch: for (let size = Math.min(14, Math.floor(words.length / 2)); size >= 4; size -= 1) {
       for (let i = 0; i <= words.length - size * 2; i += 1) {
-        const block = words.slice(i, i + size).join(' ').toLowerCase()
+        const block = sliceWordsLower(words, i, i + size)
         for (let j = i + size; j <= words.length - size; j += 1) {
-          if (words.slice(j, j + size).join(' ').toLowerCase() !== block) continue
+          if (sliceWordsLower(words, j, j + size) !== block) continue
           cur = cleanForSpeech(words.slice(0, j).concat(words.slice(j + size)).join(' '))
           found = true
           break blockSearch
@@ -208,8 +208,8 @@ export function collapseEchoPhrase(text = '') {
   if (words.length < 6) return collapseRepeatedSpeech(current)
 
   for (let size = Math.min(Math.floor(words.length / 2), 14); size >= 3; size -= 1) {
-    const tail = words.slice(-size).join(' ').toLowerCase()
-    const head = words.slice(0, -size).join(' ').toLowerCase()
+    const tail = sliceWordsLower(words, -size)
+    const head = sliceWordsLower(words, 0, -size)
     if (head.endsWith(tail) || head.includes(` ${tail}`)) {
       current = cleanForSpeech(words.slice(0, -size).join(' '))
       break

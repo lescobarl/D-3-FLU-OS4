@@ -25,6 +25,7 @@ import { loadSearchConfigOverrides, saveSearchConfigOverrides, getLastStorageErr
 import { useSettingsSaveRegistration } from './SettingsSaveContext';
 
 import { pickText } from '../lib/uiStrings';
+import { downloadBlob } from '../lib/downloadFile';
 export interface FluSettingsPanelProps {
     // External Services Config props
     voiceConfig?: VoiceConfig;
@@ -1072,13 +1073,11 @@ export function FluSettingsPanel({
                                 type="button"
                                 className="flu-settings-btn"
                                 onClick={() => {
-                                    const blob = new Blob([JSON.stringify(audit.logs, null, 2)], { type: 'application/json' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = 'flu-audit-logs.json';
-                                    a.click();
-                                    URL.revokeObjectURL(url);
+                                    // Dueno unico de la descarga: downloadBlob (src/lib/downloadFile).
+                                    downloadBlob(
+                                        new Blob([JSON.stringify(audit.logs, null, 2)], { type: 'application/json' }),
+                                        'flu-audit-logs.json',
+                                    );
                                 }}
                             >
                                 💾 Exportar registro de auditoría

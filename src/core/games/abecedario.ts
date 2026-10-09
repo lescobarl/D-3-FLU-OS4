@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, stripDiacritics, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, stripDiacritics, turnResult } from './gameUtils';
 
 export interface AbecedarioItem {
     letra: string;
@@ -177,8 +177,7 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
+                const finRonda = advanceRound(session, state);
                 if (finRonda) return finRonda;
                 state.cursor += 1;
                 const next = itemAt(state);

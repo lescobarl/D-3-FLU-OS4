@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine';
 import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, buildShuffledState, findTokenIndex, finishRoundsIfLast, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, buildShuffledState, findTokenIndex, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils';
 
 export interface OrdenaPaso {
     texto: string;
@@ -247,8 +247,7 @@ export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource })
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                const finRonda = finishRoundsIfLast(session, state);
+                const finRonda = advanceRound(session, state);
                 if (finRonda) return finRonda;
                 state.cursor += 1;
                 const next = itemAt(state);

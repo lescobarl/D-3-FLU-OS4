@@ -431,6 +431,19 @@ export function matchWakeWordInText(text = '', wakeWords = []) {
 }
 
 /** Palabras normalizadas (sin acentos, minúsculas) de un texto de voz. Dueño único (V18). */
+/**
+ * Trozo de una lista de palabras como texto normalizado (minusculas, unidas por espacio).
+ * DUENO UNICO (P9.43): `slice(...).join(' ').toLowerCase()` estaba copiado 14 veces en
+ * speechMerge/conversationStream/turnTranscript, cada uno con su rebanada.
+ * @param {string[]} words palabras ya normalizadas (ver speechWords)
+ * @param {number} start desde (negativo = desde el final, como Array.slice)
+ * @param {number} [end] hasta (undefined = final de la lista)
+ * @returns {string}
+ */
+export function sliceWordsLower(words, start, end) {
+  return words.slice(start, end).join(' ').toLowerCase()
+}
+
 export function speechWords(text = '') {
   return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }

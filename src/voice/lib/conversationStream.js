@@ -1,7 +1,7 @@
 /**
  * Motor único: mic → turno vivo (openLine) → UI/log. Archivo (session) solo al cerrar turno.
  */
-import { cleanForSpeech, speechWords } from './audioMath.js'
+import { cleanForSpeech, sliceWordsLower, speechWords } from './audioMath.js';
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   collapseRepeatedSpeech,
@@ -773,8 +773,8 @@ export function mergeLivePreviewIntoFinalCommit(livePreview = '', finalText = ''
   const finWords = fin.split(/\s+/).filter(Boolean)
   const maxOverlap = Math.min(liveWords.length, finWords.length)
   for (let overlap = maxOverlap; overlap >= 1; overlap -= 1) {
-    const suffix = liveWords.slice(-overlap).join(' ').toLowerCase()
-    const prefix = finWords.slice(0, overlap).join(' ').toLowerCase()
+    const suffix = sliceWordsLower(liveWords, -overlap)
+    const prefix = sliceWordsLower(finWords, 0, overlap)
     if (suffix === prefix) {
       const head = liveWords.slice(0, liveWords.length - overlap).join(' ')
       return normalizeMicText(head ? `${head} ${fin}` : fin)
@@ -806,8 +806,8 @@ export function shouldMergeLivePreviewIntoFinal({
   const maxOverlap = Math.min(liveWords.length, finWords.length)
   let wordOverlap = 0
   for (let overlap = maxOverlap; overlap >= 1; overlap -= 1) {
-    const suffix = liveWords.slice(-overlap).join(' ').toLowerCase()
-    const prefix = finWords.slice(0, overlap).join(' ').toLowerCase()
+    const suffix = sliceWordsLower(liveWords, -overlap)
+    const prefix = sliceWordsLower(finWords, 0, overlap)
     if (suffix === prefix) {
       wordOverlap = overlap
       break
