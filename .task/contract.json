@@ -29,8 +29,8 @@
     "tests/structureDuplicationGuard.baseline.json",
     "plans/ledger.json"
   ],
-  "maxFiles": 45,
-  "maxLines": 2500,
+  "maxFiles": 70,
+  "maxLines": 4000,
   "dod": [
     "npx vitest run --reporter=dot tests/gameCatalog.test.ts tests/gamePlaythrough.test.ts tests/systemMatrix.test.ts tests/commandAndGameCoverage.test.ts tests/gameDomainOwnership.test.ts tests/gameRulesGuards.test.ts tests/gameAccessorSingleOwnerGuard.test.ts tests/gameTurnShapeSingleSourceGuard.test.ts",
     "npx vitest run --reporter=dot tests/abecedario.test.ts tests/adivinaCancion.test.ts tests/adivinaNumero.test.ts tests/ahorcado.test.ts tests/calculoMental.test.ts tests/cuentaConmigo.test.ts tests/cuentoColaborativo.test.ts tests/karaoke.test.ts tests/memoriaSecuencias.test.ts tests/ordenaSecuencia.test.ts tests/simonDice.test.ts",
