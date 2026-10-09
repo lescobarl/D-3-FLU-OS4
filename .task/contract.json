@@ -61,7 +61,13 @@
     "src/voice/lib/conversationRow.js",
     "src/core/autonomy/configSnapshot.ts",
     "tests/conversationStreamCommit.test.ts",
-    "tests/turnSpeakerPreflight.test.ts"
+    "tests/turnSpeakerPreflight.test.ts",
+    "src/voice/lib/configGuard.js",
+    "src/voice/lib/embeddingConfig.js",
+    "src/voice/lib/micCapture.js",
+    "src/voice/lib/speakerPolicy.js",
+    "src/voice/lib/asrTurnSegmentation.js",
+    "src/voice/lib/wakePolicy.js"
   ],
   "maxFiles": 110,
   "maxLines": 6000,
@@ -76,7 +82,8 @@
     "npx vitest run --reporter=dot tests/browserProfileService.test.ts tests/contactsService.test.ts tests/diaryService.test.ts tests/noteRemoveIntent.test.ts tests/notesService.test.ts tests/shoppingService.test.ts",
     "npx vitest run --reporter=dot tests/resultFeed.test.tsx tests/workspaceLastObjectPerTurn.test.tsx tests/localStoreBrowser.test.ts tests/localStoreMemory.test.ts tests/fluTrace.test.ts tests/fluParticipantConfig.test.ts tests/useParticipants.test.tsx tests/localAi.test.ts tests/imageGeneration.test.ts tests/notesScope.test.ts tests/shoppingIntentParser.test.ts tests/shoppingList.test.ts tests/useShoppingList.test.tsx",
     "npx vitest run --reporter=dot tests/agendaPanel.test.tsx tests/agendaQueryScenarios.test.ts tests/agendaSummary.test.ts tests/remindersAgenda.test.ts",
-    "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/conversationSession.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/validateIntegralCtx.test.ts tests/voiceCanonicalPhrase.test.ts tests/textUtils.test.ts"
+    "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/conversationSession.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/validateIntegralCtx.test.ts tests/voiceCanonicalPhrase.test.ts tests/textUtils.test.ts",
+    "npx vitest run --reporter=dot tests/asrTurnSegmentation.test.ts tests/continuousAudioBuffer.test.ts tests/speakerSoloCoalesce.test.ts tests/captureSensitivityGuard.test.ts"
   ],
   "guard": "npx vitest run --reporter=dot tests/structureDuplicationGuard.test.ts tests/purposeOwnershipGuard.test.ts",
   "guardExpect": "green",
