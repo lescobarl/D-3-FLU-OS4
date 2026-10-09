@@ -141,15 +141,19 @@ describe('turnSpeakerPreflight — slot por turno', () => {
         expect(peekTurnSpeakerPreflight(2)).toBe(null);
     });
 
-    // REGLA VIGENTE (2026-10-06): el preflight CONTINUO NO escribe clusters (sus
-    // ventanas parciales inflaban la cuenta: 8 clusters / 2 voces). Escribe el
-    // snapshot FINAL del turno. Pero el aviso del HABLANTE (`onResolved`) SI sale
-    // del continuo: el embedding llega despues del commit y la fila lo necesita.
-    it('el continuo NO escribe clusters, pero SI avisa del hablante resuelto', async () => {
+    // REGLA VIGENTE (2026-10-07, medida en el log del dueno): el aviso que COMPLETA la
+    // fila lo da SOLO el snapshot FINAL. El tick CONTINUO calienta la cache del embedding
+    // pero NO escribe clusters NI avisa del hablante: si avisara, la fila se reescribiria
+    // varias veces por turno (la misma persona salia Hablante 1, luego 2, luego 4).
+    it('el continuo ni escribe clusters ni avisa; el aviso lo da el snapshot FINAL', async () => {
         const onClusters = vi.fn();
-        scheduleTurnSpeakerPreflight(1, fuerte('Hablante 2'), { onClusters });
+        const onResolvedFinal = vi.fn();
+        scheduleTurnSpeakerPreflight(1, fuerte('Hablante 2'), { onClusters, onResolved: onResolvedFinal });
         await flush();
         expect(onClusters).toHaveBeenCalledWith([{ label: 'Hablante 2' }]);
+        expect(onResolvedFinal).toHaveBeenCalledWith(
+            expect.objectContaining({ speakerName: 'Hablante 2', turnId: 1 }),
+        );
 
         const diferido = vi.fn();
         const resuelto = vi.fn();
@@ -160,9 +164,7 @@ describe('turnSpeakerPreflight — slot por turno', () => {
         });
         await flush();
         expect(diferido).not.toHaveBeenCalled();
-        expect(resuelto).toHaveBeenCalledWith(
-            expect.objectContaining({ speakerName: 'Hablante 3', turnId: 2 }),
-        );
+        expect(resuelto).not.toHaveBeenCalled();
         expect(peekTurnSpeakerPreflight(2)!.continuous).toBe(true);
     });
 });

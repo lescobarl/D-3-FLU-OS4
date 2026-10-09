@@ -207,11 +207,16 @@ describe('conversationStreamCommit — preview (sin turnCommit)', () => {
 });
 
 describe('conversationStreamCommit — commit de turno', () => {
+    // CONVENCION (2026-10-08, commit e1a9cee): la fila nace en el CIERRE REAL del turno
+    // (onend / srGap / split por wake), que el llamante declara con `settlesTurn: true`; un
+    // `final` de SEGMENTO de Chrome (solo `turnCommit`) NO escribe fila. Los casos de aqui
+    // simulan el cierre real, asi que lo declaran (lo mismo que los llamantes de produccion:
+    // transcriptIngress.js:252/307 y wakeTurnCommit.js:122, y el guard wakeRowNoiseGuard).
     it('un commit normal emite log, escribe la fila, cierra el turno y avisa al participante', () => {
         const deps = makeDeps();
         deps.chunkTotalSamplesRef.current = 4800;
 
-        handleConversationStreamSync(deps, { capture: 'hola mundo', turnCommit: true });
+        handleConversationStreamSync(deps, { capture: 'hola mundo', turnCommit: true, settlesTurn: true });
 
         expect(deps.flushPendingStreamLog).toHaveBeenCalledTimes(1);
         expect(deps.activeTurnIdRef.current).toBe(1);
@@ -317,7 +322,7 @@ describe('conversationStreamCommit — commit de turno', () => {
         deps.lastOnresultAtRef.current = 2000;
         deps.logRowsTextRef.current = ['hola como estas'];
 
-        handleConversationStreamSync(deps, { capture: 'hola como estan', turnCommit: true });
+        handleConversationStreamSync(deps, { capture: 'hola como estan', turnCommit: true, settlesTurn: true });
 
         const emitText = deps.emitConversationLog.mock.calls[0][0];
         const emitOpts = lastEmitOptions(deps);
@@ -332,7 +337,7 @@ describe('conversationStreamCommit — commit de turno', () => {
         // El preview mostro "hola como estas"; el motor corta por ruido ASR a "hola".
         const deps = makeDeps({ publishedLiveRef: { current: 'hola como estas' } });
 
-        handleConversationStreamSync(deps, { capture: 'hola', turnCommit: true });
+        handleConversationStreamSync(deps, { capture: 'hola', turnCommit: true, settlesTurn: true });
 
         const [emitText] = deps.emitConversationLog.mock.calls[0];
         expect(emitText).toBe('hola como estas');
@@ -365,7 +370,7 @@ describe('conversationStreamCommit — commit de turno', () => {
         });
         await preflightSnapshots(['Hablante 2', 'Hablante 2']);
 
-        handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true });
+        handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true, settlesTurn: true });
 
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
         expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
@@ -379,7 +384,7 @@ describe('conversationStreamCommit — commit de turno', () => {
         });
         await preflightSnapshots(['Hablante 2', 'Hablante 2', 'Hablante 3', 'Hablante 3']);
 
-        handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true });
+        handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true, settlesTurn: true });
 
         // Solo la voz NUEVA abre fila; el tramo ya commitido no se duplica.
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
@@ -406,7 +411,7 @@ describe('conversationStreamCommit — commit de turno', () => {
 
         handleConversationStreamSync(deps, { capture: 'hola que tal' });
         const idTrasPreview = deps.activeTurnIdRef.current;
-        handleConversationStreamSync(deps, { capture: 'hola que tal', turnCommit: true });
+        handleConversationStreamSync(deps, { capture: 'hola que tal', turnCommit: true, settlesTurn: true });
 
         expect(idTrasPreview).toBe(1);
         expect(deps.activeTurnIdRef.current).toBe(1);
@@ -458,7 +463,7 @@ describe('P8.43 - un id por peticion (la reentrega no abre locucion nueva)', () 
             lastRequestRef: { current: { text: IMAGEN, at: Date.now() } },
         });
 
-        handleConversationStreamSync(deps, { capture: 'okay flow pon musica', turnCommit: true });
+        handleConversationStreamSync(deps, { capture: 'okay flow pon musica', turnCommit: true, settlesTurn: true });
 
         expect(deps.activeTurnIdRef.current).toBe(1);
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
