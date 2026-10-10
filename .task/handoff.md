@@ -530,3 +530,19 @@ de P9.64 y contar las filas sin hablante de P9.65.
   (pendiente de verificar con el micro del dueno).
 - SIGUIENTE (autorizado, en orden): plegado luis/Luis -> instrumento lastSim (ciego 39/39) ->
   ciclo de vida del microfono (InvalidStateError).
+
+## 2026-10-10 (15) - Bloque 3+1 CERRADO (plegado, sonda, micro, flanco)
+
+- **P23bloque** (src 83d9173; guards+contrato 704bebf): (A) `foldSpeakerKey` en la busqueda
+  de cluster, el cosido, la fusion, la firma del commit y el alias/renombre -> "luis"/"Luis"
+  son UNA identidad y el renombre cubre las dos grafias; (B) campo canonico `lastSim` en el
+  diagnostico + dueno de la linea (`formatIdentityDiagnosis`) -> la sonda deja de salir ciega;
+  (C) el lock del micro lo gobiernan los EVENTOS (`onstart`/`onend`) y `start` es idempotente
+  -> sin `InvalidStateError`; (D) `preserveProperSpeaker` no estampa nombre propio sin
+  evidencia acustica NI del texto (opcion `evidenciaDeTexto`).
+- Guards: `vozPlegadoEtiquetaGuard`, `vozSondaLastSimGuard`, `vozReinicioMicroGuard` (NUEVOS) +
+  caso en `vozFilaConHablanteGuard`. Gate base=1 -> actual=0. Metrica 1 -> 0.
+- TECHOS: hook 4539/4539 · App 4624/4643 · fluConfig 2772/2772 (ninguno roto).
+- PLAZO DEL PREFLIGHT: `voiceIdentity.capture.identityPipeline.commitPreflightTimeoutMs` = 1500 ms
+  (config, ajustable). Si el embedding real tarda mas, la fila sigue naciendo sin hablante.
+- SIGUIENTE: DoD-producto del dueno (su micro/log). Pendientes del ledger: P9.62, P9.64, P9.65.
