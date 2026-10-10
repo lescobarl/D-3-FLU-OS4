@@ -479,3 +479,17 @@ de P9.64 y contar las filas sin hablante de P9.65.
   `tests/vozDescarteConMotivoGuard.test.ts` (nace ROJO). Metrica 3 -> 0.
 - PENDIENTE: B4 (recomponer antes de commitear), B5 (1 commit por turno), A6 (tope+fusion
   de clusters).
+
+## 2026-10-10 (10) - B4 cerrado (recomponer antes de commitear)
+
+- **B4** (0498c89): `recomposeLocution`/`isFragmentOfLocution` (turnStream) = dueno unico de
+  la recomposicion; lo usan `reconcileCommitText` y `resolveTurnCommitPhrase`. Guard
+  `tests/vozLocucionRecompuestaGuard.test.ts` (nace ROJO). Metrica 1 -> 0.
+- PENDIENTE: A6 (tope+fusion de clusters).
+
+## 2026-10-10 (11) - B5 cerrado (verificacion fijada)
+
+- **B5** (cdb9547): la propiedad 'cada locucion => 1 fila' YA se cumplia (medido con el arnes
+  real del stream). Se cierra como verificacion fijada con guard end-to-end y contrato SIN
+  invariant (no se inventa defecto). Guard `tests/vozUnCommitPorTurnoGuard.test.ts`.
+- PENDIENTE: A6 (tope+fusion de clusters: unica pieza del plan sin cerrar).

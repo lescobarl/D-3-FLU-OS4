@@ -4622,3 +4622,29 @@ existia) con detector del vocabulario. DoD 10 ficheros VERDE = 0 fallos nuevos.
 ALCANCE REAL (0.23): CUBIERTO=el dueno del descarte y los puntos del stream/commit de la
 locucion; NO CUBIERTO=los guards internos del escritor de fila del hook (god-file), el
 DoD-producto, la suite completa y la E2E completa.
+
+================================================================
+B4 - la locucion se recompone antes de commitear
+================================================================
+COMMIT 0498c89 (turnStream + turnCommitPhrase + guard + contrato).
+MEDIDO: reconcileCommitText('a comer del','vamos a comer del plato') -> 'a comer del' y el
+texto validado tampoco recomponta. ARREGLO: dueno unico `recomposeLocution` (fragmento
+contiguo -> manda la locucion completa) en las DOS puertas del commit.
+METRICA: commit sin recomponer 1 -> 0. GUARD nuevo (nace ROJO). El guard estructural de
+duplicacion cazo un `locutionWords` propio: se importa `speechWords` (dueno unico).
+DoD 13 ficheros VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=la recomposicion del trozo en las dos puertas del commit;
+NO CUBIERTO=DoD-producto, suite completa y E2E completa.
+
+================================================================
+B5 - un commit por turno: verificado y fijado end-to-end
+================================================================
+COMMIT cdb9547 (guard + lint:guards + contrato SIN invariant).
+MEDICION PREVIA: la propiedad YA se cumple (id del turno por locucion + fila reutilizada por
+identidad + corte de re-entrega). NO se inventa defecto: B5 se cierra como VERIFICACION
+FIJADA, con contrato sin invariant (7.7.e(3)).
+GUARD nuevo end-to-end sobre el arnes real del stream: misma locucion => 1 fila; dos
+locuciones => 2; sin conversacion activa => 0 (detector).
+HONESTIDAD: paso en la primera corrida (no hay rojo que mostrar). DoD 5 ficheros VERDE.
+ALCANCE REAL (0.23): CUBIERTO=la barrera end-to-end de 1 commit por locucion;
+NO CUBIERTO=DoD-producto, suite completa y E2E completa.
