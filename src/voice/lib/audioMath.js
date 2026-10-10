@@ -180,7 +180,7 @@ function shouldAckFluWake(afterWake = '', voiceCommands = {}) {
   return isListeningAckPhrase(text, voiceCommands.listeningAckPhrases)
 }
 
-function matchesCommandPhrase(text = '', phrases = [], options = {}) {
+export function matchesCommandPhrase(text = '', phrases = [], options = {}) {
   const normalizedText = normalizeVoiceCommandText(text)
   if (!normalizedText || !phrases.length) return false
 

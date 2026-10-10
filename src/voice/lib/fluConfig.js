@@ -2358,6 +2358,8 @@ export const FLU_CONFIG = {
       'end listening',
       'turn off listening',
     ],
+    /** Cierres de sesion (A4): el primario se limpia SOLO con estas frases (dato, no hardcode). */
+    sessionClosePhrases: ['nueva sesion', 'nueva session', 'nueva conversacion', 'reiniciar conversacion', 'reiniciar la conversacion', 'reiniciar sesion', 'new session', 'new conversation', 'restart conversation'],
     startConversation: [
       'iniciar conversacion',
       'inicia conversacion',

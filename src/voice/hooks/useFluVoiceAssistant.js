@@ -63,7 +63,8 @@ import {
   pruneGhostSpeakerClusters,
   trimAudioChunkBuffer,
 } from '../lib/voiceIdentity'
-import { clearSessionPrimarySpeaker, setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
+import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
+import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
 import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
 import { registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import {
@@ -2761,7 +2762,7 @@ const lastResolvedTurnRef = useRef(0)
         setSpeakerClusters([])
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-        clearSessionPrimarySpeaker(sessionPrimarySpeakerRef)
+        applySessionCommandToPrimary({ transcript: cleaned, sessionPrimarySpeakerRef })
         // Fase E: tras reiniciar la sesion, re-sembrar el participante activo como sessionPrimary.
         seedSessionPrimaryFromActiveName()
         activeTurnIdRef.current = 0
