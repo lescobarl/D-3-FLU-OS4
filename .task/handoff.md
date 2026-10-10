@@ -460,3 +460,13 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - PENDIENTE: A6 (tope+fusion de clusters), B1 (un dueno del descarte, todo descarte con
   motivo), B2 (eco vs texto REAL de FLU: MEDIDO -> el peel trunca contenido real), B4
   (recomponer antes de commitear), B5 (1 commit por turno).
+
+## 2026-10-10 (8) - B2 cerrado (eco contra el texto real de FLU)
+
+- **B2** (d7a16f4): `src/voice/lib/echoPolicy.js` (NUEVO) es el dueno del eco: fuente =
+  ultima fila de FLU (con edad ms), ventana `echoWindowMs` (3000) anclada al fin de su habla,
+  cobertura `echoCoverageFloor` (0.6). `peelWakeQuestionEcho` exige cobertura y
+  `resolveEchoSources` es el unico constructor de fuentes (wake-turn + planificador).
+  Guard `tests/vozEcoTextoRealGuard.test.ts` (nace ROJO). Metrica 1 -> 0.
+- PENDIENTE: A6 (tope+fusion de clusters), B1 (un dueno del descarte con motivo), B4
+  (recomponer antes de commitear), B5 (1 commit por turno).

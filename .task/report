@@ -4593,3 +4593,18 @@ METRICA: ramas de descarte no-claras 1 -> 0. GUARD nuevo (nace ROJO: 4 casos) + 
 de criterio en 2 guards. DoD 4 ficheros VERDE = 0 fallos nuevos.
 ALCANCE REAL (0.23): CUBIERTO=el criterio de descarte y su guard/metrica; NO CUBIERTO=DoD-
 producto, suite completa y E2E completa.
+
+================================================================
+B2 - eco contra el texto REAL de FLU (cobertura + ventana al fin del habla)
+================================================================
+COMMIT d7a16f4 (echoPolicy.js + audioMath + wakeTurnCommit + fluConfig + guard + contrato).
+MEDIDO ANTES DE TOCAR: 'el elote y el maiz' -> 'y el maiz' (contenido real truncado) y la
+fuente del eco era la ultima fila del log de USUARIO, no el texto de FLU.
+ARREGLO: dueno unico `echoPolicy` (fuente = ultima fila 'flu' con su edad ms; ventana
+`echoWindowMs` 3000 anclada al fin del habla; cobertura `echoCoverageFloor` 0.6);
+`peelWakeQuestionEcho` exige cobertura; `resolveEchoSources` es el unico constructor y lo
+usan las DOS rutas (wake-turn y planificador).
+METRICA: listas de fuentes a mano 1 -> 0. GUARD nuevo (nace ROJO) con detector por cobertura.
+DoD 80 ficheros VERDE = 0 fallos nuevos. fluConfig 2770 (techo 2772, sin lineas netas).
+ALCANCE REAL (0.23): CUBIERTO=el criterio del eco (fuente/ventana/cobertura) con guard y
+metrica; NO CUBIERTO=DoD-producto, suite completa y E2E completa.
