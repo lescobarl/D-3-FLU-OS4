@@ -167,3 +167,35 @@ describe('turno VIEJO (stale): el srGap NO puede dejar el texto solo en ULTIMA F
     expect(h.logRowsTextRef.current.length).toBe(trasPrimero)
   })
 })
+
+// ============================================================
+// REPLAY CON DATOS REALES DEL LOG DEL DUENO (2026-10-09 17:19:51).
+// Textos y tiempos tomados 1:1 del trazo de esa sesion (VozProbe asrFinal +
+// srGap{sinceResult:237,sinceCommit:10272}). Antes del arreglo, ese cierre NO
+// escribia fila: la cola se quedaba en ULTIMA FRASE y se perdia.
+// ============================================================
+describe('REPLAY REAL del log: el cierre por turno viejo escribe la cola', () => {
+  const COLA = 'conoces una transcripci\u00f3n larga se pierde otra vez es una chingadera neta'
+  const ESCRITO_ANTES = 'conoce una transcripci\u00f3n larga se pierde otra vez'
+
+  it('turno VIEJO (sinceResult=237ms / sinceCommit=10272ms): la fila lleva la cola completa', () => {
+    const h = createHarness()
+    h.inject(chromeEvent([{ isFinal: false, transcript: 'conoces una transcripci\u00f3n larga' }], 0))
+    h.inject(chromeEvent([{ isFinal: false, transcript: 'conoces una transcripci\u00f3n larga se pierde otra vez' }], 0))
+    h.inject(chromeEvent([{ isFinal: false, transcript: COLA }], 0))
+    h.lastCommitAtRef.current = Date.now() - 10272
+    h.srGap(237)
+    const filas = h.logRowsTextRef.current
+    const todo = filas.join(' ')
+    expect(todo, 'la cola del turno se quedo en ULTIMA FRASE').toContain('es una chingadera neta')
+    expect(todo.length).toBeGreaterThan(ESCRITO_ANTES.length)
+  })
+
+  it('control negativo REAL: turno RECIEN commiteado (sin turno viejo) no vuelca', () => {
+    const h = createHarness()
+    h.inject(chromeEvent([{ isFinal: false, transcript: COLA }], 0))
+    h.lastCommitAtRef.current = Date.now() - 300
+    h.srGap(237)
+    expect(h.logRowsTextRef.current.length).toBe(0)
+  })
+})
