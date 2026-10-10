@@ -5,13 +5,6 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
-      "id": "P9.56",
-      "titulo": "RUTA DOBLE MEDIDA: la decision de abrir etiqueta NUEVA (Hablante N) vive en 4 modulos (worker + hilo principal + activeListen + hook). Unificar a UN dueno.",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-10-09 con guard nacido ROJO `tests/vozIdentidadDuenaUnicaGuard.test.ts`: `modulos que acunan etiqueta nueva (deben ser 1): src/voice/hooks/useFluVoiceAssistant.js, src/voice/lib/activeListen.js, src/voice/lib/speakerCore.js, src/voice/lib/speakerDiarization.js: expected [ …(4) ] to have a length of 1`. Las DOS rutas vivas compiten: `speakerCore.assignSpeaker` (WORKER, voiceId.worker.js:104, via voiceIdWorkerClient.resolveSpeakerFromAudio) y `speakerDiarization.resolveConversationSpeaker` (HILO PRINCIPAL, preflight en turnSpeakerPreflight.js:242). El log del dueno (sesion 17:18-17:21) muestra LAS DOS decidiendo (Match reason=new-voice-below-threshold=3, forced-new-voice-below-threshold=1, solo-coalesce=1, cluster-reidentify=2 + identity{resolved-idle}). Efecto: la MISMA voz abrio Hablante 2/3/4. El acuerdo del dueno es explicito: 'si es nuevo, nuevo; si es viejo identifica'. PENDIENTE: unificar la decision en UN dueno (un solo modulo acuna la etiqueta; el resto consume) y validar con inyeccion de datos (modelo calibrado a los cosenos medidos 0.69-0.74 misma voz / 0.58 distinta + la secuencia real de eventos del log). NO se toca la fase 1 acordada (fila sin hablante; resolveRowSpeakerName/updateTurnRowSpeaker estan bien).",
-      "origen": "defecto-medido-dueno-2026-10-09"
-    },
-    {
       "id": "P9.50",
       "titulo": "FLAKE MEDIDO: el e2e P6 (continuacion sin wake) es inestable; no es regresion de P9.49",
       "estado": "todo",
@@ -1900,6 +1893,13 @@
     }
   ],
   "done": [
+    {
+      "id": "P9.56",
+      "commit": "69faff7",
+      "titulo": "UN dueno de acunar etiqueta de hablante: speakerLabels deja de reimplementar el siguiente indice libre y delega en speakerCore",
+      "evidencia": "CERRADO 2026-10-09 (commit 69faff7). RUTA DOBLE de RESPONSABILIDAD medida (no de forma): el \"siguiente indice libre\" estaba IMPLEMENTADO dos veces con algoritmos distintos (normalizacion y tope): `speakerCore.nextAutoSpeakerLabel` (lo consume el WORKER, voiceId.worker.js:104 via resolveSpeakerFromAudio) y `speakerLabels.nextAvailableSpeakerLabel` (lo consumen activeListen.js:291, useFluVoiceAssistant.js:312 y speakerDiarization.js:34 en el HILO PRINCIPAL). El log del dueno (sesion 17:18-17:21) muestra las DOS rutas vivas decidiendo y la MISMA voz abriendo Hablante 2/3/4 (Match: new-voice-below-threshold=3, forced-new-voice-below-threshold=1). FIX: `speakerCore.nextAutoSpeakerLabel` es el DUENO unico (acepta {maxSpeakers, config}, normaliza con stripDiacriticsLower, tope 9999 cuando no hay maxSpeakers) y `speakerLabels.nextAvailableSpeakerLabel` DELEGA en el (misma firma historica, sin reimplementar). 4 llamadas internas del nucleo actualizadas. GUARD tools: `tests/vozIdentidadDuenaUnicaGuard.test.ts` mide IMPLEMENTACIONES (no llamadas: un dueno, muchos consumidores) y nace ROJO con 2 modulos (speakerCore + speakerLabels) -> VERDE con 1; tiene control positivo (un clon se marca) y negativo (un consumidor que delega NO se marca). Anadido a lint:guards (scripts/guard-files.mjs) y en el dod. METRICA: `\\bautoSpeakerLabel(` en speakerLabels.js 1 -> 0 (target 0). VALIDADO: `npm run gate` OK (metrica base=2 actual=0; guard base=1 actual=0); DoD 117/117; `npm run lint` 223 ficheros / 1876 casos VERDE; eslint 0; tsc 0. Alcance real (0.23): CUBIERTO=la acunacion con UN dueno y su barrera; NO CUBIERTO=la segunda duplicidad de responsabilidad (la DECISION \"voz conocida vs nueva\" en speakerCore.assignSpeaker y speakerDiarization.resolveConversationSpeaker, pendiente siguiente), la validacion en pantalla del dueno, la suite completa y el DoD-producto.",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
     {
       "id": "P9.55",
       "commit": "f32dc01",

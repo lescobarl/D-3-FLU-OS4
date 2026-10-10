@@ -4185,3 +4185,35 @@ nombre. Eso es el siguiente defecto, con esa evidencia.
 Alcance real (0.23): CUBIERTO=el cierre por turno viejo (replay real + escritorio) y los 6
 defectos anteriores; NO CUBIERTO=#2/#3 (hablantes/nombre de fila), la validacion visual del
 dueno, la suite completa.
+
+========================================================================
+2026-10-09 - P9.56: UN dueno de acunar etiqueta (ruta doble de RESPONSABILIDAD)
+
+MEDIDO (guard nacido ROJO): el "siguiente indice libre" estaba IMPLEMENTADO dos veces
+  - speakerCore.nextAutoSpeakerLabel  (WORKER: voiceId.worker.js:104)
+  - speakerLabels.nextAvailableSpeakerLabel (HILO PRINCIPAL: activeListen.js:291,
+    useFluVoiceAssistant.js:312, speakerDiarization.js:34)
+con normalizacion y tope distintos -> dos duenos de la MISMA decision.
+Tu log (17:18-17:21) muestra las dos rutas decidiendo y la MISMA voz en Hablante 2/3/4.
+
+Cambios aplicados:
+  - src/voice/lib/speakerCore.js: nextAutoSpeakerLabel pasa a ser el DUENO unico
+    (acepta {maxSpeakers, config}; stripDiacriticsLower; tope 9999 sin maxSpeakers).
+    4 llamadas internas actualizadas.
+  - src/voice/lib/speakerLabels.js: nextAvailableSpeakerLabel DELEGA en el dueno
+    (misma firma historica; ya no acuna).
+  - tests/vozIdentidadDuenaUnicaGuard.test.ts: mide IMPLEMENTACIONES (no llamadas),
+    con control positivo y negativo. Entra en lint:guards.
+
+Validado contra:
+  - Guard: ROJO con 2 modulos -> VERDE con 1.
+  - Metrica (`\bautoSpeakerLabel(` en speakerLabels.js): base=2 -> actual=0 (target 0).
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK.
+  - DoD 117/117; npm run lint 223 ficheros / 1876 casos VERDE; eslint 0; tsc 0.
+
+No validado: la segunda duplicidad de responsabilidad (la DECISION "voz conocida vs
+nueva" en speakerCore.assignSpeaker y speakerDiarization.resolveConversationSpeaker:
+el worker y el hilo principal deciden por separado), la pantalla del dueno, la suite.
+
+Alcance real (0.23): CUBIERTO=la acunacion con un dueno y su barrera; NO CUBIERTO=la
+decision de identidad (siguiente) y el DoD-producto.
