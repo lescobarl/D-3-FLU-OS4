@@ -37,6 +37,7 @@ import { labelToSpeakerId } from './conversationRow.js'
 import { renameSpeakerRows } from './conversationTurnRow'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
+import { DISCARD_REASONS, discardLocution } from './phraseDiscard.js'
 
 /**
  * @typedef {Object} ConversationStreamCommitPayload
@@ -166,7 +167,7 @@ export function handleConversationStreamSync(
       setLiveTranscript('')
       openPreviewTurnRef.current = false
     }
-    if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'empty-capture' })
+    discardLocution({ reason: DISCARD_REASONS.EMPTY, phrase: '', site: "stream-empty-capture", log: relayLog })
     return
   }
 
@@ -203,7 +204,8 @@ export function handleConversationStreamSync(
 
   if (!turnCommit) {
     if (wouldShrinkListenLog(capture, publishedLiveRef.current)) {
-      if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'shrink-preview' })
+      // B1: el descarte pasa por el dueno unico y SIEMPRE deja motivo (antes: solo DEV).
+      discardLocution({ reason: DISCARD_REASONS.SHRINK_PREVIEW, phrase: capture, site: "stream-preview", log: relayLog })
       return
     }
     if (capture !== publishedLiveRef.current) {
@@ -270,9 +272,7 @@ export function handleConversationStreamSync(
       lastCommitAt: lastCommitAtRef?.current || 0,
     })
   ) {
-    if (import.meta.env.DEV && debugHotPath) {
-      fluDebugHot('stream-skip', { reason: 'duplicate-turn-commit', capture })
-    }
+    discardLocution({ reason: DISCARD_REASONS.DUPLICATE_COMMIT, phrase: capture, site: 'turn-commit', log: relayLog })
     return
   }
 
@@ -316,8 +316,12 @@ export function handleConversationStreamSync(
   // UNICA puerta de emision de la fila de conversacion de un turno: el ruido de
   // fondo no la cruza (`ambientRowBlocked`). Los dos commits que emiten (ramas
   // segmentada y simple) pasan por aqui, asi que la regla vive en un solo sitio.
-  const emitTurnRow = (text, options) =>
-    ambientRowBlocked ? false : emitConversationLog(text, options)
+  const emitTurnRow = (text, options) => {
+    if (!ambientRowBlocked) return emitConversationLog(text, options)
+    // B1: la locucion viva bloquea la fila y el descarte deja su motivo.
+    discardLocution({ reason: DISCARD_REASONS.AMBIENT_BLOCKED, phrase: text, site: 'emit-row', log: relayLog })
+    return false
+  }
 
   const {
     replaceLast,

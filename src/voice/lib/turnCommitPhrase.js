@@ -20,6 +20,7 @@
 import { cleanForSpeech, stripLeadingWakeEcho } from './audioMath.js'
 import { getWakeWords } from './wakeTurnCommit.js'
 import { resolveCommittablePhrase } from './garbageTranscript.js'
+import { discardLocution } from './phraseDiscard.js'
 
 const clip = (value) => cleanForSpeech(String(value || '')).slice(0, 80)
 
@@ -39,11 +40,8 @@ export function resolveTurnCommitPhrase({ capture, fallback = '', log, wakeWords
 
   if (!canonical) {
     if (reason) {
-      emit(
-        'WARN',
-        'turnCommitPhrase',
-        `turno SIN texto válido (motivo=${reason}) capture="${clip(capture)}" fallback="${clip(fallback)}" → se cierra sin habla`,
-      )
+      // B1: el descarte va por el dueno unico (vocabulario cerrado; el motivo SIEMPRE queda).
+      discardLocution({ reason, phrase: capture, site: "turnCommitPhrase", log: emit })
     }
     return ''
   }
