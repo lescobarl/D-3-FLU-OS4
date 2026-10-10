@@ -322,3 +322,21 @@ CLAVES PARA LA SIGUIENTE SESION:
 ABIERTO: P8.31 (spec de musica, depende del arnes), P8.40 (diarizacion implementada: falta la medida en
 pantalla), P8.41 (mover el micro falso al repo como fixture e2e: 0 de 11 specs conducen la voz).
 
+
+## ESTADO 2026-10-10 (lo vigente; lo de arriba con fecha 2026-10-02 esta OBSOLETO)
+
+- Ledger: **0 pendientes**. Cerrados los 8 defectos reportados por el dueno:
+  P9.50 (flake P6 + D2), P9.51 (repeticion ASR en cualquier posicion), P9.52 (ultima frase
+  en negro + panel sin "user"), P9.53 (saludo de cierre con UN solo dueno), P9.54 (los
+  numeros son DATO, no eco), P9.55 (srGap: el EVAL aceptaba solo silencio), P9.56/P9.57
+  (un dueno de la etiqueta de hablante y de la DECISION de identidad) y **P9.59** (la
+  locucion del CIERRE ya no se pierde: el commit sin fila del segmento marcaba la locucion
+  como "ya emitida" y el cierre caia como duplicado). Commits: c0a1c0e (src+guard) y
+  8ef424c (ledger+report).
+- Comando de arranque: `npm run brief`. Validacion por cambio: `npm run test:file <ruta>`
+  + `npm run lint` + `npm run typecheck`; cierre: `npm run gate` (UNA vez) y
+  `npm run e2e:scoped` (spec del bloque, segun `.task/contract.json -> e2eScope`).
+- PENDIENTE DEL USUARIO (DoD-producto, no del agente): validar en pantalla (localhost:5173,
+  F5 porque cambian workers/identidad) los 8 casos y el dictado largo 1..40.
+- NO CUBIERTO por el agente: la suite completa (`npm run test:full`, solo con autorizacion
+  expresa del usuario en ESE turno).
