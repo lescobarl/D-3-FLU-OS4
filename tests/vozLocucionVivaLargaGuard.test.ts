@@ -121,13 +121,18 @@ const INTERINOS = [
 ]
 
 describe('locucion viva sin cerrar: el texto NO puede quedarse solo en ULTIMA FRASE', () => {
-  it('resolveSrGapTrigger dispara con la locucion estancada aunque el ASR entregue interinos', () => {
+  it('NO se vuelca con el ASR activo aunque el turno lleve 12 s abierto (spec del dueno)', () => {
+    // SPEC DEL DUENO (2026-10-10, sesion 15:02-15:14): "la ultima frase es para
+    // ACUMULAR y una vez que se termine, que haya espacio o cambio de hablante, es
+    // cuando lo debe vaciar a la conversacion". Cerrar por 'turno viejo' mientras el
+    // ASR sigue entregando escribe la fila A MITAD del dictado (medido: fila "1 2 3 4 5
+    // 6 7 8 910" nacida en el 10 y luego reemplazada 3 veces).
     const estancada = resolveSrGapTrigger({ sinceLastResultMs: 800, sinceLastCommitMs: 12000 })
-    expect(estancada.fire).toBe(true)
-    expect(estancada.sinceLastResultMs).toBeGreaterThanOrEqual(10000)
+    expect(estancada.fire).toBe(false)
+    expect(estancada.reason).toBe('sr-active')
   })
 
-  it('escenario real: interinos largos + srGap -> la fila conserva el texto (no "mientras")', () => {
+  it('escenario real: interinos largos + SILENCIO -> la fila conserva el texto (no "mientras")', () => {
     const h = createHarness()
     for (const texto of INTERINOS) {
       h.inject(chromeEvent([{ isFinal: false, transcript: texto }], 0))
@@ -143,61 +148,74 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
   it('NO dispara cuando el ASR esta activo y la locucion es reciente', () => {
     expect(resolveSrGapTrigger({ sinceLastResultMs: 2000, sinceLastCommitMs: 2000 }).fire).toBe(false)
   })
-  it('SI dispara por silencio del ASR (comportamiento previo, conservado)', () => {
+  it('SI dispara por silencio del ASR', () => {
     expect(resolveSrGapTrigger({ sinceLastResultMs: 12000, sinceLastCommitMs: 12000 }).fire).toBe(true)
+  })
+  it('NO dispara por turno viejo si el ASR sigue activo', () => {
+    expect(resolveSrGapTrigger({ sinceLastResultMs: 200, sinceLastCommitMs: 30000 }).fire).toBe(false)
   })
 })
 
-describe('turno VIEJO (stale): el srGap NO puede dejar el texto solo en ULTIMA FRASE', () => {
-  it('ASR reciente (no silencio) + turno abierto hace rato -> la fila se escribe igual', () => {
+describe('turno VIEJO (stale) con ASR activo: NO se vuelca, pero el texto NO se pierde', () => {
+  it('el srGap por turno viejo NO escribe fila; el SILENCIO posterior la escribe entera', () => {
     const h = createHarness()
     for (const texto of INTERINOS) {
       h.inject(chromeEvent([{ isFinal: false, transcript: texto }], 0))
     }
-    // El turno lleva ABIERTO mas de srGapCommitMs (10 s) sin cerrar, pero el ASR
-    // acaba de entregar un resultado (800 ms): el TRIGGER dispara por STALE y el
-    // EVAL tiene que aceptar esa misma condicion, o el texto se pierde.
+    // El turno lleva ABIERTO mas de srGapCommitMs (12 s) pero el ASR acaba de entregar
+    // (800 ms): NO se vacia todavia (spec del dueno).
     h.lastCommitAtRef.current = Date.now() - 12000
     h.srGap(800)
+    expect(
+      h.logRowsTextRef.current.length,
+      'el turno viejo NO debe vaciar mientras el ASR sigue entregando',
+    ).toBe(0)
+
+    // Silencio real: ahora SI se cierra, y el texto acumulado NO se ha perdido.
+    h.srGap(12000)
     const filas = h.logRowsTextRef.current
-    expect(filas.length, 'no se escribio ninguna fila: el texto queda en ULTIMA FRASE').toBeGreaterThanOrEqual(1)
+    expect(filas.length, 'el cierre por silencio perdio el texto acumulado').toBeGreaterThanOrEqual(1)
     expect(filas.join(' ').length).toBeGreaterThan(60)
   })
 
-  it('turno viejo SIN contenido nuevo NO duplica la fila (guarda conservada)', () => {
+  it('turno viejo repetido sin silencio NO escribe nada (ni duplica)', () => {
     const h = createHarness()
     for (const texto of INTERINOS) {
       h.inject(chromeEvent([{ isFinal: false, transcript: texto }], 0))
     }
     h.lastCommitAtRef.current = Date.now() - 12000
     h.srGap(800)
-    const trasPrimero = h.logRowsTextRef.current.length
     h.lastCommitAtRef.current = Date.now() - 12000
     h.srGap(800)
-    expect(h.logRowsTextRef.current.length).toBe(trasPrimero)
+    expect(h.logRowsTextRef.current.length).toBe(0)
   })
 })
 
 // ============================================================
-// REPLAY CON DATOS REALES DEL LOG DEL DUENO (2026-10-09 17:19:51).
-// Textos y tiempos tomados 1:1 del trazo de esa sesion (VozProbe asrFinal +
-// srGap{sinceResult:237,sinceCommit:10272}). Antes del arreglo, ese cierre NO
-// escribia fila: la cola se quedaba en ULTIMA FRASE y se perdia.
+// REPLAY CON DATOS REALES DEL LOG DEL DUENO.
+// 1) 2026-10-09 17:19:51: srGap{sinceResult:237,sinceCommit:10272} con la cola en la
+//    linea viva. P9.55 acepto 'stale' para volcarla; MEDIDO despues (sesion del
+//    2026-10-10 15:02-15:14) eso vaciaba la conversacion a mitad del dictado (26 de 26
+//    srGap por 'stale' con el ASR activo). Spec del dueno: solo silencio o cambio de
+//    hablante. Con P9.60 (el rebuild ya no descarta la linea) el texto NO se pierde:
+//    lo escribe el cierre REAL.
 // ============================================================
-describe('REPLAY REAL del log: el cierre por turno viejo escribe la cola', () => {
+describe('REPLAY REAL del log: el turno viejo no vacia; el silencio escribe la cola', () => {
   const COLA = 'conoces una transcripci\u00f3n larga se pierde otra vez es una chingadera neta'
   const ESCRITO_ANTES = 'conoce una transcripci\u00f3n larga se pierde otra vez'
 
-  it('turno VIEJO (sinceResult=237ms / sinceCommit=10272ms): la fila lleva la cola completa', () => {
+  it('turno VIEJO (sinceResult=237ms / sinceCommit=10272ms): NO vacia; el silencio saca la cola completa', () => {
     const h = createHarness()
     h.inject(chromeEvent([{ isFinal: false, transcript: 'conoces una transcripci\u00f3n larga' }], 0))
     h.inject(chromeEvent([{ isFinal: false, transcript: 'conoces una transcripci\u00f3n larga se pierde otra vez' }], 0))
     h.inject(chromeEvent([{ isFinal: false, transcript: COLA }], 0))
     h.lastCommitAtRef.current = Date.now() - 10272
     h.srGap(237)
-    const filas = h.logRowsTextRef.current
-    const todo = filas.join(' ')
-    expect(todo, 'la cola del turno se quedo en ULTIMA FRASE').toContain('es una chingadera neta')
+    expect(h.logRowsTextRef.current.length, 'el turno viejo vacio la conversacion').toBe(0)
+
+    h.srGap(12000)
+    const todo = h.logRowsTextRef.current.join(' ')
+    expect(todo, 'la cola del turno se perdio: no la saco el silencio').toContain('es una chingadera neta')
     expect(todo.length).toBeGreaterThan(ESCRITO_ANTES.length)
   })
 
@@ -209,6 +227,7 @@ describe('REPLAY REAL del log: el cierre por turno viejo escribe la cola', () =>
     expect(h.logRowsTextRef.current.length).toBe(0)
   })
 })
+
 
 // ============================================================
 // PATRON REAL del dueno (debug.log 2026-10-10 10:09:00): un FINAL de Chrome con

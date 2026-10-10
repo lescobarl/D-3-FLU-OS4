@@ -39,14 +39,16 @@ describe('srGap no sondea en reposo', () => {
     expect(r.reason).toBe('sr-silence')
   })
 
-  it('con locucion viva y turno viva estancada, dispara con la razon de antes', () => {
+  it('con locucion viva y turno estancado pero ASR ACTIVO, NO dispara (spec del dueno)', () => {
+    // `sr-live-turn-stale` se retiro (P9.63): cerrar por turno viejo mientras el ASR
+    // entrega vaciaba la conversacion a mitad del dictado. Solo el silencio vuelca.
     const r = resolveSrGapTrigger({
       sinceLastResultMs: 0,
       sinceLastCommitMs: 60000,
       hasOpenLine: true,
     })
-    expect(r.fire).toBe(true)
-    expect(r.reason).toBe('sr-live-turn-stale')
+    expect(r.fire).toBe(false)
+    expect(r.reason).toBe('sr-active')
   })
 })
 

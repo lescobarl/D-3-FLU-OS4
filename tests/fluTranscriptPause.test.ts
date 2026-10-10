@@ -157,10 +157,14 @@ describe('fluTranscriptPause - isWeakAsrSpeakerEvidence', () => {
 });
 
 describe('fluTranscriptPause - resolveSrGapTrigger (PRUEBA DE DETECTOR, el detector no es decorativo)', () => {
-  it('dispara con la locucion viva estancada y NO con el ASR activo reciente', async () => {
+  it('dispara SOLO con silencio del ASR; el turno viejo con ASR activo NO dispara (spec del dueno)', async () => {
     h.config.transcript!.pauseAndWeakAsr!.srGapCommitMs = 10000;
     const { resolveSrGapTrigger } = await import('../src/voice/lib/fluTranscriptPause.js');
-    expect(resolveSrGapTrigger({ sinceLastResultMs: 500, sinceLastCommitMs: 12000 }).fire).toBe(true);
+    // P9.55 aceptaba aqui 'turno viejo' (`sinceLastCommitMs`); RETIRADO: con el ASR
+    // entregando onresult vaciaba la conversacion A MITAD del dictado (medido en la
+    // sesion del dueno 2026-10-10: 26 de 26 srGap por 'sr-live-turn-stale').
+    expect(resolveSrGapTrigger({ sinceLastResultMs: 500, sinceLastCommitMs: 12000 }).fire).toBe(false);
+    expect(resolveSrGapTrigger({ sinceLastResultMs: 12000, sinceLastCommitMs: 12000 }).fire).toBe(true);
     expect(resolveSrGapTrigger({ sinceLastResultMs: 2000, sinceLastCommitMs: 2000 }).fire).toBe(false);
   });
 });

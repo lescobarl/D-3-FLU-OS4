@@ -436,15 +436,14 @@ export function evaluateSrGapSegmentCommit(
   if (!gapMs || gapMs <= 0) {
     return { flush: false, capture: '', reason: 'sr-gap-commit-disabled' }
   }
-  // El TRIGGER (`resolveSrGapTrigger`) dispara por SILENCIO o por turno VIEJO
-  // (stale: `sinceCommitMs >= gapMs`). Este EVAL solo aceptaba silencio, asi que un
-  // turno viejo con contenido NUEVO no se volcaba: el texto se quedaba en «ultima
-  // frase» y se perdia al resetear el buffer. Medido 2026-10-09 (log del dueno): 10
-  // de 18 commits no escribieron fila ("se pierde transcripcion"). Se aceptan las
-  // DOS condiciones del trigger; las guardas de abajo (sin contenido nuevo, cooldown)
-  // siguen evitando duplicar la fila.
-  const staleMs = lastCommitAtMs > 0 ? Math.max(0, nowMs - lastCommitAtMs) : 0
-  if (sinceLastResultMs < gapMs && staleMs < gapMs) {
+  // MISMA condicion que el TRIGGER (`resolveSrGapTrigger`): SOLO SILENCIO. En P9.55 esta
+  // rama acepto tambien 'turno viejo' (`sinceCommitMs >= gapMs`) para volcar el texto que
+  // se quedaba en «ultima frase»; se RETIRA porque con el ASR entregando onresult vaciaba
+  // la conversacion A MITAD del dictado (medido en la sesion del dueno 2026-10-10
+  // 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale' y la fila nacida en el "10",
+  // luego reemplazada). El texto NO se pierde: sigue acumulado en la linea viva y lo
+  // escribe el cierre REAL (silencio / onend / cambio de hablante).
+  if (sinceLastResultMs < gapMs) {
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 

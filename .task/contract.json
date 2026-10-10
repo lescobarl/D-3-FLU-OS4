@@ -1,26 +1,31 @@
 {
-  "task": "P9.61 - cierra el hueco que P9.60 declaro NO CUBIERTO: prueba de TUBERIA COMPLETA montando el hook real y disparando el WATCHDOG por temporizador.",
-  "objective": "Que el defecto 'el rebuild descarta la locucion confirmada' quede medido a nivel de tuberia (hook real + watchdog + fake timers), no solo por comportamiento del estado del ingress ni por lectura del hook como texto.",
-  "base": "8bd1283",
+  "task": "P9.63 - el srGap vuelca SOLO con silencio: se retira la rama 'turno viejo' que P9.55 metio y que vaciaba la conversacion a mitad del dictado.",
+  "objective": "Que la ultima frase ACUMULE y se vacie solo con espacio real (silencio) o cambio de hablante, segun la spec del dueno (2026-10-10): el cierre por 'turno viejo' con el ASR activo escribia la fila a mitad del dictado (medido: 26 de 26 srGap por sr-live-turn-stale, fila nacida en el '10' y reemplazada).",
+  "base": "daf0009",
   "allow": [
-    "tests/vozRebuildTuberiaCompletaGuard.test.tsx",
-    "scripts/guard-files.mjs",
+    "src/voice/lib/fluTranscriptPause.js",
+    "src/voice/lib/conversationStream.js",
+    "tests/vozLocucionVivaLargaGuard.test.ts",
+    "tests/fluTranscriptPause.test.ts",
+    "tests/srGapIdleProbeGuard.test.ts",
     "plans/ledger.json"
   ],
-  "maxFiles": 4,
-  "maxLines": 700,
-  "dod": "npx vitest run --reporter=dot tests/vozRebuildTuberiaCompletaGuard.test.tsx tests/vozRebuildNoPierdeLocucionGuard.test.tsx tests/vozCierrePierdeLocucionGuard.test.ts tests/vozLocucionVivaLargaGuard.test.ts tests/ingressSimulation.test.ts tests/useFluVoiceAssistant.behavior.test.tsx",
-  "guard": "npx vitest run --reporter=dot tests/vozRebuildTuberiaCompletaGuard.test.tsx",
+  "maxFiles": 7,
+  "maxLines": 900,
+  "dod": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts tests/fluTranscriptPause.test.ts tests/srGapIdleProbeGuard.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/vozCierrePierdeLocucionGuard.test.ts tests/vozRebuildNoPierdeLocucionGuard.test.ts tests/ingressSimulation.test.ts tests/conversationStreamCommit.test.ts tests/voiceCanonicalPhrase.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un solo modulo declara el dueno de la decision 'la linea abierta es una captura confirmada' (0 -> 1) y el guard de TUBERIA COMPLETA nace ROJO en el commit previo al arreglo (43a7a96), no en el actual.",
-    "base": "43a7a96",
+    "statement": "Ramas de 'turno viejo' en el cierre por srGap (staleTurn/staleMs en src/voice/lib): 4 -> 0.",
+    "base": "daf0009",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const f=['src/voice/lib/activeListen.js','src/voice/lib/conversationStream.js','src/voice/lib/conversationStreamCommit.js','src/voice/lib/transcriptIngress.js','src/voice/hooks/useFluVoiceAssistant.js'];console.log(f.filter((x)=>fs.readFileSync(x,'utf8').includes('export function hasConfirmedOpenLine')).length)\"",
-      "target": 1
+      "command": "node -e \"const fs=require('fs');const f=['src/voice/lib/fluTranscriptPause.js','src/voice/lib/conversationStream.js'];const s=f.map((x)=>fs.readFileSync(x,'utf8')).join('\\n');console.log((s.split('staleTurn').length-1)+(s.split('staleMs').length-1))\"",
+      "target": 0
     },
     "guardFiles": [
-      "tests/vozRebuildTuberiaCompletaGuard.test.tsx"
+      "tests/vozLocucionVivaLargaGuard.test.ts",
+      "tests/fluTranscriptPause.test.ts",
+      "tests/srGapIdleProbeGuard.test.ts"
     ]
   },
   "ignore": [
@@ -28,5 +33,12 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "e2eScope": {}
+  "e2eScope": {
+    "src/voice/lib/fluTranscriptPause.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/conversationStream.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ]
+  }
 }

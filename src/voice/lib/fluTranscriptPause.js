@@ -82,12 +82,18 @@ export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs =
   if (!hasOpenLine) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-no-open-line' }
   }
+  // SOLO SILENCIO (spec del dueno, 2026-10-10): "la ultima frase es para ACUMULAR y una
+  // vez que se termine, que haya espacio o cambio de hablante, es cuando lo debe vaciar a
+  // la conversacion". Se RETIRA la rama 'turno viejo' que entro en P9.55: con el ASR
+  // entregando onresult, cerrar por `sinceCommitMs` vaciaba a mitad del dictado (medido en
+  // su sesion del 2026-10-10 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale', fila
+  // nacida en el "10" y reemplazada 3 veces). El sintoma que perseguia P9.55 (texto que no
+  // llegaba a fila) tenia su causa en el DESCARTE del rebuild, cerrado en P9.60.
   const silence = Number(sinceLastResultMs) >= gapMs
-  const staleTurn = Number(sinceLastCommitMs) >= gapMs
-  if (!silence && !staleTurn) {
+  if (!silence) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
   }
-  const reason = silence ? 'sr-silence' : 'sr-live-turn-stale'
+  const reason = 'sr-silence'
   emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0 })
   return {
     fire: true,
