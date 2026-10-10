@@ -4217,3 +4217,43 @@ el worker y el hilo principal deciden por separado), la pantalla del dueno, la s
 
 Alcance real (0.23): CUBIERTO=la acunacion con un dueno y su barrera; NO CUBIERTO=la
 decision de identidad (siguiente) y el DoD-producto.
+
+========================================================================
+2026-10-09 - P9.57: UN dueno de la DECISION de identidad (ruta doble de responsabilidad)
+
+MEDIDO:
+  - La decision "voz conocida vs nueva" estaba implementada DOS veces: worker
+    (speakerCore.assignSpeaker via embedAndMatch) e hilo principal
+    (speakerDiarization.resolveProductionSpeakerAtBoundary/resolveRoomNearestNeighbor).
+  - La del worker era TRABAJO TIRADO: resolveSpeakerFromAudio usaba solo raw.vector y
+    volvia a decidir en el hilo principal (resolveIdentityIdle); su reason/name solo se
+    LOGEABAN, asi que el log "Match" mentia sobre quien decidia.
+  - PISO DE EVIDENCIA incompleto: solo en la rama de limite; la via principal (la que
+    corre con vector VACIO) abria etiqueta nueva: `[]` -> "Hablante 3" con la sesion en
+    "Hablante 1".
+
+Cambios aplicados:
+  - src/voice/workers/voiceId.worker.js: fuera embedAndMatch; el worker SOLO EMBEBE.
+  - src/voice/lib/voiceIdWorkerClient.js: pide `embed` y decide con el dueno unico; el
+    log Match dice la decision REAL.
+  - src/voice/lib/speakerCore.js: se ELIMINA assignSpeaker (-450 lineas netas) y los
+    simbolos que quedaron sin uso; src/voice/lib/voiceIdentity.js deja de re-exportarlo.
+  - src/voice/lib/speakerDiarization.js: piso de evidencia en la VIA PRINCIPAL.
+  - 7 tests de diarizacion portados al dueno unico.
+  - Guards: vozIdentidadDecisionUnicaGuard (ROJO 2 -> VERDE 1) y vozIdentidadDuenaUnicaGuard,
+    en lint:guards.
+
+Validado contra:
+  - Guard: ROJO con 2 modulos que IMPLEMENTAN la decision -> VERDE con 1.
+  - Metrica: `function assignSpeaker(` en speakerCore.js 1 -> 0 (target 0).
+  - npm run gate: Alcance OK / tamano OK / DoD OK / guard OK.
+  - npm run lint 224 ficheros / 1878 casos VERDE (incluye viteConfigNodeLoadGuard,
+    dodScopeGuard e instrumentIntegrityGuard); eslint 0; tsc 0.
+  - ESCRITORIO: npm run e2e:scoped 8/8 (3.0 m) sobre la app real con el embedding real:
+    P3 "soy Luis" renombra su participacion y P3b no deja etiquetas inventadas.
+
+No validado: la pantalla del dueno (DoD-producto), el flake P9.50, la suite completa.
+
+Alcance real (0.23): CUBIERTO=la decision con UN dueno, la eliminacion de la segunda
+implementacion, el piso de evidencia en la via principal y las barreras; NO CUBIERTO=los
+declarados arriba.
