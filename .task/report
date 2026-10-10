@@ -4648,3 +4648,20 @@ locuciones => 2; sin conversacion activa => 0 (detector).
 HONESTIDAD: paso en la primera corrida (no hay rojo que mostrar). DoD 5 ficheros VERDE.
 ALCANCE REAL (0.23): CUBIERTO=la barrera end-to-end de 1 commit por locucion;
 NO CUBIERTO=DoD-producto, suite completa y E2E completa.
+
+================================================================
+A6 - una voz = un cluster (tope + fusion por el criterio)
+================================================================
+COMMIT 525c014 (speakerClusters + turnSpeakerPreflight + fluConfig + guard + contrato).
+MEDIDO ANTES: 'N turnos de una voz => 1 cluster' YA se cumplia; el TOPE estaba inerte (los
+3 valores de config a 0 y el 0 = sin tope); la fusion por criterio existia separada del tope.
+ARREGLO: dueno unico `capAndFuseSpeakerClusters` (consolidacion por `sameVoiceFloor` + tope
+de etiquetas automaticas con fusion del exceso), consumido por el preflight; tope en config
+(`conversationMaxAutoSpeakers` 0 -> 6, mismo renglon; fluConfig 2770/2772).
+METRICA: config con el tope a 0 1 -> 0. GUARD nuevo (nace ROJO) con detector.
+ELECCION DECLARADA: 6 es un freno anti-inflacion (ajustable en config), no un limite de
+producto validado. El detector estructural cazo un import que faltaba (isAutoSpeakerLabel).
+DoD 80 ficheros VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=el tope y la fusion por criterio en un dueno, con guard y
+metrica; NO CUBIERTO=la eleccion del valor del tope (decision del dueno), el DoD-producto,
+la suite completa y la E2E completa.

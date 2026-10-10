@@ -493,3 +493,13 @@ de P9.64 y contar las filas sin hablante de P9.65.
   real del stream). Se cierra como verificacion fijada con guard end-to-end y contrato SIN
   invariant (no se inventa defecto). Guard `tests/vozUnCommitPorTurnoGuard.test.ts`.
 - PENDIENTE: A6 (tope+fusion de clusters: unica pieza del plan sin cerrar).
+
+## 2026-10-10 (12) - A6 cerrado (una voz = un cluster)
+
+- **A6** (525c014): `capAndFuseSpeakerClusters` + `autoSpeakerCount` (speakerClusters) =
+  dueno unico de la FUSION por el criterio de la diarizacion y del TOPE de etiquetas
+  automaticas; el preflight pasa por el dueno; tope en config (`conversationMaxAutoSpeakers`
+  6; fluConfig 2770/2772, mismo renglon). Guard `tests/vozUnClusterPorVozGuard.test.ts`
+  (nace ROJO). Metrica 1 -> 0. DECISION DECLARADA: el valor 6 es un freno ajustable.
+- PLAN COMPLETO: A1..A6 y B1..B5 CERRADOS. Pendiente del dueno: DoD-producto (pantalla),
+  suite completa (gate de CI) y E2E completa.
