@@ -4281,3 +4281,55 @@ No validado: el DoD-producto (pantalla del dueno), la suite completa y la suite 
 
 Alcance real (0.23): CUBIERTO=la estabilidad del bloque de voz (8/8 + 3/3) y la medicion
 D2=0 en la sesion real; NO CUBIERTO=los declarados arriba.
+
+========================================================================
+2026-10-10 - AUDITORIA DE RUTAS DUPLICADAS (criterio CONGELADO)
+
+CRITERIO (AGENTS 7.7.g, declarado ANTES de medir):
+  DUPLICADO = DOS duenos del MISMO responsable que pueden DIVERGIR.
+  SIMILITUD DE FORMA = mismo esqueleto/sentencia en responsables DISTINTOS -> se
+  reporta aparte y NO entra en el contador.
+
+A) INSTRUMENTOS CONGELADOS (.task/frozen.json)
+  - node scripts/duplication.mjs        -> ficheros=415 grupos=0 (umbral congelado)
+  - node scripts/auditoria-codigo.mjs   -> cuerpos duplicados 0 / colisiones de export 0 /
+    parches 0 / homonimos 7 (candidatos, exigen leer el sitio) / literales repetidos 541 /
+    hardcode fuera de config 3
+
+B) DUPLICADOS DE RESPONSABILIDAD: 2 encontrados y CERRADOS hoy
+  - P9.56 acunar etiqueta de hablante: 4 modulos -> 1 (guard vozIdentidadDuenaUnicaGuard, lint:guards)
+  - P9.57 decision de identidad:        2 modulos -> 1 (guard vozIdentidadDecisionUnicaGuard, lint:guards)
+
+C) VEREDICTO DE LOS 7 HOMONIMOS (leido el sitio, uno a uno)
+  1. runMainThreadFallback (fbxWorkerClient.ts:74 / voiceIdWorkerClient.js:157)
+     -> NO duplicado. Cada uno DELEGA en UNA implementacion compartida (fetchFbxJson /
+        computeSpeakerEmbedding+compareCosineSignatures) y las responsabilidades son
+        distintas (parse FBX vs embedding de voz).
+  2. sourceLabel (ImageGrid.tsx:76 / VideoGrid.tsx:52)
+     -> SIMILITUD DE FORMA. Ids distintos: COMMONS vs COMMONS_VIDEO; sin riesgo de
+        divergir sobre la MISMA entrada.
+  3. cleanLabel (deviceActionIntentParser.ts:113 / shoppingIntentParser.ts:45)
+  4. pickLabel  (selfKnowledge.ts:128 / textUtils.ts:102)
+     -> ya triados en P8.34: mismo nombre, REGLA distinta. SIMILITUD DE FORMA.
+  5. toUI (useMinuteKnowledge.ts:49 / useVoiceProfiles.ts:36)
+     -> SIMILITUD DE FORMA (dominios distintos: minutas vs perfiles de voz).
+  6. flush (clientLogRelay.ts:34 / voiceActivitySegmenter.js:149)
+     -> SIMILITUD DE FORMA (lote de logs vs vaciado de frames del VAD).
+  7. resetTurn (voiceActivitySegmenter.js:76 / whisperRecognitionEngine.js:140)
+     -> NO duplicado. Cada motor resetea SU PROPIO estado; ninguno reimplementa la
+        decision del otro.
+
+D) RESPONSABILIDADES DEL AREA CALIENTE (medidas por comando; 1 = un solo dueno)
+  - quien escribe la FILA ............ commitUserTurnRow  -> src/voice/lib/conversationTurnRow.ts (1)
+  - quien escribe los CLUSTERS ....... setSpeakerClusters -> src/voice/lib/turnSpeakerCommit.js (1)
+  - quien COMMITEA el turno .......... emitConversationLog -> src/voice/lib/conversationStreamCommit.js (1)
+  - quien NORMALIZA el comando ....... normalizeCommandForDeterministic -> src/voice/lib/audioMath.js (1)
+  - quien ACUNA etiqueta ............. speakerCore.nextAutoSpeakerLabel (1, guard)
+  - quien DECIDE identidad ........... speakerDiarization.resolveConversationSpeaker (1, guard)
+
+E) ALCANCE DE ESTA AUDITORIA (obligatorio, 0.23; evita el bucle de "siempre hay mas")
+  CUBIERTO: los 2 instrumentos congelados + los 7 homonimos con su veredicto + 6
+  responsabilidades del area de voz/identidad/salida.
+  NO CUBIERTO: un barrido del criterio de RESPONSABILIDAD por TODOS los dominios del
+  producto (agenda, notas, juegos, medios, entorno...). Eso es OTRA tarea con su propio
+  criterio congelado y su propio guard, no una vuelta mas de esta.
