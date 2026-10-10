@@ -22,7 +22,8 @@ describe('una locución → una fila de usuario por turno', () => {
     it('el commit temprano y el final no duplican: completan el hablante', () => {
         commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy', turnId: 1 });
         expect(userRows()).toHaveLength(1);
-        expect(userRows()[0].speakerName).toBeUndefined();
+        // A5: la fila del commit temprano SIEMPRE lleva etiqueta (respaldo de config).
+        expect(userRows()[0].speakerName).toBe('Hablante 1');
 
         // Fila ambiente/sistema intercalada: NO cierra el turno.
         useIntegrationStore.getState().addConversationEntry({

@@ -237,6 +237,7 @@ export const GUARD_FILES = [
     'tests/vozEcoPorContenidoGuard.test.ts',
     'tests/vozEscenarioInyectado.test.ts',
     'tests/vozFlagHuerfanoGuard.test.ts',
+    'tests/vozFilaConHablanteGuard.test.ts',
     'tests/vozHablanteFilaUnicaGuard.test.ts',
     'tests/vozSondaDatosGuard.test.ts',
     'tests/srGapIdleProbeGuard.test.ts',
