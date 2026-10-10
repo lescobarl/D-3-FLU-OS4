@@ -4333,3 +4333,41 @@ E) ALCANCE DE ESTA AUDITORIA (obligatorio, 0.23; evita el bucle de "siempre hay 
   NO CUBIERTO: un barrido del criterio de RESPONSABILIDAD por TODOS los dominios del
   producto (agenda, notas, juegos, medios, entorno...). Eso es OTRA tarea con su propio
   criterio congelado y su propio guard, no una vuelta mas de esta.
+
+P9.59 - PERDIDA DE TRANSCRIPCION: el commit sin fila marcaba la locucion como emitida y el CIERRE la perdia
+  commit: c0a1c0e (src + guard + lint:guards)
+  CAUSA RAIZ (un solo dueno, medido): conversationStreamCommit.js escribia
+  `lastEmittedTranscriptRef.current = capture` SIEMPRE, tambien cuando el gate
+  `if (refreshNeeded && settlesTurn)` NO emitia fila (un FINAL de segmento de Chrome).
+  Ese ref es la FUENTE del dedupe (`isDuplicateTurnCommit`) y de `refreshNeeded`/`replaceLast`:
+  al marcarse la locucion como "ya emitida" sin fila, el CIERRE real (onend/srGap, MISMO
+  texto, `settlesTurn:true`) 1) daba `replaceLast=true` -> `refreshNeeded=false` y 2) caia
+  como `duplicate-turn-commit` -> la locucion entera se perdia sin fila.
+  ARREGLO: solo el commit que EMITE la fila mueve ese ref. Desaparecen los dos caminos que
+  la movian sin fila: `if (!delivered)` (rama simple), `if (!refreshNeeded)` + la
+  asignacion incondicional tras el bucle (rama segmentada). No hay ruta nueva: el cierre
+  escribe por la MISMA puerta `emitTurnRow`; el hablante (`resolveRowSpeakerName`,
+  `updateTurnRowSpeaker`) NO se toca.
+  METRICA (contrato): escrituras a `lastEmittedTranscriptRef.current` en
+  conversationStreamCommit.js 5 -> 3 (target 3).
+  GUARD (nuevo, en lint:guards): tests/vozCierrePierdeLocucionGuard.test.ts, harness FIEL
+  (el sink del ingress ES el commit real `handleConversationStreamSync`) con secuencias
+  REALES de Chrome (interims que crecen + FINAL + srGap + onend). NACE ROJO en la base:
+  3 fallos ("una locucion con FINAL + onend no llega a la fila", "pausa real srGap: se
+  pierde la locucion larga", "Chrome segmenta la frase: falta el arranque"). VERDE con el
+  arreglo. 2 controles negativos verdes en base Y con el arreglo (un FINAL de SEGMENTO sin
+  cierre NO escribe fila; un silencio corto no vuelca) -> el arreglo no relaja el gate.
+  EVIDENCIA:
+    - DoD 64/64: vozCierrePierdeLocucionGuard + conversationStreamCommit +
+      wakeRowNoiseGuard + vozLocucionVivaLargaGuard + ingressSimulation.
+    - GUARD rojo->verde medido por stash del src: base 3 failed | 2 passed -> 5 passed.
+    - `npm run gate` VERDE (metrica base=5 actual=3 target=3).
+    - `npm run lint` VERDE (225 ficheros / 1885 casos) + eslint 0; `npm run typecheck` 0.
+    - `npm run e2e:scoped` (app real) 8/8 (P1..P7).
+  HUECO DE FIDELIDAD (por que estaba verde y la app perdia texto): los harness de voz
+  empujaban la fila con solo `turnCommit:true` desde un sink FALSO que no pasaba por el
+  gate real (`settlesTurn`). El harness de este guard usa el COMMIT real; de ahi que
+  reproduzca el defecto en 1.2 s y sin microfono.
+  ALCANCE REAL (obligatorio, 0.23): CUBIERTO=la perdida de la locucion al cierre (causa
+  medida, guard de comportamiento nacido rojo, metrica 5->3, e2e real del flujo);
+  NO CUBIERTO=la suite completa (gate de CI) y el DoD-producto (su pantalla, localhost:5173).
