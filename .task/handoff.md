@@ -516,3 +516,17 @@ de P9.64 y contar las filas sin hablante de P9.65.
   voz; (3) Luis NO cae en la voz de la mujer; (4) sin spam de descarte en preview.
 - SIGUIENTE (autorizado, en orden): preflight antes del commit -> plegado luis/Luis ->
   instrumento lastSim (ciego 39/39) -> ciclo de vida del microfono (InvalidStateError).
+
+## 2026-10-10 (14) - #1 CERRADO: el preflight va ANTES del commit
+
+- **P1preflight** (src 94abeda; guard+contrato 37b7175): `primeTurnSpeakerPreflight`
+  (turnIdentityPipeline) = dueno unico de la espera ACOTADA (1.5 s) de la instantanea FINAL
+  de identidad; el cierre del turno la espera ANTES de escribir la fila. Fabrica unica del
+  resolver: `buildFinalSpeakerSnapshotResolver` (conversationStreamCommit); forma
+  resolutor/fabrica: `finalSnapshotRunner`. La espera NO bloquea (si vence, el commit escribe
+  igual). Guard `tests/vozPreflightAntesCommitGuard.test.ts` NACE ROJO (gate base=1 -> actual=0).
+  Metrica 0 -> 1. TECHO: useFluVoiceAssistant.js 4539/4539 (no se rompio).
+- LIMITE: plazo 1.5 s; si el embedding real tarda mas, la fila seguiria naciendo sin hablante
+  (pendiente de verificar con el micro del dueno).
+- SIGUIENTE (autorizado, en orden): plegado luis/Luis -> instrumento lastSim (ciego 39/39) ->
+  ciclo de vida del microfono (InvalidStateError).
