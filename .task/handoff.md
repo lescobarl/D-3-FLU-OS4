@@ -340,3 +340,14 @@ pantalla), P8.41 (mover el micro falso al repo como fixture e2e: 0 de 11 specs c
   F5 porque cambian workers/identidad) los 8 casos y el dictado largo 1..40.
 - NO CUBIERTO por el agente: la suite completa (`npm run test:full`, solo con autorizacion
   expresa del usuario en ESE turno).
+
+## 2026-10-10 (despues de P9.59) — dos hitos mas, ambos cerrados
+
+- **P9.60** (47a93e7 src, 232e121 guard, 8bd1283 ledger): la locucion CONFIRMADA sin fila
+  ya NO se descarta en el rebuild del watchdog; se cierra por la misma puerta que onend.
+  Dueno unico de la decision: `activeListen.hasConfirmedOpenLine`.
+- **P9.61** (778d922 test, 44eaa21 ledger): prueba de TUBERIA COMPLETA (monta el hook real
+  y dispara el watchdog con fake timers). Reproduce el defecto en la capa del watchdog
+  (`filas=[]` en la version previa) y lo fija. El contrato lo mecaniza:
+  `invariant.base=43a7a96` -> el gate comprueba `guard base=1 actual=0`.
+- Estado: **0 pendientes** (346 cierres). Portal de validacion: http://localhost:5173.
