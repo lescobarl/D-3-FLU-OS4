@@ -1,27 +1,26 @@
 {
-  "task": "P9.60 - PERDIDA DE LOCUCION CONFIRMADA en una pausa: el rebuild del watchdog descartaba la linea viva (que ya traia un FINAL integrado sin fila) y el srGap posterior escribia solo el texto NUEVO.",
-  "objective": "Que el rebuild del reconocedor NO descarte una captura CONFIRMADA sin fila: el descarte de la linea abierta se aplica solo al INTERINO en vuelo, y una captura confirmada se CIERRA por la misma puerta que onend (pushRecognitionEndEvent) antes de reiniciar el SR. Decision con UN solo dueno (hasConfirmedOpenLine).",
-  "base": "43a7a9629efbe6057f3b4e307c64df0445811ace",
+  "task": "P9.61 - cierra el hueco que P9.60 declaro NO CUBIERTO: prueba de TUBERIA COMPLETA montando el hook real y disparando el WATCHDOG por temporizador.",
+  "objective": "Que el defecto 'el rebuild descarta la locucion confirmada' quede medido a nivel de tuberia (hook real + watchdog + fake timers), no solo por comportamiento del estado del ingress ni por lectura del hook como texto.",
+  "base": "8bd1283",
   "allow": [
-    "src/voice/lib/activeListen.js",
-    "src/voice/hooks/useFluVoiceAssistant.js",
-    "tests/vozRebuildNoPierdeLocucionGuard.test.ts",
+    "tests/vozRebuildTuberiaCompletaGuard.test.tsx",
     "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
-  "maxFiles": 6,
-  "maxLines": 900,
-  "dod": "npx vitest run --reporter=dot tests/vozRebuildNoPierdeLocucionGuard.test.ts tests/vozCierrePierdeLocucionGuard.test.ts tests/vozLocucionVivaLargaGuard.test.ts tests/ingressSimulation.test.ts tests/ingressScenarios.test.ts tests/conversationStreamCommit.test.ts tests/decisionSingleOwnerGuard.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/specificDeadGuard.test.ts tests/transcriptionDedupLoss.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts tests/wakeRowNoiseGuard.test.ts tests/useFluVoiceAssistant.behavior.test.tsx",
-  "guard": "npx vitest run --reporter=dot tests/vozRebuildNoPierdeLocucionGuard.test.ts",
+  "maxFiles": 4,
+  "maxLines": 700,
+  "dod": "npx vitest run --reporter=dot tests/vozRebuildTuberiaCompletaGuard.test.tsx tests/vozRebuildNoPierdeLocucionGuard.test.tsx tests/vozCierrePierdeLocucionGuard.test.ts tests/vozLocucionVivaLargaGuard.test.ts tests/ingressSimulation.test.ts tests/useFluVoiceAssistant.behavior.test.tsx",
+  "guard": "npx vitest run --reporter=dot tests/vozRebuildTuberiaCompletaGuard.test.tsx",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un solo modulo declara el dueno de la DECISION 'la linea abierta es una captura confirmada' (0 -> 1).",
+    "statement": "Un solo modulo declara el dueno de la decision 'la linea abierta es una captura confirmada' (0 -> 1) y el guard de TUBERIA COMPLETA nace ROJO en el commit previo al arreglo (43a7a96), no en el actual.",
+    "base": "43a7a96",
     "metric": {
       "command": "node -e \"const fs=require('fs');const f=['src/voice/lib/activeListen.js','src/voice/lib/conversationStream.js','src/voice/lib/conversationStreamCommit.js','src/voice/lib/transcriptIngress.js','src/voice/hooks/useFluVoiceAssistant.js'];console.log(f.filter((x)=>fs.readFileSync(x,'utf8').includes('export function hasConfirmedOpenLine')).length)\"",
       "target": 1
     },
     "guardFiles": [
-      "tests/vozRebuildNoPierdeLocucionGuard.test.ts"
+      "tests/vozRebuildTuberiaCompletaGuard.test.tsx"
     ]
   },
   "ignore": [
@@ -29,12 +28,5 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "e2eScope": {
-    "src/voice/hooks/useFluVoiceAssistant.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/lib/activeListen.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ]
-  }
+  "e2eScope": {}
 }
