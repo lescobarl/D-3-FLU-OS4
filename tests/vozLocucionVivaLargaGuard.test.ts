@@ -87,6 +87,7 @@ function createHarness() {
   return {
     runtime,
     logRowsTextRef,
+    publishedLiveRef,
     lastCommitAtRef,
     inject(event: unknown) {
       pushMicSpeechEvent(event as never, runtime.queue)
@@ -103,6 +104,15 @@ function createHarness() {
   }
 }
 
+// ============================================================
+// HUECO DE FIDELIDAD MEDIDO (2026-10-10): este harness (y los demas de voz) usa un
+// `syncConversationStream` PROPIO que empuja la fila con solo `turnCommit: true`. La
+// produccion NO escribe la fila asi: en `conversationStreamCommit.js` el gate real es
+// `if (refreshNeeded && settlesTurn)` (lineas 495 y 556). En el log del dueno (sesion
+// 10:09-10:12) hubo 23 commits con `refresh=true` y SOLO 11 filas: los 12 sin fila son
+// justo los que NO declaran cierre (`settlesTurn=false`). El harness no reproduce ese
+// gate, asi que estos tests pueden estar VERDES mientras la app pierde texto.
+// ============================================================
 // Locucion larga que Chrome entrega como interinos ACUMULATIVOS (nunca un final).
 const INTERINOS = [
   'estoy hablando durante mucho rato sin que el reconocedor cierre la frase',
@@ -199,3 +209,36 @@ describe('REPLAY REAL del log: el cierre por turno viejo escribe la cola', () =>
     expect(h.logRowsTextRef.current.length).toBe(0)
   })
 })
+
+// ============================================================
+// PATRON REAL del dueno (debug.log 2026-10-10 10:09:00): un FINAL de Chrome con
+// texto LARGO (la cuenta 1..30 ~316 chars) seguido del cierre por silencio. En su
+// sesion el commit de ese final NO escribio fila (`src=sticky-preflight-pending`,
+// refresh=true y 0 filas) y el texto se perdio: 23 commits -> 11 filas y 28 palabras
+// del asrFinal en NINGUNA fila (D5).
+// ============================================================
+describe('final de Chrome + cierre: la fila lleva el texto del final', () => {
+  const TEXTO =
+    'vamos a hacer pruebas de transcripcion diarizacion este aqui estamos haciendo las primeras pruebas voy a contar ahora 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 18 19 20'
+
+  it('el texto del FINAL acaba en alguna fila (no solo en ULTIMA FRASE)', () => {
+    const h = createHarness()
+    h.inject(chromeEvent([{ isFinal: true, transcript: TEXTO }], 0))
+    h.srGap(12000)
+    const todo = h.logRowsTextRef.current.join(' ')
+    expect(todo, `filas=${JSON.stringify(h.logRowsTextRef.current)}`).toContain('vamos a hacer pruebas')
+    expect(todo.length, `filas=${JSON.stringify(h.logRowsTextRef.current)}`).toBeGreaterThan(60)
+  })
+  it('final A -> silencio -> final B -> silencio: NINGUNA de las dos se pierde', () => {
+    const h = createHarness()
+    h.inject(chromeEvent([{ isFinal: true, transcript: TEXTO }], 0))
+    h.srGap(12000)
+    h.inject(chromeEvent([{ isFinal: true, transcript: 'sigue igual mal se perdio la transcripcion' }], 0))
+    h.srGap(12000)
+    const todo = h.logRowsTextRef.current.join(' | ')
+    expect(todo, 'filas=' + JSON.stringify(h.logRowsTextRef.current)).toContain('vamos a hacer pruebas')
+    expect(todo, 'filas=' + JSON.stringify(h.logRowsTextRef.current)).toContain('sigue igual mal')
+  })
+})
+
+
