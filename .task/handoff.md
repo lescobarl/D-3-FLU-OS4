@@ -379,3 +379,19 @@ pantalla), P8.41 (mover el micro falso al repo como fixture e2e: 0 de 11 specs c
 El relayLog ya escribe `Identity label=... lastSim=...` (voiceIdentityResolve.js): basta hablar
 en http://localhost:5173 y leer `debug.log` con `npm run voz:log` para fijar el valor seguro
 de P9.64 y contar las filas sin hablante de P9.65.
+
+## 2026-10-10 (despues de la sesion de P9.64/P9.65) - A1 CERRADO
+
+- **A1** (ccfb835 src+contrato; 8370fd5 guard+lint:guards+ledger): el REGISTRO del nombre
+  propio tiene UN dueno (`src/voice/lib/speakerIdentityRegister.js`: `registerSpeakerIdentity`
+  + `registerSpeakerIdentityFromCommand`) y el comando `REGISTRAR_PARTICIPANTE` desemboca en la
+  misma ruta que la del commit (`wake-intro`); antes habia 2 implementaciones y el comando no
+  tenia consumidor (decia "Registrado {name}." sin registrar nada).
+  Metrica (puerta): modulos que implementan el registro 2 -> 1. Guard
+  `tests/vozRegistroNombreUnicoGuard.test.ts` (lint:guards), rojo medido por mutacion.
+  Gate VERDE: metrica base=2 actual=1 target=1 - guard base=1 actual=0.
+- SIGUIENTE: el texto del plan A2..B5 NO esta en el repo (el usuario lo dio en el chat); A1 se
+  reconstruyo del encargo + la medicion. A2+ necesita la lista o seguir midiendo duplicaciones
+  del mismo dominio (registro/identidad de hablante) una por turno.
+- NO CUBIERTO por el agente: DoD-producto (pantalla: "okay flu soy Luz" en localhost:5173),
+  suite completa y E2E completa (spec del bloque: tests/e2e/voz-escenario-dueno.spec.ts).
