@@ -4580,3 +4580,16 @@ METRICA: salidas vacias del decisor 2 -> 0. GUARD nuevo (nace ROJO) + reparacion
 en 3 guards (commit solo de tests, 0.22). DoD 16 ficheros VERDE = 0 fallos nuevos.
 ALCANCE REAL (0.23): CUBIERTO=la regla de la etiqueta de fila con su guard y metrica;
 NO CUBIERTO=DoD-producto, suite completa y E2E completa.
+
+================================================================
+B3 - solo alucinacion clara (empty/nonword) descarta la locucion
+================================================================
+COMMIT 5960d40 (garbageTranscript.js + 3 guards + lint:guards + contrato).
+MEDIDO: el tartamudeo adyacente marcaba la frase como BASURA y, si dominaba, la frase se
+descartaba entera ('se se' -> ''). ARREGLO: stutter = MOTIVO (garbage false, con
+repiteDominante), se retira la rama de descarte por tartamudeo; el decisor informa
+`discarded` y solo descarta empty/nonword (y solo sin texto validado).
+METRICA: ramas de descarte no-claras 1 -> 0. GUARD nuevo (nace ROJO: 4 casos) + reparacion
+de criterio en 2 guards. DoD 4 ficheros VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=el criterio de descarte y su guard/metrica; NO CUBIERTO=DoD-
+producto, suite completa y E2E completa.

@@ -450,3 +450,13 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - PENDIENTE del plan: A6 (una voz = un cluster: tope/fusion), B1 (descarte con motivo),
   B2 (eco contra el texto real de FLU: MEDIR antes de tocar), B3 (solo alucinacion clara),
   B4 (recomponer antes de commitear), B5 (1 commit por turno).
+
+## 2026-10-10 (7) - B3 cerrado (solo alucinacion clara)
+
+- **B3** (5960d40): `classifyGarbageTranscript` -> garbage solo para empty/nonword; el
+  tartamudeo es motivo. `resolveCommittablePhrase` devuelve {phrase, usedFallback, reason,
+  discarded} y conserva toda frase con palabras reales. Guard
+  `tests/vozAlucinacionClaraGuard.test.ts` (nace ROJO). Metrica 1 -> 0.
+- PENDIENTE: A6 (tope+fusion de clusters), B1 (un dueno del descarte, todo descarte con
+  motivo), B2 (eco vs texto REAL de FLU: MEDIDO -> el peel trunca contenido real), B4
+  (recomponer antes de commitear), B5 (1 commit por turno).
