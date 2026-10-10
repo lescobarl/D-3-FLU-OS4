@@ -34,6 +34,7 @@ import { logCaughtError } from '../lib/caughtError';
 import { normalizeLang } from '../core/config/localeConfig';
 import { pickText } from '../lib/uiStrings';
 import { COMMAND_IDS } from '../voice/lib/commandIds';
+import { registerSpeakerIdentityFromCommand } from '../voice/lib/speakerIdentityRegister';
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
     volume?: number;
@@ -245,6 +246,24 @@ export function useNavigationCommands(
         const userRequested = userRequestedNavigationCommand(transcript, navegacion.comando);
 
         switch (navegacion.comando) {
+            // RUTA UNICA del registro de nombre propio (A1): el MISMO dueno que la
+            // ruta `wake-intro` del commit (`registerSpeakerIdentity`). Antes el comando
+            // no tenia consumidor: FLU decia "Registrado {name}." y NO registraba nada
+            // (el registro solo ocurria como efecto colateral del commit del stream).
+            case COMMAND_IDS.REGISTRAR_PARTICIPANTE: {
+                const registrado = registerSpeakerIdentityFromCommand({
+                    transcript,
+                    speakerName: speakerName || '',
+                });
+                auditLog.logEvent('command:registrar_participante', 'navigation', uuidv4(), {
+                    speaker: registrado.name || speakerName || undefined,
+                    transcript,
+                    response: commandSpeech,
+                    comando: COMMAND_IDS.REGISTRAR_PARTICIPANTE,
+                    phase,
+                }, 'REGISTRAR_PARTICIPANTE command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+                break;
+            }
             case COMMAND_IDS.GENERAR_RESUMEN:
                 dispatchFluEvent(FLU_EVENTS.GENERATE_SUMMARY);
                 break;

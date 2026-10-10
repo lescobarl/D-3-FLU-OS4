@@ -1,28 +1,30 @@
 {
-  "task": "P9.66 - 'soy <nombre>' debe renombrar la MISMA voz: el umbral de 'misma voz' era un literal (0.78) POR ENCIMA de la banda medida (0.69-0.74), asi que la unificacion de etiquetas era insatisfacible y ninguna fila cambiaba de nombre.",
-  "objective": "Que 'Okay flu soy Luz' (y cualquier registro de participante) sustituya TODAS las etiquetas automaticas que son la MISMA voz por el nombre propio, con UN solo dueno del umbral de 'misma voz' (config productionClusterReuseThreshold) en vez de literales por encima de la banda medida.",
-  "base": "ac622ef",
+  "task": "A1 - El REGISTRO del nombre propio tiene UN dueno: el comando REGISTRAR_PARTICIPANTE desemboca en la MISMA ruta que el wake-intro del commit (antes: 2 implementaciones del registro y el comando sin consumidor, diciendo 'Registrado {name}.' sin registrar nada).",
+  "objective": "Que registrar un nombre propio ('okay flu soy Luz') tenga una sola implementacion (`registerSpeakerIdentity`) que usen las dos rutas: la del commit (`applyResolvedSpeakerToSessionRefs`, fuente wake-intro) y la del comando (`registerSpeakerIdentityFromCommand` desde handleNavigationCommand, que antes no traia caso).",
+  "base": "a9c4589",
   "allow": [
-    "src/voice/lib/speakerClusters.js",
-    "src/voice/lib/turnSpeakerPreflight.js",
-    "tests/vozRenombreVozCompartidaGuard.test.ts",
+    "src/voice/lib/speakerIdentityRegister.js",
+    "src/voice/lib/turnSpeakerCommit.js",
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "src/hooks/useNavigationCommands.ts",
+    "tests/vozRegistroNombreUnicoGuard.test.ts",
     "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
-  "maxFiles": 7,
+  "maxFiles": 8,
   "maxLines": 900,
-  "dod": "npx vitest run --reporter=dot tests/vozRenombreVozCompartidaGuard.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreHablanteGuard.test.ts tests/vozClusterConsolidacionGuard.test.ts tests/turnSpeakerPreflight.test.ts tests/turnSpeakerCommit.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerDiarizationUnified.test.ts tests/speakerClusterAccumulation.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerIdentitySession.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/conversationStreamCommit.test.ts tests/turnIdentityPipeline.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozRenombreVozCompartidaGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozRegistroNombreUnicoGuard.test.ts tests/useFluVoiceAssistant.behavior.test.tsx tests/turnSpeakerCommit.test.ts tests/speakerClusterAccumulation.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/vozRenombreHablanteGuard.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozIdentidadInyectada.test.ts tests/speakerIdentitySession.test.ts tests/registeredSpeakerNameGuard.test.ts tests/conversationStreamCommit.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts tests/vozIdentidadDecisionUnicaGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozRegistroNombreUnicoGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Umbrales de 'misma voz' HARDCODEADOS en las funciones de unificacion (matchThreshold = 0.78 en src/voice/lib/speakerClusters.js): 2 -> 0.",
-    "base": "ac622ef",
+    "statement": "Modulos de src/ que IMPLEMENTAN el registro del nombre (calculan las etiquetas de la MISMA voz con findLabelsWithSharedVoice, fuera del dueno del calculo): 2 -> 1.",
+    "base": "a9c4589",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/speakerClusters.js','utf8');console.log((s.split('matchThreshold = 0.78').length-1))\"",
-      "target": 0
+      "command": "node -e \"const fs=require('fs'),p=require('path');const O='speakerClusters.js';let n=0;const w=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const fp=p.join(d,f.name);if(f.isDirectory()){w(fp)}else if(/\\.(js|ts|tsx)$/.test(f.name)&&p.basename(fp)!==O){n+=(fs.readFileSync(fp,'utf8').match(/findLabelsWithSharedVoice\\(/g)||[]).length}}};w('src');console.log(n)\"",
+      "target": 1
     },
     "guardFiles": [
-      "tests/vozRenombreVozCompartidaGuard.test.ts"
+      "tests/vozRegistroNombreUnicoGuard.test.ts"
     ]
   },
   "ignore": [
@@ -31,10 +33,16 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/speakerClusters.js": [
+    "src/voice/lib/speakerIdentityRegister.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/turnSpeakerPreflight.js": [
+    "src/voice/lib/turnSpeakerCommit.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/hooks/useFluVoiceAssistant.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/hooks/useNavigationCommands.ts": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

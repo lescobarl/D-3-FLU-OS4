@@ -6,7 +6,8 @@ import { cleanForSpeech } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { labelToSpeakerId, normalizeRowSignature } from './conversationRow.js'
-import { normalizeSpeakerLabel, findLabelsWithSharedVoice } from './voiceIdentity.js'
+import { normalizeSpeakerLabel } from './voiceIdentity.js'
+import { registerSpeakerIdentity } from './speakerIdentityRegister.js'
 import { detectNextSpeakerPhrase, nextSpeakerLabel } from './activeListen.js'
 import { isNewAudioSegment, getLastCommitPerfAt } from './audioSegmentClock.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
@@ -209,11 +210,15 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   }
   // #8 (requisito del dueno; NO depende del microfono): identificado el hablante
   // (soy Luis lo detecta el TEXTO), TODA su participacion previa lleva su nombre.
-  // Etiquetas: la que ese hablante venia usando (fila anterior) MAS las que el
-  // dueno de clusters sabe que son la MISMA voz.
+  // El registro (alias + renombrado de las etiquetas de la MISMA voz) tiene UN solo
+  // dueno, `registerSpeakerIdentity`: lo comparte con la RUTA DEL COMANDO
+  // (`REGISTRAR_PARTICIPANTE`), que antes no registraba nada.
   if (resolved?.source === 'wake-intro' && typeof refs.renameSpeakerRows === 'function') {
-    const clusters = refs.speakerClustersRef?.current || []
-    const labels = [previous, ...findLabelsWithSharedVoice(clusters, name)].filter(Boolean)
-    refs.renameSpeakerRows(labels, name)
+    registerSpeakerIdentity({
+      name,
+      clusters: refs.speakerClustersRef?.current || [],
+      previousLabel: previous,
+      rename: refs.renameSpeakerRows,
+    })
   }
 }

@@ -55,7 +55,6 @@ import {
   resolveNavigationCommand,
 } from '../lib/voiceCommands'
 import {
-  findLabelsWithSharedVoice,
   flattenChunksTail,
   flattenChunksWindow,
   isProperSpeakerName,
@@ -65,7 +64,8 @@ import {
   trimAudioChunkBuffer,
 } from '../lib/voiceIdentity'
 import { clearSessionPrimarySpeaker, setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
-import { updateTurnRowSpeaker, renameSpeakerRows } from '../lib/conversationTurnRow'
+import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
+import { registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import {
   getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
@@ -1468,9 +1468,7 @@ const lastResolvedTurnRef = useRef(0)
     if (Number.isFinite(id)) lastResolvedTurnRef.current = id
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
     updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length), registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, no la hereda
-    if (isProperSpeakerName(speakerName)) {
-      renameSpeakerRows(findLabelsWithSharedVoice(speakerClustersRef.current, speakerName), speakerName)
-    }
+    registerSpeakerIdentity({ name: speakerName, clusters: speakerClustersRef.current })
   }, [participantSpeakerRef])
 
   const scheduleIdentityPreflight = useCallback(
