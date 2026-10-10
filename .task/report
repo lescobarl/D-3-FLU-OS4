@@ -4257,3 +4257,27 @@ No validado: la pantalla del dueno (DoD-producto), el flake P9.50, la suite comp
 Alcance real (0.23): CUBIERTO=la decision con UN dueno, la eliminacion de la segunda
 implementacion, el piso de evidencia en la via principal y las barreras; NO CUBIERTO=los
 declarados arriba.
+
+========================================================================
+2026-10-09 - P9.50 (flake P6) y P9.58 (caso #7 / D2) cerrados
+
+P9.50 - El e2e P6 (continuacion sin wake) dejaba de ser flake:
+  - CAUSA: `waitForTimeout(1500)` fijo + asercion por INDICE de fila (`filas[1]`);
+    bajo carga la continuacion llegaba antes del cierre del turno previo y el poll
+    de `>= 2` filas agotaba los 20 s.
+  - FIX (spec): espera DETERMINISTA a que el turno previo este escrito, reintento de
+    la locucion (la app ignora lo que oye mientras habla) y asercion por CONTENIDO
+    (fila con "vaso" + fila con "lechita"), sin indices ni timeouts fijos.
+  - MEDIDO: `-g P6 --repeat-each=3` = 3/3 passed (53 s); `npm run e2e:scoped` = 8/8 (3.2 m).
+  - Commit: 0b53310.
+
+P9.58 - Caso #7 (fila pintada antes del corte real / bandera D2): CIERRA COMO MEDICION.
+  - `npm run voz:log` sobre la sesion real del dueno (17:18-17:21): D2 (0). Las filas que
+    no se escribieron fueron por el cierre por turno viejo (P9.55), no por fila prematura.
+  - GUARD que ya lo vigila (no se anade otro: seria una segunda ruta del mismo criterio):
+    e2e P1 (`expect(antes).toBe(0)`) y P7 (`expect(durante).toBe(0)` + una sola fila).
+
+No validado: el DoD-producto (pantalla del dueno), la suite completa y la suite e2e completa.
+
+Alcance real (0.23): CUBIERTO=la estabilidad del bloque de voz (8/8 + 3/3) y la medicion
+D2=0 en la sesion real; NO CUBIERTO=los declarados arriba.

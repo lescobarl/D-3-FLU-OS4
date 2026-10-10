@@ -5,13 +5,6 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
-      "id": "P9.50",
-      "titulo": "FLAKE MEDIDO: el e2e P6 (continuacion sin wake) es inestable; no es regresion de P9.49",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-10-09: el e2e P6 (continuacion sin wake) es intermitente y FALLA IGUAL con el hook de BASE 8a1d75f (sin el cableado de P9.49): `--repeat-each=3` dio 1-2 fallos de 3 en AMBOS arboles. NO es regresion de P9.49. Es un FLAKE de timing/estado del spec (mismo sintoma que P7.49 con systemMatrix G7). El pipeline voz-escenario-dueno pasa 8/8 en corrida limpia. PENDIENTE: estabilizar P6 (fake timers / espera determinista) o declararlo como deuda medida; NO se silencia.",
-      "origen": "flake-2026-10-09"
-    },
-    {
       "id": "P9.49",
       "titulo": "El hook cablea el vinculo del participante a la via tardia del nombre (extraido a src/app por el trinquete del god-file)",
       "estado": "done",
@@ -1893,6 +1886,13 @@
     }
   ],
   "done": [
+    {
+      "id": "P9.50",
+      "commit": "0b53310",
+      "titulo": "El e2e P6 (continuacion sin wake) deja de ser flake: espera DETERMINISTA y asercion por CONTENIDO",
+      "evidencia": "CERRADO 2026-10-09 (commit 0b53310). FLAKE MEDIDO antes: `--repeat-each=3` daba 1-2 fallos de 3 e IGUAL con el hook de base (no era regresion). CAUSA: el spec usaba un `waitForTimeout(1500)` fijo tras el turno previo y asertaba por INDICE de fila (`filas[1]`): bajo carga la continuacion llegaba antes del cierre del turno anterior (o el motor la fusionaba con el), y el poll de `>= 2` filas agotaba los 20 s. FIX (spec, sin tocar src): espera determinista a que el turno previo este escrito (`expect.poll` de que exista una fila con \"lechita\"), reintento de la locucion hasta 3 veces (la app ignora lo que oye mientras habla: supresion de eco) y asercion por CONTENIDO (existe una fila con \"vaso\" y sigue existiendo la de \"lechita\"), sin indices ni timeouts fijos. PROPIEDAD que vigila: la continuacion NO pierde su texto (era su titulo; el indice era fragilidad, no requisito). MEDIDO: `npx playwright test voz-escenario-dueno.spec.ts -g P6 --repeat-each=3` = 3/3 passed (53 s); `npm run e2e:scoped` = 8/8 passed (3.2 m). Ruta del commit: tests/e2e/voz-escenario-dueno.spec.ts. Alcance real (0.23): CUBIERTO=la estabilidad del spec P6 y el bloque de voz en verde; NO CUBIERTO=el DoD-producto del dueno y la suite e2e completa. || ADEMAS (misma tarea): el caso #7 \"fila pintada antes del corte real\" (bandera D2 del analizador) CIERRA COMO MEDICION: `npm run voz:log` sobre la sesion real del dueno (debug.log 17:18-17:21) da D2 (0) - no hubo ninguna fila prematura; las filas que no se escribieron (10 de 18 commits) fueron por el cierre por turno viejo, arreglado en P9.55. GUARD que ya lo vigila (no se anade otro: seria una segunda ruta del mismo criterio): CERRADO COMO MEDICION 2026-10-09 (misma tarea que P9.50). El analizador `npm run voz:log` (bandera D2 = \"la fila es PREFIJO del asrFinal, escrita con el interino\") sobre la sesion real del dueno (debug.log 17:18-17:21) da **D2 (0)**: no hubo ninguna fila prematura; las que no se escribieron (10 de 18 commits) fueron por el cierre por turno viejo, arreglado en P9.55. GUARD que ya lo vigila (no se anade otro, seria una segunda ruta del mismo criterio): `tests/e2e/voz-escenario-dueno.spec.ts` P1 (\"un interino acumulativo NO abre fila\" -> `expect(antes).toBe(0)`) y P7 (\"la fila no puede vaciarse antes del corte/silencio\" -> `expect(durante).toBe(0)` + una sola fila), verdes en `npm run e2e:scoped` 8/8. Alcance real (0.23): CUBIERTO=la medicion de D2=0 en la sesion real y los dos guards e2e que vigilan la fila prematura; NO CUBIERTO=una traza nueva del dueno con la sonda (si D2 volviera a aparecer, el instrumento ya esta y `npm run voz:log` lo marca) y el DoD-producto.",
+      "origen": "flake-medido-2026-10-09"
+    },
     {
       "id": "P9.57",
       "commit": "b24b7a3",
