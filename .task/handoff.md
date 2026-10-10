@@ -351,3 +351,31 @@ pantalla), P8.41 (mover el micro falso al repo como fixture e2e: 0 de 11 specs c
   (`filas=[]` en la version previa) y lo fija. El contrato lo mecaniza:
   `invariant.base=43a7a96` -> el gate comprueba `guard base=1 actual=0`.
 - Estado: **0 pendientes** (346 cierres). Portal de validacion: http://localhost:5173.
+
+---
+
+## ESTADO 2026-10-10 (sesion del dueno 15:02-15:14) - que se cerro y que falta
+
+### Cerrado
+- **P9.63** (31b904d src+tests, `chore(ledger)`): el srGap vuelca **solo con silencio**. Se
+  retiro la rama "turno viejo" de P9.55 que vaciaba la conversacion a mitad del dictado.
+  Guard `vozLocucionVivaLargaGuard` (replay del log). Metrica staleTurn/staleMs 4 -> 0.
+- **P9.66** (9220780 src, `test(voz)`, `chore(ledger)`): "soy `<nombre>`" **si** renombra la
+  MISMA voz. El umbral de "misma voz" era un literal 0.78 POR ENCIMA de la banda medida
+  (0.69-0.74) -> unificacion insatisfacible. Dueno unico nuevo: `sameVoiceFloor()`
+  (config `productionClusterReuseThreshold`). Guard `vozRenombreVozCompartidaGuard`. Metrica 2 -> 0.
+
+### Pendiente (necesita MEDICION del dueno, no se toca a ciegas)
+- **P9.64** (inflado de hablantes): modelo FAITHFUL offline = con la banda medida (0.70-0.72)
+  **no** infla (1 cluster en 20-30 turnos); el inflado solo aparece si la MISMA voz cae a
+  <=0.62 (a 0.04 del 0.58 de voz distinta). Hace falta el `Identity ... lastSim=...` REAL de
+  una sesion fresca (el log del dueno se limpio).
+- **P9.65** (filas sin hablante): el relleno tardio (`applyResolvedSpeaker`) descarta la
+  resolucion de un turno viejo (guard monotono), justo los que el srGap de P9.63 cerraba.
+  Faltan medir las filas sin hablante DESPUES de P9.63+P9.66.
+- **P9.62** (healthMonitor "Text API timeout"): sonda sin reintento; decision de diseno.
+
+### Desbloqueo (una locucion basta)
+El relayLog ya escribe `Identity label=... lastSim=...` (voiceIdentityResolve.js): basta hablar
+en http://localhost:5173 y leer `debug.log` con `npm run voz:log` para fijar el valor seguro
+de P9.64 y contar las filas sin hablante de P9.65.
