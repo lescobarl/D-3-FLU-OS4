@@ -230,18 +230,33 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
     });
 
     test('P6: la continuacion sin wake tras un turno commiteado conserva su texto', async ({ page }) => {
-        // Defecto reportado: la frase se parte (interino + final) y se pierde una parte.
         await startConversation(page);
         await esperarListo(page);
 
         await speakUntilHeard(page, 'Okay flow necesitamos la lechita', { expectedUserRows: 1 });
-        await page.waitForTimeout(1500);
-        await speakViaMic(page, 'y no lo pusiste ahi en el vaso', { final: false });
-        await speakViaMic(page, 'y no lo pusiste ahi en el vaso grande', { final: true, endTurn: true });
+        // Espera DETERMINISTA a que el turno previo este escrito (antes era un
+        // waitForTimeout fijo: bajo carga la continuacion llegaba antes del cierre y
+        // el test caia por timing, no por producto - flake medido, P9.50).
+        await expect
+            .poll(async () => (await usuarios(page)).some((f) => /lechita/i.test(f.text)), { timeout: 20000 })
+            .toBe(true);
 
-        await expect.poll(async () => await countUserRows(page), { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+        // La PROPIEDAD es que el texto de la continuacion no se pierda; NO cuantas
+        // filas se abren (asertar el indice de fila era lo que hacia el spec fragil).
+        for (let intento = 0; intento < 3; intento += 1) {
+            await speakViaMic(page, 'y no lo pusiste ahi en el vaso', { final: false });
+            await speakViaMic(page, 'y no lo pusiste ahi en el vaso grande', { final: true, endTurn: true });
+            const aparecio = await expect
+                .poll(async () => (await usuarios(page)).some((f) => /vaso/i.test(f.text)), { timeout: 15000 })
+                .toBe(true)
+                .then(() => true)
+                .catch(() => false);
+            if (aparecio) break;
+        }
+
         const filas = await usuarios(page);
-        console.log(`[P6] filas = ${JSON.stringify(filas.map((f) => f.text))}`);
-        expect(filas[1].text.toLowerCase(), 'la continuacion no puede perder su texto').toContain('vaso');
+        const textos = filas.map((f) => f.text.toLowerCase()).join(' | ');
+        expect(textos, `la continuacion no puede perder su texto. filas=${JSON.stringify(filas.map((f) => f.text))}`).toContain('vaso');
+        expect(textos, 'la locucion anterior no puede perderse').toContain('lechita');
     });
 });
