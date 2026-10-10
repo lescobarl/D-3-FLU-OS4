@@ -224,6 +224,7 @@ export const GUARD_FILES = [
     'tests/vozIdentidadDecisionUnicaGuard.test.ts',
     'tests/speakerClusterAccumulation.test.ts',
     'tests/vozCierrePierdeLocucionGuard.test.ts',
+    'tests/vozRebuildNoPierdeLocucionGuard.test.ts',
     'tests/vozBloqueLargoPierdeFilaGuard.test.ts',
     'tests/vozDiarizacionDosVocesGuard.test.ts',
     'tests/vozLocucionVivaLargaGuard.test.ts',
