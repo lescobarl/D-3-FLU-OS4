@@ -294,6 +294,8 @@ export const FLU_CONFIG = {
       /** Snapshots de identidad durante interinos (ms). */
       identityPipeline: {
         snapshotIntervalMs: 800,
+        /** Espera MAXIMA (ms) del commit a la instantanea final de identidad (preflight); si vence, la fila escribe igual y la resolucion tardia completa. */
+        commitPreflightTimeoutMs: 1500,
         /** Pausa mínima (ms) tras commit para forzar nuevo hablante por segmento. */
         segmentSilenceGapMs: 1200,
       },

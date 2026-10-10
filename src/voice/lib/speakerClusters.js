@@ -221,7 +221,9 @@ function _buildClusterMap(speakerClusters) {
   for (let i = 0; i < speakerClusters.length; i++) {
     const cluster = speakerClusters[i]
     if (cluster && cluster.label != null) {
-      map.set(String(cluster.label).trim(), cluster)
+      // Clave PLEGADA (`foldSpeakerKey`): 'luis' y 'Luis' son la MISMA identidad, no
+      // dos clusters (medido en el log del dueno 14:00-14:08: `['luis','Luis']`).
+      map.set(foldSpeakerKey(cluster.label), cluster)
     }
   }
   _clusterMapCache.set(speakerClusters, { map, length: speakerClusters.length })
@@ -229,7 +231,7 @@ function _buildClusterMap(speakerClusters) {
 }
 
 export function findClusterByLabel(speakerClusters, label = '') {
-  const normalized = String(label || '').trim()
+  const normalized = foldSpeakerKey(label)
   if (!normalized) return null
   const map = _buildClusterMap(speakerClusters)
   return map.get(normalized) || null
@@ -432,15 +434,20 @@ export function sameVoiceLabelGroup(
       Array.isArray(cluster?.signature) &&
       cluster.signature.length,
   )
-  const ancla = conFirma.find((cluster) => String(cluster.label).trim() === anchor)
+  const ancla = conFirma.find((cluster) => foldSpeakerKey(cluster.label) === foldSpeakerKey(anchor))
   if (!ancla) return [anchor]
   const firmaAncla = normalizeEmbeddingVector(ancla.signature)
-  const group = [anchor]
+  const group = [String(ancla.label).trim()]
+  const vistos = new Set([foldSpeakerKey(anchor)])
   for (const cluster of conFirma) {
     const label = String(cluster.label).trim()
-    if (label === anchor) continue
+    const clave = foldSpeakerKey(label)
+    if (vistos.has(clave)) continue
     const similarity = compareCosineSignatures(firmaAncla, normalizeEmbeddingVector(cluster.signature))
-    if (similarity >= floor) group.push(label)
+    if (similarity >= floor) {
+      vistos.add(clave)
+      group.push(label)
+    }
   }
   return group
 }
@@ -545,7 +552,11 @@ export function consolidateSpeakerClusters(speakerClusters = [], matchThreshold 
       continue
     }
     const target = out.find((candidate) => {
-      if (isRegisteredSpeakerLabel(String(candidate?.label || '')) !== isRegisteredSpeakerLabel(label)) return false
+      const candidateLabel = String(candidate?.label || '')
+      // MISMA identidad por NOMBRE (plegado): 'luis' y 'Luis' son una sola voz aunque
+      // el timbre medido difiera; no se dejan dos clusters con dos grafias.
+      if (foldSpeakerKey(candidateLabel) === foldSpeakerKey(label)) return true
+      if (isRegisteredSpeakerLabel(candidateLabel) !== isRegisteredSpeakerLabel(label)) return false
       const other = Array.isArray(candidate?.signature) && candidate.signature.length
         ? normalizeEmbeddingVector(candidate.signature)
         : []

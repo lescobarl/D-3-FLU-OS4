@@ -16,7 +16,7 @@ import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
-import { resolveRegisteredSpeakerName } from './speakerLabels';
+import { resolveRegisteredSpeakerName, foldSpeakerKey } from './speakerLabels';
 import { getFallbackSpeaker } from './speakerCore';
 
 /**
@@ -37,9 +37,9 @@ const speakerAliases = new Map<string, string>();
 
 /** Registra el alias; devuelve 1 si cambio algo. */
 export function registerSpeakerAlias(fromLabel: string, toName: string): number {
-    const from = String(fromLabel || '').trim().toLowerCase();
+    const from = foldSpeakerKey(fromLabel);
     const to = String(toName || '').trim();
-    if (!from || !to || from === to.toLowerCase()) return 0;
+    if (!from || !to || from === foldSpeakerKey(to)) return 0;
     if (speakerAliases.get(from) === to) return 0;
     speakerAliases.set(from, to);
     return 1;
@@ -48,7 +48,7 @@ export function registerSpeakerAlias(fromLabel: string, toName: string): number 
 /** Nombre final de un hablante: aplica los alias de sesion si los hay. */
 export function resolveSpeakerAlias(speakerName: string): string {
     const name = String(speakerName || '').trim();
-    return speakerAliases.get(name.toLowerCase()) || name;
+    return speakerAliases.get(foldSpeakerKey(name)) || name;
 }
 
 /**
@@ -106,6 +106,7 @@ export function preserveProperSpeaker(
     nextName: string,
     currentName?: string,
     evidenciaAcustica = true,
+    { evidenciaDeTexto = true }: { evidenciaDeTexto?: boolean } = {},
 ): string {
     const next = String(nextName || '').trim();
     const current = String(currentName || '').trim();
@@ -115,9 +116,11 @@ export function preserveProperSpeaker(
     // acababa con dos nombres para el mismo turno (medido 2026-10-07).
     // A5: sin evidencia no se DEGRADA un nombre ya escrito; si la fila esta vacia se
     // escribe la etiqueta disponible (nunca vacia).
-    // A5 corregida: sin evidencia acustica NO se estampa un nombre propio que no venga
-    // del texto de este turno (el ascenso a nombre propio lo decide la evidencia).
-    if (isProperSpeakerName(next) && !evidenciaAcustica) return current || next;
+    // A5 corregida + FLANCO: sin evidencia acustica NI del texto de ESTE turno, un
+    // nombre propio NO se estampa sobre una fila (ni siquiera vacia: el relleno tardio
+    // de identidad colaba "Luis" en la voz de la mujer). El nombre que SI viene del
+    // texto ("soy Luis") es evidencia de identidad y pasa (`evidenciaDeTexto`).
+    if (!evidenciaDeTexto && isProperSpeakerName(next) && !evidenciaAcustica) return current || getFallbackSpeaker();
     if (isAutoSpeakerLabel(next) && !evidenciaAcustica) return current || next;
     if (current && isProperSpeakerName(current) && isAutoSpeakerLabel(next)) return current;
     return next;
@@ -162,9 +165,9 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
     const name = String(toName || '').trim();
     if (!name || !Array.isArray(labels) || !labels.length) return 0;
     const normalized = new Set(
-        labels.map((l) => String(l || '').trim().toLowerCase()).filter(Boolean),
+        labels.map((l) => foldSpeakerKey(l)).filter(Boolean),
     );
-    normalized.add(name.toLowerCase());
+    normalized.add(foldSpeakerKey(name));
     for (const label of labels) registerSpeakerAlias(label, name);
     const store = useIntegrationStore.getState();
     const history = store.conversationHistory;
@@ -172,7 +175,7 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
     const updated = history.map((e) => {
         if (e.role !== 'user') return e;
         const current = String(e.speakerName || '').trim();
-        if (!current || !normalized.has(current.toLowerCase())) return e;
+        if (!current || !normalized.has(foldSpeakerKey(current))) return e;
         if (current === name) return e;
         changed += 1;
         return { ...e, speakerName: name };
@@ -208,7 +211,7 @@ export function updateTurnRowSpeaker(
     const entry = history.find((e) => e.id === rowId);
     if (!entry || entry.role !== 'user') return false;
     // Una etiqueta AUTOMATICA no pisa el nombre propio ya escrito en la fila.
-    const objetivo = preserveProperSpeaker(resolved, entry.speakerName, evidenciaAcustica);
+    const objetivo = preserveProperSpeaker(resolved, entry.speakerName, evidenciaAcustica, { evidenciaDeTexto: false });
     voiceProbe('row-update', {
         ev: evidenciaAcustica === true,
         turnId,

@@ -7,6 +7,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { labelToSpeakerId, normalizeRowSignature } from './conversationRow.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
+import { foldSpeakerKey } from './speakerLabels.js'
 import { registerSpeakerIdentity } from './speakerIdentityRegister.js'
 import { detectNextSpeakerPhrase, nextSpeakerLabel } from './activeListen.js'
 import { isNewAudioSegment, getLastCommitPerfAt } from './audioSegmentClock.js'
@@ -20,7 +21,8 @@ function clusterSignatureFor(clusters = [], { speakerId = '', speakerName = '' }
     const label = normalizeSpeakerLabel(entry?.label)
     return (
       (sid && String(entry?.speakerId || '').trim() === sid) ||
-      (name && label === name)
+      // Plegado (`foldSpeakerKey`): 'Luis'/'luis' son la MISMA voz.
+      (name && foldSpeakerKey(label) === foldSpeakerKey(name))
     )
   })
   return normalizeRowSignature(cluster?.signature)

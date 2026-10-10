@@ -612,6 +612,11 @@ export function resolveConversationSpeaker({
     if (diagnosis && typeof diagnosis === 'object') Object.assign(diagnosis, patch)
   }
   const vector = normalizeEmbeddingVector(signatureVector)
+  // UN dueno del dato `lastSim` en el diagnostico: se anota AQUI, antes de cualquier
+  // rama, para que TODAS las vias (principal, limite, sala) expongan el campo canonico
+  // que lee el instrumento `Identity`. Antes solo la via de limite lo escribia y las
+  // otras lo dejaban bajo otros nombres -> la sonda salia ciega (cero en 39/39).
+  note({ lastSim: resolveLastTurnSimilarity(vector, lastSpeaker, lastSignature, speakerClusters) })
   // PISO DE EVIDENCIA (via principal), con el MISMO dueno que el nucleo
   // (`hasVoiceMeasurement`): un vector VACIO o DEGENERADO no es "voz distinta", es
   // AUSENCIA de medida. Antes el piso solo vivia en la rama de limite, y la via
@@ -768,7 +773,10 @@ export function resolveConversationSpeaker({
     distinctFromSticky,
     distinctFromLastTurn,
     voiceDistinct,
-    lastTurnSimilarity,
+    // Un solo nombre para "similitud con el ultimo turno" en el diagnostico: la sonda
+    // (`Identity`) leia `lastTurnSimilarity` mientras la via PRINCIPAL escribia
+    // `lastSim` -> ciego (medido: 39/39). El campo canonico es `lastSim`.
+    lastSim: lastTurnSimilarity,
     boundaryRelaxEffective,
     autoClusterCount,
     embeddingDim: vector.length,
@@ -1054,7 +1062,7 @@ export function resolveConversationSpeaker({
     }
     const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers)
     speakerClusters.push({ label, signature: [...vector], signatureHistory: [[...vector]] })
-    note({ reason: 'new-cluster', speaker: label, clusterSimilarity, lastSimilarity })
+    note({ reason: 'new-cluster', speaker: label, clusterSimilarity, lastSim: lastSimilarity })
     return label
   }
 

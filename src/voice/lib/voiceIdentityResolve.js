@@ -16,6 +16,21 @@ import { relayLog } from '../../lib/clientLogRelay'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**
+ * Linea del diagnostico de identidad (`Identity`). DUENO UNICO del campo que se lee:
+ * `diagnosis.lastSim` (el nombre que escriben TODAS las vias del resolutor). Antes
+ * leia `lastTurnSimilarity`, que la via PRINCIPAL no escribe -> `lastSim=0.000` en
+ * TODAS las lineas (ciego 39/39, medido en la sesion del dueno).
+ * @param {{ label?: string, diagnosis?: object, lastSpeaker?: string, preferSpeaker?: string, atTurnBoundary?: boolean, workingClusters?: unknown[] }} [ctx]
+ * @returns {string}
+ */
+export function formatIdentityDiagnosis({ label = '', diagnosis = {}, lastSpeaker = '', preferSpeaker = '', atTurnBoundary = false, workingClusters = [] } = {}) {
+  const d = diagnosis || {}
+  const lastSim = Number(d.lastSim ?? 0).toFixed(3)
+  const auto = d.autoClusterCount ?? (Array.isArray(workingClusters) ? workingClusters.length : 0)
+  return `label="${label}" reason=${d.reason || ''} lastSim=${lastSim} auto=${auto} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}`
+}
+
+/**
  * @param {number[]} vector — embedding 512-D (solo capa diarización)
  * @returns {{ speakerId: string, speakerName: string }}
  */
@@ -70,11 +85,7 @@ export function resolveSpeakerIdentityFromVector(
       }) || fallbackSpeaker
   }
   if (typeof window !== 'undefined') {
-    relayLog(
-      'LOG',
-      'Identity',
-      `label="${label}" reason=${diagnosis.reason || ''} lastSim=${Number(diagnosis.lastTurnSimilarity ?? 0).toFixed(3)} auto=${diagnosis.autoClusterCount ?? workingClusters.length} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}`,
-    )
+    relayLog('LOG', 'Identity', formatIdentityDiagnosis({ label, diagnosis, lastSpeaker, preferSpeaker, atTurnBoundary, workingClusters }))
   }
 
   const matched = workingClusters.find(

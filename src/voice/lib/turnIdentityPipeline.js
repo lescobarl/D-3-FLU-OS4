@@ -98,6 +98,12 @@ export function stopAllContinuousIdentityPipelines() {
  * o FABRICA (funcion -> resolutor), de forma PEREZOSA. Dueño unico de esa forma: la
  * usan la espera (`primeTurnSpeakerPreflight`) y el cierre (`finalizeTurnIdentityPipeline`).
  */
+/** Plazo ACOTADO (config) de la espera del preflight antes del commit. */
+function commitPreflightTimeoutMs() {
+  const ms = Number(FLU_CONFIG.voiceIdentity?.capture?.identityPipeline?.commitPreflightTimeoutMs)
+  return Number.isFinite(ms) && ms >= 0 ? ms : 1500
+}
+
 function finalSnapshotRunner(runFinalSnapshot) {
   return () => {
     const maybeRun = runFinalSnapshot()
@@ -141,7 +147,7 @@ export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClust
  * @param {{ onClusters?: Function, onResolved?: Function, timeoutMs?: number }} [options]
  * @returns {Promise<{ ready?: boolean, pending?: boolean, speakerName?: string, speakerId?: string, signatureVector?: number[], snapshots?: unknown[] }|null>}
  */
-export function primeTurnSpeakerPreflight(turnId, runFinalSnapshot, { onClusters, onResolved, timeoutMs = 1500 } = {}) {
+export function primeTurnSpeakerPreflight(turnId, runFinalSnapshot, { onClusters, onResolved, timeoutMs = commitPreflightTimeoutMs() } = {}) {
   const id = Number(turnId)
   if (!Number.isFinite(id) || id <= 0) return Promise.resolve(null)
   const yaResuelto = peekTurnSpeakerPreflight(id)

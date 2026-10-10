@@ -38,10 +38,23 @@ export function acquireSpeechRecognition(language = 'es', activeLocale = '') {
 export function bindSpeechRecognition(recognition, handlers = {}) {
   if (!recognition) return
 
-  recognition.onstart = handlers.onStart || null
+  const onStart = handlers.onStart || null
+  const onEnd = handlers.onEnd || null
+  // El ciclo de vida del lock lo gobiernan los EVENTOS reales del motor, no el
+  // llamante: `onstart` marca captura y `onend` la libera. Sin esto el lock se
+  // quedaba pegado tras `onend` (el motor ya paro) o se creia "capturando" antes
+  // de arrancar.
+  recognition.onstart = (event) => {
+    capturing.add(recognition)
+    if (onStart) onStart(event)
+  }
+  recognition.onend = (event) => {
+    capturing.delete(recognition)
+    if (activeRecognition === recognition) activeRecognition = null
+    if (onEnd) onEnd(event)
+  }
   recognition.onresult = handlers.onResult || null
   recognition.onerror = handlers.onError || null
-  recognition.onend = handlers.onEnd || null
 }
 
 // ============================================================
@@ -52,6 +65,9 @@ export function bindSpeechRecognition(recognition, handlers = {}) {
 // una segunda instancia se detiene la anterior (última gana).
 // ============================================================
 let activeRecognition = null
+
+/** Instancias que estan CAPTURANDO ahora mismo (se marca en `onstart`, se limpia en `onend`). */
+const capturing = new WeakSet()
 
 /** Instancia que está capturando ahora mismo (o null). Solo lectura. */
 export function getActiveRecognition() {
@@ -65,6 +81,10 @@ export function resetActiveRecognitionForTest() {
 
 export function startSpeechRecognition(recognition) {
   if (!recognition) return false
+  // YA capturando: un segundo `start()` lanza `InvalidStateError: recognition has
+  // already started` (medido en la sesion del dueno). No se re-arranca ni se
+  // instancia otra escucha; el motor ya esta capturando.
+  if (activeRecognition === recognition && capturing.has(recognition)) return true
   if (activeRecognition && activeRecognition !== recognition) {
     // Otra instancia estaba capturando: se detiene antes de arrancar esta.
     stopSpeechRecognition(activeRecognition)
@@ -78,6 +98,7 @@ export function startSpeechRecognition(recognition) {
     const message = String(error?.message || error).toLowerCase()
     if (message.includes('already') && message.includes('start')) {
       activeRecognition = recognition
+      capturing.add(recognition)
       return true
     }
     return false
@@ -86,6 +107,7 @@ export function startSpeechRecognition(recognition) {
 
 export function stopSpeechRecognition(recognition) {
   if (!recognition) return
+  capturing.delete(recognition)
   try {
     recognition.stop()
   } catch (error) {
@@ -100,6 +122,7 @@ export function stopSpeechRecognition(recognition) {
 /** Aborta (anti-eco) y libera el lock para que otro flujo pueda escuchar. */
 export function abortSpeechRecognition(recognition) {
   if (!recognition) return
+  capturing.delete(recognition)
   try {
     if (typeof recognition.abort === 'function') recognition.abort()
     else recognition.stop()
