@@ -4154,3 +4154,34 @@ la propagacion del nombre (comparten raiz); la suite completa y el DoD-producto.
 
 Alcance real (0.23): CUBIERTO=el cierre por turno viejo (la causa de la perdida medida) y
 su barrera; NO CUBIERTO=los declarados arriba.
+
+========================================================================
+2026-10-09 - VALIDACION REAL de P9.55 (replay de los datos del log + escritorio)
+
+1) REPLAY CON LOS DATOS REALES DEL LOG (textos y tiempos 1:1 de la sesion del dueno
+   17:19:51; srGap sinceResult=237ms / sinceCommit=10272ms). En tests/vozLocucionVivaLargaGuard.test.ts,
+   por el runtime REAL de ingress (commit fad6e65):
+     - con el codigo VIEJO (arreglo revertido a proposito): 2 failed / 8
+       "la cola del turno se quedo en ULTIMA FRASE: expected '' to contain 'es una chingadera neta'"
+     - con el codigo NUEVO: 8/8 VERDE. Control negativo: turno recien commiteado NO vuelca (0 filas).
+
+2) PRUEBA DE ESCRITORIO sobre la app REAL (`npm run e2e:scoped`, bloque declarado
+   tests/e2e/voz-escenario-dueno.spec.ts; micro falso por el pipeline REAL
+   onresult -> onend -> ingress -> dispatch -> fila): 8 passed (3.6 m), 0 failed.
+     P1 interino no abre fila; P2 el final con solo la COLA no se come la cabeza;
+     P3/P3b "soy Luis" renombra y no deja etiquetas inventadas;
+     P7 dictado CON PAUSAS (1..25) no se vacia antes del corte y no falta nada;
+     P4 latencia final->fila; P5 la locucion que Chrome NO cierra llega a la conversacion;
+     P6 la continuacion sin wake conserva su texto.
+
+NO VALIDADO CON DATOS DEL LOG: la diarizacion y el nombre de fila (#2/#3). El log trae la
+DECISION (`Match reason=new-voice-below-threshold`, `identity{reason,clusters}`) pero NO los
+vectores 512-D del audio, asi que no se puede replayar la separacion de voces con sus datos.
+Lo que SI queda medido de su sesion: la MISMA voz abrio `Hablante 2/3/4`
+(new-voice-below-threshold=3, forced-new-voice-below-threshold=1) y las filas salieron con
+hablante EFECTIVO vacio (`row{pedido:"Hablante 1", efectivo:""}`) aunque el commit resolvio
+nombre. Eso es el siguiente defecto, con esa evidencia.
+
+Alcance real (0.23): CUBIERTO=el cierre por turno viejo (replay real + escritorio) y los 6
+defectos anteriores; NO CUBIERTO=#2/#3 (hablantes/nombre de fila), la validacion visual del
+dueno, la suite completa.
