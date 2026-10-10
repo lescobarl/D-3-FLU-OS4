@@ -546,3 +546,18 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - PLAZO DEL PREFLIGHT: `voiceIdentity.capture.identityPipeline.commitPreflightTimeoutMs` = 1500 ms
   (config, ajustable). Si el embedding real tarda mas, la fila sigue naciendo sin hablante.
 - SIGUIENTE: DoD-producto del dueno (su micro/log). Pendientes del ledger: P9.62, P9.64, P9.65.
+
+## 2026-10-10 (16) - CONGELADO por orden del dueno (no se abren hitos por cuenta del agente)
+
+- Estado: **CONGELADO**. El agente NO abre hitos por su cuenta. Solo entra si la prueba
+  EN PANTALLA del dueno falla; en ese caso, reglas de siempre: reproducir antes de tocar,
+  guard que mida la propiedad UTIL (nace ROJO), no cerrar por "gate verde" (solo cuando el
+  escenario del dueno pase, o declararlo NO CUBIERTO) e impacto en producto por escenario.
+- AVISO 1 (techos, escritos por el dueno): `useFluVoiceAssistant.js` **4539/4539** y
+  `fluConfig.js` **2772/2772** estan EN EL TECHO; cualquier cambio futuro en esos ficheros
+  comprime o saca codigo (no se amplian).
+- AVISO 2 (lo PRIMERO que mirara el dueno): el preflight espera **1.5 s**
+  (`voiceIdentity.capture.identityPipeline.commitPreflightTimeoutMs` = 1500 ms). Si su micro
+  tarda MAS, la fila nacera SIN hablante: es el primer punto a verificar en su prueba.
+- Alcance real (0.23): CUBIERTO=el registro de la congelacion y los dos avisos; NO CUBIERTO=
+  el DoD-producto (pantalla/micro del dueno).
