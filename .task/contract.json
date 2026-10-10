@@ -1,36 +1,27 @@
 {
-  "task": "P9.57 - UN dueno de la DECISION de identidad: el worker solo embebe (su decision se descartaba) y se elimina la segunda implementacion; ademas el piso de evidencia pasa a la via principal.",
-  "objective": "Eliminar la ruta doble de RESPONSABILIDAD de la decision de identidad dejando un solo dueno (speakerDiarization.resolveConversationSpeaker, que ya gobernaba la fila) y que una ventana sin VOZ no pueda abrir etiqueta nueva en ninguna via.",
-  "base": "b434ea291d27a32b3445578b05a48711b21b9d55",
+  "task": "P9.59 - PERDIDA DE TRANSCRIPCION: el commit de un FINAL de segmento marcaba la locucion como 'ya emitida' aunque NO escribiera fila, y el CIERRE real (mismo texto) caia como duplicado y se perdia.",
+  "objective": "Que `lastEmittedTranscriptRef` (fuente del dedupe `isDuplicateTurnCommit`) solo lo mueva el commit que EMITE la fila: un commit sin cierre (`settlesTurn:false`) no puede marcar la locucion como emitida, para que el cierre real (onend/srGap) la escriba en vez de descartarla como duplicado.",
+  "base": "19c5a73a960705f64bc36f8c4678a88e3c08e676",
   "allow": [
-    "src/voice/lib/speakerCore.js",
-    "src/voice/lib/speakerDiarization.js",
-    "src/voice/lib/voiceIdentity.js",
-    "src/voice/lib/voiceIdWorkerClient.js",
-    "src/voice/workers/voiceId.worker.js",
+    "src/voice/lib/conversationStreamCommit.js",
+    "tests/vozCierrePierdeLocucionGuard.test.ts",
+    "tests/conversationStreamCommit.test.ts",
     "scripts/guard-files.mjs",
-    "tests/speakerDiarizationSeparation.test.ts",
-    "tests/speakerDiarizationBehavior.test.ts",
-    "tests/speakerSoloCoalesce.test.ts",
-    "tests/speakerClusterAccumulation.test.ts",
-    "tests/voicePreferRegisteredGuard.test.ts",
-    "tests/voiceWorkerThresholdsConfigGuard.test.ts",
-    "tests/vozIdentidadInyectada.test.ts",
     "plans/ledger.json"
   ],
-  "maxFiles": 16,
-  "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/vozIdentidadDecisionUnicaGuard.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts tests/speakerClusterAccumulation.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerDiarizationUnified.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/speakerSoloCoalesce.test.ts tests/speakerIdentitySession.test.ts tests/vozIdentidadInyectada.test.ts tests/voicePreferRegisteredGuard.test.ts tests/voiceWorkerThresholdsConfigGuard.test.ts tests/turnSpeakerCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/speakerIdentityNoInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerPrimarySeed.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozIdentidadDecisionUnicaGuard.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts",
+  "maxFiles": 6,
+  "maxLines": 900,
+  "dod": "npx vitest run --reporter=dot tests/vozCierrePierdeLocucionGuard.test.ts tests/conversationStreamCommit.test.ts tests/wakeRowNoiseGuard.test.ts tests/vozLocucionVivaLargaGuard.test.ts tests/ingressSimulation.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozCierrePierdeLocucionGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Un solo modulo IMPLEMENTA la decision de identidad (el worker ya no decide).",
+    "statement": "Escrituras a `lastEmittedTranscriptRef.current` en conversationStreamCommit.js (solo el emisor de la fila puede moverla; fuera el camino sin cierre).",
     "metric": {
-      "command": "node -e \"console.log(require('fs').readFileSync('src/voice/lib/speakerCore.js','utf8').split('function assignSpeaker(').length-1)\"",
-      "target": 0
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/conversationStreamCommit.js','utf8');console.log((s.match(/lastEmittedTranscriptRef\\.current = /g)||[]).length)\"",
+      "target": 3
     },
     "guardFiles": [
-      "tests/vozIdentidadDecisionUnicaGuard.test.ts"
+      "tests/vozCierrePierdeLocucionGuard.test.ts"
     ]
   },
   "ignore": [
@@ -39,19 +30,7 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/speakerCore.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/lib/speakerDiarization.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/lib/voiceIdentity.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/lib/voiceIdWorkerClient.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/workers/voiceId.worker.js": [
+    "src/voice/lib/conversationStreamCommit.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

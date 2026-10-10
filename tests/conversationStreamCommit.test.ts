@@ -277,19 +277,29 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.flushPcmAfterTurnCommit).not.toHaveBeenCalled();
     });
 
-    it('cuando NADA refresca el stream, la fila se escribe igual y el eco no se duplica', () => {
+    it('un commit SIN fila (segmento) no marca la locucion como emitida: el CIERRE la escribe', () => {
         const deps = makeDeps({
-            lastEmittedTranscriptRef: { current: 'HOLA MUNDO' },
+            lastEmittedTranscriptRef: { current: 'buenos dias' },
         });
         deps.lastCommitAtRef.current = 1000;
         deps.lastOnresultAtRef.current = 2000; // hubo habla nueva: no es re-emision
 
+        // Segmento de Chrome: escribe la fila de SESION, pero NO la de conversacion.
         handleConversationStreamSync(deps, { capture: 'hola mundo', turnCommit: true });
 
         expect(deps.emitConversationLog).not.toHaveBeenCalled();
         expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
-        expect(deps.lastEmittedTranscriptRef.current).toBe('hola mundo');
+        // P9.59: `lastEmittedTranscriptRef` es el texto de la ULTIMA locucion EMITIDA y es
+        // la FUENTE del dedupe; un commit que no emite fila NO puede moverla, o el cierre
+        // real (mismo texto, settlesTurn) caia como duplicado y la locucion se perdia.
+        expect(deps.lastEmittedTranscriptRef.current).toBe('buenos dias');
         expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
+
+        // CIERRE REAL: la misma locucion SI se escribe (no se pierde) y deja su marca.
+        deps.lastOnresultAtRef.current = 0; // el cierre no trae un resultado nuevo
+        handleConversationStreamSync(deps, { capture: 'hola mundo', turnCommit: true, settlesTurn: true });
+        expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
+        expect(deps.lastEmittedTranscriptRef.current).toBe('hola mundo');
     });
 
     it('revision ASR del mismo enunciado: REEMPLAZA la ultima fila y conserva su hablante', () => {

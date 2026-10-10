@@ -466,6 +466,9 @@ export function handleConversationStreamSync(
 
   if (segmentPlan.length >= 1) {
     let replaceNext = replaceLast
+    // Solo si alguna fila se EMITIO de verdad se mueve la marca del turno
+    // (`lastEmittedTranscriptRef`): un commit de SEGMENTO sin cierre no emite nada.
+    let segmentRowsEmitted = false
     for (let index = 0; index < segmentPlan.length; index += 1) {
       const segment = segmentPlan[index]
       const segmentText = cleanForSpeech(segment.text)
@@ -503,16 +506,20 @@ export function handleConversationStreamSync(
         })
         if (delivered) {
           lastEmittedTranscriptRef.current = segmentText
+          segmentRowsEmitted = true
         }
       }
       commitTurnToSessionRows(segmentText, segmentSpeaker, { replaceLast: segmentReplace })
-      if (!refreshNeeded) {
-        lastEmittedTranscriptRef.current = segmentText
-      }
       replaceNext = false
     }
 
-    lastEmittedTranscriptRef.current = capture
+    // El texto COMPLETO queda como marca del turno SOLO si el troceo EMITIO fila (cierre
+    // real). Un segmento SIN cierre NO la mueve: marcaria la locucion como ya commiteada
+    // y el cierre real (mismo texto, `settlesTurn:true`) caeria como duplicado y se
+    // perderia sin fila (defecto medido P9.59).
+    if (segmentRowsEmitted) {
+      lastEmittedTranscriptRef.current = capture
+    }
     finalizeAndNotify()
 
     if (import.meta.env.DEV && debugHotPath) {
@@ -567,9 +574,11 @@ export function handleConversationStreamSync(
     }
   }
   commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })
-  if (!delivered) {
-    lastEmittedTranscriptRef.current = capture
-  }
+  // `lastEmittedTranscriptRef` es el texto de la ULTIMA locucion EMITIDA y ademas la FUENTE
+  // del dedupe (`isDuplicateTurnCommit`): solo puede moverla quien EMITE la fila (arriba,
+  // `if (delivered)`). Escribirla cuando NO se emitio (segmento sin cierre) marcaba la
+  // locucion como "ya emitida" y el CIERRE real (mismo texto, `settlesTurn:true`) caia
+  // como duplicado -> la locucion entera se perdia sin fila (defecto medido P9.59).
   finalizeAndNotify()
 
   if (import.meta.env.DEV && debugHotPath) {
