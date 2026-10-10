@@ -238,6 +238,7 @@ export const GUARD_FILES = [
     'tests/vozEscenarioInyectado.test.ts',
     'tests/vozFlagHuerfanoGuard.test.ts',
     'tests/vozFilaConHablanteGuard.test.ts',
+    'tests/vozPreflightAntesCommitGuard.test.ts',
     'tests/vozHablanteFilaUnicaGuard.test.ts',
     'tests/vozUnClusterPorVozGuard.test.ts',
     'tests/vozLocucionRecompuestaGuard.test.ts',

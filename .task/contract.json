@@ -1,28 +1,30 @@
 {
-  "task": "A5 (corregida) - La fila escribe la ETIQUETA del resolver (provisional) y usa el respaldo SOLO si no hay etiqueta; la evidencia acustica decide el ascenso a nombre propio, no la escritura. Se saca el log de phraseDiscard del camino de preview (B1: ahi no hay descarte de locucion).",
-  "objective": "Un solo dueno de la etiqueta de la fila (`resolveRowSpeakerName`): (1) la fila escribe TAL CUAL la etiqueta del resolver (\"Hablante 2\", \"luis\"), (2) el RESPALDO solo entra cuando NO hay etiqueta, (3) el vinculo registrado asciende a nombre propio SOLO con evidencia acustica; y `preserveProperSpeaker` no estampa un nombre propio sin evidencia sobre una fila ya etiquetada. Ademas, el descarte de locucion NO se registra en la ruta de preview (es DEV-only: no hay locucion descartada ahi).",
-  "base": "32d1f45",
+  "task": "Pendiente #1 (orden del dueno) - El PREFLIGHT va ANTES del commit: la fila nace con el hablante del turno.",
+  "objective": "Eliminar el desfase preflight->commit: el commit era SINCRONO y la instantanea FINAL de identidad (embedding del worker) viaja por la cola asincrona, asi que perdia SIEMPRE la carrera y la fila se escribia sin hablante (preReady=false). Dueno unico de la espera acotada: `primeTurnSpeakerPreflight` (turnIdentityPipeline), consumido por el cierre del turno (useFluVoiceAssistant) con la MISMA fabrica del resolver que usa el commit (`buildFinalSpeakerSnapshotResolver`). La espera NO bloquea: si el resolver no llega en plazo, el commit escribe igual.",
+  "base": "d1b1d36",
   "allow": [
-    "src/voice/lib/conversationTurnRow.ts",
+    "src/voice/lib/turnIdentityPipeline.js",
     "src/voice/lib/conversationStreamCommit.js",
-    "tests/vozFilaConHablanteGuard.test.ts",
+    "src/voice/hooks/useFluVoiceAssistant.js",
+    "tests/vozPreflightAntesCommitGuard.test.ts",
+    "scripts/guard-files.mjs",
     "plans/ledger.json",
     ".task/**"
   ],
-  "maxFiles": 5,
-  "maxLines": 400,
+  "maxFiles": 7,
+  "maxLines": 500,
   "dod": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/_scratchA6.test.ts tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/blindSpeakerFallbackGuard.test.ts tests/browserProfilesPanel.test.tsx tests/captureDedupGuard.test.ts tests/commandIdsVocabularySingleOwnerGuard.test.ts tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/conversationStreamCommit.test.ts tests/decideVoiceTurnDispatch.test.ts tests/decisionSingleOwnerGuard.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/floorCommandDispatchGuard.test.ts tests/floorOpenDispatchGuard.test.ts tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/fluRowLoggedOnSpeak.test.ts tests/integration.test.ts tests/localeConfigGuard.test.ts tests/materiaGrisPanel.test.tsx tests/notesClearEndToEnd.test.ts tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/onboardingStartDelayConfig.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/rulesSimulator.test.ts tests/searchControlCenter.test.tsx tests/searchEndpointSingleOwner.test.ts tests/selfKnowledge.test.ts tests/sessionResetCommandSingleOwnerGuard.test.ts tests/shoppingPanel.test.tsx tests/speakerClusterAccumulation.test.ts tests/speakerDiarizationUnified.test.ts tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/speechEchoGuard.test.ts tests/systemMatrix.test.ts tests/turnAudioSnapshotOwnerGuard.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceSingleSourceGuard.test.ts tests/voiceTurnStabilization.test.ts tests/voiceWorkerThresholdsConfigGuard.test.ts tests/vozClusterConsolidacionGuard.test.ts tests/vozCosidoDiarizacionGuard.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/vozEscenarioInyectado.test.ts tests/vozFilaConHablanteGuard.test.ts tests/vozFlagHuerfanoGuard.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozPrimarioReinicioGuard.test.ts tests/vozRendimientoVozGuard.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/vozUnClusterPorVozGuard.test.ts tests/vozUnCommitPorTurnoGuard.test.ts tests/wakePolicyGuard.test.ts tests/wakeRowNoiseGuard.test.ts tests/workspaceContractTipo.test.ts tests/workspacePersonIsolation.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozFilaConHablanteGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozPreflightAntesCommitGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "El decisor unico de la fila devuelve el RESPALDO para una etiqueta de diarizacion SIN evidencia (el defecto que rompia el renombre y colaba \"Luis\" en otra voz): 1 -> 0.",
-    "base": "32d1f45",
+    "statement": "Puntos donde el commit ESPERA la instantanea final de identidad antes de escribir la fila (hoy 0: la fila se escribia sin hablante, preReady=false): 0 -> 1.",
+    "base": "d1b1d36",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationTurnRow.ts','utf8');console.log((s.match(/isAutoSpeakerLabel\\(raw\\)/g)||[]).length)\"",
-      "target": 0
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/hooks/useFluVoiceAssistant.js','utf8');console.log((s.match(/primeTurnSpeakerPreflight\\(/g)||[]).length)\"",
+      "target": 1
     },
     "guardFiles": [
-      "tests/vozFilaConHablanteGuard.test.ts"
+      "tests/vozPreflightAntesCommitGuard.test.ts"
     ]
   },
   "ignore": [
@@ -31,11 +33,14 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/conversationTurnRow.ts": [
+    "src/voice/lib/turnIdentityPipeline.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
     "src/voice/lib/conversationStreamCommit.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
+    ],
+    "src/voice/hooks/useFluVoiceAssistant.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }
 }
