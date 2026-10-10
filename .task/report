@@ -4554,3 +4554,16 @@ METRICA: comparaciones propias contra el ancla en el cosido 1 -> 0. GUARD nuevo 
 (nace ROJO: la etiqueta de 0.649 no entraba). DoD 12 ficheros VERDE = 0 fallos nuevos.
 ALCANCE REAL (0.23): CUBIERTO=el criterio del cosido y su dueno, con metrica y detector;
 NO CUBIERTO=DoD-producto, suite completa y E2E completa.
+
+================================================================
+A4 - ciclo de vida del primario (solo se limpia al CERRAR la sesion)
+================================================================
+COMMIT ea1b1b3 (sessionLifecycle.js + audioMath + fluConfig + hook + guard + contrato).
+DEFECTO: el comando de sesion (INICIAR_CONVERSACION) limpia el primario SIEMPRE, asi que
+abrir/reanudar la escucha borraba el nombre presentado y los turnos volvian a 'Hablante N'.
+ARREGLO: dueno unico `isSessionCloseRequest` + `applySessionCommandToPrimary` con las frases
+de cierre en config (`voiceCommands.sessionClosePhrases`); el hook delega. Metrodo:
+limpiezas fuera del dueno 1 -> 0. GUARD nuevo (nace ROJO) con detector por config invertida.
+DoD 78 ficheros VERDE = 0 fallos nuevos. fluConfig dentro de techo (bloque comprimido).
+ALCANCE REAL (0.23): CUBIERTO=el ciclo de vida del primario por comando; NO CUBIERTO=DoD-
+producto, suite completa y E2E completa.

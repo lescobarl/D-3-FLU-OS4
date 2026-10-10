@@ -431,3 +431,13 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - SIGUIENTE: A4 (ciclo de vida del primario), A5 (ninguna fila sin hablante), A6 (una voz =
   un cluster), B1 (descarte con motivo), B2 (eco contra el texto real de FLU: MEDIR primero),
   B3 (solo alucinacion clara), B4 (recomponer antes de commitear), B5 (1 commit por turno).
+
+## 2026-10-10 (5) - A4 cerrado (ciclo de vida del primario)
+
+- **A4** (ea1b1b3): `src/voice/lib/sessionLifecycle.js` (NUEVO) decide: abrir/reanudar la
+  escucha NO limpia el primario; cerrar la sesion SI. Frases en config
+  (`voiceCommands.sessionClosePhrases`); `matchesCommandPhrase` exportado de audioMath.
+  Guard `tests/vozPrimarioReinicioGuard.test.ts` (nace ROJO). Metrica 1 -> 0.
+- PENDIENTE del plan: A5 (ninguna fila sin hablante), A6 (una voz = un cluster), B1 (descarte
+  con motivo), B2 (eco contra el texto real de FLU: MEDIR primero), B3 (solo alucinacion clara),
+  B4 (recomponer antes de commitear), B5 (1 commit por turno).
