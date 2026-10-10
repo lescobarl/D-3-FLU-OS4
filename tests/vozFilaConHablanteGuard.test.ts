@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import {
   commitUserTurnRow,
+  preserveProperSpeaker,
   renameSpeakerRows,
   resetSpeakerAliases,
   resolveRowSpeakerName,
@@ -92,8 +93,23 @@ describe('A5 corregida - la etiqueta del resolver se escribe y el renombre susti
     expect(resolveRowSpeakerName('   ', false)).toBe(RESPALDO)
   })
 
-  it('PRUEBA DE DETECTOR (el detector no es decorativo): la etiqueta y el respaldo discriminan', () => {
-    // Con etiqueta: se escribe la etiqueta (no el respaldo inyectado).
+  it('(flanco) fila VACIA + nombre propio SIN evidencia ni texto -> NO se estampa', () => {
+    // El relleno tardio de identidad pedia "Luis" sin evidencia sobre una fila vacia y
+    // colaba el nombre en una voz que no era la suya. Sin evidencia acustica NI del
+    // texto, la fila se queda con el RESPALDO, no con el nombre propio.
+    const respaldo = preserveProperSpeaker('Luis', '', false, { evidenciaDeTexto: false })
+    expect(respaldo, 'no se estampa el nombre propio').not.toBe('Luis')
+    expect(respaldo).toBe(String((FLU_CONFIG as any).voiceIdentity?.labels?.fallbackSpeaker || ''))
+    expect(preserveProperSpeaker('Luis', '', true), 'con evidencia SI asciende').toBe('Luis')
+    expect(preserveProperSpeaker('Luis', '', false), 'si viene del texto SI se estampa').toBe('Luis')
+    // Por la puerta REAL: el relleno tardio sobre una fila vacia no escribe el nombre.
+    commitUserTurnRow({ text: 'okay flu soy luis', speakerName: 'Hablante 2', evidenciaAcustica: false, turnId: 25 } as never)
+    useIntegrationStore.setState({ conversationHistory: useIntegrationStore.getState().conversationHistory.map((e) => ((e as { turnId?: number }).turnId === 25 ? { ...e, speakerName: '' } : e)) })
+    updateTurnRowSpeaker(25, 'Luis', { evidenciaAcustica: false } as never)
+    expect(filaDe(25), 'la fila vacia no estampa el nombre propio').not.toBe('Luis')
+  })
+
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): la etiqueta y el respaldo discriminan', () => {    // Con etiqueta: se escribe la etiqueta (no el respaldo inyectado).
     expect(resolveRowSpeakerName('Hablante 2', false, {}, 'Hablante 9')).toBe('Hablante 2')
     // Sin etiqueta: manda el respaldo inyectado.
     expect(resolveRowSpeakerName('', false, {}, 'Hablante 9')).toBe('Hablante 9')
