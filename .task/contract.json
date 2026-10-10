@@ -1,21 +1,23 @@
 {
-  "task": "P9.56 - GUARD ROJO: la decision de abrir etiqueta NUEVA (Hablante N) tiene que tener UN solo dueno (hoy la implementan 4 modulos).",
-  "objective": "Fijar con un guard nacido ROJO que la acunacion de etiquetas nuevas vive en UN solo modulo, para eliminar la ruta doble medida entre speakerCore.assignSpeaker (worker) y speakerDiarization.resolveConversationSpeaker (hilo principal).",
-  "base": "8f70915",
-  "guardExpect": "red",
+  "task": "P9.56 - UN DUENO de acuñar etiqueta de hablante: speakerLabels deja de reimplementar el 'siguiente indice libre' y delega en speakerCore.nextAutoSpeakerLabel.",
+  "objective": "Eliminar la ruta doble de RESPONSABILIDAD medida (dos implementaciones del 'siguiente indice libre', consumidas por el worker y por el hilo principal) dejando UN dueno en el nucleo compartido y un consumidor que delega.",
+  "base": "ec55bc9cecfaa9b41acab68c19cf42df204933d1",
   "allow": [
-    "tests/vozIdentidadDuenaUnicaGuard.test.ts",
+    "src/voice/lib/speakerCore.js",
+    "src/voice/lib/speakerLabels.js",
+    "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
-  "maxFiles": 6,
+  "maxFiles": 8,
   "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerIdentitySession.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/speakerClusterAccumulation.test.ts tests/speakerSoloCoalesce.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerPrimarySeed.test.ts tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/voicePreferRegisteredGuard.test.ts tests/vozIdentidadInyectada.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreHablanteGuard.test.ts tests/turnSpeakerCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationUnified.test.ts",
   "guard": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts",
+  "guardExpect": "green",
   "invariant": {
-    "statement": "Un solo modulo acuna etiquetas de hablante nuevas.",
+    "statement": "El consumidor (speakerLabels) ya no acuña: la implementacion del 'siguiente indice libre' vive en UN solo modulo.",
     "metric": {
-      "command": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts",
-      "target": "green"
+      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/speakerLabels.js','utf8');console.log((s.match(/\\bautoSpeakerLabel\\s*\\(/g)||[]).length)\"",
+      "target": 0
     },
     "guardFiles": [
       "tests/vozIdentidadDuenaUnicaGuard.test.ts"
@@ -26,5 +28,12 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "e2eScope": {}
+  "e2eScope": {
+    "src/voice/lib/speakerCore.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/speakerLabels.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ]
+  }
 }

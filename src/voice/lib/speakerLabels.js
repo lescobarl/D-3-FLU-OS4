@@ -4,7 +4,7 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpaces, stripDiacritics } from './audioMath.js'
-import { autoSpeakerLabel, getFallbackSpeaker, isAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
+import { getFallbackSpeaker, isAutoSpeakerLabel, nextAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
 
 export { isAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
 
@@ -62,26 +62,16 @@ export function expandSessionSpeakerNames(label = '') {
 }
 
 /** Primer índice libre (Hablante N, N+1, …) sin saltos por clusters fantasma. */
+/**
+ * CONSUMIDOR del DUENO UNICO (speakerCore.nextAutoSpeakerLabel): conserva la firma
+ * historica (opciones con maxSpeakers) SIN reimplementar la decision.
+ */
 export function nextAvailableSpeakerLabel(
   clusters = [],
   extraLabels = [],
   { maxSpeakers = 0, config = FLU_CONFIG } = {},
 ) {
-  const known = new Set()
-  for (const cluster of clusters) {
-    const label = String(cluster?.label || '').trim()
-    if (label) known.add(foldSpeakerKey(label))
-  }
-  for (const label of extraLabels) {
-    const cleaned = String(label || '').trim()
-    if (cleaned) known.add(foldSpeakerKey(cleaned))
-  }
-  const limit = maxSpeakers > 0 ? maxSpeakers : 9999
-  for (let index = 1; index <= limit; index += 1) {
-    const candidate = autoSpeakerLabel(index, config)
-    if (!known.has(foldSpeakerKey(candidate))) return candidate
-  }
-  return autoSpeakerLabel(limit, config)
+  return nextAutoSpeakerLabel(clusters, extraLabels, { maxSpeakers, config })
 }
 
 /** Quita clusters Hablante N que nunca aparecieron en el log ni son activos. */

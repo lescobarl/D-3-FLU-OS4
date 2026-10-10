@@ -106,21 +106,36 @@ export function labelToSpeakerIdSimple(label = '') {
 }
 
 /** Siguiente etiqueta automática libre (sin colisión con clusters ni reservadas). */
-export function nextAutoSpeakerLabel(clusters = [], reserved = [], config = FLU_CONFIG) {
+/**
+ * DUENO UNICO del "siguiente indice libre" (etiqueta automatica NUEVA).
+ *
+ * Lo consumen el WORKER (via assignSpeaker, voiceId.worker.js) y el HILO PRINCIPAL
+ * (speakerLabels.nextAvailableSpeakerLabel delega aqui). Antes estaba implementado DOS
+ * veces (aqui y en speakerLabels) con normalizacion y tope distintos: dos duenos de la
+ * MISMA decision que podian divergir (medido 2026-10-09: la misma voz abria Hablante
+ * 2/3/4 segun quien resolviera).
+ *
+ * @param {Array} clusters clusters de la sesion
+ * @param {Array} reserved etiquetas ya reservadas/conocidas
+ * @param {{maxSpeakers?: number, config?: object}} [options]
+ * @returns {string} etiqueta automatica libre
+ */
+export function nextAutoSpeakerLabel(clusters = [], reserved = [], { maxSpeakers = 0, config = FLU_CONFIG } = {}) {
   const known = new Set()
   for (const cluster of clusters) {
     const label = String(cluster?.label || '').trim()
-    if (label) known.add(label.toLowerCase())
+    if (label) known.add(stripDiacriticsLower(label))
   }
   for (const label of reserved) {
     const cleaned = String(label || '').trim()
-    if (cleaned) known.add(cleaned.toLowerCase())
+    if (cleaned) known.add(stripDiacriticsLower(cleaned))
   }
-  for (let index = 1; index <= 32; index += 1) {
+  const limit = Number(maxSpeakers) > 0 ? Number(maxSpeakers) : 9999
+  for (let index = 1; index <= limit; index += 1) {
     const candidate = autoSpeakerLabel(index, config)
-    if (!known.has(candidate.toLowerCase())) return candidate
+    if (!known.has(stripDiacriticsLower(candidate))) return candidate
   }
-  return autoSpeakerLabel(clusters.length + 1, config)
+  return autoSpeakerLabel(limit, config)
 }
 
 function clusterBestSimilarity(normalized, clusters = []) {
@@ -269,7 +284,7 @@ export function assignSpeaker(
 
 
   if (lastSpeaker && lastSim >= 0 && lastSim < newVoiceOpen && bestSim < newVoiceOpen) {
-    const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
+    const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, { config })
     return {
       speakerName: newLabel,
       speakerId: labelToSpeakerIdSimple(newLabel),
@@ -297,7 +312,7 @@ export function assignSpeaker(
   }
 
   if (lastSpeaker && lastSim >= 0 && lastSim < newVoiceOpen) {
-    const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
+    const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, { config })
     return {
       speakerName: newLabel,
       speakerId: labelToSpeakerIdSimple(newLabel),
@@ -316,7 +331,7 @@ export function assignSpeaker(
       }
     }
     if (bestSim < newVoice && !soloSession) {
-      const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
+      const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, { config })
       return {
         speakerName: newLabel,
         speakerId: labelToSpeakerIdSimple(newLabel),
@@ -337,7 +352,7 @@ export function assignSpeaker(
     }
   }
 
-  const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, config)
+  const newLabel = nextAutoSpeakerLabel(clusters, reservedLabels, { config })
   return {
     speakerName: newLabel,
     speakerId: labelToSpeakerIdSimple(newLabel),
