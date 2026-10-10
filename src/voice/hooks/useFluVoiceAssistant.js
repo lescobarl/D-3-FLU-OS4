@@ -93,6 +93,7 @@ import {
   readStreamDisplay,
   archiveCommittedTurn,
   getSpeakerLabel,
+  hasConfirmedOpenLine,
   resetActiveListenState,
   getRecognitionLanguage,
   isBilingualListenMode,
@@ -1861,15 +1862,14 @@ const lastResolvedTurnRef = useRef(0)
   const flushListenStateBeforeRebuild = useCallback(() => {
     if (!conversationActiveRef?.current) return
     // El interino en vuelo durante un stall/rebuild es NO CONFIABLE (Chrome congela a
-    // mitad de frase y entrega una palabra truncada: "hoa" de "hola"). Commitearlo crea
-    // filas basura y reinicia la linea abierta ("solo escribe hoa y deja de transcribir").
-    // En rebuild se DESCARTA esa linea, sin tocar transcript de sesion ni indice.
-    const partial = cleanForSpeech(
-      readStreamDisplay(listenStateRef.current) ||
-        listenStateRef.current.pendingInterim,
-    )
-    if (partial && import.meta.env?.DEV && debugHotPath) {
-      fluDebugHot('stall-rebuild-discard-partial', { partial: partial.slice(0, 80) })
+    // mitad de frase y suelta una palabra truncada: "hoa" de "hola"); commitearlo crea filas
+    // basura. PERO si la linea ya trae un FINAL integrado y sin fila NO es un interino: es
+    // texto que el usuario YA dijo, y se CIERRA por la misma puerta que onend antes de
+    // reiniciar el SR (descartarla perdia la locucion entera: medido P9.60).
+    if (hasConfirmedOpenLine(listenStateRef.current)) {
+      ingressRuntimeRef.current?.pushRecognitionEndEvent?.({ immediate: true })
+    } else if (import.meta.env?.DEV && debugHotPath) {
+      fluDebugHot('stall-rebuild-discard-partial', { partial: cleanForSpeech(readStreamDisplay(listenStateRef.current) || listenStateRef.current.pendingInterim).slice(0, 80) })
     }
     // Reset de la línea abierta (espejo de finalizeTurnCommit pero SIN commitear
     // una fila al log).

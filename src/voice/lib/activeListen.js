@@ -171,6 +171,25 @@ export function shouldOpenNewParagraph(state, nowMs = Date.now()) {
   return nowMs - state.lastFinalAtMs >= speakers.paragraphBreakMs
 }
 
+/**
+ * ¿La linea abierta es una captura CONFIRMADA (un FINAL ya integrado y sin interino
+ * posterior) o solo un INTERINO en vuelo?
+ *
+ * El dueño del estado marca los dos hechos: `confirmFinal` estampa `lastFinalAtMs` al
+ * integrar un FINAL, y cada interino toca `openLineLastTouchMs`
+ * (`markInterimOpenLineActivity`). Con un interino POSTERIOR al final la linea ya no es
+ * fiable (Chrome congela a mitad de frase y entrega una palabra truncada); con el FINAL
+ * como ultimo escritor, la linea es texto que el usuario YA dijo y NO se puede descartar
+ * sin fila (defecto medido P9.60: el rebuild del watchdog la descartaba y la locucion se
+ * perdia).
+ */
+export function hasConfirmedOpenLine(state) {
+  if (!cleanForSpeech(state?.openLine)) return false
+  const finalAt = Number(state?.lastFinalAtMs) || 0
+  if (finalAt <= 0) return false
+  return finalAt >= (Number(state?.openLineLastTouchMs) || 0)
+}
+
 export function confirmFinal(state, finalText = '', nowMs = Date.now()) {
   const utterance = resolveCommitCapture({
     final: finalText,
