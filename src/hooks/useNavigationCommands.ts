@@ -35,6 +35,7 @@ import { normalizeLang } from '../core/config/localeConfig';
 import { pickText } from '../lib/uiStrings';
 import { COMMAND_IDS } from '../voice/lib/commandIds';
 import { registerSpeakerIdentityFromCommand } from '../voice/lib/speakerIdentityRegister';
+import type { IdentitySessionRefs } from '../app/useIdentitySessionRef';
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {
     volume?: number;
@@ -74,6 +75,9 @@ export interface NavigationCommands {
         auditLog: NavigationAuditLog;
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
+        /** Puente de la sesion de IDENTIDAD (clusters vivos + primario): MISMA instancia
+         *  que el hook de voz. */
+        identitySession?: { current: IdentitySessionRefs | null } | null;
         /** Puerta única e idempotente de generación de medios (video/doc). */
         requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
     }) => Promise<void>;
@@ -225,6 +229,7 @@ export function useNavigationCommands(
         fluParticipant,
         os2ResetVoiceDisplay,
         requestMedia,
+        identitySession,
     }: {
         navegacion: { comando: string | null; destino?: string | null; parametros?: Record<string, unknown> };
         transcript: string;
@@ -237,6 +242,9 @@ export function useNavigationCommands(
         auditLog: NavigationAuditLog;
         fluParticipant: { resetParticipant: () => void };
         os2ResetVoiceDisplay?: () => void;
+        /** Puente de la sesion de IDENTIDAD (clusters vivos + primario): MISMA instancia
+         *  que el hook de voz. */
+        identitySession?: { current: IdentitySessionRefs | null } | null;
         /** Puerta única e idempotente de generación de medios (video/doc). */
         requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
     }) => {
@@ -251,9 +259,12 @@ export function useNavigationCommands(
             // no tenia consumidor: FLU decia "Registrado {name}." y NO registraba nada
             // (el registro solo ocurria como efecto colateral del commit del stream).
             case COMMAND_IDS.REGISTRAR_PARTICIPANTE: {
+                const sesionIdentidad = identitySession?.current || null;
                 const registrado = registerSpeakerIdentityFromCommand({
                     transcript,
                     speakerName: speakerName || '',
+                    clusters: sesionIdentidad?.speakerClustersRef?.current || [],
+                    refs: { sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef },
                 });
                 auditLog.logEvent('command:registrar_participante', 'navigation', uuidv4(), {
                     speaker: registrado.name || speakerName || undefined,

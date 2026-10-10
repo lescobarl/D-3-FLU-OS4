@@ -210,14 +210,15 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   }
   // #8 (requisito del dueno; NO depende del microfono): identificado el hablante
   // (soy Luis lo detecta el TEXTO), TODA su participacion previa lleva su nombre.
-  // El registro (alias + renombrado de las etiquetas de la MISMA voz) tiene UN solo
-  // dueno, `registerSpeakerIdentity`: lo comparte con la RUTA DEL COMANDO
-  // (`REGISTRAR_PARTICIPANTE`), que antes no registraba nada.
+  // El registro (alias + renombrado de las etiquetas de la MISMA voz + primario con
+  // fuente 'presented') tiene UN solo dueno, `registerSpeakerIdentity`: lo comparte con
+  // la RUTA DEL COMANDO (`REGISTRAR_PARTICIPANTE`), que antes no registraba nada.
   if (resolved?.source === 'wake-intro' && typeof refs.renameSpeakerRows === 'function') {
     registerSpeakerIdentity({
       name,
       clusters: refs.speakerClustersRef?.current || [],
       previousLabel: previous,
+      refs: { sessionPrimarySpeakerRef: refs.sessionPrimarySpeakerRef },
       rename: refs.renameSpeakerRows,
     })
   }

@@ -1,30 +1,33 @@
 {
-  "task": "A1 - El REGISTRO del nombre propio tiene UN dueno: el comando REGISTRAR_PARTICIPANTE desemboca en la MISMA ruta que el wake-intro del commit (antes: 2 implementaciones del registro y el comando sin consumidor, diciendo 'Registrado {name}.' sin registrar nada).",
-  "objective": "Que registrar un nombre propio ('okay flu soy Luz') tenga una sola implementacion (`registerSpeakerIdentity`) que usen las dos rutas: la del commit (`applyResolvedSpeakerToSessionRefs`, fuente wake-intro) y la del comando (`registerSpeakerIdentityFromCommand` desde handleNavigationCommand, que antes no traia caso).",
-  "base": "a9c4589",
+  "task": "A1 (huecos 1 y 2) - El registro del nombre aplica el MISMO efecto por las DOS rutas: cosido de la MISMA voz (clusters) y hablante primario con fuente 'presented'.",
+  "objective": "Que el comando REGISTRAR_PARTICIPANTE registre con la MISMA evidencia que la ruta wake-intro del commit: (a) los clusters vivos para coser las etiquetas de la MISMA voz re-clusterizada ('Hablante 3'/'4'), y (b) el hablante primario de la sesion con fuente 'presented' (presented > participant > resolved), fijado por el dueno unico del registro y no por cada consumidor.",
+  "base": "8e46d67",
   "allow": [
     "src/voice/lib/speakerIdentityRegister.js",
     "src/voice/lib/turnSpeakerCommit.js",
     "src/voice/hooks/useFluVoiceAssistant.js",
     "src/hooks/useNavigationCommands.ts",
+    "src/app/useIdentitySessionRef.ts",
+    "src/App.tsx",
     "tests/vozRegistroNombreUnicoGuard.test.ts",
-    "scripts/guard-files.mjs",
+    "tests/speakerIdentitySession.test.ts",
     "plans/ledger.json"
   ],
-  "maxFiles": 8,
+  "maxFiles": 9,
   "maxLines": 900,
-  "dod": "npx vitest run --reporter=dot tests/vozRegistroNombreUnicoGuard.test.ts tests/useFluVoiceAssistant.behavior.test.tsx tests/turnSpeakerCommit.test.ts tests/speakerClusterAccumulation.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/vozRenombreHablanteGuard.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozIdentidadInyectada.test.ts tests/speakerIdentitySession.test.ts tests/registeredSpeakerNameGuard.test.ts tests/conversationStreamCommit.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts tests/vozIdentidadDecisionUnicaGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozRegistroNombreUnicoGuard.test.ts tests/speakerIdentitySession.test.ts tests/useFluVoiceAssistant.behavior.test.tsx tests/vozRebuildTuberiaCompletaGuard.test.tsx tests/turnSpeakerCommit.test.ts tests/speakerClusterAccumulation.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/vozRenombreHablanteGuard.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozIdentidadInyectada.test.ts tests/registeredSpeakerNameGuard.test.ts tests/conversationStreamCommit.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts tests/vozIdentidadDecisionUnicaGuard.test.ts",
   "guard": "npx vitest run --reporter=dot tests/vozRegistroNombreUnicoGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Modulos de src/ que IMPLEMENTAN el registro del nombre (calculan las etiquetas de la MISMA voz con findLabelsWithSharedVoice, fuera del dueno del calculo): 2 -> 1.",
-    "base": "a9c4589",
+    "statement": "Escritores DIRECTOS del hablante primario con una presentacion de voz (fuera del dueno del registro): 1 -> 0. El primario de un nombre presentado solo lo fija `registerSpeakerIdentity` (fuente 'presented').",
+    "base": "8e46d67",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),p=require('path');const O='speakerClusters.js';let n=0;const w=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const fp=p.join(d,f.name);if(f.isDirectory()){w(fp)}else if(/\\.(js|ts|tsx)$/.test(f.name)&&p.basename(fp)!==O){n+=(fs.readFileSync(fp,'utf8').match(/findLabelsWithSharedVoice\\(/g)||[]).length}}};w('src');console.log(n)\"",
-      "target": 1
+      "command": "node -e \"const fs=require('fs'),p=require('path');let n=0;const w=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const fp=p.join(d,f.name);if(f.isDirectory()){w(fp)}else if(/\\.(js|ts|tsx)$/.test(f.name)){for(const l of fs.readFileSync(fp,'utf8').split(/\\r?\\n/)){if(/setSessionPrimarySpeaker\\(/.test(l)&&/'presented'/.test(l))n++}}}};w('src');console.log(n)\"",
+      "target": 0
     },
     "guardFiles": [
-      "tests/vozRegistroNombreUnicoGuard.test.ts"
+      "tests/vozRegistroNombreUnicoGuard.test.ts",
+      "tests/speakerIdentitySession.test.ts"
     ]
   },
   "ignore": [
@@ -43,6 +46,12 @@
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
     "src/hooks/useNavigationCommands.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/app/useIdentitySessionRef.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/App.tsx": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

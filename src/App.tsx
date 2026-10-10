@@ -198,6 +198,7 @@ import { logCaughtError } from './lib/caughtError';
 import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
+import { useIdentitySessionRef } from './app/useIdentitySessionRef';
 import { isAIProvider } from './app/appTypeGuards';
 import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
 import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
@@ -1163,6 +1164,11 @@ function App() {
         registeredName: activeParticipantNameForVoice || "",
     }), [activeParticipantSpeakerLabelForVoice, activeParticipantNameForVoice]);
     const participantSpeakerRef = useRef(participantSpeakerForRow) // closure fresca (deps [] del callback)
+
+    // Puente de la sesion de IDENTIDAD (clusters vivos + hablante primario): lo rellena
+    // `useFluVoiceAssistant` y lo consume el comando REGISTRAR_PARTICIPANTE, para que las
+    // DOS rutas del registro del nombre usen la MISMA evidencia (A1: casos 3 y 4).
+    const identitySessionRef = useIdentitySessionRef();
     participantSpeakerRef.current = participantSpeakerForRow;
     const {
         status: voiceStatus,
@@ -2229,6 +2235,7 @@ function App() {
                     fluParticipant,
                     os2ResetVoiceDisplay,
                     requestMedia: (tipo, text) => requestMediaRef.current(tipo, text),
+                    identitySession: identitySessionRef,
                 });
             }
 
@@ -2400,7 +2407,8 @@ function App() {
         // sessionPrimary en la diarización (config-gated en el hook).
         activeParticipantName: activeParticipantNameForVoice,
         activeParticipantSpeakerLabel: activeParticipantSpeakerLabelForVoice,
-    });
+
+        identitySession: identitySessionRef,    });
 
     // Keep the ref in sync so onEmotion (captured by useFluParticipant before
     // useFluVoiceAssistant) always reads the latest setRecentMemory.

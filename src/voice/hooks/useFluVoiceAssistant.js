@@ -354,6 +354,7 @@ export function useFluVoiceAssistant({
   activeParticipantName = '',
   activeParticipantSpeakerLabel = '',
   wakeWords = '',
+  identitySession = /** @type {{ current: unknown } | null} */ (null),
 }) {
   const [status, setStatus] = useState('idle')
   const [phase, setPhase] = useState('CONFIGURACION')
@@ -613,6 +614,7 @@ const lastResolvedTurnRef = useRef(0)
   const preflightScheduledForTurnRef = useRef(false)
   const turnBridgeTextRef = useRef('')
   const sessionPrimarySpeakerRef = useRef('')
+  if (identitySession) identitySession.current = { speakerClustersRef, sessionPrimarySpeakerRef }
   const turnSegmentStartedAtRef = useRef(0)
   const ingressEchoStreakRef = useRef(0)
   const lastEchoAtRef = useRef(0)
@@ -1646,8 +1648,7 @@ const lastResolvedTurnRef = useRef(0)
       const speakerAlias = introducedName && introducedName !== speakerName ? speakerName : null
 
       if (introducedName && introducedName !== speakerName) {
-        // §9 Decisión: el segmento solo PROPONE; el COMMIT persiste los clusters.
-        // Aquí no se escribe `speakerClustersRef` (era una 2ª ruta de escritura).
+        // §9: el segmento solo PROPONE; el COMMIT persiste los clusters (aqui NO se escribe el ref).
         saveVoiceProfile({
           label: introducedName,
           signature: signatureVector,
@@ -1660,7 +1661,7 @@ const lastResolvedTurnRef = useRef(0)
           })
           .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
       }
-      setSessionPrimarySpeaker(sessionPrimarySpeakerRef, introducedName, 'presented')
+      registerSpeakerIdentity({ name: introducedName, clusters: speakerClustersRef.current, refs: { sessionPrimarySpeakerRef } })
       lastSpeakerRef.current = resolvedSpeakerName
       lastTurnSignatureRef.current = signatureVector
       return {
@@ -2761,8 +2762,7 @@ const lastResolvedTurnRef = useRef(0)
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         clearSessionPrimarySpeaker(sessionPrimarySpeakerRef)
-        // Fase E: tras reiniciar la sesión, re-sembrar el participante activo (Juan/Luis)
-        // como sessionPrimary para que sus turnos sigan etiquetándose con su nombre.
+        // Fase E: tras reiniciar la sesion, re-sembrar el participante activo como sessionPrimary.
         seedSessionPrimaryFromActiveName()
         activeTurnIdRef.current = 0
         preflightScheduledForTurnRef.current = false
