@@ -22,12 +22,28 @@ import {
 const hookSource = () =>
     readFileSync(join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'), 'utf8');
 
+const ownerSource = () =>
+    readFileSync(join(process.cwd(), 'src', 'voice', 'lib', 'speakerIdentityRegister.js'), 'utf8');
+
 /**
- * El hook enruta la presentacion por voz al DUENO UNICO del primario
- * (`setSessionPrimarySpeaker`, fuente 'presented'): ya no escribe el ref a mano.
+ * El hook enruta la presentacion por voz al DUENO UNICO del REGISTRO del nombre
+ * (`registerSpeakerIdentity`): ya no fija el primario por su cuenta, ni con
+ * `setSessionPrimarySpeaker` ni escribiendo el ref a mano.
  */
 export function hookRoutesPresentedToOwner(src: string): boolean {
-    return /setSessionPrimarySpeaker\(sessionPrimarySpeakerRef,\s*introducedName,\s*'presented'\)/.test(src);
+    return /registerSpeakerIdentity\(\{\s*name: introducedName/.test(src);
+}
+
+/**
+ * Quien fija el primario de una presentacion de voz es el DUENO del registro:
+ * `setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)` con
+ * `source = 'presented'` por defecto (presented > participant > resolved).
+ */
+export function ownerSetsPresentedPrimary(src: string): boolean {
+    return (
+        /setSessionPrimarySpeaker\(refs\?\.sessionPrimarySpeakerRef,\s*clean,\s*source\)/.test(src) &&
+        /source = ['"]presented['"]/.test(src)
+    );
 }
 
 /** Escritores DIRECTOS del ref en un fuente (debe ser 0: el dueno es el modulo). */
@@ -74,8 +90,12 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
         expect(otra).not.toBe('Luis');
     });
 
-    it('GUARD: el hook enruta la presentacion por voz al dueno unico del primario', () => {
+    it('GUARD: el hook enruta la presentacion por voz al dueno unico del registro', () => {
         expect(hookRoutesPresentedToOwner(hookSource())).toBe(true);
+    });
+
+    it('GUARD: el primario de una presentacion lo fija el DUENO del registro (fuente presented)', () => {
+        expect(ownerSetsPresentedPrimary(ownerSource())).toBe(true);
     });
 
     it('GUARD: no queda ningun escritor DIRECTO del ref en src (dueno unico)', () => {
@@ -91,10 +111,18 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
 // P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
 describe('identidad de hablante - el detector no es decorativo', () => {
     it('marca el hook que enruta la presentacion y no el que la ignora', () => {
-        expect(hookRoutesPresentedToOwner("setSessionPrimarySpeaker(sessionPrimarySpeakerRef, introducedName, 'presented')")).toBe(true)
+        expect(hookRoutesPresentedToOwner("registerSpeakerIdentity({ name: introducedName, clusters })")).toBe(true)
+        expect(hookRoutesPresentedToOwner("setSessionPrimarySpeaker(sessionPrimarySpeakerRef, introducedName, 'presented')")).toBe(false)
         expect(hookRoutesPresentedToOwner('const x = introducedName')).toBe(false)
         expect(directSessionPrimaryWrites('sessionPrimarySpeakerRef.current = name')).toBe(1)
         expect(directSessionPrimaryWrites('setSessionPrimarySpeaker(ref, name)')).toBe(0)
+    })
+
+    it('marca al dueno que fija el primario y no al que lo deja a medias', () => {
+        const dueno = "const primarySet = setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)"
+        expect(ownerSetsPresentedPrimary(dueno + " // source = 'presented'")).toBe(true)
+        expect(ownerSetsPresentedPrimary("const primarySet = setSessionPrimarySpeaker(ref, clean, source)")).toBe(false)
+        expect(ownerSetsPresentedPrimary("setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, 'resolved')")).toBe(false)
     })
 })
 

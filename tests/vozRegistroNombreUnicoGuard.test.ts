@@ -147,6 +147,112 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
 })
 
 // ============================================================
+// A1 (huecos 1 y 2) - el registro COMPLETO por las DOS rutas:
+//   hueco 1: la ruta del comando no recibia los clusters -> no cosia 'Hablante 3'/'4'
+//            (la MISMA voz re-clusterizada), asi que esas filas seguian con etiqueta.
+//   hueco 2: el dueno no fijaba el hablante PRIMARIO con fuente 'presented' -> los
+//            turnos siguientes seguian cayendo a 'Hablante N' (el sembrado del panel,
+//            de rango menor, mandaba).
+// ============================================================
+const CLUSTERS_VOZ_UNICA = [
+  { label: 'Luz', signature: ANCLA },
+  { label: 'Hablante 1', signature: v(0.70) },
+  { label: 'Hablante 3', signature: v(0.71) },
+  { label: 'Hablante 4', signature: v(0.69) },
+  { label: 'Hablante 2', signature: v(OTRA_VOZ) },
+]
+
+function seedFilasDeLaMismaVoz() {
+  resetSpeakerAliases()
+  useIntegrationStore.setState({
+    conversationHistory: [
+      { id: 'r1', role: 'user', text: 'uno', speakerName: 'Hablante 1', timestamp: '10:00' },
+      { id: 'r2', role: 'user', text: 'dos', speakerName: 'Hablante 3', timestamp: '10:01' },
+      { id: 'r3', role: 'user', text: 'tres', speakerName: 'Hablante 4', timestamp: '10:02' },
+      { id: 'r4', role: 'user', text: 'cuatro', speakerName: 'Hablante 2', timestamp: '10:03' },
+    ] as any,
+  })
+}
+
+describe('A1 hueco 1 - el COMANDO recibe los clusters y cose la MISMA voz', () => {
+  it('registrar por el comando pasa al nombre las etiquetas de la MISMA voz (3 y 4)', () => {
+    seedFilasDeLaMismaVoz()
+    const result = registerSpeakerIdentityFromCommand({
+      transcript: 'okay flu soy Luz',
+      speakerName: 'Hablante 1',
+      clusters: CLUSTERS_VOZ_UNICA,
+    })
+    expect(result.registered).toBe(true)
+    expect(speakerRows()).toEqual(['Luz', 'Luz', 'Luz', 'Hablante 2'])
+  })
+})
+
+describe('A1 hueco 2 - el registro fija el PRIMARIO como presented', () => {
+  it('la ruta del COMMIT fija el primario (presented manda sobre el sembrado del panel)', () => {
+    seedRows()
+    const sessionPrimarySpeakerRef = { current: 'Luis' } // sembrado por el participante
+    applyResolvedSpeakerToSessionRefs(
+      { speakerName: 'Luz', source: 'wake-intro', previousLabel: 'Hablante 1' } as any,
+      {
+        renameSpeakerRows,
+        speakerClustersRef: { current: CLUSTERS_VOZ_UNICA },
+        sessionPrimarySpeakerRef,
+      } as any,
+    )
+    expect(sessionPrimarySpeakerRef.current).toBe('Luz')
+  })
+
+  it('la ruta del COMANDO fija el mismo primario', () => {
+    seedRows()
+    const sessionPrimarySpeakerRef = { current: 'Luis' }
+    registerSpeakerIdentityFromCommand({
+      transcript: 'okay flu soy Luz',
+      speakerName: 'Hablante 1',
+      clusters: CLUSTERS_VOZ_UNICA,
+      refs: { sessionPrimarySpeakerRef },
+    })
+    expect(sessionPrimarySpeakerRef.current).toBe('Luz')
+  })
+
+  it('MISMA RUTA: comando y wake-intro dejan el MISMO estado de identidad (filas + primario)', () => {
+    seedRows()
+    const refCommit = { current: 'Luis' }
+    applyResolvedSpeakerToSessionRefs(
+      { speakerName: 'Luz', source: 'wake-intro', previousLabel: 'Hablante 1' } as any,
+      {
+        renameSpeakerRows,
+        speakerClustersRef: { current: CLUSTERS_VOZ_UNICA },
+        sessionPrimarySpeakerRef: refCommit,
+      } as any,
+    )
+    const estadoCommit = { filas: speakerRows(), primario: refCommit.current }
+
+    seedRows()
+    const refComando = { current: 'Luis' }
+    registerSpeakerIdentityFromCommand({
+      transcript: 'okay flu soy Luz',
+      speakerName: 'Hablante 1',
+      clusters: CLUSTERS_VOZ_UNICA,
+      refs: { sessionPrimarySpeakerRef: refComando },
+    })
+    expect({ filas: speakerRows(), primario: refComando.current }).toEqual(estadoCommit)
+  })
+
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): con fuente "resolved" el sembrado MANDA', () => {
+    seedRows()
+    const sessionPrimarySpeakerRef = { current: 'Luis' }
+    registerSpeakerIdentity({
+      name: 'Luz',
+      clusters: CLUSTERS_VOZ_UNICA,
+      previousLabel: 'Hablante 1',
+      refs: { sessionPrimarySpeakerRef },
+      source: 'resolved', // el relleno NO pisa un nombre ya fijado
+    })
+    expect(sessionPrimarySpeakerRef.current).toBe('Luis')
+  })
+})
+
+// ============================================================
 // IMPLEMENTACIONES, NO LITERALES (AGENTS 7.7.d): el registro tiene UN modulo. Se
 // cuenta quien IMPLEMENTA el registro (quien calcula el conjunto de etiquetas de la
 // MISMA voz), no quien invoca una funcion suelta.
