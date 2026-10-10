@@ -1,5 +1,6 @@
 import { computeSpeakerEmbedding } from './speakerEmbedding.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { echoChunkCovers, echoCoverageFloor, resolveEchoSources } from './echoPolicy.js'
 import { detectParticipantFloorCommand } from './participantFloor.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
@@ -457,8 +458,20 @@ export function novelWords(next = '', prior = '') {
   return speechWords(next).filter((word) => !priorSet.has(word))
 }
 
-/** Quita eco TV/ASR repetido al inicio de la pregunta tras «ok flu» (p. ej. «primeros partidos platicame…»). */
-export function peelWakeQuestionEcho(question = '', echoSources = []) {
+/**
+ * Quita el eco TV/ASR repetido al inicio de la pregunta tras «ok flu» (p. ej. «primeros
+ * partidos platicame…»).
+ *
+ * B2: solo recorta si el trozo CUBRE al menos `coverageFloor` de las palabras de la
+ * fuente (dueno unico del criterio: echoPolicy.`echoChunkCovers`): un eco de verdad
+ * repite casi todo lo anterior; repetir la COLA de lo ultimo dicho es habla nueva y se
+ * conserva entera (medido: «el elote y el maiz» se truncaba a «y el maiz»).
+ */
+export function peelWakeQuestionEcho(
+  question = '',
+  echoSources = [],
+  { coverageFloor = echoCoverageFloor() } = {},
+) {
   // §9.6: la comparación es insensible a acentos/mayúsculas, pero el texto que
   // se devuelve conserva la forma original de la frase (no se pasa a minúsculas).
   const originalWords = cleanForSpeech(question).split(/\s+/).filter(Boolean)
@@ -472,10 +485,11 @@ export function peelWakeQuestionEcho(question = '', echoSources = []) {
       const prefixStr = normalizeVoiceCommandText(words.slice(0, len).join(' '))
       const srcTail = srcWords.slice(-len).join(' ')
       const srcHead = srcWords.slice(0, len).join(' ')
-      if (prefixStr === srcTail || prefixStr === srcHead) {
-        words = words.slice(len)
-        break
-      }
+      if (prefixStr !== srcTail && prefixStr !== srcHead) continue
+      // B2: el trozo debe CUBRIR la fuente (eco real) para poder recortarse.
+      if (!echoChunkCovers(words.slice(0, len), srcWords, coverageFloor)) continue
+      words = words.slice(len)
+      break
     }
   }
   return cleanForSpeech(words.join(' '))
@@ -879,10 +893,11 @@ export function resolveFinalConversationAction(
   const questionTextRaw = cleanForSpeech(
     split.afterWakeText || split.afterWake || split.commandText || '',
   )
-  /** Solo pelar eco TV (beforeWake); lastCommitted solo en wake inline con TV — no repetir fila del usuario. */
-  const echoSources = beforeWake
-    ? [beforeWake, cleanForSpeech(lastCommitted)].filter(Boolean)
-    : [beforeWake].filter(Boolean)
+  // B2: las fuentes de eco son el texto pasivo de la MISMA locucion y el texto REAL de
+  // FLU (solo si su ventana de eco sigue abierta). `lastCommitted` NO es fuente: en el
+  // ingress es la ultima fila del log de USUARIO, y medir el eco contra el usuario
+  // recortaba habla real.
+  const echoSources = resolveEchoSources({ passiveText: beforeWake || lastCommitted })
   const afterWake = peelWakeQuestionEcho(afterWakeRaw, echoSources)
   const question = peelWakeQuestionEcho(questionTextRaw, echoSources)
 

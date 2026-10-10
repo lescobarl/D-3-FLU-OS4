@@ -172,13 +172,11 @@ export const FLU_CONFIG = {
         quantized: true,
         logProgress: false,
       },
-      /** Sala / TV: captura pasiva sin AEC; reglas anti-clusters fantasma. */
       roomCapture: {
         deferNewSpeakerUntilCommit: true,
         pruneGhostClusters: false, // borraba el cluster recien escrito -> inClusters=0
         stickySpeaker: true,
-        /** Tras «ok flu soy …» mantener ese nombre en turnos siguientes (misma voz). */
-        pinRegisteredSpeaker: true,
+          pinRegisteredSpeaker: true,
         /**
          * Nombre propio solo vía wake + comando (REGISTRAR_PARTICIPANTE).
          * Sin wake: diarización genérica (Hablante N); no inferir «Luis» del texto pasivo.
@@ -186,10 +184,7 @@ export const FLU_CONFIG = {
         requireWakeWordForSpeakerName: true,
         /** Umbral relajado para no crear Hablante N tras registro con nombre propio. */
         registeredMatchRelax: 1.42,
-        /**
-         * Misma voz no salta H1→H2 por ruido/TV; si el timbre es distinto sí abre H2, H3…
-         * (reuniones variables). No significa «solo una persona en la sala».
-         */
+        /** Misma voz no salta H1->H2 por ruido/TV; timbre distinto si abre H2, H3 (reuniones). */
         soloSpeakerSticky: false,
         strictCosineDiarization: true,
         /** En límite de turno: nueva voz acústica abre cluster (Hablante 2+). */
@@ -2304,7 +2299,11 @@ export const FLU_CONFIG = {
       dispatchOnInterim: false,
       /** No re-despachar si la frase crece («platícame de los aero» → «…aeropuertos»). */ prefixExtensionDedupMs: 12000,
       /** Ventana unica de "misma peticion" (la comparten el despacho y el dedup de la captura reentregada). */ requestDedupMs: 4500,
-      /** Revision del ASR que CRECE ("Como" -> "Como sal"): decide el planificador, no el hook. */ asrRevisionWindowMs: 1600,
+      /** Revision del ASR que CRECE ("Como" -> "Como sal"): decide el planificador, no el hook. */ asrRevisionWindowMs: 1600,      /** B2: ventana de eco tras el FIN del habla de FLU (ms) en la que su voz puede volver por el micro. */
+      echoWindowMs: 3000,
+      /** B2: cobertura minima del texto de FLU para que la locucion cuente como ECO (no repeticion real). */
+      echoCoverageFloor: 0.6,
+
     },
     interimOpenLineFlushCheckMs: 0,
     /** Tras este intervalo sin commit: no shrink/redundant agresivo en ingress. */
@@ -2358,7 +2357,6 @@ export const FLU_CONFIG = {
       'end listening',
       'turn off listening',
     ],
-    /** Cierres de sesion (A4): el primario se limpia SOLO con estas frases (dato, no hardcode). */
     sessionClosePhrases: ['nueva sesion', 'nueva session', 'nueva conversacion', 'reiniciar conversacion', 'reiniciar la conversacion', 'reiniciar sesion', 'new session', 'new conversation', 'restart conversation'],
     startConversation: [
       'iniciar conversacion',

@@ -3,6 +3,7 @@
  * Ingress, hook y comandos delegan aquí — una sola ruta, sin duplicar split/commit.
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { resolveEchoSources } from './echoPolicy.js'
 import { resolveWakeWords } from './wakeWords.js'
 import {
   cleanForSpeech,
@@ -64,7 +65,9 @@ export function analyzeWakeTurn(capture = '', { lastCommitted = '', wakeWords = 
   const split = splitTranscriptAtWakeWord(cleaned, wakeWords)
   const passiveOnly = cleanForSpeech(split.beforeWake || '')
   const hasInlineBoundary = Boolean(split.wakeWordMatched && passiveOnly)
-  const echoSources = [passiveOnly, cleanForSpeech(lastCommitted)].filter(Boolean)
+  // B2: la fuente del eco es el texto REAL de FLU (no la ultima fila del log de usuario),
+  // y solo si su ventana de eco sigue abierta (anclada al fin de su habla).
+  const echoSources = resolveEchoSources({ passiveText: passiveOnly })
   const afterWakeRaw = cleanForSpeech(split.afterWake || split.commandText || '')
   const afterWake = peelWakeQuestionEcho(afterWakeRaw, echoSources)
   const action = planConversationDispatch(cleaned, FLU_CONFIG.voiceCommands, {

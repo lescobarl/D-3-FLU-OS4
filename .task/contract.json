@@ -1,29 +1,30 @@
 {
-  "task": "B3 - Solo se descarta la alucinacion CLARA (vacio o tokens sin palabra): toda frase con PALABRAS REALES se conserva.",
-  "objective": "Que el guard anti-alucinacion no descarte una locucion con palabras reales: el tartamudeo adyacente ('se se', 'no no') pasa a ser un MOTIVO (viaja al log) y deja de marcar la frase como basura; solo `empty` y `nonword` descartan. El decisor (`resolveCommittablePhrase`) informa motivo y si descarto.",
-  "base": "aefc07d",
+  "task": "B2 - El eco se mide contra el texto REAL de FLU, con COBERTURA y con la ventana anclada al fin de su habla.",
+  "objective": "Que el recorte de eco no trunque habla real: (1) la fuente es la ultima fila de FLU (su texto real, no la ultima fila del log de usuario), (2) solo se mide dentro de la ventana anclada al fin de su habla (epoch ms de la fila) y (3) solo se recorta si el trozo CUBRE al menos `echoCoverageFloor` de las palabras de la fuente. Dueno unico: src/voice/lib/echoPolicy.js.",
+  "base": "bb602d3",
   "allow": [
-    "src/voice/lib/garbageTranscript.js",
-    "tests/vozAlucinacionClaraGuard.test.ts",
-    "tests/turnCommitGarbageGate.test.ts",
-    "tests/garbageTranscript.test.ts",
+    "src/voice/lib/echoPolicy.js",
+    "src/voice/lib/audioMath.js",
+    "src/voice/lib/wakeTurnCommit.js",
+    "src/voice/lib/fluConfig.js",
+    "tests/vozEcoTextoRealGuard.test.ts",
     "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
-  "maxFiles": 7,
-  "maxLines": 300,
-  "dod": "npx vitest run --reporter=dot tests/garbageTranscript.test.ts tests/turnCommitGarbageGate.test.ts tests/turnCommitPhrase.test.ts tests/vozAlucinacionClaraGuard.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozAlucinacionClaraGuard.test.ts",
+  "maxFiles": 8,
+  "maxLines": 400,
+  "dod": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/blindSpeakerFallbackGuard.test.ts tests/browserProfilesPanel.test.tsx tests/captureDedupGuard.test.ts tests/commandIdsVocabularySingleOwnerGuard.test.ts tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/conversationStreamCommit.test.ts tests/decideVoiceTurnDispatch.test.ts tests/decisionSingleOwnerGuard.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/floorCommandDispatchGuard.test.ts tests/floorOpenDispatchGuard.test.ts tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/fluRowLoggedOnSpeak.test.ts tests/integration.test.ts tests/localeConfigGuard.test.ts tests/materiaGrisPanel.test.tsx tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/onboardingStartDelayConfig.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/rulesSimulator.test.ts tests/searchControlCenter.test.tsx tests/searchEndpointSingleOwner.test.ts tests/selfKnowledge.test.ts tests/sessionResetCommandSingleOwnerGuard.test.ts tests/shoppingPanel.test.tsx tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/speechEchoGuard.test.ts tests/speechWordsSingleOwnerGuard.test.ts tests/spokenUtteranceRevision.test.ts tests/systemMatrix.test.ts tests/textUtilsSingleSourceGuard.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/tutoringModel.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceSingleSourceGuard.test.ts tests/voiceTurnStabilization.test.ts tests/voiceWorkerThresholdsConfigGuard.test.ts tests/vozClusterConsolidacionGuard.test.ts tests/vozCosidoDiarizacionGuard.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/vozEcoTextoRealGuard.test.ts tests/vozEscenarioInyectado.test.ts tests/vozFilaConHablanteGuard.test.ts tests/vozFlagHuerfanoGuard.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozPrimarioReinicioGuard.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/wakePolicyGuard.test.ts tests/wakeRowNoiseGuard.test.ts tests/wakeWordDisplay.test.ts tests/workspaceContractTipo.test.ts tests/workspacePersonIsolation.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozEcoTextoRealGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ramas de descarte que NO son alucinacion clara (tartamudeo) en el decisor: 1 -> 0.",
-    "base": "aefc07d",
+    "statement": "Listas de fuentes de eco construidas a mano en src/ (fuera del dueno `echoPolicy`): 1 -> 0. Ademas, el recorte exige cobertura (config `echoCoverageFloor`).",
+    "base": "bb602d3",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/garbageTranscript.js','utf8');console.log((s.match(/verdict\\.reason === 'stutter'/g)||[]).length)\"",
+      "command": "node -e \"const fs=require('fs'),p=require('path');let n=0;const w=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const fp=p.join(d,f.name);if(f.isDirectory())w(fp);else if(/\\.(js|ts)$/.test(f.name)){const s=fs.readFileSync(fp,'utf8');n+=(s.match(/echoSources = \\[/g)||[]).length-(s.match(/echoSources = \\[\\]/g)||[]).length}}};w('src');console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozAlucinacionClaraGuard.test.ts"
+      "tests/vozEcoTextoRealGuard.test.ts"
     ]
   },
   "ignore": [
@@ -32,7 +33,16 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/garbageTranscript.js": [
+    "src/voice/lib/echoPolicy.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/audioMath.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/wakeTurnCommit.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/fluConfig.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }
