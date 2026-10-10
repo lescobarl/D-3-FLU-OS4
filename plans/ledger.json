@@ -5,6 +5,13 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+      "id": "P9.57",
+      "titulo": "RUTA DOBLE de RESPONSABILIDAD (medida): la DECISION \"voz conocida vs nueva\" esta implementada dos veces (speakerCore.assignSpeaker en el WORKER y speakerDiarization.resolveProductionSpeakerAtBoundary/resolveRoomNearestNeighbor en el HILO PRINCIPAL). Unificar en UN dueno.",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-09 con guard nacido ROJO `tests/vozIdentidadDecisionUnicaGuard.test.ts` (commit 86ae465): \"modulos que IMPLEMENTAN la decision de identidad (debe ser 1): src/voice/lib/speakerCore.js, src/voice/lib/speakerDiarization.js: expected [ Array(2) ] to have a length of 1 but got 2\". La afirmacion de speakerDiarization.js:6 (\"El Worker y el hilo principal consumen el mismo nucleo\") es verdad a medias: comparten PRIMITIVAS (compareCosineSignatures, normalizeEmbeddingVector, hasVoiceMeasurement) pero cada uno implementa su DECISION. El log del dueno (sesion 17:18-17:21) muestra LAS DOS decidiendo en la misma sesion (Match reason=new-voice-below-threshold=3, forced-new-voice-below-threshold=1, solo-coalesce=1, cluster-reidentify=2 + identity{resolved-idle}) y la MISMA voz abriendo Hablante 2/3/4. PLAN: (1) el WORKER deja de decidir y consume el resolver canonico (resolveConversationSpeaker de speakerDiarization.js, que declara ese nombre como canonico), pasando voicedSampleCount desde el audio transferido; (2) se ELIMINA speakerCore.assignSpeaker (la segunda decision) y su test (`speakerDiarizationSeparation.test.ts`) se reescribe contra el resolver canonico; (3) el guard pasa a VERDE y entra en lint:guards. RIESGO/VALIDACION declarados: el cambio vive en el WORKER (no se puede unit-probar), asi que se valida con (a) el guard calibrado a los cosenos MEDIDOS del dueno (misma voz 0.69-0.74 / distinta 0.58) y (b) `npm run e2e:scoped` sobre `tests/e2e/voz-escenario-dueno.spec.ts`, que SI ejercita el embedding real (P3/P3b tardan 25-40 s). NO tocar la fase 1 acordada (fila sin hablante; resolveRowSpeakerName/updateTurnRowSpeaker estan bien).",
+      "origen": "defecto-medido-dueno-2026-10-09"
+    },
+    {
       "id": "P9.50",
       "titulo": "FLAKE MEDIDO: el e2e P6 (continuacion sin wake) es inestable; no es regresion de P9.49",
       "estado": "todo",
