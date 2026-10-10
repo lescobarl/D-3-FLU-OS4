@@ -45,8 +45,11 @@ export function classifyGarbageTranscript(text = '') {
     if (words[i] === words[i - 1] && words[i].length <= STUTTER_MAX_WORD_CHARS) repeticionesCortas += 1
   }
   if (repeticionesCortas > 0) {
+    // B3: la repeticion adyacente de palabra corta es un MOTIVO (tartamudeo del ASR),
+    // NO una alucinacion clara: la frase tiene PALABRAS REALES y se conserva. Solo
+    // `empty` (sin texto) y `nonword` (sin palabras) descartan la locucion.
     return {
-      garbage: true,
+      garbage: false,
       reason: 'stutter',
       repiteDominante: repeticionesCortas * 2 >= words.length,
     }
@@ -88,22 +91,22 @@ export function looksLikeGarbageTranscript(text = '') {
 export function resolveCommittablePhrase(capture = '', fallback = '') {
   const primary = String(capture || '').trim()
   const verdict = classifyGarbageTranscript(primary)
-  if (!verdict.garbage) return { phrase: primary, usedFallback: false, reason: null }
-
   const alternative = String(fallback || '').trim()
-  if (!classifyGarbageTranscript(alternative).garbage) {
-    return { phrase: alternative, usedFallback: true, reason: verdict.reason }
+  const validAlternative = Boolean(alternative) && !classifyGarbageTranscript(alternative).garbage
+
+  // Frase CONSERVADA (no es alucinacion clara). Si la captura traia un motivo y hay un
+  // texto validado mas limpio, se prefiere el validado; la locucion NO se descarta.
+  if (!verdict.garbage) {
+    if (verdict.reason && validAlternative) {
+      return { phrase: alternative, usedFallback: true, reason: verdict.reason, discarded: false }
+    }
+    return { phrase: primary, usedFallback: false, reason: verdict.reason || null, discarded: false }
   }
 
-  // Sin texto validado al que caer. El veredicto 'stutter' NO basta por si solo para
-  // callar el turno: solo es senal fuerte cuando la repeticion DOMINA la frase
-  // ("se se", "bor bor" = alucinacion del ASR). Si la repeticion es un detalle
-  // dentro de una frase real ("no no", "ahi ahi", "si si") se commitea lo que dijo
-  // el usuario. Medido en el log real del dueno: 3 capturas humanas de 3 acabaron
-  // MUDAS por esta via (fallback vacio -> phrase vacia -> turno sin habla).
-  // 'nonword' (sin vocales) y 'empty' SI son ruido claro: siguen descartandose.
-  if (verdict.reason === 'stutter' && !verdict.repiteDominante) {
-    return { phrase: primary, usedFallback: false, reason: verdict.reason }
+  // Alucinacion CLARA (empty / nonword): se descarta, con su motivo, y solo se salva si
+  // hay texto validado del turno.
+  if (validAlternative) {
+    return { phrase: alternative, usedFallback: true, reason: verdict.reason, discarded: false }
   }
-  return { phrase: '', usedFallback: false, reason: verdict.reason }
+  return { phrase: '', usedFallback: false, reason: verdict.reason, discarded: true }
 }

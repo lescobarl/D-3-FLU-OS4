@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { looksLikeGarbageTranscript } from '../src/voice/lib/garbageTranscript.js';
 
 describe('garbageTranscript — guard anti-alucinación ASR', () => {
-  it('descarta basura con repetición adyacente ("se se")', () => {
-    expect(looksLikeGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toBe(true);
+  it('la repeticion adyacente con palabras reales NO es alucinacion clara (B3)', () => {
+    // B3: la frase tiene PALABRAS REALES (el tartamudeo es un motivo, no alucinacion clara).
+    expect(looksLikeGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toBe(false);
   });
 
   // Una persona repite "hola hola" a proposito: el guard solo debe descartar

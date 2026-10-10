@@ -1,30 +1,29 @@
 {
-  "task": "A5 - Ninguna fila de usuario sin etiqueta: la etiqueta final se decide en UN punto y siempre hay respaldo (fallbackSpeaker).",
-  "objective": "Que la fila de usuario SIEMPRE lleve etiqueta: el decisor unico (`resolveRowSpeakerName`) devuelve el respaldo de config cuando no hay nombre medido, sin inventar un nombre propio (se conserva la regla de P9.52) y sin degradar un nombre ya escrito.",
-  "base": "182df1d",
+  "task": "B3 - Solo se descarta la alucinacion CLARA (vacio o tokens sin palabra): toda frase con PALABRAS REALES se conserva.",
+  "objective": "Que el guard anti-alucinacion no descarte una locucion con palabras reales: el tartamudeo adyacente ('se se', 'no no') pasa a ser un MOTIVO (viaja al log) y deja de marcar la frase como basura; solo `empty` y `nonword` descartan. El decisor (`resolveCommittablePhrase`) informa motivo y si descarto.",
+  "base": "aefc07d",
   "allow": [
-    "src/voice/lib/conversationTurnRow.ts",
-    "tests/vozFilaConHablanteGuard.test.ts",
-    "tests/registeredSpeakerNameGuard.test.ts",
-    "tests/conversationTurnSingleRow.test.ts",
-    "tests/vozEscenarioInyectado.test.ts",
+    "src/voice/lib/garbageTranscript.js",
+    "tests/vozAlucinacionClaraGuard.test.ts",
+    "tests/turnCommitGarbageGate.test.ts",
+    "tests/garbageTranscript.test.ts",
     "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
-  "maxFiles": 8,
-  "maxLines": 400,
-  "dod": "npx vitest run --reporter=dot tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnRowSingleWriter.test.ts tests/conversationTurnSingleRow.test.ts tests/fluRowLoggedOnSpeak.test.ts tests/gameDomainOwnership.test.ts tests/integration.test.ts tests/registeredSpeakerNameGuard.test.ts tests/turnRowNoDuplicate.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/vozEscenarioInyectado.test.ts tests/vozFilaConHablanteGuard.test.ts tests/vozIdentidadInyectada.test.ts tests/vozRegistroNombreUnicoGuard.test.ts tests/vozRenombreHablanteGuard.test.ts tests/vozSondaDatosGuard.test.ts tests/workspacePersonIsolation.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozFilaConHablanteGuard.test.ts",
+  "maxFiles": 7,
+  "maxLines": 300,
+  "dod": "npx vitest run --reporter=dot tests/garbageTranscript.test.ts tests/turnCommitGarbageGate.test.ts tests/turnCommitPhrase.test.ts tests/vozAlucinacionClaraGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozAlucinacionClaraGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Salidas vacias del decisor de la etiqueta de fila (`resolveRowSpeakerName`): 2 -> 0. La fila siempre lleva etiqueta (respaldo de config).",
-    "base": "182df1d",
+    "statement": "Ramas de descarte que NO son alucinacion clara (tartamudeo) en el decisor: 1 -> 0.",
+    "base": "aefc07d",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationTurnRow.ts','utf8');const a=s.indexOf('export function resolveRowSpeakerName');const b=s.indexOf('export function',a+10);console.log((s.slice(a,b).match(/return ''/g)||[]).length)\"",
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/garbageTranscript.js','utf8');console.log((s.match(/verdict\\.reason === 'stutter'/g)||[]).length)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozFilaConHablanteGuard.test.ts"
+      "tests/vozAlucinacionClaraGuard.test.ts"
     ]
   },
   "ignore": [
@@ -33,9 +32,8 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/conversationTurnRow.ts": [
-      "tests/e2e/voz-escenario-dueno.spec.ts",
-      "tests/e2e/voz-locucion-unica.spec.ts"
+    "src/voice/lib/garbageTranscript.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }
 }

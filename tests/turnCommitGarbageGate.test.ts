@@ -30,7 +30,8 @@ const CAPTURA_CORRUPTA = 'Okay Flow platícame de los aviones los los aviones';
 
 describe('el criterio de basura sigue siendo el mismo (comportamiento validado)', () => {
     it('descarta tartamudeo y ruido sin vocales', () => {
-        expect(looksLikeGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toBe(true);
+        // B3: la frase tiene palabras reales; el tartamudeo es un MOTIVO, no alucinacion clara.
+        expect(looksLikeGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toBe(false);
         expect(looksLikeGarbageTranscript('hmm mmm nnn')).toBe(true);
         expect(looksLikeGarbageTranscript('')).toBe(true);
         expect(looksLikeGarbageTranscript('   ')).toBe(true);
@@ -55,7 +56,7 @@ describe('el criterio de basura sigue siendo el mismo (comportamiento validado)'
     it('el motivo queda clasificado, no en un booleano opaco', () => {
         expect(classifyGarbageTranscript('')).toMatchObject({ garbage: true, reason: 'empty' });
         expect(classifyGarbageTranscript('¿Y se se? ¿Bon la ofes ahí?')).toMatchObject({
-            garbage: true,
+            garbage: false,
             reason: 'stutter',
         });
         expect(classifyGarbageTranscript('hmm mmm nnn')).toMatchObject({
@@ -74,6 +75,7 @@ describe('el escenario del log: la captura cruda corrupta NO mata el turno', () 
             phrase: AVIONES,
             usedFallback: true,
             reason: 'stutter',
+            discarded: false,
         });
         expect(resolved.phrase).not.toBe('');
     });
@@ -83,6 +85,7 @@ describe('el escenario del log: la captura cruda corrupta NO mata el turno', () 
             phrase: AVIONES,
             usedFallback: false,
             reason: null,
+            discarded: false,
         });
     });
 
@@ -135,10 +138,11 @@ describe('el log del dueno: habla real con repeticion no puede quedar muda', () 
         }
     });
 
-    it('la alucinacion pura sigue descartandose (la repeticion DOMINA la frase)', () => {
-        for (const ruido of ['se se', 'bor bor', 'el el el', 'la la la la']) {
-            expect(classifyGarbageTranscript(ruido).repiteDominante).toBe(true);
-            expect(resolveCommittablePhrase(ruido, '').phrase).toBe('');
+    it('B3: una frase real con tartamudeo se CONSERVA (antes se perdia)', () => {
+        for (const real of ['se se', 'bor bor', 'el el el', 'la la la la']) {
+            expect(classifyGarbageTranscript(real).repiteDominante).toBe(true);
+            expect(resolveCommittablePhrase(real, '').phrase).toBe(real);
+            expect(resolveCommittablePhrase(real, '').discarded).toBe(false);
         }
     });
 
