@@ -503,3 +503,16 @@ de P9.64 y contar las filas sin hablante de P9.65.
   (nace ROJO). Metrica 1 -> 0. DECISION DECLARADA: el valor 6 es un freno ajustable.
 - PLAN COMPLETO: A1..A6 y B1..B5 CERRADOS. Pendiente del dueno: DoD-producto (pantalla),
   suite completa (gate de CI) y E2E completa.
+
+## 2026-10-10 (13) - A5 CORREGIDA (validacion del dueno 14:00-14:08)
+
+- **A5c** (src 80f80fb; guard+contrato d24cdb6; ledger 4dbae6b): la fila escribe TAL CUAL la
+  etiqueta del resolver; el RESPALDO solo si no hay etiqueta; el vinculo registrado asciende a
+  nombre propio SOLO con evidencia acustica; preserveProperSpeaker no estampa un nombre propio
+  sin evidencia sobre una fila ya etiquetada. Se retira el log de descarte (phraseDiscard) de la
+  ruta de preview (B1 habia metido spam: 457 WARN/8 min). Guard
+  tests/vozFilaConHablanteGuard.test.ts mide la propiedad UTIL (nace ROJO 4/6). Metrica 1 -> 0.
+- IMPACTO: (1) la fila lleva la etiqueta del resolver; (2) 'soy Luis' sustituye las filas de esa
+  voz; (3) Luis NO cae en la voz de la mujer; (4) sin spam de descarte en preview.
+- SIGUIENTE (autorizado, en orden): preflight antes del commit -> plegado luis/Luis ->
+  instrumento lastSim (ciego 39/39) -> ciclo de vida del microfono (InvalidStateError).
