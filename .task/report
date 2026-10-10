@@ -4461,3 +4461,45 @@ P9.64: modelo FAITHFUL offline (resolveConversationSpeaker real + thresholds de 
 P9.65: el relleno tardio (applyResolvedSpeaker:1465) tiene un guard monotono que descarta la
   resolucion de un turno viejo (justo los que el srGap de P9.63 cerraba antes de tiempo). Faltan
   medir las filas sin hablante DESPUES de P9.63+P9.66 para decidir si queda defecto.
+
+================================================================
+A1 - El REGISTRO del nombre propio tiene UN dueno (y el comando REGISTRAR_PARTICIPANTE
+     desemboca en la MISMA ruta que wake-intro)
+================================================================
+COMMITS: ccfb835 (src + contrato) · guard + lint:guards + ledger (el siguiente).
+DEFECTO MEDIDO (antes del arreglo): el registro de un nombre propio para la voz activa
+estaba implementado DOS veces - useFluVoiceAssistant.js:1472 (resolucion tardia) y
+turnSpeakerCommit.js:216-217 (wake-intro) -, y el comando REGISTRAR_PARTICIPANTE no
+tenia consumidor: handleNavigationCommand no traia caso, asi que FLU decia
+"Registrado {name}." y el registro solo ocurria como efecto colateral del commit del
+stream (ruta que promete y no cumple).
+CAMBIOS APLICADOS:
+  - src/voice/lib/speakerIdentityRegister.js (NUEVO, dueno unico): registerSpeakerIdentity
+    (alias de sesion + renombrado de las filas de la MISMA voz; calculo delegado, escritor
+    de filas inyectable) y registerSpeakerIdentityFromCommand (mismo registro, mismo
+    detector: resolveSpeakerNameFromUtterance).
+  - turnSpeakerCommit.js (wake-intro) y useFluVoiceAssistant.js (resolucion tardia) llaman
+    al dueno: el registro pasa de 2 implementaciones a 1. Hook 4537 lineas (techo 4539).
+  - useNavigationCommands.ts: caso COMMAND_IDS.REGISTRAR_PARTICIPANTE (antes: sin caso).
+  - tests/vozRegistroNombreUnicoGuard.test.ts (NUEVO, en lint:guards) + .task/contract.json.
+VALIDADO CONTRA:
+  - METRICA (puerta): modulos de src que implementan el registro 2 -> 1 (target 1).
+    BASE: git grep -c findLabelsWithSharedVoice( a9c4589 -- src/* -> hook:1 +
+    turnSpeakerCommit:1 (+ la definicion). AHORA: 1 (speakerIdentityRegister.js).
+  - GUARD: 7/7 VERDE. NACE ROJO (el dueno no existia: "Failed to load url
+    ../src/voice/lib/speakerIdentityRegister.js ... Does the file exist?"). DETECTOR por
+    mutacion: con la ruta del commit desactivada (if (false)) cae "MISMA RUTA: comando y
+    wake-intro dejan el store identico..." (1 failed / 6 passed); restaurado -> 7/7.
+  - BASELINE previo del area: 11 ficheros / 94 casos VERDE (0 fallos) -> 0 NUEVOS.
+  - DoD (14 ficheros, incluye useFluVoiceAssistant.behavior.test.tsx por 0.25): VERDE.
+  - Meta-guards: guardMutation / dodScope (P7.88) / instrumentIntegrity (0.22-0.24) /
+    eolGuard VERDE. npm run lint 229 ficheros / 1905 casos + eslint 0 + typecheck 0.
+    npm run ledger:check OK (3 pendientes: P9.62, P9.64, P9.65; 349 cierres).
+NO VALIDADO:
+  - DoD-producto (pantalla del dueno): decir "okay flu soy Luz" en localhost:5173 y ver
+    sus filas con su nombre (reservado al usuario, AGENTS A.1).
+  - Suite completa (gate de CI) y suite E2E completa: se declara el spec del bloque
+    (tests/e2e/voz-escenario-dueno.spec.ts) en e2eScope.
+ALCANCE REAL (0.23): CUBIERTO=la unificacion del registro en un dueno y que la ruta del
+COMANDO registre de verdad, con detector medido; NO CUBIERTO=el DoD-producto, la suite
+completa y la E2E completa.

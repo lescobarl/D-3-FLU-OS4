@@ -1,0 +1,190 @@
+// ============================================================
+// vozRegistroNombreUnicoGuard - A1: el REGISTRO del nombre propio tiene UN dueno
+// ------------------------------------------------------------
+// DEFECTO MEDIDO (2026-10-10): el registro de un nombre propio para la voz activa
+// estaba implementado DOS veces:
+//   - src/voice/hooks/useFluVoiceAssistant.js:1472 (resolucion tardia)
+//   - src/voice/lib/turnSpeakerCommit.js:217     (ruta `wake-intro` del commit)
+// y el comando `REGISTRAR_PARTICIPANTE` (producido en src/voice/lib/audioMath.js:946
+// con el nombre introducido) NO tenia consumidor: `handleNavigationCommand` no traia
+// caso para el, asi que decia "Registrado {name}." sin registrar NADA. Dos rutas para
+// el mismo responsable y la del comando muerta.
+//
+// DUENO UNICO: `registerSpeakerIdentity` (src/voice/lib/speakerIdentityRegister.js)
+// = alias de sesion + renombrado de las filas de la MISMA voz. Lo llaman las dos
+// rutas: el commit (`applyResolvedSpeakerToSessionRefs`, fuente wake-intro) y el
+// comando (`registerSpeakerIdentityFromCommand`).
+//
+// PRUEBA DE DETECTOR (el detector no es decorativo): el guard EJECUTA las dos rutas
+// sobre un store sembrado (no cuenta nombres) y
+// exige el MISMO resultado: una etiqueta automatica de la MISMA voz pasa al nombre
+// propio, y la de OTRA voz no se toca.
+// ============================================================
+import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { walkFiles } from './_helpers'
+import { useIntegrationStore } from '../src/store/integrationStore'
+import {
+  renameSpeakerRows,
+  resetSpeakerAliases,
+  resolveSpeakerAlias,
+} from '../src/voice/lib/conversationTurnRow'
+import {
+  registerSpeakerIdentity,
+  registerSpeakerIdentityFromCommand,
+} from '../src/voice/lib/speakerIdentityRegister.js'
+import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit.js'
+
+/** Vector con coseno EXACTO `c` respecto a la base [1,0,0]. */
+function v(c: number): number[] {
+  return [c, Math.sqrt(Math.max(0, 1 - c * c)), 0]
+}
+const ANCLA = [1, 0, 0]
+const MISMA_VOZ = 0.70 // techo medido de la banda de la misma voz
+const OTRA_VOZ = 0.58 // voz distinta medida
+const CLUSTERS = [
+  { label: 'Luz', signature: ANCLA },
+  { label: 'Hablante 1', signature: v(MISMA_VOZ) },
+  { label: 'Hablante 2', signature: v(OTRA_VOZ) },
+]
+
+/** Store con tres filas de usuario: la voz de 'Hablante 1' y una voz distinta. */
+function seedRows() {
+  resetSpeakerAliases()
+  useIntegrationStore.setState({
+    conversationHistory: [
+      { id: 'r1', role: 'user', text: 'hola', speakerName: 'Hablante 1', timestamp: '10:00' },
+      { id: 'r2', role: 'user', text: 'que tal', speakerName: 'Hablante 2', timestamp: '10:01' },
+      { id: 'r3', role: 'user', text: 'bueno', speakerName: 'Hablante 1', timestamp: '10:02' },
+    ] as any,
+  })
+}
+
+function speakerRows(): string[] {
+  return useIntegrationStore
+    .getState()
+    .conversationHistory.filter((e) => e.role === 'user')
+    .map((e) => String(e.speakerName || ''))
+}
+
+describe('A1 - un solo dueno del registro del nombre propio', () => {
+  beforeEach(() => {
+    resetSpeakerAliases()
+    useIntegrationStore.setState({ conversationHistory: [] })
+  })
+
+  it('registrar el nombre pasa AL NOMBRE las filas de la MISMA voz y deja la voz distinta', () => {
+    seedRows()
+    const result = registerSpeakerIdentity({
+      name: 'Luz',
+      clusters: CLUSTERS,
+      previousLabel: 'Hablante 1',
+    })
+    expect(result.registered).toBe(true)
+    expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
+    expect(result.rowsChanged).toBe(2)
+  })
+
+  it('RUTA DEL COMANDO: REGISTRAR_PARTICIPANTE registra el nombre (antes no registraba nada)', () => {
+    seedRows()
+    const result = registerSpeakerIdentityFromCommand({
+      transcript: 'okay flu soy Luz',
+      speakerName: 'Hablante 1',
+    })
+    expect(result.registered).toBe(true)
+    expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
+    // y la etiqueta con la que esa voz venia apareciendo queda con su nombre
+    expect(resolveSpeakerAlias('Hablante 1')).toBe('Luz')
+  })
+
+  it('MISMA RUTA: comando y wake-intro dejan el store identico para la misma voz', () => {
+    seedRows()
+    applyResolvedSpeakerToSessionRefs(
+      { speakerName: 'Luz', source: 'wake-intro', previousLabel: 'Hablante 1' } as any,
+      {
+        renameSpeakerRows,
+        speakerClustersRef: { current: CLUSTERS },
+        sessionPrimarySpeakerRef: { current: '' },
+      } as any,
+    )
+    const porCommit = speakerRows()
+
+    seedRows()
+    registerSpeakerIdentityFromCommand({ transcript: 'okay flu soy Luz', speakerName: 'Hablante 1' })
+    const porComando = speakerRows()
+
+    expect(porComando).toEqual(porCommit)
+  })
+
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): sin nombre propio no se registra ni se toca una fila', () => {
+    seedRows()
+    const sinNombre = registerSpeakerIdentity({ name: 'Hablante 3', clusters: CLUSTERS })
+    expect(sinNombre.registered).toBe(false)
+    expect(sinNombre.rowsChanged).toBe(0)
+    expect(speakerRows()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1'])
+
+    const sinWake = registerSpeakerIdentityFromCommand({
+      transcript: 'buenos dias a todos',
+      speakerName: 'Hablante 1',
+    })
+    expect(sinWake.registered).toBe(false)
+    expect(speakerRows()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1'])
+  })
+
+  it('PRUEBA DE DETECTOR: una etiqueta que NO es esa voz no se renombra', () => {
+    seedRows()
+    useIntegrationStore.setState({
+      conversationHistory: [
+        ...useIntegrationStore.getState().conversationHistory,
+        { id: 'r4', role: 'user', text: 'otro', speakerName: 'Hablante 9', timestamp: '10:03' },
+      ] as any,
+    })
+    registerSpeakerIdentity({ name: 'Luz', clusters: CLUSTERS, previousLabel: 'Hablante 1' })
+    // 'Hablante 2' (otra voz) y 'Hablante 9' (sin cluster) quedan como estaban.
+    expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz', 'Hablante 9'])
+  })
+})
+
+// ============================================================
+// IMPLEMENTACIONES, NO LITERALES (AGENTS 7.7.d): el registro tiene UN modulo. Se
+// cuenta quien IMPLEMENTA el registro (quien calcula el conjunto de etiquetas de la
+// MISMA voz), no quien invoca una funcion suelta.
+// ============================================================
+const ROOT = process.cwd()
+/** Dueno del calculo "que etiquetas son la MISMA voz". */
+const DEFINICION_VOZ_COMPARTIDA = 'src/voice/lib/speakerClusters.js'
+const CALCULO_VOZ_COMPARTIDA = /findLabelsWithSharedVoice\(/
+
+/** Modulos que IMPLEMENTAN el registro (calculan las etiquetas de la misma voz). */
+export function modulosQueRegistran(fuentes: Record<string, string>): string[] {
+  return Object.entries(fuentes)
+    .filter(([ruta, texto]) => ruta !== DEFINICION_VOZ_COMPARTIDA && CALCULO_VOZ_COMPARTIDA.test(String(texto)))
+    .map(([ruta]) => ruta)
+    .sort()
+}
+
+describe('A1 - el registro del nombre vive en UN modulo', () => {
+  it('solo el dueno calcula las etiquetas de la MISMA voz', () => {
+    const fuentes: Record<string, string> = {}
+    for (const abs of walkFiles(join(ROOT, 'src'), /\.(js|ts|tsx)$/)) {
+      const ruta = relative(ROOT, abs).replace(/\\/g, '/')
+      if (ruta.endsWith('.d.ts')) continue
+      fuentes[ruta] = readFileSync(abs, 'utf8')
+    }
+    expect(modulosQueRegistran(fuentes)).toEqual(['src/voice/lib/speakerIdentityRegister.js'])
+  })
+
+  it('PRUEBA DE DETECTOR: una copia inline en otro modulo lo pone ROJO', () => {
+    const conCopia = {
+      'src/voice/lib/speakerIdentityRegister.js': 'const l = findLabelsWithSharedVoice(c, n)',
+      'src/voice/hooks/useFluVoiceAssistant.js': 'renameSpeakerRows(findLabelsWithSharedVoice(c, n), n)',
+      [DEFINICION_VOZ_COMPARTIDA]: 'export function findLabelsWithSharedVoice(...) {}',
+    }
+    expect(modulosQueRegistran(conCopia)).toEqual([
+      'src/voice/hooks/useFluVoiceAssistant.js',
+      'src/voice/lib/speakerIdentityRegister.js',
+    ])
+    expect(modulosQueRegistran({ 'src/a.js': 'soy una copia sin el calculo' })).toEqual([])
+  })
+})

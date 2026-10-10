@@ -229,6 +229,7 @@ export const GUARD_FILES = [
     'tests/vozBloqueLargoPierdeFilaGuard.test.ts',
     'tests/vozDiarizacionDosVocesGuard.test.ts',
     'tests/vozLocucionVivaLargaGuard.test.ts',
+    'tests/vozRegistroNombreUnicoGuard.test.ts',
     'tests/vozRenombreHablanteGuard.test.ts',
     'tests/vozRenombreVozCompartidaGuard.test.ts',
     'tests/vozRendimientoVozGuard.test.ts',
