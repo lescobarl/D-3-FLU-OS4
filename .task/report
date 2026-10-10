@@ -4426,3 +4426,24 @@ tests/voiceCanonicalPhrase.test.ts al dod; y jsReferenceGuard) + eslint 0 + type
 ALCANCE REAL (0.23): CUBIERTO=la rama "turno viejo" del srGap (trigger + eval, con REPLAY del
 log del dueno) y la re-derivacion de los tests del area; NO CUBIERTO=la suite completa (gate de
 CI) y el DoD-producto (pantalla del dueno).
+
+================================================================
+P9.66 - "soy <nombre>" unifica la MISMA voz (umbral de un solo dueno)
+================================================================
+COMMIT 9220780 (src + contrato; guard en el commit siguiente).
+DEFECTO (pantalla + log del dueno): "Okay flu soy Luz" -> FLU "Registrado Luz." y NINGUNA
+fila cambiaba (reparto final: (vacio)=35, luis=4, Hablante 1=1).
+CAUSA RAIZ: `findLabelsWithSharedVoice` / `findSpeakerLabelsMatchingSignature` con el umbral
+HARDCODEADO en 0.78, POR ENCIMA del techo de la banda medida de la misma voz (0.69-0.74).
+Predicado INSATISFACIBLE: dos clusters de la MISMA voz nunca llegan a 0.78.
+ARREGLO (un solo dueno): `sameVoiceFloor()` = config productionClusterReuseThreshold (0.66);
+las dos funciones leen su default de ahi y turnSpeakerPreflight delega en el mismo dueno.
+METRICA: matchThreshold = 0.78 en speakerClusters.js 2 -> 0.
+GUARD: tests/vozRenombreVozCompartidaGuard.test.ts (banda exacta 0.70 misma / 0.58 distinta).
+NACE ROJO medido (2 fallos revirtiendo los defaults a 0.78) -> VERDE. Gate: metrica base=2
+actual=0 target=0 - guard base=1 actual=0.
+VALIDADO: DoD 124/124; npm run lint 228 ficheros / 1898 casos + eslint 0 + typecheck 0;
+npm run e2e:scoped 8/8.
+ALCANCE REAL (0.23): CUBIERTO=la unificacion de etiquetas de la misma voz al registrar un
+nombre (con el dueno unico del umbral); NO CUBIERTO=P9.64 (inflado de clusters), P9.65 (filas
+sin hablante), la suite completa y el DoD-producto.
