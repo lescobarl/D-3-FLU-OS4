@@ -240,6 +240,7 @@ export const GUARD_FILES = [
     'tests/vozFilaConHablanteGuard.test.ts',
     'tests/vozHablanteFilaUnicaGuard.test.ts',
     'tests/vozLocucionRecompuestaGuard.test.ts',
+    'tests/vozUnCommitPorTurnoGuard.test.ts',
     'tests/vozDescarteConMotivoGuard.test.ts',
     'tests/vozEcoTextoRealGuard.test.ts',
     'tests/vozAlucinacionClaraGuard.test.ts',

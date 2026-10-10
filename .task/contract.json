@@ -1,41 +1,16 @@
 {
-  "task": "B4 - La locucion se RECOMPONE antes de commitear: ningun fragmento entra cortado.",
-  "objective": "Que el commit escriba la locucion COMPLETA cuando el ASR cierra el turno con un trozo de ella: dueno unico `recomposeLocution` (turnStream.js), consumido por `reconcileCommitText` (lado ultimo mostrado) y por `resolveTurnCommitPhrase` (lado texto validado del turno).",
-  "base": "c584764",
+  "task": "B5 - Cada locucion real produce EXACTAMENTE una fila (un unico commit por turno). Contrato SIN invariant: la propiedad es un 0 de conducta ya correcto; el cambio es el GUARD que la fija end-to-end (AGENTS 7.7.e(3): no se inventa un defecto).",
+  "objective": "Fijar end-to-end que el escritor unico de la fila no duplica el commit del mismo turno y que dos locuciones distintas son dos filas, usando el arnes REAL del stream (colaboradores reales, no mocks de las reglas).",
+  "base": "0498c89",
   "allow": [
-    "src/voice/lib/turnStream.js",
-    "src/voice/lib/turnCommitPhrase.js",
-    "tests/vozLocucionRecompuestaGuard.test.ts",
-    "scripts/guard-files.mjs",
-    "plans/ledger.json"
+    "tests/vozUnCommitPorTurnoGuard.test.ts",
+    "scripts/guard-files.mjs"
   ],
-  "maxFiles": 6,
-  "maxLines": 300,
-  "dod": "npx vitest run --reporter=dot tests/_scratchB4.test.ts tests/conversationStreamCommit.test.ts tests/conversationTurnSingleRow.test.ts tests/jsReferenceGuard.test.ts tests/rulesSimulator.test.ts tests/transcriptionDedupLoss.test.ts tests/turnCommitGarbageGate.test.ts tests/turnCommitPhrase.test.ts tests/voiceTurnRefireDedup.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/vozCierrePierdeLocucionGuard.test.ts tests/vozDescarteConMotivoGuard.test.ts tests/vozLocucionRecompuestaGuard.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozLocucionRecompuestaGuard.test.ts",
+  "maxFiles": 4,
+  "maxLines": 200,
+  "dod": "npx vitest run --reporter=dot tests/vozUnCommitPorTurnoGuard.test.ts tests/turnRowNoDuplicate.test.ts tests/conversationStreamCommit.test.ts tests/vozDescarteConMotivoGuard.test.ts tests/vozLocucionRecompuestaGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozUnCommitPorTurnoGuard.test.ts",
   "guardExpect": "green",
-  "invariant": {
-    "statement": "Commit del texto sin recomponer (el cuerpo viejo de `reconcileCommitText`, que adoptaba el trozo tal cual): 1 -> 0.",
-    "base": "c584764",
-    "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/turnStream.js','utf8');console.log((s.match(/return wouldShrinkListenLog\\(capture, shown\\) \\? shown : capture/g)||[]).length)\"",
-      "target": 0
-    },
-    "guardFiles": [
-      "tests/vozLocucionRecompuestaGuard.test.ts"
-    ]
-  },
-  "ignore": [
-    ".task/**",
-    "scripts/task-gate*.mjs",
-    "kilo.json"
-  ],
-  "e2eScope": {
-    "src/voice/lib/turnStream.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/lib/turnCommitPhrase.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ]
-  }
+  "ignore": [".task/**", "scripts/task-gate*.mjs", "kilo.json"],
+  "e2eScope": {}
 }
