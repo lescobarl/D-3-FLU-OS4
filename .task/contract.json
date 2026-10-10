@@ -1,25 +1,24 @@
 {
-  "task": "P9.55 - el cierre por turno VIEJO (stale) vuelca la locucion viva: el EVAL del srGap acepta la MISMA condicion que su trigger.",
-  "objective": "Que la locucion viva de un turno abierto hace rato (stale) con contenido nuevo se escriba en la conversacion, en vez de quedarse solo en ULTIMA FRASE y perderse.",
-  "base": "c2f21ae",
+  "task": "P9.56 - GUARD ROJO: la decision de abrir etiqueta NUEVA (Hablante N) tiene que tener UN solo dueno (hoy la implementan 4 modulos).",
+  "objective": "Fijar con un guard nacido ROJO que la acunacion de etiquetas nuevas vive en UN solo modulo, para eliminar la ruta doble medida entre speakerCore.assignSpeaker (worker) y speakerDiarization.resolveConversationSpeaker (hilo principal).",
+  "base": "8f70915",
+  "guardExpect": "red",
   "allow": [
-    "src/voice/lib/conversationStream.js",
-    "tests/vozLocucionVivaLargaGuard.test.ts",
+    "tests/vozIdentidadDuenaUnicaGuard.test.ts",
     "plans/ledger.json"
   ],
   "maxFiles": 6,
   "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts tests/voiceCanonicalPhrase.test.ts tests/conversationStreamCommit.test.ts tests/ingressSimulation.test.ts tests/vozEscenarioInyectado.test.ts tests/turnRowNoDuplicate.test.ts tests/transcriptionDedupLoss.test.ts tests/fluTranscriptPause.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/wakeRowNoiseGuard.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts tests/voiceCanonicalPhrase.test.ts",
-  "guardExpect": "green",
+  "dod": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts",
   "invariant": {
-    "statement": "El EVAL del srGap usa la MISMA condicion que su trigger (silencio O turno viejo), no solo silencio.",
+    "statement": "Un solo modulo acuna etiquetas de hablante nuevas.",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/conversationStream.js','utf8');console.log((s.match(/staleMs < gapMs/g)||[]).length)\"",
-      "target": 1
+      "command": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts",
+      "target": "green"
     },
     "guardFiles": [
-      "tests/vozLocucionVivaLargaGuard.test.ts"
+      "tests/vozIdentidadDuenaUnicaGuard.test.ts"
     ]
   },
   "ignore": [
@@ -27,9 +26,5 @@
     "scripts/task-gate*.mjs",
     "kilo.json"
   ],
-  "e2eScope": {
-    "src/voice/lib/conversationStream.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ]
-  }
+  "e2eScope": {}
 }
