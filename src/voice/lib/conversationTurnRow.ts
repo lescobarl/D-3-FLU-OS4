@@ -55,17 +55,18 @@ export function resolveSpeakerAlias(speakerName: string): string {
  * Hablante que puede ESCRIBIRSE en la fila del turno. DUENO UNICO de la decision,
  * consumido por la puerta unica de la fila (`commitUserTurnRow`).
  *
- * Regla (A5): la etiqueta final SIEMPRE existe. Una etiqueta AUTOMATICA ("Hablante N")
- * —y el NOMBRE que le corresponde por registrado (panel) o por alias de sesion— SOLO
- * entra como medida si hay evidencia acustica declarada; SIN evidencia (o sin etiqueta)
- * la fila lleva el RESPALDO (`getFallbackSpeaker`), nunca queda vacia: medido, 35 de 40
- * filas de usuario salian sin hablante. Un nombre propio introducido por el texto
- * ("soy luis") no es auto y pasa.
+ * Regla (A5, corregida): la etiqueta de DIARIZACION es PROVISIONAL y se escribe TAL CUAL
+ * ("Hablante 2", "luis"…): la evidencia acustica NO decide si se escribe, solo si se
+ * ASCIENDE a nombre propio. El RESPALDO (`getFallbackSpeaker`) se usa SOLO cuando no hay
+ * etiqueta ninguna, para que la fila nunca quede vacia. Un nombre propio SIN evidencia
+ * acustica (p. ej. el del participante activo o el de otra voz) NO se estampa: la fila
+ * conserva su etiqueta de diarizacion (el "soy <nombre>" asciende por el renombre del
+ * registro, que es dato de sesion, no por esta via).
  *
  * @param speakerName etiqueta/nombre que aporta el que llama
  * @param evidenciaAcustica `true` si el nombre viene de una ventana de AUDIO medida
  * @param registered vinculo etiqueta->persona registrada (panel de participantes)
- * @param fallbackSpeaker respaldo cuando no hay nombre util (por defecto, el de config)
+ * @param fallbackSpeaker respaldo cuando NO hay etiqueta (por defecto, el de config)
  * @returns el hablante a escribir (siempre una etiqueta)
  */
 export function resolveRowSpeakerName(
@@ -76,8 +77,11 @@ export function resolveRowSpeakerName(
 ): string {
     const respaldo = String(fallbackSpeaker || '').trim() || getFallbackSpeaker();
     const raw = String(speakerName || '').trim();
+    // El RESPALDO se usa SOLO cuando no hay etiqueta (la fila nunca queda vacia).
     if (!raw) return respaldo;
-    if (isAutoSpeakerLabel(raw) && !evidenciaAcustica) return respaldo;
+    // La etiqueta de DIARIZACION es PROVISIONAL: se escribe TAL CUAL (con su alias de
+    // sesion). La evidencia acustica decide si se ASCIENDE al nombre de la persona
+    // registrada (`registered`), no si se escribe.
     const registrado = evidenciaAcustica ? resolveRegisteredSpeakerName(raw, registered) : '';
     return resolveSpeakerAlias(registrado || raw);
 }
@@ -111,6 +115,9 @@ export function preserveProperSpeaker(
     // acababa con dos nombres para el mismo turno (medido 2026-10-07).
     // A5: sin evidencia no se DEGRADA un nombre ya escrito; si la fila esta vacia se
     // escribe la etiqueta disponible (nunca vacia).
+    // A5 corregida: sin evidencia acustica NO se estampa un nombre propio que no venga
+    // del texto de este turno (el ascenso a nombre propio lo decide la evidencia).
+    if (isProperSpeakerName(next) && !evidenciaAcustica) return current || next;
     if (isAutoSpeakerLabel(next) && !evidenciaAcustica) return current || next;
     if (current && isProperSpeakerName(current) && isAutoSpeakerLabel(next)) return current;
     return next;
@@ -203,6 +210,7 @@ export function updateTurnRowSpeaker(
     // Una etiqueta AUTOMATICA no pisa el nombre propio ya escrito en la fila.
     const objetivo = preserveProperSpeaker(resolved, entry.speakerName, evidenciaAcustica);
     voiceProbe('row-update', {
+        ev: evidenciaAcustica === true,
         turnId,
         pedido: resolved,
         actual: String(entry.speakerName || ''),

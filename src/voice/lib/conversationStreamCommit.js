@@ -167,7 +167,7 @@ export function handleConversationStreamSync(
       setLiveTranscript('')
       openPreviewTurnRef.current = false
     }
-    discardLocution({ reason: DISCARD_REASONS.EMPTY, phrase: '', site: "stream-empty-capture", log: relayLog })
+    if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'empty-capture' })
     return
   }
 
@@ -204,8 +204,9 @@ export function handleConversationStreamSync(
 
   if (!turnCommit) {
     if (wouldShrinkListenLog(capture, publishedLiveRef.current)) {
-      // B1: el descarte pasa por el dueno unico y SIEMPRE deja motivo (antes: solo DEV).
-      discardLocution({ reason: DISCARD_REASONS.SHRINK_PREVIEW, phrase: capture, site: "stream-preview", log: relayLog })
+      // B1 corregido: esto NO es un descarte de locucion (es "no actualizar el preview");
+      // se queda como marca de DEV, fuera del relay (una WARN por interino inundaba el log).
+      if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'shrink-preview' })
       return
     }
     if (capture !== publishedLiveRef.current) {
