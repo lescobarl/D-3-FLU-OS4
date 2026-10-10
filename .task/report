@@ -4608,3 +4608,17 @@ METRICA: listas de fuentes a mano 1 -> 0. GUARD nuevo (nace ROJO) con detector p
 DoD 80 ficheros VERDE = 0 fallos nuevos. fluConfig 2770 (techo 2772, sin lineas netas).
 ALCANCE REAL (0.23): CUBIERTO=el criterio del eco (fuente/ventana/cobertura) con guard y
 metrica; NO CUBIERTO=DoD-producto, suite completa y E2E completa.
+
+================================================================
+B1 - un dueno del descarte, motivo en todos los descartes
+================================================================
+COMMIT 1293514 (phraseDiscard.js + conversationStreamCommit + turnCommitPhrase + guard).
+MEDIDO: 3 descartes del stream solo dejaban fluDebugHot('stream-skip') de DEV; la locucion
+viva bloqueaba con `? false`; el guard anti-alucinacion emitia por su cuenta.
+ARREGLO: `discardLocution` (dueno unico, vocabulario cerrado, emision SIEMPRE con motivo y
+sitio, devuelve el valor de descarte). Cableados los 4 del stream + turnCommitPhrase.
+METRICA: stream-skip (registro solo DEV) 3 -> 0. GUARD nuevo (nace ROJO: el dueno no
+existia) con detector del vocabulario. DoD 10 ficheros VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=el dueno del descarte y los puntos del stream/commit de la
+locucion; NO CUBIERTO=los guards internos del escritor de fila del hook (god-file), el
+DoD-producto, la suite completa y la E2E completa.

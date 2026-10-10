@@ -470,3 +470,12 @@ de P9.64 y contar las filas sin hablante de P9.65.
   Guard `tests/vozEcoTextoRealGuard.test.ts` (nace ROJO). Metrica 1 -> 0.
 - PENDIENTE: A6 (tope+fusion de clusters), B1 (un dueno del descarte con motivo), B4
   (recomponer antes de commitear), B5 (1 commit por turno).
+
+## 2026-10-10 (9) - B1 cerrado (descarte con motivo)
+
+- **B1** (1293514): `src/voice/lib/phraseDiscard.js` (NUEVO) = dueno unico del descarte
+  (`DISCARD_REASONS` cerrado + `discardLocution` que siempre emite motivo/sitio). Cableados
+  los 4 descartes del stream + el de turnCommitPhrase. Guard
+  `tests/vozDescarteConMotivoGuard.test.ts` (nace ROJO). Metrica 3 -> 0.
+- PENDIENTE: B4 (recomponer antes de commitear), B5 (1 commit por turno), A6 (tope+fusion
+  de clusters).
