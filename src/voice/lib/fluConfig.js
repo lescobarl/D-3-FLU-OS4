@@ -184,8 +184,6 @@ export const FLU_CONFIG = {
          * Sin wake: diarización genérica (Hablante N); no inferir «Luis» del texto pasivo.
          */
         requireWakeWordForSpeakerName: true,
-        /** Al registrar por wake, renombrar todas las filas con etiquetas auto que coincidan por voz. */
-        renameSessionAutoLabelsOnRegister: true,
         /** Umbral relajado para no crear Hablante N tras registro con nombre propio. */
         registeredMatchRelax: 1.42,
         /**
