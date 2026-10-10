@@ -239,6 +239,7 @@ export const GUARD_FILES = [
     'tests/vozFlagHuerfanoGuard.test.ts',
     'tests/vozFilaConHablanteGuard.test.ts',
     'tests/vozHablanteFilaUnicaGuard.test.ts',
+    'tests/vozLocucionRecompuestaGuard.test.ts',
     'tests/vozDescarteConMotivoGuard.test.ts',
     'tests/vozEcoTextoRealGuard.test.ts',
     'tests/vozAlucinacionClaraGuard.test.ts',

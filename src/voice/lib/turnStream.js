@@ -3,7 +3,7 @@
  * - Interino → preview («Última frase»), nunca fila en el log
  * - Final → único commit al log + sesión archivada
  */
-import { cleanForSpeech } from './audioMath.js'
+import { cleanForSpeech, speechWords } from './audioMath.js'
 import { phrasesEquivalent, wouldShrinkListenLog } from './activeListen.js'
 import {
   processListenPacket,
@@ -69,8 +69,46 @@ export function applyMicPreview(
  * No afecta a las extensiones ("intervencion" -> "intervencion 2"): eso es
  * crecimiento y la guarda deja pasar.
  */
+/**
+ * true si `part` es un FRAGMENTO CONTIGUO de `whole` (todas sus palabras, en orden y
+ * seguidas). Un trozo del ASR a mitad de frase lo cumple; una frase nueva no.
+ */
+export function isFragmentOfLocution(part = '', whole = '') {
+  const p = speechWords(part)
+  const w = speechWords(whole)
+  if (!p.length || p.length >= w.length) return false
+  for (let i = 0; i + p.length <= w.length; i += 1) {
+    let ok = true
+    for (let j = 0; j < p.length; j += 1) {
+      if (p[j] !== w[i + j]) { ok = false; break }
+    }
+    if (ok) return true
+  }
+  return false
+}
+
+/**
+ * B4 - DUENO UNICO de la RECOMPOSICION de la locucion: si `part` es un trozo de la
+ * locucion completa (`whole`), manda la completa; nunca se commitea un fragmento cortado.
+ * Si no lo es, se conserva `part` (es habla nueva).
+ *
+ * @param {string} part Texto candidato (captura cruda o lo mostrado).
+ * @param {string} whole Locucion completa (ultimo mostrado / texto validado del turno).
+ * @returns {string}
+ */
+export function recomposeLocution(part = '', whole = '') {
+  const candidato = cleanForSpeech(part)
+  const completa = cleanForSpeech(whole)
+  if (!candidato) return completa
+  if (!completa || completa.length <= candidato.length) return candidato
+  return isFragmentOfLocution(candidato, completa) ? completa : candidato
+}
+
 export function reconcileCommitText(capture = '', shown = '') {
-  return wouldShrinkListenLog(capture, shown) ? shown : capture
+  const reconciliado = wouldShrinkListenLog(capture, shown) ? shown : capture
+  // B4: fila y ultima frase son la locucion COMPLETA, tambien cuando el ASR corta el turno
+  // en un trozo del medio ("a comer del" -> "vamos a comer del plato").
+  return recomposeLocution(reconciliado, shown)
 }
 
 export function resolveMicCommitAction(

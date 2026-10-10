@@ -1,29 +1,28 @@
 {
-  "task": "B1 - Un solo dueno del descarte de locuciones, y TODO descarte emite su motivo.",
-  "objective": "Que ningun descarte de locucion sea silencioso: los descartes del stream (preview que encoge, re-entrega del turno, locucion viva, captura vacia) y el del guard anti-alucinacion pasan por `discardLocution` (dueno unico, vocabulario cerrado de motivos), que SIEMPRE emite `motivo=` + `site=` y devuelve el valor de descarte.",
-  "base": "eeeac66",
+  "task": "B4 - La locucion se RECOMPONE antes de commitear: ningun fragmento entra cortado.",
+  "objective": "Que el commit escriba la locucion COMPLETA cuando el ASR cierra el turno con un trozo de ella: dueno unico `recomposeLocution` (turnStream.js), consumido por `reconcileCommitText` (lado ultimo mostrado) y por `resolveTurnCommitPhrase` (lado texto validado del turno).",
+  "base": "c584764",
   "allow": [
-    "src/voice/lib/phraseDiscard.js",
-    "src/voice/lib/conversationStreamCommit.js",
+    "src/voice/lib/turnStream.js",
     "src/voice/lib/turnCommitPhrase.js",
-    "tests/vozDescarteConMotivoGuard.test.ts",
+    "tests/vozLocucionRecompuestaGuard.test.ts",
     "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
-  "maxFiles": 7,
-  "maxLines": 400,
-  "dod": "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/conversationTurnSingleRow.test.ts tests/turnCommitGarbageGate.test.ts tests/turnCommitPhrase.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/vozCierrePierdeLocucionGuard.test.ts tests/vozDescarteConMotivoGuard.test.ts tests/vozRebuildNoPierdeLocucionGuard.test.ts tests/vozRebuildTuberiaCompletaGuard.test.tsx tests/wakeRowNoiseGuard.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozDescarteConMotivoGuard.test.ts",
+  "maxFiles": 6,
+  "maxLines": 300,
+  "dod": "npx vitest run --reporter=dot tests/_scratchB4.test.ts tests/conversationStreamCommit.test.ts tests/conversationTurnSingleRow.test.ts tests/jsReferenceGuard.test.ts tests/rulesSimulator.test.ts tests/transcriptionDedupLoss.test.ts tests/turnCommitGarbageGate.test.ts tests/turnCommitPhrase.test.ts tests/voiceTurnRefireDedup.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/vozCierrePierdeLocucionGuard.test.ts tests/vozDescarteConMotivoGuard.test.ts tests/vozLocucionRecompuestaGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozLocucionRecompuestaGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Descartes del stream registrados SOLO en DEV (fluDebugHot('stream-skip') en conversationStreamCommit.js), es decir sin motivo para la sesion: 3 -> 0.",
-    "base": "eeeac66",
+    "statement": "Commit del texto sin recomponer (el cuerpo viejo de `reconcileCommitText`, que adoptaba el trozo tal cual): 1 -> 0.",
+    "base": "c584764",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationStreamCommit.js','utf8');console.log((s.match(/fluDebugHot\\('stream-skip'/g)||[]).length)\"",
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/turnStream.js','utf8');console.log((s.match(/return wouldShrinkListenLog\\(capture, shown\\) \\? shown : capture/g)||[]).length)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozDescarteConMotivoGuard.test.ts"
+      "tests/vozLocucionRecompuestaGuard.test.ts"
     ]
   },
   "ignore": [
@@ -32,10 +31,7 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/phraseDiscard.js": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/voice/lib/conversationStreamCommit.js": [
+    "src/voice/lib/turnStream.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
     "src/voice/lib/turnCommitPhrase.js": [

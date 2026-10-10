@@ -20,6 +20,7 @@
 import { cleanForSpeech, stripLeadingWakeEcho } from './audioMath.js'
 import { getWakeWords } from './wakeTurnCommit.js'
 import { resolveCommittablePhrase } from './garbageTranscript.js'
+import { recomposeLocution } from './turnStream.js'
 import { discardLocution } from './phraseDiscard.js'
 
 const clip = (value) => cleanForSpeech(String(value || '')).slice(0, 80)
@@ -53,5 +54,7 @@ export function resolveTurnCommitPhrase({ capture, fallback = '', log, wakeWords
       `captura del ASR descartada (motivo=${reason}) "${clip(capture)}" → se usa el texto validado del turno "${canonical.slice(0, 80)}"`,
     )
   }
-  return canonical
+  // B4: si el ASR cerro el turno con un TROZO de la locucion, manda la locucion completa
+  // (el texto validado del turno); nunca se commitea un fragmento cortado.
+  return recomposeLocution(canonical, canonicalFallback)
 }
