@@ -4400,3 +4400,29 @@ P9.61 - TUBERIA COMPLETA: el rebuild del watchdog ya esta medido por temporizado
   ALCANCE REAL (0.23): CUBIERTO=la capa del watchdog con temporizador (disparo real del
   rebuild + cierre de la locucion confirmada) y el control negativo de descarte;
   NO CUBIERTO=la suite completa (gate de CI) y el DoD-producto (pantalla del dueno).
+
+================================================================
+P9.63 - srGap vuelca SOLO con silencio (se retira la rama "turno viejo" de P9.55)
+================================================================
+COMMIT 31b904d (src + tests + contrato).
+DEFECTO MEDIDO (sesion del dueno 2026-10-10 15:02-15:14): 26 de 26 srGap con
+reason=sr-live-turn-stale; la "ultima frase" se volcaba a la conversacion A MITAD del
+dictado (fila nacida en el "10", luego reemplazada). Spec del dueno: la ultima frase
+ACUMULA y se vacia SOLO con espacio real (silencio) o cambio de hablante.
+ARREGLO (un solo dueno, sin ruta nueva): TRIGGER (resolveSrGapTrigger) y EVAL
+(evaluateSrGapSegmentCommit) comparten la MISMA condicion -SOLO silencio-. Se retiran
+las ramas "stale"/"staleTurn" del trigger y del eval. El texto no se pierde: lo escribe el
+cierre REAL (silencio/onend/cambio de hablante). Se conserva el cooldown post-commit
+config-driven (postCommitCooldownMs): la referencia huerfana lastCommitAtMs que dejo el
+retiro del parametro se restauro con su default (la pillo jsReferenceGuard).
+METRICA: staleTurn/staleMs en src/voice/lib 4 -> 0 (target 0).
+GUARD (vozLocucionVivaLargaGuard, lint:guards) re-derivado: REPLAY del log 2026-10-09 17:19
+(sinceResult=237ms/sinceCommit=10272ms) -> NO flush con el ASR activo; el silencio SI escribe
+la cola. Nacido rojo en la base (5 fallos). Tests derivados re-escritos (fluTranscriptPause,
+srGapIdleProbeGuard). 33 casos verdes en 4 ficheros.
+VALIDADO: npm run gate VERDE ("metrica base=4 actual=0 target=0 - guard base=1 actual=0");
+npm run lint 227 ficheros / 1894 casos VERDE (incluye dodScopeGuard P7.88 -> se anade
+tests/voiceCanonicalPhrase.test.ts al dod; y jsReferenceGuard) + eslint 0 + typecheck 0.
+ALCANCE REAL (0.23): CUBIERTO=la rama "turno viejo" del srGap (trigger + eval, con REPLAY del
+log del dueno) y la re-derivacion de los tests del area; NO CUBIERTO=la suite completa (gate de
+CI) y el DoD-producto (pantalla del dueno).
