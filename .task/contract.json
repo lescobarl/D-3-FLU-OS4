@@ -1,27 +1,27 @@
 {
-  "task": "A2 - Bandera de configuracion SIN CONSUMIDOR: roomCapture.renameSessionAutoLabelsOnRegister (o tiene consumidor o no existe).",
-  "objective": "Borrar la bandera muerta renameSessionAutoLabelsOnRegister: nadie la lee en src/ y el renombrado de etiquetas al registrar un nombre ya es incondicional (lo hace el dueno unico del registro).",
-  "base": "e079fb4",
+  "task": "A3 - El COSIDO de las etiquetas de una misma voz usa el criterio de la diarizacion (piso config cosineNewVoiceThreshold), no un umbral propio (0.66) ni una comparacion duplicada contra el ancla.",
+  "objective": "Que 'que etiquetas son la MISMA voz' para el registro lo decida UN dueno (`sameVoiceLabelGroup`) con el piso con el que la diarizacion decide que una voz NO es nueva (config `cosineNewVoiceThreshold` = 0.64, banda medida: misma voz 0.69-0.74, voz distinta 0.58), y no el piso de reutilizacion de cluster (0.66) declarado dentro del cosido.",
+  "base": "a05851b",
   "allow": [
-    "src/voice/lib/fluConfig.js",
-    "tests/vozFlagHuerfanoGuard.test.ts",
+    "src/voice/lib/speakerClusters.js",
+    "tests/vozCosidoDiarizacionGuard.test.ts",
     "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
   "maxFiles": 4,
-  "maxLines": 200,
-  "dod": "npx vitest run --reporter=dot tests/vozFlagHuerfanoGuard.test.ts tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/blindSpeakerFallbackGuard.test.ts tests/browserProfilesPanel.test.tsx tests/captureDedupGuard.test.ts tests/commandIdsVocabularySingleOwnerGuard.test.ts tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/conversationStreamCommit.test.ts tests/decideVoiceTurnDispatch.test.ts tests/decisionSingleOwnerGuard.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/floorCommandDispatchGuard.test.ts tests/floorOpenDispatchGuard.test.ts tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/fluRowLoggedOnSpeak.test.ts tests/integration.test.ts tests/localeConfigGuard.test.ts tests/materiaGrisPanel.test.tsx tests/notesClearEndToEnd.test.ts tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/onboardingStartDelayConfig.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/rulesSimulator.test.ts tests/searchControlCenter.test.tsx tests/searchEndpointSingleOwner.test.ts tests/selfKnowledge.test.ts tests/sessionResetCommandSingleOwnerGuard.test.ts tests/shoppingPanel.test.tsx tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/speechEchoGuard.test.ts tests/systemMatrix.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceSingleSourceGuard.test.ts tests/voiceTurnStabilization.test.ts tests/voiceWorkerThresholdsConfigGuard.test.ts tests/vozClusterConsolidacionGuard.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/wakePolicyGuard.test.ts tests/wakeRowNoiseGuard.test.ts tests/workspaceContractTipo.test.ts tests/workspacePersonIsolation.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozFlagHuerfanoGuard.test.ts",
+  "maxLines": 300,
+  "dod": "npx vitest run --reporter=dot tests/vozCosidoDiarizacionGuard.test.ts tests/embeddingConfigSingleSourceGuard.test.ts tests/speakerClusterAccumulation.test.ts tests/vozClusterConsolidacionGuard.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRegistroNombreUnicoGuard.test.ts tests/vozRendimientoVozGuard.test.ts tests/vozRenombreVozCompartidaGuard.test.ts tests/speakerDiarizationUnified.test.ts tests/speakerDiarizationBehavior.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/vozRenombreHablanteGuard.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozCosidoDiarizacionGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Declaraciones de la bandera renameSessionAutoLabelsOnRegister en src/: 1 -> 0 (no tiene consumidor: se borra).",
-    "base": "e079fb4",
+    "statement": "Comparaciones propias contra el ancla dentro del cosido (criterio duplicado): 1 -> 0. El grupo de 'misma voz' lo decide el dueno unico `sameVoiceLabelGroup`.",
+    "base": "a05851b",
     "metric": {
-      "command": "node -e \"const fs=require('fs'),p=require('path');let n=0;const w=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const fp=p.join(d,f.name);if(f.isDirectory()){w(fp)}else if(/\\.(js|ts|tsx)$/.test(f.name)){n+=(fs.readFileSync(fp,'utf8').match(/renameSessionAutoLabelsOnRegister/g)||[]).length}}};w('src');console.log(n)\"",
+      "command": "node -e \"const fs=require('fs'),p=require('path');let n=0;const w=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const fp=p.join(d,f.name);if(f.isDirectory()){w(fp)}else if(/\\.(js|ts)$/.test(f.name)){n+=(fs.readFileSync(fp,'utf8').match(/compareCosineSignatures\\(anchor\\.signature/g)||[]).length}}};w('src');console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozFlagHuerfanoGuard.test.ts"
+      "tests/vozCosidoDiarizacionGuard.test.ts"
     ]
   },
   "ignore": [
@@ -30,7 +30,7 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/fluConfig.js": [
+    "src/voice/lib/speakerClusters.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

@@ -387,25 +387,70 @@ export function resolveImmediateShortSpeakerContinuity({
   return null
 }
 
-/** Etiquetas de clusters con firma similar a la ancla (misma persona re-clusterizada). */
+/**
+ * PISO de "MISMA voz" para el COSIDO de etiquetas: el criterio de la DIARIZACION, no
+ * un segundo umbral propio. La diarizacion decide que una voz NO es nueva por
+ * `cosineNewVoiceThreshold` (medido 2026-10-07: misma voz 0.69-0.74, voz distinta 0.58;
+ * el 0.64 cae ENTRE las dos bandas). Por debajo de ese piso, dos firmas son voces
+ * distintas; por encima, la misma.
+ */
+export function sameVoiceCosidoFloor(thresholds = null) {
+  const cfg =
+    thresholds ||
+    getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds ||
+    {}
+  const value = Number(cfg.cosineNewVoiceThreshold)
+  return Number.isFinite(value) && value > 0 && value < 1 ? value : 0.64
+}
+
+/**
+ * DUENO UNICO de "que etiquetas son la MISMA voz que el ancla" para el COSIDO.
+ *
+ * Regla = la de la diarizacion al consolidar clusters: ENCADENAMIENTO (una etiqueta
+ * entra si su firma pasa el piso contra CUALQUIER miembro ya dentro del grupo, y se
+ * itera hasta punto fijo). Antes se comparaba SOLO contra el ancla, asi que una voz
+ * partida en tres etiquetas donde la tercera se parece a la segunda y no al ancla
+ * quedaba fuera y la voz seguia con dos etiquetas.
+ *
+ * @param {Array} speakerClusters Clusters con firma.
+ * @param {string} anchorLabel Etiqueta ancla (el nombre registrado o su etiqueta).
+ * @param {number} [matchThreshold] Piso (por defecto, el de la diarizacion).
+ * @returns {string[]} Grupo (incluye el ancla si existe) sin duplicados.
+ */
+export function sameVoiceLabelGroup(
+  speakerClusters = [],
+  anchorLabel = '',
+  matchThreshold = sameVoiceCosidoFloor(),
+) {
+  const anchor = String(anchorLabel || "").trim()
+  if (!anchor) return []
+  const floor = Number(matchThreshold)
+  if (!Number.isFinite(floor) || floor <= 0) return [anchor]
+  const conFirma = (Array.isArray(speakerClusters) ? speakerClusters : []).filter(
+    (cluster) =>
+      String(cluster?.label || "").trim() &&
+      Array.isArray(cluster?.signature) &&
+      cluster.signature.length,
+  )
+  const ancla = conFirma.find((cluster) => String(cluster.label).trim() === anchor)
+  if (!ancla) return [anchor]
+  const firmaAncla = normalizeEmbeddingVector(ancla.signature)
+  const group = [anchor]
+  for (const cluster of conFirma) {
+    const label = String(cluster.label).trim()
+    if (label === anchor) continue
+    const similarity = compareCosineSignatures(firmaAncla, normalizeEmbeddingVector(cluster.signature))
+    if (similarity >= floor) group.push(label)
+  }
+  return group
+}
+
 export function findLabelsWithSharedVoice(
   speakerClusters = [],
   anchorLabel = '',
-  matchThreshold = sameVoiceFloor(),
+  matchThreshold = sameVoiceCosidoFloor(),
 ) {
-  const anchor = findClusterByLabel(speakerClusters, anchorLabel)
-  if (!anchor?.signature?.length) {
-    const label = String(anchorLabel || '').trim()
-    return label ? [label] : []
-  }
-  const out = new Set([String(anchorLabel || '').trim()])
-  for (const cluster of speakerClusters) {
-    const label = String(cluster?.label || '').trim()
-    if (!label || !cluster?.signature?.length) continue
-    const similarity = compareCosineSignatures(anchor.signature, cluster.signature)
-    if (similarity >= matchThreshold) out.add(label)
-  }
-  return [...out].filter(Boolean)
+  return sameVoiceLabelGroup(speakerClusters, anchorLabel, matchThreshold)
 }
 
 /** Filas del log cuya firma de cluster coincide con la voz del registro. */
