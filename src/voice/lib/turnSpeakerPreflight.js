@@ -7,7 +7,7 @@ import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { isAutoSpeakerLabel } from './speakerCore.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
-import { consolidateSpeakerClusters } from './speakerClusters.js'
+import { consolidateSpeakerClusters, sameVoiceFloor } from './speakerClusters.js'
 import { voiceProbe } from './voiceProbe'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -16,14 +16,13 @@ import { relayLog } from '../../lib/clientLogRelay'
 
 const preflightByTurn = new Map()
 
-/** Umbral de fusion de clusters: el de REUTILIZACION ("misma voz") de la config.
- *  Medido: misma voz 0.69-0.74, distinta 0.58 -> el umbral (0.66) cae entre las dos
- *  bandas; NO se usa el de "misma persona" (0.85) porque los clusters de una misma
- *  voz entre turnos quedan ~0.70 y nunca se fusionarian. */
+/** Umbral de fusion de clusters: el de REUTILIZACION ("misma voz"). Medido: misma
+ *  voz 0.69-0.74, distinta 0.58 -> el umbral (0.66) cae entre las dos bandas; NO se
+ *  usa el de "misma persona" (0.85) porque los clusters de una misma voz entre turnos
+ *  quedan ~0.70 y nunca se fusionarian. Delegado en el DUENO UNICO `sameVoiceFloor`
+ *  (antes esta funcion era una TERCERA copia del mismo criterio). */
 function clusterMergeFloor() {
-  const thresholds = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
-  const floor = Number(thresholds.productionClusterReuseThreshold)
-  return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : 0.66
+  return sameVoiceFloor()
 }
 
 /**

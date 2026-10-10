@@ -1,31 +1,28 @@
 {
-  "task": "P9.63 - el srGap vuelca SOLO con silencio: se retira la rama 'turno viejo' que P9.55 metio y que vaciaba la conversacion a mitad del dictado.",
-  "objective": "Que la ultima frase ACUMULE y se vacie solo con espacio real (silencio) o cambio de hablante, segun la spec del dueno (2026-10-10): el cierre por 'turno viejo' con el ASR activo escribia la fila a mitad del dictado (medido: 26 de 26 srGap por sr-live-turn-stale, fila nacida en el '10' y reemplazada).",
-  "base": "daf0009",
+  "task": "P9.66 - 'soy <nombre>' debe renombrar la MISMA voz: el umbral de 'misma voz' era un literal (0.78) POR ENCIMA de la banda medida (0.69-0.74), asi que la unificacion de etiquetas era insatisfacible y ninguna fila cambiaba de nombre.",
+  "objective": "Que 'Okay flu soy Luz' (y cualquier registro de participante) sustituya TODAS las etiquetas automaticas que son la MISMA voz por el nombre propio, con UN solo dueno del umbral de 'misma voz' (config productionClusterReuseThreshold) en vez de literales por encima de la banda medida.",
+  "base": "ac622ef",
   "allow": [
-    "src/voice/lib/fluTranscriptPause.js",
-    "src/voice/lib/conversationStream.js",
-    "tests/vozLocucionVivaLargaGuard.test.ts",
-    "tests/fluTranscriptPause.test.ts",
-    "tests/srGapIdleProbeGuard.test.ts",
+    "src/voice/lib/speakerClusters.js",
+    "src/voice/lib/turnSpeakerPreflight.js",
+    "tests/vozRenombreVozCompartidaGuard.test.ts",
+    "scripts/guard-files.mjs",
     "plans/ledger.json"
   ],
   "maxFiles": 7,
   "maxLines": 900,
-  "dod": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts tests/fluTranscriptPause.test.ts tests/srGapIdleProbeGuard.test.ts tests/vozBloqueLargoPierdeFilaGuard.test.ts tests/vozCierrePierdeLocucionGuard.test.ts tests/vozRebuildNoPierdeLocucionGuard.test.ts tests/ingressSimulation.test.ts tests/conversationStreamCommit.test.ts tests/voiceCanonicalPhrase.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozLocucionVivaLargaGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozRenombreVozCompartidaGuard.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreHablanteGuard.test.ts tests/vozClusterConsolidacionGuard.test.ts tests/turnSpeakerPreflight.test.ts tests/turnSpeakerCommit.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerDiarizationUnified.test.ts tests/speakerClusterAccumulation.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerIdentitySession.test.ts tests/vozHablanteFilaUnicaGuard.test.ts tests/conversationStreamCommit.test.ts tests/turnIdentityPipeline.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozRenombreVozCompartidaGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Ramas de 'turno viejo' en el cierre por srGap (staleTurn/staleMs en src/voice/lib): 4 -> 0.",
-    "base": "daf0009",
+    "statement": "Umbrales de 'misma voz' HARDCODEADOS en las funciones de unificacion (matchThreshold = 0.78 en src/voice/lib/speakerClusters.js): 2 -> 0.",
+    "base": "ac622ef",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const f=['src/voice/lib/fluTranscriptPause.js','src/voice/lib/conversationStream.js'];const s=f.map((x)=>fs.readFileSync(x,'utf8')).join('\\n');console.log((s.split('staleTurn').length-1)+(s.split('staleMs').length-1))\"",
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/speakerClusters.js','utf8');console.log((s.split('matchThreshold = 0.78').length-1))\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozLocucionVivaLargaGuard.test.ts",
-      "tests/fluTranscriptPause.test.ts",
-      "tests/srGapIdleProbeGuard.test.ts"
+      "tests/vozRenombreVozCompartidaGuard.test.ts"
     ]
   },
   "ignore": [
@@ -34,10 +31,10 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/fluTranscriptPause.js": [
+    "src/voice/lib/speakerClusters.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/conversationStream.js": [
+    "src/voice/lib/turnSpeakerPreflight.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

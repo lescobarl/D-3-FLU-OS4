@@ -19,6 +19,28 @@ export function cosineThreshold(thresholds = {}, key, fallback) {
   return Number.isFinite(value) && value > 0 && value <= 1 ? value : fallback
 }
 
+/**
+ * DUENO UNICO del umbral de "MISMA VOZ" (dos clusters de la MISMA persona
+ * re-clusterizada). MEDIDO (debug.log del dueno): MISMA voz 0.69-0.74, DISTINTA
+ * 0.58; el umbral tiene que caer ENTRE las dos bandas, y el valor validado y
+ * config-driven es `productionClusterReuseThreshold` (0.66) -el mismo que ya usaba
+ * `turnSpeakerPreflight.clusterMergeFloor` para consolidar-.
+ *
+ * DEFECTO MEDIDO (P9.66): `findLabelsWithSharedVoice`/`findSpeakerLabelsMatchingSignature`
+ * traian el umbral HARDCODEADO en 0.78, POR ENCIMA del techo de la banda de la misma
+ * voz (0.74): el predicado era INSATISFACIBLE para la clase que dice cubrir (dos
+ * clusters de la misma voz nunca llegan a 0.78), asi que el "soy Luz" jamas unificaba
+ * sus etiquetas automaticas y NINGUNA fila cambiaba de nombre. Un dueno, un valor.
+ *
+ * @param {object|null} [thresholds] bloque `conversationSpeakerThresholds` (o se lee de config)
+ * @returns {number} umbral coseno de "misma voz"
+ */
+export function sameVoiceFloor(thresholds = null) {
+  const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
+  const floor = Number(cfg?.productionClusterReuseThreshold)
+  return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : 0.66
+}
+
 /** Solo las últimas N ms de chunks — evita copiar/analizar todo el buffer en cada commit. */
 export function flattenChunksTail(chunks = [], maxSamples = 0) {
   if (!chunks.length || maxSamples <= 0) return new Float32Array(0)
@@ -369,7 +391,7 @@ export function resolveImmediateShortSpeakerContinuity({
 export function findLabelsWithSharedVoice(
   speakerClusters = [],
   anchorLabel = '',
-  matchThreshold = 0.78,
+  matchThreshold = sameVoiceFloor(),
 ) {
   const anchor = findClusterByLabel(speakerClusters, anchorLabel)
   if (!anchor?.signature?.length) {
@@ -391,7 +413,7 @@ export function findSpeakerLabelsMatchingSignature(
   speakerClusters = [],
   signatureVector = [],
   labels = [],
-  matchThreshold = 0.78,
+  matchThreshold = sameVoiceFloor(),
 ) {
   const vector = normalizeEmbeddingVector(signatureVector)
   if (!vector.length) return []
