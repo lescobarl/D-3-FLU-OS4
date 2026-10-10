@@ -4567,3 +4567,16 @@ limpiezas fuera del dueno 1 -> 0. GUARD nuevo (nace ROJO) con detector por confi
 DoD 78 ficheros VERDE = 0 fallos nuevos. fluConfig dentro de techo (bloque comprimido).
 ALCANCE REAL (0.23): CUBIERTO=el ciclo de vida del primario por comando; NO CUBIERTO=DoD-
 producto, suite completa y E2E completa.
+
+================================================================
+A5 - ninguna fila de usuario sin etiqueta (respaldo en el decisor)
+================================================================
+COMMITS 1c9e1e8 (guards) · 985380b (src + ledger).
+DEFECTO: el decisor unico devolvia '' (sin etiqueta y auto sin evidencia) -> 35/40 filas
+de usuario sin hablante. ARREGLO: respaldo de config (`getFallbackSpeaker`) en esos dos
+casos; sin evidencia NO se inventa un nombre propio (P9.52 se conserva) y nada ya escrito
+se degrada (`preserveProperSpeaker` -> `current || next`).
+METRICA: salidas vacias del decisor 2 -> 0. GUARD nuevo (nace ROJO) + reparacion de criterio
+en 3 guards (commit solo de tests, 0.22). DoD 16 ficheros VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=la regla de la etiqueta de fila con su guard y metrica;
+NO CUBIERTO=DoD-producto, suite completa y E2E completa.

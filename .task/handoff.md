@@ -441,3 +441,12 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - PENDIENTE del plan: A5 (ninguna fila sin hablante), A6 (una voz = un cluster), B1 (descarte
   con motivo), B2 (eco contra el texto real de FLU: MEDIR primero), B3 (solo alucinacion clara),
   B4 (recomponer antes de commitear), B5 (1 commit por turno).
+
+## 2026-10-10 (6) - A5 cerrado (ninguna fila sin hablante)
+
+- **A5** (1c9e1e8 guards; 985380b src): `resolveRowSpeakerName` devuelve el RESPALDO de
+  config cuando no hay nombre medido; `preserveProperSpeaker` no deja la fila vacia.
+  Guard `tests/vozFilaConHablanteGuard.test.ts` (nace ROJO). Metrica 2 -> 0.
+- PENDIENTE del plan: A6 (una voz = un cluster: tope/fusion), B1 (descarte con motivo),
+  B2 (eco contra el texto real de FLU: MEDIR antes de tocar), B3 (solo alucinacion clara),
+  B4 (recomponer antes de commitear), B5 (1 commit por turno).
