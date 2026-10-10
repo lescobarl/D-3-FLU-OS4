@@ -121,7 +121,7 @@ export const FLU_CONFIG = {
       conversationMinVoicedMs: 8,
       /** Voz mínima para nuevo hablante (ms); bajo en sala/TV para no perder cambios de voz. */
       conversationMinVoicedForNewMs: 2200,
-      conversationMaxAutoSpeakers: 0,
+      conversationMaxAutoSpeakers: 6,
       /** Umbrales de similitud coseno entre embeddings WavLM-SV 512-D (mayor = misma persona). */
       conversationSpeakerThresholds: {
         /** Misma persona con variación natural de tono NO crea H2/H3. Subido para separar voces claras. */

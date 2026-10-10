@@ -7,7 +7,7 @@ import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { isAutoSpeakerLabel } from './speakerCore.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
-import { consolidateSpeakerClusters, sameVoiceFloor } from './speakerClusters.js'
+import { capAndFuseSpeakerClusters, sameVoiceFloor } from './speakerClusters.js'
 import { voiceProbe } from './voiceProbe'
 import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -21,6 +21,10 @@ const preflightByTurn = new Map()
  *  usa el de "misma persona" (0.85) porque los clusters de una misma voz entre turnos
  *  quedan ~0.70 y nunca se fusionarian. Delegado en el DUENO UNICO `sameVoiceFloor`
  *  (antes esta funcion era una TERCERA copia del mismo criterio). */
+/** TOPE de etiquetas automaticas de la sesion (config; 0 = sin tope). */
+function autoSpeakerCap() {
+  return Number(FLU_CONFIG.voiceIdentity?.capture?.conversationMaxAutoSpeakers) || 0
+}
 function clusterMergeFloor() {
   return sameVoiceFloor()
 }
@@ -69,7 +73,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
   // del dueno 2026-10-07); la fusion es segura (misma firma, nombres propios exentos).
   const emitClusters = (clusters) => {
     if (typeof onClusters !== 'function' || !clusters?.length) return
-    onClusters(consolidateSpeakerClusters(clusters, clusterMergeFloor()))
+    onClusters(capAndFuseSpeakerClusters(clusters, { maxAuto: autoSpeakerCap(), floor: clusterMergeFloor() }))
   }
 
   const prior = preflightByTurn.get(id)

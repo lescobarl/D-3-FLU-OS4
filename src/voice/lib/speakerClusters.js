@@ -4,7 +4,7 @@
  * Única fuente de estas operaciones; el resolver (speakerDiarization.js) las consume.
  */
 import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
-import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
+import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
 import { foldSpeakerKey, getVoiceIdentityConfig, isRegisteredSpeakerLabel } from './speakerLabels.js'
 import { getPassiveBufferMs } from './micCapture.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
@@ -472,6 +472,51 @@ export function findSpeakerLabelsMatchingSignature(
   return [...out].filter(Boolean)
 }
 
+/** Numero de etiquetas AUTOMATICAS (Hablante N) con firma entre los clusters. */
+export function autoSpeakerCount(speakerClusters = []) {
+  return (Array.isArray(speakerClusters) ? speakerClusters : []).filter(
+    (cluster) => isAutoSpeakerLabel(String(cluster?.label || '')) && Array.isArray(cluster?.signature) && cluster.signature.length,
+  ).length
+}
+
+/**
+ * DUENO UNICO del TOPE + FUSION de los clusters de una sesion (A6: una voz = un cluster).
+ *
+ * Orden (una sola via):
+ *   1) FUSION por el criterio de la DIARIZACION: delega en `consolidateSpeakerClusters`
+ *      (mismo dueno, sin copia) con el piso de "misma voz" (`sameVoiceFloor`).
+ *   2) TOPE de etiquetas AUTOMATICAS: si el numero supera `maxAuto`, el exceso se funde en
+ *      el cluster MAS PARECIDO (por coseno); es el precio declarado del tope (mejor una
+ *      etiqueta de mas que un crecimiento sin freno: medido H1..H5 con DOS personas).
+ *
+ * @param {Array} speakerClusters Clusters de la sesion (no se muta el array: se devuelve nuevo).
+ * @param {{ maxAuto?: number, floor?: number }} [options]
+ * @returns {Array} clusters fusionados y acotados
+ */
+export function capAndFuseSpeakerClusters(speakerClusters = [], { maxAuto = 0, floor = 0 } = {}) {
+  const piso = Number(floor)
+  let out = piso > 0 && piso <= 1 ? consolidateSpeakerClusters(speakerClusters, piso) : [...speakerClusters]
+  const tope = Number(maxAuto)
+  if (Number.isFinite(tope) && tope > 0) {
+    while (autoSpeakerCount(out) > tope) {
+      const autos = out.filter((cluster) => isAutoSpeakerLabel(String(cluster?.label || '')))
+      const sobran = autos[autos.length - 1]
+      const otros = out.filter((cluster) => cluster !== sobran)
+      if (!otros.length) break
+      let mejor = otros[0]
+      let mejorSim = -2
+      for (const candidato of otros) {
+        const a = normalizeEmbeddingVector(sobran.signature)
+        const b = normalizeEmbeddingVector(candidato.signature)
+        const sim = a.length && b.length ? compareCosineSignatures(a, b) : -1
+        if (sim > mejorSim) { mejorSim = sim; mejor = candidato }
+      }
+      updateClusterSignature(mejor, normalizeEmbeddingVector(sobran.signature))
+      out = out.filter((cluster) => cluster !== sobran)
+    }
+  }
+  return out
+}
 /**
  * CONSOLIDA clusters de la MISMA voz: fusiona los que tienen firma muy similar en
  * el mas antiguo. MEDIDO en el log del dueno (2026-10-07 17:28-17:33): con 2
