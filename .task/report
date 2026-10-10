@@ -4371,3 +4371,32 @@ P9.59 - PERDIDA DE TRANSCRIPCION: el commit sin fila marcaba la locucion como em
   ALCANCE REAL (obligatorio, 0.23): CUBIERTO=la perdida de la locucion al cierre (causa
   medida, guard de comportamiento nacido rojo, metrica 5->3, e2e real del flujo);
   NO CUBIERTO=la suite completa (gate de CI) y el DoD-producto (su pantalla, localhost:5173).
+
+P9.61 - TUBERIA COMPLETA: el rebuild del watchdog ya esta medido por temporizador (cierra el hueco de P9.60)
+  commit: 778d922 (test + lint:guards + contrato; SIN cambios en src)
+  QUE FALTABA: el cierre de P9.60 se apoyo en (a) comportamiento del estado real del
+  ingress y (b) el cableado del hook leido como texto. Ningun test montaba el hook y
+  disparaba el WATCHDOG por temporizador, que es la capa donde ocurre la perdida.
+  NUEVO GUARD (en lint:guards): tests/vozRebuildTuberiaCompletaGuard.test.tsx monta el
+  hook real (renderHook) con conversacion activa, arranca la escucha, emite onresult con
+  forma de SpeechRecognitionEvent sobre el objeto de reconocimiento (unica frontera
+  sustituida) y avanza fake timers 6000 ms para que el watchdog cumpla conversationStallMs
+  (4,2 s) y haga REBUILD. INGRESS, COMMIT y WATCHDOG son REALES.
+  EVIDENCIA (born-red medido con la version PREVIA al arreglo, commit 43a7a96 copiado a
+  mano sobre el arbol, porque el base del contrato es posterior):
+    - caso 1: filas=[] y onContractResolved NUNCA llamado -> la locucion de 169 chars se
+      pierde en la capa del watchdog = EL DEFECTO.
+    - control negativo (INTERINO en vuelo): verde en base Y con el arreglo.
+    - con el arreglo: la fila del turno lleva "voy a hacer una prueba..." y el contrato
+      se resuelve (payload de fila + userCommitOnly + contrato).
+    - anti-vacuidad: se exige reconocedor creado 2+ veces (arranque + rebuild); pasa en
+      base y con el arreglo -> el rojo no es vacio.
+  MECANIZADO EN LA PUERTA: el contrato declara invariant.base = 43a7a96 y la metrica se
+  mide sobre SRC (hasConfirmedOpenLine 0 -> 1), asi el gate copia el guard en ese worktree
+  y comprueba el rojo: "metric base=0 actual=1 target=1 - guard base=1 actual=0".
+  VALIDADO: npm run gate VERDE; npm run lint 227 ficheros / 1893 casos VERDE (incluye
+  guardMutationGuard, dodScopeGuard, instrumentIntegrityGuard, godFileSizeGuard, eolGuard)
+  + eslint 0 + npm run typecheck 0.
+  ALCANCE REAL (0.23): CUBIERTO=la capa del watchdog con temporizador (disparo real del
+  rebuild + cierre de la locucion confirmada) y el control negativo de descarte;
+  NO CUBIERTO=la suite completa (gate de CI) y el DoD-producto (pantalla del dueno).
