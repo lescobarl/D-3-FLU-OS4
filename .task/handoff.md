@@ -415,3 +415,10 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - NO CUBIERTO por el agente: el DoD-producto (pantalla: "okay flu soy Luz" en localhost:5173
   y los turnos siguientes con su nombre), suite completa y E2E completa
   (spec del bloque: tests/e2e/voz-escenario-dueno.spec.ts).
+
+## 2026-10-10 (3) - A2 cerrado (bandera muerta)
+
+- **A2** (201ddf4): `roomCapture.renameSessionAutoLabelsOnRegister` borrada (sin consumidor).
+  Guard `tests/vozFlagHuerfanoGuard.test.ts` (lint:guards, nace ROJO). Metrica 1 -> 0.
+- SIGUIENTE: A3 (coser clusters con el criterio de la diaarizacion, no el 0.66), A4, A5, A6,
+  B1..B5. Plan completo en el mensaje del dueno (2026-10-10).

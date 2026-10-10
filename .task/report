@@ -4530,3 +4530,14 @@ NO VALIDADO: DoD-producto (pantalla del dueno), suite completa (CI) y E2E comple
 ALCANCE REAL (0.23): CUBIERTO=las dos rutas registrando lo mismo (cosido de la MISMA voz +
 primario "presented") con guard y metrica mecanizada; NO CUBIERTO=el DoD-producto, la suite
 completa y la E2E completa.
+
+================================================================
+A2 - Bandera muerta retirada (renameSessionAutoLabelsOnRegister)
+================================================================
+COMMIT 201ddf4 (fluConfig.js + guard + lint:guards + contrato).
+MEDIDO: la bandera solo existia en su declaracion; ningun consumidor en src/.
+DECISION: borrar. METRICA: declaraciones en src/ 1 -> 0. GUARD nuevo (nace ROJO:
+"expected true to be false") en lint:guards con prueba de detector por los dos lados.
+DoD 69 ficheros (importadores de fluConfig.js por 0.25) VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=la bandera y su guard/metrica; NO CUBIERTO=DoD-producto,
+suite completa y E2E completa.
