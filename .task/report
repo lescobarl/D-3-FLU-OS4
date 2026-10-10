@@ -4503,3 +4503,30 @@ NO VALIDADO:
 ALCANCE REAL (0.23): CUBIERTO=la unificacion del registro en un dueno y que la ruta del
 COMANDO registre de verdad, con detector medido; NO CUBIERTO=el DoD-producto, la suite
 completa y la E2E completa.
+
+================================================================
+A1 (huecos 1 y 2) - el registro del nombre aplica el MISMO efecto por las DOS rutas
+================================================================
+COMMITS: fbb5647 (guard + reparacion de detector) · c0b27bc (src + contrato) · ledger/report.
+HUECOS CERRADOS: (1) el comando no recibia los clusters -> no cosia "Hablante 3"/"4";
+(2) nadie del registro fijaba el primario -> los turnos siguientes caian a "Hablante N".
+CAMBIOS: registerSpeakerIdentity({refs, source="presented"}) fija el primario;
+registerSpeakerIdentityFromCommand({clusters, refs}); turnSpeakerCommit pasa refs; el hook
+delega la ruta "presented" en el dueno y PUBLICa sus refs en src/app/useIdentitySessionRef.ts
+(NUEVO, sin estado propio); App pasa el puente al hook y a handleNavigationCommand; el caso
+REGISTRAR_PARTICIPANTE usa la MISMA evidencia. Hook 4537 (techo 4539) - App 4624 (4643).
+VALIDADO CONTRA:
+  - METRICA (puerta): escritores directos del primario con presentacion de voz fuera del
+    dueno: BASE 1 (git grep 8e46d67: useFluVoiceAssistant.js:1663) -> AHORA 0 (target 0).
+  - GUARD: 12/12 VERDE. NACE ROJO medido antes del src: 3 casos (hueco 1 + las 2 rutas del
+    hueco 2). Prueba de detector por la FUENTE (con "resolved" el sembrado manda).
+  - REPARACION DE DETECTOR (7.7.f(3)): speakerIdentitySession.test.ts apuntaba a la llamada
+    inline del hook; ahora exige la delegacion + ownerSetsPresentedPrimary (con su detector).
+  - Baseline del area 94 casos VERDE -> 0 fallos NUEVOS. Meta-guards VERDE (guardMutation,
+    dodScope, instrumentIntegrity, eol, godFileSize, deadExports, tsStrict, auditVacuity,
+    auditLedgerSync). El sensor V17 cazo un import relativo en JSDoc: corregido en el src.
+  - DoD 178 casos VERDE; npm run lint 229 ficheros / 1912 casos + eslint 0 + tsc 0.
+NO VALIDADO: DoD-producto (pantalla del dueno), suite completa (CI) y E2E completa.
+ALCANCE REAL (0.23): CUBIERTO=las dos rutas registrando lo mismo (cosido de la MISMA voz +
+primario "presented") con guard y metrica mecanizada; NO CUBIERTO=el DoD-producto, la suite
+completa y la E2E completa.

@@ -395,3 +395,23 @@ de P9.64 y contar las filas sin hablante de P9.65.
   del mismo dominio (registro/identidad de hablante) una por turno.
 - NO CUBIERTO por el agente: DoD-producto (pantalla: "okay flu soy Luz" en localhost:5173),
   suite completa y E2E completa (spec del bloque: tests/e2e/voz-escenario-dueno.spec.ts).
+
+## 2026-10-10 (2) - A1 CERRADO DEL TODO (huecos 1 y 2)
+
+- **A1 huecos** (fbb5647 guard+detector; c0b27bc src+contrato; ledger/report): el registro
+  del nombre aplica el MISMO efecto por las dos rutas: los clusters vivos (cose "Hablante 3"/"4")
+  y el primario con fuente "presented" (manda sobre el sembrado del participante).
+  Puente nuevo `src/app/useIdentitySessionRef.ts` (sin estado propio: puntero a los refs del
+  hook, que los publica) para que la ruta del comando use la MISMA instancia. Metrica:
+  escritores directos del primario con presentacion de voz 1 -> 0. Gate VERDE.
+- PLAN PENDIENTE (dado por el dueno en el chat, 2026-10-10): A2 borrar el flag muerto
+  `renameSessionAutoLabelsOnRegister`; A3 coser clusters con el criterio de la DIAARIZACION
+  (no el umbral 0.66) + pasar clusters por el comando; A4 el primario no debe borrarse en el
+  reinicio de escucha (el comando debe fijarlo); A5 ninguna fila sin hablante (respaldo en el
+  commit); A6 una voz = un cluster (tope/fusion); B1 un solo dueno del "descarte" de locuciones;
+  B2 el eco se mide contra el texto REAL de FLU (caso "el elote", nace ROJO: MEDIR antes que
+  filtro se comio la frase); B3-B5 solo descartar alucinacion clara, recomponer la locucion
+  antes de commitear (fragmentos cortados) y un unico commit por turno.
+- NO CUBIERTO por el agente: el DoD-producto (pantalla: "okay flu soy Luz" en localhost:5173
+  y los turnos siguientes con su nombre), suite completa y E2E completa
+  (spec del bloque: tests/e2e/voz-escenario-dueno.spec.ts).
