@@ -221,6 +221,7 @@ export const GUARD_FILES = [
     'tests/speechMerge.test.ts',
     'tests/vozRepeticionAsrGuard.test.ts',
     'tests/vozIdentidadDuenaUnicaGuard.test.ts',
+    'tests/vozIdentidadDecisionUnicaGuard.test.ts',
     'tests/speakerClusterAccumulation.test.ts',
     'tests/vozBloqueLargoPierdeFilaGuard.test.ts',
     'tests/vozDiarizacionDosVocesGuard.test.ts',

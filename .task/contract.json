@@ -1,26 +1,36 @@
 {
-  "task": "P9.56 - UN DUENO de acuñar etiqueta de hablante: speakerLabels deja de reimplementar el 'siguiente indice libre' y delega en speakerCore.nextAutoSpeakerLabel.",
-  "objective": "Eliminar la ruta doble de RESPONSABILIDAD medida (dos implementaciones del 'siguiente indice libre', consumidas por el worker y por el hilo principal) dejando UN dueno en el nucleo compartido y un consumidor que delega.",
-  "base": "ec55bc9cecfaa9b41acab68c19cf42df204933d1",
+  "task": "P9.57 - UN dueno de la DECISION de identidad: el worker solo embebe (su decision se descartaba) y se elimina la segunda implementacion; ademas el piso de evidencia pasa a la via principal.",
+  "objective": "Eliminar la ruta doble de RESPONSABILIDAD de la decision de identidad dejando un solo dueno (speakerDiarization.resolveConversationSpeaker, que ya gobernaba la fila) y que una ventana sin VOZ no pueda abrir etiqueta nueva en ninguna via.",
+  "base": "b434ea291d27a32b3445578b05a48711b21b9d55",
   "allow": [
     "src/voice/lib/speakerCore.js",
-    "src/voice/lib/speakerLabels.js",
+    "src/voice/lib/speakerDiarization.js",
+    "src/voice/lib/voiceIdentity.js",
+    "src/voice/lib/voiceIdWorkerClient.js",
+    "src/voice/workers/voiceId.worker.js",
     "scripts/guard-files.mjs",
+    "tests/speakerDiarizationSeparation.test.ts",
+    "tests/speakerDiarizationBehavior.test.ts",
+    "tests/speakerSoloCoalesce.test.ts",
+    "tests/speakerClusterAccumulation.test.ts",
+    "tests/voicePreferRegisteredGuard.test.ts",
+    "tests/voiceWorkerThresholdsConfigGuard.test.ts",
+    "tests/vozIdentidadInyectada.test.ts",
     "plans/ledger.json"
   ],
-  "maxFiles": 8,
+  "maxFiles": 16,
   "maxLines": 3000,
-  "dod": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerIdentitySession.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/speakerClusterAccumulation.test.ts tests/speakerSoloCoalesce.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerPrimarySeed.test.ts tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/voicePreferRegisteredGuard.test.ts tests/vozIdentidadInyectada.test.ts tests/vozEscenarioInyectado.test.ts tests/vozRenombreHablanteGuard.test.ts tests/turnSpeakerCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationUnified.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozIdentidadDuenaUnicaGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/vozIdentidadDecisionUnicaGuard.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts tests/speakerClusterAccumulation.test.ts tests/speakerDiarizationBehavior.test.ts tests/speakerDiarizationSeparation.test.ts tests/speakerDiarizationUnified.test.ts tests/vozDiarizacionDosVocesGuard.test.ts tests/speakerSoloCoalesce.test.ts tests/speakerIdentitySession.test.ts tests/vozIdentidadInyectada.test.ts tests/voicePreferRegisteredGuard.test.ts tests/voiceWorkerThresholdsConfigGuard.test.ts tests/turnSpeakerCommit.test.ts tests/turnSpeakerPreflight.test.ts tests/speakerIdentityNoInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerPrimarySeed.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozIdentidadDecisionUnicaGuard.test.ts tests/vozIdentidadDuenaUnicaGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "El consumidor (speakerLabels) ya no acuña: la implementacion del 'siguiente indice libre' vive en UN solo modulo.",
+    "statement": "Un solo modulo IMPLEMENTA la decision de identidad (el worker ya no decide).",
     "metric": {
-      "command": "node -e \"const s=require('fs').readFileSync('src/voice/lib/speakerLabels.js','utf8');console.log((s.match(/\\bautoSpeakerLabel\\s*\\(/g)||[]).length)\"",
+      "command": "node -e \"console.log(require('fs').readFileSync('src/voice/lib/speakerCore.js','utf8').split('function assignSpeaker(').length-1)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozIdentidadDuenaUnicaGuard.test.ts"
+      "tests/vozIdentidadDecisionUnicaGuard.test.ts"
     ]
   },
   "ignore": [
@@ -32,7 +42,16 @@
     "src/voice/lib/speakerCore.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/speakerLabels.js": [
+    "src/voice/lib/speakerDiarization.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/voiceIdentity.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/voiceIdWorkerClient.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/workers/voiceId.worker.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }
