@@ -422,3 +422,12 @@ de P9.64 y contar las filas sin hablante de P9.65.
   Guard `tests/vozFlagHuerfanoGuard.test.ts` (lint:guards, nace ROJO). Metrica 1 -> 0.
 - SIGUIENTE: A3 (coser clusters con el criterio de la diaarizacion, no el 0.66), A4, A5, A6,
   B1..B5. Plan completo en el mensaje del dueno (2026-10-10).
+
+## 2026-10-10 (4) - A3 cerrado (cosido con el criterio de la diarizacion)
+
+- **A3** (6d7a8e7): `sameVoiceCosidoFloor()` (config `cosineNewVoiceThreshold`) +
+  `sameVoiceLabelGroup()` como dueno unico del cosido; `findLabelsWithSharedVoice` delega.
+  Guard `tests/vozCosidoDiarizacionGuard.test.ts` (lint:guards, nace ROJO). Metrica 1 -> 0.
+- SIGUIENTE: A4 (ciclo de vida del primario), A5 (ninguna fila sin hablante), A6 (una voz =
+  un cluster), B1 (descarte con motivo), B2 (eco contra el texto real de FLU: MEDIR primero),
+  B3 (solo alucinacion clara), B4 (recomponer antes de commitear), B5 (1 commit por turno).

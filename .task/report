@@ -4541,3 +4541,16 @@ DECISION: borrar. METRICA: declaraciones en src/ 1 -> 0. GUARD nuevo (nace ROJO:
 DoD 69 ficheros (importadores de fluConfig.js por 0.25) VERDE = 0 fallos nuevos.
 ALCANCE REAL (0.23): CUBIERTO=la bandera y su guard/metrica; NO CUBIERTO=DoD-producto,
 suite completa y E2E completa.
+
+================================================================
+A3 - cosido con el criterio de la diarizacion (piso de config)
+================================================================
+COMMIT 6d7a8e7 (speakerClusters.js + guard + lint:guards + contrato).
+DEFECTO: el cosido usaba un piso propio (0.66, reutilizacion de cluster) distinto del
+criterio de la diarizacion (cosineNewVoiceThreshold = 0.64, banda medida 0.69-0.74 vs 0.58).
+ARREGLO: sameVoiceCosidoFloor() + sameVoiceLabelGroup() (dueno unico); findLabelsWithSharedVoice
+delega (se retira su comparacion duplicada contra el ancla).
+METRICA: comparaciones propias contra el ancla en el cosido 1 -> 0. GUARD nuevo con detector
+(nace ROJO: la etiqueta de 0.649 no entraba). DoD 12 ficheros VERDE = 0 fallos nuevos.
+ALCANCE REAL (0.23): CUBIERTO=el criterio del cosido y su dueno, con metrica y detector;
+NO CUBIERTO=DoD-producto, suite completa y E2E completa.
