@@ -4,10 +4,7 @@
  */
 import { AutoModel, AutoProcessor, env } from '@huggingface/transformers'
 import {
-  assignSpeaker,
   compareCosineSignatures,
-  getFallbackSpeaker,
-  labelToSpeakerIdSimple,
   normalizeEmbeddingVector as normalizeVector,
 } from '../lib/speakerCore.js'
 import { downsampleTo16k, tensorToEmbeddingVector } from '../lib/embeddingFrames.js'
@@ -20,7 +17,6 @@ import {
   getTargetSampleRate,
 } from '../lib/embeddingConfig.js'
 
-const DEFAULT_MATCH_THRESHOLD = 0.85
 
 env.allowLocalModels = false
 env.allowRemoteModels = true
@@ -76,51 +72,6 @@ self.onmessage = async (event) => {
     if (type === 'compare') {
       const similarity = compareCosineSignatures(payload.a || [], payload.b || [])
       reply(true, { similarity })
-      return
-    }
-
-    if (type === 'embedAndMatch') {
-      const vector = await embedAudio(payload)
-      const matchThreshold =
-        Number(payload.roomRematchFloor) > 0 && Number(payload.roomRematchFloor) <= 1
-          ? Number(payload.roomRematchFloor)
-          : Number(payload.matchThreshold) > 0 && Number(payload.matchThreshold) <= 1
-            ? Number(payload.matchThreshold)
-            : DEFAULT_MATCH_THRESHOLD
-
-      if (!vector.length) {
-        const fallbackLabel =
-          String(payload.fallbackSpeaker || getFallbackSpeaker()).trim() || getFallbackSpeaker()
-        reply(true, {
-          vector: [],
-          speakerId: labelToSpeakerIdSimple(fallbackLabel),
-          speakerName: fallbackLabel,
-          similarity: 0,
-          reason: 'no-vector',
-        })
-        return
-      }
-
-      const assignment = assignSpeaker(vector, {
-        clusters: payload.clusters || [],
-        matchThreshold,
-        reservedLabels: payload.reservedLabels || [],
-        preferLabel: payload.preferSpeaker || payload.lastSpeaker || '',
-        lastSpeaker: payload.lastSpeaker || '',
-        lastSignature: payload.lastSignature || null,
-        continuityThreshold: payload.continuityThreshold,
-        newVoiceThreshold: payload.newVoiceThreshold,
-        matchThresholdCluster: payload.matchThresholdCluster,
-        soloNewVoiceFactor: payload.soloNewVoiceFactor,
-      })
-
-      reply(true, {
-        vector,
-        speakerId: assignment.speakerId,
-        speakerName: assignment.speakerName,
-        similarity: assignment.similarity,
-        reason: assignment.reason,
-      })
       return
     }
 

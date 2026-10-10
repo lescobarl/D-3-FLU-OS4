@@ -612,6 +612,18 @@ export function resolveConversationSpeaker({
     if (diagnosis && typeof diagnosis === 'object') Object.assign(diagnosis, patch)
   }
   const vector = normalizeEmbeddingVector(signatureVector)
+  // PISO DE EVIDENCIA (via principal), con el MISMO dueno que el nucleo
+  // (`hasVoiceMeasurement`): un vector VACIO o DEGENERADO no es "voz distinta", es
+  // AUSENCIA de medida. Antes el piso solo vivia en la rama de limite, y la via
+  // principal -la que corre precisamente cuando el vector esta vacio, porque la rama
+  // de limite exige `vector.length`- abria una etiqueta NUEVA para una ventana SIN
+  // VOZ (medido 2026-10-09: `[]` -> "Hablante 3" con la sesion en "Hablante 1").
+  if (!hasVoiceMeasurement(vector)) {
+    const keep =
+      String(lastSpeaker || preferSpeaker || getFallbackSpeaker()).trim() || getFallbackSpeaker()
+    note({ reason: 'no-vector', speaker: keep })
+    return keep
+  }
   const roomCfg = FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
   const factors = FLU_CONFIG.voiceIdentity?.capture?.diarizationFactors || {}
   const pinRegistered = roomCfg.pinRegisteredSpeaker !== false

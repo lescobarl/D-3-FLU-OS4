@@ -16,7 +16,6 @@ export {
   autoSpeakerLabel,
   nextAutoSpeakerLabel,
   getFallbackSpeaker,
-  assignSpeaker,
 } from './speakerCore.js'
 export {
   getVoiceIdentityConfig,

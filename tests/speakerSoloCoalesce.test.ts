@@ -26,7 +26,6 @@
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js';
-import { assignSpeaker } from '../src/voice/lib/speakerCore.js';
 import { anchorResolvedToLastLogged } from '../src/voice/lib/speakerPolicy.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 
@@ -128,51 +127,6 @@ describe('resolveConversationSpeaker — separación sin relajación de solo (ma
             lastSignature: E1,
         } as any);
         expect(r).toBe('Hablante 3');
-    });
-});
-
-describe('assignSpeaker — solo coalesce (worker path)', () => {
-    const workerBase = {
-        continuityThreshold: 0.70,
-        newVoiceThreshold: 0.68,
-        matchThresholdCluster: 0.76,
-        soloNewVoiceFactor: 0.82,
-    };
-
-    it('solo (1 cluster) sim 0.60 → solo-coalesce / Hablante 1', () => {
-        const r = assignSpeaker(query(0.6), {
-            ...workerBase,
-            clusters: [{ label: 'Hablante 1', signature: E1 }],
-            lastSpeaker: 'Hablante 1',
-            lastSignature: E1,
-        } as any);
-        expect(r.speakerName).toBe('Hablante 1');
-        expect(r.reason).toBe('solo-coalesce');
-        expect(r.similarity).toBeCloseTo(0.6, 5);
-    });
-
-    it('solo (1 cluster) sim 0.50 → abre Hablante 2 (voz genuina)', () => {
-        const r = assignSpeaker(query(0.5), {
-            ...workerBase,
-            clusters: [{ label: 'Hablante 1', signature: E1 }],
-            lastSpeaker: 'Hablante 1',
-            lastSignature: E1,
-        } as any);
-        expect(r.speakerName).toBe('Hablante 2');
-        expect(r.reason).toBe('forced-new-voice-below-threshold');
-    });
-
-    it('multi-hablante (2 clusters) sim 0.60 → abre Hablante 3 (no alterado)', () => {
-        const r = assignSpeaker(query(0.6), {
-            ...workerBase,
-            clusters: [
-                { label: 'Hablante 1', signature: E1 },
-                { label: 'Hablante 2', signature: E2 },
-            ],
-            lastSpeaker: 'Hablante 1',
-            lastSignature: E1,
-        } as any);
-        expect(r.speakerName).toBe('Hablante 3');
     });
 });
 

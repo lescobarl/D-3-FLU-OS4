@@ -16,7 +16,7 @@ import { scheduleIdle } from './idleSchedule.js'
 
 let seq = 0
 const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
-const EMBED_TYPES = new Set(['embed', 'embedAndMatch'])
+const EMBED_TYPES = new Set(['embed'])
 
 let embedInFlight = false
 let embedPending = null
@@ -160,19 +160,9 @@ async function runMainThreadFallback(type, payload) {
   if (type === 'preload') {
     return { ready: true, modelId: cfg.modelId, fallback: true }
   }
-  if (type === 'embed' || type === 'embedAndMatch') {
+  if (type === 'embed') {
     const vector = await computeSpeakerEmbedding(samples, payload.sampleRate, cfg)
-    if (type === 'embed') {
-      return { vector, dim: vector.length, fallback: true }
-    }
-    const speakerName = payload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-    return {
-      vector,
-      speakerId: labelToSpeakerId(speakerName),
-      speakerName,
-      similarity: 0,
-      fallback: true,
-    }
+    return { vector, dim: vector.length, fallback: true }
   }
   if (type === 'compare') {
     const { compareCosineSignatures } = await import('./voiceIdentity.js')
@@ -267,21 +257,19 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
 
   let vector = []
   try {
-    const raw = await post('embedAndMatch', payload, transfer).catch((error) => {
+    // El WORKER solo EMBEBE (su trabajo). La DECISION la toma el dueno unico en el
+    // hilo principal (`resolveIdentityIdle`, mas abajo): antes el worker TAMBIEN
+    // decidia (`embedAndMatch` + speakerCore.assignSpeaker) y su resultado se
+    // DESCARTABA - dos decisiones de la misma cosa, una de ellas trabajo tirado y
+    // ademas mentirosa en el log (medido 2026-10-09).
+    const raw = await post('embed', payload, transfer).catch((error) => {
       if (typeof window !== 'undefined') throw error
-      return runMainThreadFallback('embedAndMatch', {
+      return runMainThreadFallback('embed', {
         ...payload,
         samples: samplesFromPayload(payload),
       })
     })
     vector = Array.isArray(raw?.vector) ? raw.vector : []
-    if (typeof window !== 'undefined') {
-      relayLog(
-        'LOG',
-        'Match',
-        `reason=${raw?.reason || ''} sim=${Number(raw?.similarity ?? 0).toFixed(3)} name="${raw?.speakerName || ''}" inClusters=${payload.clusters?.length ?? 0} last="${payload.lastSpeaker || ''}" clusterMatch=${Number(cfg.productionClusterReuseThreshold) || '-'} newVoice=${Number(cfg.cosineNewVoiceThreshold) || '-'}`,
-      )
-    }
   } catch (error) {
         logCaughtError('[catch] src/voice/lib/voiceIdWorkerClient.js', error);
     if (String(error?.message || error).includes('dropped-stale')) {
@@ -314,6 +302,14 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
   }
 
   const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, sampleCount)
+  if (typeof window !== 'undefined') {
+    // El log dice la decision REAL (la del hilo principal), no la del worker.
+    relayLog(
+      'LOG',
+      'Match',
+      `reason=canonical name="${identity.speakerName || ''}" inClusters=${(matchPayload.speakerClusters || []).length} last="${matchPayload.lastSpeaker || ''}" clusterMatch=${Number(cfg.productionClusterReuseThreshold) || '-'} newVoice=${Number(cfg.cosineNewVoiceThreshold) || '-'}` ,
+    )
+  }
   return {
     speakerId: identity.speakerId,
     speakerName: identity.speakerName,
