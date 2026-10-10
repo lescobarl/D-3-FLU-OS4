@@ -93,10 +93,27 @@ export function stopAllContinuousIdentityPipelines() {
  * cluster del turno se perdia (el commit ya habia consumido su slot vacio) y el
  * comparador de voces se quedaba sin nada contra lo que comparar (inClusters=0).
  */
+/**
+ * Desenvuelve la instantanea FINAL del turno: acepta RESOLUTOR (funcion -> resultado)
+ * o FABRICA (funcion -> resolutor), de forma PEREZOSA. Dueño unico de esa forma: la
+ * usan la espera (`primeTurnSpeakerPreflight`) y el cierre (`finalizeTurnIdentityPipeline`).
+ */
+function finalSnapshotRunner(runFinalSnapshot) {
+  return () => {
+    const maybeRun = runFinalSnapshot()
+    return typeof maybeRun === 'function' ? maybeRun() : maybeRun
+  }
+}
+
 export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClusters, onResolved } = {}) {
   const id = Number(turnId)
   stopContinuousIdentityPipeline(id)
 
+  // Se RE-ENCOLA siempre la instantanea FINAL (es la DEFINITIVA: escribe clusters y da
+  // la respuesta del turno); si el turno ya tenia evidencia (un tick continuo o una
+  // espera previa `primeTurnSpeakerPreflight`), `scheduleTurnSpeakerPreflight` la
+  // CONSERVA (`ready`/`snapshots`) y el slot devuelto la lleva. La fila usa esa
+  // evidencia acumulada; el snapshot final la consolida despues.
   if (typeof runFinalSnapshot === 'function') {
     // El snapshot FINAL puede llegar como RESOLUTOR (funcion -> resultado) o como
     // FABRICA (funcion -> resolutor). El consumidor vivo pasa la FABRICA
@@ -104,19 +121,47 @@ export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClust
     // la propia funcion y NO un snapshot: `Preflight ready=false vec=0` en TODOS los
     // turnos y ningun cluster persistido (`refClusters=0`). Se desenvuelve de forma
     // PEREZOSA para no arrancar el trabajo antes de que la cola lo pida.
-    const run = () => {
-      const maybeRun = runFinalSnapshot()
-      return typeof maybeRun === 'function' ? maybeRun() : maybeRun
-    }
-    scheduleTurnSpeakerPreflight(id, run, { continuous: false, onClusters, onResolved })
-  }
-
-  const slot = peekTurnSpeakerPreflight(id)
-  if (slot?.ready && !slot.pending) {
-    return consumeTurnSpeakerPreflight(id)
+    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot), { continuous: false, onClusters, onResolved })
   }
 
   return consumeTurnSpeakerPreflight(id)
+}
+
+/**
+ * Espera ACOTADA de la instantanea FINAL de identidad ANTES del commit.
+ *
+ * Por que: el commit es SINCRONO y la instantanea final (embedding del worker) viaja
+ * por la cola asincrona, asi que el commit SIEMPRE perdia la carrera (medido: la fila
+ * se escribia `speakerName:'' , evidenciaAcustica:false` aunque el resolver tuviera la
+ * etiqueta 60 ms despues). Con esta espera la fila NACE con el hablante del turno.
+ * `runFinalSnapshot` es la MISMA fabrica que consume el commit. NO lanza ni bloquea
+ * indefinidamente: resuelve con el slot (listo) o tal cual si vence `timeoutMs`.
+ * @param {number} turnId
+ * @param {Function} runFinalSnapshot
+ * @param {{ onClusters?: Function, onResolved?: Function, timeoutMs?: number }} [options]
+ * @returns {Promise<{ ready?: boolean, pending?: boolean, speakerName?: string, speakerId?: string, signatureVector?: number[], snapshots?: unknown[] }|null>}
+ */
+export function primeTurnSpeakerPreflight(turnId, runFinalSnapshot, { onClusters, onResolved, timeoutMs = 1500 } = {}) {
+  const id = Number(turnId)
+  if (!Number.isFinite(id) || id <= 0) return Promise.resolve(null)
+  const yaResuelto = peekTurnSpeakerPreflight(id)
+  if (yaResuelto?.ready) return Promise.resolve(yaResuelto)
+  if (typeof runFinalSnapshot === 'function') {
+    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot), { continuous: false, onClusters, onResolved })
+  }
+  const waitMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 0
+  return new Promise((resolve) => {
+    const started = Date.now()
+    const check = () => {
+      const slot = peekTurnSpeakerPreflight(id)
+      if (slot?.ready || Date.now() - started >= waitMs) {
+        resolve(slot || null)
+        return
+      }
+      setTimeout(check, 30)
+    }
+    check()
+  })
 }
 
 export function resetTurnIdentityPipeline() {

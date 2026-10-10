@@ -24,7 +24,7 @@ import {
 import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
 import { analyzeWakeTurn, requiresWakeWord } from '../lib/wakeTurnCommit.js'
-import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js'
+import { handleConversationStreamSync, buildFinalSpeakerSnapshotResolver } from '../lib/conversationStreamCommit.js'
 import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
 import { buildContractParams } from '../lib/contractParams'
@@ -136,7 +136,7 @@ import {
   flushTranscriptStateOnFinal,
   flushPcmStateAfterCommit,
 } from '../lib/recognitionBufferFlush.js'
-import { startContinuousIdentityPipeline, stopAllContinuousIdentityPipelines } from '../lib/turnIdentityPipeline.js'
+import { startContinuousIdentityPipeline, stopAllContinuousIdentityPipelines, primeTurnSpeakerPreflight } from '../lib/turnIdentityPipeline.js'
 import {
   createTurnSpeakerAudioResolver,
   peekTurnSpeakerPreflight,
@@ -1488,8 +1488,7 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       preflightScheduledForTurnRef.current = true
-      // GETTER, no id fijo: el id se acuña DESPUES de este aviso; fijarlo dejaba los
-      // snapshots en un slot que el commit no miraba (Preflight turn=5 vs Commit=9).
+      // GETTER, no id fijo: el id se acuna DESPUES de este aviso; fijarlo dejaba los snapshots en un slot que el commit no miraba (Preflight turn=5 vs Commit=9).
       startContinuousIdentityPipeline(
         () => activeTurnIdRef.current,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
@@ -2692,11 +2691,12 @@ const lastResolvedTurnRef = useRef(0)
           isStoppingRef.current = false
         }
 
-        const capture =
-          readStreamDisplay(listenStateRef.current) ||
-          cleanForSpeech(listenStateRef.current.pendingInterim)
+        const capture = readStreamDisplay(listenStateRef.current) || cleanForSpeech(listenStateRef.current.pendingInterim)
         const result = sealPendingInterim(listenStateRef.current)
         if (capture) {
+          // PREFLIGHT ANTES DEL COMMIT: espera ACOTADA de la instantanea FINAL de identidad para que la fila nazca con el hablante del turno, no sin el.
+          const turnId = activeTurnIdRef.current
+          await primeTurnSpeakerPreflight(turnId, buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, phrase: capture, turnId }), { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker })
           syncConversationStream({
             capture,
             newParagraph: result.newParagraph,
@@ -2731,6 +2731,7 @@ const lastResolvedTurnRef = useRef(0)
       syncConversationStream,
       requestRecognitionRestart,
       conversationActiveRef,
+      createSpeakerAudioResolver, setSpeakerClusters, applyResolvedSpeaker,
     ],
   )
 

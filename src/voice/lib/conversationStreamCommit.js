@@ -40,6 +40,28 @@ import { isSameEmissionWithinWindow } from './captureDedup.js'
 import { DISCARD_REASONS, discardLocution } from './phraseDiscard.js'
 
 /**
+ * Fabrica UNICA de la instantanea FINAL de hablante del turno. La usan los DOS pasos
+ * del cierre: la espera acotada antes del commit (`primeTurnSpeakerPreflight`) y el
+ * propio commit (via `finalizeTurnIdentityPipeline`). Un solo dueño de los argumentos
+ * del resolver evita que la espera y el commit midieran audios distintos.
+ * @param {{ createSpeakerAudioResolver?: Function, phrase?: string, turnId?: number }} [options]
+ * @returns {Function} resolutor (fabrica ya desenvuelta)
+ */
+export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, phrase = '', turnId } = {}) {
+  return () =>
+    typeof createSpeakerAudioResolver === 'function'
+      ? createSpeakerAudioResolver({
+          atTurnBoundary: true,
+          allowNewCluster: true,
+          utterance: phrase,
+          // El FINAL resuelve TARDE: el id se fija al commit para que lea el audio de
+          // ESTE turno (`turnAudioSnapshot`) y no el del turno que ya empezo.
+          turnId,
+        })
+      : undefined
+}
+
+/**
  * @typedef {Object} ConversationStreamCommitPayload
  * @property {string} [capture]
  * @property {boolean} [newParagraph]
@@ -367,15 +389,7 @@ export function handleConversationStreamSync(
   const turnId = activeTurnIdRef.current
   const preflight = finalizeTurnIdentityPipeline(
     turnId,
-    () =>
-      createSpeakerAudioResolver({
-        atTurnBoundary: true,
-        allowNewCluster: true,
-        utterance: phrase,
-        // El FINAL resuelve TARDE: el id se fija al commit para que lea el audio de
-        // ESTE turno (`turnAudioSnapshot`) y no el del turno que ya empezo.
-        turnId,
-      }),
+    buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, phrase, turnId }),
     // §9 El cluster del turno se persiste POR EL DUEÑO UNICO (`setSpeakerClusters`)
     // cuando el snapshot final resuelve — aunque sea despues del commit. Sin esto el
     // primer cluster se perdia y ninguna voz se podia separar (inClusters=0 siempre).
