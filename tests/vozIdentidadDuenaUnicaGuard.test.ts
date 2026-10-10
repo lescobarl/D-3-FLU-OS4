@@ -30,7 +30,7 @@ const DEFINICION = new RegExp(
     `(export\\s+)?function\\s+(nextAutoSpeakerLabel|nextAvailableSpeakerLabel|nextFreeSpeakerLabel)\\b`,
 )
 /** Acuñador de la plantilla: si el cuerpo la usa, ese modulo IMPLEMENTA el indice libre. */
-const PLANTILLA = /autoSpeakerLabel\s*\(/
+const PLANTILLA = /\bautoSpeakerLabel\s*\(/
 
 /** Predicado puro: la linea define la funcion acuñadora. */
 export function defineAcunadora(linea: string): boolean {
