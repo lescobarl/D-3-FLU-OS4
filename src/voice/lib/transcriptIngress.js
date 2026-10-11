@@ -24,6 +24,7 @@ import {
   sealPendingInterim,
   clearPendingFinal,
   phrasesEquivalent,
+  committedEchoStreakWindowMs,
 } from './activeListen.js'
 import {
   micPublishedParityOk,
@@ -578,8 +579,7 @@ function ingestInterimChunk({ interim, ctx }) {
   // misma frase vuelve tras una pausa real (>= committedEchoStreakWindowMs), es una
   // repetición genuina del usuario: se trata como voz nueva y NO se descarta ni cuenta
   // como eco (evita el loop "no escucha nada" + "transcribe a medias").
-  const echoStreakWindowMs =
-    Number(FLU_CONFIG.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200
+  const echoStreakWindowMs = committedEchoStreakWindowMs()
   const withinEchoWindow =
     msSinceLastCommitFromCtx(ctx) < echoStreakWindowMs
 

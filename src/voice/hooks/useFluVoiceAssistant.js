@@ -102,6 +102,7 @@ import {
   resolveSpeakerByText as resolveConversationSpeakerLabel,
   sealPendingInterim,
   syncSpeakerIndexFromLabel,
+  committedEchoStreakWindowMs,
 } from '../lib/activeListen.js'
 import { buildResolvedContract, estadoFastPathIdempotente } from '../lib/resolvedContract.js'
 import {
@@ -390,6 +391,7 @@ export function useFluVoiceAssistant({
   // buffer/spill y se vuelva a procesar (ciclo de comandos repetidos).
   const clearTurnAfterResolveRef = useRef(() => {})
   const activeTurnIdRef = useRef(0)
+  const lastEmittedTurnRef = useRef(0) // turno de la ultima locucion emitida: resolucion tardia idempotente
   /**
    * §9: par ÚNICO `commit + resolución` del turno. TODAS las ramas cierran por
    * aquí, de modo que el display (commit) y la fila (`transcript`) no puedan
@@ -411,7 +413,10 @@ export function useFluVoiceAssistant({
         }
         return canonicalPhrase
       }
-      const result = await onContractResolved?.({ contract, ...payload, evidenciaAcustica, transcript: canonicalPhrase, turnId: activeTurnIdRef.current })
+      // El turno de la fila es el de la FRASE (no el vivo): una resolucion tardia de una frase
+      // ya emitida escribe SU fila, no una nueva bajo el turno siguiente (filas duplicadas).
+      const turnIdDeLaFrase = canonicalPhrase && canonicalPhrase === lastEmittedTranscriptRef.current && lastEmittedTurnRef.current ? lastEmittedTurnRef.current : activeTurnIdRef.current
+      const result = await onContractResolved?.({ contract, ...payload, evidenciaAcustica, transcript: canonicalPhrase, turnId: turnIdDeLaFrase })
       // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no
       // se reprocese (ciclo de comandos/ambient que repetían la misma orden).
       clearTurnAfterResolveRef.current?.()
@@ -1814,6 +1819,7 @@ const lastResolvedTurnRef = useRef(0)
           flushPcmAfterTurnCommit,
           lastCommitAtRef,
           lastOnresultAtRef,
+          lastEmittedTurnRef,
           turnAudioStartSampleRef,
           chunkTotalSamplesRef,
           preflightScheduledForTurnRef,
@@ -1872,9 +1878,7 @@ const lastResolvedTurnRef = useRef(0)
     }
     // Reset de la línea abierta (espejo de finalizeTurnCommit pero SIN commitear
     // una fila al log).
-    // La "ultima frase" NO se vacia aqui (spec del dueno 2026-10-11): se rearma el ANCLA
-    // del turno, no lo PUBLICADO. Antes este rebuild del watchdog la borraba a mitad de
-    // frase -> el borra-y-reaparece. Su dueno es el reset de sesion/voz.
+    // NO se vacia la "ultima frase" (su dueno es el reset de sesion/voz): solo se rearma el ancla.
     listenStateRef.current.openLine = ''
     listenStateRef.current.pendingInterim = ''
     openPreviewTurnRef.current = false
@@ -3220,9 +3224,6 @@ const lastResolvedTurnRef = useRef(0)
       if (!canonicalPhrase) return
       // §9: la query ya viene derivada por el derivador único
       // (`planConversationDispatch` → action.question); NO se re-deriva aquí.
-      // La "ultima frase" NO se vacia al entregar la frase a la IA (spec del dueno
-      // 2026-10-11): borrarla aqui era la otra ruta del borra-y-reaparece.
-
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, chunksRef.current)
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
@@ -4458,8 +4459,7 @@ const lastResolvedTurnRef = useRef(0)
     scheduleIdentityPreflight,
     touchMeaningfulIngress: ({ meaningful = true, reason: _reason = '' } = {}) => {
       const now = Date.now()
-      const echoWindowMs =
-        Number(FLU_CONFIG.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200
+      const echoWindowMs = committedEchoStreakWindowMs()
       if (meaningful) {
         ingressEchoStreakRef.current = 0
         lastEchoAtRef.current = 0

@@ -20,6 +20,7 @@ import {
   shouldRefreshStream,
   syncSpeakerIndexFromLabel,
   utterancesSameRevision,
+  committedEchoStreakWindowMs,
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { relayLog } from '../../lib/clientLogRelay'
@@ -174,6 +175,7 @@ export function handleConversationStreamSync(
     commitTurnToSessionRows,
     fluParticipantRef,
     lastRequestRef,
+    lastEmittedTurnRef,
   } = deps
 
   if (!conversationActiveRef?.current) return
@@ -232,12 +234,15 @@ export function handleConversationStreamSync(
     // que una COLA reemplazaba la frase entera ("la borra y deja dos o tres palabras, y luego
     // ya se vuelve a ver": log del dueno 2026-10-11 11:28). El criterio del trozo tiene UN
     // dueno (`isFragmentOfLocution`, el mismo de la recompuesta) y ahora es el de la sonda.
-    if (isFragmentOfLocution(capture, publishedLiveRef.current)) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, acorta: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+    // Dato CONCLUYENTE: la sonda dice si el recorte se BLOQUEO o se APLICO, y si era la MISMA
+    // locucion. Antes `acorta` salia en las DOS ramas y no se podian distinguir (medido por el dueno).
+    const esTrozo = isFragmentOfLocution(capture, publishedLiveRef.current)
+    if (esTrozo) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', acorta: true, mismaLocucion: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
     if (capture !== publishedLiveRef.current) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, acorta: capture.length < publishedLiveRef.current.length, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', acorta: capture.length < publishedLiveRef.current.length, mismaLocucion: esTrozo, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
@@ -293,14 +298,19 @@ export function handleConversationStreamSync(
   // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
   // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión
   // del mismo turno, no una fila nueva.
-  if (
-    isDuplicateTurnCommit(capture, {
-      lastEmitted: lastEmittedTranscriptRef?.current || '',
-      lastCommitted: lastCommittedRow,
-      lastResultAt: lastOnresultAtRef?.current || 0,
-      lastCommitAt: lastCommitAtRef?.current || 0,
-    })
-  ) {
+  const dupCheck = {
+    lastEmitted: lastEmittedTranscriptRef?.current || '',
+    lastCommitted: lastCommittedRow,
+    lastResultAt: lastOnresultAtRef?.current || 0,
+    lastCommitAt: lastCommitAtRef?.current || 0,
+    now: Date.now(),
+    echoWindowMs: committedEchoStreakWindowMs(),
+  }
+  const esDuplicado = isDuplicateTurnCommit(capture, dupCheck)
+  // BANDERA DE DIAGNOSTICO CONCLUYENTE: el veredicto del dedupe con sus ENTRADAS (edades y
+  // ventana). Sin esto, una locucion duplicada no se podia diagnosticar desde el log.
+  voiceProbe('dup', { turn: activeTurnIdRef.current, dup: esDuplicado, lastEmitted: dupCheck.lastEmitted.slice(0, 60), lastCommittedRow: dupCheck.lastCommitted.slice(0, 60), resultAgeMs: dupCheck.now - dupCheck.lastResultAt, commitAgeMs: dupCheck.now - dupCheck.lastCommitAt, echoWindowMs: dupCheck.echoWindowMs, capture: capture.slice(0, 60) }) // BANDERA DE DIAGNOSTICO
+  if (esDuplicado) {
     discardLocution({ reason: DISCARD_REASONS.DUPLICATE_COMMIT, phrase: capture, site: 'turn-commit', log: relayLog })
     return
   }
@@ -607,6 +617,7 @@ export function handleConversationStreamSync(
     })
     if (delivered) {
       lastEmittedTranscriptRef.current = capture
+      if (lastEmittedTurnRef) lastEmittedTurnRef.current = activeTurnIdRef.current
     }
   }
   commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })

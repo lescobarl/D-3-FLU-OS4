@@ -82,6 +82,17 @@ export function pickLongestFinal(chunks = []) {
   return mergeMicChunks(chunks)
 }
 
+/**
+ * Ventana (ms) del eco ASR ya commiteado: la MISMA frase re-emitida DENTRO de esta ventana es
+ * el MISMO evento (doble final / loop de Chrome), NO habla nueva; pasada la ventana, la
+ * repeticion es genuina. DUENO UNICO del criterio (antes eran 3 copias del mismo literal).
+ *
+ * @returns {number} ms
+ */
+export function committedEchoStreakWindowMs() {
+  return Number(FLU_CONFIG?.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200
+}
+
 /** Final ya cubierto por lo commitado; preview abierto siempre se sella en commit. */
 export function isRedundantFinal(finalText = '', context = {}) {
   const fin = cleanForSpeech(finalText)
@@ -103,8 +114,7 @@ export function isRedundantFinal(finalText = '', context = {}) {
   // Repetición exacta tras una pausa real (>= ventana de eco ASR) = el usuario re-dice
   // la frase: NO es redundante, es un turno nuevo. Solo colapsa el eco rápido (loop).
   const msSinceLastCommit = Number(context.msSinceLastCommit) || 0
-  const echoStreakWindowMs =
-    Number(FLU_CONFIG?.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200
+  const echoStreakWindowMs = committedEchoStreakWindowMs()
   const isFreshRepeat = msSinceLastCommit > 0 && msSinceLastCommit >= echoStreakWindowMs
 
   for (const last of candidates) {

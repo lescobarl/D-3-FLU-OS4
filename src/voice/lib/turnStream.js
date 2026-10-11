@@ -143,11 +143,15 @@ export function resolveMicCommitAction(
  */
 export function isDuplicateTurnCommit(
   capture,
-  { lastEmitted = '', lastCommitted = '', lastResultAt = 0, lastCommitAt = 0 } = {},
+  { lastEmitted = '', lastCommitted = '', lastResultAt = 0, lastCommitAt = 0, now = Date.now(), echoWindowMs = 0 } = {},
 ) {
   if (!capture || !lastCommitAt) return false
-  if (lastResultAt > lastCommitAt) return false
   const prior = lastEmitted || lastCommitted
   if (!prior) return false
+  const hayResultadoNuevo = lastResultAt > lastCommitAt
+  // Un "resultado nuevo" con el MISMO texto DENTRO de la ventana de eco es el MISMO evento
+  // re-entregado por el ASR (doble final ~0,3-0,7 s), no habla nueva: UNA locucion = UN commit.
+  // Fuera de la ventana la repeticion es genuina del usuario y SI es un turno nuevo.
+  if (hayResultadoNuevo && !(echoWindowMs > 0 && now - lastCommitAt < echoWindowMs)) return false
   return phrasesEquivalent(capture, prior)
 }
