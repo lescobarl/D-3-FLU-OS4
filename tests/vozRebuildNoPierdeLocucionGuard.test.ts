@@ -115,13 +115,18 @@ describe('P9.60 - la captura CONFIRMADA sin fila no se puede descartar', () => {
         expect(hasConfirmedOpenLine(h.state())).toBe(true)
     })
 
-    it('un interino POSTERIOR al final NO es captura confirmada (ese si se descarta)', () => {
+    it('un FINAL confirmado con un interino POSTERIOR: la CONFIRMADA se sella (el parcial en vuelo se descarta)', () => {
+        // REGLA CORREGIDA (2026-10-10, perdida medida en el log del dueno 19:24): antes se
+        // miraba "la linea fue tocada DESPUES del final?" y con interinos posteriores la
+        // locucion CONFIRMADA se daba por no-confirmada -> el rebuild la DESCARTA. Ahora la
+        // pregunta es "hay una locucion CONFIRMADA sin fila?" (`pendingFinal`): el parcial
+        // en vuelo se sigue descartando, pero la confirmada NO se pierde.
         const h = createHarness()
         h.result(chromeEvent([{ isFinal: true, transcript: LARGA }], 0))
         expect(hasConfirmedOpenLine(h.state())).toBe(true)
         // Reanuda el habla sin cerrar el turno: la linea pasa a llevar interino en vuelo.
         h.result(chromeEvent([{ isFinal: false, transcript: 'la transcripcion desde' }], 0))
-        expect(hasConfirmedOpenLine(h.state())).toBe(false)
+        expect(hasConfirmedOpenLine(h.state()), 'la confirmada sigue sin fila: hay que sellarla').toBe(true)
     })
 
     it('sin ningun final, la linea es solo interino', () => {

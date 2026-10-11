@@ -239,6 +239,7 @@ export const GUARD_FILES = [
     'tests/vozFlagHuerfanoGuard.test.ts',
     'tests/vozFilaConHablanteGuard.test.ts',
     'tests/vozPreflightAntesCommitGuard.test.ts',
+    'tests/vozLocucionConfirmadaNoSePierdeGuard.test.ts',
     'tests/vozPlegadoEtiquetaGuard.test.ts',
     'tests/vozSondaLastSimGuard.test.ts',
     'tests/vozReinicioMicroGuard.test.ts',
