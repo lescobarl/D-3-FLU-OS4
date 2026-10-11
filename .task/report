@@ -5241,3 +5241,42 @@ VALIDACION: lint:guards VERDE 254 ficheros / 2044 tests · typecheck y eslint si
 NO CUBIERTO (0.23): el DoD-producto (su pantalla); la causa del corte de ASR posterior a
   15:38:14 (necesita hot-path); "una voz = una etiqueta" en su voz real (umbrales de audio,
   no se tocan); y la espera de la fila hasta el cierre por silencio (3,5 s de constante).
+
+----------------------------------------------------------------
+PASADA AUTONOMA 6 - 2026-10-11 - CONGELAMIENTO DE LA FRASE VIVA (2.a y definitiva correccion)
+----------------------------------------------------------------
+LO QUE DIJO EL DUENO: "la transcripcion en ultima frase se queda con la primera frase, nunca
+cambia"; "aqui esta acumulando bien la conversacion ... en ultima frase ya no escribio nada".
+
+MEDIDO EN SU LOG (16:10-16:13, 1305 lineas): 600 sondas `live` con 543 BLOQUEADAS y la memoria
+fija en `previo=382` mientras dictaba OTRA frase (candidatos de 277/281/299/307 chars:
+bloqueados por ser MAS CORTOS que 382). La conversacion SI acumulaba (filas correctas en
+turn 2/6/8): el congelado era SOLO la ultima frase.
+
+CAUSA (mi 1.a correccion fue insuficiente): el preview NO recibe `freshUtterance` (el hook lo
+llama sin ese campo), asi que mi guarda `!freshUtterance && (esTrozo || encoge)` seguia
+bloqueando TODA locucion nueva. NO se puede distinguir "locucion nueva" por longitud.
+
+ARREGLO (un solo sitio): el criterio pasa a ser la RELACION con lo mostrado:
+    bloquea si es TROZO contiguo (`isFragmentOfLocution`) o si es una REVISION MAS CORTA
+    del mismo texto (`utterancesRelate`, el dueno unico de la relacion);
+    una locucion DISTINTA reemplaza aunque sea mas corta (anti-congelamiento).
+  La sonda declara: resultado + acorta + fresh + mismaLocucion.
+
+LOG NUEVO (una corrida, 8/8, 3,0 min): bloqueados=1 (la COLA: previo=57 -> 19) · aplicados=19
+  · acortamientos aplicados de la MISMA locucion=0 · vaciados(len=0)=0 · 0 nombres sin
+  coincidencia · 0 filas reescritas sin evidencia · etiquetas automaticas distintas
+  ["Hablante 1"] · 11 filas con 11 ids (0 duplicadas en una sesion).
+
+GUARD: caso CRUDO del log del dueno (locucion de 382 chars + el dictado nuevo "no se / no se
+  que / ya no transcribio nada a la ultima frase") -> la ultima frase sigue el texto NUEVO.
+  Caso de la locucion distinta corta -> reemplaza. Caso de la COLA -> bloqueada. Control
+  negativo: con el codigo anterior los 543 bloqueos dejan la frase congelada y el caso cae.
+
+VALIDACION: lint:guards VERDE 254 / 2044 · typecheck y eslint sin errores · GATE VERDE
+  (metrica base=0 actual=1 target=1; guard base=1 actual=0). TECHOS: 4536/4536 · 2706/2706 ·
+  4624/4643 · 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO.
+
+NO CUBIERTO (0.23): su pantalla; la causa del corte de ASR (necesita hot-path); "una voz = una
+  etiqueta" con su voz real (umbrales de audio, no se tocan); la espera de la fila hasta el
+  cierre por silencio (3,5 s).
