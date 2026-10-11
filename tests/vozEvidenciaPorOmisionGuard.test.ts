@@ -31,6 +31,7 @@ import { preflightEvidenceMeasured } from '../src/voice/lib/turnSpeakerPreflight
 
 const TURN_ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
 const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
+const STREAM = readFileSync('src/voice/lib/conversationStreamCommit.js', 'utf8')
 const LUIS = { registeredLabel: 'Hablante 1', registeredName: 'Luis' }
 
 function etiquetaDe(_turnId: number): string {
@@ -50,6 +51,13 @@ describe('A) omitir la marca de evidencia NO es "medida" (fuente)', () => {
         expect(/(evidenciaAcustica = true)/.test(TURN_ROW), 'ningun dueno puede tener el default en true').toBe(false)
         expect(TURN_ROW.match(/evidenciaAcustica = false/g)?.length).toBe(3)
     })
+    it('el PARTICIPANTE elegido NO estampa su nombre sin coincidencia (solo el mandato "soy X")', () => {
+        // Medido 2026-10-11: tras elegir a Luis en el onboarding sus filas salian "Luis" sin decir
+        // el comando. La unica fuente de nombre por DATO es el texto del mandato.
+        expect(STREAM.includes("FUENTES_CON_IDENTIDAD = ['wake-intro']"), 'solo wake-intro es fuente por dato').toBe(true)
+        expect(STREAM.includes("'wake-intro', 'pinned'"), 'el participante NO es fuente de nombre').toBe(false)
+    })
+
     it('el resolver sincrono declara la evidencia con el dueno de la MEDIDA, no por "hay audio"', () => {
         expect(HOOK).toContain('preflightEvidenceMeasured(peekTurnSpeakerPreflight')
         expect(HOOK.includes('evidenciaAcustica: audioSnapshot.length > 0'), '"hay audio" NO es evidencia').toBe(false)
