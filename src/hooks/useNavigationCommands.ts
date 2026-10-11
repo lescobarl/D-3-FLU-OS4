@@ -100,6 +100,11 @@ export function useNavigationCommands(
         }
     }, [resumeListeningTimerRef]);
 
+    // DUENO UNICO del par "suspender -> reanudar" la escucha: quien habla la reanuda. La escucha
+    // quedaba SUSPENDIDA cuando un llamante hablaba sin rearmarla (el saludo posterior al
+    // onboarding): medido 2026-10-11 18:04 (SPEAKING -> IDLE y ningun LISTENING despues).
+    const resumeAfterSpeechRef = useRef<(textLength?: number) => void>(() => {});
+
     // ============================================================
     // speakFlu — suspend recognition, speak, wait for idle
     // ============================================================
@@ -111,6 +116,8 @@ export function useNavigationCommands(
         // (contexto de la IA). Escritor único de la fila: `logFluReply`.
         logFluReply(text);
         await waitForSpeechIdle();
+        // Reanuda la escucha SIEMPRE que la conversacion siga activa (el guard vive dentro).
+        resumeAfterSpeechRef.current?.(text.length);
     }, [clearResumeListeningTimer, os2SuspendRecognition]);
 
     // ============================================================
@@ -150,6 +157,7 @@ export function useNavigationCommands(
             os2StartListening({ resume: true }).catch((e: unknown) => { logCaughtError('src/hooks/useNavigationCommands.ts', e) });
         }, delayMs);
     }, [clearResumeListeningTimer, os2StartListening, voiceStatus, conversationActiveRef, resumeListeningTimerRef, resolveResumeAfterSpeechMs]);
+    resumeAfterSpeechRef.current = scheduleResumeListening;
 
     // ============================================================
     // Consolidación BUSCAR — una sola ejecución por turno de voz.
