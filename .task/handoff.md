@@ -561,3 +561,19 @@ de P9.64 y contar las filas sin hablante de P9.65.
   tarda MAS, la fila nacera SIN hablante: es el primer punto a verificar en su prueba.
 - Alcance real (0.23): CUBIERTO=el registro de la congelacion y los dos avisos; NO CUBIERTO=
   el DoD-producto (pantalla/micro del dueno).
+
+## 2026-10-10 (17) - PERDIDA DE CONVERSACION (la "garrafal") CERRADA
+
+- **P25perdida** (src 9d0c339; guards 73b2faa): la locucion CONFIRMADA sin fila se DESCARTA-
+  BA. La cadena medida: FINAL de Chrome (no escribe fila por diseno) + interinos de la
+  locucion siguiente + a los ~4.2 s (`conversationStallMs=4200` < `srGapCommitMs=10000`) el
+  watchdog REBUILDA y `hasConfirmedOpenLine` daba "no confirmada" (los interinos posteriores
+  tocan la linea) -> la linea se descartaba con la locucion dentro.
+- ARREGLO: el ingress marca la confirmada sin fila en `listenState.pendingFinal` (slot que ya
+  existia y estaba muerto); `hasConfirmedOpenLine` mira esa marca; los cierres (onend/srGap)
+  sellan la CONFIRMADA antes que la linea viva; el parcial en vuelo se sigue descartando.
+- Guard nuevo `vozLocucionConfirmadaNoSePierdeGuard` (nace ROJO, gate base=1 -> actual=0) +
+  correccion de criterio en P9.60. Metrica 0 -> 1. Lint 244/1971 verde.
+- TECHOS: hook 4539/4539 (este hito no lo toco) · App 4624/4643 · fluConfig 2772/2772.
+- SIGUIENTE: validacion del dueno en pantalla. OJO: el preflight espera 1.5 s (si su micro
+  tarda mas, la fila nace sin hablante).
