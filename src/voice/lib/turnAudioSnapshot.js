@@ -11,6 +11,7 @@
  */
 import { relayLog } from '../../lib/clientLogRelay'
 import { concatFloat32 } from './pcmChunks.js'
+import { isSpeechSynthesisSpeaking } from './fluSpeech.js'
 
 let slot = null
 let lastProbeAt = 0
@@ -26,10 +27,15 @@ export function captureTurnAudioSnapshot(turnId = 0, { buildWindow, meta = {} } 
   const window = typeof buildWindow === 'function' ? buildWindow() : null
   const samples = window?.length ? new Float32Array(window) : new Float32Array(0)
   slot = { turnId, samples }
+  // BANDERA DE DIAGNOSTICO (dueno 2026-10-11): la MISMA voz mide bestSim 0.20-0.57 en unos
+  // turnos y 0.83-0.99 en otros. Se anota la VENTANA (ms) y si FLU HABLABA al sellarla: si
+  // los turnos basura coinciden con `flu=hablando`, la voz de FLU (eco) esta entrando en la
+  // ventana del turno. Un solo dato, una sola linea. NO se toca ningun umbral de audio.
+  const ventanaMs = meta.sampleRate ? Math.round((samples.length / meta.sampleRate) * 1000) : 0
   relayLog(
     'LOG',
     'TurnAudio',
-    `capture turn=${turnId} snap=${samples.length} total=${meta.total ?? 0} since=${meta.since ?? 0} chunks=${meta.chunks ?? 0} sr=${meta.sampleRate ?? 0}`,
+    `capture turn=${turnId} snap=${samples.length} ms=${ventanaMs} flu=${isSpeechSynthesisSpeaking() ? 'hablando' : 'callada'} total=${meta.total ?? 0} since=${meta.since ?? 0} chunks=${meta.chunks ?? 0} sr=${meta.sampleRate ?? 0}`,
   )
   return samples
 }
